@@ -2540,6 +2540,94 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         }
     }
 
+    /// <summary>
+    /// Creates Unity reference projections for an already-hydrated Core Justice
+    /// owner. This adapter never adds or reconstructs authoritative owner rows.
+    /// </summary>
+    internal static bool TryCreateFromP12ECoreOwner(
+        NpcStatusData freeStatus,
+        NpcStatusData wantedStatus,
+        NpcStatusData arrestedStatus,
+        NpcStatusData hiddenStatus,
+        DomainEventRecorder domainEventRecorder,
+        SimulationLogger logger,
+        DailyV1JusticeRecordsOwner selectedOwner,
+        IReadOnlyList<WantedRecordRuntime> wantedRows,
+        IReadOnlyList<PrisonSentenceRuntime> sentenceRows,
+        out JusticeSystem staged,
+        P12AJusticeReceiptOwnerSnapshot receiptSnapshot = null)
+    {
+        staged = null;
+        if (freeStatus == null || wantedStatus == null || arrestedStatus == null || hiddenStatus == null
+            || selectedOwner == null || wantedRows == null || sentenceRows == null
+            || selectedOwner.HasP12MutationBoundary
+            || selectedOwner.WantedRecords == null || selectedOwner.Sentences == null
+            || wantedRows.Count != selectedOwner.WantedRecords.Count
+            || sentenceRows.Count != selectedOwner.Sentences.Count)
+            return false;
+
+        HashSet<WantedRecordRuntime> seenWanted = new HashSet<WantedRecordRuntime>();
+        HashSet<DailyV1JusticeWantedRecordOwner> seenWantedOwners =
+            new HashSet<DailyV1JusticeWantedRecordOwner>();
+        for (int i = 0; i < wantedRows.Count; i++)
+        {
+            WantedRecordRuntime row = wantedRows[i];
+            DailyV1JusticeWantedRecordOwner coreRow = selectedOwner.WantedRecords[i];
+            if (row == null || row.Target == null || row.City == null
+                || !seenWanted.Add(row) || !seenWantedOwners.Add(coreRow)
+                || !ReferenceEquals(row.CoreOwner, coreRow)
+                || !string.Equals(row.Target.RuntimeId, coreRow.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(row.City.RuntimeId, coreRow.CityRuntimeId, StringComparison.Ordinal))
+                return false;
+        }
+
+        HashSet<PrisonSentenceRuntime> seenSentences = new HashSet<PrisonSentenceRuntime>();
+        HashSet<DailyV1JusticeSentenceOwner> seenSentenceOwners =
+            new HashSet<DailyV1JusticeSentenceOwner>();
+        for (int i = 0; i < sentenceRows.Count; i++)
+        {
+            PrisonSentenceRuntime row = sentenceRows[i];
+            DailyV1JusticeSentenceOwner coreRow = selectedOwner.Sentences[i];
+            if (row == null || row.Target == null || row.City == null || row.Warrant == null
+                || !seenSentences.Add(row) || !seenSentenceOwners.Add(coreRow)
+                || !ReferenceEquals(row.CoreOwner, coreRow)
+                || !ReferenceEquals(row.Target, row.Warrant.Target)
+                || !ReferenceEquals(row.City, row.Warrant.City)
+                || !ReferenceEquals(coreRow.Warrant, row.Warrant.CoreOwner)
+                || !seenWanted.Contains(row.Warrant)
+                || !string.Equals(row.Target.RuntimeId, coreRow.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(row.City.RuntimeId, coreRow.CityRuntimeId, StringComparison.Ordinal))
+                return false;
+        }
+
+        try
+        {
+            JusticeSystem candidate = new JusticeSystem(
+                freeStatus, wantedStatus, arrestedStatus, hiddenStatus,
+                domainEventRecorder, logger, selectedOwner);
+            foreach (WantedRecordRuntime row in wantedRows)
+                candidate.wantedRecordViews.Add(row.CoreOwner, row);
+            foreach (PrisonSentenceRuntime row in sentenceRows)
+                candidate.sentenceViews.Add(row.CoreOwner, row);
+
+            if (receiptSnapshot != null)
+            {
+                if (!candidate.TryInstallP12AReceiptOwnerSnapshot(receiptSnapshot)) return false;
+            }
+            else if (candidate.P12P18ReceiptCensusRevision != 0L)
+                return false;
+
+            staged = candidate;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException)
+        {
+            staged = null;
+            return false;
+        }
+    }
+
     internal bool TryBindP12CrimeJusticeMutationBoundary(
         Func<JusticeSystem, bool> admission,
         Action<JusticeSystem> committed)

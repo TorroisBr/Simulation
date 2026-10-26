@@ -140,6 +140,7 @@ internal static class P12EJusticeRecordsSnapshotAdapter
         IReadOnlyList<CityRuntime> stagedCities,
         IReadOnlyList<NpcRuntime> stagedNpcs,
         PersonStore stagedPersons,
+        DailyV1JusticeRecordsOwner selectedCoreOwner,
         NpcStatusData freeStatus,
         NpcStatusData wantedStatus,
         NpcStatusData arrestedStatus,
@@ -165,21 +166,29 @@ internal static class P12EJusticeRecordsSnapshotAdapter
                 out Dictionary<string, NpcRuntime> npcsById))
             return Fail(P12EJusticeSnapshotFailureCode.InvalidReference,
                 "Staged root identities are missing or ambiguous.", out failure);
+        if (selectedCoreOwner == null
+            || selectedCoreOwner.WantedRecords == null || selectedCoreOwner.Sentences == null
+            || selectedCoreOwner.WantedRecords.Count != snapshot.Records.WantedRows.Count
+            || selectedCoreOwner.Sentences.Count != snapshot.Records.SentenceRows.Count)
+            return Fail(P12EJusticeSnapshotFailureCode.InvalidReference,
+                "The exact Core Justice owner staged from this snapshot is required.", out failure);
 
         try
         {
             List<WantedRecordRuntime> wanted = new List<WantedRecordRuntime>(snapshot.Records.WantedRows.Count);
-            foreach (P12EJusticeWantedSnapshotRow row in snapshot.Records.WantedRows)
+            for (int i = 0; i < snapshot.Records.WantedRows.Count; i++)
             {
+                P12EJusticeWantedSnapshotRow row = snapshot.Records.WantedRows[i];
+                DailyV1JusticeWantedRecordOwner coreRow = selectedCoreOwner.WantedRecords[i];
                 if (!npcsById.TryGetValue(row.TargetRuntimeId, out NpcRuntime target)
                     || !citiesById.TryGetValue(row.CityRuntimeId, out CityRuntime city)
                     || !TryValidateTargetPersonBinding(row.TargetRuntimeId, row.TargetPersonIdValue,
-                        target, stagedPersons))
+                        target, stagedPersons)
+                    || !Matches(row, coreRow))
                     return Fail(P12EJusticeSnapshotFailureCode.InvalidReference,
                         "A wanted record target or City does not resolve to the exact staged roots.", out failure);
 
-                if (!WantedRecordRuntime.TryCreateFromP12EOwnerSnapshot(
-                        target, city, row.Bounty, row.SentenceDays, row.IsResolved,
+                if (!WantedRecordRuntime.TryCreateFromCoreOwner(target, city, coreRow,
                         out WantedRecordRuntime warrant))
                     return Fail(P12EJusticeSnapshotFailureCode.StageFailed,
                         "The private wanted-record factory rejected a validated row.", out failure);
@@ -188,34 +197,37 @@ internal static class P12EJusticeRecordsSnapshotAdapter
 
             List<PrisonSentenceRuntime> sentences =
                 new List<PrisonSentenceRuntime>(snapshot.Records.SentenceRows.Count);
-            foreach (P12EJusticeSentenceSnapshotRow row in snapshot.Records.SentenceRows)
+            for (int i = 0; i < snapshot.Records.SentenceRows.Count; i++)
             {
+                P12EJusticeSentenceSnapshotRow row = snapshot.Records.SentenceRows[i];
+                DailyV1JusticeSentenceOwner coreRow = selectedCoreOwner.Sentences[i];
                 if (!npcsById.TryGetValue(row.TargetRuntimeId, out NpcRuntime target)
                     || !citiesById.TryGetValue(row.CityRuntimeId, out CityRuntime city)
                     || !TryValidateTargetPersonBinding(row.TargetRuntimeId, row.TargetPersonIdValue,
                         target, stagedPersons)
-                    || row.WarrantOrdinal < 0 || row.WarrantOrdinal >= wanted.Count)
+                    || row.WarrantOrdinal < 0 || row.WarrantOrdinal >= wanted.Count
+                    || !Matches(row, coreRow))
                     return Fail(P12EJusticeSnapshotFailureCode.InvalidReference,
                         "A sentence target, City, Person binding, or warrant ordinal is invalid.", out failure);
 
                 WantedRecordRuntime warrant = wanted[row.WarrantOrdinal];
-                if (!ReferenceEquals(target, warrant.Target) || !ReferenceEquals(city, warrant.City))
+                if (!ReferenceEquals(target, warrant.Target) || !ReferenceEquals(city, warrant.City)
+                    || !ReferenceEquals(coreRow.Warrant, warrant.CoreOwner))
                     return Fail(P12EJusticeSnapshotFailureCode.InvalidRelation,
                         "A sentence must reference the exact target and City objects of its warrant.", out failure);
-                if (!PrisonSentenceRuntime.TryCreateFromP12EOwnerSnapshot(
-                        target, city, warrant, row.RemainingDays, row.FailedEscapeAttempts,
-                        row.WasArrestedToday, out PrisonSentenceRuntime sentence))
+                if (!PrisonSentenceRuntime.TryCreateSelectedProjection(
+                        target, city, warrant, coreRow, out PrisonSentenceRuntime sentence))
                     return Fail(P12EJusticeSnapshotFailureCode.StageFailed,
                         "The private prison-sentence factory rejected a validated row.", out failure);
                 sentences.Add(sentence);
             }
 
-            if (!JusticeSystem.TryCreateFromP12EOwnerSnapshot(
+            if (!JusticeSystem.TryCreateFromP12ECoreOwner(
                     freeStatus, wantedStatus, arrestedStatus, hiddenStatus,
-                    domainEventRecorder, logger, wanted, sentences, snapshot.Records.Revision,
+                    domainEventRecorder, logger, selectedCoreOwner, wanted, sentences,
                     out JusticeSystem candidate, p12aReceiptSnapshot))
                 return Fail(P12EJusticeSnapshotFailureCode.StageFailed,
-                    "The private JusticeSystem factory rejected the staged rows.", out failure);
+                    "The JusticeSystem projection rejected the exact staged Core owner rows.", out failure);
 
             staged = candidate;
             failure = P12EJusticeSnapshotFailure.None;
@@ -230,6 +242,24 @@ internal static class P12EJusticeRecordsSnapshotAdapter
                 "Private staging rejected malformed Justice values: " + exception.Message, out failure);
         }
     }
+
+    private static bool Matches(
+        P12EJusticeWantedSnapshotRow snapshot,
+        DailyV1JusticeWantedRecordOwner owner) => owner != null
+        && string.Equals(snapshot.TargetRuntimeId, owner.TargetRuntimeId, StringComparison.Ordinal)
+        && string.Equals(snapshot.CityRuntimeId, owner.CityRuntimeId, StringComparison.Ordinal)
+        && snapshot.Bounty.Equals(owner.Bounty)
+        && snapshot.SentenceDays == owner.SentenceDays
+        && snapshot.IsResolved == owner.IsResolved;
+
+    private static bool Matches(
+        P12EJusticeSentenceSnapshotRow snapshot,
+        DailyV1JusticeSentenceOwner owner) => owner != null
+        && string.Equals(snapshot.TargetRuntimeId, owner.TargetRuntimeId, StringComparison.Ordinal)
+        && string.Equals(snapshot.CityRuntimeId, owner.CityRuntimeId, StringComparison.Ordinal)
+        && snapshot.RemainingDays == owner.RemainingDays
+        && snapshot.FailedEscapeAttempts == owner.FailedEscapeAttempts
+        && snapshot.WasArrestedToday == owner.WasArrestedToday;
 
     private static bool TryBuildInstalledMaps(
         SimulationRuntime runtime,

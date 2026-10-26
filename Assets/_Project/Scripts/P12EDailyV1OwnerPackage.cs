@@ -326,7 +326,8 @@ internal sealed class P12EDailyV1OwnerPackage
             P12DDailyV1OwnerPackage stagedD = context.P12DPackage;
             P12CStagedContinuationRoot stagedC = context.P12CRoots;
             if (!TryStageCoreOwnerRestore(institutionOfficeSnapshot, propertyEstateSnapshot,
-                    factionSnapshot, claimSnapshot, supportSnapshot, decisionSnapshot, stagedD.Persons,
+                    factionSnapshot, claimSnapshot, supportSnapshot, decisionSnapshot, justiceSnapshot,
+                    stagedD.Persons, stagedD.SelectedCityOwners, stagedD.SelectedNpcOwners,
                     exactCompletedToken.AbsoluteDay, stageObserver,
                     out P12ECoreOwnerRestoreStage coreOwnerStage,
                     propertyEstateSnapshotOverrideForTest, factionSnapshotOverrideForTest,
@@ -383,7 +384,7 @@ internal sealed class P12EDailyV1OwnerPackage
             stageObserver?.Invoke(P12GDailyV1RestoreStage.EBattleOwnerStaged);
 
             if (!P12EJusticeRecordsSnapshotAdapter.TryStage(justiceSnapshot,
-                    stagedD.Cities, stagedD.Npcs, stagedD.Persons,
+                    stagedD.Cities, stagedD.Npcs, stagedD.Persons, coreOwnerStage.JusticeRecords,
                     context.FreeStatus, context.WantedStatus,
                     context.ArrestedStatus, context.HiddenStatus,
                     context.DomainEventRecorder, context.Logger,
@@ -392,8 +393,6 @@ internal sealed class P12EDailyV1OwnerPackage
                 failure = P12EDailyV1OwnerPackageFailure.StageFailed;
                 return false;
             }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.EJusticeOwnerStaged);
-
             if (!crimeSocialSnapshot.TryStage(
                     stagedD.Persons, stagedInstitutions, context.StagedSimulationTime,
                     out CrimeSocialAppraisalWorldState stagedCrimeSocial, out _))
@@ -408,7 +407,8 @@ internal sealed class P12EDailyV1OwnerPackage
                 || stagedClaims == null || stagedSupport == null || stagedDecisions == null
                 || stagedArmedForces == null || stagedManpower == null || stagedPositions == null
                 || stagedConflicts == null || stagedWars == null || stagedBattles == null
-                || stagedJustice == null || stagedCrimeSocial == null)
+                || stagedJustice == null || stagedCrimeSocial == null
+                || !ReferenceEquals(stagedJustice.CoreOwner, coreOwnerStage.JusticeRecords))
             {
                 failure = P12EDailyV1OwnerPackageFailure.StageFailed;
                 return false;
@@ -512,7 +512,8 @@ internal sealed class P12EDailyV1OwnerPackage
 
             if (!TryStageCoreOwnerRestore(institutionOfficeSnapshot, propertyEstateSnapshot,
                     factionSnapshot, claimSnapshot, supportSnapshot, decisionSnapshot,
-                    stagedD.Persons, day, stageObserver,
+                    justiceSnapshot, stagedD.Persons, stagedD.SelectedCityOwners,
+                    stagedD.SelectedNpcOwners, day, stageObserver,
                     out P12ECoreOwnerRestoreStage coreOwnerStage))
                 return StageFailed(out failure);
             InstitutionStore stagedInstitutions = coreOwnerStage.Institutions;
@@ -546,12 +547,12 @@ internal sealed class P12EDailyV1OwnerPackage
                 return StageFailed(out failure);
             stageObserver?.Invoke(P12GDailyV1RestoreStage.EBattleOwnerStaged);
 
-            if (!P12EJusticeRecordsSnapshotAdapter.TryStage(justiceSnapshot, stagedD.Cities, stagedD.Npcs, stagedD.Persons,
+            if (!P12EJusticeRecordsSnapshotAdapter.TryStage(justiceSnapshot, stagedD.Cities, stagedD.Npcs,
+                    stagedD.Persons, coreOwnerStage.JusticeRecords,
                     context.FreeStatus, context.WantedStatus, context.ArrestedStatus, context.HiddenStatus,
                     context.DomainEventRecorder, context.Logger,
                     out JusticeSystem stagedJustice, out _, justiceReceiptSnapshot))
                 return StageFailed(out failure);
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.EJusticeOwnerStaged);
 
             if (!crimeSocialSnapshot.TryStage(stagedD.Persons, stagedInstitutions,
                     context.StagedSimulationTime, out CrimeSocialAppraisalWorldState stagedCrimeSocial, out _))
@@ -563,6 +564,7 @@ internal sealed class P12EDailyV1OwnerPackage
                 || stagedSupport == null || stagedDecisions == null || stagedArmedForces == null
                 || stagedManpower == null || stagedPositions == null || stagedConflicts == null
                 || stagedWars == null || stagedBattles == null || stagedJustice == null
+                || !ReferenceEquals(stagedJustice.CoreOwner, coreOwnerStage.JusticeRecords)
                 || stagedCrimeSocial == null
                 || !ReferenceEquals(stagedCrimeSocial.SimulationTime, context.StagedSimulationTime)
                 || stagedCrimeSocial.SimulationTime.AbsoluteDay != day
@@ -598,7 +600,10 @@ internal sealed class P12EDailyV1OwnerPackage
         P12EPoliticalClaimOwnerSnapshot politicalClaims,
         P12EPoliticalSupportOwnerSnapshot politicalSupport,
         P12EPoliticalDecisionOwnerSnapshot politicalDecisions,
+        P12EJusticeRecordsOwnerSnapshot justiceRecords,
         PersonStore persons,
+        IReadOnlyList<DailyV1CityRuntimeOwners> stagedCities,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> stagedNpcs,
         long capturedDay,
         Action<P12GDailyV1RestoreStage> stageObserver,
         out P12ECoreOwnerRestoreStage staged,
@@ -646,6 +651,9 @@ internal sealed class P12EDailyV1OwnerPackage
         if (!builder.TryStagePoliticalDecisions(politicalDecisions, out _))
             return false;
         ObserveCoreOwnerRestoreStep(stageObserver, P12ECoreOwnerRestoreStep.PoliticalDecision);
+        if (!builder.TryStageJusticeRecords(justiceRecords, stagedCities, stagedNpcs, out _))
+            return false;
+        ObserveCoreOwnerRestoreStep(stageObserver, P12ECoreOwnerRestoreStep.JusticeRecords);
         return builder.TryBuild(out staged, out _);
     }
 
@@ -673,6 +681,9 @@ internal sealed class P12EDailyV1OwnerPackage
                 break;
             case P12ECoreOwnerRestoreStep.PoliticalDecision:
                 stageObserver(P12GDailyV1RestoreStage.EPoliticalDecisionsOwnerStaged);
+                break;
+            case P12ECoreOwnerRestoreStep.JusticeRecords:
+                stageObserver(P12GDailyV1RestoreStage.EJusticeOwnerStaged);
                 break;
         }
     }

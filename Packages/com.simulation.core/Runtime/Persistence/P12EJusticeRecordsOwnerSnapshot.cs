@@ -238,6 +238,130 @@ internal sealed class P12EJusticeRecordsOwnerSnapshot
         failure = P12EJusticeSnapshotFailure.None;
         return true;
     }
+
+    /// <summary>
+    /// Reconstructs the authoritative Core Justice owner only after its exact
+    /// staged City/NPC owner roots and PersonStore bindings have been checked.
+    /// Host-specific City/NPC object projections are resolved separately by
+    /// their adapter and never become owner state here.
+    /// </summary>
+    internal bool TryStageCoreOwner(
+        PersonStore stagedPersons,
+        IReadOnlyList<DailyV1CityRuntimeOwners> stagedCities,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> stagedNpcs,
+        out DailyV1JusticeRecordsOwner stagedOwner,
+        out P12EJusticeSnapshotFailure failure)
+    {
+        stagedOwner = null;
+        if (!TryValidate(out failure)) return false;
+        if (stagedPersons == null || stagedCities == null || stagedNpcs == null)
+            return Fail(P12EJusticeSnapshotFailureCode.InvalidReference,
+                "The exact staged Core City, NPC, and PersonStore roots are required.", out failure);
+
+        Dictionary<string, DailyV1CityRuntimeOwners> citiesById =
+            new Dictionary<string, DailyV1CityRuntimeOwners>(StringComparer.Ordinal);
+        Dictionary<string, DailyV1NpcRuntimeOwners> npcsById =
+            new Dictionary<string, DailyV1NpcRuntimeOwners>(StringComparer.Ordinal);
+        HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1CityRuntimeOwners city in stagedCities)
+        {
+            if (city == null || string.IsNullOrWhiteSpace(city.RuntimeId)
+                || !runtimeIds.Add(city.RuntimeId) || !citiesById.TryAdd(city.RuntimeId, city))
+                return Fail(P12EJusticeSnapshotFailureCode.InvalidReference,
+                    "Staged Core City identities are missing or ambiguous.", out failure);
+        }
+        foreach (DailyV1NpcRuntimeOwners npc in stagedNpcs)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || !runtimeIds.Add(npc.RuntimeId) || !npcsById.TryAdd(npc.RuntimeId, npc))
+                return Fail(P12EJusticeSnapshotFailureCode.InvalidReference,
+                    "Staged Core NPC identities are missing, ambiguous, or collide with a City identity.", out failure);
+        }
+
+        try
+        {
+            DailyV1JusticeRecordsOwner candidate = new DailyV1JusticeRecordsOwner();
+            DailyV1JusticeWantedRecordOwner[] wantedRows =
+                new DailyV1JusticeWantedRecordOwner[Records.WantedRows.Count];
+            for (int i = 0; i < Records.WantedRows.Count; i++)
+            {
+                P12EJusticeWantedSnapshotRow row = Records.WantedRows[i];
+                if (!npcsById.ContainsKey(row.TargetRuntimeId)
+                    || !citiesById.ContainsKey(row.CityRuntimeId)
+                    || !HasExactPersonBinding(stagedPersons, row.TargetRuntimeId,
+                        row.TargetPersonIdValue))
+                    return Fail(P12EJusticeSnapshotFailureCode.InvalidReference,
+                        "A wanted row does not resolve to its exact staged Core roots and Person binding.", out failure);
+
+                DailyV1JusticeWantedRecordOwner wanted = new DailyV1JusticeWantedRecordOwner(
+                    row.TargetRuntimeId, row.CityRuntimeId, row.Bounty, row.SentenceDays, row.IsResolved);
+                candidate.AddWantedRecordForStaging(wanted);
+                wantedRows[i] = wanted;
+            }
+
+            for (int i = 0; i < Records.SentenceRows.Count; i++)
+            {
+                P12EJusticeSentenceSnapshotRow row = Records.SentenceRows[i];
+                if (!npcsById.ContainsKey(row.TargetRuntimeId)
+                    || !citiesById.ContainsKey(row.CityRuntimeId)
+                    || !HasExactPersonBinding(stagedPersons, row.TargetRuntimeId,
+                        row.TargetPersonIdValue)
+                    || row.WarrantOrdinal < 0 || row.WarrantOrdinal >= wantedRows.Length)
+                    return Fail(P12EJusticeSnapshotFailureCode.InvalidReference,
+                        "A sentence row does not resolve to its exact staged Core roots, Person binding, or warrant.", out failure);
+
+                DailyV1JusticeWantedRecordOwner warrant = wantedRows[row.WarrantOrdinal];
+                if (warrant == null
+                    || !string.Equals(row.TargetRuntimeId, warrant.TargetRuntimeId, StringComparison.Ordinal)
+                    || !string.Equals(row.CityRuntimeId, warrant.CityRuntimeId, StringComparison.Ordinal))
+                    return Fail(P12EJusticeSnapshotFailureCode.InvalidRelation,
+                        "A sentence must retain its referenced wanted row's exact target and City identities.", out failure);
+
+                candidate.AddSentenceForStaging(new DailyV1JusticeSentenceOwner(
+                    row.TargetRuntimeId, row.CityRuntimeId, warrant,
+                    row.RemainingDays, row.FailedEscapeAttempts, row.WasArrestedToday));
+            }
+
+            if (!candidate.TryInstallExactRevision(Records.Revision))
+                return Fail(P12EJusticeSnapshotFailureCode.StageFailed,
+                    "The Core Justice owner rejected its exact captured local revision.", out failure);
+
+            stagedOwner = candidate;
+            failure = P12EJusticeSnapshotFailure.None;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException
+            || exception is NullReferenceException)
+        {
+            stagedOwner = null;
+            return Fail(P12EJusticeSnapshotFailureCode.StageFailed,
+                "Core Justice owner reconstruction failed: " + exception.Message, out failure);
+        }
+    }
+
+    private static bool HasExactPersonBinding(
+        PersonStore stagedPersons,
+        string targetRuntimeId,
+        string personIdValue)
+    {
+        if (personIdValue == null)
+            return !stagedPersons.TryGetByMaterializedNpcRuntimeId(targetRuntimeId, out _);
+
+        if (!PersonId.TryCreate(personIdValue, out PersonId personId)
+            || !stagedPersons.TryGet(personId, out PersonRuntime person)
+            || person == null
+            || person.PersonId == null
+            || !string.Equals(person.PersonId.Value, personIdValue, StringComparison.Ordinal)
+            || !string.Equals(person.MaterializedNpcRuntimeId, targetRuntimeId, StringComparison.Ordinal)
+            || !stagedPersons.TryGetByMaterializedNpcRuntimeId(
+                targetRuntimeId, out PersonRuntime indexed)
+            || !ReferenceEquals(indexed, person))
+            return false;
+
+        return true;
+    }
+
     private static bool Fail(
         P12EJusticeSnapshotFailureCode code,
         string message,
