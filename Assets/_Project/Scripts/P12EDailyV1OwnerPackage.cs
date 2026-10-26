@@ -285,7 +285,7 @@ internal sealed class P12EDailyV1OwnerPackage
                     out P12EPoliticalClaimOwnerSnapshot claimSnapshot, out _, context.StagingAttempt)
                 || !P12EPoliticalSupportCaptureAdapter.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
-                    out P12EPoliticalSupportOwnerSnapshot supportSnapshot, out _)
+                    out P12EPoliticalSupportOwnerSnapshot supportSnapshot, out _, context.StagingAttempt)
                 || !P12EPoliticalDecisionOwnerSnapshot.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
                     out P12EPoliticalDecisionOwnerSnapshot decisionSnapshot, out _, context.StagingAttempt)

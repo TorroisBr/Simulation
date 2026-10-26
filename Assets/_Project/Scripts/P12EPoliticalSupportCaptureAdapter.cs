@@ -27,11 +27,12 @@ internal static class P12EPoliticalSupportCaptureAdapter
         DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> vector,
         out P12EPoliticalSupportOwnerSnapshot snapshot,
-        out P12EPoliticalSupportSnapshotFailure failure)
+        out P12EPoliticalSupportSnapshotFailure failure,
+        DailyCaptureStagingAttempt stagingAttempt = null)
     {
         IP12EPoliticalSupportCaptureSource source = runtime == null
             ? null
-            : new RuntimeCaptureSource(runtime);
+            : new RuntimeCaptureSource(runtime, stagingAttempt);
         return P12EPoliticalSupportOwnerSnapshot.TryCapture(
             source, token, vector, out snapshot, out failure);
     }
@@ -39,16 +40,20 @@ internal static class P12EPoliticalSupportCaptureAdapter
     private sealed class RuntimeCaptureSource : IP12EPoliticalSupportCaptureSource
     {
         private readonly SimulationRuntime runtime;
+        private readonly DailyCaptureStagingAttempt stagingAttempt;
 
-        internal RuntimeCaptureSource(SimulationRuntime runtime)
+        internal RuntimeCaptureSource(
+            SimulationRuntime runtime,
+            DailyCaptureStagingAttempt stagingAttempt)
         {
             this.runtime = runtime;
+            this.stagingAttempt = stagingAttempt;
         }
 
         public bool IsCaptureCurrent(
             DailyCaptureEligibilityToken token,
             IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionVector) =>
-            runtime != null
-            && runtime.TryValidateCompletedDailyCaptureToken(token, out _);
+            DailyCaptureStagingAttempt.IsCaptureCurrent(
+                runtime, token, ownerSectionVector, stagingAttempt);
     }
 }
