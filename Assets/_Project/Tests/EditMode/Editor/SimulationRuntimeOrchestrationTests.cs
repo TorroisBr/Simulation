@@ -644,7 +644,7 @@ public sealed class SimulationRuntimeOrchestrationTests
         SimulationRuntime runtime = new SimulationRuntime(
             new SimulationTime(0L), null, null, economyEnabled: false);
         System.InvalidOperationException exception = Assert.Throws<System.InvalidOperationException>(
-            () => TesteSimulacao.AdvanceCoreSessionThroughApplication(application, session, runtime));
+            () => TesteSimulacao.AdvanceCoreSessionThroughApplication(application, runtime));
 
         Assert.That(exception.Message,
             Is.EqualTo("A faulted SimulationRuntime cannot advance its world."));

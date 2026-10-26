@@ -2296,7 +2296,7 @@ public class TesteSimulacao : MonoBehaviour
                 expectedSession.Runtime.AdvanceDay();
             else
                 AdvanceCoreSessionThroughApplication(
-                    dailyV1Application, coreSession, expectedSession.Runtime);
+                    dailyV1Application, expectedSession.Runtime);
 
             SimulationActiveSession session;
             if (!TryBeginActiveSessionOperation(expectedSession, out session)) return;
@@ -2334,11 +2334,11 @@ public class TesteSimulacao : MonoBehaviour
 
     internal static void AdvanceCoreSessionThroughApplication(
         DailyV1Application application,
-        DailyV1ActiveRuntimeSession coreSession,
         SimulationRuntime runtime)
     {
-        if (!application.TryAdvanceDay(
-                coreSession, out SimulationRuntimeAdvanceFailure advanceFailure))
+        if (application == null) throw new System.ArgumentNullException(nameof(application));
+        if (runtime == null) throw new System.ArgumentNullException(nameof(runtime));
+        if (!application.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure))
             throw runtime.CreateAdvanceFailureException(advanceFailure);
     }
 

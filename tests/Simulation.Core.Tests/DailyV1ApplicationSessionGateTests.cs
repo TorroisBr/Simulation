@@ -1121,7 +1121,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             }, out session, out ApplicationAdvanceBoundary boundary);
 
         Assert.That(application.TryAdvanceDay(
-            session, out SimulationRuntimeAdvanceFailure failure), Is.False);
+            out SimulationRuntimeAdvanceFailure failure), Is.False);
 
         Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(boundary.OperationEntered, Is.True);
@@ -1143,6 +1143,24 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void ApplicationCannotAdvanceBeforePublishingItsCoreSession()
+    {
+        DailyV1Application application = new DailyV1Application();
+
+        Assert.That(application.TryAdvanceDay(
+            out SimulationRuntimeAdvanceFailure dayFailure), Is.False);
+        Assert.That(dayFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
+
+        Assert.That(application.TryAdvanceDays(
+            1, out int daysAdvanced,
+            out SimulationRuntimeAdvanceFailure batchFailure), Is.False);
+        Assert.That(daysAdvanced, Is.Zero);
+        Assert.That(batchFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
+        Assert.That(application.ActiveSession, Is.Null);
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
     public void ApplicationBatchAdvanceReservesExactSessionAndReleasesAfterRejectedStageConstruction()
     {
         DailyV1Application application = null;
@@ -1158,7 +1176,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             }, out session, out ApplicationAdvanceBoundary boundary);
 
         Assert.That(application.TryAdvanceDays(
-            session, 3, out int daysAdvanced,
+            3, out int daysAdvanced,
             out SimulationRuntimeAdvanceFailure failure), Is.False);
 
         Assert.That(daysAdvanced, Is.Zero,

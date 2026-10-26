@@ -687,6 +687,18 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
+    /// Advances the application's current session without requiring a host to
+    /// retain or select a Core session reference. The operation gate still
+    /// validates that the captured session remains the exact published one.
+    /// </summary>
+    internal bool TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure)
+    {
+        DailyV1ActiveRuntimeSession expectedSession = activeSessionGate.Current;
+        failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+        return expectedSession != null && TryAdvanceDay(expectedSession, out failure);
+    }
+
+    /// <summary>
     /// Advances the exact published session for one serialized multi-day
     /// operation. The execution boundary owns one DailyAdvance scope and lease
     /// for the entire span, including completed-boundary accounting and its
@@ -726,6 +738,19 @@ internal sealed class DailyV1Application
                 && expectedSession.ExecutionBoundaryState.TryAdvanceSelectedDailyV1Days(
                     coreBoundary, dayCount, out daysAdvanced, out failure);
         }
+    }
+
+    /// <summary>Advances the application's current session as one serialized operation.</summary>
+    internal bool TryAdvanceDays(
+        int dayCount,
+        out int daysAdvanced,
+        out SimulationRuntimeAdvanceFailure failure)
+    {
+        DailyV1ActiveRuntimeSession expectedSession = activeSessionGate.Current;
+        daysAdvanced = 0;
+        failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+        return expectedSession != null
+            && TryAdvanceDays(expectedSession, dayCount, out daysAdvanced, out failure);
     }
 
     internal bool TryPublishReplacement(

@@ -27,3 +27,13 @@ The CoreValidation originals are not normalized into a distributable package, so
 ## Preservation and limits
 
 `ProjectSettings/EditorBuildSettings.asset` and `ProjectSettings/ShaderGraphSettings.asset` remain unrelated user changes and were not staged. This candidate is not Core canonical, does not close CORE-F, and does not claim the Unity projection/census ports have been moved into Core.
+
+## Follow-up: application-selected advance surface
+
+The additive source change based on candidate `251afabc1cd198bd9e9898e405d983f469b3e0c4` adds current-session `DailyV1Application.TryAdvanceDay` and `TryAdvanceDays` overloads. The Unity forwarding helper no longer supplies a `DailyV1ActiveRuntimeSession`; Core captures its active session and the existing gate verifies it is still the exact published session. This follow-up does not move the Unity runtime projection, host ports, or P12 census authority into Core.
+
+- Official CoreValidation: 834/834 cold and 834/834 warm; run `214b262df74e44199e49a033fd94a805`; input digest `0745e8b8b4316adfe84e69f524c2007a3a32347bef487962b77f7ac58a693e05`; private manifest SHA-256 `77b3df95658b7a0078f10dd5e173cc4685b80a739d17ddf26f6ae462f188d71a`; original cold/warm TRX SHA-256 `0b89e7bce5ce8fbaccc9fe500317edb38347f159cb62e4acd1782a255c1c279b` and `03c27ae14e2d0cc12353dd333fe1360c51a3d1ff38d94d2fc36767bb8a82a15c`.
+- Official Unity EditMode focused identity `SimulationRuntimeOrchestrationTests.ApplicationBoundSimulationLoopPreservesTypedAdvanceFailureDiagnostic`: 1/1 passed; run `5c2a7fcaa22e4e12b630e2d60d68e4c4`; stable input snapshot SHA-256 `4c87c634fd8ec7f85f922aa2968cc4b5aa5cf92d21aaa804f91c84af3c16b212`; private manifest SHA-256 `ba88bbafa8443b83c7562780db1b830246320adfea648d97182ef4567c1cd2fe`; original XML SHA-256 `3fc9b2988ed181ae502657a49cf852cf840c0c151960fb822b7cefc442c3fb3f`; raw log SHA-256 `e8fbf0ce2843c1014e1c68ba8c37930882f9eea757ce67f5176c2a8cf2a3bb25`.
+- All 18 modified C# source/test files were compared to their corresponding official Unity or CoreValidation input snapshots and matched. The original XML and private logs remain in protected E: evidence directories; no .NET TRX normalization/package is claimed. The prior 3270/3270 full Unity result applies to the preceding checkpoint source; it is not relabeled as a full-suite result for this follow-up.
+- `git diff --check`: passed after this follow-up.
+- The preceding exact candidate `251afabc1cd198bd9e9898e405d983f469b3e0c4` (tree `3d60b4a6c43b6a28c977f1f993ffa6b2ae38b08b`) received independent `VALIDATED_CANDIDATE` review, durably recorded at `4327fd895e3851427f661ce46c9b5d8f885400eb`. That review does not cover the five-file follow-up described here; the follow-up needs its own exact-tip review.
