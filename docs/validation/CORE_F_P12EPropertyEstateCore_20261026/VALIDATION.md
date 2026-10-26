@@ -22,4 +22,3 @@ Status: validated candidate checkpoint only. It is not a P12-E completion, CORE-
 ## Review and limits
 
 Independent exact-tip implementation review: PASS with no actionable findings. See REVIEW.md. The candidate was published on its existing noncanonical branch. Unrelated user changes and protected local evidence were not staged or included. This source move does not establish detached P12-E restoration, full owner closure, DailyV1Application readiness, or CORE-F completion.
-
