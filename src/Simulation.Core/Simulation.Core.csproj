@@ -33,8 +33,14 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalKnowledge.cs" Link="Political/PoliticalKnowledge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalKnowledgeStore.cs" Link="Political/PoliticalKnowledgeStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalKnowledgeStoreCensusProvider.cs" Link="Political/PoliticalKnowledgeStoreCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/EstateContracts.cs" Link="Property/EstateContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/EstateStore.cs" Link="Property/EstateStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/EstateCensusProvider.cs" Link="Property/EstateCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PropertyEstateOwnerSnapshot.cs" Link="Persistence/PropertyEstateOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPropertyEstateOwnerCodec.cs" Link="Persistence/P12EPropertyEstateOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyContracts.cs" Link="Property/PropertyContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyOwnershipStore.cs" Link="Property/PropertyOwnershipStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyOwnershipCensusProvider.cs" Link="Property/PropertyOwnershipCensusProvider.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyTransferContracts.cs" Link="Property/PropertyTransferContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyTransferSystem.cs" Link="Property/PropertyTransferSystem.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationTypes.cs" Link="Configuration/SimulationConfigurationTypes.cs" />

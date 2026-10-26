@@ -31,6 +31,7 @@
     <Compile Include="DailyV1RuntimeIdentityIndexTests.cs" />
     <Compile Include="P12ARuntimeIdentityOwnerCodecTests.cs" Link="Persistence/P12ARuntimeIdentityOwnerCodecTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12ANpcOwnerDecoderTests.cs" Link="Persistence/P12ANpcOwnerDecoderTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12EPropertyEstateOwnerCodecTests.cs" Link="Persistence/P12EPropertyEstateOwnerCodecTests.cs" />
     <Compile Include="SpatialNetworkOwnerCodecTests.cs" Link="Persistence/SpatialNetworkOwnerCodecTests.cs" />
     <Compile Include="SpatialNetworkOwnerHydratorTests.cs" Link="Persistence/SpatialNetworkOwnerHydratorTests.cs" />
     <Compile Include="MoneyAccountRuntimeCoreTests.cs" />
