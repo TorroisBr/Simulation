@@ -11853,7 +11853,7 @@ public sealed class SimulationRuntimeAdmissionTests
             out PropertyEstateOwnerSnapshotFailure propertyEstateFailure), Is.True,
             propertyEstateFailure?.Message);
         snapshots.Add("E/PropertyEstate", propertyEstateSnapshot);
-        Assert.That(P12EFactionOwnerSnapshot.TryCapture(
+        Assert.That(P12EFactionCaptureAdapter.TryCapture(
             runtime, GetRequiredOwner<FactionStore>(vector, FactionStoreCensusProvider.FactionsSectionId),
             token, vector,
             out P12EFactionOwnerSnapshot factionSnapshot,

@@ -1774,7 +1774,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         AppendPropertyEstateSnapshot(signature, propertyEstate);
 
         FactionStore factionOwner = GetOwner<FactionStore>(vector, FactionStoreCensusProvider.FactionsSectionId);
-        Assert.That(P12EFactionOwnerSnapshot.TryCapture(
+        Assert.That(P12EFactionCaptureAdapter.TryCapture(
             runtime, factionOwner, token, vector,
             out P12EFactionOwnerSnapshot factions,
             out P12EFactionSnapshotFailure factionFailure), Is.True, factionFailure?.Message);

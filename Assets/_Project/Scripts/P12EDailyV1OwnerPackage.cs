@@ -277,7 +277,7 @@ internal sealed class P12EDailyV1OwnerPackage
                 || !PropertyEstateOwnerSnapshot.TryCapture(
                     propertyOwner, estateOwner, exactCompletedToken, exactTokenOwnerSections,
                     out PropertyEstateOwnerSnapshot propertyEstateSnapshot, out _)
-                || !P12EFactionOwnerSnapshot.TryCapture(
+                || !P12EFactionCaptureAdapter.TryCapture(
                     sourceRuntime, factionOwner, exactCompletedToken, exactTokenOwnerSections,
                     out P12EFactionOwnerSnapshot factionSnapshot, out _, context.StagingAttempt)
                 || !P12EPoliticalClaimOwnerSnapshot.TryCapture(

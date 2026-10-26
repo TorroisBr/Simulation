@@ -75,23 +75,13 @@ internal sealed class P12EFactionOwnerSnapshot
         P12EFactionSnapshotSection<P12EFactionAffiliationSnapshotRecord> affiliations)
     { Factions = factions; Affiliations = affiliations; }
 
-    internal static bool TryCapture(SimulationRuntime runtime, FactionStore owner,
-        out P12EFactionOwnerSnapshot snapshot, out P12EFactionSnapshotFailure failure)
-    {
-        snapshot = null; failure = P12EFactionSnapshotFailure.Create(P12EFactionSnapshotFailureCode.InvalidCaptureContext,
-            "Capture requires the live admitted Daily-v1 runtime and its section vector.");
-        if (runtime == null || !runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken token, out DailyCaptureEligibilityFailure tokenFailure)
-            || tokenFailure != DailyCaptureEligibilityFailure.None || token == null) return false;
-        return TryCapture(runtime, owner, token, token.OwnerSections, out snapshot, out failure);
-    }
-
-    internal static bool TryCapture(SimulationRuntime runtime, FactionStore owner, DailyCaptureEligibilityToken token,
+    internal static bool TryCapture(IP12EFactionCaptureSource captureSource, FactionStore owner, DailyCaptureEligibilityToken token,
         IReadOnlyList<OwnerSectionCensusSnapshot> vector, out P12EFactionOwnerSnapshot snapshot,
-        out P12EFactionSnapshotFailure failure, DailyCaptureStagingAttempt stagingAttempt = null)
+        out P12EFactionSnapshotFailure failure)
     {
         snapshot = null; failure = P12EFactionSnapshotFailure.Create(P12EFactionSnapshotFailureCode.InvalidCaptureContext,
             "Capture requires the exact completed-boundary token and section vector.");
-        if (runtime == null || owner == null || token == null || vector == null || !ReferenceEquals(token.OwnerSections, vector)
+        if (captureSource == null || owner == null || token == null || vector == null || !ReferenceEquals(token.OwnerSections, vector)
             || token.AdmissionContext == null || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || token.CompletedCoreSequence <= 0L || token.AbsoluteDay < 0L || token.MutationEpoch < 0L) return false;
         IReadOnlyList<FactionRecord> factions = owner.Factions;
@@ -127,7 +117,7 @@ internal sealed class P12EFactionOwnerSnapshot
             || owner.Revision != revision || owner.Count != factionCount || owner.AffiliationCount != affiliationCount
             || !Matches(vector, FactionStoreCensusProvider.FactionsSectionId, owner, factionCount, revision)
             || !Matches(vector, FactionStoreCensusProvider.AffiliationsSectionId, owner, affiliationCount, revision)
-            || !DailyCaptureStagingAttempt.IsCaptureCurrent(runtime, token, vector, stagingAttempt))
+            || !captureSource.IsCaptureCurrent(token, vector))
         {
             snapshot = null;
             if (failure.Code == P12EFactionSnapshotFailureCode.None) failure = P12EFactionSnapshotFailure.Create(
