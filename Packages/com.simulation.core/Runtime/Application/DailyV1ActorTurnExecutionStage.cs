@@ -88,11 +88,8 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
         DailyV1NpcRuntimeOwners actor,
         out IDailyV1SelectedActionProjectionBoundary projectionBoundary);
 
-    bool TryGetDecisionRecordOwners(
-        DailyV1NpcRuntimeOwners actor,
-        out RuntimeIdAllocator idAllocator,
-        out SimulationRecordSequence recordSequence,
-        out NpcDecisionStore decisionStore);
+    // Decision identity roots are supplied by DailyV1ActorTurnCoreRoots for admitted sessions.
+    // Legacy actor-choice hosts retain their separate compatibility port.
 
     bool TryPrepareSelectedActionProjection(
         DailyV1NpcRuntimeOwners actor,

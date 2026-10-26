@@ -1920,6 +1920,19 @@ public sealed class DailyV1SelectedActionDispatchOutcomeTests
     }
 
     [Test]
+    public void SelectedActionBoundaryDoesNotSupplyDecisionIdentityRoots()
+    {
+        Assert.That(
+            typeof(IDailyV1SelectedActorActionExecutionBoundary).GetMethod("TryGetDecisionRecordOwners"),
+            Is.Null,
+            "An admitted selected action obtains identity roots from its Core execution state, not its host projection boundary.");
+        Assert.That(
+            typeof(IDailyV1ActorChoiceExecutionBoundary).GetMethod("TryGetDecisionRecordOwners"),
+            Is.Not.Null,
+            "The legacy actor-choice compatibility port retains its existing root lookup.");
+    }
+
+    [Test]
     public void HostCompletionContractCannotReturnOrReplaceActionOutcome()
     {
         var method = typeof(IDailyV1SelectedActorActionExecutionBoundary).GetMethod(

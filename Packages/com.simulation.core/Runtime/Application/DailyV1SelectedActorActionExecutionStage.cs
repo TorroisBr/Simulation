@@ -287,10 +287,17 @@ internal static class DailyV1SelectedActorActionExecutionStage
             decisionStore = coreRoots.DecisionStore;
             hasDecisionOwners = true;
         }
+        else if (boundary is IDailyV1ActorChoiceExecutionBoundary actorChoiceBoundary)
+        {
+            hasDecisionOwners = actorChoiceBoundary.TryGetDecisionRecordOwners(
+                actor, out idAllocator, out recordSequence, out decisionStore);
+        }
         else
         {
-            hasDecisionOwners = boundary.TryGetDecisionRecordOwners(
-                actor, out idAllocator, out recordSequence, out decisionStore);
+            idAllocator = null;
+            recordSequence = null;
+            decisionStore = null;
+            hasDecisionOwners = false;
         }
 
         bool committed;
