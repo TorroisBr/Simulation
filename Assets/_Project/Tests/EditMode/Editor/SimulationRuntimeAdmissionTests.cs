@@ -12069,6 +12069,81 @@ public sealed class SimulationRuntimeAdmissionTests
             .Append(':').Append(value).Append(';');
     }
 
+    [TestCase((int)P12GDailyV1RestoreStage.OwnersStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.TargetChecksCompleted)]
+    [TestCase((int)P12GDailyV1RestoreStage.BoundaryAdmitted)]
+    public void CoreContinuationSaveRejectsOperationClosedByRestoreStageCallback(
+        int invalidateAtValue)
+    {
+        P12GDailyV1RestoreStage invalidateAt = (P12GDailyV1RestoreStage)invalidateAtValue;
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G Core save operation callback invalidation");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession sourceSession =
+                ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(sourceSession?.CoreRuntimeSession, Is.Not.Null);
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+
+            DailyV1Application application =
+                ReadPrivateField<DailyV1Application>(source, "dailyV1Application");
+            DailyV1ActiveRuntimeSession coreSession = sourceSession.CoreRuntimeSession;
+            Assert.That(application, Is.Not.Null);
+            Assert.That(application.TryBeginContinuationSaveOperation(
+                coreSession,
+                out DailyV1P12GContinuationSaveOperation operation,
+                out DailyCaptureEligibilityFailure beginFailure), Is.True, beginFailure.ToString());
+
+            bool callbackInvoked = false;
+            P12AContinuationImage image;
+            SimulationActiveSession restored;
+            P12GDailyV1RestoreFailure failure;
+            string diagnostic;
+            using (operation)
+            {
+                Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                    sourceSession,
+                    sourceSession.AdmissionContext,
+                    operation,
+                    out image,
+                    out restored,
+                    out failure,
+                    out diagnostic,
+                    stage =>
+                    {
+                        if (stage != invalidateAt) return;
+                        callbackInvoked = true;
+                        operation.Dispose();
+                    }), Is.False,
+                    "A closed Core continuation-save operation must not fall back to Unity token validation.");
+            }
+
+            Assert.That(callbackInvoked, Is.True, invalidateAt.ToString());
+            Assert.That(image, Is.Null);
+            Assert.That(restored, Is.Null);
+            Assert.That(failure, Is.Not.EqualTo(P12GDailyV1RestoreFailure.None), diagnostic);
+            Assert.That(application.ActiveSession, Is.SameAs(coreSession));
+            Assert.That(application.ActiveOperationCount, Is.Zero);
+            Assert.That(sourceSession.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+
+            Assert.That(application.TryBeginContinuationSaveOperation(
+                coreSession,
+                out DailyV1P12GContinuationSaveOperation retry,
+                out DailyCaptureEligibilityFailure retryFailure), Is.True, retryFailure.ToString());
+            retry.Dispose();
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
     [Test]
     public void PersistedDailyV1ImageRestoresWithoutUsingSourceSessionAndContinuesIdentically()
     {

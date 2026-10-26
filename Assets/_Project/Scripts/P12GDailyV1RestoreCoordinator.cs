@@ -182,7 +182,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         out P12AContinuationImage image,
         out SimulationActiveSession restoredSession,
         out P12GDailyV1RestoreFailure failure,
-        out string diagnostic)
+        out string diagnostic,
+        Action<P12GDailyV1RestoreStage> stageObserver = null)
     {
         if (continuationSaveOperation == null)
         {
@@ -196,7 +197,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         return TryCreateRestoredSessionCore(
             sourceSession, bootstrapAdmissionContext, true, null,
             out image, out restoredSession, out failure, out diagnostic,
-            null, null, null, null, null, null, null, null, null,
+            stageObserver, null, null, null, null, null, null, null, null,
             null, null, continuationSaveOperation);
     }
 
@@ -544,7 +545,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
 
             if (!stagingAttempt.IsCurrentFor(sourceRuntime, sourceToken, sourceOwnerSections)
                 || !IsSourceTokenCurrent(
-                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation))
+                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation,
+                    continuationSaveOperation))
             {
                 failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
                 diagnostic = "The source completed boundary changed during private staging.";
@@ -697,13 +699,22 @@ internal static partial class P12GDailyV1RestoreCoordinator
 
             if (!stagingAttempt.IsCurrentFor(sourceRuntime, sourceToken, sourceOwnerSections)
                 || !IsSourceTokenCurrent(
-                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation))
+                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation,
+                    continuationSaveOperation))
             {
                 failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
                 diagnostic = "The source completed boundary changed during final target graph validation.";
                 return false;
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetChecksCompleted);
+            if (!IsSourceTokenCurrent(
+                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation,
+                    continuationSaveOperation))
+            {
+                failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
+                diagnostic = "The Core continuation-save operation or source boundary changed after target checks.";
+                return false;
+            }
 
             if (!targetRuntime.TryBindRestoredCandidateMutationGuard(out string mutationGuardDiagnostic))
             {
@@ -758,7 +769,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             if (!targetRuntime.HasValidRestoredDailyBoundaryAdmission()
                 || !targetRuntime.IsHealthyDailyOwnerThreadBoundary()
                 || !IsSourceTokenCurrent(
-                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation))
+                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation,
+                    continuationSaveOperation))
             {
                 failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
                 diagnostic = "The admitted target or source boundary changed before the publication handoff.";
@@ -770,6 +782,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     worldIdentitySnapshot, allocatorSnapshot, recordSequenceSnapshot, spatialSnapshot,
                     manifestSnapshot, randomSnapshot, stagedD, stagedE, capturedF,
                     dotNetIdentity,
+                    continuationSaveOperation,
                     out continuationImage, out P12AResult imageResult))
             {
                 failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
@@ -811,6 +824,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         P12EDailyV1OwnerPackage e,
         P12FDailyV1OwnerCapture f,
         DailyV1HostEnvironmentIdentity dotNetIdentity,
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation,
         out P12AContinuationImage image,
         out P12AResult result)
     {
@@ -820,7 +834,9 @@ internal static partial class P12GDailyV1RestoreCoordinator
         P12ACompatibilityDescriptorV2 compatibilityV2 = null;
         if (sourceSession == null || token == null || ownerSections == null
             || !ReferenceEquals(token.OwnerSections, ownerSections)
-            || !sourceSession.Runtime.TryValidateCompletedDailyCaptureTokenForContinuationSave(token, out _)
+            || (continuationSaveOperation != null
+                ? !IsSourceTokenCurrent(sourceSession.Runtime, token, true, null, continuationSaveOperation)
+                : !sourceSession.Runtime.TryValidateCompletedDailyCaptureTokenForContinuationSave(token, out _))
             || !P12ADailyV1Census.TryCreate(ownerSections, out P12ADailyV1Census census, out result)
             || !P12ACSpatialAuthorityCodec.TryComputeFingerprint(spatialAuthority,
                 out string p8Fingerprint))
@@ -881,7 +897,9 @@ internal static partial class P12GDailyV1RestoreCoordinator
             image = null;
             return false;
         }
-        if (!sourceSession.Runtime.TryValidateCompletedDailyCaptureTokenForContinuationSave(token, out _))
+        if (continuationSaveOperation != null
+            ? !IsSourceTokenCurrent(sourceSession.Runtime, token, true, null, continuationSaveOperation)
+            : !sourceSession.Runtime.TryValidateCompletedDailyCaptureTokenForContinuationSave(token, out _))
         {
             image = null;
             result = new P12AResult(P12AResultCode.CaptureRejected);
