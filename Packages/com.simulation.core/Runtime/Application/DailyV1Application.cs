@@ -415,6 +415,68 @@ internal sealed class DailyV1Application
         return true;
     }
 
+    /// <summary>
+    /// Persists a P12-G image only while the exact Core continuation-save
+    /// operation that authorized its capture remains active. This is the
+    /// Core-owned census/encode/atomic-store half of the Unity migration
+    /// route; image capture itself remains in the P12-G owner coordinator
+    /// until its selected owner staging closure is moved into Core.
+    /// </summary>
+    internal bool TryPersistContinuationImage(
+        DailyV1P12GContinuationSaveOperation operation,
+        P12AContinuationImage image,
+        string persistentDataRoot,
+        IAtomicFileSlotOperations fileOperations,
+        out P12AResult result)
+    {
+        result = new P12AResult(P12AResultCode.CaptureRejected);
+        if (operation == null || !operation.IsActive || !operation.IsOwnedBy(this)
+            || !ReferenceEquals(activeSessionGate.Current, operation.Session))
+            return false;
+
+        if (!operation.Session.AdmissionContext.IsOwnedByCurrentThread())
+        {
+            result = new P12AResult(P12AResultCode.WrongThread);
+            return false;
+        }
+
+        if (image == null || image.Header == null || !image.Header.IsValid
+            || string.IsNullOrWhiteSpace(persistentDataRoot) || fileOperations == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        if (!operation.TryRevalidate(out _))
+            return false;
+
+        if (!P12ADailyV1Census.TryCreateForImage(
+                image, out P12ADailyV1Census census, out result)
+            || !P12AContinuationCodec.TryEncode(
+                image, census.Manifest, out byte[] bytes, out result))
+            return false;
+
+        // Encoding traverses every owner section. Confirm that the same
+        // completed boundary still authorizes the bytes immediately before
+        // the externally supplied storage operations begin.
+        if (!operation.TryRevalidate(out _))
+        {
+            result = new P12AResult(P12AResultCode.CaptureRejected);
+            return false;
+        }
+
+        if (image.Header.Compatibility != null && image.Header.CompatibilityV2 == null)
+            return P12AContinuationStore.TrySave(bytes, census.Manifest,
+                image.Header.Compatibility, persistentDataRoot, fileOperations, out result);
+
+        if (image.Header.Compatibility == null && image.Header.CompatibilityV2 != null)
+            return P12AContinuationStore.TrySaveDotNetV2(bytes, census.Manifest,
+                image.Header.CompatibilityV2, persistentDataRoot, fileOperations, out result);
+
+        result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        return false;
+    }
+
     internal void EndContinuationSaveOperation()
     {
         activeSessionGate.EndOperation(DailyV1OperationScopeKind.ContinuationSave);

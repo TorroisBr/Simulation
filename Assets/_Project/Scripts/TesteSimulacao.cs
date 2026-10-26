@@ -526,6 +526,19 @@ public class TesteSimulacao : MonoBehaviour
             return false;
         }
 
+        if (continuationSaveOperation != null)
+        {
+            if (!continuationSaveOperation.TryPersistImage(
+                    image, persistentDataPath, SystemAtomicFileSlotOperations.Instance, out result))
+            {
+                if (result == null) result = new P12AResult(P12AResultCode.CaptureRejected);
+                session.Logger.LogError("P12-A continuation save failed: " + result.Code + ".");
+                return false;
+            }
+
+            return true;
+        }
+
         if (image == null
             || !P12ADailyV1Census.TryCreateForImage(
                 image,
@@ -547,7 +560,6 @@ public class TesteSimulacao : MonoBehaviour
             session.Logger.LogError("P12-A continuation save failed: " + result.Code + ".");
             return false;
         }
-
         return true;
     }
 

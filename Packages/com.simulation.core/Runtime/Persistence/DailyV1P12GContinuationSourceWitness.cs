@@ -120,6 +120,25 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
             Session, SourceWitness, out failure);
     }
 
+    internal bool TryPersistImage(
+        P12AContinuationImage image,
+        string persistentDataRoot,
+        IAtomicFileSlotOperations fileOperations,
+        out P12AResult result)
+    {
+        DailyV1Application owner = Volatile.Read(ref application);
+        if (owner == null)
+        {
+            result = new P12AResult(P12AResultCode.CaptureRejected);
+            return false;
+        }
+        return owner.TryPersistContinuationImage(
+            this, image, persistentDataRoot, fileOperations, out result);
+    }
+
+    internal bool IsOwnedBy(DailyV1Application candidate) =>
+        ReferenceEquals(Volatile.Read(ref application), candidate);
+
     public void Dispose()
     {
         lock (disposalSyncRoot)
