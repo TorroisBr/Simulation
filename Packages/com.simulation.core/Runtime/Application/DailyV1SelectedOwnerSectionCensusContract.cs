@@ -133,6 +133,13 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
     internal static string NpcSectionIdFor(int familyIndex, string runtimeId) =>
         NpcPrefixes[familyIndex] + runtimeId;
 
+    internal static string NpcStatusCrimeSectionIdFor(string runtimeId)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId))
+            throw new ArgumentException("NPC status census requires a RuntimeId.", nameof(runtimeId));
+        return NpcStatusCrimePrefix + runtimeId;
+    }
+
     internal static string NpcResidenceSectionIdFor(string runtimeId) => NpcResidencePrefix + runtimeId;
 
     internal static string NpcLocalObservationReceiptsSectionIdFor(string runtimeId) =>

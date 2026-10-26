@@ -11,11 +11,7 @@ public static class P12CrimeJusticeCensusProvider
     public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     public static string NpcStatusSectionIdFor(string runtimeId)
-    {
-        if (string.IsNullOrWhiteSpace(runtimeId))
-            throw new ArgumentException("NPC status census requires a RuntimeId.", nameof(runtimeId));
-        return NpcStatusSectionPrefix + runtimeId;
-    }
+        => DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(runtimeId);
 
     public static IReadOnlyList<IOwnerSectionCensusProvider> CreateNpcStatusProviders(
         IReadOnlyList<NpcRuntime> roster)

@@ -74,6 +74,32 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
     }
 
     [Test]
+    public void NpcStatusBindingUsesExactCoreCompositeAndItsPersistedRevision()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition npcDefinition = definitions.Npcs.Values.First();
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-status-binding", definitions, npcDefinition, 0f,
+            out DailyV1NpcRuntimeOwners owner), Is.True);
+
+        DailyV1P12CrimeJusticeOwnerBinding binding =
+            DailyV1P12CrimeJusticeOwnerBinding.ForNpcStatusOwner(owner);
+
+        Assert.That(binding.OwnerIdentity, Is.SameAs(owner));
+        Assert.That(binding.SectionId, Is.EqualTo(
+            DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(owner.RuntimeId)));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.NpcSectionPrefixFor(19),
+            Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix));
+        Assert.That(owner.TryInstallCrimeJusticeRevision(17L), Is.True);
+        Assert.That(binding.ReadRevision(), Is.EqualTo(17L),
+            "The operation binding observes the restored composite owner's exact revision.");
+        owner.NotifyCrimeJusticeMutationCommitted();
+        Assert.That(binding.ReadRevision(), Is.EqualTo(18L));
+        Assert.Throws<ArgumentException>(() =>
+            DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(" "));
+    }
+
+    [Test]
     public void ImmediateMutationRequiresExactOwnerAndNotifiesCommittedWriteImmediately()
     {
         FakeProtocol protocol = new FakeProtocol();

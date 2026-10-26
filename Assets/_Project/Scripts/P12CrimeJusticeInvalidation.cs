@@ -216,14 +216,20 @@ public sealed partial class SimulationRuntime
             || !ReferenceEquals(installed, npc)
             || !p12CrimeJusticeBoundNpcs.Contains(npc))
             return null;
-        return P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(npc.RuntimeId);
+        DailyV1NpcRuntimeOwners selectedOwner = npc.SelectedRuntimeOwners;
+        if (selectedOwner != null
+            && !string.Equals(selectedOwner.RuntimeId, npc.RuntimeId, StringComparison.Ordinal))
+            return null;
+        return DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(npc.RuntimeId);
     }
 
     private DailyV1P12CrimeJusticeOwnerBinding CreateP12CrimeJusticeNpcBinding(NpcRuntime npc)
     {
         string sectionId = GetP12CrimeJusticeNpcSectionId(npc);
-        return sectionId == null
-            ? null
+        if (sectionId == null) return null;
+        DailyV1NpcRuntimeOwners selectedOwner = npc.SelectedRuntimeOwners;
+        return selectedOwner != null
+            ? DailyV1P12CrimeJusticeOwnerBinding.ForNpcStatusOwner(selectedOwner)
             : new DailyV1P12CrimeJusticeOwnerBinding(
                 npc, sectionId, () => npc.P12CrimeJusticeRevision);
     }
@@ -462,25 +468,27 @@ public sealed partial class SimulationRuntime
     private bool CanCommitP12NpcCrimeJusticeMutation(NpcRuntime npc)
     {
         if (runtimeAdmissionContext == null) return true;
-        string sectionId = GetP12CrimeJusticeNpcSectionId(npc);
-        if (sectionId == null)
+        DailyV1P12CrimeJusticeOwnerBinding binding = CreateP12CrimeJusticeNpcBinding(npc);
+        if (binding == null)
         {
             FaultRuntimeAdmission();
             return false;
         }
-        return P12CrimeJusticeMutationCoordinator.CanCommit(npc, sectionId);
+        return P12CrimeJusticeMutationCoordinator.CanCommit(
+            binding.OwnerIdentity, binding.SectionId);
     }
 
     private void NotifyP12NpcCrimeJusticeMutation(NpcRuntime npc)
     {
         if (runtimeAdmissionContext == null) return;
-        string sectionId = GetP12CrimeJusticeNpcSectionId(npc);
-        if (sectionId == null)
+        DailyV1P12CrimeJusticeOwnerBinding binding = CreateP12CrimeJusticeNpcBinding(npc);
+        if (binding == null)
         {
             FaultRuntimeAdmission();
             return;
         }
-        P12CrimeJusticeMutationCoordinator.NotifyCommitted(npc, sectionId);
+        P12CrimeJusticeMutationCoordinator.NotifyCommitted(
+            binding.OwnerIdentity, binding.SectionId);
     }
 
     private bool CanCommitP12JusticeRecordsMutation(JusticeSystem justice)

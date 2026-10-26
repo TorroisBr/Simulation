@@ -26,6 +26,16 @@ internal sealed class DailyV1P12CrimeJusticeOwnerBinding
             : sectionId;
         ReadRevision = readRevision ?? throw new ArgumentNullException(nameof(readRevision));
     }
+
+    internal static DailyV1P12CrimeJusticeOwnerBinding ForNpcStatusOwner(
+        DailyV1NpcRuntimeOwners owner)
+    {
+        if (owner == null) throw new ArgumentNullException(nameof(owner));
+        return new DailyV1P12CrimeJusticeOwnerBinding(
+            owner,
+            DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(owner.RuntimeId),
+            () => owner.CrimeJusticeRevision);
+    }
 }
 
 /// <summary>
