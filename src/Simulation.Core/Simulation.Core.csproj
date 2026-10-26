@@ -27,10 +27,13 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EFactionCaptureSource.cs" Link="Persistence/IP12EFactionCaptureSource.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EPoliticalClaimCaptureSource.cs" Link="Persistence/IP12EPoliticalClaimCaptureSource.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EPoliticalSupportCaptureSource.cs" Link="Persistence/IP12EPoliticalSupportCaptureSource.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EPoliticalDecisionCaptureSource.cs" Link="Persistence/IP12EPoliticalDecisionCaptureSource.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalClaimOwnerSnapshot.cs" Link="Persistence/P12EPoliticalClaimOwnerSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalClaimOwnerCodec.cs" Link="Persistence/P12EPoliticalClaimOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalSupportOwnerSnapshot.cs" Link="Persistence/P12EPoliticalSupportOwnerSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalSupportOwnerCodec.cs" Link="Persistence/P12EPoliticalSupportOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalDecisionOwnerSnapshot.cs" Link="Persistence/P12EPoliticalDecisionOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalDecisionOwnerCodec.cs" Link="Persistence/P12EPoliticalDecisionOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12ECoreOwnerRestoreStager.cs" Link="Persistence/DailyV1P12ECoreOwnerRestoreStager.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EFactionOwnerSnapshot.cs" Link="Persistence/P12EFactionOwnerSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EFactionOwnerCodec.cs" Link="Persistence/P12EFactionOwnerCodec.cs" />
@@ -45,6 +48,8 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalSupportTransitions.cs" Link="Political/PoliticalSupportTransitions.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalSupportStore.cs" Link="Political/PoliticalSupportStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalSupportStoreCensusProviders.cs" Link="Political/PoliticalSupportStoreCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalDecision.cs" Link="Political/PoliticalDecision.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalDecisionStoreCensusProvider.cs" Link="Political/PoliticalDecisionStoreCensusProvider.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionContracts.cs" Link="Political/FactionContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionStore.cs" Link="Political/FactionStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionTransitions.cs" Link="Political/FactionTransitions.cs" />

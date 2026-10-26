@@ -286,7 +286,7 @@ internal sealed class P12EDailyV1OwnerPackage
                 || !P12EPoliticalSupportCaptureAdapter.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
                     out P12EPoliticalSupportOwnerSnapshot supportSnapshot, out _, context.StagingAttempt)
-                || !P12EPoliticalDecisionOwnerSnapshot.TryCapture(
+                || !P12EPoliticalDecisionCaptureAdapter.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
                     out P12EPoliticalDecisionOwnerSnapshot decisionSnapshot, out _, context.StagingAttempt)
                 || !P12EMilitaryOwnerSnapshot.TryCapture(
@@ -326,7 +326,7 @@ internal sealed class P12EDailyV1OwnerPackage
             P12DDailyV1OwnerPackage stagedD = context.P12DPackage;
             P12CStagedContinuationRoot stagedC = context.P12CRoots;
             if (!TryStageCoreOwnerRestore(institutionOfficeSnapshot, propertyEstateSnapshot,
-                    factionSnapshot, claimSnapshot, supportSnapshot, stagedD.Persons,
+                    factionSnapshot, claimSnapshot, supportSnapshot, decisionSnapshot, stagedD.Persons,
                     exactCompletedToken.AbsoluteDay, stageObserver,
                     out P12ECoreOwnerRestoreStage coreOwnerStage,
                     propertyEstateSnapshotOverrideForTest, factionSnapshotOverrideForTest,
@@ -343,15 +343,7 @@ internal sealed class P12EDailyV1OwnerPackage
             FactionStore stagedFactions = coreOwnerStage.Factions;
             PoliticalClaimStore stagedClaims = coreOwnerStage.PoliticalClaims;
             PoliticalSupportStore stagedSupport = coreOwnerStage.PoliticalSupport;
-
-            if (!decisionSnapshot.TryStage(
-                    stagedD.Persons, stagedInstitutions, stagedOffices, stagedClaims,
-                    out PoliticalDecisionStore stagedDecisions, out _))
-            {
-                failure = P12EDailyV1OwnerPackageFailure.StageFailed;
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.EPoliticalDecisionsOwnerStaged);
+            PoliticalDecisionStore stagedDecisions = coreOwnerStage.PoliticalDecisions;
 
             if (!militarySnapshot.TryStage(
                     stagedD.Persons, stagedC.SpatialAuthority, null,
@@ -519,7 +511,7 @@ internal sealed class P12EDailyV1OwnerPackage
             P12AJusticeReceiptOwnerSnapshot justiceReceiptSnapshot = decoded.JusticeReceipts;
 
             if (!TryStageCoreOwnerRestore(institutionOfficeSnapshot, propertyEstateSnapshot,
-                    factionSnapshot, claimSnapshot, supportSnapshot,
+                    factionSnapshot, claimSnapshot, supportSnapshot, decisionSnapshot,
                     stagedD.Persons, day, stageObserver,
                     out P12ECoreOwnerRestoreStage coreOwnerStage))
                 return StageFailed(out failure);
@@ -530,11 +522,7 @@ internal sealed class P12EDailyV1OwnerPackage
             FactionStore stagedFactions = coreOwnerStage.Factions;
             PoliticalClaimStore stagedClaims = coreOwnerStage.PoliticalClaims;
             PoliticalSupportStore stagedSupport = coreOwnerStage.PoliticalSupport;
-
-            if (!decisionSnapshot.TryStage(stagedD.Persons, stagedInstitutions, stagedOffices,
-                    stagedClaims, out PoliticalDecisionStore stagedDecisions, out _))
-                return StageFailed(out failure);
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.EPoliticalDecisionsOwnerStaged);
+            PoliticalDecisionStore stagedDecisions = coreOwnerStage.PoliticalDecisions;
 
             if (!militarySnapshot.TryStage(stagedD.Persons, stagedC.SpatialAuthority, null,
                     out ArmedForceStore stagedArmedForces,
@@ -609,6 +597,7 @@ internal sealed class P12EDailyV1OwnerPackage
         P12EFactionOwnerSnapshot faction,
         P12EPoliticalClaimOwnerSnapshot politicalClaims,
         P12EPoliticalSupportOwnerSnapshot politicalSupport,
+        P12EPoliticalDecisionOwnerSnapshot politicalDecisions,
         PersonStore persons,
         long capturedDay,
         Action<P12GDailyV1RestoreStage> stageObserver,
@@ -653,6 +642,10 @@ internal sealed class P12EDailyV1OwnerPackage
         if (!builder.TryStagePoliticalSupport(effectivePoliticalSupport, out _))
             return false;
         ObserveCoreOwnerRestoreStep(stageObserver, P12ECoreOwnerRestoreStep.PoliticalSupport);
+
+        if (!builder.TryStagePoliticalDecisions(politicalDecisions, out _))
+            return false;
+        ObserveCoreOwnerRestoreStep(stageObserver, P12ECoreOwnerRestoreStep.PoliticalDecision);
         return builder.TryBuild(out staged, out _);
     }
 
@@ -677,6 +670,9 @@ internal sealed class P12EDailyV1OwnerPackage
                 break;
             case P12ECoreOwnerRestoreStep.PoliticalSupport:
                 stageObserver(P12GDailyV1RestoreStage.EPoliticalSupportOwnerStaged);
+                break;
+            case P12ECoreOwnerRestoreStep.PoliticalDecision:
+                stageObserver(P12GDailyV1RestoreStage.EPoliticalDecisionsOwnerStaged);
                 break;
         }
     }

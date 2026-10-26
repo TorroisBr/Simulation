@@ -166,40 +166,19 @@ internal sealed class P12EPoliticalDecisionOwnerSnapshot
     }
 
     internal static bool TryCapture(
-        SimulationRuntime runtime,
+        IP12EPoliticalDecisionCaptureSource captureSource,
+        DailyCaptureEligibilityToken token,
+        IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
         out P12EPoliticalDecisionOwnerSnapshot snapshot,
         out P12EPoliticalDecisionSnapshotFailure failure)
     {
         snapshot = null;
         failure = P12EPoliticalDecisionSnapshotFailure.Create(
             P12EPoliticalDecisionSnapshotFailureCode.InvalidCaptureContext,
-            "Capture requires an admitted completed Daily-v1 runtime.");
-        if (runtime == null
-            || !runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken token, out _)
-            || token == null)
-        {
-            return false;
-        }
-
-        return TryCapture(runtime, token, token.OwnerSections, out snapshot, out failure);
-    }
-
-    internal static bool TryCapture(
-        SimulationRuntime runtime,
-        DailyCaptureEligibilityToken token,
-        IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
-        out P12EPoliticalDecisionOwnerSnapshot snapshot,
-        out P12EPoliticalDecisionSnapshotFailure failure,
-        DailyCaptureStagingAttempt stagingAttempt = null)
-    {
-        snapshot = null;
-        failure = P12EPoliticalDecisionSnapshotFailure.Create(
-            P12EPoliticalDecisionSnapshotFailureCode.InvalidCaptureContext,
             "Capture requires the exact live P12-B token and its owner-section vector.");
-        if (runtime == null || token == null || sharedOwnerSectionVector == null
+        if (captureSource == null || token == null || sharedOwnerSectionVector == null
             || !ReferenceEquals(token.OwnerSections, sharedOwnerSectionVector)
-            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
-                runtime, token, sharedOwnerSectionVector, stagingAttempt))
+            || !captureSource.IsCaptureCurrent(token, sharedOwnerSectionVector))
         {
             return false;
         }
@@ -294,8 +273,7 @@ internal sealed class P12EPoliticalDecisionOwnerSnapshot
         if (!candidateSnapshot.TryValidate(out failure)) return false;
         if (owner.Count != count || owner.Revision != revision
             || !Matches(witness, owner, count, revision)
-            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
-                runtime, token, sharedOwnerSectionVector, stagingAttempt))
+            || !captureSource.IsCaptureCurrent(token, sharedOwnerSectionVector))
         {
             snapshot = null;
             return Fail(P12EPoliticalDecisionSnapshotFailureCode.InvalidOwnerSectionVector,

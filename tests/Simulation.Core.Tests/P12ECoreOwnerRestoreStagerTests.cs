@@ -11,7 +11,7 @@ public sealed class P12ECoreOwnerRestoreStagerTests
         List<P12ECoreOwnerRestoreStep> order = new List<P12ECoreOwnerRestoreStep>();
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
-            EmptyPoliticalSupport(), persons, 4L, order.Add,
+            EmptyPoliticalSupport(), EmptyPoliticalDecisions(), persons, 4L, order.Add,
             out P12ECoreOwnerRestoreStage staged,
             out P12ECoreOwnerRestoreFailure failure), Is.True, failure.ToString());
 
@@ -25,13 +25,16 @@ public sealed class P12ECoreOwnerRestoreStagerTests
         Assert.That(staged.PoliticalClaims.Revision, Is.Zero);
         Assert.That(staged.PoliticalSupport.Count, Is.Zero);
         Assert.That(staged.PoliticalSupport.Revision, Is.Zero);
+        Assert.That(staged.PoliticalDecisions.Count, Is.Zero);
+        Assert.That(staged.PoliticalDecisions.Revision, Is.Zero);
         Assert.That(order, Is.EqualTo(new[]
         {
             P12ECoreOwnerRestoreStep.InstitutionOffice,
             P12ECoreOwnerRestoreStep.PropertyEstate,
             P12ECoreOwnerRestoreStep.Faction,
             P12ECoreOwnerRestoreStep.PoliticalClaim,
-            P12ECoreOwnerRestoreStep.PoliticalSupport
+            P12ECoreOwnerRestoreStep.PoliticalSupport,
+            P12ECoreOwnerRestoreStep.PoliticalDecision
         }));
     }
 
@@ -46,7 +49,7 @@ public sealed class P12ECoreOwnerRestoreStagerTests
 
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), invalidClaims,
-            EmptyPoliticalSupport(), persons, 4L, null,
+            EmptyPoliticalSupport(), EmptyPoliticalDecisions(), persons, 4L, null,
             out P12ECoreOwnerRestoreStage staged,
             out P12ECoreOwnerRestoreFailure failure), Is.False);
         Assert.That(staged, Is.Null);
@@ -62,7 +65,23 @@ public sealed class P12ECoreOwnerRestoreStagerTests
 
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
-            invalidSupport, persons, 4L, null,
+            invalidSupport, EmptyPoliticalDecisions(), persons, 4L, null,
+            out P12ECoreOwnerRestoreStage staged,
+            out P12ECoreOwnerRestoreFailure failure), Is.False);
+        Assert.That(staged, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12ECoreOwnerRestoreFailure.StageFailed));
+    }
+
+    [Test]
+    public void InvalidPoliticalDecisionSnapshotRejectsWholePrivateCoreStage()
+    {
+        PersonStore persons = new PersonStore();
+        P12EPoliticalDecisionOwnerSnapshot invalidDecisions =
+            new P12EPoliticalDecisionOwnerSnapshot(4L, null);
+
+        Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
+            EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
+            EmptyPoliticalSupport(), invalidDecisions, persons, 4L, null,
             out P12ECoreOwnerRestoreStage staged,
             out P12ECoreOwnerRestoreFailure failure), Is.False);
         Assert.That(staged, Is.Null);
@@ -99,6 +118,13 @@ public sealed class P12ECoreOwnerRestoreStagerTests
                 PoliticalSupportStoreCensusProvider.RelationsSectionId,
                 P12EPoliticalSupportOwnerSnapshot.CurrentSchemaVersion,
                 0, 0L, Array.Empty<P12EPoliticalSupportSnapshotRow>()));
+
+    private static P12EPoliticalDecisionOwnerSnapshot EmptyPoliticalDecisions() =>
+        new P12EPoliticalDecisionOwnerSnapshot(4L,
+            new P12EPoliticalDecisionSnapshotSection(
+                PoliticalDecisionStoreCensusProvider.SectionId,
+                P12EPoliticalDecisionOwnerSnapshot.CurrentSchemaVersion,
+                0, 0L, Array.Empty<P12EPoliticalDecisionSnapshotRow>()));
 
     private static P12EPoliticalClaimOwnerSnapshot EmptyPoliticalClaims() =>
         new P12EPoliticalClaimOwnerSnapshot(

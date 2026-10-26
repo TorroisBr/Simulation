@@ -28,7 +28,7 @@ public sealed class P12EPoliticalDecisionOwnerSnapshotTests
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken token,
             out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
 
-        Assert.That(P12EPoliticalDecisionOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12EPoliticalDecisionCaptureAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12EPoliticalDecisionOwnerSnapshot snapshot, out P12EPoliticalDecisionSnapshotFailure failure),
             Is.True, failure?.Message);
         Assert.That(snapshot.CapturedAbsoluteDay, Is.EqualTo(token.AbsoluteDay));
@@ -45,7 +45,7 @@ public sealed class P12EPoliticalDecisionOwnerSnapshotTests
         Assert.That(runtime.TryValidateCompletedDailyCaptureToken(token, out _), Is.True);
 
         List<OwnerSectionCensusSnapshot> copiedVector = new List<OwnerSectionCensusSnapshot>(token.OwnerSections);
-        Assert.That(P12EPoliticalDecisionOwnerSnapshot.TryCapture(runtime, token, copiedVector,
+        Assert.That(P12EPoliticalDecisionCaptureAdapter.TryCapture(runtime, token, copiedVector,
             out P12EPoliticalDecisionOwnerSnapshot rejected, out failure), Is.False);
         Assert.That(rejected, Is.Null);
     }
@@ -150,7 +150,7 @@ public sealed class P12EPoliticalDecisionOwnerSnapshotTests
             Is.True, appendFailure.ToString());
         Assert.That(owner.Count, Is.EqualTo(1));
         Assert.That(owner.Revision, Is.EqualTo(1L));
-        Assert.That(P12EPoliticalDecisionOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12EPoliticalDecisionCaptureAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12EPoliticalDecisionOwnerSnapshot staleOwner, out P12EPoliticalDecisionSnapshotFailure failure), Is.False);
         Assert.That(staleOwner, Is.Null);
 

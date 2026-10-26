@@ -6,7 +6,8 @@ internal enum P12ECoreOwnerRestoreStep
     PropertyEstate = 1,
     Faction = 2,
     PoliticalClaim = 3,
-    PoliticalSupport = 4
+    PoliticalSupport = 4,
+    PoliticalDecision = 5
 }
 
 internal enum P12ECoreOwnerRestoreFailure
@@ -27,6 +28,7 @@ internal sealed class P12ECoreOwnerRestoreStage
     internal FactionStore Factions { get; }
     internal PoliticalClaimStore PoliticalClaims { get; }
     internal PoliticalSupportStore PoliticalSupport { get; }
+    internal PoliticalDecisionStore PoliticalDecisions { get; }
 
     internal P12ECoreOwnerRestoreStage(
         PersonStore persons,
@@ -36,7 +38,8 @@ internal sealed class P12ECoreOwnerRestoreStage
         EstateStore estates,
         FactionStore factions,
         PoliticalClaimStore politicalClaims,
-        PoliticalSupportStore politicalSupport)
+        PoliticalSupportStore politicalSupport,
+        PoliticalDecisionStore politicalDecisions)
     {
         Persons = persons;
         Institutions = institutions;
@@ -46,6 +49,7 @@ internal sealed class P12ECoreOwnerRestoreStage
         Factions = factions;
         PoliticalClaims = politicalClaims;
         PoliticalSupport = politicalSupport;
+        PoliticalDecisions = politicalDecisions;
     }
 }
 
@@ -66,6 +70,7 @@ internal sealed class DailyV1P12ECoreOwnerRestoreBuilder
     private FactionStore factions;
     private PoliticalClaimStore politicalClaims;
     private PoliticalSupportStore politicalSupport;
+    private PoliticalDecisionStore politicalDecisions;
 
     private DailyV1P12ECoreOwnerRestoreBuilder(PersonStore persons, long capturedDay)
     {
@@ -207,20 +212,43 @@ internal sealed class DailyV1P12ECoreOwnerRestoreBuilder
         }
     }
 
+    internal bool TryStagePoliticalDecisions(
+        P12EPoliticalDecisionOwnerSnapshot snapshot,
+        out P12ECoreOwnerRestoreFailure failure)
+    {
+        if (!CanStage(P12ECoreOwnerRestoreStep.PoliticalDecision, out failure)) return false;
+        try
+        {
+            if (snapshot == null || persons == null || institutions == null || offices == null
+                || politicalClaims == null
+                || !snapshot.TryStage(persons, institutions, offices, politicalClaims,
+                    out PoliticalDecisionStore stagedPoliticalDecisions, out _))
+                return MarkFailed(out failure);
+            politicalDecisions = stagedPoliticalDecisions;
+            nextStep++;
+            failure = P12ECoreOwnerRestoreFailure.None;
+            return true;
+        }
+        catch (Exception exception) when (IsStageException(exception))
+        {
+            return MarkFailed(out failure);
+        }
+    }
+
     internal bool TryBuild(
         out P12ECoreOwnerRestoreStage staged,
         out P12ECoreOwnerRestoreFailure failure)
     {
         staged = null;
-        if (failed || nextStep != 5 || persons == null || institutions == null || offices == null
+        if (failed || nextStep != 6 || persons == null || institutions == null || offices == null
             || propertyOwnership == null || estates == null || factions == null || politicalClaims == null
-            || politicalSupport == null)
+            || politicalSupport == null || politicalDecisions == null)
         {
             failure = P12ECoreOwnerRestoreFailure.StageFailed;
             return false;
         }
         staged = new P12ECoreOwnerRestoreStage(persons, institutions, offices,
-            propertyOwnership, estates, factions, politicalClaims, politicalSupport);
+            propertyOwnership, estates, factions, politicalClaims, politicalSupport, politicalDecisions);
         failure = P12ECoreOwnerRestoreFailure.None;
         return true;
     }
@@ -260,6 +288,7 @@ internal static class DailyV1P12ECoreOwnerRestoreStager
         P12EFactionOwnerSnapshot faction,
         P12EPoliticalClaimOwnerSnapshot politicalClaims,
         P12EPoliticalSupportOwnerSnapshot politicalSupport,
+        P12EPoliticalDecisionOwnerSnapshot politicalDecisions,
         PersonStore persons,
         long capturedDay,
         Action<P12ECoreOwnerRestoreStep> stageObserver,
@@ -281,6 +310,8 @@ internal static class DailyV1P12ECoreOwnerRestoreStager
         stageObserver?.Invoke(P12ECoreOwnerRestoreStep.PoliticalClaim);
         if (!builder.TryStagePoliticalSupport(politicalSupport, out failure)) return false;
         stageObserver?.Invoke(P12ECoreOwnerRestoreStep.PoliticalSupport);
+        if (!builder.TryStagePoliticalDecisions(politicalDecisions, out failure)) return false;
+        stageObserver?.Invoke(P12ECoreOwnerRestoreStep.PoliticalDecision);
 
         return builder.TryBuild(out staged, out failure);
     }

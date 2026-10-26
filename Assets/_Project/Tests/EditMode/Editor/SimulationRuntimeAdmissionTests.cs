@@ -11872,7 +11872,7 @@ public sealed class SimulationRuntimeAdmissionTests
             out P12EPoliticalSupportSnapshotFailure supportFailure), Is.True,
             supportFailure?.Message);
         snapshots.Add("E/PoliticalSupport", supportSnapshot);
-        Assert.That(P12EPoliticalDecisionOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalDecisionCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalDecisionOwnerSnapshot decisionSnapshot,
             out P12EPoliticalDecisionSnapshotFailure decisionFailure), Is.True,

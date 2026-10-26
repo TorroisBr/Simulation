@@ -1038,7 +1038,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         Assert.That(knowledgeRow.OwnerInstanceIdentity, Is.SameAs(knowledge));
         Assert.That(runtime.PoliticalDecisionRecords.Single().KnowledgeReferences,
             Is.EqualTo(new[] { KnowledgeReferenceA, KnowledgeReferenceB }));
-        Assert.That(P12EPoliticalDecisionOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalDecisionCaptureAdapter.TryCapture(
                 runtime,
                 token,
                 token.OwnerSections,
@@ -1543,7 +1543,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
 
         PoliticalDecisionStore decisionOwner = GetOwner<PoliticalDecisionStore>(
             token.OwnerSections, PoliticalDecisionStoreCensusProvider.SectionId);
-        Assert.That(P12EPoliticalDecisionOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalDecisionCaptureAdapter.TryCapture(
             session.Runtime,
             token,
             token.OwnerSections,
