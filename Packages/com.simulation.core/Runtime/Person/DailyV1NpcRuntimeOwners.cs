@@ -38,6 +38,57 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal DailyV1NpcHiddenStateOwner HiddenState { get; }
     internal long CrimeJusticeRevision { get; private set; }
 
+    internal bool CanCommitPersonDeathAfterValidation(
+        NpcInjurySeverity injurySeverity,
+        DailyV1ActionDefinition expectedAction,
+        DailyV1NpcActionPayloadOwner expectedPayload)
+    {
+        if (!NpcInjuryRules.IsValid(injurySeverity)
+            || Lifecycle == null
+            || ActionSlot == null
+            || Lifecycle.LifeState != NpcLifeState.Alive
+            || !ReferenceEquals(ActionSlot.CurrentAction, expectedAction)
+            || !ReferenceEquals(ActionSlot.CurrentPayload, expectedPayload)
+            || (expectedAction == null && expectedPayload != null)
+            || (expectedPayload != null && !ReferenceEquals(expectedPayload.Action, expectedAction))
+            || (expectedAction != null
+                && (!Definitions.Actions.TryGetValue(expectedAction.DefinitionId, out DailyV1ActionDefinition admitted)
+                    || !ReferenceEquals(admitted, expectedAction)))
+            || !Lifecycle.CanAdvanceRevision(1)
+            || !ActionSlot.CanAdvanceRevision(expectedAction == null ? 0 : 1)
+            || !ActionSlot.CanSetCurrentAction(null, null))
+            return false;
+
+        return true;
+    }
+
+    internal bool TryCommitPersonDeathAfterValidation(
+        NpcInjurySeverity injurySeverity,
+        DailyV1ActionDefinition expectedAction,
+        DailyV1NpcActionPayloadOwner expectedPayload,
+        out bool currentActionChanged)
+    {
+        currentActionChanged = false;
+        if (!CanCommitPersonDeathAfterValidation(injurySeverity, expectedAction, expectedPayload))
+            return false;
+
+        if (injurySeverity > Lifecycle.InjurySeverity
+            && !Lifecycle.TrySetInjurySeverity(injurySeverity))
+            return false;
+        if (!Lifecycle.TrySetLifeState(NpcLifeState.Dead))
+            return false;
+
+        Lifecycle.NotifyLifeStateMutationCommitted();
+        if (expectedAction != null)
+        {
+            if (!ActionSlot.TrySetCurrentAction(null, null))
+                return false;
+            ActionSlot.NotifyCurrentActionMutationCommitted();
+            currentActionChanged = true;
+        }
+        return true;
+    }
+
     private DailyV1NpcRuntimeOwners(
         string runtimeId,
         DailyV1EffectiveDefinitions definitions,

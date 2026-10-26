@@ -8225,6 +8225,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                         && (materializedNpc == null
                             || materializedNpc.CanAdvanceP12LifecycleRevisions(
                                 1, 0, actionChanged ? 1 : 0))
+                        && (materializedNpc == null
+                            || materializedNpc.CanCommitSelectedPersonDeathAfterValidation(
+                                NpcInjurySeverity.None, out _))
                         && (!resident || PopulationOwnerBridge.CanAdvanceP12AggregateRevision(settlement.Population)),
                     out P12PopulationOperationScope p12Scope))
             {

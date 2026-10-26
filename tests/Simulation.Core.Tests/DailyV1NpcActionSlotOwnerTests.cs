@@ -189,6 +189,83 @@ public sealed class DailyV1NpcActionSlotOwnerTests
     }
 
     [Test]
+    public void SelectedPersonDeathCommitsLifecycleAndActionOwnersTogether()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-death-owner", definitions, definitions.Npcs.Values.First(), 0f,
+            out DailyV1NpcRuntimeOwners owners), Is.True);
+        DailyV1ActionDefinition action = definitions.Actions.Values.First();
+        Assert.That(owners.ActionSlot.TrySetCurrentAction(action), Is.True);
+        owners.ActionSlot.NotifyCurrentActionMutationCommitted();
+        long actionRevisionBeforeDeath = owners.ActionSlot.Revision;
+
+        Assert.That(owners.TryCommitPersonDeathAfterValidation(
+            NpcInjurySeverity.Injured, action, null, out bool actionChanged), Is.True);
+        Assert.That(actionChanged, Is.True);
+        Assert.That(owners.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Dead));
+        Assert.That(owners.Lifecycle.InjurySeverity, Is.EqualTo(NpcInjurySeverity.Injured));
+        Assert.That(owners.Lifecycle.LifeStateRevision, Is.EqualTo(1L));
+        Assert.That(owners.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(owners.ActionSlot.CurrentPayload, Is.Null);
+        Assert.That(owners.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeDeath + 1L));
+
+        Assert.That(owners.TryCommitPersonDeathAfterValidation(
+            NpcInjurySeverity.None, null, null, out bool repeatedActionChanged), Is.False);
+        Assert.That(repeatedActionChanged, Is.False);
+        Assert.That(owners.Lifecycle.LifeStateRevision, Is.EqualTo(1L));
+        Assert.That(owners.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeDeath + 1L));
+    }
+
+    [Test]
+    public void SelectedPersonDeathPreflightRejectsStaleActionAndSaturatedRevisionsAtomically()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-death-owner", definitions, definitions.Npcs.Values.First(), 0f,
+            out DailyV1NpcRuntimeOwners owners), Is.True);
+        DailyV1ActionDefinition action = definitions.Actions.Values.First();
+        Assert.That(owners.ActionSlot.TrySetCurrentAction(action), Is.True);
+
+        Assert.That(owners.TryCommitPersonDeathAfterValidation(
+            NpcInjurySeverity.None, null, null, out _), Is.False,
+            "A stale action identity cannot be silently cleared by a death commit.");
+        Assert.That(owners.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Alive));
+        Assert.That(owners.ActionSlot.CurrentAction, Is.SameAs(action));
+        Assert.That(owners.Lifecycle.LifeStateRevision, Is.Zero);
+        Assert.That(owners.ActionSlot.Revision, Is.Zero);
+
+        Assert.That(owners.Lifecycle.TryInstallState(
+            NpcLifeState.Alive, NpcInjurySeverity.None, long.MaxValue), Is.True);
+        Assert.That(owners.ActionSlot.TryInstallRevision(long.MaxValue), Is.True);
+        Assert.That(owners.TryCommitPersonDeathAfterValidation(
+            NpcInjurySeverity.None, action, null, out _), Is.False,
+            "Revision exhaustion rejects before either Core owner changes.");
+        Assert.That(owners.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Alive));
+        Assert.That(owners.ActionSlot.CurrentAction, Is.SameAs(action));
+        Assert.That(owners.Lifecycle.LifeStateRevision, Is.EqualTo(long.MaxValue));
+        Assert.That(owners.ActionSlot.Revision, Is.EqualTo(long.MaxValue));
+    }
+
+    [Test]
+    public void SelectedPersonDeathWithoutActionLeavesActionRevisionUnchanged()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-death-owner", definitions, definitions.Npcs.Values.First(), 0f,
+            out DailyV1NpcRuntimeOwners owners), Is.True);
+
+        Assert.That(owners.TryCommitPersonDeathAfterValidation(
+            NpcInjurySeverity.None, null, null, out bool actionChanged), Is.True);
+        Assert.That(actionChanged, Is.False);
+        Assert.That(owners.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Dead));
+        Assert.That(owners.Lifecycle.LifeStateRevision, Is.EqualTo(1L));
+        Assert.That(owners.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(owners.ActionSlot.CurrentPayload, Is.Null);
+        Assert.That(owners.ActionSlot.Revision, Is.Zero);
+    }
+
+    [Test]
     public void SelectedActionSlotOwnsCommittedRevisionAndExactHydrationValue()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

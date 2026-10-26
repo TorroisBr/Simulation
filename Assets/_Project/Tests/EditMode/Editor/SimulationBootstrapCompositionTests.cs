@@ -2706,10 +2706,16 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(runtime.TryApplyInjury(NpcInjurySeverity.Hurt), Is.True);
         Assert.That(runtime.InjurySeverity, Is.EqualTo(NpcInjurySeverity.Hurt));
         Assert.That(runtime.SelectedRuntimeOwners.Lifecycle.InjurySeverity, Is.EqualTo(NpcInjurySeverity.Hurt));
+        runtime.SetCurrentActionRuntime(new NpcActionRuntime(actionAsset));
+        long actionRevisionBeforeDeath = runtime.CurrentActionRevision;
+        Assert.That(runtime.CurrentActionRuntime, Is.Not.Null);
         Assert.That(runtime.TryApplyDeath(), Is.True);
         Assert.That(runtime.LifeState, Is.EqualTo(NpcLifeState.Dead));
         Assert.That(runtime.SelectedRuntimeOwners.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Dead));
         Assert.That(runtime.LifeStateRevision, Is.EqualTo(1L));
+        Assert.That(runtime.CurrentActionRuntime, Is.Null);
+        Assert.That(runtime.SelectedRuntimeOwners.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(runtime.CurrentActionRevision, Is.EqualTo(actionRevisionBeforeDeath + 1L));
     }
 
     [Test]

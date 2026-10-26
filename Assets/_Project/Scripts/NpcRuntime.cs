@@ -1211,9 +1211,10 @@ public class NpcRuntime : ICapabilityConditionSource
         bool lifeStateChanged,
         bool residenceChanged,
         bool currentActionChanged = false,
-        bool currentActionRevisionAlreadyCommitted = false)
+        bool currentActionRevisionAlreadyCommitted = false,
+        bool lifeStateRevisionAlreadyCommitted = false)
     {
-        if (lifeStateChanged)
+        if (lifeStateChanged && !lifeStateRevisionAlreadyCommitted)
         {
             if (selectedRuntimeOwners != null)
                 selectedRuntimeOwners.Lifecycle.NotifyLifeStateMutationCommitted();
@@ -2215,6 +2216,42 @@ public class NpcRuntime : ICapabilityConditionSource
         return true;
     }
 
+    internal bool CanCommitSelectedPersonDeathAfterValidation(
+        NpcInjurySeverity severity,
+        out bool currentActionChanged)
+    {
+        currentActionChanged = currentActionRuntime != null;
+        DailyV1NpcRuntimeOwners owners = selectedRuntimeOwners;
+        if (owners == null) return true;
+        if (!HasConsistentCurrentActionSlot) return false;
+
+        if (!owners.CanCommitPersonDeathAfterValidation(
+            severity,
+            owners.ActionSlot.CurrentAction,
+            owners.ActionSlot.CurrentPayload))
+            return false;
+        return (owners.ActionSlot.CurrentAction != null) == currentActionChanged;
+    }
+
+    private bool TryCommitSelectedPersonDeathAfterValidation(
+        NpcInjurySeverity severity,
+        out bool currentActionChanged)
+    {
+        currentActionChanged = currentActionRuntime != null;
+        DailyV1NpcRuntimeOwners owners = selectedRuntimeOwners;
+        if (owners == null || !HasConsistentCurrentActionSlot
+            || !owners.TryCommitPersonDeathAfterValidation(
+                severity,
+                owners.ActionSlot.CurrentAction,
+                owners.ActionSlot.CurrentPayload,
+                out bool ownerActionChanged))
+            return false;
+
+        currentActionChanged = ownerActionChanged;
+        ClearCurrentActionSlotAfterAdmission();
+        return true;
+    }
+
     public bool TryApplyInjury(NpcInjurySeverity severity)
     {
         // Injury severity has no owner section or operation in this bounded P12 profile.
@@ -2241,6 +2278,18 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
+        if (selectedRuntimeOwners != null)
+        {
+            if (!CanCommitSelectedPersonDeathAfterValidation(NpcInjurySeverity.None, out currentActionChanged)
+                || !TryCommitSelectedPersonDeathAfterValidation(NpcInjurySeverity.None, out currentActionChanged))
+                return false;
+            NotifyP12LifecycleMutationCommitted(
+                true, false, currentActionChanged,
+                currentActionRevisionAlreadyCommitted: currentActionChanged,
+                lifeStateRevisionAlreadyCommitted: true);
+            return true;
+        }
+
         if (!TrySetLifeStateAfterValidation(NpcLifeState.Dead)) return false;
         ClearCurrentActionSlotAfterAdmission();
         NotifyP12LifecycleMutationCommitted(true, false, currentActionChanged);
@@ -2264,6 +2313,18 @@ public class NpcRuntime : ICapabilityConditionSource
             || !CanCommitP12LifecycleMutation(true, false, currentActionChanged))
         {
             return false;
+        }
+
+        if (selectedRuntimeOwners != null)
+        {
+            if (!CanCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged)
+                || !TryCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged))
+                return false;
+            NotifyP12LifecycleMutationCommitted(
+                true, false, currentActionChanged,
+                currentActionRevisionAlreadyCommitted: currentActionChanged,
+                lifeStateRevisionAlreadyCommitted: true);
+            return true;
         }
 
         if (severity > InjurySeverity && !TrySetInjurySeverityAfterValidation(severity)) return false;
@@ -2299,6 +2360,19 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
+        if (selectedRuntimeOwners != null)
+        {
+            if (!CanCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged)
+                || !TryCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged))
+                return false;
+            if (residenceChanged) residenceSettlementRuntimeId = null;
+            NotifyP12LifecycleMutationCommitted(
+                true, residenceChanged, currentActionChanged,
+                currentActionRevisionAlreadyCommitted: currentActionChanged,
+                lifeStateRevisionAlreadyCommitted: true);
+            return true;
+        }
+
         if (severity > InjurySeverity && !TrySetInjurySeverityAfterValidation(severity)) return false;
 
         if (!TrySetLifeStateAfterValidation(NpcLifeState.Dead)) return false;
@@ -2322,8 +2396,24 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
+        if (selectedRuntimeOwners != null
+            && !CanCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged))
+            return false;
+
         if (!PersonRuntimeOwnerBridge.RecordDeathAfterValidation(personRuntime, personDeathTransition.DeathAbsoluteDay))
             return false;
+
+        if (selectedRuntimeOwners != null)
+        {
+            SetResidenceSettlementRuntimeId(null);
+            if (!TryCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged))
+                return false;
+            NotifyP12LifecycleMutationCommitted(
+                true, false, currentActionChanged,
+                currentActionRevisionAlreadyCommitted: currentActionChanged,
+                lifeStateRevisionAlreadyCommitted: true);
+            return true;
+        }
 
         if (severity > InjurySeverity && !TrySetInjurySeverityAfterValidation(severity)) return false;
 
