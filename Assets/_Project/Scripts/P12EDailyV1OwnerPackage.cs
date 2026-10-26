@@ -307,7 +307,7 @@ internal sealed class P12EDailyV1OwnerPackage
                     out P12EJusticeRecordsOwnerSnapshot justiceSnapshot, out _, context.StagingAttempt)
                 || !justiceOwner.TryCaptureP12AReceiptOwnerSnapshot(
                     out P12AJusticeReceiptOwnerSnapshot justiceReceiptSnapshot)
-                || !P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(
+                || !P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
                     out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialSnapshot, out _, context.StagingAttempt))
             {

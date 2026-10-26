@@ -11911,7 +11911,7 @@ public sealed class SimulationRuntimeAdmissionTests
             out P12EJusticeSnapshotFailure justiceFailure), Is.True,
             justiceFailure?.Message);
         snapshots.Add("E/Justice", justiceSnapshot);
-        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(
+        Assert.That(P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialSnapshot,
             out P12ECrimeSocialAppraisalSnapshotFailure crimeSocialFailure), Is.True,

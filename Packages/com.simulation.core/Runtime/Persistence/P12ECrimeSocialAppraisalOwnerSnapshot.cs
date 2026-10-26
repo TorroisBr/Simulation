@@ -203,40 +203,20 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
     }
 
     internal static bool TryCapture(
-        SimulationRuntime runtime,
+        IP12ECrimeSocialAppraisalCaptureSource captureSource,
+        DailyCaptureEligibilityToken token,
+        IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
+        CrimeSocialAppraisalWorldState world,
         out P12ECrimeSocialAppraisalOwnerSnapshot snapshot,
         out P12ECrimeSocialAppraisalSnapshotFailure failure)
     {
         snapshot = null;
         failure = P12ECrimeSocialAppraisalSnapshotFailure.Create(
             P12ECrimeSocialAppraisalSnapshotFailureCode.InvalidCaptureContext,
-            "Capture requires an admitted completed Daily-v1 runtime.");
-        if (runtime == null
-            || !runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken token, out _)
-            || token == null)
-        {
-            return false;
-        }
-
-        return TryCapture(runtime, token, token.OwnerSections, out snapshot, out failure);
-    }
-
-    internal static bool TryCapture(
-        SimulationRuntime runtime,
-        DailyCaptureEligibilityToken token,
-        IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
-        out P12ECrimeSocialAppraisalOwnerSnapshot snapshot,
-        out P12ECrimeSocialAppraisalSnapshotFailure failure,
-        DailyCaptureStagingAttempt stagingAttempt = null)
-    {
-        snapshot = null;
-        failure = P12ECrimeSocialAppraisalSnapshotFailure.Create(
-            P12ECrimeSocialAppraisalSnapshotFailureCode.InvalidCaptureContext,
             "Capture requires the exact completed P12-B token and owner-section vector.");
-        if (runtime == null || token == null || sharedOwnerSectionVector == null
+        if (captureSource == null || token == null || sharedOwnerSectionVector == null
             || !ReferenceEquals(token.OwnerSections, sharedOwnerSectionVector)
-            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
-                runtime, token, sharedOwnerSectionVector, stagingAttempt)
+            || !captureSource.IsCaptureCurrent(token, sharedOwnerSectionVector)
             || token.AdmissionContext == null
             || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || token.CompletedCoreSequence <= 0L || token.AbsoluteDay < 0L || token.MutationEpoch < 0L)
@@ -244,7 +224,6 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
             return false;
         }
 
-        CrimeSocialAppraisalWorldState world = runtime.CrimeSocialAppraisal;
         if (!HasExactWorldOwners(world) || world.SimulationTime.AbsoluteDay != token.AbsoluteDay)
         {
             return Fail(P12ECrimeSocialAppraisalSnapshotFailureCode.InvalidCaptureContext,
@@ -252,11 +231,11 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
         }
 
         OwnerSectionCensusSnapshot outcomeWitness = Find(sharedOwnerSectionVector,
-            P12CrimeSocialAppraisalCensusProvider.OutcomesSectionId, out bool duplicateOutcomes);
+            P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId, out bool duplicateOutcomes);
         OwnerSectionCensusSnapshot knowledgeWitness = Find(sharedOwnerSectionVector,
-            P12CrimeSocialAppraisalCensusProvider.KnowledgeSectionId, out bool duplicateKnowledge);
+            P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId, out bool duplicateKnowledge);
         OwnerSectionCensusSnapshot reactionWitness = Find(sharedOwnerSectionVector,
-            P12CrimeSocialAppraisalCensusProvider.ReactionsSectionId, out bool duplicateReactions);
+            P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId, out bool duplicateReactions);
 
         int outcomeCount = world.TheftOutcomes.Count;
         long outcomeRevision = world.TheftOutcomes.P12CensusRevision;
@@ -265,11 +244,11 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
         int reactionCount = world.SocialReactions.Count;
         long reactionRevision = world.SocialReactions.P12CensusRevision;
         if (duplicateOutcomes || duplicateKnowledge || duplicateReactions
-            || !Matches(outcomeWitness, P12CrimeSocialAppraisalCensusProvider.OutcomesSectionId,
+            || !Matches(outcomeWitness, P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId,
                 world.TheftOutcomes, outcomeCount, outcomeRevision)
-            || !Matches(knowledgeWitness, P12CrimeSocialAppraisalCensusProvider.KnowledgeSectionId,
+            || !Matches(knowledgeWitness, P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId,
                 world.CrimeKnowledge, knowledgeCount, knowledgeRevision)
-            || !Matches(reactionWitness, P12CrimeSocialAppraisalCensusProvider.ReactionsSectionId,
+            || !Matches(reactionWitness, P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId,
                 world.SocialReactions, reactionCount, reactionRevision))
         {
             return Fail(P12ECrimeSocialAppraisalSnapshotFailureCode.InvalidOwnerSectionVector,
@@ -292,17 +271,16 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
 
             if (outcomeRows.Count != outcomeCount || knowledgeRows.Count != knowledgeCount
                 || reactionRows.Count != reactionCount
-                || !Matches(outcomeWitness, P12CrimeSocialAppraisalCensusProvider.OutcomesSectionId,
+                || !Matches(outcomeWitness, P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId,
                     world.TheftOutcomes, world.TheftOutcomes.Count, world.TheftOutcomes.P12CensusRevision)
-                || !Matches(knowledgeWitness, P12CrimeSocialAppraisalCensusProvider.KnowledgeSectionId,
+                || !Matches(knowledgeWitness, P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId,
                     world.CrimeKnowledge, world.CrimeKnowledge.Count, world.CrimeKnowledge.P12CensusRevision)
-                || !Matches(reactionWitness, P12CrimeSocialAppraisalCensusProvider.ReactionsSectionId,
+                || !Matches(reactionWitness, P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId,
                     world.SocialReactions, world.SocialReactions.Count, world.SocialReactions.P12CensusRevision)
                 || world.TheftOutcomes.Count != outcomeCount || world.TheftOutcomes.P12CensusRevision != outcomeRevision
                 || world.CrimeKnowledge.Count != knowledgeCount || world.CrimeKnowledge.P12CensusRevision != knowledgeRevision
                 || world.SocialReactions.Count != reactionCount || world.SocialReactions.P12CensusRevision != reactionRevision
-                || !DailyCaptureStagingAttempt.IsCaptureCurrent(
-                    runtime, token, sharedOwnerSectionVector, stagingAttempt))
+                || !captureSource.IsCaptureCurrent(token, sharedOwnerSectionVector))
             {
                 return Fail(P12ECrimeSocialAppraisalSnapshotFailureCode.InvalidOwnerSectionVector,
                     "The completed token or one of its exact owner stamps changed while values were copied.", out failure);
@@ -311,16 +289,16 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
             P12ECrimeSocialAppraisalOwnerSnapshot candidate = new P12ECrimeSocialAppraisalOwnerSnapshot(
                 token.AbsoluteDay,
                 new P12ECrimeOwnerSnapshotSection<P12ECrimeOutcomeSnapshotRow>(
-                    P12CrimeSocialAppraisalCensusProvider.OutcomesSectionId,
-                    P12CrimeSocialAppraisalCensusProvider.SchemaVersion,
+                    P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId,
+                    P12CrimeSocialAppraisalOwnerContract.SchemaVersion,
                     outcomeCount, outcomeRevision, outcomeRows),
                 new P12ECrimeOwnerSnapshotSection<P12ECrimeKnowledgeSnapshotRow>(
-                    P12CrimeSocialAppraisalCensusProvider.KnowledgeSectionId,
-                    P12CrimeSocialAppraisalCensusProvider.SchemaVersion,
+                    P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId,
+                    P12CrimeSocialAppraisalOwnerContract.SchemaVersion,
                     knowledgeCount, knowledgeRevision, knowledgeRows),
                 new P12ECrimeOwnerSnapshotSection<P12ESocialReactionSnapshotRow>(
-                    P12CrimeSocialAppraisalCensusProvider.ReactionsSectionId,
-                    P12CrimeSocialAppraisalCensusProvider.SchemaVersion,
+                    P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId,
+                    P12CrimeSocialAppraisalOwnerContract.SchemaVersion,
                     reactionCount, reactionRevision, reactionRows));
 
             if (!candidate.TryValidate(world.PersonStore, world.InstitutionStore, world.SimulationTime,
@@ -328,8 +306,7 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
             {
                 return false;
             }
-            if (!DailyCaptureStagingAttempt.IsCaptureCurrent(
-                    runtime, token, sharedOwnerSectionVector, stagingAttempt))
+            if (!captureSource.IsCaptureCurrent(token, sharedOwnerSectionVector))
             {
                 return Fail(P12ECrimeSocialAppraisalSnapshotFailureCode.InvalidOwnerSectionVector,
                     "The completed token became stale before capture finished.", out failure);
@@ -410,9 +387,9 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
         if (CapturedAbsoluteDay < 0L || time.AbsoluteDay != CapturedAbsoluteDay)
             return Fail(P12ECrimeSocialAppraisalSnapshotFailureCode.InvalidTimeline,
                 "The staged simulation day must equal the captured boundary day.", out failure);
-        if (!ValidateSection(Outcomes, P12CrimeSocialAppraisalCensusProvider.OutcomesSectionId, out failure)
-            || !ValidateSection(Knowledge, P12CrimeSocialAppraisalCensusProvider.KnowledgeSectionId, out failure)
-            || !ValidateSection(Reactions, P12CrimeSocialAppraisalCensusProvider.ReactionsSectionId, out failure))
+        if (!ValidateSection(Outcomes, P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId, out failure)
+            || !ValidateSection(Knowledge, P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId, out failure)
+            || !ValidateSection(Reactions, P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId, out failure))
             return false;
 
         try
@@ -607,7 +584,7 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
         if (section == null || !string.Equals(section.SectionId, expectedId, StringComparison.Ordinal))
             return Fail(P12ECrimeSocialAppraisalSnapshotFailureCode.InvalidOwnerSectionVector,
                 "A required CrimeSocialAppraisal section is missing or has the wrong identity.", out failure);
-        if (section.SchemaVersion != P12CrimeSocialAppraisalCensusProvider.SchemaVersion)
+        if (section.SchemaVersion != P12CrimeSocialAppraisalOwnerContract.SchemaVersion)
             return Fail(P12ECrimeSocialAppraisalSnapshotFailureCode.UnsupportedSchema,
                 "The CrimeSocialAppraisal section schema is unsupported.", out failure);
         if (section.Revision < 0L)
@@ -815,7 +792,7 @@ internal sealed class P12ECrimeSocialAppraisalOwnerSnapshot
     {
         return witness != null && owner != null
             && string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
-            && witness.SchemaVersion == P12CrimeSocialAppraisalCensusProvider.SchemaVersion
+            && witness.SchemaVersion == P12CrimeSocialAppraisalOwnerContract.SchemaVersion
             && witness.Role == OwnerSectionRole.Required
             && ReferenceEquals(witness.OwnerInstanceIdentity, owner)
             && count >= 0 && revision >= 0L

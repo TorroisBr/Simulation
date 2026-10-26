@@ -1823,7 +1823,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             out P12EJusticeSnapshotFailure justiceFailure), Is.True, justiceFailure?.Message);
         AppendJusticeSnapshot(signature, justice);
 
-        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(
+        Assert.That(P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocial,
             out P12ECrimeSocialAppraisalSnapshotFailure crimeSocialFailure), Is.True, crimeSocialFailure?.Message);
