@@ -1667,15 +1667,9 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         public bool TryCompleteDispatch(
             DailyV1NpcRuntimeOwners actor,
             DailyV1SelectedActionDispatchResult dispatch,
-            out bool actionSucceeded,
-            out NpcActionResultType? resultType,
             out string resultMessage)
         {
             Events.Add("complete-dispatch");
-            actionSucceeded = dispatch.Succeeded;
-            resultType = dispatch.Succeeded
-                ? NpcActionResultType.Success
-                : NpcActionResultType.Failure;
             resultMessage = null;
             return true;
         }
@@ -1852,5 +1846,48 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             return value;
         }
         public DeterministicRandomStream CreateStream(string streamKey) => null;
+    }
+}
+
+[TestFixture]
+public sealed class DailyV1SelectedActionDispatchOutcomeTests
+{
+    [Test]
+    public void CoreOutcomeUsesActionRollAndDomainDispatchResult()
+    {
+        var succeeded = new DailyV1SelectedActionDispatchResult(
+            DailyV1SelectedActionDispatchKind.Normal, true, true);
+        Assert.That(DailyV1SelectedActorActionExecutionStage.TryResolveDispatchOutcome(
+            succeeded, out bool actionSucceeded, out NpcActionResultType resultType), Is.True);
+        Assert.That(actionSucceeded, Is.True);
+        Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+
+        var failedRoll = new DailyV1SelectedActionDispatchResult(
+            DailyV1SelectedActionDispatchKind.Normal, false, false);
+        Assert.That(DailyV1SelectedActorActionExecutionStage.TryResolveDispatchOutcome(
+            failedRoll, out actionSucceeded, out resultType), Is.True);
+        Assert.That(actionSucceeded, Is.False);
+        Assert.That(resultType, Is.EqualTo(NpcActionResultType.Failure));
+    }
+
+    [Test]
+    public void CoreOutcomeRejectsHostProjectionAsAuthorityAndMalformedSuccess()
+    {
+        var impossibleRollSuccess = new DailyV1SelectedActionDispatchResult(
+            DailyV1SelectedActionDispatchKind.Normal, false, true);
+        Assert.That(DailyV1SelectedActorActionExecutionStage.TryResolveDispatchOutcome(
+            impossibleRollSuccess, out bool actionSucceeded, out _), Is.False);
+        Assert.That(actionSucceeded, Is.False);
+
+        var missingDomainResult = new DailyV1SelectedActionDispatchResult(
+            DailyV1SelectedActionDispatchKind.FleeCity, true, true);
+        Assert.That(DailyV1SelectedActorActionExecutionStage.TryResolveDispatchOutcome(
+            missingDomainResult, out actionSucceeded, out _), Is.False);
+        Assert.That(actionSucceeded, Is.False);
+
+        var unknownKind = new DailyV1SelectedActionDispatchResult(
+            (DailyV1SelectedActionDispatchKind)byte.MaxValue, true, false);
+        Assert.That(DailyV1SelectedActorActionExecutionStage.TryResolveDispatchOutcome(
+            unknownKind, out actionSucceeded, out _), Is.False);
     }
 }

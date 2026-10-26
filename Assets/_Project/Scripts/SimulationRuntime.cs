@@ -12251,8 +12251,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         public bool TryCompleteDispatch(
             DailyV1NpcRuntimeOwners actor,
             DailyV1SelectedActionDispatchResult dispatch,
-            out bool actionSucceeded,
-            out NpcActionResultType? resultType,
             out string resultMessage)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
@@ -12266,8 +12264,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 if (normalResult != null && !string.IsNullOrEmpty(normalResult.Message))
                     runtime.logger?.Log(SimulationLogCategory.NpcAction,
                         normalResult.Message);
-                actionSucceeded = normalResult?.Success == true;
-                resultType = normalResult?.ResultType;
                 resultMessage = normalResult?.Message;
                 return true;
             }
@@ -12279,8 +12275,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             if (actionResult != null && !string.IsNullOrEmpty(actionResult.Message))
                 runtime.logger?.Log(SimulationLogCategory.NpcAction,
                     actionResult.Message);
-            actionSucceeded = actionResult?.Success == true;
-            resultType = actionResult?.ResultType;
             resultMessage = actionResult?.Message;
             return actionRuntime != null && action != null;
         }

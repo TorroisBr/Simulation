@@ -10,6 +10,73 @@ using System.Collections.Generic;
 internal static class DailyV1SelectedActorActionExecutionStage
 {
     /// <summary>
+    /// Resolves an action's authoritative result from the dispatch produced by
+    /// Core. A host may publish the matching Unity projection and presentation
+    /// message, but it cannot change whether the admitted owner operation
+    /// succeeded.
+    /// </summary>
+    internal static bool TryResolveDispatchOutcome(
+        DailyV1SelectedActionDispatchResult dispatch,
+        out bool actionSucceeded,
+        out NpcActionResultType resultType)
+    {
+        actionSucceeded = false;
+        resultType = default;
+        if (dispatch == null
+            || !Enum.IsDefined(typeof(DailyV1SelectedActionDispatchKind), dispatch.Kind)
+            || (!dispatch.ActionRollSucceeded && dispatch.Succeeded))
+            return false;
+
+        bool detailedSuccess;
+        switch (dispatch.Kind)
+        {
+            case DailyV1SelectedActionDispatchKind.Normal:
+                detailedSuccess = true;
+                break;
+            case DailyV1SelectedActionDispatchKind.PlannedNpcSale:
+                detailedSuccess = dispatch.PlannedNpcSale?.Succeeded == true
+                    && dispatch.PlannedNpcSale.Sale?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.PlannedMarketSale:
+                detailedSuccess = dispatch.PlannedMarketSale?.Succeeded == true
+                    && dispatch.PlannedMarketSale.Sale?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.OpenMarket:
+                detailedSuccess = dispatch.OpenMarket?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.CrossCityBuy:
+                detailedSuccess = dispatch.CrossCityBuy?.Purchase?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.SoloTravel:
+                detailedSuccess = dispatch.SoloTravel?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.FleeCity:
+                detailedSuccess = dispatch.FleeCity?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.GuardArrest:
+                detailedSuccess = dispatch.GuardArrest?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.Steal:
+                detailedSuccess = dispatch.Steal?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.Crime:
+                detailedSuccess = dispatch.Crime?.Succeeded == true;
+                break;
+            default:
+                return false;
+        }
+
+        if (dispatch.Succeeded && !detailedSuccess)
+            return false;
+
+        actionSucceeded = dispatch.ActionRollSucceeded && dispatch.Succeeded;
+        resultType = actionSucceeded
+            ? NpcActionResultType.Success
+            : NpcActionResultType.Failure;
+        return true;
+    }
+
+    /// <summary>
     /// Identifies a targetless Normal action whose exact Core slot and typed
     /// action-status plan are sufficient for dispatch. Actor status effects
     /// still commit through the Core status owner and the existing host P12
@@ -590,11 +657,14 @@ internal static class DailyV1SelectedActorActionExecutionStage
             throw new InvalidOperationException(
                 "The exact selected Daily-v1 action could not execute through its Core owner operation.");
 
-        if (!boundary.TryCompleteDispatch(
-                actor, dispatch, out actionSucceeded, out resultType,
-                out resultMessage))
+        if (!TryResolveDispatchOutcome(
+                dispatch, out actionSucceeded, out NpcActionResultType coreResultType))
             throw new InvalidOperationException(
-                "The selected Daily-v1 action result could not be published by its host adapter.");
+                "Core produced an invalid selected-action dispatch outcome.");
+        if (!boundary.TryCompleteDispatch(actor, dispatch, out resultMessage))
+            throw new InvalidOperationException(
+                "The selected Daily-v1 action projection could not be completed by its host adapter.");
+        resultType = coreResultType;
 
         if (!actionSucceeded) return true;
 

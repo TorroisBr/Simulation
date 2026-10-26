@@ -125,8 +125,6 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
     bool TryCompleteDispatch(
         DailyV1NpcRuntimeOwners actor,
         DailyV1SelectedActionDispatchResult dispatch,
-        out bool actionSucceeded,
-        out NpcActionResultType? resultType,
         out string resultMessage);
     bool TryGetActionStatusBoundary(
         DailyV1NpcRuntimeOwners actor,

@@ -520,12 +520,8 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
         public bool TryCompleteDispatch(
             DailyV1NpcRuntimeOwners actor,
             DailyV1SelectedActionDispatchResult dispatch,
-            out bool actionSucceeded,
-            out NpcActionResultType? resultType,
             out string resultMessage)
         {
-            actionSucceeded = false;
-            resultType = null;
             resultMessage = null;
             return false;
         }
