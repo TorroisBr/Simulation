@@ -11032,27 +11032,29 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).TryCreateSelectedDailyExecutionBoundary(
             out executionBoundary);
 
-    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCaptureCompletedDailyCaptureEvidence(
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCaptureOwnerSectionCensus(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
-        out DailyCaptureEligibilityFailure failure) =>
-        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).TryCaptureCompletedDailyCaptureEvidence(
-            out ownerSections, out mutationEpoch, out failure);
+        out DailyCaptureEligibilityFailure failure)
+    {
+        if (!Enum.IsDefined(typeof(DailyV1CaptureScopeAllowance), allowedOuterScope))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+            return false;
+        }
 
-    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCaptureDailyBoundaryAdmissionEvidence(
-        bool sessionReplacement,
-        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
-        out long mutationEpoch,
-        out DailyCaptureEligibilityFailure failure) =>
-        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).TryCaptureDailyBoundaryAdmissionEvidence(
-            sessionReplacement, out ownerSections, out mutationEpoch, out failure);
-
-    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCaptureContinuationSaveEvidence(
-        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
-        out long mutationEpoch,
-        out DailyCaptureEligibilityFailure failure) =>
-        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).TryCaptureContinuationSaveEvidence(
-            out ownerSections, out mutationEpoch, out failure);
+        // Core chooses the exact capture scope; Unity remains the adapter for
+        // the live census providers and the existing protocol-level P12 checks.
+        return TryReadDailyCaptureEvidence(
+            finalizingHeldAdvance: allowedOuterScope == DailyV1CaptureScopeAllowance.DailyAdvance,
+            allowedOuterScope,
+            out ownerSections,
+            out mutationEpoch,
+            out failure);
+    }
 
     void IDailyV1SelectedRuntimeAdvanceHostPorts.FaultRuntimeAdmission() =>
         ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).FaultRuntimeAdmission();

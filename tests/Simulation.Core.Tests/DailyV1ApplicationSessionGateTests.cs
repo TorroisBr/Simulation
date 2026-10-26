@@ -43,6 +43,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         internal int LegacyAdvanceInvocationCount { get; private set; }
         internal bool Faulted { get; private set; }
         internal bool? RequestedSessionReplacement { get; private set; }
+        internal DailyV1CaptureScopeAllowance? RequestedCaptureScopeAllowance { get; private set; }
+        internal int OwnerCensusCaptureCount { get; private set; }
         internal int ContinuationSaveEvidenceCaptureCount { get; private set; }
         internal void ThrowOnContinuationSaveCapture(Exception exception) =>
             continuationSaveCaptureException = exception;
@@ -131,6 +133,32 @@ public sealed class DailyV1ApplicationSessionGateTests
             onContinuationSaveEvidenceCapture?.Invoke(ContinuationSaveEvidenceCaptureCount);
             return TryCaptureDailyBoundaryAdmissionEvidence(
                 sessionReplacement: false, out ownerSections, out mutationEpoch, out failure);
+        }
+
+        public bool TryCaptureOwnerSectionCensus(
+            DailyV1CaptureScopeAllowance allowedOuterScope,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            RequestedCaptureScopeAllowance = allowedOuterScope;
+            RequestedSessionReplacement =
+                allowedOuterScope == DailyV1CaptureScopeAllowance.SessionReplacementValidation;
+            OwnerCensusCaptureCount++;
+            if (allowedOuterScope == DailyV1CaptureScopeAllowance.ContinuationSave)
+            {
+                if (continuationSaveCaptureException != null)
+                    throw continuationSaveCaptureException;
+                ContinuationSaveEvidenceCaptureCount++;
+                onContinuationSaveEvidenceCapture?.Invoke(ContinuationSaveEvidenceCaptureCount);
+            }
+
+            ownerSections = admissionOwnerSections;
+            mutationEpoch = admissionMutationEpoch;
+            failure = admissionOwnerSections == null
+                ? DailyCaptureEligibilityFailure.OperationInProgress
+                : DailyCaptureEligibilityFailure.None;
+            return admissionOwnerSections != null;
         }
 
         public void FaultRuntimeAdmission()
@@ -1261,6 +1289,62 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(coreBoundary.ExecutionState, Is.SameAs(session.ExecutionBoundaryState));
         Assert.That(coreBoundary.IsBoundTo(session.ExecutionBoundaryState, exact), Is.True);
     }
+
+    [Test]
+    public void CoreSelectsAndRechecksExactP12CaptureScopeBeforeUsingHostCensusPort()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary hostPorts);
+        DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
+            session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
+        Assert.That(coreBoundary, Is.Not.Null);
+        hostPorts.SetAdmissionEvidence(
+            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot(), mutationEpoch: 17L);
+
+        Assert.That(coreBoundary.TryCaptureCompletedDailyCaptureEvidence(
+            out _, out _, out DailyCaptureEligibilityFailure failure), Is.False,
+            "Core must reject completed-advance evidence unless its exact DailyAdvance scope is active.");
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero,
+            "A rejected Core scope cannot ask the host to read or reserve the P12 census.");
+
+        Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+            sessionReplacement: false, out _, out _, out failure), Is.True);
+        Assert.That(hostPorts.RequestedCaptureScopeAllowance,
+            Is.EqualTo(DailyV1CaptureScopeAllowance.None));
+
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+        using (lease)
+        {
+            Assert.That(coreBoundary.TryCaptureCompletedDailyCaptureEvidence(
+                out _, out _, out failure), Is.True);
+            Assert.That(hostPorts.RequestedCaptureScopeAllowance,
+                Is.EqualTo(DailyV1CaptureScopeAllowance.DailyAdvance));
+        }
+        Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        Assert.That(coreBoundary.TryCaptureContinuationSaveEvidence(
+            out _, out _, out failure), Is.True);
+        Assert.That(hostPorts.RequestedCaptureScopeAllowance,
+            Is.EqualTo(DailyV1CaptureScopeAllowance.ContinuationSave));
+        Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+
+        Assert.That(application.TryBeginExclusiveOperation(session, out var replacement), Is.True);
+        using (replacement)
+        {
+            Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+                sessionReplacement: true, out _, out _, out failure), Is.True);
+            Assert.That(hostPorts.RequestedCaptureScopeAllowance,
+                Is.EqualTo(DailyV1CaptureScopeAllowance.SessionReplacementValidation));
+        }
+
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(4));
+    }
+
     [Test]
     public void ApplicationRejectsAnotherGenesisAfterPublishingItsInitialSession()
     {

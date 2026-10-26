@@ -54,16 +54,8 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
     bool TryEnterDailyAdvanceOperation(out IDisposable operationScope);
     bool TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary);
-    bool TryCaptureCompletedDailyCaptureEvidence(
-        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
-        out long mutationEpoch,
-        out DailyCaptureEligibilityFailure failure);
-    bool TryCaptureDailyBoundaryAdmissionEvidence(
-        bool sessionReplacement,
-        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
-        out long mutationEpoch,
-        out DailyCaptureEligibilityFailure failure);
-    bool TryCaptureContinuationSaveEvidence(
+    bool TryCaptureOwnerSectionCensus(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure);
@@ -131,7 +123,8 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure) =>
-        hostPorts.TryCaptureCompletedDailyCaptureEvidence(
+        TryCaptureOwnerSectionCensus(
+            DailyV1CaptureScopeAllowance.DailyAdvance,
             out ownerSections, out mutationEpoch, out failure);
 
     public bool TryCaptureDailyBoundaryAdmissionEvidence(
@@ -139,15 +132,57 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure) =>
-        hostPorts.TryCaptureDailyBoundaryAdmissionEvidence(
-            sessionReplacement, out ownerSections, out mutationEpoch, out failure);
+        TryCaptureOwnerSectionCensus(
+            sessionReplacement
+                ? DailyV1CaptureScopeAllowance.SessionReplacementValidation
+                : DailyV1CaptureScopeAllowance.None,
+            out ownerSections, out mutationEpoch, out failure);
 
     public bool TryCaptureContinuationSaveEvidence(
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure) =>
-        hostPorts.TryCaptureContinuationSaveEvidence(
+        TryCaptureOwnerSectionCensus(
+            DailyV1CaptureScopeAllowance.ContinuationSave,
             out ownerSections, out mutationEpoch, out failure);
+
+    private bool TryCaptureOwnerSectionCensus(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        ownerSections = null;
+        mutationEpoch = 0L;
+        if (!Enum.IsDefined(typeof(DailyV1CaptureScopeAllowance), allowedOuterScope))
+        {
+            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+            return false;
+        }
+
+        // Core selects the only scope that may remain active around this
+        // snapshot. Recheck after the host reads the owner census so a
+        // reentrant scope change cannot authorize a stale capture.
+        if (!executionState.TryAssessCaptureScope(allowedOuterScope))
+        {
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        if (!hostPorts.TryCaptureOwnerSectionCensus(
+                allowedOuterScope, out ownerSections, out mutationEpoch, out failure))
+            return false;
+
+        if (!executionState.TryAssessCaptureScope(allowedOuterScope))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        return true;
+    }
 
     public void FaultRuntimeAdmission() => hostPorts.FaultRuntimeAdmission();
 }
