@@ -1853,25 +1853,41 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 public sealed class DailyV1SelectedActionDispatchOutcomeTests
 {
     [Test]
-    public void CoreOutcomeUsesActionRollAndDomainDispatchResult()
+    public void CoreOutcomeResolvesSuccessAndOperationFailureForEveryDispatchKind()
     {
-        var succeeded = new DailyV1SelectedActionDispatchResult(
-            DailyV1SelectedActionDispatchKind.Normal, true, true);
-        Assert.That(DailyV1SelectedActorActionExecutionStage.TryResolveDispatchOutcome(
-            succeeded, out bool actionSucceeded, out NpcActionResultType resultType), Is.True);
-        Assert.That(actionSucceeded, Is.True);
-        Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+        foreach (DailyV1SelectedActionDispatchKind kind
+            in Enum.GetValues(typeof(DailyV1SelectedActionDispatchKind)))
+        {
+            DailyV1SelectedActionDispatchResult succeeded = CreateDispatch(kind, true, true);
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryResolveDispatchOutcome(
+                succeeded, out bool actionSucceeded, out NpcActionResultType resultType),
+                Is.True, $"A complete successful {kind} dispatch should resolve.");
+            Assert.That(actionSucceeded, Is.True, $"{kind} should preserve Core success.");
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success),
+                $"{kind} should resolve the Core success result type.");
 
-        var failedRoll = new DailyV1SelectedActionDispatchResult(
-            DailyV1SelectedActionDispatchKind.Normal, false, false);
-        Assert.That(DailyV1SelectedActorActionExecutionStage.TryResolveDispatchOutcome(
-            failedRoll, out actionSucceeded, out resultType), Is.True);
-        Assert.That(actionSucceeded, Is.False);
-        Assert.That(resultType, Is.EqualTo(NpcActionResultType.Failure));
+            DailyV1SelectedActionDispatchResult failedOperation = CreateDispatch(kind, true, false);
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryResolveDispatchOutcome(
+                failedOperation, out actionSucceeded, out resultType),
+                Is.True, $"A complete failed {kind} operation should resolve.");
+            Assert.That(actionSucceeded, Is.False,
+                $"{kind} should preserve the failed Core operation result.");
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Failure),
+                $"{kind} should resolve the Core failure result type.");
+
+            DailyV1SelectedActionDispatchResult failedRoll = CreateDispatch(kind, false, false);
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryResolveDispatchOutcome(
+                failedRoll, out actionSucceeded, out resultType),
+                Is.True, $"A failed-roll {kind} dispatch should resolve.");
+            Assert.That(actionSucceeded, Is.False,
+                $"{kind} must not report action success after a failed roll.");
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Failure),
+                $"{kind} failed roll should resolve the Core failure result type.");
+        }
     }
 
     [Test]
-    public void CoreOutcomeRejectsHostProjectionAsAuthorityAndMalformedSuccess()
+    public void CoreOutcomeRejectsMalformedSuccessAndUnknownDispatchKind()
     {
         var impossibleRollSuccess = new DailyV1SelectedActionDispatchResult(
             DailyV1SelectedActionDispatchKind.Normal, false, true);
@@ -1889,5 +1905,106 @@ public sealed class DailyV1SelectedActionDispatchOutcomeTests
             (DailyV1SelectedActionDispatchKind)byte.MaxValue, true, false);
         Assert.That(DailyV1SelectedActorActionExecutionStage.TryResolveDispatchOutcome(
             unknownKind, out actionSucceeded, out _), Is.False);
+
+        foreach (DailyV1SelectedActionDispatchKind kind
+            in Enum.GetValues(typeof(DailyV1SelectedActionDispatchKind)))
+        {
+            if (kind == DailyV1SelectedActionDispatchKind.Normal) continue;
+            var missingDetailedResult = new DailyV1SelectedActionDispatchResult(
+                kind, true, true);
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryResolveDispatchOutcome(
+                missingDetailedResult, out actionSucceeded, out _), Is.False,
+                $"A successful {kind} dispatch without its typed Core result must fail closed.");
+            Assert.That(actionSucceeded, Is.False);
+        }
+    }
+
+    [Test]
+    public void HostCompletionContractCannotReturnOrReplaceActionOutcome()
+    {
+        var method = typeof(IDailyV1SelectedActorActionExecutionBoundary).GetMethod(
+            nameof(IDailyV1SelectedActorActionExecutionBoundary.TryCompleteDispatch));
+        Assert.That(method, Is.Not.Null);
+        var parameters = method.GetParameters();
+        int outputCount = 0;
+        foreach (var parameter in parameters)
+        {
+            if (!parameter.IsOut) continue;
+            outputCount++;
+            Assert.That(parameter.ParameterType, Is.EqualTo(typeof(string).MakeByRefType()),
+                "The host may return presentation text, but not Core action success or result type.");
+        }
+        Assert.That(outputCount, Is.EqualTo(1));
+    }
+
+    private static DailyV1SelectedActionDispatchResult CreateDispatch(
+        DailyV1SelectedActionDispatchKind kind,
+        bool actionRollSucceeded,
+        bool succeeded)
+    {
+        switch (kind)
+        {
+            case DailyV1SelectedActionDispatchKind.Normal:
+                return new DailyV1SelectedActionDispatchResult(kind,
+                    actionRollSucceeded, succeeded);
+            case DailyV1SelectedActionDispatchKind.PlannedNpcSale:
+            {
+                var sale = new DailyV1SelectedActionExecutionStage.PlannedNpcSaleResult(
+                    succeeded, false, succeeded ? 1 : 0, 1f, false, false, null, null);
+                var result = new DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult(
+                    succeeded, actionRollSucceeded, sale);
+                return new DailyV1SelectedActionDispatchResult(kind,
+                    actionRollSucceeded, succeeded, plannedNpcSale: result);
+            }
+            case DailyV1SelectedActionDispatchKind.PlannedMarketSale:
+            {
+                var sale = new DailyV1SelectedActionExecutionStage.PlannedMarketSaleResult(
+                    succeeded, false, succeeded ? 1 : 0, 1f, false, false, null);
+                var result = new DailyV1SelectedActionExecutionStage.SelectedPlannedMarketSaleActionResult(
+                    succeeded, actionRollSucceeded, sale);
+                return new DailyV1SelectedActionDispatchResult(kind,
+                    actionRollSucceeded, succeeded, plannedMarketSale: result);
+            }
+            case DailyV1SelectedActionDispatchKind.OpenMarket:
+                return new DailyV1SelectedActionDispatchResult(kind,
+                    actionRollSucceeded, succeeded,
+                    openMarket: new DailyV1SelectedActionExecutionStage.SelectedOpenMarketActionResult(
+                        succeeded, actionRollSucceeded, null, null));
+            case DailyV1SelectedActionDispatchKind.CrossCityBuy:
+                return new DailyV1SelectedActionDispatchResult(kind,
+                    actionRollSucceeded, succeeded,
+                    crossCityBuy: new DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult(
+                        actionRollSucceeded,
+                        new DailyV1SelectedCrossCityBuyResult(succeeded,
+                            succeeded ? DailyV1SelectedCrossCityBuyFailure.None
+                                : DailyV1SelectedCrossCityBuyFailure.InvalidInput)));
+            case DailyV1SelectedActionDispatchKind.SoloTravel:
+                return new DailyV1SelectedActionDispatchResult(kind,
+                    actionRollSucceeded, succeeded,
+                    soloTravel: new DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult(
+                        succeeded, actionRollSucceeded, null));
+            case DailyV1SelectedActionDispatchKind.FleeCity:
+                return new DailyV1SelectedActionDispatchResult(kind,
+                    actionRollSucceeded, succeeded,
+                    fleeCity: new DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult(
+                        succeeded, succeeded ? "destination" : null, 1f));
+            case DailyV1SelectedActionDispatchKind.GuardArrest:
+                return new DailyV1SelectedActionDispatchResult(kind,
+                    actionRollSucceeded, succeeded,
+                    guardArrest: new DailyV1SelectedActionExecutionStage.SelectedGuardArrestActionResult(
+                        succeeded, "target", "city", "decision"));
+            case DailyV1SelectedActionDispatchKind.Steal:
+                return new DailyV1SelectedActionDispatchResult(kind,
+                    actionRollSucceeded, succeeded,
+                    steal: new DailyV1SelectedStealActionExecutionStage.Result(
+                        succeeded, "target", "city", 1));
+            case DailyV1SelectedActionDispatchKind.Crime:
+                return new DailyV1SelectedActionDispatchResult(kind,
+                    actionRollSucceeded, succeeded,
+                    crime: new DailyV1SelectedCrimeActionExecutionStage.Result(
+                        actionRollSucceeded, succeeded));
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+        }
     }
 }
