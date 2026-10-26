@@ -1,6 +1,6 @@
 # CORE-F selected P12 status Core-owner binding — independent review
 
-**Verdict: VALIDATED_CANDIDATE**  
+**Verdict: VALIDATED_CANDIDATE**
 **Review date:** 2026-10-26
 
 ## Exact identities
