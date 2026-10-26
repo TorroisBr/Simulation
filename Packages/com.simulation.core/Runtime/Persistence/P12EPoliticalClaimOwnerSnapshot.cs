@@ -111,29 +111,24 @@ internal sealed class P12EPoliticalClaimOwnerSnapshot
         P12EPoliticalClaimSnapshotSection<P12EPoliticalClaimRecognitionRow> recognitions)
     { Claims = claims; Recognitions = recognitions; }
 
-    internal static bool TryCapture(SimulationRuntime runtime, out P12EPoliticalClaimOwnerSnapshot snapshot,
+    internal static bool TryCapture(
+        IP12EPoliticalClaimCaptureSource captureSource,
+        DailyCaptureEligibilityToken token,
+        IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
+        PersonStore persons,
+        PropertyOwnershipStore properties,
+        InstitutionStore institutions,
+        OfficeStore offices,
+        out P12EPoliticalClaimOwnerSnapshot snapshot,
         out P12EPoliticalClaimSnapshotFailure failure)
     {
         snapshot = null;
         failure = P12EPoliticalClaimSnapshotFailure.Create(P12EPoliticalClaimSnapshotFailureCode.InvalidCaptureContext,
-            "Capture requires an admitted completed Daily-v1 runtime.");
-        if (runtime == null || !runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken token, out _)
-            || token == null) return false;
-        return TryCapture(runtime, token, token.OwnerSections, out snapshot, out failure);
-    }
-
-    internal static bool TryCapture(SimulationRuntime runtime, DailyCaptureEligibilityToken token,
-        IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
-        out P12EPoliticalClaimOwnerSnapshot snapshot, out P12EPoliticalClaimSnapshotFailure failure,
-        DailyCaptureStagingAttempt stagingAttempt = null)
-    {
-        snapshot = null;
-        failure = P12EPoliticalClaimSnapshotFailure.Create(P12EPoliticalClaimSnapshotFailureCode.InvalidCaptureContext,
             "Capture requires the exact live P12-B token and its owner-section vector.");
-        if (runtime == null || token == null || sharedOwnerSectionVector == null
+        if (captureSource == null || token == null || sharedOwnerSectionVector == null
+            || persons == null || properties == null || institutions == null || offices == null
             || !ReferenceEquals(token.OwnerSections, sharedOwnerSectionVector)
-            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
-                runtime, token, sharedOwnerSectionVector, stagingAttempt)) return false;
+            || !captureSource.IsCaptureCurrent(token, sharedOwnerSectionVector)) return false;
         if (token.AdmissionContext == null
             || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || token.CompletedCoreSequence <= 0L || token.AbsoluteDay < 0L || token.MutationEpoch < 0L)
@@ -169,7 +164,7 @@ internal sealed class P12EPoliticalClaimOwnerSnapshot
         foreach (PoliticalClaimRecognitionRecord row in recognitions)
         {
             if (row?.ClaimId == null || row.InstitutionId == null || row.History == null)
-                return Fail(P12EPoliticalClaimSnapshotFailureCode.InvalidOwnerValues, "A recognition row is incomplete.", out failure);
+                return Fail(P12EPoliticalClaimSnapshotFailureCode.InvalidOwnerValues, "Recognition row is incomplete.", out failure);
             List<P12EPoliticalClaimRecognitionHistoryRow> history = new List<P12EPoliticalClaimRecognitionHistoryRow>();
             foreach (PoliticalClaimRecognitionHistoryEntry item in row.History)
             {
@@ -182,13 +177,11 @@ internal sealed class P12EPoliticalClaimOwnerSnapshot
         P12EPoliticalClaimOwnerSnapshot candidate = new P12EPoliticalClaimOwnerSnapshot(
             Section(PoliticalClaimStoreCensusProvider.ClaimsSectionId, claimCount, revision, claimRows, x => x?.Copy()),
             Section(PoliticalClaimStoreCensusProvider.RecognitionsSectionId, recognitionCount, revision, recognitionRows, x => x?.Copy()));
-        if (!candidate.TryValidate(runtime.PersonStore, runtime.PropertyOwnershipStore,
-                runtime.InstitutionStoreForWorldBoundary, runtime.OfficeStoreForWorldBoundary, token.AbsoluteDay, out failure)
+        if (!candidate.TryValidate(persons, properties, institutions, offices, token.AbsoluteDay, out failure)
             || owner.Count != claimCount || owner.RecognitionCount != recognitionCount || owner.Revision != revision
             || !Matches(claimWitness, PoliticalClaimStoreCensusProvider.ClaimsSectionId, owner, claimCount, revision)
             || !Matches(recognitionWitness, PoliticalClaimStoreCensusProvider.RecognitionsSectionId, owner, recognitionCount, revision)
-            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
-                runtime, token, sharedOwnerSectionVector, stagingAttempt))
+            || !captureSource.IsCaptureCurrent(token, sharedOwnerSectionVector))
         {
             snapshot = null;
             if (failure.Code == P12EPoliticalClaimSnapshotFailureCode.None)
@@ -200,7 +193,6 @@ internal sealed class P12EPoliticalClaimOwnerSnapshot
         failure = P12EPoliticalClaimSnapshotFailure.None;
         return true;
     }
-
     internal bool TryStage(PersonStore persons, PropertyOwnershipStore properties, InstitutionStore institutions,
         OfficeStore offices, long capturedDay, out PoliticalClaimStore staged, out P12EPoliticalClaimSnapshotFailure failure)
     {

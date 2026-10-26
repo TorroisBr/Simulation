@@ -1119,7 +1119,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         Assert.That(institutionSnapshot.Tenures.Records, Has.Count.EqualTo(1));
         Assert.That(institutionSnapshot.Tenures.Records[0].StartAbsoluteDay, Is.EqualTo(ownerMutationDay));
         Assert.That(institutionSnapshot.Tenures.Records[0].EndAbsoluteDay, Is.EqualTo(ownerMutationDay));
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(
             runtime,
             token,
             token.OwnerSections,
@@ -1780,7 +1780,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             out P12EFactionSnapshotFailure factionFailure), Is.True, factionFailure?.Message);
         AppendFactionSnapshot(signature, factions);
 
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalClaimOwnerSnapshot claims,
             out P12EPoliticalClaimSnapshotFailure claimFailure), Is.True, claimFailure?.Message);

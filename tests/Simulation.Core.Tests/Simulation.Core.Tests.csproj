@@ -33,6 +33,8 @@
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12ANpcOwnerDecoderTests.cs" Link="Persistence/P12ANpcOwnerDecoderTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12EPropertyEstateOwnerCodecTests.cs" Link="Persistence/P12EPropertyEstateOwnerCodecTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12EFactionOwnerCodecTests.cs" Link="Persistence/P12EFactionOwnerCodecTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12EPoliticalClaimOwnerCodecTests.cs" Link="Persistence/P12EPoliticalClaimOwnerCodecTests.cs" />
+    <Compile Include="P12ECoreOwnerRestoreStagerTests.cs" Link="Persistence/P12ECoreOwnerRestoreStagerTests.cs" />
     <Compile Include="P12EFactionCensusProviderCoreTests.cs" Link="Persistence/P12EFactionCensusProviderCoreTests.cs" />
     <Compile Include="P12EInstitutionOfficeOwnerSnapshotCoreTests.cs" Link="Persistence/P12EInstitutionOfficeOwnerSnapshotCoreTests.cs" />
     <Compile Include="SpatialNetworkOwnerCodecTests.cs" Link="Persistence/SpatialNetworkOwnerCodecTests.cs" />

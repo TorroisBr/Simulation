@@ -25,6 +25,10 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionOfficeCensusProviders.cs" Link="Institution/InstitutionOfficeCensusProviders.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EInstitutionOfficeOwnerSnapshot.cs" Link="Persistence/P12EInstitutionOfficeOwnerSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EFactionCaptureSource.cs" Link="Persistence/IP12EFactionCaptureSource.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EPoliticalClaimCaptureSource.cs" Link="Persistence/IP12EPoliticalClaimCaptureSource.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalClaimOwnerSnapshot.cs" Link="Persistence/P12EPoliticalClaimOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalClaimOwnerCodec.cs" Link="Persistence/P12EPoliticalClaimOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12ECoreOwnerRestoreStager.cs" Link="Persistence/DailyV1P12ECoreOwnerRestoreStager.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EFactionOwnerSnapshot.cs" Link="Persistence/P12EFactionOwnerSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EFactionOwnerCodec.cs" Link="Persistence/P12EFactionOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionStoreCensusProviders.cs" Link="Political/FactionStoreCensusProviders.cs" />
@@ -33,6 +37,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimStore.cs" Link="Political/PoliticalClaimStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimTransitions.cs" Link="Political/PoliticalClaimTransitions.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimOwnerBridge.cs" Link="Political/PoliticalClaimOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimStoreCensusProviders.cs" Link="Political/PoliticalClaimStoreCensusProviders.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionContracts.cs" Link="Political/FactionContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionStore.cs" Link="Political/FactionStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionTransitions.cs" Link="Political/FactionTransitions.cs" />

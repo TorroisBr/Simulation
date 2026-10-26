@@ -11860,7 +11860,7 @@ public sealed class SimulationRuntimeAdmissionTests
             out P12EFactionSnapshotFailure factionFailure), Is.True,
             factionFailure?.Message);
         snapshots.Add("E/Factions", factionSnapshot);
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalClaimOwnerSnapshot claimSnapshot,
             out P12EPoliticalClaimSnapshotFailure claimFailure), Is.True,
