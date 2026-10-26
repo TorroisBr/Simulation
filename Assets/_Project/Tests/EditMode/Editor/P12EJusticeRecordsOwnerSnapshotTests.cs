@@ -279,6 +279,16 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
             configuration.CreateOwner(), 1, 0L);
         Assert.That((bool)validate.Invoke(null, new object[] { wrongOwner, owner }), Is.False);
         Assert.That((bool)validate.Invoke(null, new object[] { null, owner }), Is.False);
+
+        FieldInfo receiptRevision = typeof(JusticeSystem).GetField(
+            "beginDayStepRevision", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(receiptRevision, Is.Not.Null);
+        receiptRevision.SetValue(owner, 1L);
+        Assert.That(owner.P12P18ReceiptCensusRevision, Is.EqualTo(1L));
+        OwnerSectionCensusSnapshot matchingNonzeroRevision = new OwnerSectionCensusSnapshot(
+            exactZero.SectionId, exactZero.SchemaVersion, exactZero.Role,
+            owner, 1, owner.P12P18ReceiptCensusRevision);
+        Assert.That((bool)validate.Invoke(null, new object[] { matchingNonzeroRevision, owner }), Is.False);
     }
 
     [Test]

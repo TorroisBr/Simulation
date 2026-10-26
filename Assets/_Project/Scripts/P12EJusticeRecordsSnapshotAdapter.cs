@@ -341,7 +341,8 @@ internal static class P12EJusticeRecordsSnapshotAdapter
                 && witness.Role == OwnerSectionRole.Required
                 && ReferenceEquals(witness.OwnerInstanceIdentity, owner)
                 && witness.Cardinality == 1
-                && witness.Revision == owner.P12P18ReceiptCensusRevision;
+                && witness.Revision == 0L
+                && owner.P12P18ReceiptCensusRevision == 0L;
         }
         catch (Exception exception) when (exception is InvalidOperationException || exception is OverflowException)
         {
