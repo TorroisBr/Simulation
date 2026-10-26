@@ -1786,7 +1786,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             out P12EPoliticalClaimSnapshotFailure claimFailure), Is.True, claimFailure?.Message);
         AppendClaimSnapshot(signature, claims);
 
-        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalSupportCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalSupportOwnerSnapshot support,
             out P12EPoliticalSupportSnapshotFailure supportFailure), Is.True, supportFailure?.Message);
