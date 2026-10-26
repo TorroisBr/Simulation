@@ -2577,7 +2577,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         GenealogyStore resolvedGenealogyStore = genealogyStore ?? new GenealogyStore();
         ValidateGenealogyStore(resolvedPersonStore, resolvedGenealogyStore);
-        SpatialAuthorityStore resolvedSpatialAuthorityStore = CloneSpatialAuthorityStore(spatialAuthorityStore);
+        // The admitted Core Daily-v1 session already owns this exact P8
+        // authority as a causal root. Retaining it is required for one
+        // authoritative owner across genesis, runtime execution, and P12-C
+        // capture. Compatibility runtimes keep the historical defensive
+        // clone behavior.
+        SpatialAuthorityStore resolvedSpatialAuthorityStore =
+            selectedExecutionBoundaryState != null
+            && selectedExecutionBoundaryState.HasAdmittedSelectedDailyExecution
+                ? RetainSelectedSpatialAuthorityStore(spatialAuthorityStore)
+                : CloneSpatialAuthorityStore(spatialAuthorityStore);
         StructureStore resolvedStructureStore = structureStore == null
             ? null
             : structureStore.Clone(resolvedSpatialAuthorityStore);
@@ -12921,6 +12930,25 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         }
 
         return source.Clone();
+    }
+
+    private static SpatialAuthorityStore RetainSelectedSpatialAuthorityStore(SpatialAuthorityStore source)
+    {
+        if (source == null)
+            throw new ArgumentException(
+                "An admitted Core Daily-v1 runtime requires its exact P8 SpatialAuthorityStore owner.",
+                nameof(source));
+
+        SpatialAuthorityInvariantReport report = source.ValidateInvariants();
+        if (report.IsValid == false)
+        {
+            throw new ArgumentException(
+                "The Core-owned SimulationRuntime SpatialAuthorityStore contains invalid world state: "
+                + string.Join("; ", report.Violations),
+                nameof(source));
+        }
+
+        return source;
     }
 
     private static LegacySpatialAnchorBindingStore CloneLegacySpatialAnchorBindingStore(

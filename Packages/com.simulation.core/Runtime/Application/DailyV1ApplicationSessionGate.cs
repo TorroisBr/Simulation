@@ -22,6 +22,104 @@ internal sealed class DailyV1SessionReportState
 }
 
 /// <summary>
+/// Retains the exact P12-C manifest and spatial authority associated with one
+/// active selected runtime. Restored sessions retain these reconstructed roots
+/// without claiming to retain an initial genesis composition.
+/// </summary>
+internal sealed class DailyV1P12CRuntimeRoots
+{
+    private DailyV1P12CRuntimeRoots(
+        DailyV1ExecutionBoundaryState executionBoundaryState,
+        P12CP9GenesisManifestCoreSnapshot manifest,
+        SpatialAuthorityStore spatialAuthority)
+    {
+        ExecutionBoundaryState = executionBoundaryState;
+        Manifest = manifest;
+        SpatialAuthority = spatialAuthority;
+    }
+
+    internal DailyV1ExecutionBoundaryState ExecutionBoundaryState { get; }
+    internal P12CP9GenesisManifestCoreSnapshot Manifest { get; }
+    internal SpatialAuthorityStore SpatialAuthority { get; }
+
+    internal bool IsFor(DailyV1ActiveRuntimeSession session) =>
+        session != null
+        && ReferenceEquals(ExecutionBoundaryState, session.ExecutionBoundaryState)
+        && Manifest != null
+        && Manifest.TryValidate(out _)
+        && Manifest.P12AdmissionProfile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+        && string.Equals(Manifest.SelectedP9ProfileFingerprint,
+            session.ProfileFingerprint, StringComparison.Ordinal)
+        && SpatialAuthority != null
+        && ExecutionBoundaryState.HasAdmittedSelectedDailyExecution
+        && ReferenceEquals(ExecutionBoundaryState.SelectedRuntimeOwnerGraph, session.OwnerGraph)
+        && ExecutionBoundaryState.HasExactSelectedRuntimeExecutionRoots(
+            session.OwnerGraph,
+            session.OwnerGraph?.PersonStore,
+            ExecutionBoundaryState.SelectedActorChoiceStore,
+            ExecutionBoundaryState.SelectedRandomSource,
+            ExecutionBoundaryState.SelectedRuntimeIdAllocator,
+            ExecutionBoundaryState.SelectedRecordSequence,
+            ExecutionBoundaryState.SelectedDecisionStore);
+
+    internal static bool TryCreate(
+        DailyV1ExecutionBoundaryState executionBoundaryState,
+        DailyV1EffectiveDefinitions definitions,
+        P12CP9GenesisManifestCoreSnapshot manifest,
+        SpatialAuthorityStore spatialAuthority,
+        out DailyV1P12CRuntimeRoots roots,
+        out string diagnostic)
+    {
+        roots = null;
+        diagnostic = null;
+        if (executionBoundaryState == null || definitions == null
+            || manifest == null || spatialAuthority == null)
+        {
+            diagnostic = "The exact selected P12-C execution state, definitions, manifest, and spatial authority are required.";
+            return false;
+        }
+
+        DailyV1SelectedRuntimeOwnerGraph graph = executionBoundaryState.SelectedRuntimeOwnerGraph;
+        string profileFingerprint = DailyV1DefinitionIdentity.CreateP9Fingerprint(definitions, out _);
+        if (!executionBoundaryState.HasAdmittedSelectedDailyExecution
+            || !ReferenceEquals(graph?.Definitions, definitions)
+            || !executionBoundaryState.HasExactSelectedRuntimeExecutionRoots(
+                graph,
+                graph?.PersonStore,
+                executionBoundaryState.SelectedActorChoiceStore,
+                executionBoundaryState.SelectedRandomSource,
+                executionBoundaryState.SelectedRuntimeIdAllocator,
+                executionBoundaryState.SelectedRecordSequence,
+                executionBoundaryState.SelectedDecisionStore)
+            || !manifest.TryValidate(out diagnostic)
+            || manifest.P12AdmissionProfile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !string.Equals(manifest.SelectedP9ProfileFingerprint, profileFingerprint,
+                StringComparison.Ordinal))
+        {
+            diagnostic = diagnostic ?? "The P12-C manifest and root identities do not match the exact admitted Daily-v1 execution state.";
+            return false;
+        }
+
+        if (!P12CSpatialAuthoritySnapshot.TryCapture(
+                executionBoundaryState.AdmissionContext.Profile,
+                manifest.SelectedP9ContractIdentity,
+                manifest.SelectedP9SchemaVersion,
+                spatialAuthority,
+                out _,
+                out P12CSpatialAuthoritySnapshotFailure spatialFailure))
+        {
+            diagnostic = "The retained P12-C spatial authority is invalid for its P9 manifest: "
+                + (spatialFailure?.Message ?? "Unknown spatial-authority validation failure.");
+            return false;
+        }
+
+        roots = new DailyV1P12CRuntimeRoots(executionBoundaryState, manifest, spatialAuthority);
+        diagnostic = null;
+        return true;
+    }
+}
+
+/// <summary>
 /// Core-owned binding for one published selected Daily-v1 runtime session.
 /// It retains the exact execution boundary and owner graph already created by
 /// genesis or staged restoration; it does not rebuild or mirror their state.
@@ -37,18 +135,21 @@ internal sealed class DailyV1ActiveRuntimeSession
         DailyV1EffectiveDefinitions definitions,
         string profileFingerprint,
         long lastEconomySnapshotDay,
-        DailyV1GenesisComposition genesisComposition)
+        DailyV1GenesisComposition genesisComposition,
+        DailyV1P12CRuntimeRoots p12CRoots)
     {
         ExecutionBoundaryState = executionBoundaryState;
         Definitions = definitions;
         ProfileFingerprint = profileFingerprint;
         ReportState = new DailyV1SessionReportState(lastEconomySnapshotDay);
         GenesisComposition = genesisComposition;
+        P12CRoots = p12CRoots;
     }
 
     internal DailyV1ExecutionBoundaryState ExecutionBoundaryState { get; }
     internal DailyV1SessionReportState ReportState { get; }
     internal DailyV1GenesisComposition GenesisComposition { get; }
+    internal DailyV1P12CRuntimeRoots P12CRoots { get; }
     internal DailyV1SelectedRuntimeOwnerGraph OwnerGraph =>
         ExecutionBoundaryState.SelectedRuntimeOwnerGraph;
     internal DailyV1EffectiveDefinitions Definitions { get; }
@@ -86,7 +187,7 @@ internal sealed class DailyV1ActiveRuntimeSession
         out DailyV1ActiveRuntimeSession session,
         out string diagnostic) =>
         TryCreateCore(executionBoundaryState, expectedDefinitions, lastEconomySnapshotDay,
-            null, out session, out diagnostic);
+            null, null, out session, out diagnostic);
 
     internal static bool TryCreate(
         DailyV1GenesisComposition genesisComposition,
@@ -101,9 +202,40 @@ internal sealed class DailyV1ActiveRuntimeSession
             return false;
         }
 
+        if (!DailyV1P12CRuntimeRoots.TryCreate(
+                genesisComposition.ExecutionBoundaryState,
+                genesisComposition.Definitions,
+                genesisComposition.P9ManifestSnapshot,
+                genesisComposition.SpatialAuthority,
+                out DailyV1P12CRuntimeRoots p12CRoots,
+                out diagnostic))
+        {
+            session = null;
+            return false;
+        }
+
         return TryCreateCore(genesisComposition.ExecutionBoundaryState,
             genesisComposition.Definitions, lastEconomySnapshotDay,
-            genesisComposition, out session, out diagnostic);
+            genesisComposition, p12CRoots, out session, out diagnostic);
+    }
+
+    internal static bool TryCreateRestored(
+        DailyV1ExecutionBoundaryState executionBoundaryState,
+        DailyV1EffectiveDefinitions expectedDefinitions,
+        long lastEconomySnapshotDay,
+        P12CP9GenesisManifestCoreSnapshot p9Manifest,
+        SpatialAuthorityStore spatialAuthority,
+        out DailyV1ActiveRuntimeSession session,
+        out string diagnostic)
+    {
+        session = null;
+        if (!DailyV1P12CRuntimeRoots.TryCreate(
+                executionBoundaryState, expectedDefinitions, p9Manifest, spatialAuthority,
+                out DailyV1P12CRuntimeRoots p12CRoots, out diagnostic))
+            return false;
+
+        return TryCreateCore(executionBoundaryState, expectedDefinitions,
+            lastEconomySnapshotDay, null, p12CRoots, out session, out diagnostic);
     }
 
     private static bool TryCreateCore(
@@ -111,6 +243,7 @@ internal sealed class DailyV1ActiveRuntimeSession
         DailyV1EffectiveDefinitions expectedDefinitions,
         long lastEconomySnapshotDay,
         DailyV1GenesisComposition genesisComposition,
+        DailyV1P12CRuntimeRoots p12CRoots,
         out DailyV1ActiveRuntimeSession session,
         out string diagnostic)
     {
@@ -157,7 +290,13 @@ internal sealed class DailyV1ActiveRuntimeSession
 
         session = new DailyV1ActiveRuntimeSession(
             executionBoundaryState, expectedDefinitions, profileFingerprint,
-            lastEconomySnapshotDay, genesisComposition);
+            lastEconomySnapshotDay, genesisComposition, p12CRoots);
+        if (p12CRoots != null && !p12CRoots.IsFor(session))
+        {
+            session = null;
+            diagnostic = "The active Core session does not retain its exact P12-C roots.";
+            return false;
+        }
         return true;
     }
 

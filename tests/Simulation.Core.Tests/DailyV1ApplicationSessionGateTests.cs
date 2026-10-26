@@ -350,6 +350,77 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void CoreBoundP12CCausalRootsCaptureFromTheExactGenesisSession()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        DailyCaptureEligibilityToken sourceToken = InstallCompletedBoundaryToken(session, boundary);
+
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
+        try
+        {
+            Assert.That(DailyV1P12GCoreBoundCausalRootSources.TryCapture(
+                operation, out DailyV1P12GCoreBoundCausalRootSources sources,
+                out DailyV1P12GCoreBoundCausalRootCaptureFailure failure,
+                out string diagnostic), Is.True, diagnostic);
+
+            Assert.That(failure, Is.EqualTo(DailyV1P12GCoreBoundCausalRootCaptureFailure.None));
+            Assert.That(sources.IsFor(operation), Is.True);
+            Assert.That(operation.SourceWitness.Token, Is.SameAs(sourceToken));
+            Assert.That(sources.Snapshots.WorldIdentity.WorldIdValue, Is.EqualTo(session.WorldId.Value));
+            Assert.That(sources.Snapshots.P9Manifest, Is.SameAs(session.GenesisComposition.P9ManifestSnapshot));
+            Assert.That(sources.Snapshots.P9Manifest.Fingerprint,
+                Is.EqualTo(session.GenesisComposition.P9ProfileFingerprint));
+            Assert.That(sources.Snapshots.SpatialAuthority.OwnerRevision,
+                Is.EqualTo(session.GenesisComposition.SpatialAuthority.Revision));
+            Assert.That(sources.Snapshots.RandomRoot.Seed,
+                Is.EqualTo(sources.Snapshots.P9Manifest.Seed));
+            Assert.That(sources.Snapshots.Allocator, Is.Not.Null);
+            Assert.That(sources.Snapshots.RecordSequence, Is.Not.Null);
+            Assert.That(operation.TryRevalidate(out DailyCaptureEligibilityFailure staleFailure), Is.True,
+                staleFailure.ToString());
+        }
+        finally
+        {
+            operation.Dispose();
+        }
+    }
+
+    [Test]
+    public void CoreBoundP12CCausalRootsRejectAStaleOwnerVector()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        OwnerSectionCensusSnapshot[] sections =
+            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        InstallCompletedBoundaryToken(session, boundary, sections);
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
+        try
+        {
+            OwnerSectionCensusSnapshot original = sections[0];
+            sections[0] = new OwnerSectionCensusSnapshot(
+                original.SectionId, original.SchemaVersion, original.Role,
+                original.OwnerInstanceIdentity, original.Cardinality, original.Revision + 1L);
+            boundary.SetAdmissionEvidence(sections, 0L);
+
+            Assert.That(DailyV1P12GCoreBoundCausalRootSources.TryCapture(
+                operation, out DailyV1P12GCoreBoundCausalRootSources sources,
+                out DailyV1P12GCoreBoundCausalRootCaptureFailure failure,
+                out _), Is.False);
+            Assert.That(sources, Is.Null);
+            Assert.That(failure, Is.EqualTo(DailyV1P12GCoreBoundCausalRootCaptureFailure.StaleSourceBoundary));
+        }
+        finally
+        {
+            operation.Dispose();
+        }
+    }
+
+    [Test]
     public void ContinuationSaveRevalidationRejectsChangedOwnerCensusAndBalancesScope()
     {
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(

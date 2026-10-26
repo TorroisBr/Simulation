@@ -28,6 +28,14 @@ public sealed class DailyV1GenesisComposerTests
             "The Core graph must retain the exact ExpeditionStore created by genesis.");
         Assert.That(composition.OwnerGraph.TryBindExpeditionStore(new ExpeditionStore()), Is.False,
             "A different ExpeditionStore cannot replace the genesis owner identity.");
+        Assert.That(composition.P9ManifestSnapshot, Is.Not.Null,
+            "Core genesis retains the exact P9-B manifest facts needed by detached P12-C capture.");
+        Assert.That(composition.P9ManifestSnapshot.TryValidate(out string p9Diagnostic), Is.True, p9Diagnostic);
+        Assert.That(composition.P9ManifestSnapshot.Fingerprint, Is.EqualTo(composition.P9ProfileFingerprint));
+        Assert.That(composition.P9ManifestSnapshot.CanonicalProvenanceRecords,
+            Is.EqualTo(composition.P9ProvenanceRecords));
+        Assert.That(composition.P9ManifestSnapshot.EffectiveConfiguration, Is.Not.Null);
+        Assert.That(composition.P9ManifestSnapshot.StageOrder, Is.EqualTo(definitions.StageOrder));
         Assert.That(completed, Is.EqualTo(definitions.StageOrder.Take(definitions.StageOrder.Count - 2)));
     }
 

@@ -12088,6 +12088,9 @@ public sealed class SimulationRuntimeAdmissionTests
             SimulationActiveSession sourceSession =
                 ReadPrivateField<SimulationActiveSession>(source, "activeSession");
             Assert.That(sourceSession?.CoreRuntimeSession, Is.Not.Null);
+            Assert.That(sourceSession.Composition.SpatialAuthority,
+                Is.SameAs(sourceSession.CoreRuntimeSession.GenesisComposition.SpatialAuthority),
+                "The admitted Unity runtime must retain Core's exact P12-C SpatialAuthorityStore owner.");
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
                 Is.True, advanceFailure.ToString());
 
@@ -12124,7 +12127,8 @@ public sealed class SimulationRuntimeAdmissionTests
                     "A closed Core continuation-save operation must not fall back to Unity token validation.");
             }
 
-            Assert.That(callbackInvoked, Is.True, invalidateAt.ToString());
+            Assert.That(callbackInvoked, Is.True,
+                invalidateAt + ": " + failure + ": " + diagnostic);
             Assert.That(image, Is.Null);
             Assert.That(restored, Is.Null);
             Assert.That(failure, Is.Not.EqualTo(P12GDailyV1RestoreFailure.None), diagnostic);
@@ -12165,6 +12169,9 @@ public sealed class SimulationRuntimeAdmissionTests
             InvokeInitializeSimulation(source, null);
             SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
             Assert.That(sourceSession, Is.Not.Null);
+            Assert.That(sourceSession.CoreRuntimeSession?.GenesisComposition, Is.Not.Null,
+                "A freshly bootstrapped source session must retain its exact Core genesis composition.");
+            string expectedP9ManifestFingerprint = sourceSession.CoreRuntimeSession.P12CRoots.Manifest.Fingerprint;
 
             TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
             ConfigureSelectedBootstrap(control, config);
@@ -12180,6 +12187,8 @@ public sealed class SimulationRuntimeAdmissionTests
                     GetCompletedDailyToken(sourceSession.Runtime)),
                 Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession,
                     GetCompletedDailyToken(controlSession.Runtime))));
+            Assert.That(sourceSession.CoreRuntimeSession.GenesisComposition, Is.Not.Null,
+                "The original Core session must retain its genesis roots after the completed advance.");
             Assert.That(source.TrySaveDailyV1ContinuationToPathForTest(storageRoot, out string saveCode), Is.True, saveCode);
             Assert.That(saveCode, Is.EqualTo(P12AResultCode.Saved.ToString()));
 
@@ -12202,6 +12211,12 @@ public sealed class SimulationRuntimeAdmissionTests
 
             SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(target, "activeSession");
             Assert.That(restored, Is.Not.Null);
+            Assert.That(restored.CoreRuntimeSession?.GenesisComposition, Is.Null,
+                "A detached continuation must not be mislabeled as an initial genesis composition.");
+            Assert.That(restored.CoreRuntimeSession?.P12CRoots, Is.Not.Null,
+                "A detached continuation must retain its exact reconstructed P12-C roots for a later save.");
+            Assert.That(restored.CoreRuntimeSession.P12CRoots.Manifest.Fingerprint,
+                Is.EqualTo(expectedP9ManifestFingerprint));
             Assert.That(restored.Runtime, Is.Not.SameAs(controlSession.Runtime));
             Assert.That(restored.IdentityRegistry, Is.Not.SameAs(controlSession.IdentityRegistry));
             Assert.That(restored.Runtime.CurrentDay, Is.EqualTo(controlSession.Runtime.CurrentDay));

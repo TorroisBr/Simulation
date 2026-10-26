@@ -150,6 +150,19 @@ internal sealed class DailyV1Application
         long lastEconomySnapshotDay,
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
         out DailyV1ActiveRuntimeSession candidate,
+        out string diagnostic) =>
+        TryCreateRestoredActiveRuntimeSession(
+            executionBoundaryState, expectedDefinitions, lastEconomySnapshotDay,
+            null, null, replacementOperation, out candidate, out diagnostic);
+
+    internal bool TryCreateRestoredActiveRuntimeSession(
+        DailyV1ExecutionBoundaryState executionBoundaryState,
+        DailyV1EffectiveDefinitions expectedDefinitions,
+        long lastEconomySnapshotDay,
+        P12CP9GenesisManifestCoreSnapshot p9Manifest,
+        SpatialAuthorityStore spatialAuthority,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out DailyV1ActiveRuntimeSession candidate,
         out string diagnostic)
     {
         candidate = null;
@@ -204,12 +217,14 @@ internal sealed class DailyV1Application
                 return false;
             }
 
-            if (!DailyV1ActiveRuntimeSession.TryCreate(
-                    executionBoundaryState,
-                    expectedDefinitions,
-                    lastEconomySnapshotDay,
-                    out candidate,
-                    out diagnostic))
+            bool sessionCreated = p9Manifest == null && spatialAuthority == null
+                ? DailyV1ActiveRuntimeSession.TryCreate(
+                    executionBoundaryState, expectedDefinitions, lastEconomySnapshotDay,
+                    out candidate, out diagnostic)
+                : DailyV1ActiveRuntimeSession.TryCreateRestored(
+                    executionBoundaryState, expectedDefinitions, lastEconomySnapshotDay,
+                    p9Manifest, spatialAuthority, out candidate, out diagnostic);
+            if (!sessionCreated)
             {
                 candidate = null;
                 return false;
@@ -248,6 +263,43 @@ internal sealed class DailyV1Application
         PersonStore personStore,
         ScheduledDirectiveStore directives,
         ExpeditionStore expeditions,
+        RuntimeIdAllocator runtimeIdAllocator,
+        IAuthoritativeRandomSource randomSource,
+        SimulationRecordSequence recordSequence,
+        NpcDecisionStore decisionStore,
+        ActorChoiceStore actorChoiceStore,
+        long lastEconomySnapshotDay,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out DailyV1ActiveRuntimeSession candidate,
+        out SimulationCalendar calendar,
+        out string diagnostic) =>
+        TryCreateRestoredActiveRuntimeSession(
+            definitions, null, effectiveConfiguration, calendarDefinition,
+            simulationTime, admissionContext, worldId, cityOwners, npcOwners,
+            spatialNetwork, justiceRecords, travelParties, runtimeIdentityIndex,
+            personStore, directives, expeditions, null, runtimeIdAllocator,
+            randomSource, recordSequence, decisionStore, actorChoiceStore,
+            lastEconomySnapshotDay, replacementOperation, out candidate,
+            out calendar, out diagnostic);
+
+    internal bool TryCreateRestoredActiveRuntimeSession(
+        DailyV1EffectiveDefinitions definitions,
+        P12CP9GenesisManifestCoreSnapshot p9Manifest,
+        EffectiveSimulationConfiguration effectiveConfiguration,
+        CalendarDefinition calendarDefinition,
+        SimulationTime simulationTime,
+        SimulationRuntimeAdmissionContext admissionContext,
+        WorldId worldId,
+        IReadOnlyList<DailyV1CityRuntimeOwners> cityOwners,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecords,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        PersonStore personStore,
+        ScheduledDirectiveStore directives,
+        ExpeditionStore expeditions,
+        SpatialAuthorityStore spatialAuthority,
         RuntimeIdAllocator runtimeIdAllocator,
         IAuthoritativeRandomSource randomSource,
         SimulationRecordSequence recordSequence,
@@ -299,6 +351,8 @@ internal sealed class DailyV1Application
                 executionBoundaryState,
                 definitions,
                 lastEconomySnapshotDay,
+                p9Manifest,
+                spatialAuthority,
                 replacementOperation,
                 out DailyV1ActiveRuntimeSession candidateSession,
                 out diagnostic))

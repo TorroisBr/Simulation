@@ -11,6 +11,7 @@ internal sealed class DailyV1GenesisComposition
     internal DailyV1EffectiveDefinitions Definitions { get; }
     internal string P9ProfileFingerprint { get; }
     internal System.Collections.Generic.IReadOnlyList<string> P9ProvenanceRecords { get; }
+    internal P12CP9GenesisManifestCoreSnapshot P9ManifestSnapshot { get; }
     internal WorldId WorldId { get; }
     internal RuntimeIdAllocator RuntimeIdAllocator { get; }
     internal SimulationTime SimulationTime { get; }
@@ -33,6 +34,7 @@ internal sealed class DailyV1GenesisComposition
         DailyV1EffectiveDefinitions definitions,
         string p9ProfileFingerprint,
         System.Collections.Generic.IReadOnlyList<string> p9ProvenanceRecords,
+        P12CP9GenesisManifestCoreSnapshot p9ManifestSnapshot,
         WorldId worldId,
         RuntimeIdAllocator runtimeIdAllocator,
         SimulationTime simulationTime,
@@ -57,6 +59,8 @@ internal sealed class DailyV1GenesisComposition
             : p9ProfileFingerprint;
         P9ProvenanceRecords = p9ProvenanceRecords
             ?? throw new ArgumentNullException(nameof(p9ProvenanceRecords));
+        P9ManifestSnapshot = p9ManifestSnapshot
+            ?? throw new ArgumentNullException(nameof(p9ManifestSnapshot));
         WorldId = worldId ?? throw new ArgumentNullException(nameof(worldId));
         RuntimeIdAllocator = runtimeIdAllocator ?? throw new ArgumentNullException(nameof(runtimeIdAllocator));
         SimulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
@@ -123,6 +127,11 @@ internal static class DailyV1GenesisComposer
         // and fingerprint boundary.
         string p9ProfileFingerprint = DailyV1DefinitionIdentity.CreateP9Fingerprint(
             definitions, out System.Collections.Generic.IReadOnlyList<string> p9ProvenanceRecords);
+        if (!P12CP9GenesisManifestCoreSnapshot.TryCreateForSelectedDailyV1Genesis(
+                definitions, p9ProfileFingerprint, p9ProvenanceRecords,
+                out P12CP9GenesisManifestCoreSnapshot p9ManifestSnapshot,
+                out diagnostic))
+            return false;
 
         // The selected runtime's identity and continuation roots are created
         // only after profile admission and before runtime-ID allocation, as in
@@ -247,7 +256,7 @@ internal static class DailyV1GenesisComposer
                             actorChoiceStore))
                         return Fail("The selected Core runtime could not bind its exact genesis owner graph.", out diagnostic);
                     composition = new DailyV1GenesisComposition(
-                        definitions, p9ProfileFingerprint, p9ProvenanceRecords,
+                        definitions, p9ProfileFingerprint, p9ProvenanceRecords, p9ManifestSnapshot,
                         worldId, runtimeIds, time, randomSource, recordSequence,
                         decisionStore, personStore, actorChoiceStore, travelParties, expeditions,
                         admissionContext, definitions.EffectiveConfiguration,

@@ -369,52 +369,107 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.SourceCaptured);
 
-            if (!(sourceSession.RandomSource is DeterministicRandomSource sourceRandom)
-                || sourceComposition.RuntimeIdAllocator == null
-                || sourceComposition.RecordSequence == null)
+            P12CWorldIdentitySnapshot worldIdentitySnapshot;
+            P12CP9GenesisManifestSnapshot manifestSnapshot;
+            P12CSpatialAuthoritySnapshot spatialSnapshot;
+            RuntimeIdAllocatorSnapshot allocatorSnapshot;
+            SimulationRecordSequenceSnapshot recordSequenceSnapshot;
+            DeterministicRandomRootSnapshot randomSnapshot;
+            if (continuationSaveOperation != null)
             {
-                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
-                diagnostic = "The deterministic random source or P12-C identity roots are unsupported.";
-                return false;
+                DailyV1P12CRuntimeRoots retainedRoots = continuationSaveOperation.Session.P12CRoots;
+                string coreRootMismatch = retainedRoots == null ? "missing-p12c-runtime-roots"
+                    : !retainedRoots.IsFor(continuationSaveOperation.Session) ? "p12c-roots-session-binding"
+                    : !(sourceSession.RandomSource is DeterministicRandomSource) ? "random-source-kind"
+                    : !ReferenceEquals(sourceSession.RandomSource,
+                        continuationSaveOperation.Session.ExecutionBoundaryState.SelectedRandomSource) ? "random-source-instance"
+                    : !ReferenceEquals(sourceComposition.RuntimeIdAllocator,
+                        continuationSaveOperation.Session.ExecutionBoundaryState.SelectedRuntimeIdAllocator) ? "runtime-id-allocator-instance"
+                    : !ReferenceEquals(sourceComposition.RecordSequence,
+                        continuationSaveOperation.Session.ExecutionBoundaryState.SelectedRecordSequence) ? "record-sequence-instance"
+                    : !ReferenceEquals(sourceComposition.SpatialAuthority, retainedRoots.SpatialAuthority) ? "spatial-authority-instance"
+                    : !string.Equals(sourceComposition.Manifest?.Fingerprint,
+                        retainedRoots.Manifest?.Fingerprint, StringComparison.Ordinal) ? "p9-manifest-fingerprint"
+                    : null;
+                if (coreRootMismatch != null)
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "The Unity projection does not retain the exact P12-C Core root: "
+                        + coreRootMismatch + ".";
+                    return false;
+                }
+
+                if (!DailyV1P12GCoreBoundCausalRootSources.TryCapture(
+                        continuationSaveOperation,
+                        out DailyV1P12GCoreBoundCausalRootSources coreRoots,
+                        out DailyV1P12GCoreBoundCausalRootCaptureFailure coreRootFailure,
+                        out string coreRootDiagnostic)
+                    || !coreRoots.IsFor(continuationSaveOperation))
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "P12-C Core-bound root capture rejected the completed boundary: "
+                        + coreRootFailure + ": " + coreRootDiagnostic;
+                    return false;
+                }
+
+                worldIdentitySnapshot = coreRoots.Snapshots.WorldIdentity;
+                manifestSnapshot = P12CP9GenesisManifestSnapshot.FromCore(
+                    coreRoots.Snapshots.P9Manifest);
+                spatialSnapshot = coreRoots.Snapshots.SpatialAuthority;
+                allocatorSnapshot = coreRoots.Snapshots.Allocator;
+                recordSequenceSnapshot = coreRoots.Snapshots.RecordSequence;
+                randomSnapshot = coreRoots.Snapshots.RandomRoot;
+            }
+            else
+            {
+                if (!(sourceSession.RandomSource is DeterministicRandomSource sourceRandom)
+                    || sourceComposition.RuntimeIdAllocator == null
+                    || sourceComposition.RecordSequence == null)
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "The deterministic random source or P12-C identity roots are unsupported.";
+                    return false;
+                }
+
+                if (!P12CWorldIdentitySnapshot.TryCapture(
+                        sourceComposition.WorldId,
+                        out worldIdentitySnapshot,
+                        out string worldIdentityDiagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "P12-C WorldId capture failed: " + worldIdentityDiagnostic;
+                    return false;
+                }
+
+                if (!P12CP9GenesisManifestSnapshot.TryCapture(
+                        SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+                        sourceComposition.Manifest,
+                        out manifestSnapshot,
+                        out string manifestDiagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "P12-C P9 manifest capture failed: " + manifestDiagnostic;
+                    return false;
+                }
+
+                if (!P12CSpatialAuthoritySnapshot.TryCapture(
+                        SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+                        sourceComposition.Manifest.SelectedP9ContractIdentity,
+                        sourceComposition.Manifest.SelectedP9SchemaVersion,
+                        sourceComposition.SpatialAuthority,
+                        out spatialSnapshot,
+                        out P12CSpatialAuthoritySnapshotFailure spatialFailure))
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "P12-C spatial authority capture failed: " + spatialFailure?.Message;
+                    return false;
+                }
+
+                allocatorSnapshot = sourceComposition.RuntimeIdAllocator.CaptureSnapshot();
+                recordSequenceSnapshot = sourceComposition.RecordSequence.CaptureSnapshot();
+                randomSnapshot = sourceRandom.CaptureSnapshot();
             }
 
-            if (!P12CWorldIdentitySnapshot.TryCapture(
-                    sourceComposition.WorldId,
-                    out P12CWorldIdentitySnapshot worldIdentitySnapshot,
-                    out string worldIdentityDiagnostic))
-            {
-                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
-                diagnostic = "P12-C WorldId capture failed: " + worldIdentityDiagnostic;
-                return false;
-            }
-
-            if (!P12CP9GenesisManifestSnapshot.TryCapture(
-                    SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
-                    sourceComposition.Manifest,
-                    out P12CP9GenesisManifestSnapshot manifestSnapshot,
-                    out string manifestDiagnostic))
-            {
-                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
-                diagnostic = "P12-C P9 manifest capture failed: " + manifestDiagnostic;
-                return false;
-            }
-
-            if (!P12CSpatialAuthoritySnapshot.TryCapture(
-                    SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
-                    sourceComposition.Manifest.SelectedP9ContractIdentity,
-                    sourceComposition.Manifest.SelectedP9SchemaVersion,
-                    sourceComposition.SpatialAuthority,
-                    out P12CSpatialAuthoritySnapshot spatialSnapshot,
-                    out P12CSpatialAuthoritySnapshotFailure spatialFailure))
-            {
-                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
-                diagnostic = "P12-C spatial authority capture failed: " + spatialFailure?.Message;
-                return false;
-            }
-
-            RuntimeIdAllocatorSnapshot allocatorSnapshot = sourceComposition.RuntimeIdAllocator.CaptureSnapshot();
-            SimulationRecordSequenceSnapshot recordSequenceSnapshot = sourceComposition.RecordSequence.CaptureSnapshot();
-            DeterministicRandomRootSnapshot randomSnapshot = sourceRandom.CaptureSnapshot();
             if (!P12CContinuationRootStager.TryStageForRestore(
                     stagingAttempt,
                     worldIdentitySnapshot,
@@ -1349,10 +1404,12 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 return false;
 
             if (restoredExecutionBoundary.HasAdmittedSelectedDailyExecution
-                && !DailyV1ActiveRuntimeSession.TryCreate(
+                && !DailyV1ActiveRuntimeSession.TryCreateRestored(
                     restoredExecutionBoundary,
                     selectedDefinitions,
                     lastEconomySnapshotDay,
+                    stagedC.CoreRoot.GenesisManifest,
+                    stagedC.SpatialAuthority,
                     out coreRuntimeSession,
                     out diagnostic))
                 return false;
@@ -1361,6 +1418,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         {
             if (!application.TryCreateRestoredActiveRuntimeSession(
                     selectedDefinitions,
+                    stagedC.CoreRoot.GenesisManifest,
                     effective,
                     calendar,
                     time,
@@ -1375,6 +1433,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     stagedD.Persons,
                     stagedF.ScheduledDirectives,
                     stagedF.Expeditions,
+                    stagedC.SpatialAuthority,
                     stagedC.RuntimeIdAllocator,
                     stagedC.DeterministicRandom,
                     stagedC.RecordSequence,
