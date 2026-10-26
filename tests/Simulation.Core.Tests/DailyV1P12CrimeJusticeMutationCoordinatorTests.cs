@@ -100,6 +100,79 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
     }
 
     [Test]
+    public void SelectedNpcStatusScopeDerivesExactBindingsAndOrderedSectionsFromCoreGraph()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition[] npcDefinitions = definitions.Npcs.Values.Take(2).ToArray();
+        Assert.That(npcDefinitions, Has.Length.EqualTo(2));
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-scope-a", definitions, npcDefinitions[0], 0f,
+            out DailyV1NpcRuntimeOwners first), Is.True);
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-scope-b", definitions, npcDefinitions[1], 0f,
+            out DailyV1NpcRuntimeOwners second), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { first, second },
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        FakeProtocol protocol = new FakeProtocol();
+        int faults = 0;
+        DailyV1P12CrimeJusticeMutationCoordinator coordinator = CreateCoordinator(protocol, () => faults++);
+        DailyV1NpcRuntimeOwners[] participants = { first, null, second, first };
+
+        Assert.That(coordinator.TryBeginSelectedNpcStatusMutation(
+            graph, participants, out IDisposable scope), Is.True);
+        using (scope)
+        {
+            string firstSection = DailyV1SelectedOwnerSectionCensusContract
+                .NpcStatusCrimeSectionIdFor(first.RuntimeId);
+            Assert.That(coordinator.CanCommit(first, firstSection), Is.True);
+            first.NotifyCrimeJusticeMutationCommitted();
+            coordinator.NotifyCommitted(first, firstSection);
+        }
+
+        string firstId = DailyV1SelectedOwnerSectionCensusContract
+            .NpcStatusCrimeSectionIdFor(first.RuntimeId);
+        string secondId = DailyV1SelectedOwnerSectionCensusContract
+            .NpcStatusCrimeSectionIdFor(second.RuntimeId);
+        Assert.That(protocol.Calls, Is.EqualTo(new[]
+        {
+            "validate:" + firstId + "|" + secondId,
+            "validate:" + firstId,
+            "capacity",
+            "notify:" + firstId
+        }));
+        Assert.That(faults, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedNpcStatusScopeRejectsEqualButUninstalledOwnerBeforeProtocolAccess()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition npcDefinition = definitions.Npcs.Values.First();
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-exact-scope", definitions, npcDefinition, 0f,
+            out DailyV1NpcRuntimeOwners installed), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { installed },
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-exact-scope", definitions, npcDefinition, 0f,
+            out DailyV1NpcRuntimeOwners alias), Is.True);
+
+        FakeProtocol protocol = new FakeProtocol();
+        int faults = 0;
+        DailyV1P12CrimeJusticeMutationCoordinator coordinator = CreateCoordinator(protocol, () => faults++);
+
+        Assert.That(coordinator.TryBeginSelectedNpcStatusMutation(
+            graph, new[] { alias }, out IDisposable scope), Is.False);
+        Assert.That(scope, Is.Null);
+        Assert.That(faults, Is.EqualTo(1));
+        Assert.That(protocol.Calls, Is.Empty,
+            "The Core graph rejects a foreign same-ID owner before consulting P12 baselines or reserving an operation.");
+    }
+
+    [Test]
     public void ImmediateMutationRequiresExactOwnerAndNotifiesCommittedWriteImmediately()
     {
         FakeProtocol protocol = new FakeProtocol();

@@ -341,6 +341,47 @@ public sealed partial class SimulationRuntime
             return false;
         }
 
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
+        if (!includeJustice && selectedGraph != null)
+        {
+            List<DailyV1NpcRuntimeOwners> selectedOwners =
+                new List<DailyV1NpcRuntimeOwners>(participants.Count);
+            HashSet<NpcRuntime> uniqueSelectedRuntimes = new HashSet<NpcRuntime>();
+            bool allParticipantsAreSelected = true;
+            foreach (NpcRuntime npc in participants)
+            {
+                if (npc == null || !uniqueSelectedRuntimes.Add(npc)) continue;
+                if (GetP12CrimeJusticeNpcSectionId(npc) == null)
+                {
+                    FaultRuntimeAdmission();
+                    return false;
+                }
+
+                DailyV1NpcRuntimeOwners selectedOwner = npc.SelectedRuntimeOwners;
+                if (selectedOwner == null)
+                {
+                    allParticipantsAreSelected = false;
+                    break;
+                }
+                selectedOwners.Add(selectedOwner);
+            }
+
+            if (allParticipantsAreSelected)
+            {
+                if (selectedOwners.Count == 0
+                    || !P12CrimeJusticeMutationCoordinator.TryBeginSelectedNpcStatusMutation(
+                        selectedGraph, selectedOwners, out IDisposable selectedCoreScope))
+                {
+                    FaultRuntimeAdmission();
+                    return false;
+                }
+                scope = selectedCoreScope == null
+                    ? null
+                    : new P12CrimeJusticeMutationScope(selectedCoreScope);
+                return true;
+            }
+        }
+
         List<DailyV1P12CrimeJusticeOwnerBinding> owners =
             new List<DailyV1P12CrimeJusticeOwnerBinding>(participants.Count + (includeJustice ? 1 : 0));
         List<string> sections = new List<string>(participants.Count + (includeJustice ? 3 : 0));

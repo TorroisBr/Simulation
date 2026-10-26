@@ -205,6 +205,56 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         return true;
     }
 
+    /// <summary>
+    /// Builds the admitted P12 status-owner scope from the exact selected Core
+    /// owner graph. Unity may resolve a compatibility projection to its owner,
+    /// but section identity and owner binding are derived here from Core truth.
+    /// Duplicate and null participant entries retain the legacy action-scope
+    /// behavior; any non-null owner outside this graph fails closed.
+    /// </summary>
+    internal bool TryBeginSelectedNpcStatusMutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> participants,
+        out IDisposable scope)
+    {
+        scope = null;
+        if (!isAdmissionEnabled()) return true;
+        if (graph == null || participants == null)
+        {
+            faultAdmission();
+            return false;
+        }
+
+        List<DailyV1P12CrimeJusticeOwnerBinding> owners =
+            new List<DailyV1P12CrimeJusticeOwnerBinding>(participants.Count);
+        List<string> sections = new List<string>(participants.Count);
+        HashSet<DailyV1NpcRuntimeOwners> uniqueOwners =
+            new HashSet<DailyV1NpcRuntimeOwners>(ReferenceIdentityComparer.Instance);
+        foreach (DailyV1NpcRuntimeOwners owner in participants)
+        {
+            if (owner == null || !uniqueOwners.Add(owner)) continue;
+            if (!graph.ContainsExactNpcOwner(owner)
+                || !ReferenceEquals(owner.Definitions, graph.Definitions))
+            {
+                faultAdmission();
+                return false;
+            }
+
+            DailyV1P12CrimeJusticeOwnerBinding binding =
+                DailyV1P12CrimeJusticeOwnerBinding.ForNpcStatusOwner(owner);
+            owners.Add(binding);
+            sections.Add(binding.SectionId);
+        }
+
+        if (sections.Count == 0)
+        {
+            faultAdmission();
+            return false;
+        }
+
+        return TryBeginImmediateMutation(owners, sections, out scope);
+    }
+
     internal bool CanReuseImmediateMutation(
         IReadOnlyList<DailyV1P12CrimeJusticeOwnerBinding> owners,
         IReadOnlyList<string> sectionIds)
