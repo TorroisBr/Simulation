@@ -1,7 +1,7 @@
 # CORE-F P12-E Justice Records Core Boundary — Independent Review
 
-**Verdict:** `VALIDATED_CANDIDATE` / `PASS`  
-**Review date:** 2026-10-26  
+**Verdict:** `VALIDATED_CANDIDATE` / `PASS`
+**Review date:** 2026-10-26
 **Reviewer independence:** Two independent read-only reviewers examined the code and evidence. Neither edited the candidate or ran its tests.
 
 ## Exact identities
