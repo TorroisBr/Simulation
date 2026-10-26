@@ -29,4 +29,8 @@
 
 The tests establish that P12-E reconstructs one Core Justice owner from the validated snapshot and exact staged Core City/NPC/Person roots, then projects Unity references onto that same owner. They cover ordered wanted/sentence rows, reciprocal Person bindings, exact revision restoration, root ambiguity, target/City/Person mismatch, and warrant identity. This is an implementation checkpoint only; it does not claim completion or canonical promotion of CORE-F.
 
-Independent exact-tip implementation review remains pending.
+Independent exact-tip implementation and evidence reviews passed for candidate
+`15b81cffe172b4031c4cbd0e362c28e3b290d376` (tree
+`1774fecc5964fe9c3e9d5a1eb3052c8c5b673cba`); the durable findings are in
+[`INDEPENDENT_REVIEW.md`](INDEPENDENT_REVIEW.md). The code tree remains the
+implementation tree recorded above.
