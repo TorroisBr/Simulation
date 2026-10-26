@@ -47,6 +47,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private SimulationRecordSequence selectedRecordSequence;
     private NpcDecisionStore selectedDecisionStore;
     private ActorChoiceStore selectedActorChoiceStore;
+    private DailyV1ActorTurnCoreRoots selectedRuntimeActorTurnCoreRoots;
 
     internal SimulationTime SimulationTime { get; private set; }
     internal SimulationRuntimeAdmissionContext AdmissionContext { get; private set; }
@@ -321,6 +322,13 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     internal SimulationRecordSequence SelectedRecordSequence => selectedRecordSequence;
     internal NpcDecisionStore SelectedDecisionStore => selectedDecisionStore;
     internal ActorChoiceStore SelectedActorChoiceStore => selectedActorChoiceStore;
+    /// <summary>
+    /// One immutable Core bundle for the exact decision roots bound to this
+    /// execution state. Per-day contexts reuse it; a host cannot recreate a
+    /// parallel root bundle from projected runtime values.
+    /// </summary>
+    internal DailyV1ActorTurnCoreRoots SelectedRuntimeActorTurnCoreRoots =>
+        selectedRuntimeActorTurnCoreRoots;
 
     internal bool TryBindSelectedRuntimeOwnerGraph(DailyV1SelectedRuntimeOwnerGraph graph)
     {
@@ -343,7 +351,24 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             || !ReferenceEquals(expected.Definitions, replacement.Definitions))
             return false;
 
+        DailyV1ActorTurnCoreRoots replacementActorTurnRoots = null;
+        if (selectedRuntimeExecutionRootsBound)
+        {
+            if (!ReferenceEquals(replacement.PersonStore, selectedActorChoiceStore?.PersonStore))
+                return false;
+            try
+            {
+                replacementActorTurnRoots = new DailyV1ActorTurnCoreRoots(this, replacement);
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+
         selectedRuntimeOwnerGraph = replacement;
+        if (replacementActorTurnRoots != null)
+            selectedRuntimeActorTurnCoreRoots = replacementActorTurnRoots;
         return true;
     }
 
@@ -572,8 +597,26 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 out IReadOnlyList<DailyV1ActorTurnRosterProjection> validatedRoster))
             return false;
 
+        DailyV1ActorTurnCoreRoots replacementActorTurnRoots = null;
+        if (selectedRuntimeExecutionRootsBound)
+        {
+            if (selectedActorChoiceStore == null
+                || !ReferenceEquals(replacementGraph.PersonStore, selectedActorChoiceStore.PersonStore))
+                return false;
+            try
+            {
+                replacementActorTurnRoots = new DailyV1ActorTurnCoreRoots(this, replacementGraph);
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+
         selectedRuntimeOwnerGraph = replacementGraph;
         selectedRuntimeActorRoster = validatedRoster;
+        if (replacementActorTurnRoots != null)
+            selectedRuntimeActorTurnCoreRoots = replacementActorTurnRoots;
         return true;
     }
 
@@ -645,6 +688,21 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         selectedRecordSequence = recordSequence;
         selectedDecisionStore = decisionStore;
         selectedActorChoiceStore = actorChoiceStore;
+        try
+        {
+            selectedRuntimeActorTurnCoreRoots = new DailyV1ActorTurnCoreRoots(
+                this, selectedRuntimeOwnerGraph);
+        }
+        catch (ArgumentException)
+        {
+            selectedRuntimeIdAllocator = null;
+            selectedRandomSource = null;
+            selectedRecordSequence = null;
+            selectedDecisionStore = null;
+            selectedActorChoiceStore = null;
+            selectedRuntimeActorTurnCoreRoots = null;
+            return false;
+        }
         selectedRuntimeExecutionRootsBound = true;
         return true;
     }
@@ -691,6 +749,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         IAuthoritativeRandomSource randomSource)
     {
         return selectedRuntimeExecutionRootsBound
+            && selectedRuntimeActorTurnCoreRoots != null
+            && selectedRuntimeActorTurnCoreRoots.IsBoundTo(
+                this, graph, personStore, actorChoiceStore)
             && ReferenceEquals(selectedRuntimeOwnerGraph, graph)
             && ReferenceEquals(graph?.PersonStore, personStore)
             && ReferenceEquals(selectedActorChoiceStore, actorChoiceStore)

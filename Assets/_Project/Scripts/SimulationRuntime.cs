@@ -11671,11 +11671,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         public bool TryGetActorChoiceExecutionContext(
             DailyV1NpcRuntimeOwners actor,
-            out bool decisionSystemAvailable,
             out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
         {
-            NpcRuntime exactRuntime = RequireExactActor(actor);
-            decisionSystemAvailable = runtime.npcDecisionSystem != null;
+            RequireExactActor(actor);
             executionBoundary = this;
             return true;
         }
@@ -11888,15 +11886,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         public IAuthoritativeRandomSource RandomSource => runtime.randomSource;
 
-        public bool TryCreateDecisionBoundary(
+        public bool TryCreateActionProjectionBoundary(
             DailyV1NpcRuntimeOwners actor,
-            out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary)
+            out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
         {
-            decisionBoundary = null;
+            projectionBoundary = null;
             NpcRuntime exactRuntime = RequireExactActor(actor);
             return runtime.npcDecisionSystem != null
-                && runtime.npcDecisionSystem.TryCreateSelectedDailyV1ActionDecisionBoundary(
-                    exactRuntime, out decisionBoundary);
+                && runtime.npcDecisionSystem.TryCreateSelectedDailyV1ActionProjectionBoundary(
+                    exactRuntime, out projectionBoundary);
         }
 
         public bool TryGetDecisionRecordOwners(
@@ -11937,7 +11935,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public bool TryPrepareSelectedActionProjection(
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionCandidate selected,
-            IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+            IDailyV1SelectedActionProjectionBoundary projectionBoundary,
             DailyV1NpcActionPayloadOwner payload)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
@@ -11948,7 +11946,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 return false;
 
             if (!runtime.npcDecisionSystem.TryProjectSelectedDailyV1ActionCandidate(
-                    exactRuntime, selected, decisionBoundary,
+                    exactRuntime, selected, projectionBoundary,
                     out NpcActionRuntime actionRuntime)
                 || actionRuntime == null
                 || !ReferenceEquals(actionRuntime.SelectedOwner, payload)
@@ -12658,9 +12656,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 actorChoiceStore,
                 CurrentDay,
                 actorTurnRosterOrdinal,
-                npcRuntime.CurrentCity != null && IsActorAtCurrentCityLocation(npcRuntime),
+                graph.IsActorAtCurrentCityLocation(npcRuntime.SelectedRuntimeOwners),
                 graph.Definitions.EffectiveConfiguration?.MerchantTrade?.Enabled == true,
-                npcDecisionSystem != null,
                 new SelectedActorChoiceExecutionBoundary(this, npcRuntime));
         }
 

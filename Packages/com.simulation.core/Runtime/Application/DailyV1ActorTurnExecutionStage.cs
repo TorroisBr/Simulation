@@ -60,14 +60,14 @@ internal interface IDailyV1ActorTurnExecutionBoundary
 
 /// <summary>
 /// Selected-profile projection/admission ports for the existing Core
-/// actor-choice stage. Current-city spatial truth comes from the exact Core
-/// owner graph; the host supplies only action projection/admission ports.
+/// actor-choice stage. Current-city spatial truth and action eligibility come
+/// from the exact Core owner graph; the host supplies only action projection/
+/// admission ports.
 /// </summary>
 internal interface IDailyV1SelectedActorChoiceExecutionContext
 {
     bool TryGetActorChoiceExecutionContext(
         DailyV1NpcRuntimeOwners actor,
-        out bool decisionSystemAvailable,
         out IDailyV1ActorChoiceExecutionBoundary executionBoundary);
 }
 
@@ -84,9 +84,9 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
     bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor);
     void LogSkippedDirective(ScheduledDirective directive, string reason);
 
-    bool TryCreateDecisionBoundary(
+    bool TryCreateActionProjectionBoundary(
         DailyV1NpcRuntimeOwners actor,
-        out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary);
+        out IDailyV1SelectedActionProjectionBoundary projectionBoundary);
 
     bool TryGetDecisionRecordOwners(
         DailyV1NpcRuntimeOwners actor,
@@ -97,7 +97,7 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
     bool TryPrepareSelectedActionProjection(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionCandidate selected,
-        IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+        IDailyV1SelectedActionProjectionBoundary projectionBoundary,
         DailyV1NpcActionPayloadOwner payload);
 
     bool CanCommitSelectedActionSlot(
@@ -521,10 +521,9 @@ internal static class DailyV1ActorTurnExecutionStage
                 throw new InvalidOperationException(
                     "The selected Daily-v1 actor omitted its required Core actor-choice context.");
             if (!selectedContext.TryGetActorChoiceExecutionContext(actor,
-                    out bool decisionSystemAvailable,
                     out IDailyV1ActorChoiceExecutionBoundary executionBoundary))
                 throw new InvalidOperationException(
-                    "The selected Daily-v1 actor could not provide its current host admission facts.");
+                    "The selected Daily-v1 actor could not provide its exact action projection boundary.");
             if (executionBoundary == null)
                 throw new InvalidOperationException(
                     "The selected Core actor-choice context omitted its projection/admission boundary.");
@@ -541,8 +540,7 @@ internal static class DailyV1ActorTurnExecutionStage
             return DailyV1ActorChoiceExecutionStage.TryProcessPending(
                 graph, actor, personId, store, absoluteDay, rosterOrdinal,
                 graph.IsActorAtCurrentCityLocation(actor), merchantTrade.Enabled,
-                decisionSystemAvailable, executionBoundary,
-                requireCoreOwnedSelectedOperations, coreRoots);
+                executionBoundary, requireCoreOwnedSelectedOperations, coreRoots);
         }
 
         if (requireCoreOwnedSelectedOperations)

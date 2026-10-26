@@ -189,6 +189,68 @@ public sealed class DailyV1ActorTurnExecutionStageTests
     }
 
     [Test]
+    public void CoreBoundaryRebindsActorTurnRootsWithSelectedMembershipGraph()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners first);
+        ActorChoiceStore choices = new ActorChoiceStore(new PersonStore());
+        DailyV1ExecutionBoundaryState state = CreateActorTurnExecutionState(
+            graph, choices, new RuntimeIdAllocator(), new DeterministicRandomSource(5),
+            new SimulationRecordSequence(), new NpcDecisionStore());
+        DailyV1ActorTurnCoreRoots priorRoots = state.SelectedRuntimeActorTurnCoreRoots;
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> priorRoster =
+            state.SelectedRuntimeActorRoster;
+
+        DailyV1NpcDefinition addedDefinition = graph.Definitions.Npcs.Values
+            .First(definition => !string.Equals(
+                definition.DefinitionId, first.Definition.DefinitionId, System.StringComparison.Ordinal));
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
+            "npc/actor-roots-membership-add", graph.Definitions, addedDefinition, 0f,
+            out DailyV1NpcRuntimeOwners addedOwner), Is.True);
+        Assert.That(graph.TryCreateWithAddedNpc(
+            addedOwner, out DailyV1SelectedRuntimeOwnerGraph replacementGraph), Is.True);
+        Assert.That(state.TryCreateSelectedRuntimeActorRosterWithAppendedMember(
+            new DailyV1ActorTurnRosterProjection(addedOwner.RuntimeId, null), replacementGraph,
+            out IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster), Is.True);
+
+        Assert.That(state.TryReplaceSelectedRuntimeMembership(
+            graph, replacementGraph, priorRoster, replacementRoster), Is.True);
+        Assert.That(state.SelectedRuntimeOwnerGraph, Is.SameAs(replacementGraph));
+        Assert.That(state.SelectedRuntimeActorRoster, Is.Not.SameAs(priorRoster));
+        Assert.That(state.SelectedRuntimeActorTurnCoreRoots, Is.Not.SameAs(priorRoots));
+        Assert.That(state.SelectedRuntimeActorTurnCoreRoots.IsBoundTo(
+            state, replacementGraph, choices.PersonStore, choices), Is.True);
+        Assert.That(state.SelectedRuntimeActorTurnCoreRoots.IsBoundToGraph(replacementGraph), Is.True);
+    }
+
+    [Test]
+    public void FailedCoreMembershipReplacementPreservesGraphRosterAndActorTurnRoots()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
+        ActorChoiceStore choices = new ActorChoiceStore(new PersonStore());
+        DailyV1ExecutionBoundaryState state = CreateActorTurnExecutionState(
+            graph, choices, new RuntimeIdAllocator(), new DeterministicRandomSource(5),
+            new SimulationRecordSequence(), new NpcDecisionStore());
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> priorRoster =
+            state.SelectedRuntimeActorRoster;
+        DailyV1ActorTurnCoreRoots priorRoots = state.SelectedRuntimeActorTurnCoreRoots;
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            graph.Cities, graph.Npcs, graph.SpatialNetwork,
+            out DailyV1SelectedRuntimeOwnerGraph replacementGraph), Is.True);
+        Assert.That(replacementGraph.PersonStore, Is.Null,
+            "The proposed graph has the same owner instances but lacks the exact bound PersonStore.");
+        Assert.That(state.TryReplaceSelectedRuntimeMembership(
+            graph, replacementGraph, priorRoster, priorRoster), Is.False);
+
+        Assert.That(state.SelectedRuntimeOwnerGraph, Is.SameAs(graph));
+        Assert.That(state.SelectedRuntimeActorRoster, Is.SameAs(priorRoster));
+        Assert.That(state.SelectedRuntimeActorTurnCoreRoots, Is.SameAs(priorRoots));
+        Assert.That(priorRoots.IsBoundTo(
+            state, graph, choices.PersonStore, choices), Is.True);
+        Assert.That(actor.RuntimeId, Is.EqualTo(priorRoster[0].RuntimeId));
+    }
+
+    [Test]
     public void CoreBoundaryRefreshesPersonBindingWithoutChangingActorRosterSlots()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(
@@ -1263,10 +1325,8 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         public bool TryGetActorChoiceExecutionContext(
             DailyV1NpcRuntimeOwners actor,
-            out bool decisionSystemAvailable,
             out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
         {
-            decisionSystemAvailable = true;
             executionBoundary = graph.ContainsExactNpcOwner(actor) ? ChoiceBoundary : null;
             return executionBoundary != null;
         }
@@ -1310,7 +1370,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         IDailyV1SelectedActorChoiceExecutionContext,
         IDailyV1CoreActorChoiceExecutionBoundary,
         IDailyV1SelectedActorActionExecutionBoundary,
-        IDailyV1SelectedNpcActionDecisionBoundary,
+        IDailyV1SelectedActionProjectionBoundary,
         IDailyV1SelectedActionDispatchBoundary,
         DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary,
         DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary,
@@ -1352,11 +1412,11 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         public void LogSkippedDirective(ScheduledDirective directive, string reason) =>
             Events.Add("skipped:" + reason);
 
-        public bool TryCreateDecisionBoundary(
+        public bool TryCreateActionProjectionBoundary(
             DailyV1NpcRuntimeOwners actor,
-            out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary)
+            out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
         {
-            decisionBoundary = this;
+            projectionBoundary = this;
             return true;
         }
 
@@ -1383,10 +1443,8 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         public bool TryGetActorChoiceExecutionContext(
             DailyV1NpcRuntimeOwners actor,
-            out bool decisionSystemAvailable,
             out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
         {
-            decisionSystemAvailable = true;
             executionBoundary = CurrentGraph?.ContainsExactNpcOwner(actor) == true ? this : null;
             return executionBoundary != null;
         }
@@ -1434,7 +1492,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         public bool TryPrepareSelectedActionProjection(
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionCandidate selected,
-            IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+            IDailyV1SelectedActionProjectionBoundary decisionBoundary,
             DailyV1NpcActionPayloadOwner payload)
         {
             if (preparedProjectionPayload != null
@@ -1561,7 +1619,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         public bool TryRecordAndInstallSelectedAction(
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionCandidate selected,
-            IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+            IDailyV1SelectedActionProjectionBoundary decisionBoundary,
             NpcDecisionOrigin origin)
         {
             DailyV1NpcActionPayloadOwner payload = selected.PreparedPayload;
@@ -1710,12 +1768,6 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         public bool TryProjectFleeCityAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
         public bool TryProjectBuyAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
         public bool TryProjectSellAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate) => false;
-        public bool TryPrepareAutonomousProviderAction(DailyV1NpcRuntimeOwners actor, DailyV1NpcActionCandidate candidate, out float utility)
-        {
-            utility = 0f;
-            return false;
-        }
-
         public bool TryGetSoloTravelBoundary(DailyV1NpcRuntimeOwners actor, DailyV1ActionDefinition action, out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
         {
             boundary = null;

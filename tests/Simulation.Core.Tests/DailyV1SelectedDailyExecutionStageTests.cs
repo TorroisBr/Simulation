@@ -580,8 +580,19 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(context.CoreRoots.IdAllocator, Is.SameAs(state.SelectedRuntimeIdAllocator));
         Assert.That(context.CoreRoots.RecordSequence, Is.SameAs(state.SelectedRecordSequence));
         Assert.That(context.CoreRoots.DecisionStore, Is.SameAs(state.SelectedDecisionStore));
+        Assert.That(state.SelectedRuntimeActorTurnCoreRoots, Is.SameAs(context.CoreRoots));
         Assert.That(context.CoreRoots.IsBoundTo(
             state, graph, context.PersonStore, context.ActorChoiceStore), Is.True);
+
+        FakeBoundary nextBoundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore);
+        Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreate(
+            state, graph, nextBoundary,
+            out IDailyV1SelectedActorTurnExecutionContext nextContext), Is.True);
+        Assert.That(nextContext.CoreRoots, Is.SameAs(context.CoreRoots),
+            "Subsequent daily contexts must reuse the exact Core session-owned roots.");
         Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }));
     }
 
@@ -1202,10 +1213,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
 
             public bool TryGetActorChoiceExecutionContext(
                 DailyV1NpcRuntimeOwners actor,
-                out bool decisionSystemAvailable,
                 out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
             {
-                decisionSystemAvailable = false;
                 executionBoundary = owner.ActorChoiceSelectedActionExecutionOverride.HasValue
                     ? new FakeActorTurnBoundary(
                         owner, owner.ActorChoiceSelectedActionExecutionOverride.Value)
@@ -1263,10 +1272,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) =>
                 selectedActionExecution ?? owner.UseSelectedActionExecution;
             public void LogSkippedDirective(ScheduledDirective directive, string reason) { }
-            public bool TryCreateDecisionBoundary(
+            public bool TryCreateActionProjectionBoundary(
                 DailyV1NpcRuntimeOwners actor,
-                out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary)
-            { decisionBoundary = null; return false; }
+                out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
+            { projectionBoundary = null; return false; }
             public bool TryGetDecisionRecordOwners(
                 DailyV1NpcRuntimeOwners actor,
                 out RuntimeIdAllocator idAllocator,
@@ -1283,7 +1292,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public bool TryPrepareSelectedActionProjection(
                 DailyV1NpcRuntimeOwners actor,
                 DailyV1NpcActionCandidate selected,
-                IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+                IDailyV1SelectedActionProjectionBoundary decisionBoundary,
                 DailyV1NpcActionPayloadOwner payload) => false;
             public bool CanCommitSelectedActionSlot(
                 DailyV1NpcRuntimeOwners actor,

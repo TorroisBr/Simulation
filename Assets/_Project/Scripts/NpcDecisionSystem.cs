@@ -129,9 +129,9 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
             : null;
     }
 
-    internal bool TryCreateSelectedDailyV1ActionDecisionBoundary(
+    internal bool TryCreateSelectedDailyV1ActionProjectionBoundary(
         NpcRuntime npcRuntime,
-        out IDailyV1SelectedNpcActionDecisionBoundary boundary)
+        out IDailyV1SelectedActionProjectionBoundary boundary)
     {
         boundary = null;
         if (npcRuntime == null || !npcRuntime.UsesSelectedDailyV1Definitions
@@ -150,7 +150,7 @@ public class NpcDecisionSystem : IAuthoritativeMutationGuardBindable
     internal bool TryProjectSelectedDailyV1ActionCandidate(
         NpcRuntime npcRuntime,
         DailyV1NpcActionCandidate candidate,
-        IDailyV1SelectedNpcActionDecisionBoundary boundary,
+        IDailyV1SelectedActionProjectionBoundary boundary,
         out NpcActionRuntime actionRuntime)
     {
         actionRuntime = null;

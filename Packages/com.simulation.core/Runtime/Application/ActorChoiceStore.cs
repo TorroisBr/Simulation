@@ -1145,7 +1145,6 @@ internal static class DailyV1ActorChoiceExecutionStage
         int actorTurnRosterOrdinal,
         bool actorAtCurrentCityLocation,
         bool merchantTradeEnabled,
-        bool decisionSystemAvailable,
         IDailyV1ActorChoiceExecutionBoundary boundary,
         bool requireCoreOwnedSelectedOperations = false,
         DailyV1ActorTurnCoreRoots coreRoots = null)
@@ -1184,9 +1183,7 @@ internal static class DailyV1ActorChoiceExecutionStage
             return true;
         }
 
-        if (!merchantTradeEnabled
-            || actor.MerchantTradePlan?.IsActive == true
-            || !decisionSystemAvailable)
+        if (!merchantTradeEnabled || actor.MerchantTradePlan?.IsActive == true)
         {
             Reject(store, input, absoluteDay, actorTurnRosterOrdinal, ActorChoiceFailure.ActionUnavailable);
             return true;

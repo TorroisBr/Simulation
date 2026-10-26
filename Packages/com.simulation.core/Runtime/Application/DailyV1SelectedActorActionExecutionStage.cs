@@ -124,10 +124,10 @@ internal static class DailyV1SelectedActorActionExecutionStage
             || actor.Status == null || actor.ActionSlot == null)
             return false;
 
-        if (!boundary.TryCreateDecisionBoundary(actor,
-                out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary)
-            || decisionBoundary == null)
-            return true; // No configured decision service preserves the old no-op turn.
+        if (!boundary.TryCreateActionProjectionBoundary(actor,
+                out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
+            || projectionBoundary == null)
+            return true; // A missing host projection adapter preserves the existing no-action turn.
 
         if (!DailyV1SelectedNpcActionDecisionStage.TryResolveConfiguredActions(
                 graph.Definitions, out IReadOnlyList<DailyV1ActionDefinition> availableActions)
@@ -146,7 +146,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
         if (!DailyV1SelectedNpcActionDecisionStage.TryChoose(
                 graph, actor, availableActions, actor.Status.Statuses,
                 absoluteDay, randomSource,
-                out DailyV1NpcActionCandidate selected, personStore, decisionBoundary))
+                out DailyV1NpcActionCandidate selected, personStore, projectionBoundary))
             return false;
 
         // Preserve the legacy no-selection clear and the exact decision-record,
@@ -156,7 +156,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
             if (!TryClearCurrentAction(graph, actor, boundary)) return false;
         }
         else if (!TryCommitSelectedActionSlot(
-                     graph, actor, selected, decisionBoundary, NpcDecisionOrigin.Autonomous,
+                     graph, actor, selected, projectionBoundary, NpcDecisionOrigin.Autonomous,
                      absoluteDay, boundary, coreRoots))
             throw new InvalidOperationException(
                 "The exact selected Daily-v1 action could not be installed through its admitted Core owner boundary.");
@@ -180,7 +180,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionCandidate selected,
-        IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+        IDailyV1SelectedActionProjectionBoundary projectionBoundary,
         NpcDecisionOrigin origin,
         long absoluteDay,
         IDailyV1SelectedActorActionExecutionBoundary boundary,
@@ -188,7 +188,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
     {
         DailyV1NpcActionPayloadOwner payload = selected?.PreparedPayload;
         if (graph == null || actor == null || selected?.Action == null
-            || decisionBoundary == null || boundary == null
+            || projectionBoundary == null || boundary == null
             || !graph.ContainsExactNpcOwner(actor)
             || !ReferenceEquals(graph.Definitions, actor.Definitions))
             return false;
@@ -207,7 +207,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
         Func<DailyV1NpcActionPayloadOwner, bool> prepareProjection = candidate =>
             ReferenceEquals(candidate, payload)
             && boundary.TryPrepareSelectedActionProjection(
-                actor, selected, decisionBoundary, candidate);
+                actor, selected, projectionBoundary, candidate);
         Func<bool> slotAdmission = () => boundary.CanCommitSelectedActionSlot(actor, payload);
         RuntimeIdAllocator idAllocator;
         SimulationRecordSequence recordSequence;
@@ -357,9 +357,9 @@ internal static class DailyV1SelectedActorActionExecutionStage
         }
 
         DailyV1NpcActionCandidate requested = new DailyV1NpcActionCandidate(action, 0f);
-        if (!boundary.TryCreateDecisionBoundary(actor,
-                out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary)
-            || decisionBoundary == null
+        if (!boundary.TryCreateActionProjectionBoundary(actor,
+                out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
+            || projectionBoundary == null
             || !DailyV1CrimeActionPlanning.TryPrepareSelectedEscapePrison(
                 graph, actor, requested)
             || requested.PreparedPayload == null)
@@ -369,7 +369,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
         }
 
         if (!TryCommitSelectedActionSlot(
-                graph, actor, requested, decisionBoundary,
+                graph, actor, requested, projectionBoundary,
                 NpcDecisionOrigin.ScheduledDirective, absoluteDay, boundary, coreRoots))
         {
             directive.MarkSkipped(absoluteDay, incompatibleReason);

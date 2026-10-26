@@ -172,15 +172,11 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             || actorBoundary == null)
             return false;
 
-        DailyV1ActorTurnCoreRoots coreRoots;
-        try
-        {
-            coreRoots = new DailyV1ActorTurnCoreRoots(executionState, graph);
-        }
-        catch (ArgumentException)
-        {
+        DailyV1ActorTurnCoreRoots coreRoots = executionState.SelectedRuntimeActorTurnCoreRoots;
+        if (coreRoots == null
+            || !coreRoots.IsBoundTo(
+                executionState, graph, graph.PersonStore, executionState.SelectedActorChoiceStore))
             return false;
-        }
 
         context = new CoreSelectedActorTurnExecutionContext(
             executionState.SelectedRuntimeActorRoster,
@@ -553,7 +549,6 @@ internal static class DailyV1SelectedDailyExecutionStage
 
             if (!choiceContext.TryGetActorChoiceExecutionContext(
                     actor,
-                    out _,
                     out IDailyV1ActorChoiceExecutionBoundary actorChoiceBoundary)
                 || !(actorChoiceBoundary is IDailyV1CoreActorChoiceExecutionBoundary coreActorChoiceBoundary))
             {
