@@ -92,10 +92,10 @@ public sealed class P12EPoliticalSupportOwnerSnapshotTests
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken token,
             out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
 
-        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12EPoliticalSupportCaptureAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12EPoliticalSupportOwnerSnapshot snapshot, out P12EPoliticalSupportSnapshotFailure captureFailure),
             Is.True, captureFailure?.Message);
-        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12EPoliticalSupportCaptureAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12EPoliticalSupportOwnerSnapshot repeated, out captureFailure), Is.True, captureFailure?.Message);
         Assert.That(snapshot.CapturedAbsoluteDay, Is.EqualTo(token.AbsoluteDay));
         Assert.That(snapshot.CapturedAbsoluteDay, Is.EqualTo(1L));
@@ -136,7 +136,7 @@ public sealed class P12EPoliticalSupportOwnerSnapshotTests
 
         Assert.That(runtime.TryRegisterPerson(new PersonRuntime(new PersonId("p12e-support-after-token"), runtime.CurrentDay),
             out PersonStoreFailure latePersonFailure), Is.True, latePersonFailure.ToString());
-        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12EPoliticalSupportCaptureAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12EPoliticalSupportOwnerSnapshot stale, out captureFailure), Is.False);
         Assert.That(stale, Is.Null);
         Assert.That(snapshot.TryStage(stagedRoots.People, stagedRoots.Factions, stagedRoots.Claims,
@@ -154,11 +154,11 @@ public sealed class P12EPoliticalSupportOwnerSnapshotTests
             out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
 
         List<OwnerSectionCensusSnapshot> copiedVector = new List<OwnerSectionCensusSnapshot>(token.OwnerSections);
-        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(runtime, token, copiedVector,
+        Assert.That(P12EPoliticalSupportCaptureAdapter.TryCapture(runtime, token, copiedVector,
             out P12EPoliticalSupportOwnerSnapshot rejected, out P12EPoliticalSupportSnapshotFailure failure), Is.False);
         Assert.That(rejected, Is.Null);
 
-        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12EPoliticalSupportCaptureAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12EPoliticalSupportOwnerSnapshot empty, out failure), Is.True, failure?.Message);
         Assert.That(empty.CapturedAbsoluteDay, Is.EqualTo(1L));
         Assert.That(empty.Relations.RecordCount, Is.Zero);
@@ -220,7 +220,7 @@ public sealed class P12EPoliticalSupportOwnerSnapshotTests
         RegisterSupport(runtime, second);
         Assert.That(owner.Count, Is.EqualTo(capturedCount + 1));
         Assert.That(owner.Revision, Is.EqualTo(capturedRevision + 1L));
-        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12EPoliticalSupportCaptureAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12EPoliticalSupportOwnerSnapshot cardinalityStale, out P12EPoliticalSupportSnapshotFailure failure),
             Is.False);
         Assert.That(cardinalityStale, Is.Null);
@@ -242,7 +242,7 @@ public sealed class P12EPoliticalSupportOwnerSnapshotTests
             Is.True, applyFailure.ToString());
         Assert.That(owner.Count, Is.EqualTo(capturedCount));
         Assert.That(owner.Revision, Is.EqualTo(capturedRevision + 1L));
-        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(runtime, revisionToken,
+        Assert.That(P12EPoliticalSupportCaptureAdapter.TryCapture(runtime, revisionToken,
             revisionToken.OwnerSections, out P12EPoliticalSupportOwnerSnapshot revisionStale,
             out failure), Is.False);
         Assert.That(revisionStale, Is.Null);

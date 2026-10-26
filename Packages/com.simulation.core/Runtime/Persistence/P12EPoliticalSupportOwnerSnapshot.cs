@@ -134,41 +134,21 @@ internal sealed class P12EPoliticalSupportOwnerSnapshot
         Relations = relations;
     }
 
+
     internal static bool TryCapture(
-        SimulationRuntime runtime,
+        IP12EPoliticalSupportCaptureSource captureSource,
+        DailyCaptureEligibilityToken token,
+        IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
         out P12EPoliticalSupportOwnerSnapshot snapshot,
         out P12EPoliticalSupportSnapshotFailure failure)
     {
         snapshot = null;
         failure = P12EPoliticalSupportSnapshotFailure.Create(
             P12EPoliticalSupportSnapshotFailureCode.InvalidCaptureContext,
-            "Capture requires an admitted completed Daily-v1 runtime.");
-        if (runtime == null
-            || !runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken token, out _)
-            || token == null)
-        {
-            return false;
-        }
-
-        return TryCapture(runtime, token, token.OwnerSections, out snapshot, out failure);
-    }
-
-    internal static bool TryCapture(
-        SimulationRuntime runtime,
-        DailyCaptureEligibilityToken token,
-        IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
-        out P12EPoliticalSupportOwnerSnapshot snapshot,
-        out P12EPoliticalSupportSnapshotFailure failure,
-        DailyCaptureStagingAttempt stagingAttempt = null)
-    {
-        snapshot = null;
-        failure = P12EPoliticalSupportSnapshotFailure.Create(
-            P12EPoliticalSupportSnapshotFailureCode.InvalidCaptureContext,
             "Capture requires the exact live P12-B token and its owner-section vector.");
-        if (runtime == null || token == null || sharedOwnerSectionVector == null
+        if (captureSource == null || token == null || sharedOwnerSectionVector == null
             || !ReferenceEquals(token.OwnerSections, sharedOwnerSectionVector)
-            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
-                runtime, token, sharedOwnerSectionVector, stagingAttempt))
+            || !captureSource.IsCaptureCurrent(token, sharedOwnerSectionVector))
         {
             return false;
         }
@@ -245,8 +225,7 @@ internal sealed class P12EPoliticalSupportOwnerSnapshot
             || owner.Count != count
             || owner.Revision != revision
             || !Matches(witness, owner, count, revision)
-            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
-                runtime, token, sharedOwnerSectionVector, stagingAttempt))
+            || !captureSource.IsCaptureCurrent(token, sharedOwnerSectionVector))
         {
             snapshot = null;
             if (failure.Code == P12EPoliticalSupportSnapshotFailureCode.None)

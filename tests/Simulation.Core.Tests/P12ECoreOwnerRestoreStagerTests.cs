@@ -11,7 +11,7 @@ public sealed class P12ECoreOwnerRestoreStagerTests
         List<P12ECoreOwnerRestoreStep> order = new List<P12ECoreOwnerRestoreStep>();
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
-            persons, 4L, order.Add,
+            EmptyPoliticalSupport(), persons, 4L, order.Add,
             out P12ECoreOwnerRestoreStage staged,
             out P12ECoreOwnerRestoreFailure failure), Is.True, failure.ToString());
 
@@ -23,12 +23,15 @@ public sealed class P12ECoreOwnerRestoreStagerTests
         Assert.That(staged.PropertyOwnership.Revision, Is.Zero);
         Assert.That(staged.Factions.Revision, Is.Zero);
         Assert.That(staged.PoliticalClaims.Revision, Is.Zero);
+        Assert.That(staged.PoliticalSupport.Count, Is.Zero);
+        Assert.That(staged.PoliticalSupport.Revision, Is.Zero);
         Assert.That(order, Is.EqualTo(new[]
         {
             P12ECoreOwnerRestoreStep.InstitutionOffice,
             P12ECoreOwnerRestoreStep.PropertyEstate,
             P12ECoreOwnerRestoreStep.Faction,
-            P12ECoreOwnerRestoreStep.PoliticalClaim
+            P12ECoreOwnerRestoreStep.PoliticalClaim,
+            P12ECoreOwnerRestoreStep.PoliticalSupport
         }));
     }
 
@@ -43,7 +46,23 @@ public sealed class P12ECoreOwnerRestoreStagerTests
 
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), invalidClaims,
-            persons, 4L, null,
+            EmptyPoliticalSupport(), persons, 4L, null,
+            out P12ECoreOwnerRestoreStage staged,
+            out P12ECoreOwnerRestoreFailure failure), Is.False);
+        Assert.That(staged, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12ECoreOwnerRestoreFailure.StageFailed));
+    }
+
+    [Test]
+    public void InvalidPoliticalSupportSnapshotRejectsWholePrivateCoreStage()
+    {
+        PersonStore persons = new PersonStore();
+        P12EPoliticalSupportOwnerSnapshot invalidSupport =
+            new P12EPoliticalSupportOwnerSnapshot(4L, null);
+
+        Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
+            EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
+            invalidSupport, persons, 4L, null,
             out P12ECoreOwnerRestoreStage staged,
             out P12ECoreOwnerRestoreFailure failure), Is.False);
         Assert.That(staged, Is.Null);
@@ -73,6 +92,13 @@ public sealed class P12ECoreOwnerRestoreStagerTests
                 Array.Empty<P12EFactionSnapshotRecord>(), row => row.Copy()),
             FactionSection(FactionStoreCensusProvider.AffiliationsSectionId, 0, 0,
                 Array.Empty<P12EFactionAffiliationSnapshotRecord>(), row => row.Copy()));
+
+    private static P12EPoliticalSupportOwnerSnapshot EmptyPoliticalSupport() =>
+        new P12EPoliticalSupportOwnerSnapshot(4L,
+            new P12EPoliticalSupportSnapshotSection(
+                PoliticalSupportStoreCensusProvider.RelationsSectionId,
+                P12EPoliticalSupportOwnerSnapshot.CurrentSchemaVersion,
+                0, 0L, Array.Empty<P12EPoliticalSupportSnapshotRow>()));
 
     private static P12EPoliticalClaimOwnerSnapshot EmptyPoliticalClaims() =>
         new P12EPoliticalClaimOwnerSnapshot(

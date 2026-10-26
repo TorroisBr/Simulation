@@ -662,7 +662,7 @@ public sealed class PoliticalSupportStore : IAuthoritativeMutationGuardBindable
         return mutationGuardBinding.CanBindTo(guard)
             && personStore.CanBindMutationGuard(guard)
             && factionStore.CanBindMutationGuard(guard)
-            && PoliticalClaimOwnerBridge.CanBindMutationStatus(politicalClaimStore, guard);
+            && politicalClaimStore.CanBindMutationStatus(guard);
     }
 
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
@@ -670,7 +670,7 @@ public sealed class PoliticalSupportStore : IAuthoritativeMutationGuardBindable
         return CanBindMutationGuard(guard)
             && personStore.TryBindMutationGuard(guard)
             && factionStore.TryBindMutationGuard(guard)
-            && PoliticalClaimOwnerBridge.TryBindMutationStatus(politicalClaimStore, guard)
+            && politicalClaimStore.TryBindMutationStatus(guard)
             && mutationGuardBinding.TryBindTo(guard);
     }
 
