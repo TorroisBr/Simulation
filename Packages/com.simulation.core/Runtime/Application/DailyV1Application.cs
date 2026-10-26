@@ -108,8 +108,7 @@ internal sealed class DailyV1Application
         }
 
         if (!DailyV1ActiveRuntimeSession.TryCreate(
-                composition.ExecutionBoundaryState,
-                definitions,
+                composition,
                 composition.SimulationTime.AbsoluteDay,
                 out candidate,
                 out diagnostic))

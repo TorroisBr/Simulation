@@ -36,16 +36,19 @@ internal sealed class DailyV1ActiveRuntimeSession
         DailyV1ExecutionBoundaryState executionBoundaryState,
         DailyV1EffectiveDefinitions definitions,
         string profileFingerprint,
-        long lastEconomySnapshotDay)
+        long lastEconomySnapshotDay,
+        DailyV1GenesisComposition genesisComposition)
     {
         ExecutionBoundaryState = executionBoundaryState;
         Definitions = definitions;
         ProfileFingerprint = profileFingerprint;
         ReportState = new DailyV1SessionReportState(lastEconomySnapshotDay);
+        GenesisComposition = genesisComposition;
     }
 
     internal DailyV1ExecutionBoundaryState ExecutionBoundaryState { get; }
     internal DailyV1SessionReportState ReportState { get; }
+    internal DailyV1GenesisComposition GenesisComposition { get; }
     internal DailyV1SelectedRuntimeOwnerGraph OwnerGraph =>
         ExecutionBoundaryState.SelectedRuntimeOwnerGraph;
     internal DailyV1EffectiveDefinitions Definitions { get; }
@@ -81,6 +84,34 @@ internal sealed class DailyV1ActiveRuntimeSession
         DailyV1EffectiveDefinitions expectedDefinitions,
         long lastEconomySnapshotDay,
         out DailyV1ActiveRuntimeSession session,
+        out string diagnostic) =>
+        TryCreateCore(executionBoundaryState, expectedDefinitions, lastEconomySnapshotDay,
+            null, out session, out diagnostic);
+
+    internal static bool TryCreate(
+        DailyV1GenesisComposition genesisComposition,
+        long lastEconomySnapshotDay,
+        out DailyV1ActiveRuntimeSession session,
+        out string diagnostic)
+    {
+        if (genesisComposition == null)
+        {
+            session = null;
+            diagnostic = "The active Core session requires its exact genesis composition.";
+            return false;
+        }
+
+        return TryCreateCore(genesisComposition.ExecutionBoundaryState,
+            genesisComposition.Definitions, lastEconomySnapshotDay,
+            genesisComposition, out session, out diagnostic);
+    }
+
+    private static bool TryCreateCore(
+        DailyV1ExecutionBoundaryState executionBoundaryState,
+        DailyV1EffectiveDefinitions expectedDefinitions,
+        long lastEconomySnapshotDay,
+        DailyV1GenesisComposition genesisComposition,
+        out DailyV1ActiveRuntimeSession session,
         out string diagnostic)
     {
         session = null;
@@ -115,8 +146,18 @@ internal sealed class DailyV1ActiveRuntimeSession
             return false;
         }
 
+        if (genesisComposition != null
+            && (!ReferenceEquals(genesisComposition.ExecutionBoundaryState, executionBoundaryState)
+                || !ReferenceEquals(genesisComposition.Definitions, expectedDefinitions)
+                || !ReferenceEquals(genesisComposition.OwnerGraph, ownerGraph)))
+        {
+            diagnostic = "The retained genesis roots must be the exact admitted runtime boundary and owner graph.";
+            return false;
+        }
+
         session = new DailyV1ActiveRuntimeSession(
-            executionBoundaryState, expectedDefinitions, profileFingerprint, lastEconomySnapshotDay);
+            executionBoundaryState, expectedDefinitions, profileFingerprint,
+            lastEconomySnapshotDay, genesisComposition);
         return true;
     }
 

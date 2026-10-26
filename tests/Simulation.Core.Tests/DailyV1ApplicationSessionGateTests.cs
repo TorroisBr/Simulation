@@ -867,7 +867,7 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, allocateWorldId: null, stageCompleted: completedStages.Add,
-            out _, out DailyV1ActiveRuntimeSession prepared, out string diagnostic), Is.True, diagnostic);
+            out DailyV1GenesisComposition composition, out DailyV1ActiveRuntimeSession prepared, out string diagnostic), Is.True, diagnostic);
         Assert.That(application.ActiveSession, Is.Null,
             "Core genesis remains unpublished until its exact runtime advance authority is bound.");
         Assert.That(application.TryPublishInitial(prepared), Is.False,
@@ -879,6 +879,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1ActiveRuntimeSession session = application.ActiveSession;
         Assert.That(session, Is.Not.Null);
         Assert.That(session.Definitions, Is.SameAs(definitions));
+        Assert.That(session.GenesisComposition, Is.SameAs(composition),
+            "The published Core session retains the exact genesis roots rather than dropping or rebuilding them.");
         Assert.That(session.OwnerGraph, Is.SameAs(
             session.ExecutionBoundaryState.SelectedRuntimeOwnerGraph));
         Assert.That(session.OwnerGraph.Definitions, Is.SameAs(definitions));
