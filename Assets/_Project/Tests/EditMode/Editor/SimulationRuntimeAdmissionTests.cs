@@ -11905,7 +11905,7 @@ public sealed class SimulationRuntimeAdmissionTests
             out PersistentBattleOwnerSnapshotFailure battleFailure), Is.True,
             battleFailure?.Message);
         snapshots.Add("E/Battles", battleSnapshot);
-        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(
             runtime, token, vector,
             out P12EJusticeRecordsOwnerSnapshot justiceSnapshot,
             out P12EJusticeSnapshotFailure justiceFailure), Is.True,

@@ -302,7 +302,7 @@ internal sealed class P12EDailyV1OwnerPackage
                 || !PersistentBattleOwnerSnapshot.TryCapture(
                     battleOwner, exactCompletedToken, exactTokenOwnerSections,
                     out PersistentBattleOwnerSnapshot battleSnapshot, out _)
-                || !P12EJusticeRecordsOwnerSnapshot.TryCapture(
+                || !P12EJusticeRecordsSnapshotAdapter.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
                     out P12EJusticeRecordsOwnerSnapshot justiceSnapshot, out _, context.StagingAttempt)
                 || !justiceOwner.TryCaptureP12AReceiptOwnerSnapshot(
@@ -382,7 +382,7 @@ internal sealed class P12EDailyV1OwnerPackage
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.EBattleOwnerStaged);
 
-            if (!justiceSnapshot.TryStage(
+            if (!P12EJusticeRecordsSnapshotAdapter.TryStage(justiceSnapshot,
                     stagedD.Cities, stagedD.Npcs, stagedD.Persons,
                     context.FreeStatus, context.WantedStatus,
                     context.ArrestedStatus, context.HiddenStatus,
@@ -546,7 +546,7 @@ internal sealed class P12EDailyV1OwnerPackage
                 return StageFailed(out failure);
             stageObserver?.Invoke(P12GDailyV1RestoreStage.EBattleOwnerStaged);
 
-            if (!justiceSnapshot.TryStage(stagedD.Cities, stagedD.Npcs, stagedD.Persons,
+            if (!P12EJusticeRecordsSnapshotAdapter.TryStage(justiceSnapshot, stagedD.Cities, stagedD.Npcs, stagedD.Persons,
                     context.FreeStatus, context.WantedStatus, context.ArrestedStatus, context.HiddenStatus,
                     context.DomainEventRecorder, context.Logger,
                     out JusticeSystem stagedJustice, out _, justiceReceiptSnapshot))

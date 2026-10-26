@@ -1817,7 +1817,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             out PersistentBattleOwnerSnapshotFailure battleFailure), Is.True, battleFailure?.Message);
         AppendBattleSnapshot(signature, battles);
 
-        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(
             runtime, token, vector,
             out P12EJusticeRecordsOwnerSnapshot justice,
             out P12EJusticeSnapshotFailure justiceFailure), Is.True, justiceFailure?.Message);

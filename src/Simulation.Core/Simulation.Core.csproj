@@ -31,6 +31,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12ECrimeSocialAppraisalCaptureSource.cs" Link="Persistence/IP12ECrimeSocialAppraisalCaptureSource.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CrimeSocialAppraisalOwnerContract.cs" Link="Persistence/P12CrimeSocialAppraisalOwnerContract.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ECrimeSocialAppraisalOwnerSnapshot.cs" Link="Persistence/P12ECrimeSocialAppraisalOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EJusticeRecordsOwnerSnapshot.cs" Link="Persistence/P12EJusticeRecordsOwnerSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalClaimOwnerSnapshot.cs" Link="Persistence/P12EPoliticalClaimOwnerSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalClaimOwnerCodec.cs" Link="Persistence/P12EPoliticalClaimOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalSupportOwnerSnapshot.cs" Link="Persistence/P12EPoliticalSupportOwnerSnapshot.cs" />
