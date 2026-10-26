@@ -325,21 +325,12 @@ internal sealed class P12EDailyV1OwnerPackage
 
             P12DDailyV1OwnerPackage stagedD = context.P12DPackage;
             P12CStagedContinuationRoot stagedC = context.P12CRoots;
-            PropertyEstateOwnerSnapshot propertyEstateSnapshotForStage =
-                propertyEstateSnapshotOverrideForTest != null
-                    ? propertyEstateSnapshotOverrideForTest(propertyEstateSnapshot)
-                    : propertyEstateSnapshot;
-            P12EFactionOwnerSnapshot factionSnapshotForStage = factionSnapshotOverrideForTest != null
-                ? factionSnapshotOverrideForTest(factionSnapshot)
-                : factionSnapshot;
-            P12EPoliticalClaimOwnerSnapshot politicalClaimSnapshotForStage =
-                politicalClaimSnapshotOverrideForTest != null
-                    ? politicalClaimSnapshotOverrideForTest(claimSnapshot)
-                    : claimSnapshot;
-            if (!TryStageCoreOwnerRestore(institutionOfficeSnapshot, propertyEstateSnapshotForStage,
-                    factionSnapshotForStage, politicalClaimSnapshotForStage, stagedD.Persons,
+            if (!TryStageCoreOwnerRestore(institutionOfficeSnapshot, propertyEstateSnapshot,
+                    factionSnapshot, claimSnapshot, stagedD.Persons,
                     exactCompletedToken.AbsoluteDay, stageObserver,
-                    out P12ECoreOwnerRestoreStage coreOwnerStage))
+                    out P12ECoreOwnerRestoreStage coreOwnerStage,
+                    propertyEstateSnapshotOverrideForTest, factionSnapshotOverrideForTest,
+                    politicalClaimSnapshotOverrideForTest))
             {
                 failure = P12EDailyV1OwnerPackageFailure.StageFailed;
                 return false;
@@ -632,12 +623,40 @@ internal sealed class P12EDailyV1OwnerPackage
         PersonStore persons,
         long capturedDay,
         Action<P12GDailyV1RestoreStage> stageObserver,
-        out P12ECoreOwnerRestoreStage staged)
+        out P12ECoreOwnerRestoreStage staged,
+        Func<PropertyEstateOwnerSnapshot, PropertyEstateOwnerSnapshot> propertyEstateOverride = null,
+        Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionOverride = null,
+        Func<P12EPoliticalClaimOwnerSnapshot, P12EPoliticalClaimOwnerSnapshot> politicalClaimOverride = null)
     {
-        return DailyV1P12ECoreOwnerRestoreStager.TryStage(
-            institutionOffice, propertyEstate, faction, politicalClaims, persons, capturedDay,
-            step => ObserveCoreOwnerRestoreStep(stageObserver, step),
-            out staged, out _);
+        staged = null;
+        if (!DailyV1P12ECoreOwnerRestoreBuilder.TryCreate(persons, capturedDay,
+                out DailyV1P12ECoreOwnerRestoreBuilder builder, out _))
+            return false;
+        if (!builder.TryStageInstitutionOffice(institutionOffice, out _))
+            return false;
+        ObserveCoreOwnerRestoreStep(stageObserver, P12ECoreOwnerRestoreStep.InstitutionOffice);
+
+        PropertyEstateOwnerSnapshot effectivePropertyEstate = propertyEstateOverride != null
+            ? propertyEstateOverride(propertyEstate)
+            : propertyEstate;
+        if (!builder.TryStagePropertyEstate(effectivePropertyEstate, out _))
+            return false;
+        ObserveCoreOwnerRestoreStep(stageObserver, P12ECoreOwnerRestoreStep.PropertyEstate);
+
+        P12EFactionOwnerSnapshot effectiveFaction = factionOverride != null
+            ? factionOverride(faction)
+            : faction;
+        if (!builder.TryStageFaction(effectiveFaction, out _))
+            return false;
+        ObserveCoreOwnerRestoreStep(stageObserver, P12ECoreOwnerRestoreStep.Faction);
+
+        P12EPoliticalClaimOwnerSnapshot effectivePoliticalClaims = politicalClaimOverride != null
+            ? politicalClaimOverride(politicalClaims)
+            : politicalClaims;
+        if (!builder.TryStagePoliticalClaims(effectivePoliticalClaims, out _))
+            return false;
+        ObserveCoreOwnerRestoreStep(stageObserver, P12ECoreOwnerRestoreStep.PoliticalClaim);
+        return builder.TryBuild(out staged, out _);
     }
 
     private static void ObserveCoreOwnerRestoreStep(
