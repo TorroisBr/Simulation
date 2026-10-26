@@ -1059,7 +1059,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 return false;
             }
 
-            public IReadOnlyDictionary<string, int> BuildRepresentedResidentFloors() => representedFloors;
+            public IReadOnlyDictionary<string, int> BuildResidentFloorSupplement() => representedFloors;
         }
 
         private sealed class FakeTravelContext : IDailyV1SelectedTravelDayExecutionContext

@@ -75,6 +75,51 @@ public sealed class DailyV1SelectedDemographyStageTests
         Assert.That(boundary.Events[2], Does.StartWith("policy:"));
     }
 
+    [Test]
+    public void RepresentedResidentFloorCombinesCorePersonRowsWithHostSupplement()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph();
+        PersonStore people = new PersonStore();
+        DailyV1CityRuntimeOwners residentCity = graph.Cities[0];
+
+        PersonRuntime livingResident = new PersonRuntime(new PersonId("core-resident"), 0L);
+        Assert.That(people.TryRegister(livingResident, out PersonStoreFailure livingFailure),
+            Is.True, livingFailure.ToString());
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            livingResident, residentCity.RuntimeId), Is.True);
+
+        PersonRuntime deadResident = new PersonRuntime(new PersonId("dead-resident"), 0L, 1L);
+        Assert.That(people.TryRegister(deadResident, out PersonStoreFailure deadFailure),
+            Is.True, deadFailure.ToString());
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            deadResident, residentCity.RuntimeId), Is.True);
+
+        PersonRuntime outsideResident = new PersonRuntime(new PersonId("outside-resident"), 0L);
+        Assert.That(people.TryRegister(outsideResident, out PersonStoreFailure outsideFailure),
+            Is.True, outsideFailure.ToString());
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            outsideResident, "not-in-selected-city-graph"), Is.True);
+
+        RecordingBoundary boundary = new RecordingBoundary(graph.Cities, residentFloorSupplement: 2);
+        RecordingAggregateProvider provider = new RecordingAggregateProvider(boundary.Events);
+
+        DailyV1SelectedDemographyStage.Advance(
+            graph,
+            people,
+            2L,
+            new SimulationCalendar(new CalendarDefinition(2, 1, 2)),
+            new EffectiveNaturalMortalityConfiguration(),
+            new EffectiveAggregateDemographyConfiguration(true, 0d, 0d),
+            null,
+            provider,
+            boundary);
+
+        Assert.That(provider.Contexts, Has.Count.EqualTo(graph.Cities.Count));
+        foreach (AggregateDemographyContext context in provider.Contexts)
+            Assert.That(context.RepresentedResidentFloor,
+                Is.EqualTo(context.SettlementRuntimeId == residentCity.RuntimeId ? 3 : 2));
+    }
+
     private static DailyV1SelectedRuntimeOwnerGraph CreateGraph()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -89,16 +134,18 @@ public sealed class DailyV1SelectedDemographyStageTests
 
     private sealed class RecordingBoundary : IDailyV1SelectedDemographyBoundary
     {
-        private readonly IReadOnlyDictionary<string, int> floors;
+        private readonly IReadOnlyDictionary<string, int> floorSupplements;
         internal readonly List<string> Events = new List<string>();
         internal PersonId DeathToApply;
 
-        internal RecordingBoundary(IReadOnlyList<DailyV1CityRuntimeOwners> cities)
+        internal RecordingBoundary(
+            IReadOnlyList<DailyV1CityRuntimeOwners> cities,
+            int residentFloorSupplement = 0)
         {
             Dictionary<string, int> values = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (DailyV1CityRuntimeOwners city in cities)
-                values.Add(city.RuntimeId, 0);
-            floors = values;
+                values.Add(city.RuntimeId, residentFloorSupplement);
+            floorSupplements = values;
         }
 
         public bool TryApplyPersonDeath(PersonId personId, out string failure)
@@ -108,10 +155,10 @@ public sealed class DailyV1SelectedDemographyStageTests
             return DeathToApply != null && DeathToApply.Equals(personId);
         }
 
-        public IReadOnlyDictionary<string, int> BuildRepresentedResidentFloors()
+        public IReadOnlyDictionary<string, int> BuildResidentFloorSupplement()
         {
             Events.Add("floors");
-            return floors;
+            return floorSupplements;
         }
     }
 

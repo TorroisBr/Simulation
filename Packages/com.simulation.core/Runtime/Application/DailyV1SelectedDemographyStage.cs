@@ -4,7 +4,11 @@ using System.Collections.Generic;
 internal interface IDailyV1SelectedDemographyBoundary
 {
     bool TryApplyPersonDeath(PersonId personId, out string failure);
-    IReadOnlyDictionary<string, int> BuildRepresentedResidentFloors();
+    /// <summary>
+    /// Returns the residual represented residents from the host's full roster
+    /// after subtracting the exact living PersonStore residents supplied by Core.
+    /// </summary>
+    IReadOnlyDictionary<string, int> BuildResidentFloorSupplement();
 }
 
 internal sealed class DailyV1SelectedDemographyDiagnostic
@@ -67,6 +71,8 @@ internal static class DailyV1SelectedDemographyStage
     {
         if (graph == null || personStore == null || calendar == null || boundary == null)
             throw new ArgumentNullException("Selected demography requires its exact owner graph, people, calendar and host boundary.");
+        if (graph.PersonStore != null && !ReferenceEquals(graph.PersonStore, personStore))
+            throw new ArgumentException("Selected demography must use the PersonStore already bound to its owner graph.", nameof(personStore));
         if (absoluteDay < 0L) throw new ArgumentOutOfRangeException(nameof(absoluteDay));
 
         DailyV1SelectedDemographyResult result = new DailyV1SelectedDemographyResult(absoluteDay);
@@ -81,11 +87,51 @@ internal static class DailyV1SelectedDemographyStage
                     calendar,
                     aggregateConfiguration.AnnualBirthRate,
                     aggregateConfiguration.AnnualDeathRate);
-            IReadOnlyDictionary<string, int> floors = boundary.BuildRepresentedResidentFloors();
+            IReadOnlyDictionary<string, int> floors = BuildRepresentedResidentFloors(
+                graph, personStore, boundary.BuildResidentFloorSupplement());
             ApplyAggregateDemography(graph, provider, floors, absoluteDay, result);
         }
 
         return result;
+    }
+
+    private static IReadOnlyDictionary<string, int> BuildRepresentedResidentFloors(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        IReadOnlyDictionary<string, int> residentFloorSupplement)
+    {
+        Dictionary<string, int> personResidentFloors = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            if (city != null && !string.IsNullOrWhiteSpace(city.RuntimeId))
+                personResidentFloors[city.RuntimeId] = 0;
+        }
+
+        foreach (PersonRuntime person in personStore.Persons)
+        {
+            if (person == null || person.PersonId == null || person.DeathAbsoluteDay.HasValue
+                || string.IsNullOrWhiteSpace(person.ResidenceSettlementRuntimeId)
+                || !personResidentFloors.TryGetValue(person.ResidenceSettlementRuntimeId, out int count))
+                continue;
+
+            if (count < int.MaxValue)
+                personResidentFloors[person.ResidenceSettlementRuntimeId] = count + 1;
+        }
+
+        Dictionary<string, int> floors = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            if (city == null || string.IsNullOrWhiteSpace(city.RuntimeId)
+                || residentFloorSupplement == null
+                || !personResidentFloors.TryGetValue(city.RuntimeId, out int personFloor)
+                || !residentFloorSupplement.TryGetValue(city.RuntimeId, out int supplement)
+                || personFloor < 0 || supplement < 0 || personFloor > int.MaxValue - supplement)
+                continue;
+
+            floors[city.RuntimeId] = personFloor + supplement;
+        }
+
+        return floors;
     }
 
     private static void ApplyNaturalMortality(

@@ -8063,6 +8063,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     internal RepresentedResidentFloorSnapshot BuildRepresentedResidentFloorSnapshot()
     {
         Dictionary<string, int> floors = new Dictionary<string, int>(StringComparer.Ordinal);
+        Dictionary<string, int> hostSupplements = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (CityRuntime city in cities)
         {
             if (city == null || string.IsNullOrWhiteSpace(city.RuntimeId))
@@ -8075,10 +8076,23 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     city,
                     npcRuntimeSnapshot,
                     personStore.Persons);
-            floors[city.RuntimeId] = presence?.RepresentedResidentCount ?? 0;
+            int representedResidents = presence?.RepresentedResidentCount ?? 0;
+            int corePersonResidents = 0;
+            foreach (PersonRuntime person in personStore.Persons)
+            {
+                if (person == null || person.PersonId == null || person.DeathAbsoluteDay.HasValue
+                    || !string.Equals(person.ResidenceSettlementRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+                    continue;
+                if (corePersonResidents < int.MaxValue) corePersonResidents++;
+            }
+
+            floors[city.RuntimeId] = representedResidents;
+            hostSupplements[city.RuntimeId] = representedResidents >= corePersonResidents
+                ? representedResidents - corePersonResidents
+                : -1;
         }
 
-        return new RepresentedResidentFloorSnapshot(floors);
+        return new RepresentedResidentFloorSnapshot(floors, hostSupplements);
     }
 
     internal bool TryGetManpowerSourceSettlementContext(

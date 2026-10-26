@@ -8,10 +8,15 @@ using System.Collections.Generic;
 public sealed class RepresentedResidentFloorSnapshot
 {
     private readonly Dictionary<string, int> floors;
+    private readonly Dictionary<string, int> hostSupplements;
 
-    internal RepresentedResidentFloorSnapshot(Dictionary<string, int> floors)
+    internal RepresentedResidentFloorSnapshot(
+        Dictionary<string, int> floors,
+        Dictionary<string, int> hostSupplements)
     {
         this.floors = floors ?? new Dictionary<string, int>(StringComparer.Ordinal);
+        this.hostSupplements = hostSupplements
+            ?? new Dictionary<string, int>(StringComparer.Ordinal);
     }
 
     public bool TryGetFloor(string settlementRuntimeId, out int floor)
@@ -19,6 +24,13 @@ public sealed class RepresentedResidentFloorSnapshot
         floor = 0;
         return string.IsNullOrWhiteSpace(settlementRuntimeId) == false
             && floors.TryGetValue(settlementRuntimeId, out floor);
+    }
+
+    internal bool TryGetHostSupplement(string settlementRuntimeId, out int floor)
+    {
+        floor = 0;
+        return string.IsNullOrWhiteSpace(settlementRuntimeId) == false
+            && hostSupplements.TryGetValue(settlementRuntimeId, out floor);
     }
 }
 
@@ -282,14 +294,14 @@ public static class DailyDemographicSystem
             return false;
         }
 
-        public IReadOnlyDictionary<string, int> BuildRepresentedResidentFloors()
+        public IReadOnlyDictionary<string, int> BuildResidentFloorSupplement()
         {
             RepresentedResidentFloorSnapshot snapshot = world.BuildRepresentedResidentFloorSnapshot();
             Dictionary<string, int> floors = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (DailyV1CityRuntimeOwners city in graph.Cities)
             {
                 if (city != null && snapshot != null
-                    && snapshot.TryGetFloor(city.RuntimeId, out int floor))
+                    && snapshot.TryGetHostSupplement(city.RuntimeId, out int floor))
                     floors[city.RuntimeId] = floor;
             }
 
