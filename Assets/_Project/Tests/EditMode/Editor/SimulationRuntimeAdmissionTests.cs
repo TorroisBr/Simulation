@@ -11841,7 +11841,7 @@ public sealed class SimulationRuntimeAdmissionTests
             out ExplorableSiteOwnerSnapshot siteSnapshot, out var siteFailure), Is.True, siteFailure?.Message);
         snapshots.Add("D/EmptyExplorableSites", siteSnapshot);
 
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EInstitutionOfficeOwnerSnapshot institutionOfficeSnapshot,
             out P12EInstitutionOfficeSnapshotFailure institutionFailure), Is.True,

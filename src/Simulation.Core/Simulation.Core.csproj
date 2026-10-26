@@ -22,6 +22,9 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionStores.cs" Link="Institution/InstitutionStores.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionalVacancyRecognition.cs" Link="Institution/InstitutionalVacancyRecognition.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionOfficeOwnerBridge.cs" Link="Institution/InstitutionOfficeOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionOfficeCensusProviders.cs" Link="Institution/InstitutionOfficeCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EInstitutionOfficeOwnerSnapshot.cs" Link="Persistence/P12EInstitutionOfficeOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EInstitutionOfficeOwnerCodec.cs" Link="Persistence/P12EInstitutionOfficeOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimContracts.cs" Link="Political/PoliticalClaimContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimStore.cs" Link="Political/PoliticalClaimStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimTransitions.cs" Link="Political/PoliticalClaimTransitions.cs" />

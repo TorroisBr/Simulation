@@ -1108,7 +1108,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             OwnerSectionRole.Required, 2, claims.Revision, claims);
         AssertSection(token.OwnerSections, PoliticalClaimStoreCensusProvider.RecognitionsSectionId,
             OwnerSectionRole.Required, 2, claims.Revision, claims);
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(
             runtime,
             token,
             token.OwnerSections,
@@ -1761,7 +1761,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         StringBuilder signature)
     {
         IReadOnlyList<OwnerSectionCensusSnapshot> vector = token.OwnerSections;
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EInstitutionOfficeOwnerSnapshot institutionOffice,
             out P12EInstitutionOfficeSnapshotFailure institutionFailure), Is.True, institutionFailure?.Message);

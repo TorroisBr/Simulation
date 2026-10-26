@@ -2,6 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
+internal interface IP12EInstitutionOfficeCaptureSource
+{
+    InstitutionStore InstitutionOwner { get; }
+    OfficeStore OfficeOwner { get; }
+    PersonStore PersonOwner { get; }
+    bool IsCaptureCurrent(
+        DailyCaptureEligibilityToken token,
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionVector);
+}
 internal enum P12EInstitutionOfficeSnapshotFailureCode
 {
     None = 0,
@@ -178,38 +187,17 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
         Tenures = tenures;
     }
 
-    internal static bool TryCapture(
-        SimulationRuntime runtime,
+    internal static bool TryCapture(IP12EInstitutionOfficeCaptureSource captureSource,
+        DailyCaptureEligibilityToken token,
+        IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
         out P12EInstitutionOfficeOwnerSnapshot snapshot,
         out P12EInstitutionOfficeSnapshotFailure failure)
     {
         snapshot = null;
         failure = P12EInstitutionOfficeSnapshotFailure.Create(
             P12EInstitutionOfficeSnapshotFailureCode.InvalidCaptureContext,
-            "Institution/Office capture requires a live admitted Daily-v1 runtime.");
-        if (runtime == null
-            || !runtime.TryGetCompletedDailyCaptureToken(
-                out DailyCaptureEligibilityToken token,
-                out DailyCaptureEligibilityFailure tokenFailure))
-            return false;
-        if (tokenFailure != DailyCaptureEligibilityFailure.None || token == null)
-            return false;
-        return TryCapture(runtime, token, token.OwnerSections, out snapshot, out failure);
-    }
-
-    internal static bool TryCapture(
-        SimulationRuntime runtime,
-        DailyCaptureEligibilityToken token,
-        IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
-        out P12EInstitutionOfficeOwnerSnapshot snapshot,
-        out P12EInstitutionOfficeSnapshotFailure failure,
-        DailyCaptureStagingAttempt stagingAttempt = null)
-    {
-        snapshot = null;
-        failure = P12EInstitutionOfficeSnapshotFailure.Create(
-            P12EInstitutionOfficeSnapshotFailureCode.InvalidCaptureContext,
             "Capture requires the exact live P12-B token and its section vector.");
-        if (runtime == null || token == null || sharedOwnerSectionVector == null
+        if (captureSource == null || token == null || sharedOwnerSectionVector == null
             || !ReferenceEquals(token.OwnerSections, sharedOwnerSectionVector)) return false;
         if (token.AdmissionContext == null
             || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
@@ -217,9 +205,9 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
             return Fail(P12EInstitutionOfficeSnapshotFailureCode.UnsupportedProfile,
                 "A successful Daily-v1 completed-boundary token is required.", out failure);
 
-        InstitutionStore institutionOwner = runtime.InstitutionStoreForWorldBoundary;
-        OfficeStore officeOwner = runtime.OfficeStoreForWorldBoundary;
-        PersonStore personOwner = runtime.PersonStore;
+        InstitutionStore institutionOwner = captureSource.InstitutionOwner;
+        OfficeStore officeOwner = captureSource.OfficeOwner;
+        PersonStore personOwner = captureSource.PersonOwner;
         if (institutionOwner == null || officeOwner == null || personOwner == null
             || !InstitutionOfficeOwnerBridge.BelongsTo(officeOwner, institutionOwner))
             return Fail(P12EInstitutionOfficeSnapshotFailureCode.InvalidOwnerComposition,
@@ -311,8 +299,7 @@ internal sealed class P12EInstitutionOfficeOwnerSnapshot
                 officeOwner, incumbencyCount, officeRevision)
             || !Matches(sharedOwnerSectionVector, InstitutionOfficeCensusProvider.TenuresSectionId,
                 officeOwner, tenureCount, officeRevision)
-            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
-                runtime, token, sharedOwnerSectionVector, stagingAttempt))
+            || !captureSource.IsCaptureCurrent(token, sharedOwnerSectionVector))
         {
             snapshot = null;
             if (failure.Code == P12EInstitutionOfficeSnapshotFailureCode.None)

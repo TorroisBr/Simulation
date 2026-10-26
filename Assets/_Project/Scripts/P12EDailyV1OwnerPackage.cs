@@ -271,7 +271,7 @@ internal sealed class P12EDailyV1OwnerPackage
                 return false;
             }
 
-            if (!P12EInstitutionOfficeOwnerSnapshot.TryCapture(
+            if (!P12EInstitutionOfficeCaptureAdapter.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
                     out P12EInstitutionOfficeOwnerSnapshot institutionOfficeSnapshot, out _, context.StagingAttempt)
                 || !PropertyEstateOwnerSnapshot.TryCapture(
