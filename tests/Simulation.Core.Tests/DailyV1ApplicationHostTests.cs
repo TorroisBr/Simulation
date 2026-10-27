@@ -70,6 +70,16 @@ public sealed class DailyV1ApplicationHostTests
         DailyV1ApplicationHost host = new DailyV1ApplicationHost(
             "missing-slot-root", operations, null, null,
             unityV1Identity: unity);
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession unprovenCandidate,
+            out string unprovenDiagnostic), Is.False,
+            "A fresh application cannot prepare genesis before inspecting its continuation slot.");
+        Assert.That(unprovenCandidate, Is.Null);
+        Assert.That(unprovenDiagnostic,
+            Is.EqualTo("A successful P12 NoSave slot inspection is required before initial genesis."));
 
         Assert.That(application.TryInspectInitialContinuationSlot(
             host.PersistentDataRoot, operations, out bool exists, out P12AResult inspectResult), Is.True);
@@ -80,7 +90,6 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(image, Is.Null);
         Assert.That(loadResult.Code, Is.EqualTo(P12AResultCode.NoSave));
 
-        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.True, diagnostic);
@@ -110,7 +119,8 @@ public sealed class DailyV1ApplicationHostTests
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.False);
         Assert.That(candidate, Is.Null);
-        Assert.That(diagnostic, Does.Contain("cannot capture a second bootstrap"));
+        Assert.That(diagnostic,
+            Is.EqualTo("A successful P12 NoSave slot inspection is required before initial genesis."));
     }
 
     [Test]

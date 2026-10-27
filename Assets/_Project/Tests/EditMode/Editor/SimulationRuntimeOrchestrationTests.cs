@@ -661,6 +661,22 @@ public sealed class SimulationRuntimeOrchestrationTests
         Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out _, out string noProbeDiagnostic), Is.False,
+            "Initial genesis must reject a caller that skipped continuation-slot inspection.");
+        Assert.That(noProbeDiagnostic,
+            Is.EqualTo("A successful P12 NoSave slot inspection is required before initial genesis."));
+
+        string absentRoot = System.IO.Path.Combine(
+            System.IO.Directory.GetCurrentDirectory(),
+            ".coref-no-save-" + System.Guid.NewGuid().ToString("N"));
+        Assert.That(application.TryInspectInitialContinuationSlot(
+            absentRoot, SystemAtomicFileSlotOperations.Instance,
+            out bool slotExists, out P12AResult slotResult), Is.True);
+        Assert.That(slotExists, Is.False);
+        Assert.That(slotResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
             out _, out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);
 
         RejectedApplicationAdvanceBoundary boundary =

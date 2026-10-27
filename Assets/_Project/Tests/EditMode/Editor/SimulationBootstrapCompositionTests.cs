@@ -5093,8 +5093,8 @@ public sealed class SimulationBootstrapCompositionTests
         {
             if (stageId == "p9.genesis.validate-profile/v1") throw new System.InvalidOperationException("injected post-validation failure");
         };
-        MethodInfo initialize = typeof(TesteSimulacao).GetMethod("InitializeSimulation", BindingFlags.Instance | BindingFlags.NonPublic);
-        TargetInvocationException exception = Assert.Throws<TargetInvocationException>(() => initialize.Invoke(simulation, new object[] { injectFailure }));
+        TargetInvocationException exception = Assert.Throws<TargetInvocationException>(
+            () => InvokeBootstrapInitialize(simulation, injectFailure));
         Assert.That(exception.InnerException, Is.TypeOf<System.InvalidOperationException>());
         Assert.That(simulation.Bootstrap, Is.Null);
         MethodInfo simulate = typeof(TesteSimulacao).GetMethod("Simulate", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -5175,6 +5175,19 @@ public sealed class SimulationBootstrapCompositionTests
 
     private static void InvokeBootstrapInitialize(TesteSimulacao simulation, System.Action<string> stageCompleted)
     {
+        DailyV1Application application = ReadPrivateField<DailyV1Application>(
+            simulation, "dailyV1Application");
+        string absentRoot = System.IO.Path.Combine(
+            System.IO.Directory.GetCurrentDirectory(),
+            ".unity-genesis-no-save-" + System.Guid.NewGuid().ToString("N"));
+        if (application.TryInspectInitialContinuationSlot(
+                absentRoot, SystemAtomicFileSlotOperations.Instance,
+                out bool exists, out P12AResult result))
+        {
+            Assert.That(exists, Is.False);
+            Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+        }
+
         MethodInfo initialize = typeof(TesteSimulacao).GetMethod(
             "InitializeSimulation",
             BindingFlags.Instance | BindingFlags.NonPublic);

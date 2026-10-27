@@ -127,8 +127,16 @@ internal sealed class DailyV1Application
         SimulationRuntimeAdmissionContext admissionContext;
         lock (activeSessionGate.SyncRoot)
         {
+            if (!initialContinuationSlotProbeAttempted
+                || !initialContinuationSlotProbeSucceeded
+                || initialContinuationSlotExists
+                || initialContinuationLoadBlocksGenesis)
+            {
+                diagnostic = "A successful P12 NoSave slot inspection is required before initial genesis.";
+                return false;
+            }
+
             if (initialGenesisPreparationAttempted
-                || initialContinuationLoadBlocksGenesis
                 || preparedInitialGenesis != null
                 || preparedInitialSession != null
                 || activeSessionGate.Current != null

@@ -12466,6 +12466,19 @@ public sealed class SimulationRuntimeAdmissionTests
 
     private static void InvokeInitializeSimulation(TesteSimulacao bootstrap, Action<string> stageCompleted)
     {
+        DailyV1Application application = ReadPrivateField<DailyV1Application>(
+            bootstrap, "dailyV1Application");
+        string absentRoot = Path.Combine(
+            Directory.GetCurrentDirectory(),
+            ".unity-genesis-no-save-" + Guid.NewGuid().ToString("N"));
+        if (application.TryInspectInitialContinuationSlot(
+                absentRoot, SystemAtomicFileSlotOperations.Instance,
+                out bool exists, out P12AResult result))
+        {
+            Assert.That(exists, Is.False);
+            Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+        }
+
         MethodInfo method = typeof(TesteSimulacao).GetMethod(
             "InitializeSimulation",
             BindingFlags.Instance | BindingFlags.NonPublic);

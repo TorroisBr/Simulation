@@ -264,6 +264,52 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
     }
 
+    private static bool TryPrepareInitialGenesisForTest(
+        DailyV1Application targetApplication,
+        DailyV1EffectiveDefinitions definitions,
+        Action<string> stageCompleted,
+        out DailyV1GenesisComposition composition,
+        out DailyV1ActiveRuntimeSession session,
+        out string diagnostic)
+    {
+        string absentRoot = System.IO.Path.Combine(
+            System.IO.Directory.GetCurrentDirectory(),
+            ".core-genesis-no-save-" + System.Guid.NewGuid().ToString("N"));
+        if (targetApplication.TryInspectInitialContinuationSlot(
+                absentRoot, SystemAtomicFileSlotOperations.Instance,
+                out bool exists, out P12AResult result))
+        {
+            Assert.That(exists, Is.False);
+            Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+        }
+        return targetApplication.TryPrepareInitialGenesis(
+            definitions, stageCompleted, out composition, out session, out diagnostic);
+    }
+
+    private static bool TryPrepareInitialGenesisForTest(
+        DailyV1Application targetApplication,
+        DailyV1EffectiveDefinitions definitions,
+        Func<WorldId> allocateWorldId,
+        Action<string> stageCompleted,
+        out DailyV1GenesisComposition composition,
+        out DailyV1ActiveRuntimeSession session,
+        out string diagnostic)
+    {
+        string absentRoot = System.IO.Path.Combine(
+            System.IO.Directory.GetCurrentDirectory(),
+            ".core-genesis-no-save-" + System.Guid.NewGuid().ToString("N"));
+        if (targetApplication.TryInspectInitialContinuationSlot(
+                absentRoot, SystemAtomicFileSlotOperations.Instance,
+                out bool exists, out P12AResult result))
+        {
+            Assert.That(exists, Is.False);
+            Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+        }
+        return targetApplication.TryPrepareInitialGenesis(
+            definitions, allocateWorldId, stageCompleted,
+            out composition, out session, out diagnostic);
+    }
+
     private static DailyV1Application CreateApplicationWithAdvanceBoundary(
         Action onOperationEntry,
         out DailyV1ActiveRuntimeSession session,
@@ -273,7 +319,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application application = new DailyV1Application();
         definitions ??= DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
-        Assert.That(application.TryPrepareInitialGenesis(
+        Assert.That(TryPrepareInitialGenesisForTest(application,
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out session, out string diagnostic), Is.True, diagnostic);
         EnsureRuntimeProtocolInventory(session.ExecutionBoundaryState);
@@ -1163,7 +1209,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application application = new DailyV1Application();
         var completedStages = new System.Collections.Generic.List<string>();
 
-        Assert.That(application.TryPrepareInitialGenesis(
+        Assert.That(TryPrepareInitialGenesisForTest(application,
             definitions, completedStages.Add,
             out DailyV1GenesisComposition composition,
             out DailyV1ActiveRuntimeSession candidate,
@@ -1185,7 +1231,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application application = new DailyV1Application();
         var completedStages = new System.Collections.Generic.List<string>();
 
-        Assert.That(application.TryPrepareInitialGenesis(
+        Assert.That(TryPrepareInitialGenesisForTest(application,
             definitions, allocateWorldId: null, stageCompleted: completedStages.Add,
             out DailyV1GenesisComposition composition, out DailyV1ActiveRuntimeSession prepared, out string diagnostic), Is.True, diagnostic);
         Assert.That(application.ActiveSession, Is.Null,
@@ -1220,7 +1266,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryCaptureBootstrapAdmissionContext(
             out SimulationRuntimeAdmissionContext admission), Is.True);
 
-        Assert.That(application.TryPrepareInitialGenesis(
+        Assert.That(TryPrepareInitialGenesisForTest(application,
             definitions,
             allocateWorldId: () => new WorldId(Guid.Parse("6b4d50cc-66d6-4b4c-a0f6-d0f2d9f16a19")),
             stageCompleted: null,
@@ -1270,7 +1316,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         bool reentrantPublicationAccepted = false;
         DailyV1ActiveRuntimeSession reentrantCandidate = null;
 
-        Assert.That(application.TryPrepareInitialGenesis(
+        Assert.That(TryPrepareInitialGenesisForTest(application,
             definitions,
             allocateWorldId: () => new WorldId(Guid.Parse("d20e3757-9ed0-42ef-bade-3c628f7059bb")),
             stageCompleted: _ =>
@@ -1314,7 +1360,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application application = new DailyV1Application();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
 
-        Assert.Throws<System.InvalidOperationException>(() => application.TryPrepareInitialGenesis(
+        Assert.Throws<System.InvalidOperationException>(() => TryPrepareInitialGenesisForTest(application,
             definitions,
             allocateWorldId: () => new WorldId(Guid.Parse("d74685dd-9cfd-4f4e-967b-307b3622182f")),
             stageCompleted: _ => throw new System.InvalidOperationException("host stage observer failed"),
@@ -1458,7 +1504,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1EffectiveDefinitions definitions =
             DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
-        Assert.That(application.TryPrepareInitialGenesis(
+        Assert.That(TryPrepareInitialGenesisForTest(application,
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);
 
@@ -1592,7 +1638,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1Application application = new DailyV1Application();
-        Assert.That(application.TryPrepareInitialGenesis(
+        Assert.That(TryPrepareInitialGenesisForTest(application,
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.True, diagnostic);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(
@@ -1600,7 +1646,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryPublishInitial(candidate), Is.True);
         DailyV1ActiveRuntimeSession published = application.ActiveSession;
 
-        Assert.That(application.TryPrepareInitialGenesis(
+        Assert.That(TryPrepareInitialGenesisForTest(application,
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out _, out diagnostic), Is.False);
 
