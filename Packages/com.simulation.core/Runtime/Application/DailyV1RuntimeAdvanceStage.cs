@@ -3,7 +3,67 @@ using System.Collections.Generic;
 
 internal static class DailyV1RuntimeProtocolOperationContracts
 {
+    internal const string NpcMembership = "runtime.npc-membership";
+    internal const string PersonParentage = "runtime.person.parentage";
+    internal const string BootstrapPublication = "runtime.bootstrap-publication";
     internal const string DailyAdvance = "runtime.advance-day";
+    internal const string SoloTravelStart = "runtime.travel.start";
+    internal const string TravelPartyStart = "runtime.travel-party.start";
+    internal const string TravelPartyAdvance = "runtime.travel-party.advance";
+    internal const string NpcTrade = "runtime.economy.npc-trade";
+    internal const string NpcMoneyTransfer = "runtime.economy.money-transfer";
+    internal const string MarketPurchase = "runtime.economy.market-purchase";
+    internal const string MarketSale = "runtime.economy.market-sale";
+    internal const string MerchantDailyNpcTrade = "runtime.merchant.advance-npc-trade-state";
+    internal const string InstitutionOfficeOwnerCommit = "p12.institution-office.owner-commit";
+    internal const string FactionStoreOwnerCommit = "p12.faction.owner-commit";
+    internal const string PoliticalClaimOwnerCommit = "p12.political-claim.owner-commit";
+    internal const string PoliticalSupportOwnerCommit = "p12.political-support.owner-commit";
+    internal const string PropertyOwnerCommit = "p12.property.owner-commit";
+    internal const string EstateOwnerCommit = "p12.estate.owner-commit";
+    internal const string PopulationImmigration = "runtime.population.immigration";
+    internal const string PopulationEmigration = "runtime.population.emigration";
+    internal const string PopulationResidentDeath = "runtime.population.resident-death";
+    internal const string PopulationResidenceMigration = "runtime.population.residence-migration";
+    internal const string PersonDeath = "runtime.person.death";
+    internal const string PersonResidenceBind = "runtime.person.residence-bind";
+
+    internal static IReadOnlyList<string> GetExpectedOperationContractIds(
+        bool hasRuntimeAdmission,
+        bool hasTravelPartySystem,
+        bool hasTravelSystem)
+    {
+        var operationContractIds = new List<string>(24) { NpcMembership };
+        if (!hasRuntimeAdmission) return operationContractIds.AsReadOnly();
+
+        operationContractIds.Add(BootstrapPublication);
+        operationContractIds.Add(DailyAdvance);
+        operationContractIds.Add(PersonParentage);
+        if (hasTravelPartySystem)
+        {
+            operationContractIds.Add(TravelPartyStart);
+            operationContractIds.Add(TravelPartyAdvance);
+        }
+        if (hasTravelSystem) operationContractIds.Add(SoloTravelStart);
+        operationContractIds.Add(NpcTrade);
+        operationContractIds.Add(NpcMoneyTransfer);
+        operationContractIds.Add(MarketPurchase);
+        operationContractIds.Add(MarketSale);
+        operationContractIds.Add(MerchantDailyNpcTrade);
+        operationContractIds.Add(InstitutionOfficeOwnerCommit);
+        operationContractIds.Add(FactionStoreOwnerCommit);
+        operationContractIds.Add(PoliticalClaimOwnerCommit);
+        operationContractIds.Add(PoliticalSupportOwnerCommit);
+        operationContractIds.Add(PropertyOwnerCommit);
+        operationContractIds.Add(EstateOwnerCommit);
+        operationContractIds.Add(PopulationImmigration);
+        operationContractIds.Add(PopulationEmigration);
+        operationContractIds.Add(PopulationResidentDeath);
+        operationContractIds.Add(PopulationResidenceMigration);
+        operationContractIds.Add(PersonDeath);
+        operationContractIds.Add(PersonResidenceBind);
+        return operationContractIds.AsReadOnly();
+    }
 }
 
 /// <summary>

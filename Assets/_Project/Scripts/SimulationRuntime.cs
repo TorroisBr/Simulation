@@ -128,23 +128,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         GenealogyCensusProvider.SectionId
     };
 
-    private const string NpcMembershipCensusOperationId = "runtime.npc-membership";
-    private const string PersonParentageCensusOperationId = "runtime.person.parentage";
-    private const string BootstrapPublicationCensusOperationId = "runtime.bootstrap-publication";
-    private const string SoloTravelStartCensusOperationId = "runtime.travel.start";
-    private const string TravelPartyAdvanceCensusOperationId = "runtime.travel-party.advance";
-    private const string NpcTradeCensusOperationId = "runtime.economy.npc-trade";
-    private const string NpcMoneyTransferCensusOperationId = "runtime.economy.money-transfer";
-    private const string MarketPurchaseCensusOperationId = "runtime.economy.market-purchase";
-    private const string MarketSaleCensusOperationId = "runtime.economy.market-sale";
-    private const string MerchantDailyNpcTradeCensusOperationId = "runtime.merchant.advance-npc-trade-state";
-    private const string InstitutionOfficeOwnerCommitCensusOperationId = "p12.institution-office.owner-commit";
-    private const string FactionStoreOwnerCommitCensusOperationId = "p12.faction.owner-commit";
-    private const string PoliticalClaimOwnerCommitCensusOperationId = "p12.political-claim.owner-commit";
-    private const string PoliticalSupportOwnerCommitCensusOperationId = "p12.political-support.owner-commit";
-    private const string PropertyOwnerCommitCensusOperationId = "p12.property.owner-commit";
-    private const string EstateOwnerCommitCensusOperationId = "p12.estate.owner-commit";
-
     private sealed class NpcMembershipCensusContext
     {
         public readonly long PersonStoreRevisionAtStart;
@@ -3722,66 +3705,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return;
         }
 
-        bool operationsRegistered = protocol.RegisterExpectedOperation(
-            NpcMembershipCensusOperationId,
-            out _);
-        if (operationsRegistered && runtimeAdmissionContext != null)
+        IReadOnlyList<string> expectedOperationContractIds =
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                runtimeAdmissionContext != null,
+                travelPartySystem != null,
+                travelSystem != null);
+        bool operationsRegistered = true;
+        foreach (string operationContractId in expectedOperationContractIds)
         {
-            operationsRegistered = protocol.RegisterExpectedOperation(
-                    BootstrapPublicationCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    PersonParentageCensusOperationId,
-                    out _)
-                && (travelPartySystem == null
-                    || protocol.RegisterExpectedOperation(
-                        TravelPartyStartCensusOperationId,
-                        out _))
-                && (travelPartySystem == null
-                    || protocol.RegisterExpectedOperation(
-                        TravelPartyAdvanceCensusOperationId,
-                        out _))
-                && (travelSystem == null
-                    || protocol.RegisterExpectedOperation(
-                        SoloTravelStartCensusOperationId,
-                        out _))
-                && protocol.RegisterExpectedOperation(
-                    NpcTradeCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    NpcMoneyTransferCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    MarketPurchaseCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    MarketSaleCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    MerchantDailyNpcTradeCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    InstitutionOfficeOwnerCommitCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    FactionStoreOwnerCommitCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    PoliticalClaimOwnerCommitCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    PoliticalSupportOwnerCommitCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    PropertyOwnerCommitCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    EstateOwnerCommitCensusOperationId,
-                    out _)
-                && TryRegisterP12PopulationLifecycleOperations(protocol);
+            if (protocol.RegisterExpectedOperation(operationContractId, out _)) continue;
+            operationsRegistered = false;
+            break;
         }
 
         bool ownerThreadBound = false;
@@ -5752,7 +5686,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
             || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
             || !TryEnterRuntimeAdmissionOperation(
-                SoloTravelStartCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.SoloTravelStart,
                 out SimulationOperationScope protocolScope))
         {
             FaultRuntimeAdmission();
@@ -5943,7 +5877,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         if (distinct.Count != sectionIds.Count
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
             || !TryEnterRuntimeAdmissionOperation(
-                TravelPartyAdvanceCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.TravelPartyAdvance,
                 out SimulationOperationScope protocolScope))
         {
             FaultRuntimeAdmission();
@@ -6027,7 +5961,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         HashSet<string> distinctSections = new HashSet<string>(sectionIds, StringComparer.Ordinal);
         if (distinctSections.Count != sectionIds.Count
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
-            || !TryEnterRuntimeAdmissionOperation(MerchantDailyNpcTradeCensusOperationId, out SimulationOperationScope protocolScope))
+            || !TryEnterRuntimeAdmissionOperation(DailyV1RuntimeProtocolOperationContracts.MerchantDailyNpcTrade, out SimulationOperationScope protocolScope))
         {
             FaultRuntimeAdmission();
             return false;
@@ -6634,7 +6568,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
 
         return TryEnterRuntimeAdmissionOperation(
-            BootstrapPublicationCensusOperationId,
+            DailyV1RuntimeProtocolOperationContracts.BootstrapPublication,
             out scope);
     }
 
@@ -6669,9 +6603,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         if (runtimeAdmissionContext == null) return false;
 
         string operationContractId = transactionType == EconomyTransactionType.OpenMarketPurchase
-            ? MarketPurchaseCensusOperationId
+            ? DailyV1RuntimeProtocolOperationContracts.MarketPurchase
             : transactionType == EconomyTransactionType.OpenMarketSale
-                ? MarketSaleCensusOperationId
+                ? DailyV1RuntimeProtocolOperationContracts.MarketSale
                 : null;
 
         if (!IsRuntimeAdmissionOwnerThreadCurrent()
@@ -6783,7 +6717,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        return TryEnterRuntimeAdmissionOperation(NpcTradeCensusOperationId, out scope);
+        return TryEnterRuntimeAdmissionOperation(DailyV1RuntimeProtocolOperationContracts.NpcTrade, out scope);
     }
 
     internal bool TryBeginNpcMoneyTransferCensusOperation(
@@ -6815,7 +6749,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        return TryEnterRuntimeAdmissionOperation(NpcMoneyTransferCensusOperationId, out scope);
+        return TryEnterRuntimeAdmissionOperation(DailyV1RuntimeProtocolOperationContracts.NpcMoneyTransfer, out scope);
     }
 
     internal void NotifyNpcTradeOwnerMutation(string sectionId)
@@ -6967,7 +6901,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
             || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
             || !TryEnterRuntimeAdmissionOperation(
-                InstitutionOfficeOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.InstitutionOfficeOwnerCommit,
                 out scope))
         {
             FaultRuntimeAdmission();
@@ -6986,7 +6920,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             || npcRosterCensusProtocol == null
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(P12GenealogyOwnerSectionIds, out _)
             || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
-            || !TryEnterRuntimeAdmissionOperation(PersonParentageCensusOperationId, out scope))
+            || !TryEnterRuntimeAdmissionOperation(DailyV1RuntimeProtocolOperationContracts.PersonParentage, out scope))
         {
             FaultRuntimeAdmission();
             return false;
@@ -7074,7 +7008,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
             || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
             || !TryEnterRuntimeAdmissionOperation(
-                FactionStoreOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.FactionStoreOwnerCommit,
                 out scope))
         {
             FaultRuntimeAdmission();
@@ -7118,7 +7052,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
             || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
             || !TryEnterRuntimeAdmissionOperation(
-                PoliticalClaimOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.PoliticalClaimOwnerCommit,
                 out scope))
         {
             FaultRuntimeAdmission();
@@ -7161,7 +7095,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
             || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
             || !TryEnterRuntimeAdmissionOperation(
-                PoliticalSupportOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.PoliticalSupportOwnerCommit,
                 out scope))
         {
             FaultRuntimeAdmission();
@@ -7267,7 +7201,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             && TryAssessP12LifecycleOwnerRoster()
             && TryValidateP12RuntimeIdentitySpatialOwnerBaselines()
             && npcRosterCensusProtocol.TryEnterOperation(
-                NpcMembershipCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.NpcMembership,
                 out SimulationOperationScope protocolScope,
                 out _))
         {
@@ -8216,7 +8150,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             int personRevisionIncrements = resident ? 2 : 1;
             bool actionChanged = materializedNpc?.CurrentActionRuntime != null;
             if (!TryBeginP12PopulationOperation(
-                    PersonDeathCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.PersonDeath,
                     sectionIds,
                     () => PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(
                         transition.ExpectedPerson,
@@ -9037,7 +8971,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         };
         SimulationOperationScope p12Scope = null;
         if (!TryBeginP12PropertyEstateOwnerCommit(
-                PropertyOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.PropertyOwnerCommit,
                 changedSections,
                 out p12Scope))
         {
@@ -9102,7 +9036,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         string[] changedSections = { EstateCensusProvider.SectionId };
         SimulationOperationScope p12Scope = null;
         if (!TryBeginP12PropertyEstateOwnerCommit(
-                EstateOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.EstateOwnerCommit,
                 changedSections,
                 out p12Scope))
         {
@@ -9229,7 +9163,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         };
         SimulationOperationScope p12Scope = null;
         if (!TryBeginP12PropertyEstateOwnerCommit(
-                PropertyOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.PropertyOwnerCommit,
                 changedSections,
                 out p12Scope))
         {
@@ -9382,7 +9316,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         };
         SimulationOperationScope p12Scope = null;
         if (!TryBeginP12PropertyEstateOwnerCommit(
-                PropertyOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.PropertyOwnerCommit,
                 changedSections,
                 out p12Scope))
         {
@@ -9973,7 +9907,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         {
             string sectionId = PersonLifeResidenceCensusProvider.SectionIdFor(personId);
             if (!TryBeginP12PopulationOperation(
-                    PersonResidenceBindCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.PersonResidenceBind,
                     new[] { sectionId },
                     () => PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(person, 1),
                     out P12PopulationOperationScope p12Scope))
@@ -10025,7 +9959,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 out Func<bool> localRevisionCapacity))
         {
             if (!TryBeginP12PopulationOperation(
-                    PopulationImmigrationCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.PopulationImmigration,
                     sectionIds,
                     localRevisionCapacity,
                     out P12PopulationOperationScope p12Scope))
@@ -10078,7 +10012,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 out Func<bool> localRevisionCapacity))
         {
             if (!TryBeginP12PopulationOperation(
-                    PopulationEmigrationCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.PopulationEmigration,
                     sectionIds,
                     localRevisionCapacity,
                     out P12PopulationOperationScope p12Scope))
@@ -10132,7 +10066,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 out Func<bool> localRevisionCapacity))
         {
             if (!TryBeginP12PopulationOperation(
-                    PopulationResidenceMigrationCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.PopulationResidenceMigration,
                     sectionIds,
                     localRevisionCapacity,
                     out P12PopulationOperationScope p12Scope))
@@ -10180,7 +10114,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 out Func<bool> localRevisionCapacity))
         {
             if (!TryBeginP12PopulationOperation(
-                    PopulationResidentDeathCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.PopulationResidentDeath,
                     sectionIds,
                     localRevisionCapacity,
                     out P12PopulationOperationScope p12Scope))

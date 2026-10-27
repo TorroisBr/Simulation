@@ -4,8 +4,6 @@ using System.Threading;
 
 public sealed partial class SimulationRuntime
 {
-    private const string TravelPartyStartCensusOperationId = "runtime.travel-party.start";
-
     private readonly IOwnerSectionCensusProvider runtimeIdAllocatorTravelPartyCounterCensusProvider;
     private P12TravelPartyStartOperationContext activeP12TravelPartyStartOperationContext;
     private int p12TravelPartyStartRequestActive;
@@ -339,7 +337,7 @@ public sealed partial class SimulationRuntime
             if (!npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
                 || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
                 || !TryEnterRuntimeAdmissionOperation(
-                    TravelPartyStartCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.TravelPartyStart,
                     out SimulationOperationScope protocolScope))
                 throw new InvalidOperationException();
 

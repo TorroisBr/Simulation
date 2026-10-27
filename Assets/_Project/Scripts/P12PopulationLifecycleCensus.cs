@@ -4,13 +4,6 @@ using System.Threading;
 
 public sealed partial class SimulationRuntime
 {
-    private const string PopulationImmigrationCensusOperationId = "runtime.population.immigration";
-    private const string PopulationEmigrationCensusOperationId = "runtime.population.emigration";
-    private const string PopulationResidentDeathCensusOperationId = "runtime.population.resident-death";
-    private const string PopulationResidenceMigrationCensusOperationId = "runtime.population.residence-migration";
-    private const string PersonDeathCensusOperationId = "runtime.person.death";
-    private const string PersonResidenceBindCensusOperationId = "runtime.person.residence-bind";
-
     private readonly Dictionary<SettlementPopulationRuntime, string> populationAggregateSectionIdsByOwner =
         new Dictionary<SettlementPopulationRuntime, string>();
     private readonly Dictionary<SettlementPopulationRuntime, string> populationReceiptSectionIdsByOwner =
@@ -183,17 +176,6 @@ public sealed partial class SimulationRuntime
             throw new ArgumentException("A population census section requires its City RuntimeId.", nameof(runtimeId));
         return prefix + runtimeId.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
             + ":" + runtimeId;
-    }
-
-    private bool TryRegisterP12PopulationLifecycleOperations(ContinuationCensusProtocol protocol)
-    {
-        return protocol != null
-            && protocol.RegisterExpectedOperation(PopulationImmigrationCensusOperationId, out _)
-            && protocol.RegisterExpectedOperation(PopulationEmigrationCensusOperationId, out _)
-            && protocol.RegisterExpectedOperation(PopulationResidentDeathCensusOperationId, out _)
-            && protocol.RegisterExpectedOperation(PopulationResidenceMigrationCensusOperationId, out _)
-            && protocol.RegisterExpectedOperation(PersonDeathCensusOperationId, out _)
-            && protocol.RegisterExpectedOperation(PersonResidenceBindCensusOperationId, out _);
     }
 
     private bool TryBindP12LifecycleMutationBoundaries()
