@@ -1,9 +1,9 @@
 # Independent review — CORE-F Runtime Owner Section Contracts fix
 
-**Verdict:** `VALIDATED_CANDIDATE` for the exact implementation and test diff; not promotion-ready.  
-**Candidate tip reviewed:** `7edb0d1118d336fe7f0fd81259c98e03a47f38c2`  
-**Implementation commit/tree:** `59a03927d61afbf30c138db0201c59afc3c86ab7` / `3e1549c50be2b7fa919efa56770d5111c5f1633e`  
-**Base:** `3faaa8ab66e7c257fa2cccf7777ca087be9adfa0`  
+**Verdict:** `VALIDATED_CANDIDATE` for the exact implementation and test diff; not promotion-ready.
+**Candidate tip reviewed:** `7edb0d1118d336fe7f0fd81259c98e03a47f38c2`
+**Implementation commit/tree:** `59a03927d61afbf30c138db0201c59afc3c86ab7` / `3e1549c50be2b7fa919efa56770d5111c5f1633e`
+**Base:** `3faaa8ab66e7c257fa2cccf7777ca087be9adfa0`
 **Core canonical:** `a07402faa4739d0bb276d3bc4aa24e6ed7bd6cea`
 
 This review supersedes the prior `NEEDS_CHANGES` record only for the two findings listed there. That historical record remains preserved unchanged.
