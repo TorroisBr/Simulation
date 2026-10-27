@@ -120,6 +120,17 @@ try {
         Assert-Equal 2 $xml.TotalTests 'Passed count total mismatch.'
     }
 
+    $emptyXml = Join-Path $resultsRoot 'empty-selection.xml'
+    Set-Content -LiteralPath $emptyXml -Value '<test-run result="Passed" testcasecount="0" total="0" passed="0" failed="0" skipped="0" inconclusive="0" />' -Encoding UTF8
+    Invoke-Case 'ZeroDiscoveredCasesAreNotAValidationPass' {
+        $xml = Read-UnityTestResultXml -XmlPath $emptyXml
+        Assert-Equal $true $xml.IsValid 'A coherent empty test-run XML should remain syntactically valid.'
+        Assert-Equal 0 $xml.TotalTests 'Zero-test count was not preserved.'
+        Assert-Equal $false $xml.GatePassed 'A zero-test result passed the gate.'
+        Assert-Equal 'NoTestsDiscovered' (Resolve-UnityValidationStatus -XmlResult $xml) 'An empty selection did not report its distinct status.'
+        Assert-Equal $false (Test-UnityOperationalRetryEligible -Status 'NoTestsDiscovered') 'A valid empty selection was treated as an operational retry.'
+    }
+
     $failedXml = Join-Path $resultsRoot 'failed.xml'
     Set-Content -LiteralPath $failedXml -Value '<test-run result="Failed" testcasecount="2" total="2" passed="1" failed="1" skipped="0" inconclusive="0" />' -Encoding UTF8
     Invoke-Case 'FailedXmlProducesFailedStatus' {

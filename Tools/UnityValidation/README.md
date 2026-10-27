@@ -13,7 +13,7 @@ Run every test in a platform:
     -All
 ```
 
-Run a targeted EditMode or PlayMode suite:
+Run a targeted EditMode suite:
 
 ```powershell
 .\Tools\UnityValidation\Invoke-UnityValidation.ps1 `
@@ -23,9 +23,14 @@ Run a targeted EditMode or PlayMode suite:
 
 .\Tools\UnityValidation\Invoke-UnityValidation.ps1 `
     -ProjectPath . `
-    -Mode PlayMode `
-    -TestFilter GMConsolePlayModeSmokeTests
+    -Mode EditMode `
+    -TestFilter Smoke
 ```
+
+The repository's five-case Smoke gate uses `EditMode -TestFilter Smoke`.
+These fixtures exercise Play Mode transitions from EditMode tests. Selecting
+them with `-Mode PlayMode` discovers no cases and is rejected by the runner as
+`NoTestsDiscovered`.
 
 Long-run suites remain ordinary `-TestFilter` values. The harness does not hardcode test class names. Use `-UnityPath` to select an explicit executable; otherwise it reads `ProjectSettings/ProjectVersion.txt` and searches standard Unity Hub installation roots for exactly that version. Automatic discovery fails with `UNITY_NOT_FOUND` when the exact Hub version is absent; it never falls back to an arbitrary `Unity.exe` found on `PATH`.
 

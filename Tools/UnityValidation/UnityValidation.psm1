@@ -694,7 +694,7 @@ function Read-UnityTestResultXml {
     $frameworkResult = [string]$root.GetAttribute('result')
     $sum = [int]$passed + [int]$failed + [int]$skipped + [int]$inconclusive
     $countsCoherent = ([int]$total -eq $sum -and [int]$total -ge 0 -and [int]$passed -ge 0 -and [int]$failed -ge 0 -and [int]$skipped -ge 0 -and [int]$inconclusive -ge 0)
-    $gatePassed = ($frameworkResult -ieq 'Passed' -and [int]$failed -eq 0 -and [int]$inconclusive -eq 0 -and $countsCoherent)
+    $gatePassed = ([int]$total -gt 0 -and $frameworkResult -ieq 'Passed' -and [int]$failed -eq 0 -and [int]$inconclusive -eq 0 -and $countsCoherent)
 
     return [pscustomobject]@{
         XmlPath = $normalizedXmlPath
@@ -707,7 +707,7 @@ function Read-UnityTestResultXml {
         InconclusiveTests = [int]$inconclusive
         CountsCoherent = $countsCoherent
         GatePassed = $gatePassed
-        ErrorMessage = if ($countsCoherent) { $null } else { 'Result XML test counts are not coherent.' }
+        ErrorMessage = if (-not $countsCoherent) { 'Result XML test counts are not coherent.' } elseif ([int]$total -eq 0) { 'Result XML contains no discovered test cases.' } else { $null }
     }
 }
 
@@ -731,6 +731,9 @@ function Resolve-UnityValidationStatus {
     }
     if (-not $XmlResult.IsValid) {
         return 'InvalidResultXml'
+    }
+    if ([int]$XmlResult.TotalTests -le 0) {
+        return 'NoTestsDiscovered'
     }
     if ($XmlResult.GatePassed) {
         return 'Passed'
