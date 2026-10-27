@@ -28,6 +28,18 @@ public sealed class DailyV1ApplicationHostTests
         public void Delete(string path) => throw new NotSupportedException();
     }
 
+    private sealed class FailedSlotOperations : IAtomicFileSlotOperations
+    {
+        public void CreateDirectory(string path) => throw new NotSupportedException();
+        public bool Exists(string path) => throw new System.IO.IOException("Injected slot inspection failure.");
+        public System.IO.Stream CreateNewTemporary(string path) => throw new NotSupportedException();
+        public System.IO.Stream OpenRead(string path) => throw new NotSupportedException();
+        public void FlushToDisk(System.IO.Stream stream) => throw new NotSupportedException();
+        public void Replace(string source, string destination) => throw new NotSupportedException();
+        public void Move(string source, string destination) => throw new NotSupportedException();
+        public void Delete(string path) => throw new NotSupportedException();
+    }
+
     [Test]
     public void HostPortsAndDotNetIdentityAreCapturedWithoutPersistingTheStorageRoot()
     {
@@ -53,11 +65,16 @@ public sealed class DailyV1ApplicationHostTests
     public void InitialNoSaveAdmissionAllowsCoreGenesisOnTheSameApplication()
     {
         DailyV1Application application = new DailyV1Application();
+        MissingSlotOperations operations = new MissingSlotOperations();
         P12ACompatibilityDescriptor unity = UnityIdentity();
         DailyV1ApplicationHost host = new DailyV1ApplicationHost(
-            "missing-slot-root", new MissingSlotOperations(), null, null,
+            "missing-slot-root", operations, null, null,
             unityV1Identity: unity);
 
+        Assert.That(application.TryInspectInitialContinuationSlot(
+            host.PersistentDataRoot, operations, out bool exists, out P12AResult inspectResult), Is.True);
+        Assert.That(exists, Is.False);
+        Assert.That(inspectResult.Code, Is.EqualTo(P12AResultCode.NoSave));
         Assert.That(application.TryLoadInitialContinuationImageForStart(
             null, host, out P12AContinuationImage image, out P12AResult loadResult), Is.False);
         Assert.That(image, Is.Null);
@@ -74,8 +91,13 @@ public sealed class DailyV1ApplicationHostTests
     public void InvalidInitialSlotBlocksGenesisOnTheSameApplication()
     {
         DailyV1Application application = new DailyV1Application();
+        CorruptSlotOperations operations = new CorruptSlotOperations();
+        Assert.That(application.TryInspectInitialContinuationSlot(
+            "corrupt-slot-root", operations, out bool exists, out P12AResult inspectResult), Is.True);
+        Assert.That(exists, Is.True);
+        Assert.That(inspectResult.Code, Is.EqualTo(P12AResultCode.Loaded));
         DailyV1ApplicationHost host = new DailyV1ApplicationHost(
-            "corrupt-slot-root", new CorruptSlotOperations(), null, null,
+            "corrupt-slot-root", operations, null, null,
             unityV1Identity: UnityIdentity());
 
         Assert.That(application.TryLoadInitialContinuationImageForStart(
@@ -89,6 +111,75 @@ public sealed class DailyV1ApplicationHostTests
             out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.False);
         Assert.That(candidate, Is.Null);
         Assert.That(diagnostic, Does.Contain("cannot capture a second bootstrap"));
+    }
+
+    [Test]
+    public void InvalidOrUnprobedInitialLoadCannotFallThroughToGenesis()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application invalidHostApplication = new DailyV1Application();
+
+        Assert.That(invalidHostApplication.TryLoadInitialContinuationImageForStart(
+            definitions, null, out P12AContinuationImage invalidImage, out P12AResult invalidResult), Is.False);
+        Assert.That(invalidImage, Is.Null);
+        Assert.That(invalidResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+        Assert.That(invalidHostApplication.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession invalidCandidate, out _), Is.False);
+        Assert.That(invalidCandidate, Is.Null);
+
+        DailyV1Application unprobedApplication = new DailyV1Application();
+        DailyV1ApplicationHost validHost = new DailyV1ApplicationHost(
+            "unprobed-slot-root", new MissingSlotOperations(), null, null,
+            unityV1Identity: UnityIdentity());
+        Assert.That(unprobedApplication.TryLoadInitialContinuationImageForStart(
+            null, validHost, out P12AContinuationImage unprobedImage, out P12AResult unprobedResult), Is.False);
+        Assert.That(unprobedImage, Is.Null);
+        Assert.That(unprobedResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+        Assert.That(unprobedApplication.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession unprobedCandidate, out _), Is.False);
+        Assert.That(unprobedCandidate, Is.Null);
+    }
+
+    [Test]
+    public void FailedInitialSlotInspectionBlocksGenesis()
+    {
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryInspectInitialContinuationSlot(
+            "failed-slot-root", new FailedSlotOperations(), out bool exists, out P12AResult result), Is.False);
+        Assert.That(exists, Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.StorageFailure));
+
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession candidate, out _), Is.False);
+        Assert.That(candidate, Is.Null);
+    }
+
+    [Test]
+    public void NoSaveProofIsBoundToTheInspectedRootAndFileOperationsOwner()
+    {
+        DailyV1Application application = new DailyV1Application();
+        MissingSlotOperations operations = new MissingSlotOperations();
+        Assert.That(application.TryInspectInitialContinuationSlot(
+            "inspected-root", operations, out bool exists, out P12AResult inspectResult), Is.True);
+        Assert.That(exists, Is.False);
+        Assert.That(inspectResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+
+        DailyV1ApplicationHost otherRootHost = new DailyV1ApplicationHost(
+            "different-root", operations, null, null, unityV1Identity: UnityIdentity());
+        Assert.That(application.TryLoadInitialContinuationImageForStart(
+            null, otherRootHost, out P12AContinuationImage image, out P12AResult loadResult), Is.False);
+        Assert.That(image, Is.Null);
+        Assert.That(loadResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession candidate, out _), Is.False);
+        Assert.That(candidate, Is.Null);
     }
 
     [Test]

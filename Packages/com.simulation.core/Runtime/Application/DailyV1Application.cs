@@ -47,6 +47,11 @@ internal sealed class DailyV1Application
         new DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>(
             session => session.ExecutionBoundaryState);
     private SimulationRuntimeAdmissionContext bootstrapAdmissionContext;
+    private bool initialContinuationSlotProbeAttempted;
+    private bool initialContinuationSlotProbeSucceeded;
+    private bool initialContinuationSlotExists;
+    private string initialContinuationSlotRoot;
+    private IAtomicFileSlotOperations initialContinuationSlotFileOperations;
     private bool initialContinuationLoadAttempted;
     private bool initialContinuationLoadBlocksGenesis;
     private bool initialGenesisPreparationAttempted;
@@ -733,12 +738,97 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
-    /// Admits the initial continuation slot before genesis. A missing slot is
-    /// the only outcome that permits the caller to continue into genesis;
-    /// every present-but-invalid, incompatible, or inaccessible slot blocks
-    /// genesis for this application instance. The selected owner-thread context
-    /// is captured by this Core application and no runtime identity is allocated
-    /// by this read.
+    /// Inspects the initial P12 slot through the host's storage port before
+    /// genesis. Only a successful NoSave inspection permits genesis; an
+    /// existing slot or an inspection failure blocks it. The selected
+    /// owner-thread context is captured by this Core application.
+    /// </summary>
+    internal bool TryInspectInitialContinuationSlot(
+        string persistentDataRoot,
+        IAtomicFileSlotOperations fileOperations,
+        out bool exists,
+        out P12AResult result)
+    {
+        exists = false;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (string.IsNullOrWhiteSpace(persistentDataRoot) || fileOperations == null)
+        {
+            lock (activeSessionGate.SyncRoot)
+            {
+                if (!initialContinuationSlotProbeAttempted
+                    && !initialGenesisPreparationAttempted
+                    && preparedInitialGenesis == null
+                    && preparedInitialSession == null
+                    && activeSessionGate.Current == null)
+                {
+                    initialContinuationSlotProbeAttempted = true;
+                    initialContinuationSlotProbeSucceeded = false;
+                    initialContinuationSlotExists = false;
+                    initialContinuationLoadBlocksGenesis = true;
+                }
+            }
+
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (initialContinuationSlotProbeAttempted
+                || initialContinuationLoadAttempted
+                || initialGenesisPreparationAttempted
+                || preparedInitialGenesis != null
+                || preparedInitialSession != null
+                || activeSessionGate.Current != null
+                || activeSessionGate.ActiveOperationCount != 0)
+                return false;
+
+            if (bootstrapAdmissionContext == null)
+            {
+                bootstrapAdmissionContext = new SimulationRuntimeAdmissionContext(
+                    SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+                    Thread.CurrentThread,
+                    Thread.CurrentThread.ManagedThreadId);
+            }
+
+            if (!bootstrapAdmissionContext.IsOwnedByCurrentThread())
+            {
+                result = new P12AResult(P12AResultCode.WrongThread);
+                return false;
+            }
+
+            initialContinuationSlotProbeAttempted = true;
+        }
+
+        bool inspected = P12AContinuationStore.TryHasSlot(
+            persistentDataRoot, fileOperations, out exists, out result);
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            initialContinuationSlotProbeSucceeded = inspected;
+            initialContinuationSlotExists = inspected && exists;
+            initialContinuationLoadBlocksGenesis = !inspected || exists;
+            if (inspected)
+            {
+                initialContinuationSlotRoot = persistentDataRoot;
+                initialContinuationSlotFileOperations = fileOperations;
+            }
+            else
+            {
+                initialContinuationSlotRoot = null;
+                initialContinuationSlotFileOperations = null;
+            }
+        }
+
+        return inspected;
+    }
+
+    /// <summary>
+    /// Loads an initial continuation image only after this application has
+    /// successfully observed the same storage slot as present. The slot probe
+    /// and load must use the same root and exact file-operations owner. Genesis
+    /// remains blocked for every observed-present outcome, including a later
+    /// load failure or a slot removed between inspection and read.
     /// </summary>
     internal bool TryLoadInitialContinuationImageForStart(
         DailyV1EffectiveDefinitions definitions,
@@ -753,6 +843,21 @@ internal sealed class DailyV1Application
             || host.FileOperations == null
             || (host.UnityV1Identity == null && definitions == null))
         {
+            lock (activeSessionGate.SyncRoot)
+            {
+                if (!initialContinuationSlotProbeAttempted
+                    && !initialGenesisPreparationAttempted
+                    && preparedInitialGenesis == null
+                    && preparedInitialSession == null
+                    && activeSessionGate.Current == null)
+                {
+                    initialContinuationSlotProbeAttempted = true;
+                    initialContinuationSlotProbeSucceeded = false;
+                    initialContinuationSlotExists = false;
+                    initialContinuationLoadBlocksGenesis = true;
+                }
+            }
+
             result = new P12AResult(P12AResultCode.InvalidOwnerValue);
             return false;
         }
@@ -778,6 +883,32 @@ internal sealed class DailyV1Application
             if (!bootstrapAdmissionContext.IsOwnedByCurrentThread())
             {
                 result = new P12AResult(P12AResultCode.WrongThread);
+                return false;
+            }
+
+            if (!initialContinuationSlotProbeAttempted
+                || !initialContinuationSlotProbeSucceeded)
+            {
+                initialContinuationSlotProbeAttempted = true;
+                initialContinuationSlotProbeSucceeded = false;
+                initialContinuationSlotExists = false;
+                initialContinuationLoadBlocksGenesis = true;
+                result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+                return false;
+            }
+
+            if (!string.Equals(initialContinuationSlotRoot, host.PersistentDataRoot,
+                    StringComparison.Ordinal)
+                || !ReferenceEquals(initialContinuationSlotFileOperations, host.FileOperations))
+            {
+                initialContinuationLoadBlocksGenesis = true;
+                result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+                return false;
+            }
+
+            if (!initialContinuationSlotExists)
+            {
+                result = new P12AResult(P12AResultCode.NoSave);
                 return false;
             }
 
@@ -807,14 +938,11 @@ internal sealed class DailyV1Application
 
         lock (activeSessionGate.SyncRoot)
         {
-            // No-save is the only safe fall-through to genesis. A loaded image
-            // must be restored, and any storage/compatibility failure must fail
-            // closed rather than creating a replacement world.
-            initialContinuationLoadBlocksGenesis =
-                loaded || result == null || result.Code != P12AResultCode.NoSave;
+            initialContinuationSlotRoot = null;
+            initialContinuationSlotFileOperations = null;
         }
 
-        if (!loaded && (result == null || result.Code != P12AResultCode.NoSave))
+        if (!loaded)
             image = null;
         return loaded;
     }
