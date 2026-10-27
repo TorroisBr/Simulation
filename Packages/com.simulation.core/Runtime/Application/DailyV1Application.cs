@@ -3,6 +3,39 @@ using System.Collections.Generic;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 
+internal enum DailyV1P12FCoreOwnerRestoreStep
+{
+    PoliticalKnowledge = 0,
+    ScheduledDirectives = 1,
+    ActorChoices = 2,
+    TravelParties = 3,
+    Expeditions = 4
+}
+
+/// <summary>Private selected Core owner candidates staged together for P12-F.</summary>
+internal sealed class DailyV1P12FCoreOwnerRestoreStage
+{
+    internal PoliticalKnowledgeStore PoliticalKnowledge { get; }
+    internal ScheduledDirectiveStore ScheduledDirectives { get; }
+    internal ActorChoiceStore ActorChoices { get; }
+    internal TravelPartyStore TravelParties { get; }
+    internal ExpeditionStore Expeditions { get; }
+
+    internal DailyV1P12FCoreOwnerRestoreStage(
+        PoliticalKnowledgeStore politicalKnowledge,
+        ScheduledDirectiveStore scheduledDirectives,
+        ActorChoiceStore actorChoices,
+        TravelPartyStore travelParties,
+        ExpeditionStore expeditions)
+    {
+        PoliticalKnowledge = politicalKnowledge ?? throw new ArgumentNullException(nameof(politicalKnowledge));
+        ScheduledDirectives = scheduledDirectives ?? throw new ArgumentNullException(nameof(scheduledDirectives));
+        ActorChoices = actorChoices ?? throw new ArgumentNullException(nameof(actorChoices));
+        TravelParties = travelParties ?? throw new ArgumentNullException(nameof(travelParties));
+        Expeditions = expeditions ?? throw new ArgumentNullException(nameof(expeditions));
+    }
+}
+
 /// <summary>
 /// Core-owned lifetime and operation gate for one selected Daily-v1
 /// application. Host adapters may retain projections, but this instance owns
@@ -799,6 +832,199 @@ internal sealed class DailyV1Application
 
         result = null;
         return true;
+    }
+
+    /// <summary>
+    /// Stages the selected Core-owned P12-E institution, property, political,
+    /// and justice owners under the same bootstrap or exact-session
+    /// replacement authority as the P12-C/D roots. Unity supplies only the
+    /// already decoded immutable owner snapshots and staged P12-C/D roots;
+    /// Core creates the authoritative P12-E owners.
+    /// </summary>
+    internal bool TryStageRestoredP12EOwners(
+        P12CStagedCoreContinuationRoot stagedRoots,
+        P12EInstitutionOfficeOwnerSnapshot institutionOffice,
+        PropertyEstateOwnerSnapshot propertyEstate,
+        P12EFactionOwnerSnapshot faction,
+        P12EPoliticalClaimOwnerSnapshot politicalClaims,
+        P12EPoliticalSupportOwnerSnapshot politicalSupport,
+        P12EPoliticalDecisionOwnerSnapshot politicalDecisions,
+        P12EJusticeRecordsOwnerSnapshot justiceRecords,
+        PersonStore persons,
+        IReadOnlyList<DailyV1CityRuntimeOwners> stagedCities,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> stagedNpcs,
+        long capturedDay,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out P12ECoreOwnerRestoreStage stagedOwners,
+        out P12AResult result,
+        Action<P12ECoreOwnerRestoreStep> stageObserver = null)
+    {
+        stagedOwners = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+            return false;
+
+        if (stagedRoots == null || !stagedRoots.IsDetached
+            || persons == null || stagedCities == null || stagedNpcs == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        if (!DailyV1P12ECoreOwnerRestoreStager.TryStage(
+                institutionOffice, propertyEstate, faction, politicalClaims,
+                politicalSupport, politicalDecisions, justiceRecords,
+                persons, stagedCities, stagedNpcs, capturedDay, stageObserver,
+                out stagedOwners, out _)
+            || stagedOwners == null)
+        {
+            stagedOwners = null;
+            result = new P12AResult(
+                P12AResultCode.OwnerGraphRejected,
+                "p12e.core-owners");
+            return false;
+        }
+
+        result = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Stages the selected Core-owned P12-F knowledge, directive, actor-choice,
+    /// travel-party, and expedition owners under the same bootstrap or exact
+    /// session-replacement authority as the detached P12-C/D/E graph.
+    /// </summary>
+    internal bool TryStageRestoredP12FOwners(
+        P12CStagedCoreContinuationRoot stagedRoots,
+        P12FPoliticalKnowledgeOwnerSnapshot politicalKnowledge,
+        P12FScheduledDirectiveOwnerSnapshot directives,
+        P12FActorChoiceSnapshot actorChoices,
+        P12FTravelPartyOwnerSnapshot travelParties,
+        P12FExpeditionOwnerSnapshot expeditions,
+        PersonStore persons,
+        InstitutionStore institutions,
+        PoliticalClaimStore politicalClaims,
+        FactionStore factions,
+        OfficeStore offices,
+        PropertyOwnershipStore properties,
+        long capturedDay,
+        SimulationTime stagedTime,
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        IReadOnlyList<P12DNpcFRow> detachedNpcRows,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> stagedSelectedNpcOwners,
+        DailyV1RuntimeIdentityIndex stagedIdentities,
+        SpatialNetworkOwner stagedSpatialNetwork,
+        ExplorableSiteStore stagedExplorableSites,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out DailyV1P12FCoreOwnerRestoreStage stagedOwners,
+        out P12AResult result,
+        Action<DailyV1P12FCoreOwnerRestoreStep> stageObserver = null)
+    {
+        stagedOwners = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+            return false;
+
+        if (stagedRoots == null || !stagedRoots.IsDetached
+            || politicalKnowledge == null || directives == null || actorChoices == null
+            || travelParties == null || expeditions == null || persons == null
+            || institutions == null || politicalClaims == null || factions == null
+            || offices == null || properties == null || stagedTime == null
+            || capturedDay != stagedTime.AbsoluteDay || capturedDay < 0L
+            || selectedDefinitions == null || detachedNpcRows == null
+            || stagedSelectedNpcOwners == null || stagedIdentities == null
+            || stagedSpatialNetwork == null || stagedExplorableSites == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        try
+        {
+            List<string> stagedNpcRuntimeIds = new List<string>(detachedNpcRows.Count);
+            HashSet<string> seenNpcRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (P12DNpcFRow row in detachedNpcRows)
+            {
+                if (row == null || string.IsNullOrWhiteSpace(row.RuntimeId)
+                    || !seenNpcRuntimeIds.Add(row.RuntimeId))
+                {
+                    result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+                    return false;
+                }
+                stagedNpcRuntimeIds.Add(row.RuntimeId);
+            }
+
+            if (!politicalKnowledge.TryStageForImage(persons, institutions, politicalClaims,
+                    factions, offices, properties, capturedDay,
+                    out PoliticalKnowledgeStore stagedPoliticalKnowledge, out _)
+                || stagedPoliticalKnowledge == null)
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12f.political-knowledge");
+                return false;
+            }
+            stageObserver?.Invoke(DailyV1P12FCoreOwnerRestoreStep.PoliticalKnowledge);
+
+            if (!directives.TryStageForImage(stagedTime, selectedDefinitions,
+                    out ScheduledDirectiveStore stagedDirectives, out _)
+                || stagedDirectives == null)
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12f.scheduled-directives");
+                return false;
+            }
+            stageObserver?.Invoke(DailyV1P12FCoreOwnerRestoreStep.ScheduledDirectives);
+
+            if (!P12FActorChoiceSnapshot.TryStage(actorChoices, persons,
+                    out ActorChoiceStore stagedActorChoices, out _)
+                || stagedActorChoices == null)
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12f.actor-choices");
+                return false;
+            }
+            stageObserver?.Invoke(DailyV1P12FCoreOwnerRestoreStep.ActorChoices);
+
+            if (!DailyV1P12FTravelPartyOwnerStager.TryStage(travelParties,
+                    stagedSelectedNpcOwners, detachedNpcRows, stagedSpatialNetwork,
+                    out TravelPartyStore stagedTravelParties, out _)
+                || stagedTravelParties == null)
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12f.travel-parties");
+                return false;
+            }
+            stageObserver?.Invoke(DailyV1P12FCoreOwnerRestoreStep.TravelParties);
+
+            if (!P12FExpeditionOwnerSnapshotStager.TryStage(expeditions,
+                    stagedNpcRuntimeIds, detachedNpcRows, stagedSelectedNpcOwners,
+                    stagedIdentities, stagedSpatialNetwork, stagedExplorableSites,
+                    stagedTravelParties, out ExpeditionStore stagedExpeditions, out _)
+                || stagedExpeditions == null)
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12f.expeditions");
+                return false;
+            }
+            stageObserver?.Invoke(DailyV1P12FCoreOwnerRestoreStep.Expeditions);
+
+            stagedOwners = new DailyV1P12FCoreOwnerRestoreStage(
+                stagedPoliticalKnowledge, stagedDirectives, stagedActorChoices,
+                stagedTravelParties, stagedExpeditions);
+            result = null;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException
+            || exception is NullReferenceException)
+        {
+            stagedOwners = null;
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12f.core-owners");
+            return false;
+        }
     }
 
     private bool HasRestoredContinuationStagingAuthority(

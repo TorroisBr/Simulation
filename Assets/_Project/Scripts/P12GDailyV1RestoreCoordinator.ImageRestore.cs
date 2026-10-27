@@ -171,7 +171,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             P12EDailyV1OwnerStagingContext eContext = new P12EDailyV1OwnerStagingContext(
                 null, stagedC, stagedD, stagedTime, configuration.freeStatus,
                 configuration.wantedStatus, configuration.arrestedStatus,
-                configuration.hiddenStatus, eventRecorder, logger);
+                configuration.hiddenStatus, eventRecorder, logger,
+                application, replacementOperation?.ExpectedSession, replacementOperation);
 
             if (!P12EDailyV1OwnerPackage.TryStageFromImage(image, decoded, eContext,
                     out P12EDailyV1OwnerPackage stagedE,

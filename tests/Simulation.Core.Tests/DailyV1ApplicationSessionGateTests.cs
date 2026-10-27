@@ -2218,4 +2218,91 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(initialResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue),
             "Initial P12-D staging is admitted only on the unused app's captured bootstrap thread, then validates its roots.");
     }
+
+    [Test]
+    public void SelectedP12EOwnerStageRequiresTheSameRestoreAuthorityAsItsRoots()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        InstallCompletedBoundaryToken(session, boundary);
+
+        Assert.That(application.TryStageRestoredP12EOwners(
+                null, null, null, null, null, null, null, null,
+                null, null, null, 0L, session, null,
+                out P12ECoreOwnerRestoreStage unreservedOwners,
+                out P12AResult unreservedResult), Is.False);
+        Assert.That(unreservedOwners, Is.Null);
+        Assert.That(unreservedResult.Code, Is.EqualTo(P12AResultCode.Busy),
+            "P12-E must reject before inspecting owner inputs unless the exact source session is reserved.");
+
+        Assert.That(application.TryBeginExclusiveOperation(session, out var replacement), Is.True);
+        using (replacement)
+        {
+            Assert.That(application.TryStageRestoredP12EOwners(
+                    null, null, null, null, null, null, null, null,
+                    null, null, null, 0L, session, replacement,
+                    out P12ECoreOwnerRestoreStage reservedOwners,
+                    out P12AResult reservedResult), Is.False);
+            Assert.That(reservedOwners, Is.Null);
+            Assert.That(reservedResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue),
+                "With the exact replacement reservation, Core proceeds to validate the detached P12-C roots first.");
+        }
+
+        DailyV1Application initialApplication = new DailyV1Application();
+        Assert.That(initialApplication.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        Assert.That(initialApplication.TryStageRestoredP12EOwners(
+                null, null, null, null, null, null, null, null,
+                null, null, null, 0L, null, null,
+                out P12ECoreOwnerRestoreStage initialOwners,
+                out P12AResult initialResult), Is.False);
+        Assert.That(initialOwners, Is.Null);
+        Assert.That(initialResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue),
+            "Initial P12-E staging is admitted only on the unused app's captured bootstrap thread, then validates its roots.");
+    }
+
+    [Test]
+    public void SelectedP12FOwnerStageRequiresTheSameRestoreAuthorityAsItsRoots()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        InstallCompletedBoundaryToken(session, boundary);
+
+        Assert.That(application.TryStageRestoredP12FOwners(
+                null, null, null, null, null, null,
+                null, null, null, null, null, null, 0L, null, null,
+                null, null, null, null, null, session, null,
+                out DailyV1P12FCoreOwnerRestoreStage unreservedOwners,
+                out P12AResult unreservedResult), Is.False);
+        Assert.That(unreservedOwners, Is.Null);
+        Assert.That(unreservedResult.Code, Is.EqualTo(P12AResultCode.Busy),
+            "P12-F must reject before inspecting owner inputs unless the exact source session is reserved.");
+
+        Assert.That(application.TryBeginExclusiveOperation(session, out var replacement), Is.True);
+        using (replacement)
+        {
+            Assert.That(application.TryStageRestoredP12FOwners(
+                    null, null, null, null, null, null,
+                    null, null, null, null, null, null, 0L, null, null,
+                    null, null, null, null, null, session, replacement,
+                    out DailyV1P12FCoreOwnerRestoreStage reservedOwners,
+                    out P12AResult reservedResult), Is.False);
+            Assert.That(reservedOwners, Is.Null);
+            Assert.That(reservedResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue),
+                "With the exact replacement reservation, Core proceeds to validate the detached P12-C roots first.");
+        }
+
+        DailyV1Application initialApplication = new DailyV1Application();
+        Assert.That(initialApplication.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        Assert.That(initialApplication.TryStageRestoredP12FOwners(
+                null, null, null, null, null, null,
+                null, null, null, null, null, null, 0L, null, null,
+                null, null, null, null, null, null, null,
+                out DailyV1P12FCoreOwnerRestoreStage initialOwners,
+                out P12AResult initialResult), Is.False);
+        Assert.That(initialOwners, Is.Null);
+        Assert.That(initialResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue),
+            "Initial P12-F staging is admitted only on the unused app's captured bootstrap thread, then validates its roots.");
+    }
 }

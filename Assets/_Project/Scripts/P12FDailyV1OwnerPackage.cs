@@ -427,55 +427,85 @@ internal sealed class P12FDailyV1OwnerPackage
         try
         {
             long day = image.Header.Day;
-            if (!decoded.PoliticalKnowledge.TryStageForImage(context.P12DPackage.Persons,
-                    stagedE.Institutions, stagedE.PoliticalClaims, stagedE.Factions,
-                    stagedE.Offices, stagedE.PropertyOwnership, day,
-                    out PoliticalKnowledgeStore politicalKnowledge, out _))
+            DailyV1P12FCoreOwnerRestoreStage coreOwnerStage;
+            if (context.Application != null)
             {
-                failure = P12FDailyV1OwnerPackageFailure.StageFailed;
-                return false;
+                if (!context.Application.TryStageRestoredP12FOwners(
+                        context.P12CRoots.CoreRoot, decoded.PoliticalKnowledge,
+                        decoded.Directives, decoded.ActorChoices, decoded.TravelParties,
+                        decoded.Expeditions, context.P12DPackage.Persons,
+                        stagedE.Institutions, stagedE.PoliticalClaims, stagedE.Factions,
+                        stagedE.Offices, stagedE.PropertyOwnership, day,
+                        context.StagedSimulationTime, selectedDefinitions,
+                        context.P12DPackage.NpcFRows, context.P12DPackage.SelectedNpcOwners,
+                        context.P12DPackage.RuntimeIdentities.CoreIdentityIndex,
+                        context.P12DPackage.SpatialNetwork.SelectedOwner,
+                        context.P12DPackage.EmptyExplorableSites,
+                        context.ExpectedSession, context.ReplacementOperation,
+                        out coreOwnerStage, out _,
+                        step => ObserveP12FCoreOwnerRestoreStep(stageObserver, step))
+                    || coreOwnerStage == null)
+                {
+                    failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+                    return false;
+                }
             }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.FPoliticalKnowledgeStaged);
+            else
+            {
+                if (!decoded.PoliticalKnowledge.TryStageForImage(context.P12DPackage.Persons,
+                        stagedE.Institutions, stagedE.PoliticalClaims, stagedE.Factions,
+                        stagedE.Offices, stagedE.PropertyOwnership, day,
+                        out PoliticalKnowledgeStore politicalKnowledge, out _))
+                {
+                    failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.FPoliticalKnowledgeStaged);
 
-            if (!decoded.Directives.TryStageForImage(context.StagedSimulationTime,
-                    selectedDefinitions, out ScheduledDirectiveStore directives, out _))
-            {
-                failure = P12FDailyV1OwnerPackageFailure.StageFailed;
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.FScheduledDirectivesStaged);
+                if (!decoded.Directives.TryStageForImage(context.StagedSimulationTime,
+                        selectedDefinitions, out ScheduledDirectiveStore directives, out _))
+                {
+                    failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.FScheduledDirectivesStaged);
 
-            if (!P12FActorChoiceSnapshot.TryStage(decoded.ActorChoices, context.P12DPackage.Persons,
-                    out ActorChoiceStore actorChoices, out _))
-            {
-                failure = P12FDailyV1OwnerPackageFailure.StageFailed;
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.FActorChoicesStaged);
+                if (!P12FActorChoiceSnapshot.TryStage(decoded.ActorChoices, context.P12DPackage.Persons,
+                        out ActorChoiceStore actorChoices, out _))
+                {
+                    failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.FActorChoicesStaged);
 
-            if (!DailyV1P12FTravelPartyOwnerStager.TryStage(decoded.TravelParties,
-                    context.P12DPackage.SelectedNpcOwners, context.P12DPackage.NpcFRows,
-                    context.P12DPackage.SpatialNetwork.SelectedOwner,
-                    out TravelPartyStore travelParties, out _))
-            {
-                failure = P12FDailyV1OwnerPackageFailure.StageFailed;
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.FTravelPartiesStaged);
+                if (!DailyV1P12FTravelPartyOwnerStager.TryStage(decoded.TravelParties,
+                        context.P12DPackage.SelectedNpcOwners, context.P12DPackage.NpcFRows,
+                        context.P12DPackage.SpatialNetwork.SelectedOwner,
+                        out TravelPartyStore travelParties, out _))
+                {
+                    failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.FTravelPartiesStaged);
 
-            if (!P12FExpeditionOwnerSnapshotStager.TryStage(
-                    decoded.Expeditions, stagedNpcRuntimeIds, context.P12DPackage.NpcFRows,
-                    context.P12DPackage.SelectedNpcOwners, context.P12DPackage.RuntimeIdentities.CoreIdentityIndex,
-                    context.P12DPackage.SpatialNetwork.SelectedOwner, context.P12DPackage.EmptyExplorableSites, travelParties,
-                    out ExpeditionStore expeditions, out _))
-            {
-                failure = P12FDailyV1OwnerPackageFailure.StageFailed;
-                return false;
+                if (!P12FExpeditionOwnerSnapshotStager.TryStage(
+                        decoded.Expeditions, stagedNpcRuntimeIds, context.P12DPackage.NpcFRows,
+                        context.P12DPackage.SelectedNpcOwners, context.P12DPackage.RuntimeIdentities.CoreIdentityIndex,
+                        context.P12DPackage.SpatialNetwork.SelectedOwner, context.P12DPackage.EmptyExplorableSites, travelParties,
+                        out ExpeditionStore expeditions, out _))
+                {
+                    failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.FExpeditionsStaged);
+                coreOwnerStage = new DailyV1P12FCoreOwnerRestoreStage(
+                    politicalKnowledge, directives, actorChoices, travelParties, expeditions);
             }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.FExpeditionsStaged);
 
             package = new P12FDailyV1OwnerPackage(null, context.P12CRoots.WorldIdentity,
-                politicalKnowledge, directives, actorChoices, travelParties, expeditions,
+                coreOwnerStage.PoliticalKnowledge, coreOwnerStage.ScheduledDirectives,
+                coreOwnerStage.ActorChoices, coreOwnerStage.TravelParties,
+                coreOwnerStage.Expeditions,
                 context.P12DPackage.NpcFRows, stagedE.UnresolvedPoliticalKnowledgeBindings);
             failure = P12FDailyV1OwnerPackageFailure.None;
             return true;
@@ -506,5 +536,30 @@ internal sealed class P12FDailyV1OwnerPackage
 
         runtimeIds = new ReadOnlyCollection<string>(ids);
         return true;
+    }
+
+    private static void ObserveP12FCoreOwnerRestoreStep(
+        Action<P12GDailyV1RestoreStage> stageObserver,
+        DailyV1P12FCoreOwnerRestoreStep step)
+    {
+        if (stageObserver == null) return;
+        switch (step)
+        {
+            case DailyV1P12FCoreOwnerRestoreStep.PoliticalKnowledge:
+                stageObserver(P12GDailyV1RestoreStage.FPoliticalKnowledgeStaged);
+                break;
+            case DailyV1P12FCoreOwnerRestoreStep.ScheduledDirectives:
+                stageObserver(P12GDailyV1RestoreStage.FScheduledDirectivesStaged);
+                break;
+            case DailyV1P12FCoreOwnerRestoreStep.ActorChoices:
+                stageObserver(P12GDailyV1RestoreStage.FActorChoicesStaged);
+                break;
+            case DailyV1P12FCoreOwnerRestoreStep.TravelParties:
+                stageObserver(P12GDailyV1RestoreStage.FTravelPartiesStaged);
+                break;
+            case DailyV1P12FCoreOwnerRestoreStep.Expeditions:
+                stageObserver(P12GDailyV1RestoreStage.FExpeditionsStaged);
+                break;
+        }
     }
 }

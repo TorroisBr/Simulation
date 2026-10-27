@@ -30,6 +30,9 @@ internal sealed class P12EDailyV1OwnerStagingContext
     internal NpcStatusData HiddenStatus { get; }
     internal DomainEventRecorder DomainEventRecorder { get; }
     internal SimulationLogger Logger { get; }
+    internal DailyV1Application Application { get; }
+    internal DailyV1ActiveRuntimeSession ExpectedSession { get; }
+    internal DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation ReplacementOperation { get; }
 
     internal P12EDailyV1OwnerStagingContext(
         DailyCaptureStagingAttempt stagingAttempt,
@@ -41,7 +44,10 @@ internal sealed class P12EDailyV1OwnerStagingContext
         NpcStatusData arrestedStatus,
         NpcStatusData hiddenStatus,
         DomainEventRecorder domainEventRecorder,
-        SimulationLogger logger)
+        SimulationLogger logger,
+        DailyV1Application application = null,
+        DailyV1ActiveRuntimeSession expectedSession = null,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
     {
         StagingAttempt = stagingAttempt;
         P12CRoots = p12cRoots;
@@ -53,6 +59,9 @@ internal sealed class P12EDailyV1OwnerStagingContext
         HiddenStatus = hiddenStatus;
         DomainEventRecorder = domainEventRecorder;
         Logger = logger;
+        Application = application;
+        ExpectedSession = expectedSession;
+        ReplacementOperation = replacementOperation;
     }
 }
 
@@ -510,11 +519,32 @@ internal sealed class P12EDailyV1OwnerPackage
             P12ACrimeReceiptOwnerSnapshot crimeReceiptSnapshot = decoded.CrimeReceipts;
             P12AJusticeReceiptOwnerSnapshot justiceReceiptSnapshot = decoded.JusticeReceipts;
 
-            if (!TryStageCoreOwnerRestore(institutionOfficeSnapshot, propertyEstateSnapshot,
+            bool coreOwnerStageAccepted;
+            P12ECoreOwnerRestoreStage coreOwnerStage;
+            if (context.Application != null)
+            {
+                coreOwnerStageAccepted = context.Application.TryStageRestoredP12EOwners(
+                    stagedC.CoreRoot, institutionOfficeSnapshot, propertyEstateSnapshot,
                     factionSnapshot, claimSnapshot, supportSnapshot, decisionSnapshot,
                     justiceSnapshot, stagedD.Persons, stagedD.SelectedCityOwners,
-                    stagedD.SelectedNpcOwners, day, stageObserver,
-                    out P12ECoreOwnerRestoreStage coreOwnerStage))
+                    stagedD.SelectedNpcOwners, day, context.ExpectedSession,
+                    context.ReplacementOperation,
+                    out coreOwnerStage, out _,
+                    step => ObserveCoreOwnerRestoreStep(stageObserver, step));
+            }
+            else
+            {
+                // Lower-level restore coordinator tests intentionally exercise
+                // detached staging without an application publication gate.
+                // The same authoritative Core stager still creates these owners.
+                coreOwnerStageAccepted = DailyV1P12ECoreOwnerRestoreStager.TryStage(
+                    institutionOfficeSnapshot, propertyEstateSnapshot, factionSnapshot,
+                    claimSnapshot, supportSnapshot, decisionSnapshot, justiceSnapshot,
+                    stagedD.Persons, stagedD.SelectedCityOwners, stagedD.SelectedNpcOwners,
+                    day, step => ObserveCoreOwnerRestoreStep(stageObserver, step),
+                    out coreOwnerStage, out _);
+            }
+            if (!coreOwnerStageAccepted || coreOwnerStage == null)
                 return StageFailed(out failure);
             InstitutionStore stagedInstitutions = coreOwnerStage.Institutions;
             OfficeStore stagedOffices = coreOwnerStage.Offices;
