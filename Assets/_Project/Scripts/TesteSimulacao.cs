@@ -384,7 +384,7 @@ public class TesteSimulacao : MonoBehaviour
                 + restoreFailure + ": " + restoreDiagnostic);
             return true;
         }
-        if (!TryPublishRestoredSession(null, candidate))
+        if (!TryPublishRestoredSession(null, candidate, null, image))
         {
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A detached continuation passed private validation but bootstrap publication failed; genesis was not started.");
@@ -1106,7 +1106,8 @@ public class TesteSimulacao : MonoBehaviour
     private bool TryPublishRestoredSession(
         SimulationActiveSession expectedSession,
         SimulationActiveSession candidateSession,
-        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation,
+        P12AContinuationImage initialSourceImage = null)
     {
         if (candidateSession == null)
             return false;
@@ -1160,7 +1161,8 @@ public class TesteSimulacao : MonoBehaviour
             {
                 if (dailyV1Application.ActiveSession != null) return false;
                 return TryCommitCoreRestoredCandidateWithProjection(
-                    null, candidateCoreSession, null, candidateSession, exclusiveOperation);
+                    null, candidateCoreSession, null, candidateSession, exclusiveOperation,
+                    initialSourceImage);
             }
 
             if (expectedCoreSession == null
@@ -1169,7 +1171,8 @@ public class TesteSimulacao : MonoBehaviour
                 return false;
 
             return TryCommitCoreRestoredCandidateWithProjection(
-                expectedCoreSession, candidateCoreSession, expectedSession, candidateSession, exclusiveOperation);
+                expectedCoreSession, candidateCoreSession, expectedSession, candidateSession,
+                exclusiveOperation, initialSourceImage);
         }
     }
 
@@ -1178,7 +1181,8 @@ public class TesteSimulacao : MonoBehaviour
         DailyV1ActiveRuntimeSession candidateCoreSession,
         SimulationActiveSession expectedProjection,
         SimulationActiveSession candidateProjection,
-        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation,
+        P12AContinuationImage initialSourceImage)
     {
         if (candidateCoreSession == null || candidateProjection == null
             || activeSessionProjections.ContainsKey(candidateCoreSession))
@@ -1197,6 +1201,11 @@ public class TesteSimulacao : MonoBehaviour
 
         if (!dailyV1Application.TryBindRuntimeAdvanceBoundary(
                 candidateCoreSession, candidateProjection.Runtime))
+            return false;
+
+        if (expectedCoreSession == null
+            && !dailyV1Application.TryAuthorizeInitialRestoredCandidate(
+                initialSourceImage, candidateCoreSession))
             return false;
 
         // Register the host projection before the Core exchange. Both writes

@@ -1041,7 +1041,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void CoreRestoreCommitRechecksCandidateCensusBeforeInitialPublication()
+    public void CoreRestoreInitialPublicationRequiresTheExactApplicationLoadedImage()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1Application application = new DailyV1Application();
@@ -1092,8 +1092,10 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         boundary.SetAdmissionEvidence(ownerSections, 23L);
         Assert.That(application.TryCommitRestoredCandidate(
-            null, candidate, null, out diagnostic), Is.True, diagnostic);
-        Assert.That(application.ActiveSession, Is.SameAs(candidate));
+            null, candidate, null, out diagnostic), Is.False,
+            "Fresh target census alone cannot replace proof that the application loaded this exact initial P12 image.");
+        Assert.That(diagnostic, Does.Contain("successfully loaded P12 continuation image"));
+        Assert.That(application.ActiveSession, Is.Null);
         Assert.That(boundary.RequestedSessionReplacement, Is.EqualTo(false));
     }
 
@@ -1104,6 +1106,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application application = new DailyV1Application();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(
             out SimulationRuntimeAdmissionContext bootstrapAdmission), Is.True);
+        AssertInitialNoSaveWasProven(application);
         Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
             definitions, bootstrapAdmission, out DailyV1GenesisComposition sourceComposition,
             out string diagnostic), Is.True, diagnostic);
@@ -1138,8 +1141,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         ApplicationAdvanceBoundary sourceBoundary = new ApplicationAdvanceBoundary(
             sourceState, null, sourceOwners, sourceEpoch);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(sourceSession, sourceBoundary), Is.True);
-        Assert.That(application.TryCommitRestoredCandidate(
-            null, sourceSession, null, out diagnostic), Is.True, diagnostic);
+        Assert.That(application.TryPublishInitial(sourceSession), Is.True,
+            "The replacement test publishes its synthetic source boundary after the explicit NoSave fixture proof.");
         Assert.That(application.ActiveSession, Is.SameAs(sourceSession));
 
         SimulationRuntimeAdmissionContext candidateAdmission =

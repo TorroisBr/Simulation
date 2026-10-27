@@ -53,6 +53,8 @@ internal sealed class DailyV1Application
     private string initialContinuationSlotRoot;
     private IAtomicFileSlotOperations initialContinuationSlotFileOperations;
     private bool initialContinuationLoadAttempted;
+    private P12AContinuationImage initialContinuationLoadedImage;
+    private DailyV1ActiveRuntimeSession authorizedInitialRestoredCandidate;
     private bool initialContinuationLoadBlocksGenesis;
     private bool initialGenesisPreparationAttempted;
     private DailyV1GenesisComposition preparedInitialGenesis;
@@ -953,11 +955,55 @@ internal sealed class DailyV1Application
         {
             initialContinuationSlotRoot = null;
             initialContinuationSlotFileOperations = null;
+            initialContinuationLoadedImage = loaded && image != null ? image : null;
         }
 
         if (!loaded)
             image = null;
         return loaded;
+    }
+
+    /// <summary>
+    /// Binds an initial restored candidate to the exact image that this
+    /// application successfully read from its inspected P12 slot. Detached
+    /// restore may still be used for validation without an application slot;
+    /// only a candidate carrying this application-local authorization can be
+    /// published as the application's initial restored session.
+    /// </summary>
+    internal bool TryAuthorizeInitialRestoredCandidate(
+        P12AContinuationImage image,
+        DailyV1ActiveRuntimeSession candidate)
+    {
+        if (image == null || candidate == null) return false;
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            SimulationRuntimeAdmissionContext candidateAdmission = candidate.AdmissionContext;
+            if (activeSessionGate.Current != null
+                || activeSessionGate.ActiveOperationCount != 0
+                || initialGenesisPreparationAttempted
+                || preparedInitialGenesis != null
+                || preparedInitialSession != null
+                || !initialContinuationSlotProbeAttempted
+                || !initialContinuationSlotProbeSucceeded
+                || !initialContinuationSlotExists
+                || !initialContinuationLoadAttempted
+                || !ReferenceEquals(initialContinuationLoadedImage, image)
+                || bootstrapAdmissionContext == null
+                || !bootstrapAdmissionContext.IsOwnedByCurrentThread()
+                || candidateAdmission == null
+                || !candidateAdmission.IsRestoredContinuation
+                || !candidateAdmission.IsOwnedByCurrentThread()
+                || !IsBootstrapOrRestoredDescendant(candidateAdmission)
+                || !candidate.ExecutionBoundaryState.IsHealthyDailyOwnerThreadBoundary()
+                || !candidate.ExecutionBoundaryState.HasValidRestoredDailyBoundaryAdmission(
+                    candidate.RuntimeAdvanceBoundary)
+                || candidate.ExecutionBoundaryState.ActiveOperationCount != 0)
+                return false;
+
+            authorizedInitialRestoredCandidate = candidate;
+            return true;
+        }
     }
 
     /// <summary>
@@ -1500,12 +1546,16 @@ internal sealed class DailyV1Application
                     || initialGenesisPreparationAttempted
                     || preparedInitialGenesis != null
                     || preparedInitialSession != null
+                    || initialContinuationLoadedImage == null
+                    || !ReferenceEquals(authorizedInitialRestoredCandidate, candidate)
                     || !activeSessionGate.TryPublishInitial(candidate))
                 {
-                    diagnostic = "Initial restore requires an unused Core application and a candidate with no replacement reservation.";
+                    diagnostic = "Initial restore requires the exact candidate staged from this application's successfully loaded P12 continuation image.";
                     return false;
                 }
 
+                initialContinuationLoadedImage = null;
+                authorizedInitialRestoredCandidate = null;
                 return true;
             }
 
