@@ -143,7 +143,11 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     Array.Empty<DailyV1ExplorableSiteDefinition>(), stagedPartyIds,
                     out P12DDailyV1OwnerPackage stagedD,
                     out P12DDailyV1OwnerPackageFailure dFailure,
-                    selectedDefinitions)
+                    selectedDefinitions,
+                    application,
+                    stagedC.CoreRoot,
+                    replacementOperation?.ExpectedSession,
+                    replacementOperation)
                 || stagedD == null || stagedD.StagingAttempt != null)
             {
                 failure = P12GDailyV1RestoreFailure.OwnerStageFailed;

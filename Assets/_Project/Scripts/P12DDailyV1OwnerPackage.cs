@@ -437,7 +437,11 @@ internal sealed class P12DDailyV1OwnerPackage
         IReadOnlyList<string> stagedTravelPartyIds,
         out P12DDailyV1OwnerPackage package,
         out P12DDailyV1OwnerPackageFailure failure,
-        DailyV1EffectiveDefinitions selectedDefinitions = null)
+        DailyV1EffectiveDefinitions selectedDefinitions = null,
+        DailyV1Application application = null,
+        P12CStagedCoreContinuationRoot stagedCoreRoots = null,
+        DailyV1ActiveRuntimeSession expectedSession = null,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
     {
         package = null;
         failure = P12DDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -515,11 +519,24 @@ internal sealed class P12DDailyV1OwnerPackage
                 selectedNpcInputs.Add(input);
             }
 
-            if (!DailyV1P12DSelectedCoreOwnerStager.TryCreate(
+            bool selectedCoreStageAccepted;
+            if (application != null)
+            {
+                selectedCoreStageAccepted = application.TryStageRestoredP12DOwners(
+                    stagedCoreRoots, selectedDefinitions, selectedCityInputs, selectedNpcInputs,
+                    stagedSpatialNetwork.SelectedOwner, stagedTravelPartyIds,
+                    expectedSession, replacementOperation,
+                    out selectedCoreOwnerStage, out _);
+            }
+            else
+            {
+                selectedCoreStageAccepted = DailyV1P12DSelectedCoreOwnerStager.TryCreate(
                     selectedDefinitions, selectedCityInputs, selectedNpcInputs,
                     stagedSpatialNetwork.SelectedOwner, stagedTravelPartyIds,
-                    out selectedCoreOwnerStage, out _)
-                || selectedCoreOwnerStage == null)
+                    out selectedCoreOwnerStage, out _);
+            }
+
+            if (!selectedCoreStageAccepted || selectedCoreOwnerStage == null)
             { failure = P12DDailyV1OwnerPackageFailure.InvalidRelation; return false; }
         }
 

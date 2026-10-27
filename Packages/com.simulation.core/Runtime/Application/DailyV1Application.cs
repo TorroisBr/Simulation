@@ -714,36 +714,8 @@ internal sealed class DailyV1Application
     {
         stagedRoots = null;
         result = new P12AResult(P12AResultCode.Busy);
-
-        bool initialRestore = expectedSession == null && replacementOperation == null;
-        if (initialRestore)
-        {
-            if (bootstrapAdmissionContext == null
-                || !bootstrapAdmissionContext.IsOwnedByCurrentThread()
-                || activeSessionGate.Current != null
-                || activeSessionGate.ActiveOperationCount != 0
-                || initialGenesisPreparationAttempted
-                || preparedInitialGenesis != null
-                || preparedInitialSession != null)
-                return false;
-        }
-        else
-        {
-            DailyV1ExecutionBoundaryState sourceState = expectedSession?.ExecutionBoundaryState;
-            IDailyV1RuntimeAdvanceEvidenceBoundary sourceBoundary = expectedSession?.RuntimeAdvanceBoundary;
-            if (expectedSession == null || replacementOperation == null
-                || !replacementOperation.IsOwnedByCurrentThread()
-                || !ReferenceEquals(replacementOperation.ExpectedSession, expectedSession)
-                || !ReferenceEquals(activeSessionGate.Current, expectedSession)
-                || !replacementOperation.AuthorizesSessionReplacementCapture(sourceState)
-                || activeSessionGate.ActiveOperationCount != 0
-                || sourceBoundary == null
-                || !ReferenceEquals(sourceBoundary.ExecutionState, sourceState)
-                || !sourceState.IsHealthyDailyOwnerThreadBoundary()
-                || !sourceState.HasValidCompletedDailyBoundaryAdmission(
-                    sourceBoundary, sessionReplacement: true))
-                return false;
-        }
+        if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+            return false;
 
         if (image == null)
         {
@@ -779,6 +751,85 @@ internal sealed class DailyV1Application
 
         result = null;
         return true;
+    }
+
+    /// <summary>
+    /// Stages the selected Core-owned P12-D City/NPC owner vectors under the
+    /// same bootstrap or exact-session replacement authority as the P12-C
+    /// roots. Unity supplies detached value rows and the already staged legacy
+    /// spatial owner; Core creates and validates the authoritative selected
+    /// City/NPC owners before the host builds compatibility projections.
+    /// </summary>
+    internal bool TryStageRestoredP12DOwners(
+        P12CStagedCoreContinuationRoot stagedRoots,
+        DailyV1EffectiveDefinitions definitions,
+        IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cityInputs,
+        IReadOnlyList<DailyV1P12DNpcCoreOwnerHydrationInput> npcInputs,
+        SpatialNetworkOwner spatialNetwork,
+        IEnumerable<string> travelPartyIds,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out DailyV1P12DSelectedCoreOwnerStage stagedOwners,
+        out P12AResult result)
+    {
+        stagedOwners = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+            return false;
+
+        if (stagedRoots == null || !stagedRoots.IsDetached || definitions == null
+            || cityInputs == null || npcInputs == null || spatialNetwork == null
+            || travelPartyIds == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        if (!DailyV1P12DSelectedCoreOwnerStager.TryCreate(
+                definitions, cityInputs, npcInputs, spatialNetwork, travelPartyIds,
+                out stagedOwners, out _)
+            || stagedOwners == null)
+        {
+            stagedOwners = null;
+            result = new P12AResult(
+                P12AResultCode.OwnerGraphRejected,
+                "p12d.selected-core-owners");
+            return false;
+        }
+
+        result = null;
+        return true;
+    }
+
+    private bool HasRestoredContinuationStagingAuthority(
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation)
+    {
+        bool initialRestore = expectedSession == null && replacementOperation == null;
+        if (initialRestore)
+        {
+            return bootstrapAdmissionContext != null
+                && bootstrapAdmissionContext.IsOwnedByCurrentThread()
+                && activeSessionGate.Current == null
+                && activeSessionGate.ActiveOperationCount == 0
+                && !initialGenesisPreparationAttempted
+                && preparedInitialGenesis == null
+                && preparedInitialSession == null;
+        }
+
+        DailyV1ExecutionBoundaryState sourceState = expectedSession?.ExecutionBoundaryState;
+        IDailyV1RuntimeAdvanceEvidenceBoundary sourceBoundary = expectedSession?.RuntimeAdvanceBoundary;
+        return expectedSession != null && replacementOperation != null
+            && replacementOperation.IsOwnedByCurrentThread()
+            && ReferenceEquals(replacementOperation.ExpectedSession, expectedSession)
+            && ReferenceEquals(activeSessionGate.Current, expectedSession)
+            && replacementOperation.AuthorizesSessionReplacementCapture(sourceState)
+            && activeSessionGate.ActiveOperationCount == 0
+            && sourceBoundary != null
+            && ReferenceEquals(sourceBoundary.ExecutionState, sourceState)
+            && sourceState.IsHealthyDailyOwnerThreadBoundary()
+            && sourceState.HasValidCompletedDailyBoundaryAdmission(
+                sourceBoundary, sessionReplacement: true);
     }
 
     /// <summary>
