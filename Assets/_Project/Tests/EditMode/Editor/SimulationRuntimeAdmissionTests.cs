@@ -3542,13 +3542,19 @@ public sealed class SimulationRuntimeAdmissionTests
                 "TryPublishRestoredSession",
                 BindingFlags.Instance | BindingFlags.NonPublic,
                 null,
-                new[] { typeof(SimulationActiveSession), typeof(SimulationActiveSession), exclusiveOperation.GetType() },
+                new[]
+                {
+                    typeof(SimulationActiveSession),
+                    typeof(SimulationActiveSession),
+                    exclusiveOperation.GetType(),
+                    typeof(P12AContinuationImage)
+                },
                 null);
             Assert.That(commitRestored, Is.Not.Null);
             using ((IDisposable)exclusiveOperation)
             {
                 Assert.That((bool)commitRestored.Invoke(
-                    activeOwner, new[] { sourceSession, candidateSession, exclusiveOperation }), Is.True,
+                    activeOwner, new object[] { sourceSession, candidateSession, exclusiveOperation, null }), Is.True,
                     "An admitted restored candidate may publish under its exact idle owner-thread reservation.");
             }
             Assert.That(ReadPrivateField<SimulationActiveSession>(activeOwner, "activeSession"), Is.SameAs(candidateSession));
