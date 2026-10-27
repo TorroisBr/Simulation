@@ -105,7 +105,10 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
 
             stageObserver?.Invoke(P12GDailyV1RestoreStage.SourceCaptured);
-            if (!P12ACausalRootImageAdapter.TryStage(image,
+            if (!P12ACausalRootImageAdapter.TryStage(application,
+                    replacementOperation?.ExpectedSession,
+                    replacementOperation,
+                    image,
                     out P12CStagedContinuationRoot stagedC, out imageResult, stageObserver)
                 || stagedC == null || !stagedC.IsDetached)
             {

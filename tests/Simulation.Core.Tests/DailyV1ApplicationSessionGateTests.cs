@@ -2145,4 +2145,38 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(fileOperations.OpenReadCount, Is.EqualTo(2),
             "Both descriptor variants must use the exact reserved application session and the same read-only slot operation.");
     }
+
+    [Test]
+    public void ContinuationRootStagingRequiresExactReservedSessionBeforeInspectingImage()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        InstallCompletedBoundaryToken(session, boundary);
+        int observedStages = 0;
+
+        Assert.That(application.TryStageRestoredContinuationRoots(
+                null, session, null,
+                out P12CStagedCoreContinuationRoot unreservedRoots,
+                out P12AResult unreservedResult,
+                _ => observedStages++), Is.False);
+        Assert.That(unreservedRoots, Is.Null);
+        Assert.That(unreservedResult.Code, Is.EqualTo(P12AResultCode.Busy),
+            "Without the exact replacement reservation, Core must reject before inspecting the image.");
+        Assert.That(observedStages, Is.Zero);
+
+        Assert.That(application.TryBeginExclusiveOperation(session, out var replacement), Is.True);
+        using (replacement)
+        {
+            Assert.That(application.TryStageRestoredContinuationRoots(
+                    null, session, replacement,
+                    out P12CStagedCoreContinuationRoot reservedRoots,
+                    out P12AResult reservedResult,
+                    _ => observedStages++), Is.False);
+            Assert.That(reservedRoots, Is.Null);
+            Assert.That(reservedResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue),
+                "Only after source authorization may Core reject a missing detached image as malformed input.");
+            Assert.That(observedStages, Is.Zero);
+        }
+    }
 }

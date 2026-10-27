@@ -697,6 +697,91 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
+    /// Stages the detached P12-C roots for an image through this application.
+    /// Replacement staging is bound to the exact published session and its
+    /// owner-thread reservation; initial restoration is accepted only by an
+    /// unused application on its captured bootstrap thread. The host receives
+    /// only the staged Core root and may create a Unity compatibility
+    /// projection, but does not choose or reconstruct the authoritative roots.
+    /// </summary>
+    internal bool TryStageRestoredContinuationRoots(
+        P12AContinuationImage image,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out P12CStagedCoreContinuationRoot stagedRoots,
+        out P12AResult result,
+        Action<string> stageCompleted = null)
+    {
+        stagedRoots = null;
+        result = new P12AResult(P12AResultCode.Busy);
+
+        bool initialRestore = expectedSession == null && replacementOperation == null;
+        if (initialRestore)
+        {
+            if (bootstrapAdmissionContext == null
+                || !bootstrapAdmissionContext.IsOwnedByCurrentThread()
+                || activeSessionGate.Current != null
+                || activeSessionGate.ActiveOperationCount != 0
+                || initialGenesisPreparationAttempted
+                || preparedInitialGenesis != null
+                || preparedInitialSession != null)
+                return false;
+        }
+        else
+        {
+            DailyV1ExecutionBoundaryState sourceState = expectedSession?.ExecutionBoundaryState;
+            IDailyV1RuntimeAdvanceEvidenceBoundary sourceBoundary = expectedSession?.RuntimeAdvanceBoundary;
+            if (expectedSession == null || replacementOperation == null
+                || !replacementOperation.IsOwnedByCurrentThread()
+                || !ReferenceEquals(replacementOperation.ExpectedSession, expectedSession)
+                || !ReferenceEquals(activeSessionGate.Current, expectedSession)
+                || !replacementOperation.AuthorizesSessionReplacementCapture(sourceState)
+                || activeSessionGate.ActiveOperationCount != 0
+                || sourceBoundary == null
+                || !ReferenceEquals(sourceBoundary.ExecutionState, sourceState)
+                || !sourceState.IsHealthyDailyOwnerThreadBoundary()
+                || !sourceState.HasValidCompletedDailyBoundaryAdmission(
+                    sourceBoundary, sessionReplacement: true))
+                return false;
+        }
+
+        if (image == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        if (!P12ACausalRootImageCodec.TryDecode(
+                image, out P12ACausalRootImageSnapshots snapshots, out result)
+            || snapshots == null)
+            return false;
+
+        if (!P12CSelectedCoreRootStager.TryStage(
+                snapshots.WorldIdentity,
+                snapshots.Allocator,
+                snapshots.RecordSequence,
+                snapshots.SpatialAuthority,
+                snapshots.P9Manifest,
+                snapshots.RandomRoot,
+                isDetached: true,
+                stageObserver: stageCompleted,
+                out stagedRoots,
+                out _)
+            || stagedRoots == null
+            || !stagedRoots.IsDetached)
+        {
+            stagedRoots = null;
+            result = new P12AResult(
+                P12AResultCode.OwnerGraphRejected,
+                "p12c.continuation-roots");
+            return false;
+        }
+
+        result = null;
+        return true;
+    }
+
+    /// <summary>
     /// Associates an unpublished or replacement Core session with the exact
     /// host boundary built for its execution state. Once published, the
     /// session's boundary is immutable; advances resolve it from the session
