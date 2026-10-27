@@ -857,9 +857,7 @@ public sealed class SimulationBootstrapCompositionTests
         ContinuationCensusProtocol censusProtocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
             .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(runtime);
-        HashSet<string> expectedOperations = (HashSet<string>)typeof(ContinuationCensusProtocol)
-            .GetField("expectedOperations", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(censusProtocol);
+        IReadOnlyCollection<string> expectedOperations = censusProtocol.RegisteredOperationContractIds;
         Assert.That(expectedOperations, Does.Contain("p12.institution-office.owner-commit"));
         Assert.That(expectedOperations, Does.Contain("p12.faction.owner-commit"));
         Assert.That(expectedOperations, Does.Contain("p12.political-claim.owner-commit"));

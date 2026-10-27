@@ -27,12 +27,17 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private readonly object operationSyncRoot = new object();
     private readonly List<DailyV1OperationScopeKind> activeOperationScopes =
         new List<DailyV1OperationScopeKind>();
+    private readonly HashSet<string> expectedRuntimeProtocolOperationContracts =
+        new HashSet<string>(StringComparer.Ordinal);
+    private readonly List<string> activeRuntimeProtocolOperationContracts =
+        new List<string>();
     private readonly DailyV1MutationEpochState mutationEpochState =
         new DailyV1MutationEpochState();
     private readonly AuthoritativeMutationGuard mutationGuard =
         new AuthoritativeMutationGuard();
     private bool runtimeIdentityBound;
     private bool runtimeConfigurationBound;
+    private bool runtimeProtocolOperationInventorySealed;
     private bool exclusiveSessionReplacementInProgress;
     private DailyV1AdvanceLease advanceLease;
     private long advanceLeaseInitialCompletedSequence;
@@ -141,6 +146,44 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    internal bool HasRegisteredRuntimeProtocolOperationContracts
+    {
+        get
+        {
+            lock (operationSyncRoot)
+                return expectedRuntimeProtocolOperationContracts.Count > 0;
+        }
+    }
+
+    internal bool HasRuntimeProtocolOperationInventory
+    {
+        get
+        {
+            lock (operationSyncRoot)
+                return runtimeProtocolOperationInventorySealed
+                    && expectedRuntimeProtocolOperationContracts.Count > 0;
+        }
+    }
+
+    internal bool HasRuntimeProtocolOperationContract(string operationContractId)
+    {
+        if (string.IsNullOrWhiteSpace(operationContractId)) return false;
+        lock (operationSyncRoot)
+            return runtimeProtocolOperationInventorySealed
+                && expectedRuntimeProtocolOperationContracts.Contains(operationContractId);
+    }
+
+    internal IReadOnlyList<string> GetRuntimeProtocolOperationContractIds()
+    {
+        lock (operationSyncRoot)
+        {
+            List<string> operationContractIds =
+                new List<string>(expectedRuntimeProtocolOperationContracts);
+            operationContractIds.Sort(StringComparer.Ordinal);
+            return operationContractIds.AsReadOnly();
+        }
+    }
+
     internal bool TryBeginOperation(DailyV1OperationScopeKind kind = DailyV1OperationScopeKind.Application)
     {
         lock (operationSyncRoot)
@@ -165,6 +208,54 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || !Enum.IsDefined(typeof(DailyV1OperationScopeKind), kind))
                 return false;
             return TryRemoveOperationScope(kind);
+        }
+    }
+
+    /// <summary>
+    /// Records one runtime operation during selected-profile bootstrap. The
+    /// complete supported inventory is sealed before Core will admit any ID.
+    /// </summary>
+    internal bool TryRegisterRuntimeProtocolOperationContract(string operationContractId)
+    {
+        if (string.IsNullOrWhiteSpace(operationContractId)) return false;
+        lock (operationSyncRoot)
+        {
+            if (runtimeProtocolOperationInventorySealed
+                || activeOperationScopes.Count != 0
+                || exclusiveSessionReplacementInProgress
+                || AdmissionContext == null
+                || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !runtimeIdentityBound
+                || !runtimeConfigurationBound
+                || !AdmissionContext.IsOwnedByCurrentThread())
+                return false;
+
+            return expectedRuntimeProtocolOperationContracts.Add(operationContractId);
+        }
+    }
+
+    /// <summary>
+    /// Seals the Core-owned allowlist only when it exactly matches one complete
+    /// supported selected-runtime catalogue.
+    /// </summary>
+    internal bool TrySealRuntimeProtocolOperationInventory()
+    {
+        lock (operationSyncRoot)
+        {
+            if (runtimeProtocolOperationInventorySealed
+                || activeOperationScopes.Count != 0
+                || exclusiveSessionReplacementInProgress
+                || AdmissionContext == null
+                || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !runtimeIdentityBound
+                || !runtimeConfigurationBound
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !DailyV1RuntimeProtocolOperationContracts.IsSupportedSelectedOperationInventory(
+                    expectedRuntimeProtocolOperationContracts))
+                return false;
+
+            runtimeProtocolOperationInventorySealed = true;
+            return true;
         }
     }
 
@@ -223,14 +314,21 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
-    internal bool TryBeginRuntimeProtocolOperation()
+    internal bool TryBeginRuntimeProtocolOperation(string operationContractId)
     {
         lock (operationSyncRoot)
         {
             if (exclusiveSessionReplacementInProgress
-                || AdmissionContext == null || !AdmissionContext.IsOwnedByCurrentThread())
+                || AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !runtimeProtocolOperationInventorySealed
+                || string.IsNullOrWhiteSpace(operationContractId)
+                || !expectedRuntimeProtocolOperationContracts.Contains(operationContractId)
+                || activeRuntimeProtocolOperationContracts.Count == int.MaxValue)
                 return false;
-            return TryAddOperationScope(DailyV1OperationScopeKind.RuntimeProtocol);
+            if (!TryAddOperationScope(DailyV1OperationScopeKind.RuntimeProtocol)) return false;
+            activeRuntimeProtocolOperationContracts.Add(operationContractId);
+            return true;
         }
     }
 
@@ -238,9 +336,14 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     {
         lock (operationSyncRoot)
         {
-            if (AdmissionContext == null || !AdmissionContext.IsOwnedByCurrentThread())
+            if (AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || activeRuntimeProtocolOperationContracts.Count == 0
+                || !TryRemoveOperationScope(DailyV1OperationScopeKind.RuntimeProtocol))
                 return false;
-            return TryRemoveOperationScope(DailyV1OperationScopeKind.RuntimeProtocol);
+            activeRuntimeProtocolOperationContracts.RemoveAt(
+                activeRuntimeProtocolOperationContracts.Count - 1);
+            return true;
         }
     }
 

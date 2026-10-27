@@ -54,8 +54,7 @@ public sealed class GenealogyCensusTests
         IDictionary expectedSections = (IDictionary)typeof(ContinuationCensusProtocol).GetField(
             "expectedSections", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(protocol);
         Assert.That(expectedSections.Count, Is.EqualTo(299));
-        HashSet<string> expectedOperations = (HashSet<string>)typeof(ContinuationCensusProtocol).GetField(
-            "expectedOperations", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(protocol);
+        IReadOnlyCollection<string> expectedOperations = protocol.RegisteredOperationContractIds;
         Assert.That(expectedOperations.Count, Is.EqualTo(24));
         Assert.That(expectedOperations, Does.Contain("runtime.person.parentage"));
 

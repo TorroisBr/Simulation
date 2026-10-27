@@ -64,6 +64,45 @@ internal static class DailyV1RuntimeProtocolOperationContracts
         operationContractIds.Add(PersonResidenceBind);
         return operationContractIds.AsReadOnly();
     }
+
+    /// <summary>
+    /// Accepts only a complete selected-runtime inventory emitted by this Core
+    /// catalogue. A host may register the IDs during composition, but it cannot
+    /// admit a partial or host-invented operation set.
+    /// </summary>
+    internal static bool IsSupportedSelectedOperationInventory(
+        IEnumerable<string> operationContractIds)
+    {
+        if (operationContractIds == null) return false;
+
+        HashSet<string> supplied = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string operationContractId in operationContractIds)
+            if (string.IsNullOrWhiteSpace(operationContractId)
+                || !supplied.Add(operationContractId)) return false;
+
+        if (supplied.Count == 0) return false;
+        for (int travelParty = 0; travelParty <= 1; travelParty++)
+        for (int travel = 0; travel <= 1; travel++)
+        {
+            IReadOnlyList<string> expected = GetExpectedOperationContractIds(
+                hasRuntimeAdmission: true,
+                hasTravelPartySystem: travelParty == 1,
+                hasTravelSystem: travel == 1);
+            if (expected.Count != supplied.Count) continue;
+
+            bool matches = true;
+            foreach (string operationContractId in expected)
+                if (!supplied.Contains(operationContractId))
+                {
+                    matches = false;
+                    break;
+                }
+
+            if (matches) return true;
+        }
+
+        return false;
+    }
 }
 
 /// <summary>

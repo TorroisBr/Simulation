@@ -228,6 +228,23 @@ public sealed class ContinuationCensusProtocol
         ? sharedExecutionState.ActiveRuntimeOperationCount
         : standaloneActiveOperationCount;
     internal int ActiveOperationCount => activeOperationCount;
+    private bool hasRegisteredOperationInventory => sharedExecutionState != null
+        ? sharedExecutionState.HasRegisteredRuntimeProtocolOperationContracts
+        : expectedOperations.Count > 0;
+    private bool hasExpectedOperationInventory => sharedExecutionState != null
+        ? sharedExecutionState.HasRuntimeProtocolOperationInventory
+        : expectedOperations.Count > 0;
+    internal IReadOnlyCollection<string> RegisteredOperationContractIds
+    {
+        get
+        {
+            if (sharedExecutionState != null)
+                return sharedExecutionState.GetRuntimeProtocolOperationContractIds();
+            List<string> operationContractIds = new List<string>(expectedOperations);
+            operationContractIds.Sort(StringComparer.Ordinal);
+            return operationContractIds.AsReadOnly();
+        }
+    }
     private readonly DailyV1MutationEpochState mutationEpochState;
     internal DailyV1MutationEpochState MutationEpochState => mutationEpochState;
     private DailyV1MutationEpochReservation activeMutationEpochReservation =>
@@ -1040,7 +1057,10 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
         }
-        if (!expectedOperations.Add(operationContractId))
+        bool registered = sharedExecutionState != null
+            ? sharedExecutionState.TryRegisterRuntimeProtocolOperationContract(operationContractId)
+            : expectedOperations.Add(operationContractId);
+        if (!registered)
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -1064,7 +1084,13 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
         }
-        if (operationsSealed || expectedOperations.Count == 0)
+        if (operationsSealed || !hasRegisteredOperationInventory)
+        {
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        if (sharedExecutionState != null
+            && !sharedExecutionState.TrySealRuntimeProtocolOperationInventory())
         {
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1095,7 +1121,7 @@ public sealed class ContinuationCensusProtocol
         }
 
         if (!expectedSectionsSealed || !providersSealed || !operationsSealed
-            || expectedSections.Count == 0 || expectedOperations.Count == 0)
+            || expectedSections.Count == 0 || !hasExpectedOperationInventory)
         {
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -2214,7 +2240,11 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        if (!expectedOperations.Contains(operationContractId ?? string.Empty))
+        string requestedOperationContractId = operationContractId ?? string.Empty;
+        bool operationRegistered = sharedExecutionState != null
+            ? sharedExecutionState.HasRuntimeProtocolOperationContract(requestedOperationContractId)
+            : expectedOperations.Contains(requestedOperationContractId);
+        if (!operationRegistered)
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -2230,7 +2260,7 @@ public sealed class ContinuationCensusProtocol
 
         if (sharedExecutionState != null)
         {
-            if (!sharedExecutionState.TryBeginRuntimeProtocolOperation())
+            if (!sharedExecutionState.TryBeginRuntimeProtocolOperation(requestedOperationContractId))
             {
                 Fault();
                 failure = ContinuationCensusFailure.ProtocolFaulted;
@@ -2250,7 +2280,7 @@ public sealed class ContinuationCensusProtocol
     public bool TryReadActiveOperationCount(out int count, out ContinuationCensusFailure failure)
     {
         count = 0;
-        if (!operationsSealed || expectedOperations.Count == 0)
+        if (!operationsSealed || !hasExpectedOperationInventory)
         {
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -2267,7 +2297,7 @@ public sealed class ContinuationCensusProtocol
     /// </summary>
     public bool TryAssessRegisteredOperationQuiescence(out ContinuationCensusFailure failure)
     {
-        if (!operationsSealed || expectedOperations.Count == 0)
+        if (!operationsSealed || !hasExpectedOperationInventory)
         {
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -2320,7 +2350,7 @@ public sealed class ContinuationCensusProtocol
             || !providersSealed
             || expectedSections.Count == 0
             || !operationsSealed
-            || expectedOperations.Count == 0)
+            || !hasExpectedOperationInventory)
         {
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;

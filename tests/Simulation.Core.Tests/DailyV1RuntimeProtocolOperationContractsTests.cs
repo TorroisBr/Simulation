@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 
@@ -78,5 +79,75 @@ public sealed class DailyV1RuntimeProtocolOperationContractsTests
 
         CollectionAssert.AreEqual(
             new[] { "runtime.npc-membership" }, operationContractIds);
+    }
+    [TestCase(false, false)]
+    [TestCase(true, false)]
+    [TestCase(false, true)]
+    [TestCase(true, true)]
+    public void CoreExecutionBoundarySealsAndEnforcesItsCompleteOperationInventory(
+        bool hasTravelPartySystem,
+        bool hasTravelSystem)
+    {
+        DailyV1ExecutionBoundaryState state = CreateAdmittedExecutionState();
+        IReadOnlyList<string> operationContractIds =
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                true, hasTravelPartySystem, hasTravelSystem);
+
+        foreach (string operationContractId in operationContractIds)
+            Assert.That(state.TryRegisterRuntimeProtocolOperationContract(operationContractId), Is.True,
+                "Core must accept each unique operation from its selected catalogue.");
+
+        Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
+        Assert.That(state.HasRuntimeProtocolOperationInventory, Is.True);
+        Assert.That(state.HasRuntimeProtocolOperationContract(operationContractIds[0]), Is.True);
+        Assert.That(state.HasRuntimeProtocolOperationContract("host.invented-operation"), Is.False);
+        Assert.That(state.TryBeginRuntimeProtocolOperation("host.invented-operation"), Is.False);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+
+        Assert.That(state.TryBeginRuntimeProtocolOperation(operationContractIds[0]), Is.True);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.EqualTo(1));
+        Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.False,
+            "A Core-active operation must prevent a capture from appearing quiescent.");
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.True);
+    }
+
+    [Test]
+    public void CoreOperationInventoryRejectsDuplicatesAndIncompleteOrMixedSets()
+    {
+        DailyV1ExecutionBoundaryState duplicateState = CreateAdmittedExecutionState();
+        string first = DailyV1RuntimeProtocolOperationContracts.NpcMembership;
+        Assert.That(duplicateState.TryRegisterRuntimeProtocolOperationContract(first), Is.True);
+        Assert.That(duplicateState.TryRegisterRuntimeProtocolOperationContract(first), Is.False);
+        Assert.That(duplicateState.TrySealRuntimeProtocolOperationInventory(), Is.False);
+
+        DailyV1ExecutionBoundaryState incompleteState = CreateAdmittedExecutionState();
+        IReadOnlyList<string> baseIds =
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                true, false, false);
+        foreach (string operationContractId in baseIds)
+            Assert.That(incompleteState.TryRegisterRuntimeProtocolOperationContract(operationContractId), Is.True);
+        Assert.That(incompleteState.TryRegisterRuntimeProtocolOperationContract(
+            DailyV1RuntimeProtocolOperationContracts.TravelPartyStart), Is.True);
+        Assert.That(incompleteState.TrySealRuntimeProtocolOperationInventory(), Is.False,
+            "A partial optional family must not seal as a supported selected operation set.");
+        Assert.That(incompleteState.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcMembership), Is.False,
+            "An unsealed operation inventory cannot admit a runtime operation.");
+    }
+
+    private static DailyV1ExecutionBoundaryState CreateAdmittedExecutionState()
+    {
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(0L), admission,
+            SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(Guid.NewGuid()));
+        Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True);
+        return state;
     }
 }

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using NUnit.Framework;
 
 /// <summary>
@@ -69,12 +68,8 @@ internal static class CoreFDailyV1OwnerClosureVectors
 
     internal static IReadOnlyCollection<string> ReadSealedOperationIds(ContinuationCensusProtocol protocol)
     {
-        FieldInfo field = typeof(ContinuationCensusProtocol).GetField(
-            "expectedOperations", BindingFlags.Instance | BindingFlags.NonPublic);
-        if (field == null) throw new MissingFieldException(typeof(ContinuationCensusProtocol).FullName, "expectedOperations");
-        var ids = field.GetValue(protocol) as HashSet<string>;
-        if (ids == null) throw new InvalidOperationException("Sealed operation inventory was not a HashSet<string>.");
-        return ids.OrderBy(id => id, StringComparer.Ordinal).ToArray();
+        if (protocol == null) throw new ArgumentNullException(nameof(protocol));
+        return protocol.RegisteredOperationContractIds;
     }
 
     internal static void AssertSameWitnesses(

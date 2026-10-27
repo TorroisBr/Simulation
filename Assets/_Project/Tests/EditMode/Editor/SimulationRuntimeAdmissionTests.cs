@@ -1270,7 +1270,7 @@ public sealed class SimulationRuntimeAdmissionTests
             "runtime.person.residence-bind",
             "runtime.person.parentage"
         };
-        HashSet<string> registeredOperations = ReadPrivateField<HashSet<string>>(protocol, "expectedOperations");
+        IReadOnlyCollection<string> registeredOperations = protocol.RegisteredOperationContractIds;
         CollectionAssert.AreEquivalent(operationIds, registeredOperations,
             "the probes must cover the full currently registered Daily-v1 operation inventory");
 

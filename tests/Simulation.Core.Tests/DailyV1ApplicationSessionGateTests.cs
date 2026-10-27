@@ -78,7 +78,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             RequestedRuntimeProtocolOperationId = operationContractId;
             OperationEntered = true;
             onOperationEntry?.Invoke();
-            if (!state.TryBeginRuntimeProtocolOperation())
+            if (!state.TryBeginRuntimeProtocolOperation(operationContractId))
             {
                 operationScope = null;
                 return false;
@@ -213,9 +213,29 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
         SimulationRuntimeAdmissionContext admission =
             SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
-        return new TestSession(new DailyV1ExecutionBoundaryState(
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState(
             new SimulationTime(), admission, SimulationRuntimeCompositionProfile.Standard,
-            new WorldId(Guid.NewGuid())));
+            new WorldId(Guid.NewGuid()));
+        Assert.That(state.TryBindRuntimeConfiguration(
+            SimulationConfigurationResolver.ResolveOrThrow(),
+            new SimulationCalendar(new CalendarDefinition(1, 1, 1))), Is.True);
+        EnsureRuntimeProtocolInventory(state);
+        return new TestSession(state);
+    }
+
+    private static void EnsureRuntimeProtocolInventory(DailyV1ExecutionBoundaryState state)
+    {
+        if (state.HasRuntimeProtocolOperationInventory) return;
+        Assert.That(state.HasRegisteredRuntimeProtocolOperationContracts, Is.False,
+            "The test state cannot already own a partial operation inventory.");
+        IReadOnlyList<string> operationContractIds =
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                hasRuntimeAdmission: true,
+                hasTravelPartySystem: false,
+                hasTravelSystem: false);
+        foreach (string operationContractId in operationContractIds)
+            Assert.That(state.TryRegisterRuntimeProtocolOperationContract(operationContractId), Is.True);
+        Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
     }
 
     private static DailyV1Application CreateApplicationWithAdvanceBoundary(
@@ -230,6 +250,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out session, out string diagnostic), Is.True, diagnostic);
+        EnsureRuntimeProtocolInventory(session.ExecutionBoundaryState);
         boundary = new ApplicationAdvanceBoundary(session.ExecutionBoundaryState, onOperationEntry);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(session, boundary), Is.True);
         Assert.That(application.TryPublishInitial(session), Is.True);
@@ -1720,7 +1741,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(reentrant, Is.Null);
             Assert.That(current.ExecutionState.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.False,
                 "Direct runtime advance must observe the same exclusive replacement boundary.");
-            Assert.That(current.ExecutionState.TryBeginRuntimeProtocolOperation(), Is.False,
+            Assert.That(current.ExecutionState.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.NpcMembership), Is.False,
                 "Direct P12 owner census operations must not enter while the source session is being replaced.");
             Assert.That(current.ExecutionState.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.False,
                 "The source session cannot become capture-eligible during detached replacement.");
@@ -1812,7 +1834,8 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         Assert.That(gate.TryBeginOperation(session, out _), Is.True);
         Assert.That(gate.ActiveOperationCount, Is.EqualTo(1));
-        Assert.That(session.ExecutionState.TryBeginRuntimeProtocolOperation(), Is.True);
+        Assert.That(session.ExecutionState.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
         Assert.That(gate.ActiveOperationCount, Is.EqualTo(2));
 
         Assert.That(session.ExecutionState.TryEndRuntimeProtocolOperation(), Is.True);
@@ -1845,7 +1868,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.ContinuationSave), Is.False,
             "A nested generic scope is not part of the save allowance.");
         Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.Application), Is.True);
-        Assert.That(state.TryBeginRuntimeProtocolOperation(), Is.True);
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
         Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.ContinuationSave), Is.False,
             "A RuntimeProtocol scope remains forbidden during a P12-G owner snapshot.");
         Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);

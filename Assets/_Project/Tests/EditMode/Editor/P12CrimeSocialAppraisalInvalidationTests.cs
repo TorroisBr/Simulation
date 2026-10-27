@@ -181,7 +181,7 @@ public sealed class P12CrimeSocialAppraisalInvalidationTests
             SetPrivateField(crime, "theftOutcomeSink", probe);
 
             ContinuationCensusProtocol protocol = GetProtocol(runtime);
-            HashSet<string> expectedOperations = (HashSet<string>)GetPrivateField(protocol, "expectedOperations");
+            IReadOnlyCollection<string> expectedOperations = protocol.RegisteredOperationContractIds;
             Assert.That(expectedOperations, Does.Contain(DailyAdvanceOperationId));
             Assert.That(protocol.TryReadMutationEpoch(out long startingEpoch, out ContinuationCensusFailure startFailure),
                 Is.True, startFailure.ToString());

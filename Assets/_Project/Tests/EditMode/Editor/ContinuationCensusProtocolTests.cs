@@ -317,7 +317,8 @@ public sealed class ContinuationCensusProtocolTests
 
         Assert.That(protocol.TryAssessRegisteredOperationQuiescence(out _), Is.True);
         Assert.That(protocol.TryEnterOperation(
-            "runtime.advance", out SimulationOperationScope runtimeOperation, out _), Is.True);
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+            out SimulationOperationScope runtimeOperation, out _), Is.True);
         Assert.That(runtimeState.ActiveOperationCount, Is.EqualTo(1));
         Assert.That(runtimeState.ActiveRuntimeOperationCount, Is.EqualTo(1));
         Assert.That(runtimeState.TryBeginOperation(), Is.True,
@@ -367,7 +368,7 @@ public sealed class ContinuationCensusProtocolTests
         Assert.That(runtimeState.TryEndOperation(DailyV1OperationScopeKind.Application), Is.True);
 
         Assert.That(protocol.TryEnterOperation(
-            "runtime.advance", out SimulationOperationScope runtimeOperation, out ContinuationCensusFailure enterFailure),
+            DailyV1RuntimeProtocolOperationContracts.NpcTrade, out SimulationOperationScope runtimeOperation, out ContinuationCensusFailure enterFailure),
             Is.True, enterFailure.ToString());
         Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
             DailyV1CaptureScopeAllowance.ContinuationSave,
@@ -385,7 +386,7 @@ public sealed class ContinuationCensusProtocolTests
         Assert.That(idleAdvanceSnapshots, Has.Count.EqualTo(1),
             "The exact outer DailyAdvance scope is capturable after registered protocol work has closed.");
         Assert.That(protocol.TryEnterOperation(
-            "runtime.advance-day", out SimulationOperationScope advanceProtocolOperation, out _), Is.True);
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance, out SimulationOperationScope advanceProtocolOperation, out _), Is.True);
         Assert.That(runtimeState.ActiveOperationCount, Is.EqualTo(2),
             "One outer DailyAdvance and one registered RuntimeProtocol scope share the same registry.");
         Assert.That(runtimeState.ActiveRuntimeOperationCount, Is.EqualTo(1),
@@ -666,9 +667,25 @@ public sealed class ContinuationCensusProtocolTests
         Assert.That(protocol.RegisterCensusProvider(ReceiptSectionId, records.DecisionRecorder, out _), Is.True);
         Assert.That(protocol.SealExpectedSectionInventory(out _), Is.True);
         Assert.That(protocol.SealCensusProviderInventory(out _), Is.True);
-        Assert.That(protocol.RegisterExpectedOperation("bootstrap.publish", out _), Is.True);
-        Assert.That(protocol.RegisterExpectedOperation("runtime.advance", out _), Is.True);
-        Assert.That(protocol.RegisterExpectedOperation("runtime.advance-day", out _), Is.True);
+        if (sharedExecutionState == null)
+        {
+            Assert.That(protocol.RegisterExpectedOperation("bootstrap.publish", out _), Is.True);
+            Assert.That(protocol.RegisterExpectedOperation("runtime.advance", out _), Is.True);
+            Assert.That(protocol.RegisterExpectedOperation("runtime.advance-day", out _), Is.True);
+        }
+        else
+        {
+            Assert.That(sharedExecutionState.TryBindRuntimeConfiguration(
+                SimulationConfigurationResolver.ResolveOrThrow(),
+                new SimulationCalendar(new CalendarDefinition(1, 1, 1))), Is.True);
+            IReadOnlyList<string> operationContractIds =
+                DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                    hasRuntimeAdmission: true,
+                    hasTravelPartySystem: false,
+                    hasTravelSystem: false);
+            foreach (string operationContractId in operationContractIds)
+                Assert.That(protocol.RegisterExpectedOperation(operationContractId, out _), Is.True);
+        }
         Assert.That(protocol.SealOperationInventory(out _), Is.True);
         Assert.That(protocol.BindOwnerThread(out _), Is.True);
         return protocol;
