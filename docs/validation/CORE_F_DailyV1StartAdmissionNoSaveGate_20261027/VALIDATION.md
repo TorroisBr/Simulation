@@ -39,7 +39,7 @@ The public package snapshot binds origin `https://github.com/TorroisBr/Simulatio
 |---|---|
 | `core-f-dailyv1-nosave-editmode-final.manifest.json` | `b17b9c32313f1dfbba0fa429b1d342c9eab93395ae4596a225d2fc0ae65740d3` |
 | `core-f-dailyv1-nosave-editmode-final.zip` | `5c3e07d48775049b583db2f5c342b6ed270dc7970a374f3131f0d28a6257e0ef` |
-| Normalized NUnit XML | `38e1418f86ad753b1192cadced994583ac70ea79fb02cd85cc6a5624b722cec7` |
+| Normalized NUnit XML | `2b0892d6add5969b54a3b46a85fc29541c6c77939cb11854de589726603675ef` |
 
 Verification result: `VALID`, one run, one archive entry, status `Passed`, with the 3274 case identities and counters bound to the package. Original XML and raw logs remain in protected local retention.
 
