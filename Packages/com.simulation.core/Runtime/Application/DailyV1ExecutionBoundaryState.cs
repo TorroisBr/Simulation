@@ -298,7 +298,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         {
             if (!expectedOwnerSectionContractInventorySealed
                 || exclusiveSessionReplacementInProgress
-                || activeRuntimeProtocolOperationContracts.Count == 0
+                || !activeRuntimeProtocolOperationContracts.Contains(
+                    DailyV1RuntimeProtocolOperationContracts.NpcMembership)
                 || AdmissionContext == null
                 || !AdmissionContext.IsOwnedByCurrentThread()
                 || expectedOwnerSectionContractInventoryRevision == long.MaxValue)

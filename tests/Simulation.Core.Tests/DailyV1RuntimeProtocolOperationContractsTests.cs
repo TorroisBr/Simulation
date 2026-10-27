@@ -201,12 +201,23 @@ public sealed class DailyV1RuntimeProtocolOperationContractsTests
             new DailyV1OwnerSectionContractIdentity("npc.knowledge.dynamic", 1, OwnerSectionRole.Required)
         };
 
+        long initialInventoryRevision = state.ExpectedOwnerSectionContractInventoryRevision;
         Assert.That(state.TryReplaceExpectedOwnerSectionContractInventoryDuringRuntimeOperation(
             transitioned), Is.False, "A roster census cannot change its section identities while idle.");
+        Assert.That(state.ExpectedOwnerSectionContractInventoryRevision, Is.EqualTo(initialInventoryRevision));
+
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.MarketSale), Is.True);
+        Assert.That(state.TryReplaceExpectedOwnerSectionContractInventoryDuringRuntimeOperation(
+            transitioned), Is.False, "An unrelated active operation cannot replace the roster owner catalogue.");
+        Assert.That(state.ExpectedOwnerSectionContractInventoryRevision, Is.EqualTo(initialInventoryRevision));
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+
         Assert.That(state.TryBeginRuntimeProtocolOperation(
             DailyV1RuntimeProtocolOperationContracts.NpcMembership), Is.True);
         Assert.That(state.TryReplaceExpectedOwnerSectionContractInventoryDuringRuntimeOperation(
             transitioned), Is.True);
+        Assert.That(state.ExpectedOwnerSectionContractInventoryRevision, Is.EqualTo(initialInventoryRevision + 1L));
         Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
 
         IReadOnlyList<DailyV1OwnerSectionContractIdentity> contracts =
