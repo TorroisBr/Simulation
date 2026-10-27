@@ -155,6 +155,9 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
+    bool TryBindApplicationAdvanceAuthority(
+        DailyV1Application application,
+        DailyV1ActiveRuntimeSession session);
     bool TryEnterRuntimeProtocolOperation(
         string operationContractId,
         out IDisposable operationScope);

@@ -67,6 +67,13 @@ public sealed class DailyV1ApplicationSessionGateTests
         public DailyV1ExecutionBoundaryState ExecutionState => state;
         public bool HasIntradayTimeline => false;
 
+        public bool TryBindApplicationAdvanceAuthority(
+            DailyV1Application application,
+            DailyV1ActiveRuntimeSession session) =>
+            application != null
+            && session != null
+            && ReferenceEquals(session.ExecutionBoundaryState, state);
+
         public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
             => TryEnterRuntimeProtocolOperation(
                 DailyV1RuntimeProtocolOperationContracts.DailyAdvance,

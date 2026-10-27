@@ -663,12 +663,16 @@ internal sealed class DailyV1Application
         {
             DailyV1ActiveRuntimeSession current = activeSessionGate.Current;
             if (ReferenceEquals(current, candidateSession))
-                return candidateSession.TryBindSelectedRuntimeAdvanceHostPorts(hostPorts);
+            {
+                return candidateSession.TryBindSelectedRuntimeAdvanceHostPorts(hostPorts)
+                    && hostPorts.TryBindApplicationAdvanceAuthority(this, candidateSession);
+            }
             if (!IsBootstrapOrRestoredDescendant(candidateSession.AdmissionContext)
                 || activeSessionGate.ActiveOperationCount != 0
                 || (current != null && !current.IsProfileCompatibleWith(candidateSession)))
                 return false;
-            return candidateSession.TryBindSelectedRuntimeAdvanceHostPorts(hostPorts);
+            return candidateSession.TryBindSelectedRuntimeAdvanceHostPorts(hostPorts)
+                && hostPorts.TryBindApplicationAdvanceAuthority(this, candidateSession);
         }
     }
 

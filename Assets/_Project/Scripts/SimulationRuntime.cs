@@ -1720,6 +1720,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     private AuthoritativeMutationGuard mutationGuard => dailyExecutionBoundary.MutationGuard;
     private bool coreMutationGuardAuthoritiesBound;
     private readonly DailyV1ExecutionBoundaryState dailyExecutionBoundary;
+    private readonly object dailyV1ApplicationAdvanceAuthorityGate = new object();
+    private DailyV1Application dailyV1ApplicationAdvanceAuthority;
+    private DailyV1ActiveRuntimeSession dailyV1ApplicationAdvanceSession;
     private Func<DailyV1SelectedRuntimeOwnerGraph> selectedRuntimeOwnerGraphProvider;
     private Func<string, NpcRuntime> selectedNpcPresenceProjectionResolver;
     private bool advanceLeaseHeld => dailyExecutionBoundary.AdvanceLeaseHeld;
@@ -10904,7 +10907,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
     public bool TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure)
     {
+        if (TryGetBoundDailyV1ApplicationAdvanceAuthority(
+                out DailyV1Application application,
+                out DailyV1ActiveRuntimeSession session))
+            return application.TryAdvanceDay(session, out failure);
+
         return dailyExecutionBoundary.TryAdvanceDay(this, out failure);
+    }
+
+    private bool TryGetBoundDailyV1ApplicationAdvanceAuthority(
+        out DailyV1Application application,
+        out DailyV1ActiveRuntimeSession session)
+    {
+        lock (dailyV1ApplicationAdvanceAuthorityGate)
+        {
+            application = dailyV1ApplicationAdvanceAuthority;
+            session = dailyV1ApplicationAdvanceSession;
+            return application != null && session != null;
+        }
     }
 
     private bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
@@ -11032,6 +11052,32 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     // methods remain available only to the non-selected compatibility path.
     DailyV1ExecutionBoundaryState IDailyV1SelectedRuntimeAdvanceHostPorts.ExecutionState =>
         dailyExecutionBoundary;
+
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryBindApplicationAdvanceAuthority(
+        DailyV1Application application,
+        DailyV1ActiveRuntimeSession session)
+    {
+        if (application == null || session == null
+            || !ReferenceEquals(session.ExecutionBoundaryState, dailyExecutionBoundary)
+            || !dailyExecutionBoundary.HasAdmittedSelectedDailyExecution
+            || dailyExecutionBoundary.AdmissionContext?.Profile
+                != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+            return false;
+
+        lock (dailyV1ApplicationAdvanceAuthorityGate)
+        {
+            if (dailyV1ApplicationAdvanceAuthority == null
+                && dailyV1ApplicationAdvanceSession == null)
+            {
+                dailyV1ApplicationAdvanceAuthority = application;
+                dailyV1ApplicationAdvanceSession = session;
+                return true;
+            }
+
+            return ReferenceEquals(dailyV1ApplicationAdvanceAuthority, application)
+                && ReferenceEquals(dailyV1ApplicationAdvanceSession, session);
+        }
+    }
 
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryEnterRuntimeProtocolOperation(
         string operationContractId,
@@ -14046,6 +14092,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         out int daysAdvanced,
         out SimulationRuntimeAdvanceFailure failure)
     {
+        if (TryGetBoundDailyV1ApplicationAdvanceAuthority(
+                out DailyV1Application application,
+                out DailyV1ActiveRuntimeSession session))
+            return application.TryAdvanceDays(session, dayCount, out daysAdvanced, out failure);
+
         return dailyExecutionBoundary.TryAdvanceDays(this, dayCount, out daysAdvanced, out failure);
     }
 
