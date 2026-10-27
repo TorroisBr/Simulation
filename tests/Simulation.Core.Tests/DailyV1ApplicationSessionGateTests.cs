@@ -25,6 +25,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         private long admissionMutationEpoch;
         private Exception continuationSaveCaptureException;
         private Action<int> onContinuationSaveEvidenceCapture;
+        private Action<DailyV1CaptureScopeAllowance> onOwnerSectionCensusCapture;
 
         internal ApplicationAdvanceBoundary(
             DailyV1ExecutionBoundaryState state,
@@ -42,14 +43,19 @@ public sealed class DailyV1ApplicationSessionGateTests
         internal bool SelectedBoundaryRequested { get; private set; }
         internal int LegacyAdvanceInvocationCount { get; private set; }
         internal bool Faulted { get; private set; }
+        internal string RequestedRuntimeProtocolOperationId { get; private set; }
         internal bool? RequestedSessionReplacement { get; private set; }
         internal DailyV1CaptureScopeAllowance? RequestedCaptureScopeAllowance { get; private set; }
         internal int OwnerCensusCaptureCount { get; private set; }
+        internal bool ReturnPartialOwnerEvidenceThenFail { get; set; }
         internal int ContinuationSaveEvidenceCaptureCount { get; private set; }
         internal void ThrowOnContinuationSaveCapture(Exception exception) =>
             continuationSaveCaptureException = exception;
         internal void SetContinuationSaveEvidenceCaptureCallback(Action<int> callback) =>
             onContinuationSaveEvidenceCapture = callback;
+        internal void SetOwnerSectionCensusCaptureCallback(
+            Action<DailyV1CaptureScopeAllowance> callback) =>
+            onOwnerSectionCensusCapture = callback;
         internal void SetAdmissionEvidence(
             IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
             long mutationEpoch)
@@ -61,7 +67,15 @@ public sealed class DailyV1ApplicationSessionGateTests
         public bool HasIntradayTimeline => false;
 
         public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
+            => TryEnterRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+                out operationScope);
+
+        public bool TryEnterRuntimeProtocolOperation(
+            string operationContractId,
+            out IDisposable operationScope)
         {
+            RequestedRuntimeProtocolOperationId = operationContractId;
             OperationEntered = true;
             onOperationEntry?.Invoke();
             if (!state.TryBeginRuntimeProtocolOperation())
@@ -155,6 +169,12 @@ public sealed class DailyV1ApplicationSessionGateTests
 
             ownerSections = admissionOwnerSections;
             mutationEpoch = admissionMutationEpoch;
+            onOwnerSectionCensusCapture?.Invoke(allowedOuterScope);
+            if (ReturnPartialOwnerEvidenceThenFail)
+            {
+                failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+                return false;
+            }
             failure = admissionOwnerSections == null
                 ? DailyCaptureEligibilityFailure.OperationInProgress
                 : DailyCaptureEligibilityFailure.None;
@@ -1153,6 +1173,9 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(boundary.OperationEntered, Is.True);
+        Assert.That(boundary.RequestedRuntimeProtocolOperationId,
+            Is.EqualTo(DailyV1RuntimeProtocolOperationContracts.DailyAdvance),
+            "The selected Core runtime names the P12 operation that the host protocol admits.");
         Assert.That(boundary.SelectedBoundaryRequested, Is.True);
         Assert.That(boundary.LegacyAdvanceInvocationCount, Is.Zero,
             "The selected Core session cannot delegate a failed stage to the host day or intraday advance.");
@@ -1343,6 +1366,51 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
 
         Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void CoreDropsCensusEvidenceWhenHostFailsOrScopeChangesDuringCapture()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary hostPorts);
+        DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
+            session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
+        Assert.That(coreBoundary, Is.Not.Null);
+        IReadOnlyList<OwnerSectionCensusSnapshot> expectedSections =
+            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        hostPorts.SetAdmissionEvidence(expectedSections, mutationEpoch: 23L);
+
+        hostPorts.ReturnPartialOwnerEvidenceThenFail = true;
+        Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+            sessionReplacement: false,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> rejectedSections,
+            out long rejectedEpoch,
+            out DailyCaptureEligibilityFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.RuntimeFaulted));
+        Assert.That(rejectedSections, Is.Null,
+            "A failing host census cannot leak a partially populated owner vector through Core.");
+        Assert.That(rejectedEpoch, Is.Zero);
+
+        hostPorts.ReturnPartialOwnerEvidenceThenFail = false;
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        hostPorts.SetOwnerSectionCensusCaptureCallback(allowance =>
+        {
+            Assert.That(allowance, Is.EqualTo(DailyV1CaptureScopeAllowance.None));
+            Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.Application), Is.True,
+                "The fake host simulates a reentrant scope opening during census capture.");
+        });
+
+        Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+            sessionReplacement: false,
+            out rejectedSections,
+            out rejectedEpoch,
+            out failure), Is.False,
+            "Core must reject a census if its allowed outer scope changes during the host read.");
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
+        Assert.That(rejectedSections, Is.Null);
+        Assert.That(rejectedEpoch, Is.Zero);
+        Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.Application), Is.True);
     }
 
     [Test]

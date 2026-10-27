@@ -19,6 +19,14 @@ public sealed class SimulationRuntimeOrchestrationTests
             return false;
         }
 
+        public bool TryEnterRuntimeProtocolOperation(
+            string operationContractId,
+            out System.IDisposable operationScope)
+        {
+            operationScope = null;
+            return false;
+        }
+
         public bool TryCreateSelectedDailyExecutionBoundary(
             out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
         {

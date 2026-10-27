@@ -4563,11 +4563,9 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusBeforeFailure), Is.True,
             censusBeforeFailure.ToString());
 
-        FieldInfo dailyAdvanceOperationField = typeof(SimulationRuntime).GetField(
-            "DailyAdvanceCensusOperationId", BindingFlags.Static | BindingFlags.NonPublic);
-        Assert.That(dailyAdvanceOperationField, Is.Not.Null);
-        string dailyAdvanceOperationId = dailyAdvanceOperationField.GetRawConstantValue() as string;
-        Assert.That(dailyAdvanceOperationId, Is.Not.Null.And.Not.Empty);
+        string dailyAdvanceOperationId =
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance;
+        Assert.That(dailyAdvanceOperationId, Is.EqualTo("runtime.advance-day"));
         MethodInfo enterDailyAdvanceOperation = typeof(SimulationRuntime).GetMethod(
             "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(enterDailyAdvanceOperation, Is.Not.Null);

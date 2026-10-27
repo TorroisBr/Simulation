@@ -131,7 +131,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     private const string NpcMembershipCensusOperationId = "runtime.npc-membership";
     private const string PersonParentageCensusOperationId = "runtime.person.parentage";
     private const string BootstrapPublicationCensusOperationId = "runtime.bootstrap-publication";
-    private const string DailyAdvanceCensusOperationId = "runtime.advance-day";
     private const string SoloTravelStartCensusOperationId = "runtime.travel.start";
     private const string TravelPartyAdvanceCensusOperationId = "runtime.travel-party.advance";
     private const string NpcTradeCensusOperationId = "runtime.economy.npc-trade";
@@ -3732,7 +3731,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     BootstrapPublicationCensusOperationId,
                     out _)
                 && protocol.RegisterExpectedOperation(
-                    DailyAdvanceCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
                     out _)
                 && protocol.RegisterExpectedOperation(
                     PersonParentageCensusOperationId,
@@ -10938,7 +10937,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     {
         operationScope = null;
         if (!TryEnterRuntimeAdmissionOperation(
-                DailyAdvanceCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
                 out SimulationOperationScope hostScope))
             return false;
         operationScope = hostScope;
@@ -11022,10 +11021,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     DailyV1ExecutionBoundaryState IDailyV1SelectedRuntimeAdvanceHostPorts.ExecutionState =>
         dailyExecutionBoundary;
 
-    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryEnterDailyAdvanceOperation(
-        out IDisposable operationScope) =>
-        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).TryEnterDailyAdvanceOperation(
-            out operationScope);
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryEnterRuntimeProtocolOperation(
+        string operationContractId,
+        out IDisposable operationScope)
+    {
+        operationScope = null;
+        if (!TryEnterRuntimeAdmissionOperation(
+                operationContractId, out SimulationOperationScope hostScope))
+            return false;
+        operationScope = hostScope;
+        return true;
+    }
 
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary) =>

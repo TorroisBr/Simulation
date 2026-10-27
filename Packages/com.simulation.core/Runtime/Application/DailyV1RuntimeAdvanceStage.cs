@@ -1,6 +1,11 @@
 using System;
 using System.Collections.Generic;
 
+internal static class DailyV1RuntimeProtocolOperationContracts
+{
+    internal const string DailyAdvance = "runtime.advance-day";
+}
+
 /// <summary>
 /// Common P12 scope, projection, census and fault ports used by Core-owned
 /// selected execution and legacy runtime advancement.
@@ -51,7 +56,9 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
-    bool TryEnterDailyAdvanceOperation(out IDisposable operationScope);
+    bool TryEnterRuntimeProtocolOperation(
+        string operationContractId,
+        out IDisposable operationScope);
     bool TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary);
     bool TryCaptureOwnerSectionCensus(
@@ -113,7 +120,9 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
     public DailyV1ExecutionBoundaryState ExecutionState => executionState;
 
     public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope) =>
-        hostPorts.TryEnterDailyAdvanceOperation(out operationScope);
+        hostPorts.TryEnterRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+            out operationScope);
 
     public bool TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary) =>
@@ -171,7 +180,11 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
 
         if (!hostPorts.TryCaptureOwnerSectionCensus(
                 allowedOuterScope, out ownerSections, out mutationEpoch, out failure))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
             return false;
+        }
 
         if (!executionState.TryAssessCaptureScope(allowedOuterScope))
         {
