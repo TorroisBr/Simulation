@@ -204,7 +204,7 @@ internal static class P12DNpcRootOwnerSnapshot
                 return false;
             }
 
-            if (!TryCaptureNpc(npc, token, evidence,
+            if (!TryCaptureNpc(npc, runtime.SelectedRuntimeOwnerGraph, token, evidence,
                     inventoryOwners, accountOwners, merchantPlanOwners, travelPlanOwners,
                     commercialOwners, spatialOwners, siteKnowledgeOwners, adventureOwners,
                     actionOwners, selectedActionPayloadOwners, cityOwners,
@@ -230,6 +230,7 @@ internal static class P12DNpcRootOwnerSnapshot
 
     private static bool TryCaptureNpc(
         NpcRuntime npc,
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph,
         DailyCaptureEligibilityToken token,
         P12DCityNpcProjectionCaptureEvidence evidence,
         HashSet<object> inventoryOwners,
@@ -603,29 +604,41 @@ internal static class P12DNpcRootOwnerSnapshot
             return false;
         }
 
-        dRow = new P12DNpcDRow(
-            npc.RuntimeId, npc.NpcData.DefinitionId, personId?.Value,
-            npc.ResidenceSettlementRuntimeId, npc.LifeState, npc.InjurySeverity,
-            statusIds, npc.HiddenDaysRemaining,
-            npc.UsesSelectedDailyV1Definitions
-                ? npc.SelectedRuntimeOwners.ActionSlot.CurrentAction?.DefinitionId
-                : npc.CurrentAction?.DefinitionId,
-            npc.CurrentCity?.RuntimeId, npc.CurrentLocation?.RuntimeId,
-            npc.DestinationCity?.RuntimeId, npc.DestinationLocation?.RuntimeId,
-            inventoryRows, inventory.Revision, account.Balance, account.Revision,
-            npc.LifeStateRevision, npc.ResidenceRevision, npc.P12CrimeJusticeRevision,
-            npc.CurrentActionRevision);
+        if (npc.UsesSelectedDailyV1Definitions)
+        {
+            if (!DailyV1P12DNpcCoreOwnerExporter.TryCreate(
+                    selectedGraph, npc.SelectedRuntimeOwners, npc.BoundPersonRuntime,
+                    out dRow, out fRow, out DailyV1P12DNpcCoreOwnerExportFailure exportFailure))
+            {
+                failure = exportFailure == DailyV1P12DNpcCoreOwnerExportFailure.InvalidOwner
+                    ? P12DNpcRootOwnerSnapshotFailure.InvalidOwner
+                    : P12DNpcRootOwnerSnapshotFailure.UnsupportedValue;
+                return false;
+            }
+        }
+        else
+        {
+            dRow = new P12DNpcDRow(
+                npc.RuntimeId, npc.NpcData.DefinitionId, personId?.Value,
+                npc.ResidenceSettlementRuntimeId, npc.LifeState, npc.InjurySeverity,
+                statusIds, npc.HiddenDaysRemaining, npc.CurrentAction?.DefinitionId,
+                npc.CurrentCity?.RuntimeId, npc.CurrentLocation?.RuntimeId,
+                npc.DestinationCity?.RuntimeId, npc.DestinationLocation?.RuntimeId,
+                inventoryRows, inventory.Revision, account.Balance, account.Revision,
+                npc.LifeStateRevision, npc.ResidenceRevision, npc.P12CrimeJusticeRevision,
+                npc.CurrentActionRevision);
 
-        fRow = new P12DNpcFRow(
-            npc.RuntimeId, actionValue, npc.TravelDaysRemaining, npc.TravelDaysTotal,
-            npc.TravelRouteRuntimeId, npc.TravelStartedToday, npc.TravelOriginDecisionId,
-            npc.ActiveTravelPartyId, npc.TravelStateRevision, merchantPlanValue,
-            travelPlanValue, siteObservations, siteKnowledge.Revision,
-            new List<string>(spatial.KnownLocationRuntimeIds),
-            new List<string>(spatial.KnownRouteRuntimeIds), spatial.Revision,
-            adventure.OppositionObservations, adventure.NotableItemObservations,
-            adventure.CommonResourceObservations, adventure.AccessObservations, adventure.Revision,
-            marketValues, liquidityValues, receiptValues, commercial.Revision);
+            fRow = new P12DNpcFRow(
+                npc.RuntimeId, actionValue, npc.TravelDaysRemaining, npc.TravelDaysTotal,
+                npc.TravelRouteRuntimeId, npc.TravelStartedToday, npc.TravelOriginDecisionId,
+                npc.ActiveTravelPartyId, npc.TravelStateRevision, merchantPlanValue,
+                travelPlanValue, siteObservations, siteKnowledge.Revision,
+                new List<string>(spatial.KnownLocationRuntimeIds),
+                new List<string>(spatial.KnownRouteRuntimeIds), spatial.Revision,
+                adventure.OppositionObservations, adventure.NotableItemObservations,
+                adventure.CommonResourceObservations, adventure.AccessObservations, adventure.Revision,
+                marketValues, liquidityValues, receiptValues, commercial.Revision);
+        }
         failure = P12DNpcRootOwnerSnapshotFailure.None;
         return true;
     }

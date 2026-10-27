@@ -168,7 +168,9 @@ public class NpcRuntime : ICapabilityConditionSource
     }
     public string ResidenceSettlementRuntimeId => personRuntime != null
         ? personRuntime.ResidenceSettlementRuntimeId
-        : residenceSettlementRuntimeId;
+        : selectedRuntimeOwners != null
+            ? selectedRuntimeOwners.Residence.SettlementRuntimeId
+            : residenceSettlementRuntimeId;
     internal PersonRuntime BoundPersonRuntime => personRuntime;
     internal IReadOnlyList<NpcStatusData> ExistingCurrentStatus => currentStatus;
     public IReadOnlyList<NpcStatusData> CurrentStatus
@@ -268,7 +270,9 @@ public class NpcRuntime : ICapabilityConditionSource
     internal long LifeStateRevision => selectedRuntimeOwners != null
         ? selectedRuntimeOwners.Lifecycle.LifeStateRevision
         : lifeStateRevision;
-    internal long ResidenceRevision => residenceRevision;
+    internal long ResidenceRevision => selectedRuntimeOwners != null
+        ? selectedRuntimeOwners.Residence.Revision
+        : residenceRevision;
     internal long P12CrimeJusticeRevision =>
         selectedRuntimeOwners?.CrimeJusticeRevision ?? p12CrimeJusticeRevision;
     internal bool IsP12CrimeJusticeBound => p12CrimeJusticeMutationAdmission != null;
@@ -1176,7 +1180,9 @@ public class NpcRuntime : ICapabilityConditionSource
                 && (selectedRuntimeOwners != null
                     ? selectedRuntimeOwners.Lifecycle.CanAdvanceRevision(lifeStateIncrements)
                     : lifeStateRevision <= long.MaxValue - lifeStateIncrements)
-                && residenceRevision <= long.MaxValue - residenceIncrements
+                && (selectedRuntimeOwners != null
+                    ? selectedRuntimeOwners.Residence.CanAdvanceRevision(residenceIncrements)
+                    : residenceRevision <= long.MaxValue - residenceIncrements)
                 && (selectedRuntimeOwners != null
                     ? selectedRuntimeOwners.ActionSlot.CanAdvanceRevision(currentActionIncrements)
                     : currentActionRevision <= long.MaxValue - currentActionIncrements));
@@ -1221,7 +1227,13 @@ public class NpcRuntime : ICapabilityConditionSource
             else if (lifeStateRevision < long.MaxValue)
                 lifeStateRevision++;
         }
-        if (residenceChanged && residenceRevision < long.MaxValue) residenceRevision++;
+        if (residenceChanged)
+        {
+            if (selectedRuntimeOwners != null)
+                selectedRuntimeOwners.Residence.NotifyMutationCommitted();
+            else if (residenceRevision < long.MaxValue)
+                residenceRevision++;
+        }
         if (currentActionChanged && !currentActionRevisionAlreadyCommitted)
         {
             if (selectedRuntimeOwners != null)
@@ -1914,6 +1926,12 @@ public class NpcRuntime : ICapabilityConditionSource
                 LifeState = state.LifeState,
                 InjurySeverity = state.InjurySeverity,
                 LifeStateRevision = state.LifeStateRevision,
+                ResidenceSettlementRuntimeId = state.SelectedRuntimeOwners != null
+                    ? state.SelectedRuntimeOwners.Residence.SettlementRuntimeId
+                    : state.ResidenceSettlementRuntimeId,
+                ResidenceRevision = state.SelectedRuntimeOwners != null
+                    ? state.SelectedRuntimeOwners.Residence.Revision
+                    : state.ResidenceRevision,
                 CrimeJusticeRevision = state.CrimeJusticeRevision,
                 HiddenDaysRemaining = state.HiddenDaysRemaining,
                 CurrentLocationRuntimeId = state.CurrentLocation?.RuntimeId,
@@ -1976,7 +1994,9 @@ public class NpcRuntime : ICapabilityConditionSource
         personRuntime = state.PersonRuntime;
         selectedRuntimeOwners = stagedSelectedOwners;
         selectedDefinitionBindings = null;
-        residenceSettlementRuntimeId = state.ResidenceSettlementRuntimeId;
+        residenceSettlementRuntimeId = stagedSelectedOwners == null
+            ? state.ResidenceSettlementRuntimeId
+            : null;
         lifeState = state.LifeState;
         injurySeverity = state.InjurySeverity;
         currentStatus = new List<NpcStatusData>(state.CurrentStatus);
@@ -2006,7 +2026,9 @@ public class NpcRuntime : ICapabilityConditionSource
                 || !adventureSiteIntelKnowledge.TryBindSelectedOwner(stagedSelectedOwners.AdventureSiteIntelKnowledge)))
             return false;
         lifeStateRevision = stagedSelectedOwners == null ? state.LifeStateRevision : 0L;
-        residenceRevision = state.ResidenceRevision;
+        residenceRevision = stagedSelectedOwners == null
+            ? state.ResidenceRevision
+            : 0L;
         p12CrimeJusticeRevision = stagedSelectedOwners == null ? state.CrimeJusticeRevision : 0L;
         currentActionRevision = stagedSelectedOwners == null ? state.CurrentActionRevision : 0L;
         travelStateRevision = state.TravelStateRevision;
@@ -2365,7 +2387,8 @@ public class NpcRuntime : ICapabilityConditionSource
             if (!CanCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged)
                 || !TryCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged))
                 return false;
-            if (residenceChanged) residenceSettlementRuntimeId = null;
+            if (residenceChanged && !TrySetNpcOnlyResidenceValueAfterAdmission(null))
+                return false;
             NotifyP12LifecycleMutationCommitted(
                 true, residenceChanged, currentActionChanged,
                 currentActionRevisionAlreadyCommitted: currentActionChanged,
@@ -2376,7 +2399,8 @@ public class NpcRuntime : ICapabilityConditionSource
         if (severity > InjurySeverity && !TrySetInjurySeverityAfterValidation(severity)) return false;
 
         if (!TrySetLifeStateAfterValidation(NpcLifeState.Dead)) return false;
-        if (residenceChanged) residenceSettlementRuntimeId = null;
+        if (residenceChanged && !TrySetNpcOnlyResidenceValueAfterAdmission(null))
+            return false;
         ClearCurrentActionSlotAfterAdmission();
         NotifyP12LifecycleMutationCommitted(true, residenceChanged, currentActionChanged);
         return true;
@@ -3303,8 +3327,17 @@ public class NpcRuntime : ICapabilityConditionSource
             return true;
         if (!CanCommitP12LifecycleMutation(false, true))
             return false;
-        residenceSettlementRuntimeId = normalized;
+        if (!TrySetNpcOnlyResidenceValueAfterAdmission(normalized))
+            return false;
         NotifyP12LifecycleMutationCommitted(false, true);
+        return true;
+    }
+
+    private bool TrySetNpcOnlyResidenceValueAfterAdmission(string settlementRuntimeId)
+    {
+        if (selectedRuntimeOwners != null)
+            return selectedRuntimeOwners.Residence.TrySetValue(settlementRuntimeId);
+        residenceSettlementRuntimeId = settlementRuntimeId;
         return true;
     }
 

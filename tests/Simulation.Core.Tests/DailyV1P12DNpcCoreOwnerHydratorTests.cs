@@ -21,7 +21,7 @@ public sealed class DailyV1P12DNpcCoreOwnerHydratorTests
             CreateDRow(npc.DefinitionId, runtimeId,
                 new[] { status.DefinitionId },
                 new[] { new P12DNpcInventoryRowValue(item.DefinitionId, 5, 2.25f) },
-                action.DefinitionId),
+                action.DefinitionId, "city/p12d-core-hydration", 40L),
             action.DefinitionId,
             item.DefinitionId,
             locationId,
@@ -32,7 +32,7 @@ public sealed class DailyV1P12DNpcCoreOwnerHydratorTests
             accessObservations, 46L);
 
         Assert.That(DailyV1P12DNpcCoreOwnerHydrator.TryCreate(
-            input, definitions, Array.Empty<string>(), new[] { locationId },
+            input, definitions, new[] { "city/p12d-core-hydration" }, new[] { locationId },
             Array.Empty<string>(), Array.Empty<string>(), new[] { runtimeId },
             out DailyV1NpcRuntimeOwners owners,
             out DailyV1P12DNpcCoreOwnerHydrationFailure failure), Is.True, failure.ToString());
@@ -52,6 +52,34 @@ public sealed class DailyV1P12DNpcCoreOwnerHydratorTests
         Assert.That(owners.AdventureSiteIntelKnowledge.AccessObservations.Single().ObservedAccessState,
             Is.EqualTo(PlaceAccessState.Contested));
 
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { owners },
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(DailyV1P12DNpcCoreOwnerExporter.TryCreate(
+            graph, owners, null, out P12DNpcDRow exportedD, out P12DNpcFRow exportedF,
+            out DailyV1P12DNpcCoreOwnerExportFailure exportFailure), Is.True, exportFailure.ToString());
+        Assert.That(exportedD.RuntimeId, Is.EqualTo(runtimeId));
+        Assert.That(exportedD.NpcDefinitionId, Is.EqualTo(npc.DefinitionId));
+        Assert.That(exportedD.ResidenceSettlementRuntimeId, Is.EqualTo("city/p12d-core-hydration"));
+        Assert.That(exportedD.ResidenceRevision, Is.EqualTo(40L));
+        Assert.That(exportedD.InventoryRows.Single().ItemDefinitionId, Is.EqualTo(item.DefinitionId));
+        Assert.That(exportedD.InventoryRevision, Is.EqualTo(31L));
+        Assert.That(exportedD.MoneyBalance, Is.EqualTo(17.5f));
+        Assert.That(exportedF.Action.ActionDefinitionId, Is.EqualTo(action.DefinitionId));
+        Assert.That(exportedF.Action.TargetItemDefinitionId, Is.EqualTo(item.DefinitionId));
+        Assert.That(exportedF.SiteObservations.Single().SiteRuntimeId,
+            Is.EqualTo("site/p12d-core-hydration"));
+        Assert.That(exportedF.CommercialMarkets.Single().ItemDefinitionId, Is.EqualTo(item.DefinitionId));
+        Assert.That(exportedF.TravelStateRevision, Is.EqualTo(36L));
+
+        Assert.That(DailyV1P12DNpcCoreOwnerExporter.TryCreate(
+            null, owners, null, out P12DNpcDRow mixedRosterD, out P12DNpcFRow mixedRosterF,
+            out DailyV1P12DNpcCoreOwnerExportFailure mixedRosterFailure), Is.True,
+            mixedRosterFailure.ToString());
+        Assert.That(mixedRosterD.RuntimeId, Is.EqualTo(exportedD.RuntimeId));
+        Assert.That(mixedRosterD.ResidenceRevision, Is.EqualTo(exportedD.ResidenceRevision));
+        Assert.That(mixedRosterF.TravelStateRevision, Is.EqualTo(exportedF.TravelStateRevision));
+
         Assert.That(owners.Definitions, Is.SameAs(definitions));
         Assert.That(owners.Definition, Is.SameAs(npc));
         Assert.That(owners.Status.Statuses.Single(), Is.SameAs(status));
@@ -62,6 +90,13 @@ public sealed class DailyV1P12DNpcCoreOwnerHydratorTests
         Assert.That(owners.MoneyAccount.Balance, Is.EqualTo(17.5f));
         Assert.That(owners.MoneyAccount.Revision, Is.EqualTo(32L));
         Assert.That(owners.Lifecycle.LifeStateRevision, Is.EqualTo(33L));
+        Assert.That(owners.Residence.OwnerRuntimeId, Is.EqualTo(runtimeId));
+        Assert.That(owners.Residence.SettlementRuntimeId, Is.EqualTo("city/p12d-core-hydration"));
+        Assert.That(owners.Residence.Revision, Is.EqualTo(40L));
+        Assert.That(owners.Residence.TrySetValue(null), Is.True);
+        owners.Residence.NotifyMutationCommitted();
+        Assert.That(owners.Residence.SettlementRuntimeId, Is.Null);
+        Assert.That(owners.Residence.Revision, Is.EqualTo(41L));
         Assert.That(owners.CrimeJusticeRevision, Is.EqualTo(34L));
         Assert.That(owners.ActionSlot.CurrentAction, Is.SameAs(action));
         Assert.That(owners.ActionSlot.CurrentPayload.TargetItem, Is.SameAs(item));
@@ -129,11 +164,13 @@ public sealed class DailyV1P12DNpcCoreOwnerHydratorTests
         string runtimeId,
         string[] statuses,
         P12DNpcInventoryRowValue[] inventory,
-        string actionDefinitionId) =>
-        new P12DNpcDRow(runtimeId, definitionId, null, null,
+        string actionDefinitionId,
+        string residenceSettlementRuntimeId = null,
+        long residenceRevision = 0L) =>
+        new P12DNpcDRow(runtimeId, definitionId, null, residenceSettlementRuntimeId,
             NpcLifeState.Alive, NpcInjurySeverity.None, statuses, 0,
             actionDefinitionId, null, null, null, null, inventory,
-            31L, 17.5f, 32L, 33L, 0L, 34L, 35L);
+            31L, 17.5f, 32L, 33L, residenceRevision, 34L, 35L);
 
     private static readonly ExplorableSiteKnowledgeObservation[] siteObservations =
     {

@@ -275,6 +275,8 @@ internal static class DailyV1P12DNpcCoreOwnerHydrator
             LifeState = d.LifeState,
             InjurySeverity = d.InjurySeverity,
             LifeStateRevision = d.LifeStateRevision,
+            ResidenceSettlementRuntimeId = d.ResidenceSettlementRuntimeId,
+            ResidenceRevision = d.ResidenceRevision,
             CrimeJusticeRevision = d.CrimeJusticeRevision,
             HiddenDaysRemaining = d.HiddenDaysRemaining,
             CurrentLocationRuntimeId = d.CurrentLocationRuntimeId,
@@ -473,4 +475,336 @@ internal static class DailyV1P12DNpcCoreOwnerHydrator
 
     private static bool ContainsNullable(HashSet<string> values, string id) =>
         id == null || (!string.IsNullOrWhiteSpace(id) && values != null && values.Contains(id));
+}
+
+internal enum DailyV1P12DNpcCoreOwnerExportFailure
+{
+    None,
+    InvalidInput,
+    InvalidOwner,
+    UnsupportedValue
+}
+
+/// <summary>
+/// Projects detached P12-D/F NPC rows from the exact selected Core NPC owner.
+/// When a complete selected graph is available, membership and definition
+/// identity are checked against it. Mixed legacy rosters may have no complete
+/// graph; their caller still validates the selected census witness identities
+/// and projections while persisted values come from the live Core owners.
+/// </summary>
+internal static class DailyV1P12DNpcCoreOwnerExporter
+{
+    internal static bool TryCreate(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners npc,
+        PersonRuntime boundPerson,
+        out P12DNpcDRow dRow,
+        out P12DNpcFRow fRow,
+        out DailyV1P12DNpcCoreOwnerExportFailure failure)
+    {
+        dRow = null;
+        fRow = null;
+        failure = DailyV1P12DNpcCoreOwnerExportFailure.InvalidInput;
+        if (npc == null
+            || (graph != null && (!graph.ContainsExactNpcOwner(npc)
+                || !ReferenceEquals(graph.Definitions, npc.Definitions)))
+            || npc.Definition == null || npc.Status == null || npc.Inventory == null
+            || npc.MoneyAccount == null || npc.Residence == null
+            || npc.Lifecycle == null || npc.ActionSlot == null || npc.Travel == null
+            || npc.TravelPlan == null || npc.HiddenState == null
+            || npc.MerchantTradePlan == null || npc.CommercialKnowledge == null
+            || npc.SpatialKnowledge == null || npc.ExplorableSiteKnowledge == null
+            || npc.AdventureSiteIntelKnowledge == null
+            || npc.LocalTopologyKnowledgeEmptyOwner == null
+            || !string.Equals(npc.Residence.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(npc.Travel.NpcRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(npc.SpatialKnowledge.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(npc.ExplorableSiteKnowledge.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
+            || !npc.LocalTopologyKnowledgeEmptyOwner.MatchesRuntimeId(npc.RuntimeId)
+            || !string.Equals(npc.AdventureSiteIntelKnowledge.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal))
+        {
+            failure = DailyV1P12DNpcCoreOwnerExportFailure.InvalidOwner;
+            return false;
+        }
+
+        MoneyAccountRuntime account = npc.MoneyAccount;
+        DailyV1NpcTravelOwner travel = npc.Travel;
+        DailyV1NpcTravelPlanOwner travelPlan = npc.TravelPlan;
+        DailyV1NpcMerchantTradePlanOwner merchantPlan = npc.MerchantTradePlan;
+        DailyV1CommercialKnowledgeOwner commercial = npc.CommercialKnowledge;
+        DailyV1ExplorableSiteKnowledgeOwner site = npc.ExplorableSiteKnowledge;
+        DailyV1AdventureSiteIntelKnowledgeOwner adventure = npc.AdventureSiteIntelKnowledge;
+        if (npc.Inventory.Revision < 0L || account.Revision < 0L
+            || float.IsNaN(account.Balance) || float.IsInfinity(account.Balance) || account.Balance < 0f
+            || npc.Lifecycle.LifeStateRevision < 0L || npc.Residence.Revision < 0L
+            || npc.CrimeJusticeRevision < 0L || npc.ActionSlot.Revision < 0L
+            || travel.Revision < 0L || travelPlan.Revision < 0L || merchantPlan.Revision < 0L
+            || commercial.Revision < 0L || site.Revision < 0L
+            || adventure.Revision < 0L || npc.SpatialKnowledge.Revision < 0L
+            || npc.HiddenState.RemainingDays < 0
+            || travel.TravelDaysRemaining < 0 || travel.TravelDaysTotal < 0
+            || (travel.TravelDaysTotal > 0 && travel.TravelDaysRemaining > travel.TravelDaysTotal)
+            || npc.LocalTopologyKnowledgeEmptyOwner.Revision != 0L
+            || npc.LocalTopologyKnowledgeEmptyOwner.PlaceObservationCount != 0
+            || npc.LocalTopologyKnowledgeEmptyOwner.ConnectionObservationCount != 0
+            || !Enum.IsDefined(typeof(NpcLifeState), npc.Lifecycle.LifeState)
+            || !NpcInjuryRules.IsValid(npc.Lifecycle.InjurySeverity)
+            || !npc.Status.TryCopyDefinitionIds(new List<string>())
+            || !npc.ActionSlot.TryCapturePayload(out DailyV1NpcActionPayloadSnapshot actionSnapshot))
+        {
+            failure = DailyV1P12DNpcCoreOwnerExportFailure.UnsupportedValue;
+            return false;
+        }
+
+        List<string> statusIds = new List<string>();
+        if (!npc.Status.TryCopyDefinitionIds(statusIds))
+        {
+            failure = DailyV1P12DNpcCoreOwnerExportFailure.UnsupportedValue;
+            return false;
+        }
+
+        List<P12DNpcInventoryRowValue> inventoryRows =
+            new List<P12DNpcInventoryRowValue>(npc.Inventory.Items.Count);
+        HashSet<string> itemIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1InventoryItemState item in npc.Inventory.Items)
+        {
+            if (item == null || item.Item == null || string.IsNullOrWhiteSpace(item.Item.DefinitionId)
+                || !npc.Definitions.Items.TryGetValue(item.Item.DefinitionId, out DailyV1ItemDefinition admittedItem)
+                || !ReferenceEquals(admittedItem, item.Item)
+                || item.Amount < 0 || float.IsNaN(item.AverageUnitCost)
+                || float.IsInfinity(item.AverageUnitCost) || item.AverageUnitCost < 0f
+                || !itemIds.Add(item.Item.DefinitionId))
+            {
+                failure = DailyV1P12DNpcCoreOwnerExportFailure.UnsupportedValue;
+                return false;
+            }
+            inventoryRows.Add(new P12DNpcInventoryRowValue(
+                item.Item.DefinitionId, item.Amount, item.AverageUnitCost));
+        }
+
+        P12DNpcActionValue actionValue = null;
+        if (actionSnapshot != null)
+        {
+            actionValue = new P12DNpcActionValue(
+                actionSnapshot.ActionDefinitionId,
+                actionSnapshot.TargetNpcRuntimeId,
+                actionSnapshot.TargetCityRuntimeId,
+                actionSnapshot.TargetItemDefinitionId,
+                actionSnapshot.Amount,
+                actionSnapshot.ExpectedUnitPrice,
+                actionSnapshot.SuccessChanceMultiplier,
+                actionSnapshot.TravelReason,
+                actionSnapshot.ExpectedNetValue,
+                actionSnapshot.OriginDecisionId,
+                actionSnapshot.StableOccurrenceKey,
+                actionSnapshot.CommercialDecisionEvidence,
+                actionSnapshot.CommercialScoutingEvidence);
+        }
+
+        P12DNpcTravelPlanValue travelPlanValue = new P12DNpcTravelPlanValue(
+            travelPlan.TargetLocationRuntimeId,
+            travelPlan.TargetCityRuntimeId,
+            travelPlan.Reason,
+            travelPlan.Utility,
+            travelPlan.ExpectedCost,
+            travelPlan.OriginDecisionId,
+            travelPlan.Revision);
+        P12DNpcMerchantPlanValue merchantPlanValue = new P12DNpcMerchantPlanValue(
+            merchantPlan.ItemDefinition?.DefinitionId,
+            merchantPlan.OriginCityRuntimeId,
+            merchantPlan.TargetCityRuntimeId,
+            merchantPlan.PlannedAmount,
+            merchantPlan.RawRemainingAmount,
+            merchantPlan.PurchasePricePerItem,
+            merchantPlan.WaitDaysAtDestination,
+            merchantPlan.PendingTravelDays,
+            merchantPlan.OriginDecisionId,
+            merchantPlan.Revision);
+
+        if (!commercial.TryCopyOwnerSnapshot(
+                out IReadOnlyList<DailyV1CommercialMarketObservation> markets,
+                out IReadOnlyList<DailyV1CommercialLiquidityObservation> liquidity,
+                out IReadOnlyList<DailyV1CommercialKnowledgeShareReceipt> receipts)
+            || markets == null || liquidity == null || receipts == null)
+        {
+            failure = DailyV1P12DNpcCoreOwnerExportFailure.UnsupportedValue;
+            return false;
+        }
+
+        List<P12DNpcCommercialMarketValue> marketValues =
+            new List<P12DNpcCommercialMarketValue>(markets.Count);
+        foreach (DailyV1CommercialMarketObservation observation in markets)
+        {
+            if (observation == null || observation.ItemDefinition == null
+                || !npc.Definitions.Items.TryGetValue(observation.ItemDefinitionId,
+                    out DailyV1ItemDefinition admittedItem)
+                || !ReferenceEquals(admittedItem, observation.ItemDefinition)
+                || !Enum.IsDefined(typeof(DailyV1CommercialKnowledgeSource), observation.Source))
+            {
+                failure = DailyV1P12DNpcCoreOwnerExportFailure.UnsupportedValue;
+                return false;
+            }
+            marketValues.Add(new P12DNpcCommercialMarketValue(
+                observation.LocationRuntimeId, observation.ItemDefinitionId,
+                observation.ObservedPrice, observation.ObservedStock,
+                observation.ObservedDay, observation.ReceivedDay,
+                (CommercialKnowledgeSource)(int)observation.Source, observation.SourceRuntimeId));
+        }
+
+        List<P12DNpcCommercialLiquidityValue> liquidityValues =
+            new List<P12DNpcCommercialLiquidityValue>(liquidity.Count);
+        foreach (DailyV1CommercialLiquidityObservation observation in liquidity)
+        {
+            if (observation == null
+                || !Enum.IsDefined(typeof(DailyV1CommercialKnowledgeSource), observation.Source))
+            {
+                failure = DailyV1P12DNpcCoreOwnerExportFailure.UnsupportedValue;
+                return false;
+            }
+            liquidityValues.Add(new P12DNpcCommercialLiquidityValue(
+                observation.LocationRuntimeId, observation.LiquidityMode,
+                observation.ObservedPurchasingPower, observation.ObservedDay,
+                observation.ReceivedDay,
+                (CommercialKnowledgeSource)(int)observation.Source, observation.SourceRuntimeId));
+        }
+
+        List<P12DNpcCommercialShareReceiptValue> receiptValues =
+            new List<P12DNpcCommercialShareReceiptValue>(receipts.Count);
+        foreach (DailyV1CommercialKnowledgeShareReceipt receipt in receipts)
+        {
+            if (receipt == null)
+            {
+                receiptValues.Add(null);
+                continue;
+            }
+            if (!P12DNpcCommercialShareReceiptValue.TryCreateFromOwnerSnapshot(
+                    receipt.OperationIdentity, receipt.Fingerprint, receipt.BoundaryOccurrenceId,
+                    receipt.SenderRuntimeId, receipt.SenderPersonId, receipt.ReceiverRuntimeId,
+                    receipt.ReceiverPersonId, receipt.SourceSnapshotFingerprint,
+                    receipt.AppliedObservationCount,
+                    out P12DNpcCommercialShareReceiptValue detachedReceipt))
+            {
+                failure = DailyV1P12DNpcCoreOwnerExportFailure.UnsupportedValue;
+                return false;
+            }
+            receiptValues.Add(detachedReceipt);
+        }
+
+        if (!site.TryCopyOwnerSnapshot(
+                out IReadOnlyList<ExplorableSiteKnowledgeObservation> siteSnapshot,
+                out long siteRevision)
+            || siteSnapshot == null)
+        {
+            failure = DailyV1P12DNpcCoreOwnerExportFailure.UnsupportedValue;
+            return false;
+        }
+
+        List<ExplorableSiteKnowledgeObservation> siteObservations =
+            new List<ExplorableSiteKnowledgeObservation>(siteSnapshot.Count);
+        foreach (ExplorableSiteKnowledgeObservation observation in siteSnapshot)
+        {
+            if (observation == null)
+            {
+                failure = DailyV1P12DNpcCoreOwnerExportFailure.UnsupportedValue;
+                return false;
+            }
+            siteObservations.Add(new ExplorableSiteKnowledgeObservation(
+                observation.SiteRuntimeId, observation.LocationRuntimeId,
+                observation.ObservedDay, observation.ReceivedDay, observation.Source));
+        }
+
+        if (!adventure.TryCopyOwnerSnapshot(
+                out IReadOnlyList<AdventureOppositionObservation> opposition,
+                out IReadOnlyList<AdventureNotableItemObservation> notableItems,
+                out IReadOnlyList<AdventureCommonResourceObservation> resources,
+                out IReadOnlyList<AdventureAccessObservation> access,
+                out long adventureRevision)
+            || opposition == null || notableItems == null || resources == null || access == null
+            || npc.SpatialKnowledge.KnownLocationRuntimeIds == null
+            || npc.SpatialKnowledge.KnownRouteRuntimeIds == null)
+        {
+            failure = DailyV1P12DNpcCoreOwnerExportFailure.UnsupportedValue;
+            return false;
+        }
+
+        PersonRuntime person = boundPerson;
+        string personIdValue = null;
+        string residenceId = npc.Residence.SettlementRuntimeId;
+        if (person != null && (person.PersonId == null
+            || !string.Equals(person.MaterializedNpcRuntimeId, npc.RuntimeId, StringComparison.Ordinal)))
+        {
+            failure = DailyV1P12DNpcCoreOwnerExportFailure.InvalidOwner;
+            return false;
+        }
+        if (graph?.PersonStore != null)
+        {
+            bool hasGraphPerson = graph.PersonStore.TryGetByMaterializedNpcRuntimeId(
+                npc.RuntimeId, out PersonRuntime graphPerson);
+            if ((person != null && (!hasGraphPerson || !ReferenceEquals(person, graphPerson)))
+                || (person == null && hasGraphPerson))
+            {
+                failure = DailyV1P12DNpcCoreOwnerExportFailure.InvalidOwner;
+                return false;
+            }
+            person = graphPerson;
+        }
+        if (person != null)
+        {
+            personIdValue = person.PersonId.Value;
+            residenceId = person.ResidenceSettlementRuntimeId;
+        }
+
+        dRow = new P12DNpcDRow(
+            npc.RuntimeId,
+            npc.Definition.DefinitionId,
+            personIdValue,
+            residenceId,
+            npc.Lifecycle.LifeState,
+            npc.Lifecycle.InjurySeverity,
+            statusIds,
+            npc.HiddenState.RemainingDays,
+            npc.ActionSlot.CurrentAction?.DefinitionId,
+            travel.CurrentCityRuntimeId,
+            travel.CurrentLocationRuntimeId,
+            travel.DestinationCityRuntimeId,
+            travel.DestinationLocationRuntimeId,
+            inventoryRows,
+            npc.Inventory.Revision,
+            account.Balance,
+            account.Revision,
+            npc.Lifecycle.LifeStateRevision,
+            npc.Residence.Revision,
+            npc.CrimeJusticeRevision,
+            npc.ActionSlot.Revision);
+
+        fRow = new P12DNpcFRow(
+            npc.RuntimeId,
+            actionValue,
+            travel.TravelDaysRemaining,
+            travel.TravelDaysTotal,
+            travel.TravelRouteRuntimeId,
+            travel.TravelStartedToday,
+            travel.TravelOriginDecisionId,
+            travel.ActiveTravelPartyId,
+            travel.Revision,
+            merchantPlanValue,
+            travelPlanValue,
+            siteObservations,
+            siteRevision,
+            new List<string>(npc.SpatialKnowledge.KnownLocationRuntimeIds),
+            new List<string>(npc.SpatialKnowledge.KnownRouteRuntimeIds),
+            npc.SpatialKnowledge.Revision,
+            opposition,
+            notableItems,
+            resources,
+            access,
+            adventureRevision,
+            marketValues,
+            liquidityValues,
+            receiptValues,
+            commercial.Revision);
+
+        failure = DailyV1P12DNpcCoreOwnerExportFailure.None;
+        return true;
+    }
 }

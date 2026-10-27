@@ -36,6 +36,7 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal DailyV1NpcTravelOwner Travel { get; }
     internal DailyV1NpcTravelPlanOwner TravelPlan { get; }
     internal DailyV1NpcHiddenStateOwner HiddenState { get; }
+    internal DailyV1NpcResidenceOwner Residence { get; }
     internal long CrimeJusticeRevision { get; private set; }
 
     internal bool CanCommitPersonDeathAfterValidation(
@@ -119,6 +120,7 @@ internal sealed class DailyV1NpcRuntimeOwners
         Travel = new DailyV1NpcTravelOwner(runtimeId);
         TravelPlan = new DailyV1NpcTravelPlanOwner();
         HiddenState = new DailyV1NpcHiddenStateOwner();
+        Residence = new DailyV1NpcResidenceOwner(runtimeId);
     }
 
     internal static bool TryCreateInitial(
@@ -303,6 +305,9 @@ internal sealed class DailyV1NpcRuntimeOwners
             || state.AdventureSiteIntelKnowledge == null
             || state.ActionRevision < 0L
             || state.LifeStateRevision < 0L
+            || state.ResidenceRevision < 0L
+            || (state.ResidenceSettlementRuntimeId != null
+                && string.IsNullOrWhiteSpace(state.ResidenceSettlementRuntimeId))
             || state.CrimeJusticeRevision < 0L
             || state.HiddenDaysRemaining < 0
             || !Enum.IsDefined(typeof(NpcLifeState), state.LifeState)
@@ -325,6 +330,8 @@ internal sealed class DailyV1NpcRuntimeOwners
             || !candidate.ActionSlot.TryInstallRevision(state.ActionRevision)
             || !candidate.Lifecycle.TryInstallState(state.LifeState, state.InjurySeverity,
                 state.LifeStateRevision)
+            || !candidate.Residence.TryInstallExact(
+                state.ResidenceSettlementRuntimeId, state.ResidenceRevision)
             || !candidate.TryInstallCrimeJusticeRevision(state.CrimeJusticeRevision)
             || !candidate.HiddenState.TryInstallExact(state.HiddenDaysRemaining)
             || !candidate.Travel.TryInstallState(
@@ -374,6 +381,8 @@ internal sealed class DailyV1NpcRuntimeOwners
             || !ReferenceEquals(AdventureSiteIntelKnowledge, state.AdventureSiteIntelKnowledge)
             || LocalTopologyKnowledgeEmptyOwner == null
             || !LocalTopologyKnowledgeEmptyOwner.MatchesRuntimeId(RuntimeId)
+            || Residence == null
+            || !Residence.Matches(state.ResidenceSettlementRuntimeId, state.ResidenceRevision)
             || Status == null || state.Statuses == null
             || Status.Statuses.Count != state.Statuses.Count
             || ActionSlot == null
@@ -456,6 +465,8 @@ internal sealed class DailyV1NpcRuntimeRestoreState
     internal NpcLifeState LifeState { get; set; }
     internal NpcInjurySeverity InjurySeverity { get; set; }
     internal long LifeStateRevision { get; set; }
+    internal string ResidenceSettlementRuntimeId { get; set; }
+    internal long ResidenceRevision { get; set; }
     internal long CrimeJusticeRevision { get; set; }
     internal int HiddenDaysRemaining { get; set; }
     internal string CurrentLocationRuntimeId { get; set; }
@@ -476,6 +487,55 @@ internal sealed class DailyV1NpcRuntimeRestoreState
     internal float TravelPlanExpectedCost { get; set; }
     internal string TravelPlanOriginDecisionId { get; set; }
     internal long TravelPlanRevision { get; set; }
+}
+
+/// <summary>
+/// Owns residence for a selected NPC that is not backed by a Person. Person-backed
+/// residence remains authoritative in PersonRuntime and its PersonStore census.
+/// NpcRuntime performs gameplay admission before committing this selected owner.
+/// </summary>
+internal sealed class DailyV1NpcResidenceOwner
+{
+    internal string OwnerRuntimeId { get; }
+    internal string SettlementRuntimeId { get; private set; }
+    internal long Revision { get; private set; }
+
+    internal DailyV1NpcResidenceOwner(string ownerRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(ownerRuntimeId))
+            throw new ArgumentException("An NPC runtime identity is required.", nameof(ownerRuntimeId));
+        OwnerRuntimeId = ownerRuntimeId;
+    }
+
+    internal bool CanAdvanceRevision(int increments) =>
+        increments >= 0 && Revision <= long.MaxValue - increments;
+
+    internal bool TryInstallExact(string settlementRuntimeId, long revision)
+    {
+        if (revision < 0L
+            || (settlementRuntimeId != null && string.IsNullOrWhiteSpace(settlementRuntimeId)))
+            return false;
+        SettlementRuntimeId = settlementRuntimeId;
+        Revision = revision;
+        return true;
+    }
+
+    internal bool TrySetValue(string settlementRuntimeId)
+    {
+        if (settlementRuntimeId != null && string.IsNullOrWhiteSpace(settlementRuntimeId))
+            return false;
+        SettlementRuntimeId = settlementRuntimeId;
+        return true;
+    }
+
+    internal void NotifyMutationCommitted()
+    {
+        if (Revision < long.MaxValue) Revision++;
+    }
+
+    internal bool Matches(string settlementRuntimeId, long revision) =>
+        string.Equals(SettlementRuntimeId, settlementRuntimeId, StringComparison.Ordinal)
+        && Revision == revision;
 }
 
 /// <summary>
