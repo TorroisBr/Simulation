@@ -340,8 +340,11 @@ public class TesteSimulacao : MonoBehaviour
                 + compatibilityDiagnostic);
             return true;
         }
-        if (!P12AContinuationStore.TryLoad(null, compatibility, persistentDataPath, fileOperations,
-                out P12AContinuationImage image, out P12AResult loadResult))
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            persistentDataPath, fileOperations, stageCompleted: null, logOutput: null,
+            unityV1Identity: compatibility);
+        if (!dailyV1Application.TryLoadInitialContinuationImageForStart(
+                null, host, out P12AContinuationImage image, out P12AResult loadResult))
         {
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A continuation load failed; genesis was not started. "

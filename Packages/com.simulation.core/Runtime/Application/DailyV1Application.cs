@@ -47,6 +47,8 @@ internal sealed class DailyV1Application
         new DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>(
             session => session.ExecutionBoundaryState);
     private SimulationRuntimeAdmissionContext bootstrapAdmissionContext;
+    private bool initialContinuationLoadAttempted;
+    private bool initialContinuationLoadBlocksGenesis;
     private bool initialGenesisPreparationAttempted;
     private DailyV1GenesisComposition preparedInitialGenesis;
     private DailyV1ActiveRuntimeSession preparedInitialSession;
@@ -121,6 +123,7 @@ internal sealed class DailyV1Application
         lock (activeSessionGate.SyncRoot)
         {
             if (initialGenesisPreparationAttempted
+                || initialContinuationLoadBlocksGenesis
                 || preparedInitialGenesis != null
                 || preparedInitialSession != null
                 || activeSessionGate.Current != null
@@ -727,6 +730,93 @@ internal sealed class DailyV1Application
         return P12AContinuationStore.TryLoadDotNetV2(
             null, dotNetV2Identity, persistentDataRoot, fileOperations,
             out image, out result);
+    }
+
+    /// <summary>
+    /// Admits the initial continuation slot before genesis. A missing slot is
+    /// the only outcome that permits the caller to continue into genesis;
+    /// every present-but-invalid, incompatible, or inaccessible slot blocks
+    /// genesis for this application instance. The selected owner-thread context
+    /// is captured by this Core application and no runtime identity is allocated
+    /// by this read.
+    /// </summary>
+    internal bool TryLoadInitialContinuationImageForStart(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ApplicationHost host,
+        out P12AContinuationImage image,
+        out P12AResult result)
+    {
+        image = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (host == null
+            || string.IsNullOrWhiteSpace(host.PersistentDataRoot)
+            || host.FileOperations == null
+            || (host.UnityV1Identity == null && definitions == null))
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (initialContinuationLoadAttempted
+                || initialGenesisPreparationAttempted
+                || preparedInitialGenesis != null
+                || preparedInitialSession != null
+                || activeSessionGate.Current != null
+                || activeSessionGate.ActiveOperationCount != 0)
+                return false;
+
+            if (bootstrapAdmissionContext == null)
+            {
+                bootstrapAdmissionContext = new SimulationRuntimeAdmissionContext(
+                    SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+                    Thread.CurrentThread,
+                    Thread.CurrentThread.ManagedThreadId);
+            }
+
+            if (!bootstrapAdmissionContext.IsOwnedByCurrentThread())
+            {
+                result = new P12AResult(P12AResultCode.WrongThread);
+                return false;
+            }
+
+            initialContinuationLoadAttempted = true;
+        }
+
+        bool loaded;
+        if (host.UnityV1Identity != null)
+        {
+            loaded = P12AContinuationStore.TryLoad(
+                null, host.UnityV1Identity, host.PersistentDataRoot,
+                host.FileOperations, out image, out result);
+        }
+        else if (!DailyV1CompatibilityDescriptorFactory.TryCreateDotNetV2(
+                definitions, host.DotNetIdentity,
+                out P12ACompatibilityDescriptorV2 dotNetIdentity, out _))
+        {
+            result = new P12AResult(P12AResultCode.IncompatibleContentOrConfiguration);
+            loaded = false;
+        }
+        else
+        {
+            loaded = P12AContinuationStore.TryLoadDotNetV2(
+                null, dotNetIdentity, host.PersistentDataRoot,
+                host.FileOperations, out image, out result);
+        }
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            // No-save is the only safe fall-through to genesis. A loaded image
+            // must be restored, and any storage/compatibility failure must fail
+            // closed rather than creating a replacement world.
+            initialContinuationLoadBlocksGenesis =
+                loaded || result == null || result.Code != P12AResultCode.NoSave;
+        }
+
+        if (!loaded && (result == null || result.Code != P12AResultCode.NoSave))
+            image = null;
+        return loaded;
     }
 
     /// <summary>
