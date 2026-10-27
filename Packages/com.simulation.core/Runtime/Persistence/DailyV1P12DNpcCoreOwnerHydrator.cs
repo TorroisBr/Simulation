@@ -754,6 +754,9 @@ internal static class DailyV1P12DNpcCoreOwnerExporter
             residenceId = person.ResidenceSettlementRuntimeId;
         }
 
+        long residenceRevision = person != null
+            ? PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person)
+            : npc.Residence.Revision;
         dRow = new P12DNpcDRow(
             npc.RuntimeId,
             npc.Definition.DefinitionId,
@@ -773,7 +776,7 @@ internal static class DailyV1P12DNpcCoreOwnerExporter
             account.Balance,
             account.Revision,
             npc.Lifecycle.LifeStateRevision,
-            npc.Residence.Revision,
+            residenceRevision,
             npc.CrimeJusticeRevision,
             npc.ActionSlot.Revision);
 

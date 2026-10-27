@@ -80,6 +80,32 @@ public sealed class DailyV1P12DNpcCoreOwnerHydratorTests
         Assert.That(mixedRosterD.ResidenceRevision, Is.EqualTo(exportedD.ResidenceRevision));
         Assert.That(mixedRosterF.TravelStateRevision, Is.EqualTo(exportedF.TravelStateRevision));
 
+        PersonStore boundPersons = new PersonStore();
+        PersonRuntime boundPerson = new PersonRuntime(
+            new PersonId("person/p12d-core-hydration"), 0L);
+        Assert.That(boundPersons.TryRegister(boundPerson, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(boundPersons.TryBindMaterializedNpc(
+            boundPerson.PersonId, runtimeId, out PersonStoreFailure bindFailure),
+            Is.True, bindFailure.ToString());
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            boundPerson, "city/p12d-core-hydration"), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(boundPerson), Is.EqualTo(1L));
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions,
+            Array.Empty<DailyV1CityRuntimeOwners>(),
+            new[] { owners },
+            null, null, null, null, boundPersons,
+            out DailyV1SelectedRuntimeOwnerGraph boundGraph), Is.True);
+        Assert.That(DailyV1P12DNpcCoreOwnerExporter.TryCreate(
+            boundGraph, owners, boundPerson,
+            out P12DNpcDRow boundD, out _,
+            out DailyV1P12DNpcCoreOwnerExportFailure boundFailure), Is.True, boundFailure.ToString());
+        Assert.That(boundD.PersonIdValue, Is.EqualTo(boundPerson.PersonId.Value));
+        Assert.That(boundD.ResidenceSettlementRuntimeId, Is.EqualTo("city/p12d-core-hydration"));
+        Assert.That(boundD.ResidenceRevision, Is.EqualTo(1L),
+            "The bound Person is the selected authority for residence and its revision.");
+
         Assert.That(owners.Definitions, Is.SameAs(definitions));
         Assert.That(owners.Definition, Is.SameAs(npc));
         Assert.That(owners.Status.Statuses.Single(), Is.SameAs(status));

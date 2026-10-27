@@ -2373,7 +2373,7 @@ public class NpcRuntime : ICapabilityConditionSource
     /// </summary>
     internal bool ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity severity)
     {
-        bool residenceChanged = !string.IsNullOrWhiteSpace(residenceSettlementRuntimeId);
+        bool residenceChanged = !string.IsNullOrWhiteSpace(ResidenceSettlementRuntimeId);
         bool currentActionChanged = currentActionRuntime != null;
         if (NpcInjuryRules.IsValid(severity) == false
             || IsDead
@@ -3323,7 +3323,7 @@ public class NpcRuntime : ICapabilityConditionSource
         string normalized = string.IsNullOrWhiteSpace(settlementRuntimeId) == true
             ? null
             : settlementRuntimeId;
-        if (string.Equals(residenceSettlementRuntimeId, normalized, StringComparison.Ordinal))
+        if (string.Equals(ResidenceSettlementRuntimeId, normalized, StringComparison.Ordinal))
             return true;
         if (!CanCommitP12LifecycleMutation(false, true))
             return false;
