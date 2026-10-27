@@ -137,6 +137,84 @@ public sealed class DailyV1RuntimeProtocolOperationContractsTests
             "An unsealed operation inventory cannot admit a runtime operation.");
     }
 
+    [Test]
+    public void CoreOwnerSectionInventoryIsSortedSealedAndFailClosed()
+    {
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
+
+        Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.False,
+            "An empty owner-section declaration cannot be sealed.");
+        Assert.That(state.TryRegisterExpectedOwnerSectionContract(
+            "owner.z", 2, OwnerSectionRole.Required), Is.True);
+        Assert.That(state.TryRegisterExpectedOwnerSectionContract(
+            "owner.a", 1, OwnerSectionRole.ExplicitlyEmpty), Is.True);
+        Assert.That(state.TryRegisterExpectedOwnerSectionContract(
+            "owner.a", 1, OwnerSectionRole.ExplicitlyEmpty), Is.False);
+
+        IReadOnlyList<DailyV1OwnerSectionContractIdentity> contracts =
+            state.GetExpectedOwnerSectionContractInventory(out long revision);
+        Assert.That(contracts, Has.Count.EqualTo(2));
+        Assert.That(contracts[0].SectionId, Is.EqualTo("owner.a"));
+        Assert.That(contracts[1].SectionId, Is.EqualTo("owner.z"));
+        Assert.That(contracts[0].SchemaVersion, Is.EqualTo(1));
+        Assert.That(contracts[0].Role, Is.EqualTo(OwnerSectionRole.ExplicitlyEmpty));
+
+        Assert.That(state.TryReplaceExpectedOwnerSectionContractInventoryBeforeSeal(
+            new[]
+            {
+                new DailyV1OwnerSectionContractIdentity("owner.replacement", 1, OwnerSectionRole.Required),
+                new DailyV1OwnerSectionContractIdentity("owner.replacement", 1, OwnerSectionRole.Required)
+            }), Is.False, "Duplicate staged identities must reject without replacing the prior inventory.");
+        Assert.That(state.ExpectedOwnerSectionContractInventoryRevision, Is.EqualTo(revision));
+        IReadOnlyList<DailyV1OwnerSectionContractIdentity> unchanged =
+            state.GetExpectedOwnerSectionContractInventory(out _);
+        Assert.That(unchanged, Has.Count.EqualTo(2));
+        Assert.That(unchanged[0].SectionId, Is.EqualTo("owner.a"));
+        Assert.That(unchanged[1].SectionId, Is.EqualTo("owner.z"));
+
+        Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.True);
+        Assert.That(state.ExpectedOwnerSectionContractInventorySealed, Is.True);
+        Assert.That(state.TryRegisterExpectedOwnerSectionContract(
+            "owner.late", 1, OwnerSectionRole.Required), Is.False);
+        Assert.That(state.TryReplaceExpectedOwnerSectionContractInventoryBeforeSeal(
+            new[] { new DailyV1OwnerSectionContractIdentity("owner.late", 1, OwnerSectionRole.Required) }),
+            Is.False);
+    }
+
+    [Test]
+    public void CoreSealedOwnerSectionInventoryChangesOnlyInsideActiveRuntimeOperation()
+    {
+        DailyV1ExecutionBoundaryState state = CreateAdmittedExecutionState();
+        IReadOnlyList<string> operationIds =
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                hasRuntimeAdmission: true, hasTravelPartySystem: false, hasTravelSystem: false);
+        foreach (string operationId in operationIds)
+            Assert.That(state.TryRegisterRuntimeProtocolOperationContract(operationId), Is.True);
+        Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
+
+        Assert.That(state.TryRegisterExpectedOwnerSectionContract(
+            "owner.initial", 1, OwnerSectionRole.Required), Is.True);
+        Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.True);
+        DailyV1OwnerSectionContractIdentity[] transitioned =
+        {
+            new DailyV1OwnerSectionContractIdentity("owner.initial", 1, OwnerSectionRole.Required),
+            new DailyV1OwnerSectionContractIdentity("npc.knowledge.dynamic", 1, OwnerSectionRole.Required)
+        };
+
+        Assert.That(state.TryReplaceExpectedOwnerSectionContractInventoryDuringRuntimeOperation(
+            transitioned), Is.False, "A roster census cannot change its section identities while idle.");
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcMembership), Is.True);
+        Assert.That(state.TryReplaceExpectedOwnerSectionContractInventoryDuringRuntimeOperation(
+            transitioned), Is.True);
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+
+        IReadOnlyList<DailyV1OwnerSectionContractIdentity> contracts =
+            state.GetExpectedOwnerSectionContractInventory(out _);
+        Assert.That(contracts, Has.Count.EqualTo(2));
+        Assert.That(contracts[0].SectionId, Is.EqualTo("npc.knowledge.dynamic"));
+        Assert.That(state.ExpectedOwnerSectionContractInventorySealed, Is.True);
+    }
     private static DailyV1ExecutionBoundaryState CreateAdmittedExecutionState()
     {
         SimulationRuntimeAdmissionContext admission =

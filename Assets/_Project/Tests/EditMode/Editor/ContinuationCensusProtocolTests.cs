@@ -311,6 +311,11 @@ public sealed class ContinuationCensusProtocolTests
             new SimulationTime(), admission, SimulationRuntimeCompositionProfile.Standard,
             new WorldId(System.Guid.NewGuid()));
         ContinuationCensusProtocol protocol = CreateOperationProtocol(runtimeState);
+        IReadOnlyList<DailyV1OwnerSectionContractIdentity> coreSectionContracts =
+            runtimeState.GetExpectedOwnerSectionContractInventory(out _);
+        Assert.That(runtimeState.ExpectedOwnerSectionContractInventorySealed, Is.True);
+        Assert.That(coreSectionContracts, Has.Count.EqualTo(1));
+        Assert.That(coreSectionContracts[0].SectionId, Is.EqualTo(ReceiptSectionId));
 
         Assert.That(protocol.MutationEpochState, Is.SameAs(runtimeState.MutationEpochState),
             "P12 mutation epoch state belongs to the same Core runtime boundary as operation and capture state.");

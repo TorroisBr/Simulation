@@ -228,6 +228,44 @@ public sealed class ContinuationCensusProtocol
         ? sharedExecutionState.ActiveRuntimeOperationCount
         : standaloneActiveOperationCount;
     internal int ActiveOperationCount => activeOperationCount;
+    private bool TryCommitExpectedSectionInventory(
+        Dictionary<string, OwnerSectionContract> stagedExpected,
+        bool runtimeProtocolTransition = false)
+    {
+        if (stagedExpected == null) return false;
+        if (sharedExecutionState != null)
+        {
+            List<DailyV1OwnerSectionContractIdentity> identities =
+                new List<DailyV1OwnerSectionContractIdentity>(stagedExpected.Count);
+            foreach (OwnerSectionContract contract in stagedExpected.Values)
+            {
+                if (contract == null) return false;
+                identities.Add(new DailyV1OwnerSectionContractIdentity(
+                    contract.SectionId, contract.SchemaVersion, contract.Role));
+            }
+            bool committed = runtimeProtocolTransition
+                ? sharedExecutionState.TryReplaceExpectedOwnerSectionContractInventoryDuringRuntimeOperation(identities)
+                : sharedExecutionState.TryReplaceExpectedOwnerSectionContractInventoryBeforeSeal(identities);
+            if (!committed) return false;
+            expectedSectionsSealed = sharedExecutionState.ExpectedOwnerSectionContractInventorySealed;
+        }
+        // In shared mode this is a provider-facing projection of Core state.
+        expectedSections = stagedExpected;
+        return true;
+    }
+
+    private void RefreshExpectedSectionProjectionFromCore()
+    {
+        IReadOnlyList<DailyV1OwnerSectionContractIdentity> contracts =
+            sharedExecutionState.GetExpectedOwnerSectionContractInventory(out _);
+        Dictionary<string, OwnerSectionContract> projection =
+            new Dictionary<string, OwnerSectionContract>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionContractIdentity contract in contracts)
+            projection.Add(contract.SectionId,
+                new OwnerSectionContract(contract.SectionId, contract.SchemaVersion, contract.Role));
+        expectedSections = projection;
+        expectedSectionsSealed = sharedExecutionState.ExpectedOwnerSectionContractInventorySealed;
+    }
     private bool hasRegisteredOperationInventory => sharedExecutionState != null
         ? sharedExecutionState.HasRegisteredRuntimeProtocolOperationContracts
         : expectedOperations.Count > 0;
@@ -267,6 +305,8 @@ public sealed class ContinuationCensusProtocol
         this.sharedExecutionState = sharedExecutionState;
         mutationEpochState = sharedExecutionState?.MutationEpochState
             ?? new DailyV1MutationEpochState();
+        if (sharedExecutionState != null)
+            RefreshExpectedSectionProjectionFromCore();
     }
 
     /// <summary>
@@ -298,7 +338,19 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
         }
-        expectedSections.Add(contract.SectionId, contract);
+
+        Dictionary<string, OwnerSectionContract> staged =
+            new Dictionary<string, OwnerSectionContract>(expectedSections, StringComparer.Ordinal);
+        staged.Add(contract.SectionId, contract);
+        if (sharedExecutionState != null
+            && !sharedExecutionState.TryRegisterExpectedOwnerSectionContract(
+                contract.SectionId, contract.SchemaVersion, contract.Role))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        expectedSections = staged;
         failure = ContinuationCensusFailure.None;
         return true;
     }
@@ -321,11 +373,22 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
         }
-        expectedSectionsSealed = true;
+        if (sharedExecutionState != null)
+        {
+            if (!sharedExecutionState.TrySealExpectedOwnerSectionContractInventory())
+            {
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+            expectedSectionsSealed = sharedExecutionState.ExpectedOwnerSectionContractInventorySealed;
+        }
+        else
+        {
+            expectedSectionsSealed = true;
+        }
         failure = ContinuationCensusFailure.None;
         return true;
     }
-
     /// <summary>Registers an owner-backed census provider for an expected section.</summary>
     public bool RegisterCensusProvider(
         string sectionId,
@@ -422,7 +485,12 @@ public sealed class ContinuationCensusProtocol
             stagedProviders[i] = candidate.Provider;
         }
 
-        expectedSections = stagedExpected;
+        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
         registeredSections = stagedRegistered;
         spatialKnowledgeSectionIds = stagedIds;
         spatialKnowledgeNpcOwnersBySection = stagedNpcOwners;
@@ -469,7 +537,12 @@ public sealed class ContinuationCensusProtocol
             providers[i] = candidate.Provider;
         }
 
-        expectedSections = stagedExpected;
+        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
         registeredSections = stagedRegistered;
         npcTravelStateSectionIds = ids;
         npcTravelStateNpcOwnersBySection = owners;
@@ -505,7 +578,13 @@ public sealed class ContinuationCensusProtocol
             owners.Add(c.SectionId, c.NpcOwner);
             providers[i] = c.Provider;
         }
-        expectedSections = stagedExpected; registeredSections = stagedRegistered;
+        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        registeredSections = stagedRegistered;
         inventorySectionIds = ids; inventoryNpcOwnersBySection = owners; inventoryRoster = roster;
         inventoryFamilyProviders = Array.AsReadOnly(providers);
         failure = ContinuationCensusFailure.None; return true;
@@ -544,7 +623,12 @@ public sealed class ContinuationCensusProtocol
             providers[i] = candidate.Provider;
         }
 
-        expectedSections = stagedExpected;
+        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
         registeredSections = stagedRegistered;
         moneyAccountSectionIds = ids;
         moneyAccountNpcOwnersBySection = owners;
@@ -577,7 +661,13 @@ public sealed class ContinuationCensusProtocol
             stagedRegistered.Add(c.SectionId, section); owners.Add(c.SectionId, c.NpcOwner);
             providers[i] = c.Provider;
         }
-        expectedSections = stagedExpected; registeredSections = stagedRegistered;
+        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        registeredSections = stagedRegistered;
         npcKnowledgeSectionIds = ids; npcKnowledgeNpcOwnersBySection = owners; npcKnowledgeRoster = roster;
         npcKnowledgeFamilyProviders = Array.AsReadOnly(providers);
         failure = ContinuationCensusFailure.None; return true;
@@ -621,7 +711,12 @@ public sealed class ContinuationCensusProtocol
             providers[i] = candidate.Provider;
         }
 
-        expectedSections = stagedExpected;
+        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
         registeredSections = stagedRegistered;
         npcPlanSectionIds = ids;
         npcPlanNpcOwnersBySection = owners;
@@ -678,7 +773,12 @@ public sealed class ContinuationCensusProtocol
             stagedProviders[i] = candidate.Provider;
         }
 
-        expectedSections = stagedExpected;
+        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
         registeredSections = stagedRegistered;
         npcReceiptOwnerSectionIds = stagedIds;
         npcReceiptOwnerNpcOwnersBySection = stagedNpcOwners;
@@ -725,7 +825,12 @@ public sealed class ContinuationCensusProtocol
             stagedProviders[i] = candidate.Provider;
         }
 
-        expectedSections = stagedExpected;
+        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
         registeredSections = stagedRegistered;
         lifecycleSectionIds = stagedIds;
         lifecycleOwnersBySection = stagedOwners;
@@ -2048,7 +2153,12 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        expectedSections = stagedExpected;
+        if (!TryCommitExpectedSectionInventory(stagedExpected, runtimeProtocolTransition: true))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
         registeredSections = stagedRegistered;
         spatialKnowledgeSectionIds = stagedDynamicIds;
         spatialKnowledgeNpcOwnersBySection = stagedDynamicNpcOwners;

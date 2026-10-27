@@ -1,6 +1,21 @@
 using System;
 using System.Collections.Generic;
 
+internal sealed class DailyV1OwnerSectionContractIdentity
+{
+    internal string SectionId { get; }
+    internal int SchemaVersion { get; }
+    internal OwnerSectionRole Role { get; }
+
+    internal DailyV1OwnerSectionContractIdentity(string sectionId, int schemaVersion, OwnerSectionRole role)
+    {
+        SectionId = sectionId;
+        SchemaVersion = schemaVersion;
+        Role = role;
+    }
+}
+
+
 internal enum DailyV1OperationScopeKind : byte
 {
     Application = 0,
@@ -27,6 +42,10 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private readonly object operationSyncRoot = new object();
     private readonly List<DailyV1OperationScopeKind> activeOperationScopes =
         new List<DailyV1OperationScopeKind>();
+    private Dictionary<string, DailyV1OwnerSectionContractIdentity> expectedOwnerSectionContracts =
+        new Dictionary<string, DailyV1OwnerSectionContractIdentity>(StringComparer.Ordinal);
+    private bool expectedOwnerSectionContractInventorySealed;
+    private long expectedOwnerSectionContractInventoryRevision;
     private readonly HashSet<string> expectedRuntimeProtocolOperationContracts =
         new HashSet<string>(StringComparer.Ordinal);
     private readonly List<string> activeRuntimeProtocolOperationContracts =
@@ -184,6 +203,158 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    /// <summary>
+    /// Owns the logical P12 section contracts attached to this runtime.
+    /// This is only the declared inventory; provider registration and exact
+    /// selected-profile completeness remain separately assessed by the census
+    /// adapter and its composition evidence.
+    /// </summary>
+    internal bool ExpectedOwnerSectionContractInventorySealed
+    {
+        get { lock (operationSyncRoot) return expectedOwnerSectionContractInventorySealed; }
+    }
+
+    internal long ExpectedOwnerSectionContractInventoryRevision
+    {
+        get { lock (operationSyncRoot) return expectedOwnerSectionContractInventoryRevision; }
+    }
+
+    internal IReadOnlyList<DailyV1OwnerSectionContractIdentity> GetExpectedOwnerSectionContractInventory(
+        out long revision)
+    {
+        lock (operationSyncRoot)
+        {
+            List<DailyV1OwnerSectionContractIdentity> contracts =
+                new List<DailyV1OwnerSectionContractIdentity>(expectedOwnerSectionContracts.Values);
+            contracts.Sort((left, right) =>
+                StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+            revision = expectedOwnerSectionContractInventoryRevision;
+            return contracts.AsReadOnly();
+        }
+    }
+
+    internal bool TryRegisterExpectedOwnerSectionContract(
+        string sectionId,
+        int schemaVersion,
+        OwnerSectionRole role)
+    {
+        if (string.IsNullOrWhiteSpace(sectionId)
+            || schemaVersion <= 0
+            || !Enum.IsDefined(typeof(OwnerSectionRole), role))
+            return false;
+
+        lock (operationSyncRoot)
+        {
+            if (expectedOwnerSectionContractInventorySealed
+                || activeOperationScopes.Count != 0
+                || exclusiveSessionReplacementInProgress
+                || expectedOwnerSectionContractInventoryRevision == long.MaxValue
+                || expectedOwnerSectionContracts.ContainsKey(sectionId))
+                return false;
+
+            Dictionary<string, DailyV1OwnerSectionContractIdentity> staged =
+                new Dictionary<string, DailyV1OwnerSectionContractIdentity>(
+                    expectedOwnerSectionContracts, StringComparer.Ordinal);
+            staged.Add(sectionId,
+                new DailyV1OwnerSectionContractIdentity(sectionId, schemaVersion, role));
+            expectedOwnerSectionContracts = staged;
+            expectedOwnerSectionContractInventoryRevision++;
+            return true;
+        }
+    }
+
+    internal bool TryReplaceExpectedOwnerSectionContractInventoryBeforeSeal(
+        IEnumerable<DailyV1OwnerSectionContractIdentity> contracts)
+    {
+        if (!TryCreateExpectedOwnerSectionContractMap(contracts, out var staged))
+            return false;
+
+        lock (operationSyncRoot)
+        {
+            if (expectedOwnerSectionContractInventorySealed
+                || activeOperationScopes.Count != 0
+                || exclusiveSessionReplacementInProgress
+                || expectedOwnerSectionContractInventoryRevision == long.MaxValue)
+                return false;
+
+            expectedOwnerSectionContracts = staged;
+            expectedOwnerSectionContractInventoryRevision++;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Applies the validated census roster transition's section identity set
+    /// while the runtime is inside an owner-thread operation. This does not
+    /// advance the mutation epoch; the owning operation retains that commit.
+    /// </summary>
+    internal bool TryReplaceExpectedOwnerSectionContractInventoryDuringRuntimeOperation(
+        IEnumerable<DailyV1OwnerSectionContractIdentity> contracts)
+    {
+        if (!TryCreateExpectedOwnerSectionContractMap(contracts, out var staged))
+            return false;
+
+        lock (operationSyncRoot)
+        {
+            if (!expectedOwnerSectionContractInventorySealed
+                || exclusiveSessionReplacementInProgress
+                || activeRuntimeProtocolOperationContracts.Count == 0
+                || AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || expectedOwnerSectionContractInventoryRevision == long.MaxValue)
+                return false;
+
+            expectedOwnerSectionContracts = staged;
+            expectedOwnerSectionContractInventoryRevision++;
+            return true;
+        }
+    }
+
+    internal bool TrySealExpectedOwnerSectionContractInventory()
+    {
+        lock (operationSyncRoot)
+        {
+            if (expectedOwnerSectionContractInventorySealed
+                || expectedOwnerSectionContracts.Count == 0
+                || activeOperationScopes.Count != 0
+                || exclusiveSessionReplacementInProgress)
+                return false;
+
+            expectedOwnerSectionContractInventorySealed = true;
+            return true;
+        }
+    }
+
+    private static bool TryCreateExpectedOwnerSectionContractMap(
+        IEnumerable<DailyV1OwnerSectionContractIdentity> contracts,
+        out Dictionary<string, DailyV1OwnerSectionContractIdentity> inventory)
+    {
+        inventory = null;
+        if (contracts == null) return false;
+
+        Dictionary<string, DailyV1OwnerSectionContractIdentity> staged =
+            new Dictionary<string, DailyV1OwnerSectionContractIdentity>(StringComparer.Ordinal);
+        try
+        {
+            foreach (DailyV1OwnerSectionContractIdentity contract in contracts)
+            {
+                if (contract == null
+                    || string.IsNullOrWhiteSpace(contract.SectionId)
+                    || contract.SchemaVersion <= 0
+                    || !Enum.IsDefined(typeof(OwnerSectionRole), contract.Role)
+                    || staged.ContainsKey(contract.SectionId))
+                    return false;
+                staged.Add(contract.SectionId, contract);
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        inventory = staged;
+        return true;
+    }
     internal bool TryBeginOperation(DailyV1OperationScopeKind kind = DailyV1OperationScopeKind.Application)
     {
         lock (operationSyncRoot)
