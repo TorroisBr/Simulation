@@ -93,6 +93,7 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
 {
     private readonly object disposalSyncRoot = new object();
     private DailyV1Application application;
+    private DailyV1P12GCoreBoundCityOwnerSources coreCityOwnerSources;
 
     internal DailyV1P12GContinuationSaveOperation(
         DailyV1Application application,
@@ -106,7 +107,16 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
 
     internal DailyV1ActiveRuntimeSession Session { get; }
     internal DailyV1P12GSourceBoundaryWitness SourceWitness { get; }
+    internal DailyV1P12GCoreBoundCityOwnerSources CoreCityOwnerSources =>
+        Volatile.Read(ref coreCityOwnerSources);
     internal bool IsActive => Volatile.Read(ref application) != null;
+
+    internal bool TryBindCoreCityOwnerSources(
+        DailyV1P12GCoreBoundCityOwnerSources sources)
+    {
+        if (!IsActive || sources == null || !sources.IsFor(this)) return false;
+        return Interlocked.CompareExchange(ref coreCityOwnerSources, sources, null) == null;
+    }
 
     internal bool TryRevalidate(out DailyCaptureEligibilityFailure failure)
     {

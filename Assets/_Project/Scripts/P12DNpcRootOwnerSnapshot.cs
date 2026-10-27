@@ -341,11 +341,19 @@ internal static class P12DNpcRootOwnerSnapshot
 
         if (npc.CurrentCity != null)
         {
+            DailyV1CityNpcPresenceOwner selectedPresenceOwner =
+                npc.CurrentCity.SelectedRuntimeOwners?.NpcPresence;
+            object presenceOwnerIdentity = (object)selectedPresenceOwner ?? npc.CurrentCity;
+            int presenceCardinality = selectedPresenceOwner != null
+                ? selectedPresenceOwner.OrderedNpcRuntimeIds.Count
+                : npc.CurrentCity.ImportantNpcs.Count;
+            long presenceRevision = selectedPresenceOwner != null
+                ? selectedPresenceOwner.Revision
+                : npc.CurrentCity.ImportantNpcRevision;
             if (npc.CurrentCity.Location == null || !ReferenceEquals(npc.CurrentLocation, npc.CurrentCity.Location)
                 || !TryRequireSection(token, CityNpcPresenceCensusProvider.SectionIdFor(npc.CurrentCity.RuntimeId),
                     CityNpcPresenceCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                    npc.CurrentCity, npc.CurrentCity.ImportantNpcs.Count,
-                    npc.CurrentCity.ImportantNpcRevision))
+                    presenceOwnerIdentity, presenceCardinality, presenceRevision))
             {
                 failure = P12DNpcRootOwnerSnapshotFailure.InvalidCityMembership;
                 return false;

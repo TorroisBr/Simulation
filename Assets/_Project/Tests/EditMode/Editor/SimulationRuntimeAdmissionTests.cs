@@ -12138,6 +12138,53 @@ public sealed class SimulationRuntimeAdmissionTests
             SimulationActiveSession sourceSession =
                 ReadPrivateField<SimulationActiveSession>(source, "activeSession");
             Assert.That(sourceSession?.CoreRuntimeSession, Is.Not.Null);
+            foreach (CityRuntime city in sourceSession.Runtime.Cities)
+            {
+                Assert.That(city.SelectedRuntimeOwners, Is.Not.Null,
+                    "The selected Daily-v1 save source must be bound to Core City owners.");
+
+                OwnerSectionCensusWitness presenceWitness = null;
+                foreach (IOwnerSectionCensusProvider provider in
+                    sourceSession.Composition.CityNpcPresenceCensusProviders)
+                {
+                    OwnerSectionCensusWitness candidate = provider.GetCurrentCensus();
+                    if (string.Equals(candidate.SectionId,
+                        CityNpcPresenceCensusProvider.SectionIdFor(city.RuntimeId),
+                        StringComparison.Ordinal))
+                    {
+                        presenceWitness = candidate;
+                        break;
+                    }
+                }
+                Assert.That(presenceWitness, Is.Not.Null);
+                Assert.That(presenceWitness.OwnerInstanceIdentity,
+                    Is.SameAs(city.SelectedRuntimeOwners.NpcPresence));
+                Assert.That(presenceWitness.Cardinality,
+                    Is.EqualTo(city.SelectedRuntimeOwners.NpcPresence.OrderedNpcRuntimeIds.Count));
+                Assert.That(presenceWitness.Revision,
+                    Is.EqualTo(city.SelectedRuntimeOwners.NpcPresence.Revision));
+
+                OwnerSectionCensusWitness marketWitness = null;
+                foreach (IOwnerSectionCensusProvider provider in
+                    sourceSession.Composition.CityMarketCensusProviders)
+                {
+                    OwnerSectionCensusWitness candidate = provider.GetCurrentCensus();
+                    if (string.Equals(candidate.SectionId,
+                        CityMarketCensusProvider.SectionIdFor(city.RuntimeId),
+                        StringComparison.Ordinal))
+                    {
+                        marketWitness = candidate;
+                        break;
+                    }
+                }
+                Assert.That(marketWitness, Is.Not.Null);
+                Assert.That(marketWitness.OwnerInstanceIdentity,
+                    Is.SameAs(city.SelectedRuntimeOwners.Market));
+                Assert.That(marketWitness.Cardinality,
+                    Is.EqualTo(city.SelectedRuntimeOwners.Market.Items.Count));
+                Assert.That(marketWitness.Revision,
+                    Is.EqualTo(city.SelectedRuntimeOwners.Market.Revision));
+            }
             Assert.That(sourceSession.Composition.SpatialAuthority,
                 Is.SameAs(sourceSession.CoreRuntimeSession.GenesisComposition.SpatialAuthority),
                 "The admitted Unity runtime must retain Core's exact P12-C SpatialAuthorityStore owner.");

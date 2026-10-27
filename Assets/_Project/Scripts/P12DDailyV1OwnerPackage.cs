@@ -114,7 +114,9 @@ internal sealed class P12DDailyV1OwnerPackage
         Action afterGenealogyRecordStagedForTest = null,
         Func<GenealogyOwnerSnapshot, GenealogyOwnerSnapshot> genealogySnapshotOverrideForTest = null,
         DailyV1EffectiveDefinitions selectedDefinitions = null,
-        Action<P12DNpcRootOwnerSnapshotFailure> npcStageFailureObserver = null)
+        Action<P12DNpcRootOwnerSnapshotFailure> npcStageFailureObserver = null,
+        DailyV1P12GCoreBoundCityOwnerSources coreBoundCityOwnerSources = null,
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation = null)
     {
         package = null;
         failure = P12DDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -130,6 +132,11 @@ internal sealed class P12DDailyV1OwnerPackage
             || !stagingAttempt.IsCurrentFor(sourceRuntime, token, exactOwnerSectionVector)
             || !ReferenceEquals(token.WorldId, sourceRuntime.WorldId)
             || !token.WorldId.Equals(stagedWorldId)
+            || ((coreBoundCityOwnerSources == null) != (continuationSaveOperation == null))
+            || (coreBoundCityOwnerSources != null
+                && (!coreBoundCityOwnerSources.IsFor(continuationSaveOperation)
+                    || !ReferenceEquals(continuationSaveOperation.CoreCityOwnerSources,
+                        coreBoundCityOwnerSources)))
             || !sourceRuntime.HasSameP12RuntimeIdentitySpatialOwners(
                 sourceRuntimeIdentities, sourceSpatialNetwork, sourceExplorableSites))
         {
@@ -152,19 +159,67 @@ internal sealed class P12DDailyV1OwnerPackage
         IReadOnlyList<OwnerSectionCensusSnapshot> vector = exactOwnerSectionVector;
         List<P12DCityRootOwnerSnapshot.StagingCaptureEnvelope> cityCaptures =
             new List<P12DCityRootOwnerSnapshot.StagingCaptureEnvelope>(sourceRuntime.Cities.Count);
-        for (int i = 0; i < sourceRuntime.Cities.Count; i++)
+        if (coreBoundCityOwnerSources != null)
         {
-            CityRuntime sourceCity = sourceRuntime.Cities[i];
-            if (sourceCity == null
-                || !P12DCityRootOwnerSnapshot.TryCaptureForStaging(
-                    sourceCity, token, sharedStamp, vector,
-                    out P12DCityRootOwnerSnapshot.StagingCaptureEnvelope cityCapture, out _)
-                || cityCapture == null)
+            if (coreBoundCityOwnerSources.Cities.Count != sourceRuntime.Cities.Count)
             {
                 failure = P12DDailyV1OwnerPackageFailure.InvalidOwnerSnapshot;
                 return false;
             }
-            cityCaptures.Add(cityCapture);
+
+            Dictionary<string, DailyV1P12GCoreCityOwnerSource> coreSourcesByCityId =
+                new Dictionary<string, DailyV1P12GCoreCityOwnerSource>(StringComparer.Ordinal);
+            foreach (DailyV1P12GCoreCityOwnerSource coreSource in coreBoundCityOwnerSources.Cities)
+                if (coreSource?.Owner == null
+                    || !coreSourcesByCityId.TryAdd(coreSource.Owner.RuntimeId, coreSource))
+                {
+                    failure = P12DDailyV1OwnerPackageFailure.InvalidOwnerSnapshot;
+                    return false;
+                }
+
+            HashSet<string> projectionCityIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (CityRuntime sourceCity in sourceRuntime.Cities)
+            {
+                if (sourceCity == null || !projectionCityIds.Add(sourceCity.RuntimeId)
+                    || !coreSourcesByCityId.TryGetValue(sourceCity.RuntimeId,
+                        out DailyV1P12GCoreCityOwnerSource coreSource)
+                    || !ReferenceEquals(sourceCity.SelectedRuntimeOwners, coreSource.Owner)
+                    || !string.Equals(sourceCity.DefinitionId,
+                        coreSource.Owner.Definition?.DefinitionId, StringComparison.Ordinal)
+                    || sourceCity.Location == null
+                    || !string.Equals(sourceCity.Location.RuntimeId,
+                        coreSource.Owner.LocationRuntimeId, StringComparison.Ordinal)
+                    || !ReferenceEquals(sourceCity.SelectedDailyV1DefinitionGraph,
+                        coreSource.Owner.Definitions)
+                    || !ReferenceEquals(sourceCity.SelectedDailyV1Definition,
+                        coreSource.Owner.Definition)
+                    || !P12DCityRootOwnerSnapshot.StagingCaptureEnvelope.TryCreateFromCoreBoundSource(
+                        coreSource, continuationSaveOperation, sharedStamp, vector,
+                        out P12DCityRootOwnerSnapshot.StagingCaptureEnvelope cityCapture, out _)
+                    || cityCapture == null)
+                {
+                    failure = P12DDailyV1OwnerPackageFailure.InvalidOwnerSnapshot;
+                    return false;
+                }
+                cityCaptures.Add(cityCapture);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < sourceRuntime.Cities.Count; i++)
+            {
+                CityRuntime sourceCity = sourceRuntime.Cities[i];
+                if (sourceCity == null
+                    || !P12DCityRootOwnerSnapshot.TryCaptureForStaging(
+                        sourceCity, token, sharedStamp, vector,
+                        out P12DCityRootOwnerSnapshot.StagingCaptureEnvelope cityCapture, out _)
+                    || cityCapture == null)
+                {
+                    failure = P12DDailyV1OwnerPackageFailure.InvalidOwnerSnapshot;
+                    return false;
+                }
+                cityCaptures.Add(cityCapture);
+            }
         }
 
         if (!P12DNpcRootOwnerSnapshot.TryCapture(

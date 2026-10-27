@@ -11,25 +11,78 @@ public static class CityMarketCensusProvider
     public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion;
     public const string SectionIdPrefix = DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix;
 
+    public static string SectionIdFor(string cityRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(cityRuntimeId))
+            throw new ArgumentException("Market section requires a City RuntimeId.", nameof(cityRuntimeId));
+        string encodedRuntimeId = cityRuntimeId.Length.ToString(CultureInfo.InvariantCulture)
+            + ":" + cityRuntimeId;
+        return SectionIdPrefix + encodedRuntimeId;
+    }
+
     private sealed class SectionProvider : IOwnerSectionCensusProvider
     {
-        private readonly MarketRuntime owner;
+        private readonly CityRuntime city;
         private readonly string sectionId;
 
-        public SectionProvider(MarketRuntime owner, string sectionId)
+        public SectionProvider(CityRuntime city, string sectionId)
         {
-            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            this.city = city ?? throw new ArgumentNullException(nameof(city));
             this.sectionId = sectionId;
         }
 
         public OwnerSectionCensusWitness GetCurrentCensus()
         {
+            MarketRuntime projection = city.Market;
+            DailyV1MarketOwner selectedOwner = city.SelectedRuntimeOwners?.Market;
+            if (selectedOwner == null)
+            {
+                return new OwnerSectionCensusWitness(
+                    sectionId,
+                    SchemaVersion,
+                    projection,
+                    projection.Items.Count,
+                    projection.Revision);
+            }
+
+            if (!ReferenceEquals(projection.SelectedDailyV1Owner, selectedOwner)
+                || !MatchesSelectedProjection(projection, selectedOwner))
+            {
+                throw new InvalidOperationException(
+                    "Selected City Market owner differs from its exact Unity projection.");
+            }
+
             return new OwnerSectionCensusWitness(
                 sectionId,
                 SchemaVersion,
-                owner,
-                owner.Items.Count,
-                owner.Revision);
+                selectedOwner,
+                selectedOwner.Items.Count,
+                selectedOwner.Revision);
+        }
+
+        private static bool MatchesSelectedProjection(
+            MarketRuntime projection,
+            DailyV1MarketOwner selectedOwner)
+        {
+            IReadOnlyList<MarketItemRuntime> projectedRows = projection.Items;
+            IReadOnlyList<DailyV1MarketItemState> ownerRows = selectedOwner.Items;
+            if (projectedRows == null || ownerRows == null
+                || projectedRows.Count != ownerRows.Count)
+                return false;
+
+            for (int index = 0; index < ownerRows.Count; index++)
+            {
+                MarketItemRuntime projected = projectedRows[index];
+                DailyV1MarketItemState row = ownerRows[index];
+                if (projected == null || row == null
+                    || !ReferenceEquals(projected.SelectedDefinition, row.Item)
+                    || projected.Amount != row.Amount
+                    || projected.DesiredAmount != row.DesiredAmount
+                    || !projected.CurrentPrice.Equals(row.CurrentPrice))
+                    return false;
+            }
+
+            return true;
         }
     }
 
@@ -79,11 +132,9 @@ public static class CityMarketCensusProvider
                     nameof(cities));
             }
 
-            string encodedRuntimeId = city.RuntimeId.Length.ToString(CultureInfo.InvariantCulture)
-                + ":" + city.RuntimeId;
             providers[i] = new SectionProvider(
-                city.Market,
-                SectionIdPrefix + encodedRuntimeId);
+                city,
+                SectionIdFor(city.RuntimeId));
             previousRuntimeId = city.RuntimeId;
         }
 

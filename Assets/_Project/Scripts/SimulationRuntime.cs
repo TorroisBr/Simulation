@@ -4415,13 +4415,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         {
             IReadOnlyList<IOwnerSectionCensusProvider> providers =
                 CityMarketCensusProvider.CreateProviders(cities);
+            HashSet<CityRuntime> owners = new HashSet<CityRuntime>();
             for (int i = 0; i < providers.Count; i++)
             {
                 IOwnerSectionCensusProvider provider = providers[i];
                 OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
-                if (!(witness.OwnerInstanceIdentity is MarketRuntime market)
-                    || string.IsNullOrWhiteSpace(witness.SectionId)
-                    || marketSectionIdsByOwner.ContainsKey(market)
+                if (!TryResolveCurrentCityMarketWitness(witness, out CityRuntime city)
+                    || !owners.Add(city)
+                    || marketSectionIdsByOwner.ContainsKey(city.Market)
                     || !protocol.RegisterExpectedSection(
                         new OwnerSectionContract(
                             witness.SectionId,
@@ -4434,9 +4435,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     return false;
                 }
 
-                marketSectionIdsByOwner.Add(market, witness.SectionId);
+                marketSectionIdsByOwner.Add(city.Market, witness.SectionId);
             }
 
+            if (providers.Count != cities.Count || owners.Count != cities.Count)
+            {
+                protocol.FaultClosed();
+                return false;
+            }
             return true;
         }
         catch
@@ -4609,17 +4615,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             {
                 IOwnerSectionCensusProvider provider = providers[i];
                 OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
-                if (witness == null
-                    || !(witness.OwnerInstanceIdentity is CityRuntime city)
-                    || !cities.Contains(city)
+                if (!TryResolveCurrentCityNpcPresenceWitness(witness, out CityRuntime city)
                     || !owners.Add(city)
-                    || witness.SchemaVersion != CityNpcPresenceCensusProvider.SchemaVersion
-                    || !string.Equals(
-                        witness.SectionId,
-                        CityNpcPresenceCensusProvider.SectionIdFor(city.RuntimeId),
-                        StringComparison.Ordinal)
-                    || witness.Cardinality != city.ImportantNpcs.Count
-                    || witness.Revision != city.ImportantNpcRevision
                     || !sectionIds.Add(witness.SectionId)
                     || !protocol.RegisterExpectedSection(
                         new OwnerSectionContract(
@@ -4651,6 +4648,89 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             protocol.FaultClosed();
             return false;
         }
+    }
+
+    private bool TryResolveCurrentCityMarketWitness(
+        OwnerSectionCensusWitness witness,
+        out CityRuntime city)
+    {
+        city = null;
+        if (witness == null || string.IsNullOrWhiteSpace(witness.SectionId)) return false;
+
+        CityRuntime match = null;
+        for (int index = 0; index < cities.Count; index++)
+        {
+            CityRuntime candidate = cities[index];
+            if (candidate == null
+                || !string.Equals(witness.SectionId,
+                    CityMarketCensusProvider.SectionIdFor(candidate.RuntimeId),
+                    StringComparison.Ordinal))
+                continue;
+            if (match != null) return false;
+            match = candidate;
+        }
+
+        if (match == null
+            || !ReferenceEquals(match.Market.SelectedDailyV1Owner,
+                match.SelectedRuntimeOwners?.Market))
+            return false;
+
+        DailyV1MarketOwner selectedOwner = match.SelectedRuntimeOwners?.Market;
+        object expectedIdentity = (object)selectedOwner ?? match.Market;
+        int expectedCardinality = selectedOwner != null
+            ? selectedOwner.Items.Count
+            : match.Market.Items.Count;
+        long expectedRevision = selectedOwner != null
+            ? selectedOwner.Revision
+            : match.Market.Revision;
+        if (!ReferenceEquals(witness.OwnerInstanceIdentity, expectedIdentity)
+            || witness.SchemaVersion != CityMarketCensusProvider.SchemaVersion
+            || witness.Cardinality != expectedCardinality
+            || witness.Revision != expectedRevision)
+            return false;
+
+        city = match;
+        return true;
+    }
+
+    private bool TryResolveCurrentCityNpcPresenceWitness(
+        OwnerSectionCensusWitness witness,
+        out CityRuntime city)
+    {
+        city = null;
+        if (witness == null || string.IsNullOrWhiteSpace(witness.SectionId)) return false;
+
+        CityRuntime match = null;
+        for (int index = 0; index < cities.Count; index++)
+        {
+            CityRuntime candidate = cities[index];
+            if (candidate == null
+                || !string.Equals(witness.SectionId,
+                    CityNpcPresenceCensusProvider.SectionIdFor(candidate.RuntimeId),
+                    StringComparison.Ordinal))
+                continue;
+            if (match != null) return false;
+            match = candidate;
+        }
+
+        if (match == null) return false;
+        DailyV1CityNpcPresenceOwner selectedOwner = match.SelectedRuntimeOwners?.NpcPresence;
+        object expectedIdentity = (object)selectedOwner ?? match;
+        int expectedCardinality = selectedOwner != null
+            ? selectedOwner.OrderedNpcRuntimeIds.Count
+            : match.ImportantNpcs.Count;
+        long expectedRevision = selectedOwner != null
+            ? selectedOwner.Revision
+            : match.ImportantNpcRevision;
+        if (!ReferenceEquals(witness.OwnerInstanceIdentity, expectedIdentity)
+            || witness.SchemaVersion != CityNpcPresenceCensusProvider.SchemaVersion
+            || witness.Cardinality != expectedCardinality
+            || witness.Revision != expectedRevision
+            || (selectedOwner != null && !match.HasConsistentSelectedNpcPresence))
+            return false;
+
+        city = match;
+        return true;
     }
 
     private bool TryRebindNpcOwnerMutationBoundaries()
@@ -5829,9 +5909,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             foreach (IOwnerSectionCensusProvider provider in cityNpcPresenceCensusProviders)
             {
                 OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
-                if (witness == null
-                    || !(witness.OwnerInstanceIdentity is CityRuntime city)
-                    || !cities.Contains(city)
+                if (!TryResolveCurrentCityNpcPresenceWitness(witness, out CityRuntime city)
                     || !cityNpcPresenceSectionIdsByOwner.TryGetValue(city, out string sectionId)
                     || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal))
                 {

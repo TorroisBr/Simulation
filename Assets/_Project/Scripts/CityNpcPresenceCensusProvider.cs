@@ -26,6 +26,18 @@ public static class CityNpcPresenceCensusProvider
         public OwnerSectionCensusWitness GetCurrentCensus()
         {
             ValidateReciprocalPresenceProjection();
+            DailyV1CityRuntimeOwners selectedOwners = owner.SelectedRuntimeOwners;
+            if (selectedOwners != null)
+            {
+                DailyV1CityNpcPresenceOwner selectedOwner = selectedOwners.NpcPresence;
+                return new OwnerSectionCensusWitness(
+                    sectionId,
+                    SchemaVersion,
+                    selectedOwner,
+                    selectedOwner.OrderedNpcRuntimeIds.Count,
+                    selectedOwner.Revision);
+            }
+
             return new OwnerSectionCensusWitness(
                 sectionId,
                 SchemaVersion,

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using NUnit.Framework;
 
@@ -241,11 +242,11 @@ public sealed class DailyV1ApplicationSessionGateTests
     private static DailyV1Application CreateApplicationWithAdvanceBoundary(
         Action onOperationEntry,
         out DailyV1ActiveRuntimeSession session,
-        out ApplicationAdvanceBoundary boundary)
+        out ApplicationAdvanceBoundary boundary,
+        DailyV1EffectiveDefinitions definitions = null)
     {
         DailyV1Application application = new DailyV1Application();
-        DailyV1EffectiveDefinitions definitions =
-            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        definitions ??= DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, allocateWorldId: null, stageCompleted: null,
@@ -263,7 +264,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         OwnerSectionCensusSnapshot[] sections = null,
         long mutationEpoch = 0L)
     {
-        sections ??= DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        sections ??= CreateCoreBoundCompleteOwnerSectionVector(session);
         DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
         Assert.That(state.TryRecordCompletedCore(), Is.True);
         Assert.That(state.TryCreateCompletedAdvanceToken(
@@ -312,6 +313,10 @@ public sealed class DailyV1ApplicationSessionGateTests
 
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundP12FSectionVector(
         DailyV1ActiveRuntimeSession session)
+        => CreateCoreBoundCityAndP12FSectionVector(session);
+
+    private static OwnerSectionCensusSnapshot[] CreateCoreBoundP12FSectionVectorWithoutCity(
+        DailyV1ActiveRuntimeSession session)
     {
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
         PoliticalKnowledgeStore politicalKnowledge =
@@ -352,7 +357,19 @@ public sealed class DailyV1ApplicationSessionGateTests
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundCityAndP12FSectionVector(
         DailyV1ActiveRuntimeSession session)
     {
-        OwnerSectionCensusSnapshot[] existing = CreateCoreBoundP12FSectionVector(session);
+        OwnerSectionCensusSnapshot[] existing = CreateCoreBoundP12FSectionVectorWithoutCity(session);
+        return ReplaceCityOwnerSectionVector(session, existing);
+    }
+
+    private static OwnerSectionCensusSnapshot[] CreateCoreBoundCompleteOwnerSectionVector(
+        DailyV1ActiveRuntimeSession session)
+        => ReplaceCityOwnerSectionVector(
+            session, DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot());
+
+    private static OwnerSectionCensusSnapshot[] ReplaceCityOwnerSectionVector(
+        DailyV1ActiveRuntimeSession session,
+        OwnerSectionCensusSnapshot[] existing)
+    {
         List<OwnerSectionCensusSnapshot> sections = new List<OwnerSectionCensusSnapshot>();
         foreach (OwnerSectionCensusSnapshot section in existing)
         {
@@ -467,8 +484,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(
             onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
             out ApplicationAdvanceBoundary boundary);
-        OwnerSectionCensusSnapshot[] sections =
-            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCompleteOwnerSectionVector(session);
         InstallCompletedBoundaryToken(session, boundary, sections);
         Assert.That(application.TryBeginContinuationSaveOperation(
             session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
@@ -499,8 +515,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(
             onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
             out ApplicationAdvanceBoundary boundary);
-        OwnerSectionCensusSnapshot[] sections =
-            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCompleteOwnerSectionVector(session);
         InstallCompletedBoundaryToken(session, boundary, sections);
         Assert.That(application.TryBeginContinuationSaveOperation(
             session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
@@ -630,7 +645,7 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         boundary.SetContinuationSaveEvidenceCaptureCallback(captureCount =>
         {
-            if (captureCount != 3) return;
+            if (captureCount != 5) return;
             OwnerSectionCensusSnapshot current = sections[0];
             sections[0] = new OwnerSectionCensusSnapshot(
                 current.SectionId, current.SchemaVersion, current.Role,
@@ -668,6 +683,8 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         Assert.That(failure, Is.EqualTo(DailyV1P12GCoreCitySourceCaptureFailure.None));
         Assert.That(sources.IsFor(operation), Is.True);
+        Assert.That(operation.CoreCityOwnerSources, Is.SameAs(sources),
+            "The save operation must retain the Core City sources captured at admission.");
         Assert.That(sources.Cities.Count, Is.EqualTo(session.OwnerGraph.Cities.Count));
         for (int index = 0; index < sources.Cities.Count; index++)
         {
@@ -711,7 +728,124 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void CoreBoundCitySourcesRejectMismatchedOwnerIdentityWithoutPartialOutput()
+    public void SaveAdmissionRejectsCoreCityDailyEconomyReceipt()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        DailyV1CityRuntimeOwners city = session.OwnerGraph.Cities[0];
+        RecordNoOpDailyEconomyReceipt(city);
+        city.GetDailyEconomyReceiptExclusionProof(out int receiptCount, out long receiptRevision);
+        Assert.That(receiptCount, Is.EqualTo(1));
+        Assert.That(receiptRevision, Is.EqualTo(1L));
+
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCityAndP12FSectionVector(session);
+        InstallCompletedBoundaryToken(session, boundary, sections);
+
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation,
+            out DailyCaptureEligibilityFailure failure), Is.False);
+        Assert.That(operation, Is.Null);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void SaveAdmissionRejectsEmptyButAdvancedCoreCityDailyEconomyReceiptRevision()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        DailyV1CityRuntimeOwners city = session.OwnerGraph.Cities[0];
+        FieldInfo revisionField = typeof(DailyV1CityRuntimeOwners).GetField(
+            "dailyEconomyReceiptRevision", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(revisionField, Is.Not.Null);
+        revisionField.SetValue(city, 1L);
+        city.GetDailyEconomyReceiptExclusionProof(out int receiptCount, out long receiptRevision);
+        Assert.That(receiptCount, Is.Zero);
+        Assert.That(receiptRevision, Is.EqualTo(1L),
+            "A receipt-free but advanced local ledger is not the accepted exact-zero state.");
+
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCityAndP12FSectionVector(session);
+        InstallCompletedBoundaryToken(session, boundary, sections);
+
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation,
+            out DailyCaptureEligibilityFailure failure), Is.False);
+        Assert.That(operation, Is.Null);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void SaveAdmissionRejectsCoreCityLocalMaterialFlowState()
+    {
+        DailyV1EffectiveDefinitions definitions = CreateP14LocalFlowDefinitions();
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary, definitions);
+        DailyV1CityRuntimeOwners city = session.OwnerGraph.Cities[0];
+        Assert.That(city.HasLocalDailyMaterialFlow, Is.True);
+
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCityAndP12FSectionVector(session);
+        InstallCompletedBoundaryToken(session, boundary, sections);
+
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation,
+            out DailyCaptureEligibilityFailure failure), Is.False);
+        Assert.That(operation, Is.Null);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    private static void RecordNoOpDailyEconomyReceipt(DailyV1CityRuntimeOwners city)
+    {
+        DailyBoundaryOperation operation = new DailyBoundaryOperation(
+            "city-p12-capture-exclusion", "daily-v1", 1);
+        Assert.That(city.TryCreateDailyEconomyStep(operation, 0,
+            CityDailyEconomyStepKind.PriceRefresh, out BoundaryContinuationStep step, out _), Is.True);
+        BoundaryContinuationManifest manifest = new BoundaryContinuationManifest(
+            operation, "city-economy", "1", "p12-capture-exclusion", new[] { step }, "fixture");
+        Assert.That(city.TryPrepareDailyEconomyStep(manifest, step,
+            out IBoundaryContinuationStepCommit prepared, out _), Is.True);
+        Assert.That(prepared.TryCommit(out _), Is.True);
+    }
+
+    private static DailyV1EffectiveDefinitions CreateP14LocalFlowDefinitions()
+    {
+        DailyV1EffectiveDefinitions baseline = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1CityDefinition baselineCity = baseline.Cities["CAMPO_VERDE"];
+        DailyV1CityData city = new DailyV1CityData(
+            baselineCity.Values.id, baselineCity.Values.cityName,
+            "settlement/p12-exclusion", baseline.Configuration.authoredLocationId,
+            "store/p12-exclusion",
+            new DailyV1EnumValue((int)LocalMaterialFlowProfile.ExogenousDaily, "ExogenousDaily"),
+            baselineCity.Values.initialPopulation, baselineCity.Values.marketLiquidity,
+            baselineCity.Values.populationConsumption, baselineCity.Values.marketItems,
+            new[] { new DailyV1CityProductionConfig(
+                "TRIGO", 1, 0, "source/p12-exclusion", "revision/1",
+                new DailyV1EnumValue((int)CityProductionSourceKind.ExogenousDaily, "ExogenousDaily")) },
+            baselineCity.Values.connections);
+
+        return DailyV1EffectiveDefinitions.CreateSelectedSchema(
+            baseline.Configuration, baseline.EffectiveConfiguration, baseline.Calendar,
+            baseline.Cities.Values.Select(value => value.DefinitionId == city.id ? city : value.Values),
+            baseline.Items.Values.Select(value => value.Values),
+            baseline.Npcs.Values.Select(value => value.Values),
+            baseline.Jobs.Values.Select(value => value.Values),
+            baseline.Actions.Values.Select(value => value.Values),
+            baseline.Statuses.Values.Select(value => value.Values),
+            baseline.StageOrder, baseline.ProfileContractIdentity,
+            baseline.GeographyProfileContractIdentity, baseline.GeographyStageIdentity,
+            baseline.HexCoordinateConvention, baseline.HexCoordinateCanonicalOrder,
+            baseline.Traits.Select(pair => new KeyValuePair<string, string>(pair.Key, pair.Value.DisplayName)),
+            baseline.CapabilityAttributes.Select(pair =>
+                new KeyValuePair<string, string>(pair.Key, pair.Value.DisplayName)),
+            baseline.ExplorableSites.Values.Select(value => value.Values));
+    }
+
+    [Test]
+    public void SaveOperationRejectsMismatchedCoreCityOwnerIdentityBeforeIssuingLease()
     {
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(
             onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
@@ -727,16 +861,10 @@ public sealed class DailyV1ApplicationSessionGateTests
             current.Cardinality, current.Revision);
         InstallCompletedBoundaryToken(session, boundary, sections);
         Assert.That(application.TryBeginContinuationSaveOperation(
-            session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
-
-        Assert.That(DailyV1P12GCoreBoundCityOwnerSources.TryCapture(
-            operation, out DailyV1P12GCoreBoundCityOwnerSources sources,
-            out DailyV1P12GCoreCitySourceCaptureFailure failure,
-            out string diagnostic), Is.False, diagnostic);
-        Assert.That(sources, Is.Null);
-        Assert.That(failure, Is.EqualTo(DailyV1P12GCoreCitySourceCaptureFailure.OwnerCensusMismatch));
-        Assert.That(application.ActiveOperationCount, Is.EqualTo(1));
-        operation.Dispose();
+            session, out DailyV1P12GContinuationSaveOperation operation,
+            out DailyCaptureEligibilityFailure failure), Is.False);
+        Assert.That(operation, Is.Null);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
         Assert.That(application.ActiveOperationCount, Is.Zero);
     }
 
@@ -752,7 +880,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
         boundary.SetContinuationSaveEvidenceCaptureCallback(captureCount =>
         {
-            if (captureCount != 3) return;
+            if (captureCount != 4) return;
             OwnerSectionCensusSnapshot current = sections[0];
             sections[0] = new OwnerSectionCensusSnapshot(current.SectionId,
                 current.SchemaVersion, current.Role, current.OwnerInstanceIdentity,

@@ -502,6 +502,16 @@ internal static partial class P12GDailyV1RestoreCoordinator
             RuntimeIdentityRegistry sourceIdentityRegistry = sourceSession.IdentityRegistry;
             ExplorableSiteStore sourceSites = sourceComposition.ExplorableSites;
             P12DNpcRootOwnerSnapshotFailure npcStageFailure = P12DNpcRootOwnerSnapshotFailure.None;
+            DailyV1P12GCoreBoundCityOwnerSources coreCityOwnerSources =
+                continuationSaveOperation?.CoreCityOwnerSources;
+            if (continuationSaveOperation != null
+                && (coreCityOwnerSources == null
+                    || !coreCityOwnerSources.IsFor(continuationSaveOperation)))
+            {
+                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                diagnostic = "The Core continuation-save operation has no matching selected City owner sources.";
+                return false;
+            }
             if (!P12DDailyV1OwnerPackage.TryCaptureAndStage(
                     sourceRuntime,
                     sourceToken,
@@ -527,7 +537,9 @@ internal static partial class P12GDailyV1RestoreCoordinator
                         : (Action)(() => stageObserver(P12GDailyV1RestoreStage.DGenealogyEdgeStaged)),
                     genealogySnapshotOverrideForTest,
                     selectedDefinitions: sourceComposition.SelectedDefinitions,
-                    npcStageFailureObserver: stageFailure => npcStageFailure = stageFailure))
+                    npcStageFailureObserver: stageFailure => npcStageFailure = stageFailure,
+                    coreBoundCityOwnerSources: coreCityOwnerSources,
+                    continuationSaveOperation: continuationSaveOperation))
             {
                 failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
                 diagnostic = "P12-D could not stage the factual roots: " + dFailure

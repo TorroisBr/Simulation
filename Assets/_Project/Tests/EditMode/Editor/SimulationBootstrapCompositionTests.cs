@@ -1828,7 +1828,8 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(witness.SectionId, Is.EqualTo(
                 CityNpcPresenceCensusProvider.SectionIdPrefix + city.RuntimeId));
             Assert.That(witness.SchemaVersion, Is.EqualTo(CityNpcPresenceCensusProvider.SchemaVersion));
-            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(city));
+            object expectedPresenceOwner = (object)city.SelectedRuntimeOwners?.NpcPresence ?? city;
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expectedPresenceOwner));
             Assert.That(witness.Cardinality, Is.EqualTo(city.ImportantNpcs.Count));
             Assert.That(witness.Revision, Is.EqualTo(city.ImportantNpcRevision));
             Assert.That(city.ImportantNpcs.Distinct().Count(), Is.EqualTo(city.ImportantNpcs.Count));
@@ -1844,7 +1845,8 @@ public sealed class SimulationBootstrapCompositionTests
                 + city.RuntimeId.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 + ":" + city.RuntimeId));
             Assert.That(marketWitness.SchemaVersion, Is.EqualTo(CityMarketCensusProvider.SchemaVersion));
-            Assert.That(marketWitness.OwnerInstanceIdentity, Is.SameAs(city.Market));
+            object expectedMarketOwner = (object)city.SelectedRuntimeOwners?.Market ?? city.Market;
+            Assert.That(marketWitness.OwnerInstanceIdentity, Is.SameAs(expectedMarketOwner));
             Assert.That(marketWitness.Cardinality, Is.EqualTo(city.Market.Items.Count));
             Assert.That(marketWitness.Cardinality, Is.EqualTo(5));
             Assert.That(marketWitness.Revision, Is.EqualTo(city.Market.Revision));
@@ -3766,9 +3768,11 @@ public sealed class SimulationBootstrapCompositionTests
             string encodedCityId = city.RuntimeId.Length.ToString(
                 System.Globalization.CultureInfo.InvariantCulture) + ":" + city.RuntimeId;
             AddExpectedDailyV1OwnerIdentity(
-                expected, CityNpcPresenceCensusProvider.SectionIdPrefix + city.RuntimeId, city);
+                expected, CityNpcPresenceCensusProvider.SectionIdPrefix + city.RuntimeId,
+                (object)city.SelectedRuntimeOwners?.NpcPresence ?? city);
             AddExpectedDailyV1OwnerIdentity(
-                expected, CityMarketCensusProvider.SectionIdPrefix + encodedCityId, city.Market);
+                expected, CityMarketCensusProvider.SectionIdPrefix + encodedCityId,
+                (object)city.SelectedRuntimeOwners?.Market ?? city.Market);
             AddExpectedDailyV1OwnerIdentity(
                 expected, SettlementPopulationCensusProvider.AggregateSectionPrefix + encodedCityId,
                 city.Population);
@@ -4570,7 +4574,8 @@ public sealed class SimulationBootstrapCompositionTests
         ContinuationCensusProtocol censusProtocol = ReadPrivateField<ContinuationCensusProtocol>(
             runtime,
             "npcRosterCensusProtocol");
-        Assert.That(initialCityPresence.OwnerInstanceIdentity, Is.SameAs(startingCity));
+        object expectedPresenceOwner = (object)startingCity.SelectedRuntimeOwners?.NpcPresence ?? startingCity;
+        Assert.That(initialCityPresence.OwnerInstanceIdentity, Is.SameAs(expectedPresenceOwner));
         Assert.That(initialCityPresence.Cardinality, Is.EqualTo(initialCityPresenceCardinality));
         Assert.That(initialCityPresence.Revision, Is.EqualTo(initialCityPresenceRevision));
 
@@ -4596,7 +4601,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(startingCity.ImportantNpcs, Has.Member(materializedNpc));
         AssertSelectedDailyNpcOwnerFamilies(runtime);
         OwnerSectionCensusWitness materializedCityPresence = cityPresenceProvider.GetCurrentCensus();
-        Assert.That(materializedCityPresence.OwnerInstanceIdentity, Is.SameAs(startingCity));
+        Assert.That(materializedCityPresence.OwnerInstanceIdentity, Is.SameAs(expectedPresenceOwner));
         Assert.That(materializedCityPresence.Cardinality, Is.EqualTo(initialCityPresenceCardinality + 1));
         Assert.That(materializedCityPresence.Revision, Is.EqualTo(initialCityPresenceRevision + 1));
         Assert.That(censusProtocol.TryReadMutationEpoch(

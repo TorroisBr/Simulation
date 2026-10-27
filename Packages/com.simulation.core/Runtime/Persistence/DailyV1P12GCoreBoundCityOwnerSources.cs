@@ -8,6 +8,7 @@ internal enum DailyV1P12GCoreCitySourceCaptureFailure
     InvalidSaveOperation,
     MissingCoreOwnerBinding,
     OwnerCensusMismatch,
+    ExcludedCityStatePresent,
     OwnerCaptureFailed,
     StaleSourceBoundary
 }
@@ -54,6 +55,14 @@ internal sealed class DailyV1P12GCoreBoundCityOwnerSources
 
     internal IReadOnlyList<DailyV1P12GCoreCityOwnerSource> Cities => cities;
 
+    internal bool Contains(DailyV1P12GCoreCityOwnerSource candidate)
+    {
+        if (candidate == null) return false;
+        for (int index = 0; index < cities.Count; index++)
+            if (ReferenceEquals(cities[index], candidate)) return true;
+        return false;
+    }
+
     internal bool IsFor(DailyV1P12GContinuationSaveOperation operation) =>
         operation != null
         && ReferenceEquals(token, operation.SourceWitness.Token)
@@ -76,6 +85,21 @@ internal sealed class DailyV1P12GCoreBoundCityOwnerSources
             diagnostic = "A current active Core continuation-save witness is required: "
                 + initialFailure + ".";
             return false;
+        }
+
+        DailyV1P12GCoreBoundCityOwnerSources boundSources = operation.CoreCityOwnerSources;
+        if (boundSources != null)
+        {
+            if (!boundSources.IsFor(operation))
+            {
+                failure = DailyV1P12GCoreCitySourceCaptureFailure.InvalidSaveOperation;
+                diagnostic = "The continuation-save operation is bound to a different Core City source.";
+                return false;
+            }
+
+            sources = boundSources;
+            failure = DailyV1P12GCoreCitySourceCaptureFailure.None;
+            return true;
         }
 
         DailyV1P12GSourceBoundaryWitness witness = operation.SourceWitness;
@@ -186,6 +210,20 @@ internal sealed class DailyV1P12GCoreBoundCityOwnerSources
         {
             failure = DailyV1P12GCoreCitySourceCaptureFailure.OwnerCensusMismatch;
             diagnostic = "A selected City source does not match its exact P12-D owner identity/cardinality/revision.";
+            return false;
+        }
+
+        city.GetDailyEconomyReceiptExclusionProof(
+            out int dailyEconomyReceiptCount,
+            out long dailyEconomyReceiptRevision);
+        if (dailyEconomyReceiptCount != 0
+            || dailyEconomyReceiptRevision != 0L
+            || city.HasLocalDailyMaterialFlow
+            || city.FiniteSource != null
+            || city.LastMaterialFlow != null)
+        {
+            failure = DailyV1P12GCoreCitySourceCaptureFailure.ExcludedCityStatePresent;
+            diagnostic = "The selected P12-D City source contains excluded daily-economy receipt or local material-flow state.";
             return false;
         }
 

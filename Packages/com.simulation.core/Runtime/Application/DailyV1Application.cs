@@ -422,14 +422,36 @@ internal sealed class DailyV1Application
             witnessCaptured = TryCaptureContinuationSourceWitness(expectedSession,
                 out DailyV1P12GSourceBoundaryWitness witness, out failure);
             if (witnessCaptured)
+            {
                 candidateOperation = new DailyV1P12GContinuationSaveOperation(
                     this, expectedSession, witness);
+
+                // Bind the P12-D City image source to the exact Core owner
+                // graph while the continuation-save lease is active. The
+                // Unity projection may later stage a detached candidate, but
+                // it cannot choose a different City state for this image.
+                if (!DailyV1P12GCoreBoundCityOwnerSources.TryCapture(
+                        candidateOperation,
+                        out DailyV1P12GCoreBoundCityOwnerSources cityOwnerSources,
+                        out DailyV1P12GCoreCitySourceCaptureFailure cityCaptureFailure,
+                        out _)
+                    || !candidateOperation.TryBindCoreCityOwnerSources(cityOwnerSources))
+                {
+                    witnessCaptured = false;
+                    failure = cityCaptureFailure == DailyV1P12GCoreCitySourceCaptureFailure.StaleSourceBoundary
+                        ? DailyCaptureEligibilityFailure.StaleToken
+                        : DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                }
+            }
         }
         catch (Exception captureException)
         {
             try
             {
-                activeSessionGate.EndOperation(DailyV1OperationScopeKind.ContinuationSave);
+                if (candidateOperation != null && candidateOperation.IsActive)
+                    candidateOperation.Dispose();
+                else
+                    activeSessionGate.EndOperation(DailyV1OperationScopeKind.ContinuationSave);
             }
             catch (Exception cleanupException)
             {
@@ -451,7 +473,10 @@ internal sealed class DailyV1Application
 
         if (!witnessCaptured)
         {
-            activeSessionGate.EndOperation(DailyV1OperationScopeKind.ContinuationSave);
+            if (candidateOperation != null && candidateOperation.IsActive)
+                candidateOperation.Dispose();
+            else
+                activeSessionGate.EndOperation(DailyV1OperationScopeKind.ContinuationSave);
             return false;
         }
 
