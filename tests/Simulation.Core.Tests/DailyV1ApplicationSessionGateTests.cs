@@ -25,6 +25,17 @@ public sealed class DailyV1ApplicationSessionGateTests
         public void Delete(string path) => throw new NotSupportedException();
     }
 
+    private static void AssertInitialNoSaveWasProven(DailyV1Application application)
+    {
+        Assert.That(application.TryInspectInitialContinuationSlot(
+            "application-session-gate-no-save",
+            new MissingContinuationSlotOperations(),
+            out bool exists,
+            out P12AResult result), Is.True);
+        Assert.That(exists, Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+    }
+
     private sealed class TestSession
     {
         internal readonly DailyV1ExecutionBoundaryState ExecutionState;
@@ -987,6 +998,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application otherApplication = new DailyV1Application();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(
             out SimulationRuntimeAdmissionContext admission), Is.True);
+        AssertInitialNoSaveWasProven(application);
         Assert.That(admission.Profile,
             Is.EqualTo(SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1));
         Assert.That(admission.ExpectedOwnerThread, Is.SameAs(Thread.CurrentThread));
@@ -1222,6 +1234,29 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(completedStages, Is.Not.Empty);
         Assert.That(application.ActiveSession, Is.Null,
             "Core-owned genesis remains private until a real runtime boundary is bound and published.");
+    }
+
+    [Test]
+    public void DirectInitialPublicationRequiresSuccessfulNoSaveInspection()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admission), Is.True);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, admission,
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            composition, 0L,
+            out DailyV1ActiveRuntimeSession candidate, out diagnostic), Is.True, diagnostic);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(
+            candidate, new ApplicationAdvanceBoundary(candidate.ExecutionBoundaryState, null)), Is.True);
+
+        Assert.That(application.TryPublishInitial(candidate), Is.False,
+            "A bound session cannot bypass the initial P12 slot inspection by publishing without the prepared genesis path.");
+        Assert.That(application.ActiveSession, Is.Null);
     }
 
     [Test]
@@ -1664,6 +1699,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application foreignApplication = new DailyV1Application();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(
             out SimulationRuntimeAdmissionContext admission), Is.True);
+        AssertInitialNoSaveWasProven(application);
         Assert.That(foreignApplication.TryCaptureBootstrapAdmissionContext(
             out SimulationRuntimeAdmissionContext foreignAdmission), Is.True);
 
@@ -1828,6 +1864,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application application = new DailyV1Application();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(
             out SimulationRuntimeAdmissionContext admission), Is.True);
+        AssertInitialNoSaveWasProven(application);
         Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
             definitions,
             admission,

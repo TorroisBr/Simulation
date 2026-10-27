@@ -682,6 +682,11 @@ internal sealed class DailyV1Application
             }
 
             if (initialGenesisPreparationAttempted
+                || !initialContinuationSlotProbeAttempted
+                || !initialContinuationSlotProbeSucceeded
+                || initialContinuationSlotExists
+                || initialContinuationLoadAttempted
+                || initialContinuationLoadBlocksGenesis
                 || bootstrapAdmissionContext == null
                 || !IsBootstrapOrRestoredDescendant(candidate.AdmissionContext))
                 return false;
