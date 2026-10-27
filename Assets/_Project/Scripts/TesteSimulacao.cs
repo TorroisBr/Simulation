@@ -1261,7 +1261,10 @@ public class TesteSimulacao : MonoBehaviour
                 resultCode = P12AResultCode.IncompatibleContentOrConfiguration.ToString();
                 return false;
             }
-            if (!P12AContinuationStore.TryLoad(null, compatibility, persistentDataPath,
+            if (!dailyV1Application.TryLoadContinuationImageForReplacement(
+                    expectedSession.CoreRuntimeSession, exclusiveOperation,
+                    compatibility, null, persistentDataPath,
+                    SystemAtomicFileSlotOperations.Instance,
                     out P12AContinuationImage image, out P12AResult loadResult))
             {
                 resultCode = loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString();

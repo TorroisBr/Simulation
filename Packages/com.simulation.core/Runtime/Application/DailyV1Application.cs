@@ -646,6 +646,57 @@ internal sealed class DailyV1Application
         activeSessionGate.TryBeginExclusiveOperation(expectedSession, out operation);
 
     /// <summary>
+    /// Reads the continuation image for the exact published session while its
+    /// replacement reservation remains held. The host chooses only its
+    /// explicit storage root, file operations, and current-host descriptor;
+    /// Core revalidates the source completed boundary immediately before the
+    /// read so a stale reservation cannot authorize detached staging.
+    /// </summary>
+    internal bool TryLoadContinuationImageForReplacement(
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        P12ACompatibilityDescriptor unityV1Identity,
+        P12ACompatibilityDescriptorV2 dotNetV2Identity,
+        string persistentDataRoot,
+        IAtomicFileSlotOperations fileOperations,
+        out P12AContinuationImage image,
+        out P12AResult result)
+    {
+        image = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (expectedSession == null || replacementOperation == null
+            || ((unityV1Identity == null) == (dotNetV2Identity == null))
+            || string.IsNullOrWhiteSpace(persistentDataRoot) || fileOperations == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        DailyV1ExecutionBoundaryState state = expectedSession.ExecutionBoundaryState;
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary = expectedSession.RuntimeAdvanceBoundary;
+        if (!replacementOperation.IsOwnedByCurrentThread()
+            || !ReferenceEquals(replacementOperation.ExpectedSession, expectedSession)
+            || !ReferenceEquals(activeSessionGate.Current, expectedSession)
+            || !replacementOperation.AuthorizesSessionReplacementCapture(state)
+            || activeSessionGate.ActiveOperationCount != 0
+            || boundary == null
+            || !ReferenceEquals(boundary.ExecutionState, state)
+            || !state.IsHealthyDailyOwnerThreadBoundary()
+            || !state.HasValidCompletedDailyBoundaryAdmission(
+                boundary, sessionReplacement: true))
+            return false;
+
+        if (unityV1Identity != null)
+            return P12AContinuationStore.TryLoad(
+                null, unityV1Identity, persistentDataRoot, fileOperations,
+                out image, out result);
+
+        return P12AContinuationStore.TryLoadDotNetV2(
+            null, dotNetV2Identity, persistentDataRoot, fileOperations,
+            out image, out result);
+    }
+
+    /// <summary>
     /// Associates an unpublished or replacement Core session with the exact
     /// host boundary built for its execution state. Once published, the
     /// session's boundary is immutable; advances resolve it from the session

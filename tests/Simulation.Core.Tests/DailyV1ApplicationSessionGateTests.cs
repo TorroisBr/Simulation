@@ -7,6 +7,24 @@ using NUnit.Framework;
 
 public sealed class DailyV1ApplicationSessionGateTests
 {
+    private sealed class MissingContinuationSlotOperations : IAtomicFileSlotOperations
+    {
+        internal int OpenReadCount { get; private set; }
+
+        public void CreateDirectory(string path) => throw new NotSupportedException();
+        public bool Exists(string path) => false;
+        public System.IO.Stream CreateNewTemporary(string path) => throw new NotSupportedException();
+        public System.IO.Stream OpenRead(string path)
+        {
+            OpenReadCount++;
+            throw new System.IO.FileNotFoundException();
+        }
+        public void FlushToDisk(System.IO.Stream stream) => throw new NotSupportedException();
+        public void Replace(string source, string destination) => throw new NotSupportedException();
+        public void Move(string source, string destination) => throw new NotSupportedException();
+        public void Delete(string path) => throw new NotSupportedException();
+    }
+
     private sealed class TestSession
     {
         internal readonly DailyV1ExecutionBoundaryState ExecutionState;
@@ -2076,5 +2094,55 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(gate.ActiveOperationCount, Is.Zero);
         Assert.That(session.ExecutionState.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.True);
         Assert.That(gate.TryPublishReplacement(session, new TestSession()), Is.True);
+    }
+
+    [Test]
+    public void ContinuationImageLoadUsesExactReservedSessionForUnityV1AndDotNetV2()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        InstallCompletedBoundaryToken(session, boundary);
+        MissingContinuationSlotOperations fileOperations = new MissingContinuationSlotOperations();
+        P12ACompatibilityDescriptor unityIdentity = new P12ACompatibilityDescriptor(
+            "UnityBootstrap-Daily-v1", 1, "config", "6000.3.9f1", "WindowsEditor", "Mono",
+            "build", new[] { "00000000-0000-0000-0000-000000000001" }, "numeric", 1,
+            "content", "providers", "daily", 1, "calendar", "p9", "p8");
+        P12ACompatibilityDescriptorV2 dotNetIdentity = new P12ACompatibilityDescriptorV2(
+            "UnityBootstrap-Daily-v1", 1, 1,
+            ".NET 8.0", "8.0.1.0", "Windows", "win-x64", "x64", "net8.0",
+            new[] { new P12AAssemblyIdentityV2("Simulation.Core", "1.0.0.0",
+                "00000000-0000-0000-0000-000000000001") }, "numeric", 1,
+            "configuration", "content", "providers", "calendar", 1,
+            "calendar-fingerprint", "p9", "p8");
+
+        Assert.That(application.TryLoadContinuationImageForReplacement(
+            session, null, unityIdentity, null, "private-root", fileOperations,
+            out P12AContinuationImage unreservedImage, out P12AResult unreservedResult), Is.False);
+        Assert.That(unreservedImage, Is.Null);
+        Assert.That(unreservedResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+        Assert.That(fileOperations.OpenReadCount, Is.Zero,
+            "A missing replacement reservation must not touch the continuation slot.");
+
+        Assert.That(application.TryBeginExclusiveOperation(session, out var replacement), Is.True);
+        using (replacement)
+        {
+            Assert.That(application.TryLoadContinuationImageForReplacement(
+                session, replacement, unityIdentity, null,
+                "private-root", fileOperations,
+                out P12AContinuationImage unityImage, out P12AResult unityResult), Is.False);
+            Assert.That(unityImage, Is.Null);
+            Assert.That(unityResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+
+            Assert.That(application.TryLoadContinuationImageForReplacement(
+                session, replacement, null, dotNetIdentity,
+                "private-root", fileOperations,
+                out P12AContinuationImage dotNetImage, out P12AResult dotNetResult), Is.False);
+            Assert.That(dotNetImage, Is.Null);
+            Assert.That(dotNetResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        }
+
+        Assert.That(fileOperations.OpenReadCount, Is.EqualTo(2),
+            "Both descriptor variants must use the exact reserved application session and the same read-only slot operation.");
     }
 }
