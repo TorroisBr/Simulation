@@ -159,6 +159,13 @@ public sealed class ArmedForceStore : IAuthoritativeMutationGuardBindable
         return copy;
     }
 
+    /// <summary>
+    /// Rebuilds this owner for a runtime composition in another assembly while
+    /// preserving its stable records and revision without replaying writes.
+    /// </summary>
+    public ArmedForceStore CloneForRuntime(PersonStore targetPersonStore) =>
+        Clone(targetPersonStore);
+
     public IReadOnlyList<ArmedForceRecord> Forces
     {
         get
