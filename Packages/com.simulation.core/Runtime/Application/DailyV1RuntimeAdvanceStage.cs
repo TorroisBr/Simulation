@@ -274,11 +274,8 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         // Core selects the only scope that may remain active around this
         // snapshot. Recheck after the host reads the owner census so a
         // reentrant scope change cannot authorize a stale capture.
-        if (!executionState.TryAssessCaptureScope(allowedOuterScope))
-        {
-            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+        if (!executionState.TryAssessSelectedCaptureBoundary(allowedOuterScope, out failure))
             return false;
-        }
 
         if (!hostPorts.TryCaptureOwnerSectionCensus(
                 allowedOuterScope, out ownerSections, out mutationEpoch, out failure))
@@ -288,11 +285,32 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
-        if (!executionState.TryAssessCaptureScope(allowedOuterScope))
+        if (failure != DailyCaptureEligibilityFailure.None)
         {
             ownerSections = null;
             mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+        if (mutationEpoch < 0L)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+            return false;
+        }
+        if (ownerSections == null
+            || !DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(ownerSections))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        if (!executionState.TryAssessSelectedCaptureBoundary(allowedOuterScope, out failure))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
             return false;
         }
 

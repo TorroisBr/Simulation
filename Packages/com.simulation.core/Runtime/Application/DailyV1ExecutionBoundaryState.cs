@@ -488,6 +488,50 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    /// <summary>
+    /// Core owns selected Daily-v1 capture admission. A host may read the
+    /// existing live owner protocol, but cannot authorize a census outside
+    /// this runtime's exact profile, thread, lease, operation, mutation,
+    /// and owner-graph boundary. The host's existing live census protocol
+    /// retains its world-publication check.
+    /// </summary>
+    internal bool TryAssessSelectedCaptureBoundary(
+        DailyV1CaptureScopeAllowance allowance,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+        if (!Enum.IsDefined(typeof(DailyV1CaptureScopeAllowance), allowance))
+            return false;
+
+        SimulationRuntimeAdmissionContext admission = AdmissionContext;
+        if (admission == null
+            || admission.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+        {
+            failure = DailyCaptureEligibilityFailure.UnsupportedProfile;
+            return false;
+        }
+        if (!admission.IsOwnedByCurrentThread())
+        {
+            failure = DailyCaptureEligibilityFailure.WrongOwnerThread;
+            return false;
+        }
+
+        bool advanceLeaseRequired = allowance == DailyV1CaptureScopeAllowance.DailyAdvance;
+        if (AdvanceLeaseHeld != advanceLeaseRequired || !TryAssessCaptureScope(allowance))
+        {
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+
+        if (!runtimeIdentityBound || !runtimeConfigurationBound
+            || !HasAdmittedSelectedDailyExecution || !mutationGuard.CanMutate)
+            return false;
+
+        failure = DailyCaptureEligibilityFailure.None;
+        return true;
+    }
+
     internal bool TryBeginRuntimeProtocolOperation(string operationContractId)
     {
         lock (operationSyncRoot)

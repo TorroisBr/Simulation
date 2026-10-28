@@ -1627,6 +1627,55 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void CoreSelectedCensusAdmissionRequiresExactLeaseAndCompleteOwnerVector()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary hostPorts);
+        DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
+            session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
+        Assert.That(coreBoundary, Is.Not.Null);
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        IReadOnlyList<OwnerSectionCensusSnapshot> complete =
+            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        hostPorts.SetAdmissionEvidence(complete, mutationEpoch: 23L);
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        Assert.That(coreBoundary.TryCaptureCompletedDailyCaptureEvidence(
+            out _, out _, out DailyCaptureEligibilityFailure failure), Is.False,
+            "Core rejects a DailyAdvance census when its exact runtime lease is not held.");
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero);
+        Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease mismatchedLease), Is.True);
+        using (mismatchedLease)
+        {
+            Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+                sessionReplacement: false, out _, out _, out failure), Is.False,
+                "Core rejects an idle census while an advance lease is held.");
+            Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
+            Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero);
+        }
+
+        Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+            sessionReplacement: false, out _, out _, out failure), Is.True);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.None));
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(1));
+
+        hostPorts.SetAdmissionEvidence(new[] { complete[0] }, mutationEpoch: 23L);
+        Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+            sessionReplacement: false,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> incomplete,
+            out long incompleteEpoch,
+            out failure), Is.False,
+            "Core requires the complete selected owner-family census before returning host evidence.");
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
+        Assert.That(incomplete, Is.Null);
+        Assert.That(incompleteEpoch, Is.Zero);
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(2));
+    }
+    [Test]
     public void CoreDropsCensusEvidenceWhenHostFailsOrScopeChangesDuringCapture()
     {
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(
