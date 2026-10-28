@@ -1,8 +1,39 @@
+using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 
 [TestFixture]
 public sealed class DailyV1P12DRelationshipValidatorTests
 {
+    [Test]
+    public void ValidatesDecodedImageOwnersBeforeHostProjection()
+    {
+        PersonStoreOwnerSnapshot persons = new PersonStoreOwnerSnapshot(
+            PersonStoreOwnerSnapshot.CurrentSchemaId,
+            PersonStoreOwnerSnapshot.CurrentSchemaVersion,
+            1L, 1, 1,
+            new[] { new PersonStoreOwnerSnapshotRow(
+                "person-a", null, null, "city-a", "npc-a", 1L) });
+        GenealogyOwnerSnapshot genealogy = new GenealogyOwnerSnapshot(
+            GenealogyOwnerSnapshot.CurrentSchemaVersion, 0L, Array.Empty<ParentageRecord>());
+        DailyV1P12DCityCoreOwnerHydrationInput city = new DailyV1P12DCityCoreOwnerHydrationInput(
+            "city-a", "city-definition-a", "location-a", "location-a", 1L,
+            new[] { "npc-a" }, "city-a", MarketLiquidityMode.Open, false, 0L,
+            Array.Empty<P12DCityMarketItemSnapshot>(), "population-a",
+            ConsumptionPaymentMode.Free, false, "population-a", 1, 0L, 0L,
+            Array.Empty<PopulationOperationReceiptSnapshot>());
+        P12DNpcDRow npc = CreateNpcRow("location-a");
+        SpatialNetworkOwnerSnapshot spatial = new SpatialNetworkOwnerSnapshot(
+            SpatialNetworkOwnerSnapshot.CurrentSchemaVersion, 1L,
+            new[] { "location-a" }, Array.Empty<SpatialRouteOwnerSnapshotRecord>());
+
+        Assert.That(DailyV1P12DRelationshipValidator.TryValidate(
+            persons, genealogy, new[] { city }, new[] { npc }, spatial), Is.True);
+
+        Assert.That(DailyV1P12DRelationshipValidator.TryValidate(
+            persons, genealogy, new[] { city }, new[] { CreateNpcRow("location-other") }, spatial), Is.False);
+    }
+
     [Test]
     public void AcceptsConsistentDetachedPersonGenealogyCityAndNpcLinks()
     {
@@ -121,4 +152,10 @@ public sealed class DailyV1P12DRelationshipValidatorTests
             },
             new string[0], new System.Collections.Generic.Dictionary<string, string>()), Is.False);
     }
+
+    private static P12DNpcDRow CreateNpcRow(string currentLocationId) =>
+        new P12DNpcDRow("npc-a", "npc-definition-a", "person-a", "city-a",
+            NpcLifeState.Alive, NpcInjurySeverity.None, Array.Empty<string>(), 0,
+            null, "city-a", currentLocationId, null, null,
+            Array.Empty<P12DNpcInventoryRowValue>(), 0L, 0f, 0L, 0L, 0L, 0L, 0L);
 }

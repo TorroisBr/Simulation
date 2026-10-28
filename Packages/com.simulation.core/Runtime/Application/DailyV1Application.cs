@@ -1179,6 +1179,14 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        if (!DailyV1P12DRelationshipValidator.TryValidate(
+                personSnapshot, genealogySnapshot, cityInputs, npcDRows, spatialSnapshot))
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12d.relationship-integrity");
+            return false;
+        }
+
         if (!P12DSpatialNetworkOwnerHydrator.TryCreateOwner(
                 spatialSnapshot, out SpatialNetworkOwner stagedSpatialNetwork, out _)
             || stagedSpatialNetwork == null

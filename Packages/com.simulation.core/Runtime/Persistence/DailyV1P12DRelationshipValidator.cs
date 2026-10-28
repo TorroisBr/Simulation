@@ -87,6 +87,67 @@ internal sealed class DailyV1P12DNpcRelation
 /// </summary>
 internal static class DailyV1P12DRelationshipValidator
 {
+    /// <summary>
+    /// Validates decoded P12-D owner values directly in Core before any host
+    /// projections are constructed. This keeps restore relation authority
+    /// beside the owner hydrators while retaining the same value-level rules
+    /// used by legacy Unity staging.
+    /// </summary>
+    internal static bool TryValidate(
+        PersonStoreOwnerSnapshot persons,
+        GenealogyOwnerSnapshot genealogy,
+        IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cities,
+        IReadOnlyList<P12DNpcDRow> npcs,
+        SpatialNetworkOwnerSnapshot spatial)
+    {
+        if (persons?.Rows == null || genealogy?.Records == null || cities == null
+            || npcs == null || spatial?.LocationRuntimeIds == null)
+            return false;
+
+        List<DailyV1P12DPersonRelation> personRelations =
+            new List<DailyV1P12DPersonRelation>(persons.Rows.Count);
+        foreach (PersonStoreOwnerSnapshotRow person in persons.Rows)
+            personRelations.Add(person == null ? null : new DailyV1P12DPersonRelation(
+                person.PersonIdValue, person.ResidenceSettlementRuntimeId,
+                person.MaterializedNpcRuntimeId));
+
+        List<DailyV1P12DParentageRelation> parentageRelations =
+            new List<DailyV1P12DParentageRelation>(genealogy.Records.Count);
+        foreach (ParentageRecord edge in genealogy.Records)
+            parentageRelations.Add(edge == null ? null : new DailyV1P12DParentageRelation(
+                edge.ParentId?.Value, edge.ChildId?.Value));
+
+        List<DailyV1P12DCityRelation> cityRelations =
+            new List<DailyV1P12DCityRelation>(cities.Count);
+        Dictionary<string, string> cityLocationIds = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (DailyV1P12DCityCoreOwnerHydrationInput city in cities)
+        {
+            if (city == null)
+            {
+                cityRelations.Add(null);
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(city.CityRuntimeId)
+                || !cityLocationIds.TryAdd(city.CityRuntimeId, city.ResolvedLocationRuntimeId))
+                return false;
+            cityRelations.Add(new DailyV1P12DCityRelation(
+                city.CityRuntimeId, city.LegacyLocationRuntimeId,
+                city.ImportantNpcRuntimeIds));
+        }
+
+        List<DailyV1P12DNpcRelation> npcRelations =
+            new List<DailyV1P12DNpcRelation>(npcs.Count);
+        foreach (P12DNpcDRow npc in npcs)
+            npcRelations.Add(npc == null ? null : new DailyV1P12DNpcRelation(
+                npc.RuntimeId, npc.PersonIdValue, npc.ResidenceSettlementRuntimeId,
+                npc.CurrentCityRuntimeId, npc.CurrentLocationRuntimeId,
+                npc.DestinationCityRuntimeId, npc.DestinationLocationRuntimeId));
+
+        return TryValidate(personRelations, parentageRelations, cityRelations, npcRelations,
+            spatial.LocationRuntimeIds, cityLocationIds);
+    }
+
     internal static bool TryValidate(
         IReadOnlyList<DailyV1P12DPersonRelation> persons,
         IReadOnlyList<DailyV1P12DParentageRelation> genealogy,

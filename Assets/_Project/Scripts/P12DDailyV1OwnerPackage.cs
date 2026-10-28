@@ -576,7 +576,8 @@ internal sealed class P12DDailyV1OwnerPackage
             cityLinkers.Add(linker);
         }
 
-        if (!TryPreflightRelations(personSnapshot, genealogySnapshot, citySnapshots,
+        if (!coreOwnsSelectedRestore
+            && !TryPreflightRelations(personSnapshot, genealogySnapshot, citySnapshots,
                 npcDRows, locationsById, cityLocationIds))
         { failure = P12DDailyV1OwnerPackageFailure.InvalidRelation; return false; }
 
