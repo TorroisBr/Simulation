@@ -244,8 +244,13 @@ internal static class DailyV1GenesisComposer
                     if (!builder.TryBuild(justice, travelParties, directives, expeditions,
                             out DailyV1SelectedRuntimeOwnerGraph graph))
                         return Fail("Core selected owner graph failed exact genesis admission.", out diagnostic);
+                    PersonSpatialPositionStore personSpatialPositions =
+                        new PersonSpatialPositionStore(personStore, spatialAuthority,
+                            new SpatialPassageTraversalOptionResolver(spatialAuthority.PassageAuthority));
                     if (!graph.TryBindPersonStore(personStore)
                         || !ReferenceEquals(actorChoiceStore.PersonStore, personStore)
+                        || !graph.TryBindPersonSpatialPositionStore(personSpatialPositions)
+                        || !graph.TryBindLegacySpatialAnchorBindingStore(anchorBindings)
                         || !executionBoundaryState.TryBindSelectedRuntimeOwnerGraph(graph)
                         || !executionBoundaryState.TryBindInitialSelectedRuntimeActorRosterFromOwnerGraph()
                         || !executionBoundaryState.TryBindSelectedRuntimeExecutionRoots(

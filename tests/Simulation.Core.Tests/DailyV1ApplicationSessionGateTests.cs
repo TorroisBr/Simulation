@@ -337,14 +337,22 @@ public sealed class DailyV1ApplicationSessionGateTests
         if (bindP8Owners)
         {
             DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
-            PersonSpatialPositionStore positions = new PersonSpatialPositionStore(
-                graph.PersonStore,
-                session.GenesisComposition.SpatialAuthority,
-                new SpatialPassageTraversalOptionResolver(
-                    session.GenesisComposition.SpatialAuthority.PassageAuthority));
-            Assert.That(graph.TryBindPersonSpatialPositionStore(positions), Is.True);
-            Assert.That(graph.TryBindLegacySpatialAnchorBindingStore(
-                session.GenesisComposition.LegacySpatialAnchorBindings), Is.True);
+            if (graph.PersonSpatialPositionStore == null)
+            {
+                PersonSpatialPositionStore positions = new PersonSpatialPositionStore(
+                    graph.PersonStore,
+                    session.GenesisComposition.SpatialAuthority,
+                    new SpatialPassageTraversalOptionResolver(
+                        session.GenesisComposition.SpatialAuthority.PassageAuthority));
+                Assert.That(graph.TryBindPersonSpatialPositionStore(positions), Is.True);
+                Assert.That(graph.TryBindLegacySpatialAnchorBindingStore(
+                    session.GenesisComposition.LegacySpatialAnchorBindings), Is.True);
+            }
+            else
+            {
+                Assert.That(graph.LegacySpatialAnchors,
+                    Is.SameAs(session.GenesisComposition.LegacySpatialAnchorBindings));
+            }
         }
         EnsureRuntimeProtocolInventory(session.ExecutionBoundaryState);
         boundary = new ApplicationAdvanceBoundary(session.ExecutionBoundaryState, onOperationEntry);
@@ -453,7 +461,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         => CreateCoreBoundCityAndP12FSectionVector(session);
 
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundP12FSectionVectorWithoutCity(
-        DailyV1ActiveRuntimeSession session)
+        DailyV1ActiveRuntimeSession session,
+        bool includeBoundP8OwnerWitnesses = true)
     {
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
         PoliticalKnowledgeStore politicalKnowledge =
@@ -471,7 +480,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             new TravelPartyCensusProvider(graph.TravelParties).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus());
-        return sections;
+        return includeBoundP8OwnerWitnesses
+            ? ReplaceP8CensusOwnerVector(graph, sections)
+            : sections;
     }
 
     private static PoliticalKnowledgeStore CreateAndBindCorePoliticalKnowledgeStore(
@@ -492,9 +503,11 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundCityAndP12FSectionVector(
-        DailyV1ActiveRuntimeSession session)
+        DailyV1ActiveRuntimeSession session,
+        bool includeBoundP8OwnerWitnesses = true)
     {
-        OwnerSectionCensusSnapshot[] existing = CreateCoreBoundP12FSectionVectorWithoutCity(session);
+        OwnerSectionCensusSnapshot[] existing =
+            CreateCoreBoundP12FSectionVectorWithoutCity(session, includeBoundP8OwnerWitnesses);
         return ReplaceCityOwnerSectionVector(session, existing);
     }
 
@@ -503,14 +516,21 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
         OwnerSectionCensusSnapshot[] sections = ReplaceCityOwnerSectionVector(
             session, DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot());
-        if (session.OwnerGraph.PersonSpatialPositionStore != null)
+        return ReplaceP8CensusOwnerVector(session.OwnerGraph, sections);
+    }
+
+    private static OwnerSectionCensusSnapshot[] ReplaceP8CensusOwnerVector(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        OwnerSectionCensusSnapshot[] sections)
+    {
+        if (graph?.PersonSpatialPositionStore != null)
             ReplaceOwnerSectionWithCurrentCensus(sections,
                 new PersonSpatialPositionCensusProvider(
-                    session.OwnerGraph.PersonSpatialPositionStore).GetCurrentCensus());
-        if (session.OwnerGraph.LegacySpatialAnchors != null)
+                    graph.PersonSpatialPositionStore).GetCurrentCensus());
+        if (graph?.LegacySpatialAnchors != null)
             ReplaceOwnerSectionWithCurrentCensus(sections,
                 new LegacySpatialAnchorBindingCensusProvider(
-                    session.OwnerGraph.LegacySpatialAnchors).GetCurrentCensus());
+                    graph.LegacySpatialAnchors).GetCurrentCensus());
         return sections;
     }
 
@@ -935,7 +955,11 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1CityRuntimeOwners city = session.OwnerGraph.Cities[0];
         Assert.That(city.HasLocalDailyMaterialFlow, Is.True);
 
-        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCityAndP12FSectionVector(session);
+        // Daily-v1 explicitly admits the P8 anchor/position sections as exact-empty.
+        // This fixture adds P14 local-flow state outside that profile, so retain the
+        // admitted empty P8 rows and let the selected City capture reject the P14 state.
+        OwnerSectionCensusSnapshot[] sections =
+            CreateCoreBoundCityAndP12FSectionVector(session, includeBoundP8OwnerWitnesses: false);
         InstallCompletedBoundaryToken(session, boundary, sections);
 
         Assert.That(application.TryBeginContinuationSaveOperation(
@@ -1121,8 +1145,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             bootstrapAdmission.CreateRestoredContinuationContext();
         DailyV1ExecutionBoundaryState restoredState =
             CreateBoundaryWithAdmission(composition, restoredAdmission);
-        OwnerSectionCensusSnapshot[] ownerSections =
-            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        OwnerSectionCensusSnapshot[] ownerSections = ReplaceP8CensusOwnerVector(
+            composition.OwnerGraph, DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot());
         Assert.That(restoredState.TryAdmitRestoredContinuationBoundary(
             restoredAdmission,
             restoredState.ConfigurationIdentity,
@@ -1184,8 +1208,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             bootstrapAdmission.CreateRestoredContinuationContext();
         DailyV1ExecutionBoundaryState sourceState =
             CreateBoundaryWithAdmission(sourceComposition, sourceAdmission);
-        OwnerSectionCensusSnapshot[] sourceOwners =
-            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        OwnerSectionCensusSnapshot[] sourceOwners = ReplaceP8CensusOwnerVector(
+            sourceComposition.OwnerGraph, DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot());
         const long sourceEpoch = 23L;
         Assert.That(sourceState.TryAdmitRestoredContinuationBoundary(
             sourceAdmission,
@@ -1215,8 +1239,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             bootstrapAdmission.CreateRestoredContinuationContext();
         DailyV1ExecutionBoundaryState candidateState =
             CreateBoundaryWithAdmission(candidateComposition, candidateAdmission);
-        OwnerSectionCensusSnapshot[] candidateOwners =
-            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        OwnerSectionCensusSnapshot[] candidateOwners = ReplaceP8CensusOwnerVector(
+            candidateComposition.OwnerGraph, DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot());
         const long candidateEpoch = 31L;
         Assert.That(candidateState.TryAdmitRestoredContinuationBoundary(
             candidateAdmission,
@@ -1647,7 +1671,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
         Assert.That(coreBoundary, Is.Not.Null);
         hostPorts.SetAdmissionEvidence(
-            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot(), mutationEpoch: 17L);
+            CreateCoreBoundCompleteOwnerSectionVector(session), mutationEpoch: 17L);
 
         Assert.That(coreBoundary.TryCaptureCompletedDailyCaptureEvidence(
             out _, out _, out DailyCaptureEligibilityFailure failure), Is.False,

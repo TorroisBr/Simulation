@@ -2576,20 +2576,30 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         StructureStore resolvedStructureStore = structureStore == null
             ? null
             : structureStore.Clone(resolvedSpatialAuthorityStore);
+        DailyV1SelectedRuntimeOwnerGraph selectedCoreOwnerGraph =
+            GetAdmittedSelectedCoreOwnerGraph(selectedExecutionBoundaryState);
         ISpatialTraversalOptionResolver resolvedTraversalOptionResolver =
-            new SpatialPassageTraversalOptionResolver(resolvedSpatialAuthorityStore.PassageAuthority);
+            selectedCoreOwnerGraph?.PersonSpatialPositionStore?.TraversalOptionResolver
+            ?? new SpatialPassageTraversalOptionResolver(resolvedSpatialAuthorityStore.PassageAuthority);
         LegacySpatialAnchorBindingStore resolvedLegacySpatialAnchorBindingStore =
-            CloneLegacySpatialAnchorBindingStore(
-                legacySpatialAnchorBindingStore,
-                resolvedSpatialAuthorityStore,
-                resolvedCities,
-                explorableSiteStore);
+            selectedCoreOwnerGraph?.LegacySpatialAnchors != null
+                ? RetainSelectedCoreLegacySpatialAnchorBindingStore(
+                    legacySpatialAnchorBindingStore, selectedCoreOwnerGraph, resolvedSpatialAuthorityStore)
+                : CloneLegacySpatialAnchorBindingStore(
+                    legacySpatialAnchorBindingStore,
+                    resolvedSpatialAuthorityStore,
+                    resolvedCities,
+                    explorableSiteStore);
         PersonSpatialPositionStore resolvedPersonSpatialPositionStore =
-            ClonePersonSpatialPositionStore(
-                personSpatialPositionStore,
-                resolvedPersonStore,
-                resolvedSpatialAuthorityStore,
-                resolvedTraversalOptionResolver);
+            selectedCoreOwnerGraph?.PersonSpatialPositionStore != null
+                ? RetainSelectedCorePersonSpatialPositionStore(
+                    personSpatialPositionStore, selectedCoreOwnerGraph,
+                    resolvedPersonStore, resolvedSpatialAuthorityStore)
+                : ClonePersonSpatialPositionStore(
+                    personSpatialPositionStore,
+                    resolvedPersonStore,
+                    resolvedSpatialAuthorityStore,
+                    resolvedTraversalOptionResolver);
         SpatialRouteKnowledgeStore resolvedSpatialRouteKnowledgeStore =
             CloneSpatialRouteKnowledgeStore(
                 spatialRouteKnowledgeStore,
@@ -13112,6 +13122,58 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         return source;
     }
 
+    private static DailyV1SelectedRuntimeOwnerGraph GetAdmittedSelectedCoreOwnerGraph(
+        DailyV1ExecutionBoundaryState executionBoundaryState)
+    {
+        if (executionBoundaryState == null
+            || !executionBoundaryState.HasAdmittedSelectedDailyExecution
+            || executionBoundaryState.AdmissionContext?.Profile
+                != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+            return null;
+        return executionBoundaryState.SelectedRuntimeOwnerGraph;
+    }
+
+    private static LegacySpatialAnchorBindingStore RetainSelectedCoreLegacySpatialAnchorBindingStore(
+        LegacySpatialAnchorBindingStore supplied,
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph,
+        SpatialAuthorityStore spatialAuthorityStore)
+    {
+        LegacySpatialAnchorBindingStore owner = selectedGraph?.LegacySpatialAnchors;
+        if (owner == null || (supplied != null && !ReferenceEquals(supplied, owner))
+            || !ReferenceEquals(owner.SpatialLocationLookup, spatialAuthorityStore))
+            throw new ArgumentException(
+                "The selected Core graph must retain the exact P8 legacy-anchor owner bound to its spatial authority.",
+                nameof(supplied));
+
+        SpatialAnchorBindingInvariantReport report = owner.ValidateInvariants();
+        if (!report.IsValid)
+            throw new ArgumentException(
+                "The selected Core P8 legacy-anchor owner is invalid: "
+                + string.Join("; ", report.Violations), nameof(supplied));
+        return owner;
+    }
+
+    private static PersonSpatialPositionStore RetainSelectedCorePersonSpatialPositionStore(
+        PersonSpatialPositionStore supplied,
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph,
+        PersonStore personStore,
+        SpatialAuthorityStore spatialAuthorityStore)
+    {
+        PersonSpatialPositionStore owner = selectedGraph?.PersonSpatialPositionStore;
+        if (owner == null || (supplied != null && !ReferenceEquals(supplied, owner))
+            || !ReferenceEquals(owner.PersonStore, personStore)
+            || !ReferenceEquals(owner.SpatialAuthorityStore, spatialAuthorityStore))
+            throw new ArgumentException(
+                "The selected Core graph must retain the exact P8 Person-position owner bound to its Person and spatial authorities.",
+                nameof(supplied));
+
+        PersonSpatialPositionInvariantReport report = owner.ValidateInvariants();
+        if (!report.IsValid)
+            throw new ArgumentException(
+                "The selected Core P8 Person-position owner is invalid: "
+                + string.Join("; ", report.Violations), nameof(supplied));
+        return owner;
+    }
     private static LegacySpatialAnchorBindingStore CloneLegacySpatialAnchorBindingStore(
         LegacySpatialAnchorBindingStore source,
         SpatialAuthorityStore spatialAuthorityStore,

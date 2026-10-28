@@ -344,6 +344,17 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(composition.DecisionStore.Decisions, Is.Empty);
         Assert.That(composition.OwnerGraph.PersonStore, Is.SameAs(composition.PersonStore));
         Assert.That(composition.ActorChoiceStore.PersonStore, Is.SameAs(composition.PersonStore));
+        Assert.That(composition.OwnerGraph.PersonSpatialPositionStore, Is.Not.Null);
+        Assert.That(composition.OwnerGraph.PersonSpatialPositionStore.PersonStore,
+            Is.SameAs(composition.PersonStore));
+        Assert.That(composition.OwnerGraph.PersonSpatialPositionStore.SpatialAuthorityStore,
+            Is.SameAs(composition.SpatialAuthority));
+        Assert.That(composition.OwnerGraph.PersonSpatialPositionStore.Count, Is.Zero);
+        Assert.That(composition.OwnerGraph.PersonSpatialPositionStore.Revision, Is.Zero);
+        Assert.That(composition.OwnerGraph.LegacySpatialAnchors,
+            Is.SameAs(composition.LegacySpatialAnchorBindings));
+        Assert.That(composition.OwnerGraph.LegacySpatialAnchors.SpatialLocationLookup,
+            Is.SameAs(composition.SpatialAuthority));
         Assert.That(composition.Expeditions, Is.Not.Null);
         Assert.That(composition.Expeditions.ActiveExpeditions, Is.Empty);
         Assert.That(composition.Expeditions.Revision, Is.Zero);

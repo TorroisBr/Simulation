@@ -115,6 +115,7 @@ public sealed class PersonSpatialPositionStore : IAuthoritativeMutationGuardBind
     public long Revision => revision;
     internal PersonStore PersonStore => personStore;
     internal SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
+    internal ISpatialTraversalOptionResolver TraversalOptionResolver => traversalResolver;
     internal bool TryPrepareBeginTransit(PersonId id, TraversalOptionRef option, HexBoundaryKey boundary,
         HexId from, HexId to, long expectedRevision, out PreparedPersonSpatialPositionChange prepared,
         out PersonSpatialPositionFailure failure) => TryPrepareOperation(id, expectedRevision,
