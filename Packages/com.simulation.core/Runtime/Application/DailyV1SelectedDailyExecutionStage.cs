@@ -643,11 +643,25 @@ internal static class DailyV1SelectedDailyExecutionStage
             executionState,
             context.P12Protocol,
             executionState == null ? context.ExecuteWithinPartyOwnerOperation : null,
-            context.AdvanceSoloTravel,
+            ShouldAdvanceSelectedSoloTravel(executionState, context.AdvanceSoloTravel),
             out partyArrivals,
             out soloResults);
     }
 
+    /// <summary>
+    /// A sealed Core session owns selected travel-stage availability. The host
+    /// value is retained only for the pre-inventory compatibility path.
+    /// </summary>
+    internal static bool ShouldAdvanceSelectedSoloTravel(
+        DailyV1ExecutionBoundaryState executionState,
+        bool hostReportedTravelAvailability)
+    {
+        if (executionState == null || !executionState.HasRuntimeProtocolOperationInventory)
+            return hostReportedTravelAvailability;
+
+        return executionState.HasRuntimeProtocolOperationContract(
+            DailyV1RuntimeProtocolOperationContracts.SoloTravelStart);
+    }
     private static string GetCalendarSemanticVersion(DailyV1CalendarDefinition calendar)
     {
         if (calendar == null) throw new InvalidOperationException(

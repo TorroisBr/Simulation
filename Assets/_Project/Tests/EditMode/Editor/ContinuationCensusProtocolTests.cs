@@ -342,6 +342,37 @@ public sealed class ContinuationCensusProtocolTests
     }
 
     [Test]
+    public void SelectedSoloTravelAvailabilityComesFromSealedCoreOperationInventory()
+    {
+        SimulationRuntimeAdmissionContext noTravelAdmission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        DailyV1ExecutionBoundaryState noTravelState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(), noTravelAdmission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(System.Guid.NewGuid()));
+        CreateOperationProtocol(noTravelState, hasTravelSystem: false);
+
+        Assert.That(noTravelState.HasRuntimeProtocolOperationInventory, Is.True);
+        Assert.That(noTravelState.HasRuntimeProtocolOperationContract(
+            DailyV1RuntimeProtocolOperationContracts.SoloTravelStart), Is.False);
+        Assert.That(DailyV1SelectedDailyExecutionStage.ShouldAdvanceSelectedSoloTravel(
+            noTravelState, hostReportedTravelAvailability: true), Is.False,
+            "A Unity host component cannot enable a selected Core operation absent from the sealed inventory.");
+
+        SimulationRuntimeAdmissionContext travelAdmission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        DailyV1ExecutionBoundaryState travelState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(), travelAdmission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(System.Guid.NewGuid()));
+        CreateOperationProtocol(travelState, hasTravelSystem: true);
+
+        Assert.That(travelState.HasRuntimeProtocolOperationInventory, Is.True);
+        Assert.That(travelState.HasRuntimeProtocolOperationContract(
+            DailyV1RuntimeProtocolOperationContracts.SoloTravelStart), Is.True);
+        Assert.That(DailyV1SelectedDailyExecutionStage.ShouldAdvanceSelectedSoloTravel(
+            travelState, hostReportedTravelAvailability: false), Is.True,
+            "The admitted Core capability remains authoritative when the host does not select the stage.");
+    }
+    [Test]
     public void SharedCaptureRequiresTheExactAuthorizedOuterScopeAndNoProtocolReservation()
     {
         SimulationRuntimeAdmissionContext admission =
@@ -792,7 +823,7 @@ public sealed class ContinuationCensusProtocolTests
     }
 
     private static ContinuationCensusProtocol CreateOperationProtocol(
-        DailyV1ExecutionBoundaryState sharedExecutionState = null)
+        DailyV1ExecutionBoundaryState sharedExecutionState = null, bool hasTravelSystem = false)
     {
         RecordFixture records = SimulationTestFactory.CreateRecordFixture();
         ContinuationCensusProtocol protocol = new ContinuationCensusProtocol(sharedExecutionState);
@@ -817,7 +848,7 @@ public sealed class ContinuationCensusProtocolTests
                 DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
                     hasRuntimeAdmission: true,
                     hasTravelPartySystem: false,
-                    hasTravelSystem: false);
+                    hasTravelSystem: hasTravelSystem);
             foreach (string operationContractId in operationContractIds)
                 Assert.That(protocol.RegisterExpectedOperation(operationContractId, out _), Is.True);
         }
