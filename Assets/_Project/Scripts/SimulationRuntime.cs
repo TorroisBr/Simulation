@@ -1743,7 +1743,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     private ScheduledDirectiveCensusProvider scheduledDirectiveCensusProvider;
     private ActorChoiceP11CensusProvider actorChoiceP11CensusProvider;
     private readonly FactualReadCoordinator factualReadCoordinator;
-    private volatile bool factualReadWorldPublished;
+    private bool factualReadWorldPublished => dailyExecutionBoundary.IsFactualReadWorldPublished;
     private SimulationTime simulationTime => dailyExecutionBoundary.SimulationTime;
     private readonly List<CityRuntime> cities;
     private readonly IReadOnlyList<CityRuntime> cityRuntimeSnapshot;
@@ -3069,7 +3069,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
     SimulationRuntimeAdmissionContext IFactualReadRuntimeState.AdmissionContext => runtimeAdmissionContext;
 
-    bool IFactualReadRuntimeState.IsWorldPublished => factualReadWorldPublished;
+    bool IFactualReadRuntimeState.IsWorldPublished => dailyExecutionBoundary.IsFactualReadWorldPublished;
 
     bool IFactualReadRuntimeState.IsHealthy
     {
@@ -3123,7 +3123,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return true;
 
         if (factualReadCoordinator == null
-            || factualReadWorldPublished
+            || dailyExecutionBoundary.IsFactualReadWorldPublished
             || !runtimeAdmissionContext.IsOwnedByCurrentThread()
             || !((IFactualReadRuntimeState)this).IsHealthy
             || ((IFactualReadRuntimeState)this).IsBootstrapOrAdvanceActive
@@ -3132,8 +3132,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        factualReadWorldPublished = true;
-        return true;
+        return dailyExecutionBoundary.TryMarkFactualReadWorldPublished();
     }
 
     internal bool TryCompleteP15AProvingPublication()
@@ -10424,7 +10423,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        if (!factualReadWorldPublished || WorldId == null)
+        if (!dailyExecutionBoundary.IsFactualReadWorldPublished || WorldId == null)
         {
             failure = DailyCaptureEligibilityFailure.WorldNotPublished;
             return false;
@@ -10536,7 +10535,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
         IReadOnlyList<OwnerSectionCensusSnapshot> tokenOwnerSections =
             validatedTargetOwnerSections ?? currentOwnerSections;
-        if (!dailyExecutionBoundary.TryCreateRestoredContinuationToken(
+        if (!dailyExecutionBoundary.TryAdmitRestoredContinuationBoundary(
                 runtimeAdmissionContext,
                 configuration,
                 calendar,
@@ -10552,7 +10551,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        return TryPublishRestoredDailyBoundaryAdmission(token, out failure);
+        failure = DailyCaptureEligibilityFailure.None;
+        return true;
     }
 
     /// <summary>
@@ -10591,7 +10591,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             || initialAbsoluteDay != preservedAbsoluteDay
             || currentDailyCaptureToken != null
             || completedDailyCoreSequence != 0L
-            || factualReadWorldPublished)
+            || dailyExecutionBoundary.IsFactualReadWorldPublished)
         {
             failure = DailyCaptureEligibilityFailure.StaleToken;
             return false;
@@ -10654,7 +10654,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        if (!mutationGuard.CanMutate || factualReadWorldPublished)
+        if (!mutationGuard.CanMutate || dailyExecutionBoundary.IsFactualReadWorldPublished)
         {
             failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
             return false;
@@ -10671,50 +10671,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
         currentOwnerSections = ownerSections;
         currentMutationEpoch = mutationEpoch;
-        return true;
-    }
-
-    /// <summary>Publishes the host's read boundary after Core installs its exact token.</summary>
-    internal bool TryPublishRestoredDailyBoundaryAdmission(
-        DailyCaptureEligibilityToken token,
-        out DailyCaptureEligibilityFailure failure)
-    {
-        failure = DailyCaptureEligibilityFailure.None;
-        if (!IsDailyCaptureProfile)
-        {
-            failure = DailyCaptureEligibilityFailure.UnsupportedProfile;
-            return false;
-        }
-        if (!IsRuntimeAdmissionOwnerThreadCurrent())
-        {
-            failure = DailyCaptureEligibilityFailure.WrongOwnerThread;
-            return false;
-        }
-        if (advanceLeaseHeld || HasActiveDailyOperationContext())
-        {
-            failure = DailyCaptureEligibilityFailure.OperationInProgress;
-            return false;
-        }
-        if (!coreMutationGuardAuthoritiesBound || !mutationGuard.CanMutate
-            || npcRosterCensusProtocol == null || factualReadCoordinator == null
-            || configuration == null || calendar == null)
-        {
-            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
-            return false;
-        }
-        if (token == null || !ReferenceEquals(currentDailyCaptureToken, token)
-            || token.BoundaryProvenance != DailyCaptureBoundaryProvenance.RestoredContinuation
-            || !ReferenceEquals(token.WorldId, WorldId)
-            || token.AbsoluteDay != initialAbsoluteDay
-            || token.CompletedCoreSequence != completedDailyCoreSequence
-            || token.MutationEpoch < 0L
-            || factualReadWorldPublished)
-        {
-            failure = DailyCaptureEligibilityFailure.StaleToken;
-            return false;
-        }
-
-        factualReadWorldPublished = true;
         return true;
     }
 
@@ -10866,7 +10822,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             && IsRuntimeAdmissionOwnerThreadCurrent()
             && !advanceLeaseHeld
             && !HasActiveDailyOperationContext()
-            && factualReadWorldPublished
+            && dailyExecutionBoundary.IsFactualReadWorldPublished
             && mutationGuard.CanMutate;
     }
 

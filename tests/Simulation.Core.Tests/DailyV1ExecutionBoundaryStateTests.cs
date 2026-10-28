@@ -307,28 +307,31 @@ public sealed class DailyV1ExecutionBoundaryStateTests
     [Test]
     public void RestoredTokenKeepsRestoredBoundaryProvenanceAndSequenceAtomicity()
     {
-        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState();
         SimulationRuntimeAdmissionContext admission =
             SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
         EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
         SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
         WorldId world = new WorldId(Guid.NewGuid());
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(6L), admission, SimulationRuntimeCompositionProfile.Standard, world);
+        Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True);
         OwnerSectionCensusSnapshot[] sections = CreateCompleteSnapshot();
 
-        Assert.That(state.TryCreateRestoredContinuationToken(
+        Assert.That(state.TryAdmitRestoredContinuationBoundary(
             admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
             world, 6L, 0L, 3L, sections, out DailyCaptureEligibilityToken rejected), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(state.CompletedCoreSequence, Is.Zero);
         Assert.That(state.CurrentCaptureToken, Is.Null);
 
-        Assert.That(state.TryCreateRestoredContinuationToken(
+        Assert.That(state.TryAdmitRestoredContinuationBoundary(
             admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
             world, 6L, 11L, 3L, sections, out DailyCaptureEligibilityToken restored), Is.True);
         Assert.That(restored.BoundaryProvenance, Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
         Assert.That(restored.CompletedCoreSequence, Is.EqualTo(11L));
         Assert.That(state.CompletedCoreSequence, Is.EqualTo(11L));
         Assert.That(state.CurrentCaptureToken, Is.SameAs(restored));
+        Assert.That(state.IsFactualReadWorldPublished, Is.True);
     }
 
     [Test]
@@ -389,7 +392,7 @@ public sealed class DailyV1ExecutionBoundaryStateTests
             clock, admission, SimulationRuntimeCompositionProfile.Standard, world);
         Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True);
         OwnerSectionCensusSnapshot[] sections = CreateCompleteSnapshot();
-        Assert.That(state.TryCreateRestoredContinuationToken(
+        Assert.That(state.TryAdmitRestoredContinuationBoundary(
             admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
             world, 12L, 4L, 9L, sections, out _), Is.True);
 
@@ -401,6 +404,45 @@ public sealed class DailyV1ExecutionBoundaryStateTests
 
         boundary.MutationEpoch = 8L;
         Assert.That(state.HasValidRestoredDailyBoundaryAdmission(boundary), Is.False);
+    }
+
+    [Test]
+    public void RestoredBoundaryAdmissionPublishesTokenAndReadableBoundaryAtomically()
+    {
+        SimulationTime clock = new SimulationTime(12L);
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
+        WorldId world = new WorldId(Guid.NewGuid());
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState(
+            clock, admission, SimulationRuntimeCompositionProfile.Standard, world);
+        Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True);
+        OwnerSectionCensusSnapshot[] sections = CreateCompleteSnapshot();
+        OwnerSectionCensusSnapshot[] incomplete =
+        {
+            new OwnerSectionCensusSnapshot("city.market", 1, OwnerSectionRole.Required,
+                new object(), 0, 0L)
+        };
+
+        Assert.That(state.TryAdmitRestoredContinuationBoundary(
+            admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
+            world, 12L, 4L, 9L, incomplete, out DailyCaptureEligibilityToken rejected), Is.False);
+        Assert.That(rejected, Is.Null);
+        Assert.That(state.CompletedCoreSequence, Is.Zero);
+        Assert.That(state.CurrentCaptureToken, Is.Null);
+        Assert.That(state.IsFactualReadWorldPublished, Is.False);
+
+        Assert.That(state.TryAdmitRestoredContinuationBoundary(
+            admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
+            world, 12L, 4L, 9L, sections, out DailyCaptureEligibilityToken admitted), Is.True);
+        Assert.That(admitted.BoundaryProvenance,
+            Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
+        Assert.That(admitted, Is.SameAs(state.CurrentCaptureToken));
+        Assert.That(admitted.OwnerSections, Is.SameAs(sections));
+        Assert.That(admitted.MutationEpoch, Is.EqualTo(9L));
+        Assert.That(state.CompletedCoreSequence, Is.EqualTo(4L));
+        Assert.That(state.IsFactualReadWorldPublished, Is.True);
     }
 
     [Test]

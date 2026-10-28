@@ -1539,6 +1539,13 @@ internal static partial class P12GDailyV1RestoreCoordinator
             requireP12RuntimeIdentitySpatialCensusOwners: true,
             p12CrimeSocialAppraisalWorldState: stagedE.CrimeSocialAppraisal);
 
+        if (application != null && coreRuntimeSession != null
+            && !application.TryBindRestoredCandidateRuntimeAdvanceBoundary(coreRuntimeSession, runtime))
+        {
+            diagnostic = "The Core application could not bind the private restored session to its exact Unity P12 evidence boundary.";
+            return false;
+        }
+
         NpcChronicleService chronicles = new NpcChronicleService(decisions, eventStore);
         NpcChronicleFormatter formatter = TesteSimulacao.CreateNpcChronicleFormatter(
             stagedD.RuntimeIdentities,

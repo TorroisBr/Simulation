@@ -1057,7 +1057,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             CreateBoundaryWithAdmission(composition, restoredAdmission);
         OwnerSectionCensusSnapshot[] ownerSections =
             DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
-        Assert.That(restoredState.TryCreateRestoredContinuationToken(
+        Assert.That(restoredState.TryAdmitRestoredContinuationBoundary(
             restoredAdmission,
             restoredState.ConfigurationIdentity,
             restoredState.CalendarIdentity,
@@ -1121,7 +1121,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         OwnerSectionCensusSnapshot[] sourceOwners =
             DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
         const long sourceEpoch = 23L;
-        Assert.That(sourceState.TryCreateRestoredContinuationToken(
+        Assert.That(sourceState.TryAdmitRestoredContinuationBoundary(
             sourceAdmission,
             sourceState.ConfigurationIdentity,
             sourceState.CalendarIdentity,
@@ -1152,7 +1152,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         OwnerSectionCensusSnapshot[] candidateOwners =
             DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
         const long candidateEpoch = 31L;
-        Assert.That(candidateState.TryCreateRestoredContinuationToken(
+        Assert.That(candidateState.TryAdmitRestoredContinuationBoundary(
             candidateAdmission,
             candidateState.ConfigurationIdentity,
             candidateState.CalendarIdentity,

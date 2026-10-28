@@ -335,6 +335,64 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         IDailyV1RuntimeAdvanceEvidenceBoundary boundary) => HasValidDailyBoundaryAdmission(
             boundary, DailyCaptureBoundaryProvenance.RestoredContinuation, sessionReplacement: false);
 
+    internal bool TryValidateRestoredDailyBoundaryAdmission(
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (boundary == null || !ReferenceEquals(boundary.ExecutionState, this))
+        {
+            diagnostic = "The restored boundary is not bound to this Core execution state.";
+            return false;
+        }
+        if (!IsHealthyDailyOwnerThreadBoundary())
+        {
+            diagnostic = "The Core execution state is not at a healthy owner-thread boundary.";
+            return false;
+        }
+
+        DailyCaptureEligibilityToken current = currentCaptureToken;
+        if (current == null
+            || current.BoundaryProvenance != DailyCaptureBoundaryProvenance.RestoredContinuation)
+        {
+            diagnostic = "The Core execution state has no restored-continuation token.";
+            return false;
+        }
+        if (!boundary.TryCaptureDailyBoundaryAdmissionEvidence(
+                sessionReplacement: false,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+                out long mutationEpoch,
+                out DailyCaptureEligibilityFailure captureFailure))
+        {
+            diagnostic = "The restored owner census could not be recaptured: " + captureFailure + ".";
+            return false;
+        }
+        if (!IsHealthyDailyOwnerThreadBoundary()
+            || !ReferenceEquals(currentCaptureToken, current)
+            || current.BoundaryProvenance != DailyCaptureBoundaryProvenance.RestoredContinuation)
+        {
+            diagnostic = "The Core boundary changed during restored owner census recapture.";
+            return false;
+        }
+        if (SimulationTime == null
+            || !TryCompareCurrentCaptureToken(
+                current,
+                AdmissionContext,
+                ConfigurationIdentity,
+                CalendarIdentity,
+                CompositionProfile,
+                WorldId,
+                SimulationTime.AbsoluteDay,
+                ownerSections,
+                mutationEpoch))
+        {
+            diagnostic = "The restored token no longer matches the exact owner vector, epoch, or runtime identities.";
+            return false;
+        }
+
+        return true;
+    }
+
     private bool HasValidDailyBoundaryAdmission(
         IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
         DailyCaptureBoundaryProvenance? expectedProvenance,

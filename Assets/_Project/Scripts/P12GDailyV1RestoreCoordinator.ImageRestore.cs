@@ -96,14 +96,6 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 validatedOwnerSections, validatedMutationEpoch,
                 out currentOwnerSections, out currentMutationEpoch, out failure);
 
-        public bool TryPublishRestoredDailyBoundaryAdmission(
-            DailyCaptureEligibilityToken token,
-            out DailyCaptureEligibilityFailure failure) =>
-            candidate.Runtime.TryPublishRestoredDailyBoundaryAdmission(token, out failure);
-
-        public bool HasValidRestoredDailyBoundaryAdmission() =>
-            candidate.Runtime.HasValidRestoredDailyBoundaryAdmission();
-
         public bool IsHealthyDailyOwnerThreadBoundary() =>
             candidate.Runtime.IsHealthyDailyOwnerThreadBoundary();
     }

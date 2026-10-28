@@ -62,6 +62,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private long advanceLeaseInitialCompletedSequence;
     private long completedCoreSequence;
     private DailyCaptureEligibilityToken currentCaptureToken;
+    private volatile bool factualReadWorldPublished;
     private bool selectedRuntimeOwnerGraphBound;
     private DailyV1SelectedRuntimeOwnerGraph selectedRuntimeOwnerGraph;
     private IReadOnlyList<DailyV1ActorTurnRosterProjection> selectedRuntimeActorRoster;
@@ -81,6 +82,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     internal SimulationCalendar CalendarIdentity { get; private set; }
     internal AuthoritativeMutationGuard MutationGuard => mutationGuard;
     internal bool CanMutate => mutationGuard.CanMutate;
+    internal bool IsFactualReadWorldPublished => factualReadWorldPublished;
 
     internal DailyV1ExecutionBoundaryState() { }
 
@@ -1287,7 +1289,31 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             out token);
     }
 
-    internal bool TryCreateRestoredContinuationToken(
+    internal bool TryMarkFactualReadWorldPublished()
+    {
+        lock (operationSyncRoot)
+        {
+            if (AdmissionContext == null
+                || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !mutationGuard.CanMutate
+                || AdvanceLeaseHeld
+                || activeOperationScopes.Count != 0
+                || factualReadWorldPublished)
+                return false;
+
+            factualReadWorldPublished = true;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Atomically admits one detached restored boundary in Core. The exact
+    /// owner vector and epoch were captured by the host port and compared by
+    /// DailyV1Application before this method; the host never receives the
+    /// token or controls the factual-read publication latch.
+    /// </summary>
+    internal bool TryAdmitRestoredContinuationBoundary(
         SimulationRuntimeAdmissionContext admissionContext,
         EffectiveSimulationConfiguration configurationIdentity,
         SimulationCalendar calendarIdentity,
@@ -1300,30 +1326,48 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         out DailyCaptureEligibilityToken token)
     {
         token = null;
-        if (!MatchesBoundRuntimeIdentity(admissionContext, configurationIdentity,
-                calendarIdentity, compositionProfile, worldId, absoluteDay)
-            || restoredCoreSequence <= 0L || completedCoreSequence != 0L || AdvanceLeaseHeld
-            || !DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(ownerSections))
-            return false;
+        lock (operationSyncRoot)
+        {
+            if (!runtimeIdentityBound || !runtimeConfigurationBound
+                || !MatchesBoundRuntimeIdentity(admissionContext,
+                    configurationIdentity, calendarIdentity, compositionProfile,
+                    worldId, absoluteDay)
+                || admissionContext == null
+                || admissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !admissionContext.IsOwnedByCurrentThread()
+                || worldId == null
+                || restoredCoreSequence <= 0L
+                || mutationEpoch < 0L
+                || completedCoreSequence != 0L
+                || currentCaptureToken != null
+                || factualReadWorldPublished
+                || !mutationGuard.CanMutate
+                || AdvanceLeaseHeld
+                || activeOperationScopes.Count != 0
+                || !DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(ownerSections))
+                return false;
 
-        DailyCaptureEligibilityToken candidate = new DailyCaptureEligibilityToken(
-            runtimeInstanceIdentity,
-            admissionContext,
-            configurationIdentity,
-            calendarIdentity,
-            compositionProfile,
-            worldId,
-            absoluteDay,
-            restoredCoreSequence,
-            DailyCaptureBoundaryProvenance.RestoredContinuation,
-            mutationEpoch,
-            ownerSections);
-        if (!TryInstallRestoredCompletedCoreSequence(restoredCoreSequence))
-            return false;
+            DailyCaptureEligibilityToken candidate = new DailyCaptureEligibilityToken(
+                runtimeInstanceIdentity,
+                admissionContext,
+                configurationIdentity,
+                calendarIdentity,
+                compositionProfile,
+                worldId,
+                absoluteDay,
+                restoredCoreSequence,
+                DailyCaptureBoundaryProvenance.RestoredContinuation,
+                mutationEpoch,
+                ownerSections);
 
-        currentCaptureToken = candidate;
-        token = candidate;
-        return true;
+            if (!TryInstallRestoredCompletedCoreSequence(restoredCoreSequence))
+                return false;
+
+            currentCaptureToken = candidate;
+            factualReadWorldPublished = true;
+            token = candidate;
+            return true;
+        }
     }
 }
 

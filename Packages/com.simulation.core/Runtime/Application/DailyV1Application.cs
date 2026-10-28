@@ -88,10 +88,6 @@ internal interface IDailyV1RestoredCandidateCertificationHost
         out IReadOnlyList<OwnerSectionCensusSnapshot> currentOwnerSections,
         out long currentMutationEpoch,
         out DailyCaptureEligibilityFailure failure);
-    bool TryPublishRestoredDailyBoundaryAdmission(
-        DailyCaptureEligibilityToken token,
-        out DailyCaptureEligibilityFailure failure);
-    bool HasValidRestoredDailyBoundaryAdmission();
     bool IsHealthyDailyOwnerThreadBoundary();
 }
 
@@ -2186,7 +2182,7 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        if (!state.TryCreateRestoredContinuationToken(
+        if (!state.TryAdmitRestoredContinuationBoundary(
                 state.AdmissionContext,
                 state.ConfigurationIdentity,
                 state.CalendarIdentity,
@@ -2203,18 +2199,13 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        if (!host.TryPublishRestoredDailyBoundaryAdmission(admittedToken,
-                out DailyCaptureEligibilityFailure publishFailure))
-        {
-            failure = DailyV1P12RestoredCandidateCertificationFailure.BoundaryAdmission;
-            diagnostic = "The host could not publish the restored boundary after Core token admission: "
-                + publishFailure + ".";
-            return false;
-        }
-
-        if (!host.HasValidRestoredDailyBoundaryAdmission()
-            || !host.IsHealthyDailyOwnerThreadBoundary()
-            || !state.IsHealthyDailyOwnerThreadBoundary()
+        bool exactStateAdmission = state.TryValidateRestoredDailyBoundaryAdmission(
+            candidate.RuntimeAdvanceBoundary, out string admissionDiagnostic);
+        bool hostBoundaryHealthy = host.IsHealthyDailyOwnerThreadBoundary();
+        bool coreBoundaryHealthy = state.IsHealthyDailyOwnerThreadBoundary();
+        if (!exactStateAdmission
+            || !hostBoundaryHealthy
+            || !coreBoundaryHealthy
             || state.CompletedCoreSequence != image.Header.Sequence
             || admittedToken == null
             || admittedToken.BoundaryProvenance != DailyCaptureBoundaryProvenance.RestoredContinuation
@@ -2225,7 +2216,11 @@ internal sealed class DailyV1Application
             || !ReferenceEquals(admittedToken.OwnerSections, admissionSections))
         {
             failure = DailyV1P12RestoredCandidateCertificationFailure.BoundaryAdmission;
-            diagnostic = "The restored target did not retain its exact healthy admitted completed boundary.";
+            diagnostic = "The restored target did not retain its exact healthy admitted completed boundary "
+                + "(state admission=" + exactStateAdmission
+                + ", host healthy=" + hostBoundaryHealthy
+                + ", Core healthy=" + coreBoundaryHealthy
+                + ", diagnostic=" + (admissionDiagnostic ?? "none") + ").";
             return false;
         }
 
@@ -2555,6 +2550,30 @@ internal sealed class DailyV1Application
         DailyV1ActiveRuntimeSession candidateSession,
         IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts)
     {
+        return TryBindRuntimeAdvanceBoundary(
+            candidateSession, hostPorts, bindApplicationAdvanceAuthority: true);
+    }
+
+    /// <summary>
+    /// Gives an unpublished restored candidate the exact host evidence boundary
+    /// needed for Core certification, without making the host route its public
+    /// runtime advance calls through this application's active-session gate.
+    /// The normal publication path performs the full binding immediately before
+    /// committing the candidate.
+    /// </summary>
+    internal bool TryBindRestoredCandidateRuntimeAdvanceBoundary(
+        DailyV1ActiveRuntimeSession candidateSession,
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts)
+    {
+        return TryBindRuntimeAdvanceBoundary(
+            candidateSession, hostPorts, bindApplicationAdvanceAuthority: false);
+    }
+
+    private bool TryBindRuntimeAdvanceBoundary(
+        DailyV1ActiveRuntimeSession candidateSession,
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts,
+        bool bindApplicationAdvanceAuthority)
+    {
         if (candidateSession == null || hostPorts == null
             || !ReferenceEquals(hostPorts.ExecutionState,
                 candidateSession.ExecutionBoundaryState))
@@ -2565,14 +2584,16 @@ internal sealed class DailyV1Application
             if (ReferenceEquals(current, candidateSession))
             {
                 return candidateSession.TryBindSelectedRuntimeAdvanceHostPorts(hostPorts)
-                    && hostPorts.TryBindApplicationAdvanceAuthority(this, candidateSession);
+                    && (!bindApplicationAdvanceAuthority
+                        || hostPorts.TryBindApplicationAdvanceAuthority(this, candidateSession));
             }
             if (!IsBootstrapOrRestoredDescendant(candidateSession.AdmissionContext)
                 || activeSessionGate.ActiveOperationCount != 0
                 || (current != null && !current.IsProfileCompatibleWith(candidateSession)))
                 return false;
             return candidateSession.TryBindSelectedRuntimeAdvanceHostPorts(hostPorts)
-                && hostPorts.TryBindApplicationAdvanceAuthority(this, candidateSession);
+                && (!bindApplicationAdvanceAuthority
+                    || hostPorts.TryBindApplicationAdvanceAuthority(this, candidateSession));
         }
     }
 
