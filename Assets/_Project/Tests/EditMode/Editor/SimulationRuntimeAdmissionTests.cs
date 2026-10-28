@@ -1222,7 +1222,18 @@ public sealed class SimulationRuntimeAdmissionTests
     [Test]
     public void SelectedRuntimeGraphUsesTheExactP8DAndP8EOwnersInstalledByRuntime()
     {
-        SimulationRuntime runtime = CreateUnpublishedDailyCaptureRuntime(new SimulationTime());
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject hostObject = new GameObject("P8D and P8E selected runtime owner identity");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
         DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
 
         Assert.That(graph, Is.Not.Null);
