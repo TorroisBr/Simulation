@@ -314,6 +314,15 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
+        if (!executionState.SelectedRuntimeOwnerGraph.MatchesSelectedP8CensusOwnerIdentities(
+                ownerSections))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
         return true;
     }
 

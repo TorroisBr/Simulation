@@ -108,6 +108,46 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     }
 
     /// <summary>
+    /// Confirms that each P8-C census witness for an owner already bound into
+    /// this graph refers to that exact instance. During the source migration,
+    /// an unbound P8-C owner remains the host protocol's responsibility.
+    /// </summary>
+    internal bool MatchesSelectedP8CensusOwnerIdentities(
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections)
+    {
+        return ownerSections != null
+            && (PersonSpatialPositionStore == null
+                || HasCensusOwnerIdentity(
+                    ownerSections,
+                    PersonSpatialPositionCensusProvider.SectionId,
+                    PersonSpatialPositionStore))
+            && (LegacySpatialAnchors == null
+                || HasCensusOwnerIdentity(
+                    ownerSections,
+                    LegacySpatialAnchorBindingCensusProvider.SectionId,
+                    LegacySpatialAnchors));
+    }
+
+    private static bool HasCensusOwnerIdentity(
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        string sectionId,
+        object expectedOwner)
+    {
+        if (ownerSections == null || string.IsNullOrWhiteSpace(sectionId) || expectedOwner == null)
+            return false;
+
+        OwnerSectionCensusSnapshot found = null;
+        foreach (OwnerSectionCensusSnapshot section in ownerSections)
+        {
+            if (!string.Equals(section?.SectionId, sectionId, StringComparison.Ordinal)) continue;
+            if (found != null) return false;
+            found = section;
+        }
+
+        return found != null && ReferenceEquals(found.OwnerInstanceIdentity, expectedOwner);
+    }
+
+    /// <summary>
     /// Resolves current-city location from the selected Core owner graph and
     /// its exact P8 position/anchor authorities. An absent Person position
     /// retains the legacy no-position behavior; transit and unresolved or

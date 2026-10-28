@@ -325,7 +325,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         Action onOperationEntry,
         out DailyV1ActiveRuntimeSession session,
         out ApplicationAdvanceBoundary boundary,
-        DailyV1EffectiveDefinitions definitions = null)
+        DailyV1EffectiveDefinitions definitions = null,
+        bool bindP8Owners = false)
     {
         DailyV1Application application = new DailyV1Application();
         definitions ??= DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -333,6 +334,18 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(TryPrepareInitialGenesisForTest(application,
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out session, out string diagnostic), Is.True, diagnostic);
+        if (bindP8Owners)
+        {
+            DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+            PersonSpatialPositionStore positions = new PersonSpatialPositionStore(
+                graph.PersonStore,
+                session.GenesisComposition.SpatialAuthority,
+                new SpatialPassageTraversalOptionResolver(
+                    session.GenesisComposition.SpatialAuthority.PassageAuthority));
+            Assert.That(graph.TryBindPersonSpatialPositionStore(positions), Is.True);
+            Assert.That(graph.TryBindLegacySpatialAnchorBindingStore(
+                session.GenesisComposition.LegacySpatialAnchorBindings), Is.True);
+        }
         EnsureRuntimeProtocolInventory(session.ExecutionBoundaryState);
         boundary = new ApplicationAdvanceBoundary(session.ExecutionBoundaryState, onOperationEntry);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(session, boundary), Is.True);
@@ -393,6 +406,20 @@ public sealed class DailyV1ApplicationSessionGateTests
             census.OwnerInstanceIdentity, census.Cardinality, census.Revision);
     }
 
+    private static void ReplaceOwnerSectionWithOwnerIdentity(
+        OwnerSectionCensusSnapshot[] sections,
+        string sectionId,
+        object ownerInstanceIdentity)
+    {
+        int index = Array.FindIndex(sections,
+            section => string.Equals(section.SectionId, sectionId, StringComparison.Ordinal));
+        Assert.That(index, Is.GreaterThanOrEqualTo(0), sectionId);
+        OwnerSectionCensusSnapshot previous = sections[index];
+        sections[index] = new OwnerSectionCensusSnapshot(
+            previous.SectionId, previous.SchemaVersion, previous.Role,
+            ownerInstanceIdentity, previous.Cardinality, previous.Revision);
+    }
+
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundP12FSectionVector(
         DailyV1ActiveRuntimeSession session)
         => CreateCoreBoundCityAndP12FSectionVector(session);
@@ -445,8 +472,19 @@ public sealed class DailyV1ApplicationSessionGateTests
 
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundCompleteOwnerSectionVector(
         DailyV1ActiveRuntimeSession session)
-        => ReplaceCityOwnerSectionVector(
+    {
+        OwnerSectionCensusSnapshot[] sections = ReplaceCityOwnerSectionVector(
             session, DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot());
+        if (session.OwnerGraph.PersonSpatialPositionStore != null)
+            ReplaceOwnerSectionWithCurrentCensus(sections,
+                new PersonSpatialPositionCensusProvider(
+                    session.OwnerGraph.PersonSpatialPositionStore).GetCurrentCensus());
+        if (session.OwnerGraph.LegacySpatialAnchors != null)
+            ReplaceOwnerSectionWithCurrentCensus(sections,
+                new LegacySpatialAnchorBindingCensusProvider(
+                    session.OwnerGraph.LegacySpatialAnchors).GetCurrentCensus());
+        return sections;
+    }
 
     private static OwnerSectionCensusSnapshot[] ReplaceCityOwnerSectionVector(
         DailyV1ActiveRuntimeSession session,
@@ -1631,13 +1669,13 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session,
-            out ApplicationAdvanceBoundary hostPorts);
+            out ApplicationAdvanceBoundary hostPorts, bindP8Owners: true);
         DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
             session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
         Assert.That(coreBoundary, Is.Not.Null);
         DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
-        IReadOnlyList<OwnerSectionCensusSnapshot> complete =
-            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        OwnerSectionCensusSnapshot[] complete =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
         hostPorts.SetAdmissionEvidence(complete, mutationEpoch: 23L);
 
         Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
@@ -1663,6 +1701,22 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.None));
         Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(1));
 
+        OwnerSectionCensusSnapshot[] wrongP8Owner =
+            (OwnerSectionCensusSnapshot[])complete.Clone();
+        ReplaceOwnerSectionWithOwnerIdentity(wrongP8Owner,
+            LegacySpatialAnchorBindingCensusProvider.SectionId, new object());
+        hostPorts.SetAdmissionEvidence(wrongP8Owner, mutationEpoch: 23L);
+        Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+            sessionReplacement: false,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> substitutedOwner,
+            out long substitutedEpoch,
+            out failure), Is.False,
+            "Core rejects a complete census whose P8 anchor witness is not the exact graph owner.");
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
+        Assert.That(substitutedOwner, Is.Null);
+        Assert.That(substitutedEpoch, Is.Zero);
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(2));
+
         hostPorts.SetAdmissionEvidence(new[] { complete[0] }, mutationEpoch: 23L);
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
             sessionReplacement: false,
@@ -1673,7 +1727,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
         Assert.That(incomplete, Is.Null);
         Assert.That(incompleteEpoch, Is.Zero);
-        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(2));
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(3));
     }
     [Test]
     public void CoreDropsCensusEvidenceWhenHostFailsOrScopeChangesDuringCapture()
