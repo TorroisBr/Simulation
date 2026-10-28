@@ -27,6 +27,57 @@ public sealed class DailyV1P12DRelationshipValidatorTests
     }
 
     [Test]
+    public void RejectsTwoTopLevelCitiesBoundToTheSameLocation()
+    {
+        Assert.That(DailyV1P12DRelationshipValidator.TryValidate(
+            new DailyV1P12DPersonRelation[0],
+            new DailyV1P12DParentageRelation[0],
+            new[]
+            {
+                new DailyV1P12DCityRelation("city-a", "location-a", new string[0]),
+                new DailyV1P12DCityRelation("city-b", "location-a", new string[0])
+            },
+            new DailyV1P12DNpcRelation[0],
+            new[] { "location-a" },
+            new System.Collections.Generic.Dictionary<string, string>
+            {
+                ["city-a"] = "location-a",
+                ["city-b"] = "location-a"
+            }), Is.False);
+    }
+
+    [Test]
+    public void RejectsDuplicateCityRowsAndUnrepresentedCityLocationBindings()
+    {
+        System.Collections.Generic.Dictionary<string, string> cityLocations =
+            new System.Collections.Generic.Dictionary<string, string>
+            {
+                ["city-a"] = "location-a",
+                ["city-b"] = "location-b"
+            };
+
+        Assert.That(DailyV1P12DRelationshipValidator.TryValidate(
+            new DailyV1P12DPersonRelation[0],
+            new DailyV1P12DParentageRelation[0],
+            new[]
+            {
+                new DailyV1P12DCityRelation("city-a", "location-a", new string[0]),
+                new DailyV1P12DCityRelation("city-a", "location-a", new string[0])
+            },
+            new DailyV1P12DNpcRelation[0],
+            new[] { "location-a", "location-b" },
+            cityLocations), Is.False);
+
+        Assert.That(DailyV1P12DRelationshipValidator.TryValidate(
+            new DailyV1P12DPersonRelation[0],
+            new DailyV1P12DParentageRelation[0],
+            new[] { new DailyV1P12DCityRelation("city-a", "location-a", new string[0]) },
+            new DailyV1P12DNpcRelation[0],
+            new[] { "location-a", "location-b" },
+            cityLocations), Is.False);
+    }
+
+    [Test]
     public void RejectsPersonAndNpcMaterializationMismatch()
     {
         Assert.That(DailyV1P12DRelationshipValidator.TryValidate(

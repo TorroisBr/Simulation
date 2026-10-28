@@ -167,14 +167,20 @@ internal static class DailyV1P12DRelationshipValidator
                 return false;
         }
 
+        if (cities.Count != cityLocationIds.Count) return false;
+
+        HashSet<string> cityIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> cityOwnedLocationIds = new HashSet<string>(StringComparer.Ordinal);
         Dictionary<string, int> expectedMemberships = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (DailyV1P12DCityRelation city in cities)
         {
             if (city?.ImportantNpcRuntimeIds == null
                 || string.IsNullOrWhiteSpace(city.CityRuntimeId)
+                || !cityIds.Add(city.CityRuntimeId)
                 || !cityLocationIds.TryGetValue(city.CityRuntimeId, out string locationId)
                 || !string.Equals(city.LocationRuntimeId, locationId, StringComparison.Ordinal)
-                || !locationIds.Contains(locationId))
+                || !locationIds.Contains(locationId)
+                || !cityOwnedLocationIds.Add(locationId))
                 return false;
 
             HashSet<string> cityMemberIds = new HashSet<string>(StringComparer.Ordinal);
