@@ -38,19 +38,26 @@ internal static class P12ACausalRootImageAdapter
             || coreRoots == null)
             return false;
 
+        return TryProject(coreRoots, out staged, out result);
+    }
+
+    internal static bool TryProject(
+        P12CStagedCoreContinuationRoot coreRoots,
+        out P12CStagedContinuationRoot staged,
+        out P12AResult result)
+    {
+        staged = null;
+        result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+            "p12c.genesis-manifest-projection");
+        if (coreRoots == null || !coreRoots.IsDetached) return false;
+
         P12CP9GenesisManifestSnapshot manifestSnapshot =
             P12CP9GenesisManifestSnapshot.FromCore(coreRoots.GenesisManifest);
         if (manifestSnapshot == null
             || !manifestSnapshot.TryStageManifest(
                 out SimulationGenesisManifest manifest, out _)
             || manifest == null)
-        {
-            staged = null;
-            result = new P12AResult(
-                P12AResultCode.OwnerGraphRejected,
-                "p12c.genesis-manifest-projection");
             return false;
-        }
 
         staged = new P12CStagedContinuationRoot(null, coreRoots, manifest);
         result = null;

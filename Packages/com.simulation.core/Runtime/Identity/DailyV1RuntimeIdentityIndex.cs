@@ -57,6 +57,39 @@ internal sealed class DailyV1RuntimeIdentityIndex
         return true;
     }
 
+    internal static bool TryCreateFromP12Snapshot(
+        P12CRuntimeIdentityOwnerSnapshot snapshot,
+        out DailyV1RuntimeIdentityIndex index)
+    {
+        index = null;
+        if (snapshot == null
+            || snapshot.SchemaVersion != P12CRuntimeIdentityOwnerSnapshot.CurrentSchemaVersion
+            || snapshot.Revision < 0L
+            || snapshot.IdentityValues == null
+            || snapshot.IdentityValues.Count > P12AContinuationCodec.MaxRows
+            || snapshot.Revision < snapshot.IdentityValues.Count)
+            return false;
+
+        DailyV1RuntimeIdentityIndex candidate = new DailyV1RuntimeIdentityIndex();
+        foreach (KeyValuePair<string, string> identity in snapshot.IdentityValues)
+        {
+            if (string.IsNullOrWhiteSpace(identity.Value)
+                || !TryGetDailyV1Kind(identity.Key, out DailyV1RuntimeIdentityKind kind)
+                || candidate.kindsByRuntimeId.ContainsKey(identity.Value))
+                return false;
+
+            candidate.kindsByRuntimeId.Add(identity.Value, kind);
+            candidate.runtimeIdsByKind[(int)kind].Add(identity.Value);
+        }
+
+        // P12 persists the owner's revision independently from its current
+        // cardinality. Restore that exact value rather than deriving it from
+        // the active identity count.
+        candidate.censusRevision = snapshot.Revision;
+        index = candidate;
+        return true;
+    }
+
     internal bool TryRemoveStaged(string runtimeId, DailyV1RuntimeIdentityKind kind)
     {
         if (!kindsByRuntimeId.TryGetValue(runtimeId ?? string.Empty, out DailyV1RuntimeIdentityKind actual)
@@ -134,6 +167,20 @@ internal sealed class DailyV1RuntimeIdentityIndex
 
     private static bool IsValidKind(DailyV1RuntimeIdentityKind kind) =>
         (byte)kind <= (byte)DailyV1RuntimeIdentityKind.NotableItem;
+
+    private static bool TryGetDailyV1Kind(
+        string familyId,
+        out DailyV1RuntimeIdentityKind kind)
+    {
+        switch (familyId)
+        {
+            case "npc": kind = DailyV1RuntimeIdentityKind.Npc; return true;
+            case "city": kind = DailyV1RuntimeIdentityKind.City; return true;
+            case "location": kind = DailyV1RuntimeIdentityKind.Location; return true;
+            case "route": kind = DailyV1RuntimeIdentityKind.Route; return true;
+            default: kind = default; return false;
+        }
+    }
 
     private static List<HashSet<string>> CreateFamilies()
     {

@@ -398,7 +398,8 @@ internal sealed class P12FDailyV1OwnerPackage
         DailyV1EffectiveDefinitions selectedDefinitions,
         out P12FDailyV1OwnerPackage package,
         out P12FDailyV1OwnerPackageFailure failure,
-        Action<P12GDailyV1RestoreStage> stageObserver = null)
+        Action<P12GDailyV1RestoreStage> stageObserver = null,
+        DailyV1P12FCoreOwnerRestoreStage preStagedCoreOwnerStage = null)
     {
         package = null;
         failure = P12FDailyV1OwnerPackageFailure.InvalidStagingContext;
@@ -430,21 +431,27 @@ internal sealed class P12FDailyV1OwnerPackage
             DailyV1P12FCoreOwnerRestoreStage coreOwnerStage;
             if (context.Application != null)
             {
-                if (!context.Application.TryStageRestoredP12FOwners(
-                        context.P12CRoots.CoreRoot, decoded.PoliticalKnowledge,
-                        decoded.Directives, decoded.ActorChoices, decoded.TravelParties,
-                        decoded.Expeditions, context.P12DPackage.Persons,
-                        stagedE.Institutions, stagedE.PoliticalClaims, stagedE.Factions,
-                        stagedE.Offices, stagedE.PropertyOwnership, day,
-                        context.StagedSimulationTime, selectedDefinitions,
-                        context.P12DPackage.NpcFRows, context.P12DPackage.SelectedNpcOwners,
-                        context.P12DPackage.RuntimeIdentities.CoreIdentityIndex,
-                        context.P12DPackage.SpatialNetwork.SelectedOwner,
-                        context.P12DPackage.EmptyExplorableSites,
-                        context.ExpectedSession, context.ReplacementOperation,
-                        out coreOwnerStage, out _,
-                        step => ObserveP12FCoreOwnerRestoreStep(stageObserver, step))
-                    || coreOwnerStage == null)
+                if (preStagedCoreOwnerStage != null)
+                    coreOwnerStage = preStagedCoreOwnerStage;
+                else if (!context.Application.TryStageRestoredP12FOwners(
+                            context.P12CRoots.CoreRoot, decoded.PoliticalKnowledge,
+                            decoded.Directives, decoded.ActorChoices, decoded.TravelParties,
+                            decoded.Expeditions, context.P12DPackage.Persons,
+                            stagedE.Institutions, stagedE.PoliticalClaims, stagedE.Factions,
+                            stagedE.Offices, stagedE.PropertyOwnership, day,
+                            context.StagedSimulationTime, selectedDefinitions,
+                            context.P12DPackage.NpcFRows, context.P12DPackage.SelectedNpcOwners,
+                            context.P12DPackage.RuntimeIdentities.CoreIdentityIndex,
+                            context.P12DPackage.SpatialNetwork.SelectedOwner,
+                            context.P12DPackage.EmptyExplorableSites,
+                            context.ExpectedSession, context.ReplacementOperation,
+                            out coreOwnerStage, out _,
+                            step => ObserveP12FCoreOwnerRestoreStep(stageObserver, step)))
+                {
+                    failure = P12FDailyV1OwnerPackageFailure.StageFailed;
+                    return false;
+                }
+                if (coreOwnerStage == null)
                 {
                     failure = P12FDailyV1OwnerPackageFailure.StageFailed;
                     return false;
@@ -538,7 +545,7 @@ internal sealed class P12FDailyV1OwnerPackage
         return true;
     }
 
-    private static void ObserveP12FCoreOwnerRestoreStep(
+    internal static void ObserveP12FCoreOwnerRestoreStep(
         Action<P12GDailyV1RestoreStage> stageObserver,
         DailyV1P12FCoreOwnerRestoreStep step)
     {

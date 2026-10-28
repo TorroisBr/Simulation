@@ -441,7 +441,9 @@ internal sealed class P12DDailyV1OwnerPackage
         DailyV1Application application = null,
         P12CStagedCoreContinuationRoot stagedCoreRoots = null,
         DailyV1ActiveRuntimeSession expectedSession = null,
-        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
+        P12CRuntimeIdentityOwnerSnapshot runtimeIdentitySnapshot = null,
+        DailyV1P12DCoreOwnerRestoreStage preStagedCoreRestoreStage = null)
     {
         package = null;
         failure = P12DDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -469,17 +471,33 @@ internal sealed class P12DDailyV1OwnerPackage
         bool coreOwnsSelectedRestore = application != null && selectedDefinitions != null;
         if (coreOwnsSelectedRestore)
         {
-            if (stagedCoreRoots == null
-                || !application.TryStageRestoredP12DOwnersFromImage(
-                    stagedCoreRoots, selectedDefinitions, cityInputs, npcDRows, npcFRows,
-                    spatialSnapshot, personSnapshot, genealogySnapshot, siteSnapshot,
-                    travelPartySnapshot, expectedSession, replacementOperation,
-                    out coreRestoreStage, out _)
-                || coreRestoreStage == null
-                || !SpatialNetworkRuntime.TryCreateFromStagedOwner(
+            if (stagedCoreRoots == null)
+            { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
+
+            if (preStagedCoreRestoreStage != null)
+                coreRestoreStage = preStagedCoreRestoreStage;
+            else if (!application.TryStageRestoredP12DOwnersFromImage(
+                    stagedCoreRoots, selectedDefinitions, runtimeIdentitySnapshot,
+                    cityInputs, npcDRows, npcFRows, spatialSnapshot, personSnapshot,
+                    genealogySnapshot, siteSnapshot, travelPartySnapshot,
+                    expectedSession, replacementOperation, out coreRestoreStage, out _))
+            { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
+            if (coreRestoreStage == null)
+            { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
+
+            stagedRuntimeIdentities = new RuntimeIdentityRegistry(
+                null, coreRestoreStage.RuntimeIdentities);
+            if (!SpatialNetworkRuntime.TryCreateFromStagedOwner(
                     coreRestoreStage.SpatialNetwork, stagedRuntimeIdentities,
+                    true,
                     out stagedSpatialNetwork, out _)
                 || stagedSpatialNetwork == null)
+            { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
+
+            // Keep the pre-staged Core index as the only authority; this
+            // Unity registry adds object projections to that exact instance.
+            if (!ReferenceEquals(coreRestoreStage.RuntimeIdentities,
+                    stagedRuntimeIdentities.CoreIdentityIndex))
             { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
 
             stagedPersons = coreRestoreStage.Persons;
@@ -526,7 +544,10 @@ internal sealed class P12DDailyV1OwnerPackage
                 || !locationsById.TryGetValue(input.LegacyLocationRuntimeId,
                     out SpatialLocationRuntime location)
                 || !string.Equals(input.ResolvedLocationRuntimeId, location.RuntimeId, StringComparison.Ordinal)
-                || !stagedRuntimeIdentities.IsRuntimeIdAvailable(input.CityRuntimeId))
+                || (coreOwnsSelectedRestore
+                    ? !stagedRuntimeIdentities.CoreIdentityIndex.HasIdentity(
+                        input.CityRuntimeId, DailyV1RuntimeIdentityKind.City)
+                    : !stagedRuntimeIdentities.IsRuntimeIdAvailable(input.CityRuntimeId)))
             { failure = P12DDailyV1OwnerPackageFailure.InvalidIdentityRoot; return false; }
 
             P12DCityRootOwnerSnapshot snapshot = P12ACityOwnerCodec.FromCoreValue(input);
@@ -570,7 +591,10 @@ internal sealed class P12DDailyV1OwnerPackage
             if (!snapshot.TryStageForImage(cityDefinitions, itemDefinitions, stagedLocations,
                     out CityRuntime city, out P12DCityMembershipLinker linker, out _, selectedDefinitions,
                     selectedOwner)
-                || city == null || linker == null || !stagedRuntimeIdentities.RegisterCity(city))
+                || city == null || linker == null
+                || !(coreOwnsSelectedRestore
+                    ? stagedRuntimeIdentities.BindSelectedCityProjection(city)
+                    : stagedRuntimeIdentities.RegisterCity(city)))
             { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
             stagedCities.Add(city);
             cityLinkers.Add(linker);
@@ -593,7 +617,9 @@ internal sealed class P12DDailyV1OwnerPackage
         { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
 
         foreach (NpcRuntime npc in stagedNpcRoster)
-            if (!stagedRuntimeIdentities.RegisterNpc(npc))
+            if (!(coreOwnsSelectedRestore
+                    ? stagedRuntimeIdentities.BindSelectedNpcProjection(npc)
+                    : stagedRuntimeIdentities.RegisterNpc(npc)))
             { failure = P12DDailyV1OwnerPackageFailure.InvalidIdentityRoot; return false; }
 
         if ((stagedSites == null

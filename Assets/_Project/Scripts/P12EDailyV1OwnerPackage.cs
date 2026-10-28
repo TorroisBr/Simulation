@@ -445,7 +445,8 @@ internal sealed class P12EDailyV1OwnerPackage
         P12EDailyV1OwnerStagingContext context,
         out P12EDailyV1OwnerPackage package,
         out P12EDailyV1OwnerPackageFailure failure,
-        Action<P12GDailyV1RestoreStage> stageObserver = null)
+        Action<P12GDailyV1RestoreStage> stageObserver = null,
+        P12ECoreOwnerRestoreStage preStagedCoreOwnerStage = null)
     {
         package = null;
         failure = P12EDailyV1OwnerPackageFailure.InvalidCaptureContext;
@@ -494,15 +495,23 @@ internal sealed class P12EDailyV1OwnerPackage
             P12ECoreOwnerRestoreStage coreOwnerStage;
             if (context.Application != null)
             {
-                coreOwnerStageAccepted = context.Application.TryStageRestoredP12EOwners(
-                    stagedC.CoreRoot, institutionOfficeSnapshot, propertyEstateSnapshot,
-                    factionSnapshot, claimSnapshot, supportSnapshot, decisionSnapshot,
-                    militarySnapshot, conflictSnapshot, warSnapshot, battleSnapshot,
-                    justiceSnapshot, stagedD.Persons, stagedD.SelectedCityOwners,
-                    stagedD.SelectedNpcOwners, day, context.ExpectedSession,
-                    context.ReplacementOperation,
-                    out coreOwnerStage, out _,
-                    step => ObserveCoreOwnerRestoreStep(stageObserver, step));
+                if (preStagedCoreOwnerStage != null)
+                {
+                    coreOwnerStage = preStagedCoreOwnerStage;
+                    coreOwnerStageAccepted = true;
+                }
+                else
+                {
+                    coreOwnerStageAccepted = context.Application.TryStageRestoredP12EOwners(
+                        stagedC.CoreRoot, institutionOfficeSnapshot, propertyEstateSnapshot,
+                        factionSnapshot, claimSnapshot, supportSnapshot, decisionSnapshot,
+                        militarySnapshot, conflictSnapshot, warSnapshot, battleSnapshot,
+                        justiceSnapshot, stagedD.Persons, stagedD.SelectedCityOwners,
+                        stagedD.SelectedNpcOwners, day, context.ExpectedSession,
+                        context.ReplacementOperation,
+                        out coreOwnerStage, out _,
+                        step => ObserveCoreOwnerRestoreStep(stageObserver, step));
+                }
             }
             else
             {
@@ -666,7 +675,9 @@ internal sealed class P12EDailyV1OwnerPackage
         ObserveCoreOwnerRestoreStep(stageObserver, P12ECoreOwnerRestoreStep.JusticeRecords);
 
         return builder.TryBuild(out staged, out _);
-    }    private static void ObserveCoreOwnerRestoreStep(
+    }
+
+    internal static void ObserveCoreOwnerRestoreStep(
         Action<P12GDailyV1RestoreStage> stageObserver,
         P12ECoreOwnerRestoreStep step)
     {

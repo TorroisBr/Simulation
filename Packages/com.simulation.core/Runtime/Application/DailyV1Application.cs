@@ -12,6 +12,49 @@ internal enum DailyV1P12FCoreOwnerRestoreStep
     Expeditions = 4
 }
 
+internal enum DailyV1P12OwnerGraphRestoreFailure
+{
+    None = 0,
+    SourceCapture,
+    RootStage,
+    DefinitionProjection,
+    OwnerStage
+}
+
+/// <summary>
+/// One unpublished, application-orchestrated P12-C/D/E/F restore graph.
+/// Core owns decoded values, canonical owner instances and stage ordering;
+/// the host callbacks only create its compatible projections between stages.
+/// </summary>
+internal sealed class DailyV1P12OwnerGraphRestoreStage
+{
+    internal P12ADailyV1Census ImageCensus { get; }
+    internal P12ADailyV1ImageOwnerSnapshots Decoded { get; }
+    internal P12CStagedCoreContinuationRoot Roots { get; }
+    internal DailyV1P12DCoreOwnerRestoreStage D { get; }
+    internal P12ECoreOwnerRestoreStage E { get; }
+    internal DailyV1P12FCoreOwnerRestoreStage F { get; }
+    internal SimulationTime StagedTime { get; }
+
+    internal DailyV1P12OwnerGraphRestoreStage(
+        P12ADailyV1Census imageCensus,
+        P12ADailyV1ImageOwnerSnapshots decoded,
+        P12CStagedCoreContinuationRoot roots,
+        DailyV1P12DCoreOwnerRestoreStage d,
+        P12ECoreOwnerRestoreStage e,
+        DailyV1P12FCoreOwnerRestoreStage f,
+        SimulationTime stagedTime)
+    {
+        ImageCensus = imageCensus ?? throw new ArgumentNullException(nameof(imageCensus));
+        Decoded = decoded ?? throw new ArgumentNullException(nameof(decoded));
+        Roots = roots ?? throw new ArgumentNullException(nameof(roots));
+        D = d ?? throw new ArgumentNullException(nameof(d));
+        E = e ?? throw new ArgumentNullException(nameof(e));
+        F = f ?? throw new ArgumentNullException(nameof(f));
+        StagedTime = stagedTime ?? throw new ArgumentNullException(nameof(stagedTime));
+    }
+}
+
 /// <summary>
 /// Exact Core-owned factual owners staged from one detached P12-D image.
 /// Unity may build compatibility projections around these same instances,
@@ -20,6 +63,7 @@ internal enum DailyV1P12FCoreOwnerRestoreStep
 internal sealed class DailyV1P12DCoreOwnerRestoreStage
 {
     internal SpatialNetworkOwner SpatialNetwork { get; }
+    internal DailyV1RuntimeIdentityIndex RuntimeIdentities { get; }
     internal PersonStore Persons { get; }
     internal GenealogyStore Genealogy { get; }
     internal ExplorableSiteStore ExplorableSites { get; }
@@ -27,12 +71,14 @@ internal sealed class DailyV1P12DCoreOwnerRestoreStage
 
     internal DailyV1P12DCoreOwnerRestoreStage(
         SpatialNetworkOwner spatialNetwork,
+        DailyV1RuntimeIdentityIndex runtimeIdentities,
         PersonStore persons,
         GenealogyStore genealogy,
         ExplorableSiteStore explorableSites,
         DailyV1P12DSelectedCoreOwnerStage selectedOwners)
     {
         SpatialNetwork = spatialNetwork ?? throw new ArgumentNullException(nameof(spatialNetwork));
+        RuntimeIdentities = runtimeIdentities ?? throw new ArgumentNullException(nameof(runtimeIdentities));
         Persons = persons ?? throw new ArgumentNullException(nameof(persons));
         Genealogy = genealogy ?? throw new ArgumentNullException(nameof(genealogy));
         ExplorableSites = explorableSites ?? throw new ArgumentNullException(nameof(explorableSites));
@@ -1557,6 +1603,7 @@ internal sealed class DailyV1Application
     internal bool TryStageRestoredP12DOwnersFromImage(
         P12CStagedCoreContinuationRoot stagedRoots,
         DailyV1EffectiveDefinitions definitions,
+        P12CRuntimeIdentityOwnerSnapshot runtimeIdentitySnapshot,
         IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cityInputs,
         IReadOnlyList<P12DNpcDRow> npcDRows,
         IReadOnlyList<P12DNpcFRow> npcFRows,
@@ -1576,7 +1623,7 @@ internal sealed class DailyV1Application
             return false;
 
         if (stagedRoots == null || !stagedRoots.IsDetached || definitions == null
-            || cityInputs == null || npcDRows == null || npcFRows == null
+            || runtimeIdentitySnapshot == null || cityInputs == null || npcDRows == null || npcFRows == null
             || npcDRows.Count != npcFRows.Count || spatialSnapshot == null
             || personSnapshot == null || genealogySnapshot?.Export == null
             || siteSnapshot == null || siteSnapshot.Sites == null
@@ -1584,6 +1631,14 @@ internal sealed class DailyV1Application
             || travelPartySnapshot?.Parties == null)
         {
             result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        if (!DailyV1RuntimeIdentityIndex.TryCreateFromP12Snapshot(
+                runtimeIdentitySnapshot, out DailyV1RuntimeIdentityIndex stagedRuntimeIdentities))
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12d.runtime-identities");
             return false;
         }
 
@@ -1650,15 +1705,18 @@ internal sealed class DailyV1Application
             if (!DailyV1P12DSelectedCoreOwnerStager.TryCreate(
                     definitions, cityInputs, npcInputs, stagedSpatialNetwork, travelPartyIds,
                     out DailyV1P12DSelectedCoreOwnerStage selectedOwners, out _)
-                || selectedOwners == null)
+                || selectedOwners == null
+                || !MatchesP12DIdentityInventory(stagedRuntimeIdentities, stagedSpatialNetwork,
+                    cityInputs, npcDRows))
             {
                 result = new P12AResult(P12AResultCode.OwnerGraphRejected,
-                    "p12d.selected-core-owners");
+                    "p12d.selected-core-owners-or-identities");
                 return false;
             }
 
             stagedOwners = new DailyV1P12DCoreOwnerRestoreStage(
-                stagedSpatialNetwork, stagedPersons, stagedGenealogy, stagedSites, selectedOwners);
+                stagedSpatialNetwork, stagedRuntimeIdentities, stagedPersons,
+                stagedGenealogy, stagedSites, selectedOwners);
             if (restoreStep != null && !restoreStep.TryComplete(stagedOwners))
             {
                 stagedOwners = null;
@@ -1674,6 +1732,187 @@ internal sealed class DailyV1Application
         {
             restoreStep?.Dispose();
         }
+    }
+
+    private static bool MatchesP12DIdentityInventory(
+        DailyV1RuntimeIdentityIndex identities,
+        SpatialNetworkOwner spatialNetwork,
+        IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cityInputs,
+        IReadOnlyList<P12DNpcDRow> npcRows)
+    {
+        if (identities == null || spatialNetwork == null || cityInputs == null || npcRows == null
+            || identities.GetCardinality(DailyV1RuntimeIdentityKind.Location) != spatialNetwork.LocationCount
+            || identities.GetCardinality(DailyV1RuntimeIdentityKind.Route) != spatialNetwork.RouteCount
+            || identities.GetCardinality(DailyV1RuntimeIdentityKind.City) != cityInputs.Count
+            || identities.GetCardinality(DailyV1RuntimeIdentityKind.Npc) != npcRows.Count)
+            return false;
+
+        foreach (SpatialLocationRuntime location in spatialNetwork.Locations)
+            if (location == null || !identities.HasIdentity(
+                    location.RuntimeId, DailyV1RuntimeIdentityKind.Location))
+                return false;
+        foreach (SpatialRouteRuntime route in spatialNetwork.Routes)
+            if (route == null || !identities.HasIdentity(
+                    route.RuntimeId, DailyV1RuntimeIdentityKind.Route))
+                return false;
+        foreach (DailyV1P12DCityCoreOwnerHydrationInput city in cityInputs)
+            if (city == null || !identities.HasIdentity(
+                    city.CityRuntimeId, DailyV1RuntimeIdentityKind.City))
+                return false;
+        foreach (P12DNpcDRow npc in npcRows)
+            if (npc == null || !identities.HasIdentity(
+                    npc.RuntimeId, DailyV1RuntimeIdentityKind.Npc))
+                return false;
+        return true;
+    }
+
+    internal bool TryStageRestoredP12OwnerGraphFromImage(
+        P12AContinuationImage image,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        Func<P12CStagedCoreContinuationRoot, bool> projectRoots,
+        Action rootsStaged,
+        Func<bool> prepareOwnerProjection,
+        Func<P12ADailyV1ImageOwnerSnapshots, P12CStagedCoreContinuationRoot,
+            DailyV1P12DCoreOwnerRestoreStage, bool> projectDOwners,
+        Func<SimulationTime, bool> prepareEOwners,
+        Func<P12ADailyV1ImageOwnerSnapshots, P12ECoreOwnerRestoreStage, bool> projectEOwners,
+        Func<P12ADailyV1ImageOwnerSnapshots, DailyV1P12FCoreOwnerRestoreStage, bool> projectFOwners,
+        Action sourceCaptured,
+        Action<string> coreRootStageObserver,
+        Action<P12ECoreOwnerRestoreStep> coreEStepObserver,
+        Action<DailyV1P12FCoreOwnerRestoreStep> coreFStepObserver,
+        out DailyV1P12OwnerGraphRestoreStage stagedGraph,
+        out P12AResult result,
+        out DailyV1P12OwnerGraphRestoreFailure failure)
+    {
+        stagedGraph = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        failure = DailyV1P12OwnerGraphRestoreFailure.SourceCapture;
+        if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+            return false;
+
+        if (image == null || definitions == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+        if (!P12ADailyV1Census.TryCreateForImage(
+                image, out P12ADailyV1Census imageCensus, out result)
+            || imageCensus == null)
+            return false;
+        if (!P12ADailyV1ImageOwnerDecoder.TryDecode(
+                image, out P12ADailyV1ImageOwnerSnapshots decoded, out result)
+            || decoded == null)
+            return false;
+
+        sourceCaptured?.Invoke();
+        if (!TryStageRestoredContinuationRoots(
+                image, expectedSession, replacementOperation,
+                out P12CStagedCoreContinuationRoot roots, out result,
+                coreRootStageObserver)
+            || roots == null || !roots.IsDetached)
+        {
+            failure = DailyV1P12OwnerGraphRestoreFailure.RootStage;
+            return false;
+        }
+
+        if (projectRoots == null || !projectRoots(roots))
+        {
+            failure = DailyV1P12OwnerGraphRestoreFailure.RootStage;
+            result ??= new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12c.host-projection");
+            return false;
+        }
+        rootsStaged?.Invoke();
+
+        if (prepareOwnerProjection == null || !prepareOwnerProjection())
+        {
+            failure = DailyV1P12OwnerGraphRestoreFailure.DefinitionProjection;
+            result ??= new P12AResult(P12AResultCode.InvalidOwnerValue,
+                "p12d.authored-definition-projection");
+            return false;
+        }
+
+        if (!TryStageRestoredP12DOwnersFromImage(
+                roots, definitions, decoded.RuntimeIdentities, decoded.Cities,
+                decoded.NpcDRows, decoded.NpcFRows, decoded.SpatialNetwork,
+                decoded.Persons, decoded.Genealogy, decoded.Sites, decoded.TravelParties,
+                expectedSession, replacementOperation,
+                out DailyV1P12DCoreOwnerRestoreStage dOwners, out result)
+            || dOwners == null)
+        {
+            failure = DailyV1P12OwnerGraphRestoreFailure.OwnerStage;
+            return false;
+        }
+        if (projectDOwners == null || !projectDOwners(decoded, roots, dOwners))
+        {
+            failure = DailyV1P12OwnerGraphRestoreFailure.OwnerStage;
+            result ??= new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12d.host-projection");
+            return false;
+        }
+
+        SimulationTime stagedTime = new SimulationTime(image.Header.Day);
+        if (prepareEOwners == null || !prepareEOwners(stagedTime))
+        {
+            failure = DailyV1P12OwnerGraphRestoreFailure.OwnerStage;
+            result ??= new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12e.host-projection-context");
+            return false;
+        }
+
+        long capturedDay = image.Header.Day;
+        if (!TryStageRestoredP12EOwners(
+                roots, decoded.InstitutionOffice, decoded.PropertyEstate, decoded.Faction,
+                decoded.PoliticalClaims, decoded.PoliticalSupport, decoded.PoliticalDecisions,
+                decoded.Military, decoded.Conflicts, decoded.Wars, decoded.Battles,
+                decoded.Justice, dOwners.Persons, dOwners.SelectedOwners.Cities,
+                dOwners.SelectedOwners.Npcs, capturedDay, expectedSession,
+                replacementOperation, out P12ECoreOwnerRestoreStage eOwners,
+                out result, coreEStepObserver)
+            || eOwners == null)
+        {
+            failure = DailyV1P12OwnerGraphRestoreFailure.OwnerStage;
+            return false;
+        }
+        if (projectEOwners == null || !projectEOwners(decoded, eOwners))
+        {
+            failure = DailyV1P12OwnerGraphRestoreFailure.OwnerStage;
+            result ??= new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12e.host-projection");
+            return false;
+        }
+
+        if (!TryStageRestoredP12FOwners(
+                roots, decoded.PoliticalKnowledge, decoded.Directives, decoded.ActorChoices,
+                decoded.TravelParties, decoded.Expeditions, dOwners.Persons,
+                eOwners.Institutions, eOwners.PoliticalClaims, eOwners.Factions,
+                eOwners.Offices, eOwners.PropertyOwnership, capturedDay, stagedTime,
+                definitions, decoded.NpcFRows, dOwners.SelectedOwners.Npcs,
+                dOwners.RuntimeIdentities, dOwners.SpatialNetwork, dOwners.ExplorableSites,
+                expectedSession, replacementOperation,
+                out DailyV1P12FCoreOwnerRestoreStage fOwners, out result,
+                coreFStepObserver)
+            || fOwners == null)
+        {
+            failure = DailyV1P12OwnerGraphRestoreFailure.OwnerStage;
+            return false;
+        }
+        if (projectFOwners == null || !projectFOwners(decoded, fOwners))
+        {
+            failure = DailyV1P12OwnerGraphRestoreFailure.OwnerStage;
+            result ??= new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12f.host-projection");
+            return false;
+        }
+
+        stagedGraph = new DailyV1P12OwnerGraphRestoreStage(
+            imageCensus, decoded, roots, dOwners, eOwners, fOwners, stagedTime);
+        result = null;
+        failure = DailyV1P12OwnerGraphRestoreFailure.None;
+        return true;
     }
 
     /// <summary>

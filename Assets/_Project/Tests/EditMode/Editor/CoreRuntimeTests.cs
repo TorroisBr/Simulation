@@ -224,6 +224,29 @@ public sealed class CoreRuntimeTests
     }
 
     [Test]
+    public void RestoredP12IdentityProjectionUsesTheExactCoreIndexAndRevision()
+    {
+        P12CRuntimeIdentityOwnerSnapshot snapshot = new P12CRuntimeIdentityOwnerSnapshot(
+            P12CRuntimeIdentityOwnerSnapshot.CurrentSchemaVersion, 17L,
+            new[]
+            {
+                new System.Collections.Generic.KeyValuePair<string, string>(
+                    "location", "location/restored")
+            });
+        Assert.That(DailyV1RuntimeIdentityIndex.TryCreateFromP12Snapshot(
+            snapshot, out DailyV1RuntimeIdentityIndex coreIndex), Is.True);
+
+        RuntimeIdentityRegistry projection = new RuntimeIdentityRegistry(null, coreIndex);
+        SpatialLocationRuntime location = new SpatialLocationRuntime("location/restored");
+        Assert.That(projection.BindSelectedLocationProjection(location), Is.True);
+        Assert.That(projection.CoreIdentityIndex, Is.SameAs(coreIndex));
+        Assert.That(projection.CensusOwnerIdentity, Is.SameAs(coreIndex));
+        Assert.That(projection.CensusRevision, Is.EqualTo(17L));
+        Assert.That(projection.TryGetLocation("location/restored", out SpatialLocationRuntime resolved), Is.True);
+        Assert.That(resolved, Is.SameAs(location));
+    }
+
+    [Test]
     public void SimulationTime_AdvanceDayIncrementsAbsoluteDay()
     {
         SimulationTime time = new SimulationTime();

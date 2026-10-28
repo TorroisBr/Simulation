@@ -78,4 +78,51 @@ public sealed class DailyV1RuntimeIdentityIndexTests
             Assert.That(witnesses[i].Cardinality, Is.Zero,
                 "Daily-v1 explicit-empty identity families remain backed by real zero-cardinality Core witnesses.");
     }
+
+    [Test]
+    public void P12SnapshotRestorePreservesIdentityRevisionInsteadOfRecountingActiveIds()
+    {
+        P12CRuntimeIdentityOwnerSnapshot snapshot = new P12CRuntimeIdentityOwnerSnapshot(
+            P12CRuntimeIdentityOwnerSnapshot.CurrentSchemaVersion, 41L,
+            new[]
+            {
+                new System.Collections.Generic.KeyValuePair<string, string>("location", "location-1"),
+                new System.Collections.Generic.KeyValuePair<string, string>("city", "city-1"),
+                new System.Collections.Generic.KeyValuePair<string, string>("npc", "npc-1"),
+                new System.Collections.Generic.KeyValuePair<string, string>("route", "route-1")
+            });
+
+        Assert.That(DailyV1RuntimeIdentityIndex.TryCreateFromP12Snapshot(
+            snapshot, out DailyV1RuntimeIdentityIndex restored), Is.True);
+        Assert.That(restored.CensusRevision, Is.EqualTo(41L));
+        Assert.That(restored.GetCardinality(DailyV1RuntimeIdentityKind.Npc), Is.EqualTo(1));
+        Assert.That(restored.GetCardinality(DailyV1RuntimeIdentityKind.City), Is.EqualTo(1));
+        Assert.That(restored.GetCardinality(DailyV1RuntimeIdentityKind.Location), Is.EqualTo(1));
+        Assert.That(restored.GetCardinality(DailyV1RuntimeIdentityKind.Route), Is.EqualTo(1));
+        Assert.That(restored.CaptureRegisteredValues(), Is.EquivalentTo(snapshot.IdentityValues));
+
+        P12CRuntimeIdentityOwnerSnapshot duplicate = new P12CRuntimeIdentityOwnerSnapshot(
+            P12CRuntimeIdentityOwnerSnapshot.CurrentSchemaVersion, 2L,
+            new[]
+            {
+                new System.Collections.Generic.KeyValuePair<string, string>("npc", "shared"),
+                new System.Collections.Generic.KeyValuePair<string, string>("city", "shared")
+            });
+        P12CRuntimeIdentityOwnerSnapshot unsupported = new P12CRuntimeIdentityOwnerSnapshot(
+            P12CRuntimeIdentityOwnerSnapshot.CurrentSchemaVersion, 1L,
+            new[]
+            {
+                new System.Collections.Generic.KeyValuePair<string, string>("site", "site-1")
+            });
+        P12CRuntimeIdentityOwnerSnapshot impossibleRevision = new P12CRuntimeIdentityOwnerSnapshot(
+            P12CRuntimeIdentityOwnerSnapshot.CurrentSchemaVersion, 0L,
+            new[]
+            {
+                new System.Collections.Generic.KeyValuePair<string, string>("npc", "npc-1")
+            });
+
+        Assert.That(DailyV1RuntimeIdentityIndex.TryCreateFromP12Snapshot(duplicate, out _), Is.False);
+        Assert.That(DailyV1RuntimeIdentityIndex.TryCreateFromP12Snapshot(unsupported, out _), Is.False);
+        Assert.That(DailyV1RuntimeIdentityIndex.TryCreateFromP12Snapshot(impossibleRevision, out _), Is.False);
+    }
 }

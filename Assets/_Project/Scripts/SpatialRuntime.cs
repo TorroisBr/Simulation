@@ -94,7 +94,8 @@ public sealed class SpatialNetworkRuntime
         }
 
         return TryCreateFromStagedOwner(
-            stagedOwner, stagedIdentityRegistry, out stagedNetwork, out failure);
+            stagedOwner, stagedIdentityRegistry, false,
+            out stagedNetwork, out failure);
     }
 
     /// <summary>
@@ -105,6 +106,7 @@ public sealed class SpatialNetworkRuntime
     internal static bool TryCreateFromStagedOwner(
         SpatialNetworkOwner stagedOwner,
         RuntimeIdentityRegistry stagedIdentityRegistry,
+        bool identitiesAlreadyStaged,
         out SpatialNetworkRuntime stagedNetwork,
         out SpatialNetworkSnapshotFailure failure)
     {
@@ -120,7 +122,11 @@ public sealed class SpatialNetworkRuntime
         long identityCount = (long)stagedOwner.LocationCount + stagedOwner.RouteCount;
         foreach (SpatialLocationRuntime location in stagedOwner.Locations)
         {
-            if (!stagedIdentityRegistry.IsRuntimeIdAvailable(location.RuntimeId))
+            bool identityMatches = identitiesAlreadyStaged
+                ? stagedIdentityRegistry.CoreIdentityIndex.HasIdentity(
+                    location.RuntimeId, DailyV1RuntimeIdentityKind.Location)
+                : stagedIdentityRegistry.IsRuntimeIdAvailable(location.RuntimeId);
+            if (!identityMatches)
             {
                 failure = SpatialNetworkSnapshotFailure.Create(
                     SpatialNetworkSnapshotFailureCode.RuntimeIdentityCollision,
@@ -130,7 +136,11 @@ public sealed class SpatialNetworkRuntime
         }
         foreach (SpatialRouteRuntime route in stagedOwner.Routes)
         {
-            if (!stagedIdentityRegistry.IsRuntimeIdAvailable(route.RuntimeId))
+            bool identityMatches = identitiesAlreadyStaged
+                ? stagedIdentityRegistry.CoreIdentityIndex.HasIdentity(
+                    route.RuntimeId, DailyV1RuntimeIdentityKind.Route)
+                : stagedIdentityRegistry.IsRuntimeIdAvailable(route.RuntimeId);
+            if (!identityMatches)
             {
                 failure = SpatialNetworkSnapshotFailure.Create(
                     SpatialNetworkSnapshotFailureCode.RuntimeIdentityCollision,
@@ -139,7 +149,8 @@ public sealed class SpatialNetworkRuntime
             }
         }
 
-        if (stagedIdentityRegistry.CensusRevision > long.MaxValue - identityCount)
+        if (!identitiesAlreadyStaged
+            && stagedIdentityRegistry.CensusRevision > long.MaxValue - identityCount)
         {
             failure = SpatialNetworkSnapshotFailure.Create(
                 SpatialNetworkSnapshotFailureCode.RuntimeIdentityRevisionExhausted,
@@ -149,7 +160,10 @@ public sealed class SpatialNetworkRuntime
 
         foreach (SpatialLocationRuntime location in stagedOwner.Locations)
         {
-            if (!stagedIdentityRegistry.RegisterLocation(location))
+            bool bound = identitiesAlreadyStaged
+                ? stagedIdentityRegistry.BindSelectedLocationProjection(location)
+                : stagedIdentityRegistry.RegisterLocation(location);
+            if (!bound)
             {
                 failure = SpatialNetworkSnapshotFailure.Create(
                     SpatialNetworkSnapshotFailureCode.RuntimeIdentityCollision,
@@ -160,7 +174,10 @@ public sealed class SpatialNetworkRuntime
 
         foreach (SpatialRouteRuntime route in stagedOwner.Routes)
         {
-            if (!stagedIdentityRegistry.RegisterRoute(route))
+            bool bound = identitiesAlreadyStaged
+                ? stagedIdentityRegistry.BindSelectedRouteProjection(route)
+                : stagedIdentityRegistry.RegisterRoute(route);
+            if (!bound)
             {
                 failure = SpatialNetworkSnapshotFailure.Create(
                     SpatialNetworkSnapshotFailureCode.RuntimeIdentityCollision,
