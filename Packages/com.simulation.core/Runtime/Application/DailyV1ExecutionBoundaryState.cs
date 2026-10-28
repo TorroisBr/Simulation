@@ -655,7 +655,6 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
     internal bool TryBindSelectedRuntimeOwnerGraph(DailyV1SelectedRuntimeOwnerGraph graph)
     {
-        if (graph == null) return false;
         if (selectedRuntimeOwnerGraphBound)
             return ReferenceEquals(selectedRuntimeOwnerGraph, graph);
 
