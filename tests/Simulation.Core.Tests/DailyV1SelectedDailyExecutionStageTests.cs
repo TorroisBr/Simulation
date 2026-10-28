@@ -1067,6 +1067,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             private readonly FakeBoundary owner;
             internal FakeTravelContext(FakeBoundary owner) => this.owner = owner;
             public IDailyV1SelectedTravelDayBoundary Boundary => EmptyTravelBoundary.Instance;
+            public IDailyV1SelectedP12TravelPartyAdvanceProtocol P12Protocol =>
+                NoOpTravelPartyP12AdvanceProtocol.Instance;
             public bool AdvanceSoloTravel => false;
             public bool ExecuteWithinPartyOwnerOperation(Func<bool> operation) => operation?.Invoke() == true;
             public void PublishCompletedTravelResults(
@@ -1092,6 +1094,34 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public bool PublishTravelPartyArrival(TravelPartyRuntime party) => false;
             public void PublishSoloTravelResult(DailyV1SelectedSoloTravelDayResult result) =>
                 throw new AssertionException("No solo travel result is expected in this fixture.");
+        }
+
+        private sealed class NoOpTravelPartyP12AdvanceProtocol
+            : IDailyV1SelectedP12TravelPartyAdvanceProtocol
+        {
+            internal static readonly NoOpTravelPartyP12AdvanceProtocol Instance =
+                new NoOpTravelPartyP12AdvanceProtocol();
+
+            public bool TryValidateOwnerSections(
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                IReadOnlyList<string> expectedSectionIds) => graph != null && expectedSectionIds != null;
+
+            public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) => sectionIds != null;
+
+            public bool TryEnterOperation(out IDisposable operationScope)
+            {
+                operationScope = EmptyDisposable.Instance;
+                return true;
+            }
+
+            public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) => sectionIds != null;
+            public void FaultClosed() { }
+        }
+
+        private sealed class EmptyDisposable : IDisposable
+        {
+            internal static readonly EmptyDisposable Instance = new EmptyDisposable();
+            public void Dispose() { }
         }
 
         private sealed class FakeActorTurnContext : IDailyV1SelectedActorTurnExecutionContext

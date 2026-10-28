@@ -2331,6 +2331,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         }
 
         public IDailyV1SelectedTravelDayBoundary Boundary => boundary;
+        public IDailyV1SelectedP12TravelPartyAdvanceProtocol P12Protocol => null;
         public bool AdvanceSoloTravel { get; }
 
         public bool ExecuteWithinPartyOwnerOperation(Func<bool> operation)

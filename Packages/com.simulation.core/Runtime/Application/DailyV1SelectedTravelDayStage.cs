@@ -26,6 +26,24 @@ internal interface IDailyV1SelectedTravelDayBoundary
 }
 
 /// <summary>
+/// Host protocol port for the selected party-advance census operation. The
+/// Core session owns the operation scope and changed-section set; the host
+/// only verifies its registered owner witnesses and exposes the existing
+/// census protocol operations.
+/// </summary>
+internal interface IDailyV1SelectedP12TravelPartyAdvanceProtocol
+{
+    bool TryValidateOwnerSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<string> expectedSectionIds);
+
+    bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
+    bool TryEnterOperation(out IDisposable operationScope);
+    bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds);
+    void FaultClosed();
+}
+
+/// <summary>
 /// Executes the selected Daily-v1 post-actor travel group in its established
 /// order: P8 TravelParty owner, then ungrouped solo travel. Core selects and
 /// commits all travel transitions against the exact admitted graph. The narrow
@@ -37,7 +55,9 @@ internal static class DailyV1SelectedTravelDayStage
     internal static bool TryAdvance(
         DailyV1SelectedRuntimeOwnerGraph graph,
         IDailyV1SelectedTravelDayBoundary boundary,
-        Func<Func<bool>, bool> runPartyOwnerOperation,
+        DailyV1ExecutionBoundaryState executionState,
+        IDailyV1SelectedP12TravelPartyAdvanceProtocol p12Protocol,
+        Func<Func<bool>, bool> legacyPartyOperation,
         bool advanceSoloTravel,
         out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
         out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults)
@@ -84,16 +104,19 @@ internal static class DailyV1SelectedTravelDayStage
 
         if (partyStore != null)
         {
-            if (runPartyOwnerOperation == null)
-                return false;
-
             IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> completed = null;
-            bool executed = runPartyOwnerOperation(() => graph.TryAdvanceTravelParties(
-                partyStore,
-                TryPrepareTransition,
-                PublishCommittedTransition,
-                boundary.PublishTravelPartyArrival,
-                out completed));
+            Func<bool> advanceParties = () => graph.TryAdvanceTravelParties(
+                    partyStore,
+                    TryPrepareTransition,
+                    PublishCommittedTransition,
+                    boundary.PublishTravelPartyArrival,
+                    out completed);
+            bool executed = executionState != null
+                ? executionState.ExecuteSelectedP12TravelPartyAdvance(
+                    graph, p12Protocol, advanceParties)
+                : legacyPartyOperation != null
+                    ? legacyPartyOperation(advanceParties)
+                    : advanceParties();
             if (!executed || completed == null)
                 return false;
             partyArrivals = completed;

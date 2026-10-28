@@ -128,6 +128,7 @@ public sealed partial class SimulationRuntime
             || !ReferenceEquals(p12TravelPartyStartRequestThread, Thread.CurrentThread)
             || activeP12TravelPartyStartOperationContext != null
             || activeP12TravelPartyAdvanceOperationContext != null
+            || dailyExecutionBoundary.HasSelectedP12TravelPartyAdvanceInProgress
             || activeP12SoloTravelStartOperationContext != null
             || activeP12MerchantOperationContext != null
             || activeNpcMembershipCensusContext != null

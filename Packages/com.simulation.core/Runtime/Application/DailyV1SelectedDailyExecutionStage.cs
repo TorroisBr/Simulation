@@ -225,7 +225,13 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
 internal interface IDailyV1SelectedTravelDayExecutionContext
 {
     IDailyV1SelectedTravelDayBoundary Boundary { get; }
+    IDailyV1SelectedP12TravelPartyAdvanceProtocol P12Protocol { get; }
     bool AdvanceSoloTravel { get; }
+    /// <summary>
+    /// Legacy compatibility wrapper used only by non-admitted selected-stage
+    /// callers. An admitted session owns this scope through its execution
+    /// state and never delegates operation ownership to the host.
+    /// </summary>
     bool ExecuteWithinPartyOwnerOperation(Func<bool> operation);
     void PublishCompletedTravelResults(
         IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
@@ -499,7 +505,7 @@ internal static class DailyV1SelectedDailyExecutionStage
             throw new InvalidOperationException(
                 "The selected Daily-v1 host could not provide its exact travel projection and P12 context.");
         bool travelAdvanced = TryAdvanceTravelDay(
-            graph, travelContext,
+            executionState, graph, travelContext,
             out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
             out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults);
         if (!travelAdvanced)
@@ -619,6 +625,7 @@ internal static class DailyV1SelectedDailyExecutionStage
     }
 
     internal static bool TryAdvanceTravelDay(
+        DailyV1ExecutionBoundaryState executionState,
         DailyV1SelectedRuntimeOwnerGraph graph,
         IDailyV1SelectedTravelDayExecutionContext context,
         out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
@@ -633,7 +640,9 @@ internal static class DailyV1SelectedDailyExecutionStage
         return DailyV1SelectedTravelDayStage.TryAdvance(
             graph,
             context.Boundary,
-            context.ExecuteWithinPartyOwnerOperation,
+            executionState,
+            context.P12Protocol,
+            executionState == null ? context.ExecuteWithinPartyOwnerOperation : null,
             context.AdvanceSoloTravel,
             out partyArrivals,
             out soloResults);

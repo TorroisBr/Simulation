@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 public sealed partial class SimulationRuntime
 {
@@ -38,7 +39,7 @@ public sealed partial class SimulationRuntime
             return false;
 
         context = new SelectedDailyV1TravelDayExecutionContext(
-            this, boundary,
+            this, boundary, new SelectedTravelPartyAdvanceProtocol(this),
             advanceSoloTravel: travelSystem != null);
         return true;
     }
@@ -50,7 +51,7 @@ public sealed partial class SimulationRuntime
                 out IDailyV1SelectedTravelDayExecutionContext context)
             || !(context is SelectedDailyV1TravelDayExecutionContext selectedContext)
             || !DailyV1SelectedDailyExecutionStage.TryAdvanceTravelDay(
-                SelectedRuntimeOwnerGraph, selectedContext,
+                dailyExecutionBoundary, SelectedRuntimeOwnerGraph, selectedContext,
                 out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
                 out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults))
             return false;
@@ -65,18 +66,22 @@ public sealed partial class SimulationRuntime
     {
         private readonly SimulationRuntime runtime;
         private readonly SelectedTravelDayBoundary boundary;
+        private readonly IDailyV1SelectedP12TravelPartyAdvanceProtocol p12Protocol;
 
         internal SelectedDailyV1TravelDayExecutionContext(
             SimulationRuntime runtime,
             SelectedTravelDayBoundary boundary,
+            IDailyV1SelectedP12TravelPartyAdvanceProtocol p12Protocol,
             bool advanceSoloTravel)
         {
             this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
             this.boundary = boundary ?? throw new ArgumentNullException(nameof(boundary));
+            this.p12Protocol = p12Protocol ?? throw new ArgumentNullException(nameof(p12Protocol));
             AdvanceSoloTravel = advanceSoloTravel;
         }
 
         public IDailyV1SelectedTravelDayBoundary Boundary => boundary;
+        public IDailyV1SelectedP12TravelPartyAdvanceProtocol P12Protocol => p12Protocol;
         internal IReadOnlyList<NpcRuntime> Arrivals => boundary.Arrivals;
         public bool AdvanceSoloTravel { get; }
 
@@ -85,10 +90,9 @@ public sealed partial class SimulationRuntime
             if (operation == null) return false;
             if (runtime.runtimeAdmissionContext == null) return operation();
             if (!runtime.TryBeginP12TravelPartyAdvanceOperation(
-                    out P12TravelPartyAdvanceOperationScope operationScope))
-                throw new InvalidOperationException(
-                    "The P12 TravelParty advance owner operation could not be admitted.");
-            using (operationScope) return operation();
+                    out P12TravelPartyAdvanceOperationScope scope))
+                return false;
+            using (scope) return operation();
         }
 
         public void PublishCompletedTravelResults(
@@ -260,5 +264,238 @@ public sealed partial class SimulationRuntime
                     "A completed Core solo-travel arrival did not resolve to its exact Unity adapter.");
             arrivals.Add(adapter);
         }
+    }
+
+    private sealed class SelectedTravelPartyAdvanceProtocol
+        : IDailyV1SelectedP12TravelPartyAdvanceProtocol
+    {
+        private readonly SimulationRuntime runtime;
+
+        internal SelectedTravelPartyAdvanceProtocol(SimulationRuntime runtime)
+        {
+            this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        }
+
+        public bool TryValidateOwnerSections(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            IReadOnlyList<string> expectedSectionIds) =>
+            runtime.TryValidateSelectedTravelPartyOwnerSections(graph, expectedSectionIds);
+
+        public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
+            runtime.runtimeAdmissionContext == null
+                || (runtime.npcRosterCensusProtocol != null
+                    && runtime.npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _));
+
+        public bool TryEnterOperation(out IDisposable operationScope)
+        {
+            operationScope = null;
+            if (runtime.runtimeAdmissionContext == null) return true;
+            if (!runtime.TryEnterRuntimeAdmissionOperation(
+                    DailyV1RuntimeProtocolOperationContracts.TravelPartyAdvance,
+                    out SimulationOperationScope scope))
+                return false;
+            operationScope = scope;
+            return true;
+        }
+
+        public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) =>
+            runtime.runtimeAdmissionContext == null
+                || (runtime.npcRosterCensusProtocol != null
+                    && runtime.npcRosterCensusProtocol.NotifyCommittedMutations(sectionIds, out _));
+
+        public void FaultClosed() => runtime.FaultRuntimeAdmission();
+    }
+
+    private bool TryValidateSelectedTravelPartyOwnerSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<string> expectedSectionIds)
+    {
+        if (runtimeAdmissionContext == null) return true;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || graph == null
+            || !ReferenceEquals(graph, SelectedRuntimeOwnerGraph)
+            || graph.TravelParties == null
+            || !ReferenceEquals(graph.TravelParties, travelPartySystem?.Store)
+            || runtimeIdAllocator == null
+            || !ReferenceEquals(runtimeIdAllocator, dailyExecutionBoundary.SelectedRuntimeIdAllocator)
+            || travelPartyCensusProvider == null
+            || expectedSectionIds == null)
+            return false;
+
+        HashSet<string> expected = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in expectedSectionIds)
+            if (string.IsNullOrWhiteSpace(sectionId) || !expected.Add(sectionId)) return false;
+        HashSet<string> actual = new HashSet<string>(StringComparer.Ordinal);
+
+        Dictionary<string, NpcRuntime> runtimeNpcsById = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        foreach (NpcRuntime runtimeNpc in npcRuntimes)
+        {
+            if (runtimeNpc == null || string.IsNullOrWhiteSpace(runtimeNpc.RuntimeId)
+                || !runtimeNpcsById.TryAdd(runtimeNpc.RuntimeId, runtimeNpc)
+                || !npcRegistryById.TryGetValue(runtimeNpc.RuntimeId, out NpcRuntime registeredNpc)
+                || !ReferenceEquals(registeredNpc, runtimeNpc))
+                return false;
+        }
+        if (runtimeNpcsById.Count != npcRegistryById.Count) return false;
+
+        Dictionary<string, DailyV1NpcRuntimeOwners> selectedNpcsByRuntimeId =
+            new Dictionary<string, DailyV1NpcRuntimeOwners>(StringComparer.Ordinal);
+        foreach (DailyV1NpcRuntimeOwners selectedOwner in graph.Npcs)
+        {
+            if (selectedOwner == null || string.IsNullOrWhiteSpace(selectedOwner.RuntimeId)
+                || !selectedNpcsByRuntimeId.TryAdd(selectedOwner.RuntimeId, selectedOwner)
+                || !runtimeNpcsById.TryGetValue(selectedOwner.RuntimeId, out NpcRuntime installedSelectedNpc)
+                || !ReferenceEquals(installedSelectedNpc.SelectedRuntimeOwners, selectedOwner)
+                || !installedSelectedNpc.UsesSelectedDailyV1Definitions)
+                return false;
+        }
+
+        OwnerSectionCensusWitness partyWitness = travelPartyCensusProvider.GetCurrentCensus();
+        if (partyWitness == null
+            || !string.Equals(partyWitness.SectionId, TravelPartyCensusProvider.SectionId, StringComparison.Ordinal)
+            || partyWitness.SchemaVersion != TravelPartyCensusProvider.SchemaVersion
+            || !ReferenceEquals(partyWitness.OwnerInstanceIdentity, graph.TravelParties)
+            || partyWitness.Cardinality != graph.TravelParties.ActiveParties.Count
+            || partyWitness.Revision != graph.TravelParties.Revision
+            || !actual.Add(partyWitness.SectionId))
+            return false;
+
+        if (cityNpcPresenceCensusProviders.Count != graph.Cities.Count
+            || cityNpcPresenceSectionIdsByOwner.Count != graph.Cities.Count)
+            return false;
+        foreach (IOwnerSectionCensusProvider provider in cityNpcPresenceCensusProviders)
+        {
+            OwnerSectionCensusWitness witness = provider?.GetCurrentCensus();
+            if (witness == null
+                || !cityNpcPresenceSectionIdsByOwner.Any(pair =>
+                    string.Equals(pair.Value, witness.SectionId, StringComparison.Ordinal)
+                    && ReferenceEquals(pair.Key.SelectedRuntimeOwners?.NpcPresence,
+                        witness.OwnerInstanceIdentity)))
+                return false;
+
+            DailyV1CityRuntimeOwners owner = null;
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+                if (string.Equals(
+                        DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(candidate.RuntimeId),
+                        witness.SectionId, StringComparison.Ordinal))
+                {
+                    if (owner != null) return false;
+                    owner = candidate;
+                }
+            if (owner == null
+                || !ReferenceEquals(owner.NpcPresence, witness.OwnerInstanceIdentity)
+                || witness.Cardinality != owner.NpcPresence.OrderedNpcRuntimeIds.Count
+                || witness.Revision != owner.NpcPresence.Revision
+                || !actual.Add(witness.SectionId))
+                return false;
+        }
+
+        IReadOnlyList<IOwnerSectionCensusProvider> travelProviders =
+            npcRosterCensusProtocol.NpcTravelStateFamilyProviders;
+        if (travelProviders.Count != runtimeNpcsById.Count) return false;
+        foreach (IOwnerSectionCensusProvider provider in travelProviders)
+        {
+            if (!(provider is NpcTravelStateCensusProvider travelProvider)
+                || !runtimeNpcsById.TryGetValue(travelProvider.RuntimeId, out NpcRuntime installed)
+                || !ReferenceEquals(installed, travelProvider.NpcOwner))
+                return false;
+            selectedNpcsByRuntimeId.TryGetValue(travelProvider.RuntimeId, out DailyV1NpcRuntimeOwners owner);
+            OwnerSectionCensusWitness witness = travelProvider.GetCurrentCensus();
+            string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(
+                12, travelProvider.RuntimeId);
+            bool exactSelectedOwner = owner != null
+                && ReferenceEquals(installed.SelectedRuntimeOwners, owner)
+                && owner.Travel != null
+                && witness?.Revision == owner.Travel.Revision;
+            bool exactCompatibilityOwner = owner == null
+                && installed.SelectedRuntimeOwners == null
+                && !installed.UsesSelectedDailyV1Definitions
+                && witness?.Revision == installed.TravelStateRevision;
+            if (owner == null
+                ? !exactCompatibilityOwner
+                : !exactSelectedOwner)
+                return false;
+            if (witness == null
+                || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
+                || witness.SchemaVersion != NpcTravelStateCensusProvider.SchemaVersion
+                || !ReferenceEquals(witness.OwnerInstanceIdentity, installed)
+                || witness.Cardinality != 1
+                || witness.Revision != installed.TravelStateRevision
+                || !actual.Add(witness.SectionId))
+                return false;
+        }
+
+        IReadOnlyList<IOwnerSectionCensusProvider> spatialProviders =
+            npcRosterCensusProtocol.SpatialKnowledgeFamilyProviders;
+        if (spatialProviders.Count != runtimeNpcsById.Count * 2) return false;
+        foreach (IOwnerSectionCensusProvider provider in spatialProviders)
+        {
+            if (!(provider is SpatialKnowledgeCensusProvider.ISpatialKnowledgeSectionCensusProvider spatialProvider)
+                || !runtimeNpcsById.TryGetValue(spatialProvider.RuntimeId, out NpcRuntime installed)
+                || !ReferenceEquals(installed, spatialProvider.NpcOwner))
+                return false;
+            selectedNpcsByRuntimeId.TryGetValue(spatialProvider.RuntimeId, out DailyV1NpcRuntimeOwners owner);
+            OwnerSectionCensusWitness witness = spatialProvider.GetCurrentCensus();
+            bool locations = string.Equals(witness?.SectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix
+                    + spatialProvider.RuntimeId, StringComparison.Ordinal);
+            bool routes = string.Equals(witness?.SectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix
+                    + spatialProvider.RuntimeId, StringComparison.Ordinal);
+            SpatialKnowledgeRuntime spatialOwner = spatialProvider.SpatialKnowledgeOwner;
+            bool exactSelectedSpatialOwner = owner != null
+                && ReferenceEquals(installed.SelectedRuntimeOwners, owner)
+                && ReferenceEquals(spatialOwner, owner.SpatialKnowledge);
+            bool exactCompatibilitySpatialOwner = owner == null
+                && installed.SelectedRuntimeOwners == null
+                && !installed.UsesSelectedDailyV1Definitions
+                && spatialOwner != null
+                && ReferenceEquals(spatialOwner, installed.ExistingSpatialKnowledge);
+            int expectedCardinality = locations ? spatialOwner?.KnownLocationCount ?? -1
+                : routes ? spatialOwner?.KnownRouteCount ?? -1 : -1;
+            if (owner == null
+                ? !exactCompatibilitySpatialOwner
+                : !exactSelectedSpatialOwner)
+                return false;
+            if (witness == null || (!locations && !routes)
+                || witness.SchemaVersion != SpatialKnowledgeCensusProvider.SchemaVersion
+                || !ReferenceEquals(witness.OwnerInstanceIdentity, spatialOwner)
+                || expectedCardinality < 0
+                || witness.Cardinality != expectedCardinality
+                || witness.Revision != spatialOwner.Revision
+                || !actual.Add(witness.SectionId))
+                return false;
+        }
+
+        if (runtimeIdAllocatorEventCounterCensusProvider == null) return false;
+        OwnerSectionCensusWitness eventCounterWitness =
+            runtimeIdAllocatorEventCounterCensusProvider.GetCurrentCensus();
+        if (eventCounterWitness == null
+            || !string.Equals(eventCounterWitness.SectionId,
+                RuntimeIdAllocatorCensusProvider.EventsSectionId, StringComparison.Ordinal)
+            || eventCounterWitness.SchemaVersion != RuntimeIdAllocatorCensusProvider.SchemaVersion
+            || eventCounterWitness.Cardinality != 1
+            || !RuntimeIdAllocatorOwnerBridge.TryMatchCurrentCensus(
+                runtimeIdAllocator, RuntimeIdAllocatorCensusCounter.Events,
+                eventCounterWitness.OwnerInstanceIdentity, eventCounterWitness.Revision, out _)
+            || !actual.Add(eventCounterWitness.SectionId))
+            return false;
+
+        if (simulationRecordSequenceCensusProvider == null) return false;
+        OwnerSectionCensusWitness sequenceWitness = simulationRecordSequenceCensusProvider.GetCurrentCensus();
+        if (sequenceWitness == null
+            || !string.Equals(sequenceWitness.SectionId, SimulationRecordSequenceCensusProvider.SectionId,
+                StringComparison.Ordinal)
+            || sequenceWitness.SchemaVersion != SimulationRecordSequenceCensusProvider.SchemaVersion
+            || sequenceWitness.Cardinality != 1
+            || !SimulationRecordSequenceOwnerBridge.TryMatchCurrentCensus(
+                simulationRecordSequence, sequenceWitness.OwnerInstanceIdentity,
+                sequenceWitness.Revision, out _)
+            || !actual.Add(sequenceWitness.SectionId))
+            return false;
+
+        return expected.SetEquals(actual)
+            && expected.Count == graph.Cities.Count + (runtimeNpcsById.Count * 3) + 3;
     }
 }

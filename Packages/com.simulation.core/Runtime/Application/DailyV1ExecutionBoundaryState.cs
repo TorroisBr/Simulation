@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 internal sealed class DailyV1OwnerSectionContractIdentity
 {
@@ -74,6 +75,37 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private DailyV1ActorTurnCoreRoots selectedRuntimeActorTurnCoreRoots;
     private DailyV1P12CrimeJusticeMutationCoordinator selectedP12CrimeJusticeMutationCoordinator;
     private IDailyV1P12CrimeJusticeMutationProtocol selectedP12CrimeJusticeMutationProtocol;
+    private SelectedP12TravelPartyAdvanceContext selectedP12TravelPartyAdvanceContext;
+
+    private sealed class SelectedP12TravelPartyAdvanceContext
+    {
+        internal readonly DailyV1SelectedRuntimeOwnerGraph Graph;
+        internal readonly IDailyV1SelectedP12TravelPartyAdvanceProtocol Protocol;
+        internal readonly Thread OwnerThread;
+        internal readonly int OwnerManagedThreadId;
+        internal readonly HashSet<string> AllowedSectionIds;
+        internal readonly HashSet<string> ChangedSectionIds =
+            new HashSet<string>(StringComparer.Ordinal);
+        internal IDisposable ProtocolScope;
+
+        internal SelectedP12TravelPartyAdvanceContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            IDailyV1SelectedP12TravelPartyAdvanceProtocol protocol,
+            IEnumerable<string> sectionIds,
+            IDisposable protocolScope)
+        {
+            Graph = graph;
+            Protocol = protocol;
+            OwnerThread = Thread.CurrentThread;
+            OwnerManagedThreadId = OwnerThread.ManagedThreadId;
+            AllowedSectionIds = new HashSet<string>(sectionIds, StringComparer.Ordinal);
+            ProtocolScope = protocolScope;
+        }
+
+        internal bool IsOwnedByCurrentThread() =>
+            ReferenceEquals(OwnerThread, Thread.CurrentThread)
+            && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
 
     internal SimulationTime SimulationTime { get; private set; }
     internal SimulationRuntimeAdmissionContext AdmissionContext { get; private set; }
@@ -553,6 +585,273 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     internal DailyV1SelectedRuntimeOwnerGraph SelectedRuntimeOwnerGraph => selectedRuntimeOwnerGraph;
 
     /// <summary>
+    /// Executes the P12 TravelParty batch using section identities derived
+    /// from the exact Core owner graph. The census adapter validates those
+    /// same owners and supplies only the registered protocol scope; this
+    /// state owns the serialized batch and its committed-section set.
+    /// </summary>
+    internal bool ExecuteSelectedP12TravelPartyAdvance(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IDailyV1SelectedP12TravelPartyAdvanceProtocol protocol,
+        Func<bool> operation)
+    {
+        if (graph == null) throw new ArgumentNullException(nameof(graph));
+        if (operation == null) throw new ArgumentNullException(nameof(operation));
+
+        // Unadmitted owner-graph tests and legacy composition retain their
+        // existing no-census behavior. A live selected session always takes
+        // the Core-owned branch below.
+        if (!HasAdmittedSelectedDailyExecution)
+            return operation();
+        if (protocol == null) throw new ArgumentNullException(nameof(protocol));
+
+        IReadOnlyList<string> sectionIds = CreateSelectedTravelPartyAdvanceSectionIds(graph);
+        IDisposable protocolScope = null;
+        SelectedP12TravelPartyAdvanceContext context = null;
+        lock (operationSyncRoot)
+        {
+            if (!HasAdmittedSelectedDailyExecution
+                || AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+                || selectedP12TravelPartyAdvanceContext != null)
+            {
+                FaultSelectedTravelPartyAdvance(protocol);
+                return false;
+            }
+
+            try
+            {
+                if (!protocol.TryValidateOwnerSections(graph, sectionIds)
+                    || !protocol.TryValidateUnchangedSections(sectionIds)
+                    || !protocol.TryEnterOperation(out protocolScope)
+                    || protocolScope == null)
+                {
+                    FaultSelectedTravelPartyAdvance(protocol);
+                    IDisposable rejectedScope = protocolScope;
+                    protocolScope = null;
+                    try { rejectedScope?.Dispose(); }
+                    catch { FaultSelectedTravelPartyAdvance(protocol); }
+                    return false;
+                }
+
+                context = new SelectedP12TravelPartyAdvanceContext(
+                    graph, protocol, sectionIds, protocolScope);
+                selectedP12TravelPartyAdvanceContext = context;
+            }
+            catch
+            {
+                FaultSelectedTravelPartyAdvance(protocol);
+                IDisposable failedScope = protocolScope;
+                protocolScope = null;
+                try { failedScope?.Dispose(); }
+                catch { FaultSelectedTravelPartyAdvance(protocol); }
+                return false;
+            }
+        }
+
+        try
+        {
+            return operation();
+        }
+        finally
+        {
+            ExitSelectedP12TravelPartyAdvance(context);
+        }
+    }
+
+    /// <summary>
+    /// Routes selected owner P12 admission through the active Core party
+    /// operation. A false handled flag means this session has no such scope,
+    /// allowing unrelated or legacy operations to use their existing path.
+    /// </summary>
+    internal bool TryCanCommitSelectedP12TravelPartyMutation(
+        IEnumerable<string> sectionIds,
+        out bool handled)
+    {
+        lock (operationSyncRoot)
+        {
+            SelectedP12TravelPartyAdvanceContext context = selectedP12TravelPartyAdvanceContext;
+            handled = context != null;
+            if (context == null) return true;
+            if (!IsCurrentSelectedTravelPartyAdvanceContext(context)
+                || !TryGetRequestedTravelPartySections(context, sectionIds, out HashSet<string> requested))
+            {
+                FaultSelectedTravelPartyAdvance(context.Protocol);
+                return false;
+            }
+
+            requested.RemoveWhere(context.ChangedSectionIds.Contains);
+            if (requested.Count == 0) return true;
+            string[] ordered = ToOrderedSectionArray(requested);
+            if (context.Protocol.TryValidateUnchangedSections(ordered)) return true;
+            FaultSelectedTravelPartyAdvance(context.Protocol);
+            return false;
+        }
+    }
+
+    internal bool TryRecordSelectedP12TravelPartyMutation(
+        IEnumerable<string> sectionIds,
+        out bool handled)
+    {
+        lock (operationSyncRoot)
+        {
+            SelectedP12TravelPartyAdvanceContext context = selectedP12TravelPartyAdvanceContext;
+            handled = context != null;
+            if (context == null) return true;
+            if (!IsCurrentSelectedTravelPartyAdvanceContext(context)
+                || !TryGetRequestedTravelPartySections(context, sectionIds, out HashSet<string> changed))
+            {
+                FaultSelectedTravelPartyAdvance(context.Protocol);
+                return false;
+            }
+
+            context.ChangedSectionIds.UnionWith(changed);
+            return true;
+        }
+    }
+
+    private bool IsCurrentSelectedTravelPartyAdvanceContext(
+        SelectedP12TravelPartyAdvanceContext context) =>
+        context != null
+        && ReferenceEquals(selectedP12TravelPartyAdvanceContext, context)
+        && context.IsOwnedByCurrentThread()
+        && HasAdmittedSelectedDailyExecution
+        && AdmissionContext != null
+        && AdmissionContext.IsOwnedByCurrentThread()
+        && ReferenceEquals(selectedRuntimeOwnerGraph, context.Graph);
+
+    private static bool TryGetRequestedTravelPartySections(
+        SelectedP12TravelPartyAdvanceContext context,
+        IEnumerable<string> sectionIds,
+        out HashSet<string> requested)
+    {
+        requested = new HashSet<string>(StringComparer.Ordinal);
+        if (sectionIds == null) return false;
+        try
+        {
+            foreach (string sectionId in sectionIds)
+            {
+                if (string.IsNullOrWhiteSpace(sectionId)
+                    || !requested.Add(sectionId)
+                    || !context.AllowedSectionIds.Contains(sectionId))
+                    return false;
+            }
+        }
+        catch { return false; }
+        return true;
+    }
+
+    private static string[] ToOrderedSectionArray(HashSet<string> sectionIds)
+    {
+        string[] ordered = new string[sectionIds.Count];
+        sectionIds.CopyTo(ordered);
+        Array.Sort(ordered, StringComparer.Ordinal);
+        return ordered;
+    }
+
+    private IReadOnlyList<string> CreateSelectedTravelPartyAdvanceSectionIds(
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph == null || graph.TravelParties == null)
+            throw new InvalidOperationException("The selected TravelParty store is not part of the Core owner graph.");
+        if (selectedRuntimeActorRoster == null)
+            throw new InvalidOperationException("The Core-owned ordered runtime roster is not bound.");
+
+        List<string> sectionIds = new List<string>
+        {
+            TravelPartyCensusProvider.SectionId
+        };
+        List<DailyV1CityRuntimeOwners> cities = new List<DailyV1CityRuntimeOwners>(graph.Cities);
+        cities.Sort((left, right) => StringComparer.Ordinal.Compare(left.RuntimeId, right.RuntimeId));
+        foreach (DailyV1CityRuntimeOwners city in cities)
+        {
+            if (city?.NpcPresence == null)
+                throw new InvalidOperationException("The selected City presence owner is missing from the Core graph.");
+            sectionIds.Add(DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId));
+        }
+
+        Dictionary<string, DailyV1NpcRuntimeOwners> selectedNpcsByRuntimeId =
+            new Dictionary<string, DailyV1NpcRuntimeOwners>(StringComparer.Ordinal);
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || npc.Travel == null || npc.SpatialKnowledge == null
+                || !selectedNpcsByRuntimeId.TryAdd(npc.RuntimeId, npc))
+                throw new InvalidOperationException("The selected NPC travel and spatial owners are incomplete.");
+        }
+
+        // The selected owner graph is intentionally a subset of the live host
+        // roster when compatibility NPCs are present. The Core-bound ordered
+        // roster carries the exact full census identities, including those
+        // unselected runtime members; P12 admission must cover every live
+        // travel and spatial section touched by the batch.
+        HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> graphRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1ActorTurnRosterProjection member in selectedRuntimeActorRoster)
+        {
+            if (member == null) continue;
+            if (string.IsNullOrWhiteSpace(member.RuntimeId) || !runtimeIds.Add(member.RuntimeId))
+                throw new InvalidOperationException("The Core-owned runtime roster contains an invalid or duplicate NPC identity.");
+
+            if (selectedNpcsByRuntimeId.TryGetValue(member.RuntimeId, out DailyV1NpcRuntimeOwners selectedNpc))
+            {
+                if (!graphRuntimeIds.Add(member.RuntimeId)
+                    || selectedNpc.Travel == null || selectedNpc.SpatialKnowledge == null)
+                    throw new InvalidOperationException("The selected NPC owner graph does not match its Core runtime roster identity.");
+            }
+
+            sectionIds.Add(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(12, member.RuntimeId));
+            sectionIds.Add(DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + member.RuntimeId);
+            sectionIds.Add(DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + member.RuntimeId);
+        }
+        if (graphRuntimeIds.Count != selectedNpcsByRuntimeId.Count)
+            throw new InvalidOperationException("The Core runtime roster omits a selected NPC owner graph identity.");
+
+        if (selectedRuntimeIdAllocator == null || selectedRecordSequence == null)
+            throw new InvalidOperationException("The selected allocator or record-sequence owner is not bound.");
+        sectionIds.Add(RuntimeIdAllocatorCensusProvider.EventsSectionId);
+        sectionIds.Add(SimulationRecordSequenceCensusProvider.SectionId);
+        if (new HashSet<string>(sectionIds, StringComparer.Ordinal).Count != sectionIds.Count)
+            throw new InvalidOperationException("The selected TravelParty P12 section inventory contains duplicate identities.");
+        return Array.AsReadOnly(sectionIds.ToArray());
+    }
+
+    private void ExitSelectedP12TravelPartyAdvance(
+        SelectedP12TravelPartyAdvanceContext context)
+    {
+        lock (operationSyncRoot)
+        {
+            try
+            {
+                if (!IsCurrentSelectedTravelPartyAdvanceContext(context))
+                    FaultSelectedTravelPartyAdvance(context?.Protocol);
+                else if (context.ChangedSectionIds.Count != 0
+                    && !context.Protocol.NotifyCommittedMutations(
+                        ToOrderedSectionArray(context.ChangedSectionIds)))
+                    FaultSelectedTravelPartyAdvance(context.Protocol);
+            }
+            catch { FaultSelectedTravelPartyAdvance(context?.Protocol); }
+            finally
+            {
+                if (ReferenceEquals(selectedP12TravelPartyAdvanceContext, context))
+                    selectedP12TravelPartyAdvanceContext = null;
+                IDisposable protocolScope = context?.ProtocolScope;
+                if (context != null) context.ProtocolScope = null;
+                try { protocolScope?.Dispose(); }
+                catch { FaultSelectedTravelPartyAdvance(context?.Protocol); }
+            }
+        }
+    }
+
+    private static void FaultSelectedTravelPartyAdvance(
+        IDailyV1SelectedP12TravelPartyAdvanceProtocol protocol)
+    {
+        try { protocol?.FaultClosed(); }
+        catch { }
+    }
+
+    /// <summary>
     /// Binds the host's registered census protocol to this exact admitted Core
     /// execution session. The execution state constructs and retains the one
     /// coordinator used by both daily reservations and selected owner writes.
@@ -783,6 +1082,14 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     internal IReadOnlyList<DailyV1ActorTurnRosterProjection> SelectedRuntimeActorRoster =>
         selectedRuntimeActorRoster;
     internal bool SelectedRuntimeExecutionRootsBound => selectedRuntimeExecutionRootsBound;
+    internal bool HasSelectedP12TravelPartyAdvanceInProgress
+    {
+        get
+        {
+            lock (operationSyncRoot)
+                return selectedP12TravelPartyAdvanceContext != null;
+        }
+    }
     /// <summary>
     /// Whether this admitted state has the complete Core owner/configuration
     /// roots needed by the selected Daily-v1 execution path. Path selection is

@@ -5368,6 +5368,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         }
         if (requested.Count == 0) return true;
 
+        bool coreHandled = dailyExecutionBoundary.TryCanCommitSelectedP12TravelPartyMutation(
+            requested, out bool handledByCorePartyAdvance);
+        if (handledByCorePartyAdvance)
+        {
+            if (!coreHandled) FaultRuntimeAdmission();
+            return coreHandled;
+        }
+
         P12TravelPartyAdvanceOperationContext travelContext =
             activeP12TravelPartyAdvanceOperationContext;
         P12MerchantOperationContext merchantContext = activeP12MerchantOperationContext;
@@ -5468,6 +5476,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
         if (changed.Count == 0) return true;
+
+        bool coreRecorded = dailyExecutionBoundary.TryRecordSelectedP12TravelPartyMutation(
+            changed, out bool recordedByCorePartyAdvance);
+        if (recordedByCorePartyAdvance)
+        {
+            if (!coreRecorded) FaultRuntimeAdmission();
+            return coreRecorded;
+        }
 
         P12TravelPartyAdvanceOperationContext travelContext =
             activeP12TravelPartyAdvanceOperationContext;
@@ -5662,6 +5678,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             || activeNpcMembershipCensusContext != null
             || activeP12MerchantOperationContext != null
             || activeP12TravelPartyAdvanceOperationContext != null
+            || dailyExecutionBoundary.HasSelectedP12TravelPartyAdvanceInProgress
             || activeP12SoloTravelStartOperationContext != null)
         {
             FaultRuntimeAdmission();
@@ -5880,6 +5897,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         if (!IsRuntimeAdmissionOwnerThreadCurrent()
             || npcRosterCensusProtocol == null
             || activeP12TravelPartyAdvanceOperationContext != null
+            || dailyExecutionBoundary.HasSelectedP12TravelPartyAdvanceInProgress
             || activeP12MerchantOperationContext != null
             || travelPartyCensusProvider == null
             || travelPartyStoreMutationBinding == null
@@ -6468,6 +6486,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         }
 
         bool hasReservedBatchEpoch = activeP12TravelPartyAdvanceOperationContext != null
+            || dailyExecutionBoundary.HasSelectedP12TravelPartyAdvanceInProgress
             || activeP12MerchantOperationContext != null
             || activeP12SoloTravelStartOperationContext != null;
         if (!hasReservedBatchEpoch
@@ -6550,6 +6569,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         }
 
         bool hasReservedBatchEpoch = activeP12TravelPartyAdvanceOperationContext != null
+            || dailyExecutionBoundary.HasSelectedP12TravelPartyAdvanceInProgress
             || activeP12MerchantOperationContext != null
             || activeP12SoloTravelStartOperationContext != null;
         if (!hasReservedBatchEpoch
@@ -10390,6 +10410,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         return activeNpcMembershipCensusContext != null
             || activeP12MerchantOperationContext != null
             || activeP12TravelPartyAdvanceOperationContext != null
+            || dailyExecutionBoundary.HasSelectedP12TravelPartyAdvanceInProgress
             || activeP12SoloTravelStartOperationContext != null
             || activeP12TravelPartyStartOperationContext != null;
     }
