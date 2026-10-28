@@ -461,8 +461,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         => CreateCoreBoundCityAndP12FSectionVector(session);
 
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundP12FSectionVectorWithoutCity(
-        DailyV1ActiveRuntimeSession session,
-        bool includeBoundP8OwnerWitnesses = true)
+        DailyV1ActiveRuntimeSession session)
     {
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
         PoliticalKnowledgeStore politicalKnowledge =
@@ -480,9 +479,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             new TravelPartyCensusProvider(graph.TravelParties).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus());
-        return includeBoundP8OwnerWitnesses
-            ? ReplaceP8CensusOwnerVector(graph, sections)
-            : sections;
+        return ReplaceP8CensusOwnerVector(graph, sections);
     }
 
     private static PoliticalKnowledgeStore CreateAndBindCorePoliticalKnowledgeStore(
@@ -503,11 +500,9 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundCityAndP12FSectionVector(
-        DailyV1ActiveRuntimeSession session,
-        bool includeBoundP8OwnerWitnesses = true)
+        DailyV1ActiveRuntimeSession session)
     {
-        OwnerSectionCensusSnapshot[] existing =
-            CreateCoreBoundP12FSectionVectorWithoutCity(session, includeBoundP8OwnerWitnesses);
+        OwnerSectionCensusSnapshot[] existing = CreateCoreBoundP12FSectionVectorWithoutCity(session);
         return ReplaceCityOwnerSectionVector(session, existing);
     }
 
@@ -948,18 +943,19 @@ public sealed class DailyV1ApplicationSessionGateTests
     [Test]
     public void SaveAdmissionRejectsCoreCityLocalMaterialFlowState()
     {
-        DailyV1EffectiveDefinitions definitions = CreateP14LocalFlowDefinitions();
+        DailyV1EffectiveDefinitions definitions = CreateP14LocalFlowDefinitions(
+            includeSpatialAnchor: false);
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(
             onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
             out ApplicationAdvanceBoundary boundary, definitions);
         DailyV1CityRuntimeOwners city = session.OwnerGraph.Cities[0];
         Assert.That(city.HasLocalDailyMaterialFlow, Is.True);
+        Assert.That(session.OwnerGraph.LegacySpatialAnchors.Count, Is.Zero,
+            "This excluded local-flow fixture has no spatial anchor, so the selected P8 owners remain exact-empty.");
 
-        // Daily-v1 explicitly admits the P8 anchor/position sections as exact-empty.
-        // This fixture adds P14 local-flow state outside that profile, so retain the
-        // admitted empty P8 rows and let the selected City capture reject the P14 state.
-        OwnerSectionCensusSnapshot[] sections =
-            CreateCoreBoundCityAndP12FSectionVector(session, includeBoundP8OwnerWitnesses: false);
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCityAndP12FSectionVector(session);
+        Assert.That(session.OwnerGraph.MatchesSelectedP8CensusOwnerWitnesses(sections), Is.True,
+            "The rejection must exercise the P14 City capture rule after exact P8 witness validation.");
         InstallCompletedBoundaryToken(session, boundary, sections);
 
         Assert.That(application.TryBeginContinuationSaveOperation(
@@ -983,13 +979,15 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(prepared.TryCommit(out _), Is.True);
     }
 
-    private static DailyV1EffectiveDefinitions CreateP14LocalFlowDefinitions()
+    private static DailyV1EffectiveDefinitions CreateP14LocalFlowDefinitions(
+        bool includeSpatialAnchor = true)
     {
         DailyV1EffectiveDefinitions baseline = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1CityDefinition baselineCity = baseline.Cities["CAMPO_VERDE"];
         DailyV1CityData city = new DailyV1CityData(
             baselineCity.Values.id, baselineCity.Values.cityName,
-            "settlement/p12-exclusion", baseline.Configuration.authoredLocationId,
+            "settlement/p12-exclusion",
+            includeSpatialAnchor ? baseline.Configuration.authoredLocationId : string.Empty,
             "store/p12-exclusion",
             new DailyV1EnumValue((int)LocalMaterialFlowProfile.ExogenousDaily, "ExogenousDaily"),
             baselineCity.Values.initialPopulation, baselineCity.Values.marketLiquidity,
