@@ -21,9 +21,11 @@ internal static partial class P12GDailyV1RestoreCoordinator
             this.stagedEOwners = stagedEOwners ?? throw new ArgumentNullException(nameof(stagedEOwners));
         }
 
-        public bool TryValidatePersonNpcGenealogyBindings(out string diagnostic) =>
-            P12GDailyV1RestoreCoordinator.TryValidatePersonNpcGenealogyBindings(
-                candidate.Runtime, out diagnostic);
+        public bool TryValidatePersonNpcProjectionBindings(
+            PersonStore expectedPersonStore,
+            out string diagnostic) =>
+            P12GDailyV1RestoreCoordinator.TryValidatePersonNpcProjectionBindings(
+                candidate.Runtime, expectedPersonStore, out diagnostic);
 
         public bool TryCaptureUnadmittedRestoredDailyOwnerVector(
             out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
@@ -80,16 +82,24 @@ internal static partial class P12GDailyV1RestoreCoordinator
         public bool TryBindRestoredCandidateMutationGuard(out string diagnostic) =>
             candidate.Runtime.TryBindRestoredCandidateMutationGuard(out diagnostic);
 
-        public bool TryAdmitRestoredDailyBoundary(
+        public bool TryPrepareRestoredDailyBoundaryAdmission(
             WorldId expectedWorldId,
             long preservedAbsoluteDay,
             long preservedCompletedCoreSequence,
             IReadOnlyList<OwnerSectionCensusSnapshot> validatedOwnerSections,
             long validatedMutationEpoch,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> currentOwnerSections,
+            out long currentMutationEpoch,
             out DailyCaptureEligibilityFailure failure) =>
-            candidate.Runtime.TryAdmitRestoredDailyBoundary(
+            candidate.Runtime.TryPrepareRestoredDailyBoundaryAdmission(
                 expectedWorldId, preservedAbsoluteDay, preservedCompletedCoreSequence,
-                validatedOwnerSections, validatedMutationEpoch, out failure);
+                validatedOwnerSections, validatedMutationEpoch,
+                out currentOwnerSections, out currentMutationEpoch, out failure);
+
+        public bool TryPublishRestoredDailyBoundaryAdmission(
+            DailyCaptureEligibilityToken token,
+            out DailyCaptureEligibilityFailure failure) =>
+            candidate.Runtime.TryPublishRestoredDailyBoundaryAdmission(token, out failure);
 
         public bool HasValidRestoredDailyBoundaryAdmission() =>
             candidate.Runtime.HasValidRestoredDailyBoundaryAdmission();

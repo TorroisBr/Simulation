@@ -1104,17 +1104,17 @@ internal static partial class P12GDailyV1RestoreCoordinator
         return true;
     }
 
-    private static bool TryValidatePersonNpcGenealogyBindings(
+    private static bool TryValidatePersonNpcProjectionBindings(
         SimulationRuntime runtime,
+        PersonStore expectedPersonStore,
         out string diagnostic)
     {
         diagnostic = null;
         PersonStore people = runtime?.PersonStore;
         IReadOnlyList<NpcRuntime> npcs = runtime?.NpcRuntimes;
-        IReadOnlyList<ParentageRecord> genealogy = runtime?.GenealogyRecords;
-        if (people == null || npcs == null || genealogy == null)
+        if (people == null || !ReferenceEquals(people, expectedPersonStore) || npcs == null)
         {
-            diagnostic = "The private target's Person/NPC/Genealogy graph is unavailable.";
+            diagnostic = "The private target's Person/NPC projections do not use the exact Core PersonStore.";
             return false;
         }
 
@@ -1176,11 +1176,29 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
         }
 
+        return true;
+    }
+
+    private static bool TryValidatePersonNpcGenealogyBindings(
+        SimulationRuntime runtime,
+        out string diagnostic)
+    {
+        PersonStore people = runtime?.PersonStore;
+        if (!TryValidatePersonNpcProjectionBindings(runtime, people, out diagnostic))
+            return false;
+
+        IReadOnlyList<ParentageRecord> genealogy = runtime?.GenealogyRecords;
+        if (genealogy == null)
+        {
+            diagnostic = "The private target's Genealogy owner is unavailable.";
+            return false;
+        }
+
         foreach (ParentageRecord edge in genealogy)
         {
             if (edge?.ParentId == null || edge.ChildId == null
-                || !personsById.ContainsKey(edge.ParentId.Value)
-                || !personsById.ContainsKey(edge.ChildId.Value))
+                || !people.TryGet(edge.ParentId, out _)
+                || !people.TryGet(edge.ChildId, out _))
             {
                 diagnostic = "A Genealogy edge endpoint does not resolve to a Person in the private target.";
                 return false;

@@ -10527,6 +10527,51 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         long validatedTargetMutationEpoch,
         out DailyCaptureEligibilityFailure failure)
     {
+        if (!TryPrepareRestoredDailyBoundaryAdmission(
+                expectedWorldId, preservedAbsoluteDay, preservedCompletedCoreSequence,
+                validatedTargetOwnerSections, validatedTargetMutationEpoch,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> currentOwnerSections,
+                out long currentMutationEpoch, out failure))
+            return false;
+
+        IReadOnlyList<OwnerSectionCensusSnapshot> tokenOwnerSections =
+            validatedTargetOwnerSections ?? currentOwnerSections;
+        if (!dailyExecutionBoundary.TryCreateRestoredContinuationToken(
+                runtimeAdmissionContext,
+                configuration,
+                calendar,
+                compositionProfile,
+                expectedWorldId,
+                preservedAbsoluteDay,
+                preservedCompletedCoreSequence,
+                currentMutationEpoch,
+                tokenOwnerSections,
+                out DailyCaptureEligibilityToken token))
+        {
+            failure = DailyCaptureEligibilityFailure.StaleToken;
+            return false;
+        }
+
+        return TryPublishRestoredDailyBoundaryAdmission(token, out failure);
+    }
+
+    /// <summary>
+    /// Performs host-specific quiescence and runtime-readiness checks without
+    /// creating a Core capture token. Core compares this final owner vector,
+    /// then installs the restored continuation token itself.
+    /// </summary>
+    internal bool TryPrepareRestoredDailyBoundaryAdmission(
+        WorldId expectedWorldId,
+        long preservedAbsoluteDay,
+        long preservedCompletedCoreSequence,
+        IReadOnlyList<OwnerSectionCensusSnapshot> validatedTargetOwnerSections,
+        long validatedTargetMutationEpoch,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> currentOwnerSections,
+        out long currentMutationEpoch,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        currentOwnerSections = null;
+        currentMutationEpoch = -1L;
         failure = DailyCaptureEligibilityFailure.None;
         if (!IsDailyCaptureProfile)
         {
@@ -10624,17 +10669,46 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        if (!dailyExecutionBoundary.TryCreateRestoredContinuationToken(
-                runtimeAdmissionContext,
-                configuration,
-                calendar,
-                compositionProfile,
-                expectedWorldId,
-                preservedAbsoluteDay,
-                preservedCompletedCoreSequence,
-                mutationEpoch,
-                validatedTargetOwnerSections ?? ownerSections,
-                out _))
+        currentOwnerSections = ownerSections;
+        currentMutationEpoch = mutationEpoch;
+        return true;
+    }
+
+    /// <summary>Publishes the host's read boundary after Core installs its exact token.</summary>
+    internal bool TryPublishRestoredDailyBoundaryAdmission(
+        DailyCaptureEligibilityToken token,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        failure = DailyCaptureEligibilityFailure.None;
+        if (!IsDailyCaptureProfile)
+        {
+            failure = DailyCaptureEligibilityFailure.UnsupportedProfile;
+            return false;
+        }
+        if (!IsRuntimeAdmissionOwnerThreadCurrent())
+        {
+            failure = DailyCaptureEligibilityFailure.WrongOwnerThread;
+            return false;
+        }
+        if (advanceLeaseHeld || HasActiveDailyOperationContext())
+        {
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+        if (!coreMutationGuardAuthoritiesBound || !mutationGuard.CanMutate
+            || npcRosterCensusProtocol == null || factualReadCoordinator == null
+            || configuration == null || calendar == null)
+        {
+            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+            return false;
+        }
+        if (token == null || !ReferenceEquals(currentDailyCaptureToken, token)
+            || token.BoundaryProvenance != DailyCaptureBoundaryProvenance.RestoredContinuation
+            || !ReferenceEquals(token.WorldId, WorldId)
+            || token.AbsoluteDay != initialAbsoluteDay
+            || token.CompletedCoreSequence != completedDailyCoreSequence
+            || token.MutationEpoch < 0L
+            || factualReadWorldPublished)
         {
             failure = DailyCaptureEligibilityFailure.StaleToken;
             return false;

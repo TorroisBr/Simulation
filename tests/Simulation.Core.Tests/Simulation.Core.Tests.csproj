@@ -68,6 +68,7 @@
     <Compile Include="DailyV1SelectedRuntimeOwnerGraphTests.cs" />
     <Compile Include="DailyV1P12RestoreStageTransactionTests.cs" />
     <Compile Include="DailyV1RestoredOwnerVectorContractTests.cs" />
+    <Compile Include="DailyV1RestoredPersonGraphContractTests.cs" />
     <Compile Include="DailyV1DecisionRecordsTests.cs" />
     <Compile Include="DailyV1ActorChoiceStoreTests.cs" />
     <Compile Include="ScheduledDirectiveStoreTests.cs" />

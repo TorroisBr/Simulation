@@ -61,7 +61,9 @@ internal enum DailyV1P12RestoredCandidateCertificationStep
 /// </summary>
 internal interface IDailyV1RestoredCandidateCertificationHost
 {
-    bool TryValidatePersonNpcGenealogyBindings(out string diagnostic);
+    bool TryValidatePersonNpcProjectionBindings(
+        PersonStore expectedPersonStore,
+        out string diagnostic);
     bool TryCaptureUnadmittedRestoredDailyOwnerVector(
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
@@ -77,12 +79,17 @@ internal interface IDailyV1RestoredCandidateCertificationHost
     bool TryAssessNpcRosterCensus(out string failure);
     bool TryValidateTravelPartyBindings(out string diagnostic);
     bool TryBindRestoredCandidateMutationGuard(out string diagnostic);
-    bool TryAdmitRestoredDailyBoundary(
+    bool TryPrepareRestoredDailyBoundaryAdmission(
         WorldId expectedWorldId,
         long preservedAbsoluteDay,
         long preservedCompletedCoreSequence,
         IReadOnlyList<OwnerSectionCensusSnapshot> validatedOwnerSections,
         long validatedMutationEpoch,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> currentOwnerSections,
+        out long currentMutationEpoch,
+        out DailyCaptureEligibilityFailure failure);
+    bool TryPublishRestoredDailyBoundaryAdmission(
+        DailyCaptureEligibilityToken token,
         out DailyCaptureEligibilityFailure failure);
     bool HasValidRestoredDailyBoundaryAdmission();
     bool IsHealthyDailyOwnerThreadBoundary();
@@ -2045,10 +2052,11 @@ internal sealed class DailyV1Application
             || !state.IsHealthyDailyOwnerThreadBoundary())
             return false;
 
-        if (!host.TryValidatePersonNpcGenealogyBindings(out diagnostic))
+        if (!TryValidateRestoredCorePersonGraph(ownerGraph, candidate, out diagnostic)
+            || !host.TryValidatePersonNpcProjectionBindings(ownerGraph.D.Persons, out diagnostic))
         {
             failure = DailyV1P12RestoredCandidateCertificationFailure.PersonNpcBindings;
-            diagnostic ??= "The detached candidate has invalid Person/NPC/Genealogy bindings.";
+            diagnostic ??= "The detached candidate has invalid Core owner or Unity projection Person/NPC/Genealogy bindings.";
             return false;
         }
         stageObserver?.Invoke(
@@ -2153,16 +2161,57 @@ internal sealed class DailyV1Application
         stageObserver?.Invoke(
             DailyV1P12RestoredCandidateCertificationStep.TargetOwnerVectorRecaptured);
 
-        if (!host.TryAdmitRestoredDailyBoundary(
+        if (!host.TryPrepareRestoredDailyBoundaryAdmission(
                 ownerGraph.Roots.WorldIdentity, image.Header.Day, image.Header.Sequence,
-                recapturedSections, recapturedEpoch, out DailyCaptureEligibilityFailure admissionFailure))
+                recapturedSections, recapturedEpoch,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> admissionSections,
+                out long admissionEpoch,
+                out DailyCaptureEligibilityFailure admissionFailure))
         {
             failure = DailyV1P12RestoredCandidateCertificationFailure.BoundaryAdmission;
-            diagnostic = "The detached target boundary admission failed: " + admissionFailure + ".";
+            diagnostic = "The detached target boundary admission preparation failed: "
+                + admissionFailure + ".";
             return false;
         }
 
-        DailyCaptureEligibilityToken admittedToken = state.CurrentCaptureToken;
+        if (admissionSections == null
+            || !DailyV1RestoredOwnerVectorContract.TryMatchCurrentTargetSnapshot(
+                recapturedSections, recapturedEpoch, admissionSections, admissionEpoch,
+                out _, out diagnostic))
+        {
+            failure = DailyV1P12RestoredCandidateCertificationFailure.BoundaryAdmission;
+            diagnostic = string.IsNullOrWhiteSpace(diagnostic)
+                ? "The host did not return a valid owner vector for restored-boundary admission."
+                : "The detached target owner vector changed during admission preparation: " + diagnostic;
+            return false;
+        }
+
+        if (!state.TryCreateRestoredContinuationToken(
+                state.AdmissionContext,
+                state.ConfigurationIdentity,
+                state.CalendarIdentity,
+                state.CompositionProfile,
+                ownerGraph.Roots.WorldIdentity,
+                image.Header.Day,
+                image.Header.Sequence,
+                admissionEpoch,
+                admissionSections,
+                out DailyCaptureEligibilityToken admittedToken))
+        {
+            failure = DailyV1P12RestoredCandidateCertificationFailure.BoundaryAdmission;
+            diagnostic = "The Core execution state rejected exact restored-boundary token publication.";
+            return false;
+        }
+
+        if (!host.TryPublishRestoredDailyBoundaryAdmission(admittedToken,
+                out DailyCaptureEligibilityFailure publishFailure))
+        {
+            failure = DailyV1P12RestoredCandidateCertificationFailure.BoundaryAdmission;
+            diagnostic = "The host could not publish the restored boundary after Core token admission: "
+                + publishFailure + ".";
+            return false;
+        }
+
         if (!host.HasValidRestoredDailyBoundaryAdmission()
             || !host.IsHealthyDailyOwnerThreadBoundary()
             || !state.IsHealthyDailyOwnerThreadBoundary()
@@ -2172,8 +2221,8 @@ internal sealed class DailyV1Application
             || !ReferenceEquals(admittedToken.WorldId, ownerGraph.Roots.WorldIdentity)
             || admittedToken.AbsoluteDay != image.Header.Day
             || admittedToken.CompletedCoreSequence != image.Header.Sequence
-            || admittedToken.MutationEpoch != recapturedEpoch
-            || !ReferenceEquals(admittedToken.OwnerSections, recapturedSections))
+            || admittedToken.MutationEpoch != admissionEpoch
+            || !ReferenceEquals(admittedToken.OwnerSections, admissionSections))
         {
             failure = DailyV1P12RestoredCandidateCertificationFailure.BoundaryAdmission;
             diagnostic = "The restored target did not retain its exact healthy admitted completed boundary.";
@@ -2184,6 +2233,37 @@ internal sealed class DailyV1Application
         failure = DailyV1P12RestoredCandidateCertificationFailure.None;
         diagnostic = null;
         return true;
+    }
+
+    private static bool TryValidateRestoredCorePersonGraph(
+        DailyV1P12OwnerGraphRestoreStage ownerGraph,
+        DailyV1ActiveRuntimeSession candidate,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = candidate?.OwnerGraph;
+        DailyV1P12DSelectedCoreOwnerStage stagedSelected = ownerGraph?.D?.SelectedOwners;
+        if (graph == null || stagedSelected == null
+            || !ReferenceEquals(graph.PersonStore, ownerGraph.D.Persons)
+            || !graph.MatchesExactOwnerInstances(stagedSelected.Cities, stagedSelected.Npcs))
+        {
+            diagnostic = "The published Core session candidate does not retain the exact staged P12-D Person, City, and NPC owners.";
+            return false;
+        }
+
+        List<string> npcRuntimeIds = new List<string>(graph.Npcs.Count);
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            if (npc == null)
+            {
+                diagnostic = "The restored Core owner graph contains a null selected NPC owner.";
+                return false;
+            }
+            npcRuntimeIds.Add(npc.RuntimeId);
+        }
+
+        return DailyV1RestoredPersonGraphContract.TryValidate(
+            ownerGraph.D.Persons, ownerGraph.D.Genealogy, npcRuntimeIds, out diagnostic);
     }
 
     /// <summary>
