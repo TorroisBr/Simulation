@@ -1309,8 +1309,7 @@ internal static class DailyV1ActorChoiceExecutionStage
                                 ? coreRoots.RandomSource
                                 : coreRoots?.RandomSource ?? coreBoundary.RandomSource,
                             absoluteDay,
-                            coreBoundary, projectionlessActionExecution: false,
-                            out _, out resultStatus, out _))
+                            coreBoundary, out _, out resultStatus, out _))
                         throw new InvalidOperationException(
                             "The selected actor-choice action could not execute through its admitted Core owner graph.");
                 }
