@@ -467,6 +467,7 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
         public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor) { }
 
         public IAuthoritativeRandomSource RandomSource => random;
+        public bool CanExecuteWithoutActionProjection => false;
         public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) =>
             graph.ContainsExactNpcOwner(actor);
         public void LogSkippedDirective(ScheduledDirective directive, string reason) { }

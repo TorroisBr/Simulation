@@ -75,12 +75,16 @@ internal interface IDailyV1SelectedActorChoiceExecutionContext
 /// Optional selected-profile ports for Core to own the complete autonomous
 /// action sequence. The host supplies effectful owner-operation boundaries,
 /// existing P12 admission adapters, and presentation publication. A Unity
-/// host validates its action projection when it creates its dispatch port;
-/// projection identity is not part of Core's execution contract.
+/// host validates its action projection when it creates its dispatch port.
+/// A projectionless host may return true with a null projection boundary;
+/// Core then commits and dispatches the exact owner slot without constructing
+/// a host-specific action object. Returning false retains the legacy
+/// unsupported-action behavior.
 /// </summary>
 internal interface IDailyV1SelectedActorActionExecutionBoundary
 {
     IAuthoritativeRandomSource RandomSource { get; }
+    bool CanExecuteWithoutActionProjection { get; }
     bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor);
     void LogSkippedDirective(ScheduledDirective directive, string reason);
 

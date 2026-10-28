@@ -1310,6 +1310,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 Func<bool> operation) => operation != null && operation();
 
             public IAuthoritativeRandomSource RandomSource => owner.randomSource;
+            public bool CanExecuteWithoutActionProjection => false;
             public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) =>
                 selectedActionExecution ?? owner.UseSelectedActionExecution;
             public void LogSkippedDirective(ScheduledDirective directive, string reason) { }
