@@ -1014,6 +1014,53 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
+    /// Stages selected P12-D owners directly from detached image rows under the
+    /// same bootstrap or exact-session replacement authority as the P12-C roots.
+    /// Core owns D/F row pairing, hydration-input conversion, definition binding,
+    /// and selected City/NPC owner creation before host projections are built.
+    /// </summary>
+    internal bool TryStageRestoredP12DOwnersFromImageRows(
+        P12CStagedCoreContinuationRoot stagedRoots,
+        DailyV1EffectiveDefinitions definitions,
+        IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cityInputs,
+        IReadOnlyList<P12DNpcDRow> npcDRows,
+        IReadOnlyList<P12DNpcFRow> npcFRows,
+        SpatialNetworkOwner spatialNetwork,
+        IEnumerable<string> travelPartyIds,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out DailyV1P12DSelectedCoreOwnerStage stagedOwners,
+        out P12AResult result)
+    {
+        stagedOwners = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+            return false;
+
+        if (stagedRoots == null || !stagedRoots.IsDetached || definitions == null
+            || cityInputs == null || npcDRows == null || npcFRows == null
+            || spatialNetwork == null || travelPartyIds == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        if (!DailyV1P12DSelectedCoreOwnerStager.TryCreateFromRows(
+                definitions, cityInputs, npcDRows, npcFRows, spatialNetwork, travelPartyIds,
+                out stagedOwners, out _)
+            || stagedOwners == null)
+        {
+            stagedOwners = null;
+            result = new P12AResult(
+                P12AResultCode.OwnerGraphRejected,
+                "p12d.selected-core-owners");
+            return false;
+        }
+
+        result = null;
+        return true;
+    }
+    /// <summary>
     /// Stages the selected Core-owned P12-E institution, property, political,
     /// and justice owners under the same bootstrap or exact-session
     /// replacement authority as the P12-C/D roots. Unity supplies only the

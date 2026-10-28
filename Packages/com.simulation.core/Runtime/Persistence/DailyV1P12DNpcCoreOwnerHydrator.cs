@@ -90,6 +90,39 @@ internal sealed class DailyV1P12DNpcCoreOwnerHydrationInput
         AdventureKnowledgeRevision = adventureKnowledgeRevision;
     }
 
+    internal static bool TryCreateFromRows(
+        P12DNpcDRow d,
+        P12DNpcFRow f,
+        out DailyV1P12DNpcCoreOwnerHydrationInput input)
+    {
+        input = null;
+        if (d == null || f == null
+            || !string.Equals(d.RuntimeId, f.RuntimeId, StringComparison.Ordinal)
+            || f.CommercialShareReceipts == null)
+            return false;
+
+        List<DailyV1CommercialKnowledgeShareReceipt> receipts =
+            new List<DailyV1CommercialKnowledgeShareReceipt>(f.CommercialShareReceipts.Count);
+        foreach (P12DNpcCommercialShareReceiptValue receipt in f.CommercialShareReceipts)
+            receipts.Add(receipt == null ? null : new DailyV1CommercialKnowledgeShareReceipt(
+                receipt.OperationIdentity, receipt.Fingerprint, receipt.BoundaryOccurrenceId,
+                receipt.SenderRuntimeId, receipt.SenderPersonId, receipt.ReceiverRuntimeId,
+                receipt.ReceiverPersonId, receipt.SourceSnapshotFingerprint,
+                receipt.AppliedObservationCount));
+
+        input = new DailyV1P12DNpcCoreOwnerHydrationInput(
+            d, f.Action, f.TravelDaysRemaining, f.TravelDaysTotal,
+            f.TravelRouteRuntimeId, f.TravelStartedToday, f.TravelOriginDecisionId,
+            f.ActiveTravelPartyId, f.TravelStateRevision, f.MerchantPlan, f.TravelPlan,
+            f.KnownLocationRuntimeIds, f.KnownRouteRuntimeIds, f.SpatialKnowledgeRevision,
+            f.CommercialMarkets, f.CommercialLiquidity, receipts,
+            f.CommercialKnowledgeRevision,
+            f.SiteObservations, f.SiteKnowledgeRevision,
+            f.OppositionObservations, f.NotableItemObservations,
+            f.CommonResourceObservations, f.AccessObservations,
+            f.AdventureKnowledgeRevision);
+        return true;
+    }
     private static IReadOnlyList<T> Copy<T>(IEnumerable<T> source) =>
         new List<T>(source ?? throw new ArgumentNullException(nameof(source))).AsReadOnly();
 }

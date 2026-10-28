@@ -2165,6 +2165,13 @@ public sealed class DailyV1ApplicationSessionGateTests
             "Without the exact replacement reservation, Core must reject before inspecting the image.");
         Assert.That(observedStages, Is.Zero);
 
+        Assert.That(application.TryStageRestoredP12DOwnersFromImageRows(
+                null, session.Definitions, null, null, null, null, null,
+                session, null, out DailyV1P12DSelectedCoreOwnerStage unreservedRowOwners,
+                out P12AResult unreservedRowResult), Is.False);
+        Assert.That(unreservedRowOwners, Is.Null);
+        Assert.That(unreservedRowResult.Code, Is.EqualTo(P12AResultCode.Busy),
+            "The row-based entry rejects before inspecting detached image rows without the exact source reservation.");
         Assert.That(application.TryBeginExclusiveOperation(session, out var replacement), Is.True);
         using (replacement)
         {
@@ -2195,6 +2202,13 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(unreservedOwners, Is.Null);
         Assert.That(unreservedResult.Code, Is.EqualTo(P12AResultCode.Busy),
             "P12-D must reject before inspecting owner inputs unless the exact source session is reserved.");
+        Assert.That(application.TryStageRestoredP12DOwnersFromImageRows(
+                null, session.Definitions, null, null, null, null, null,
+                session, null, out DailyV1P12DSelectedCoreOwnerStage unreservedRowOwners,
+                out P12AResult unreservedRowResult), Is.False);
+        Assert.That(unreservedRowOwners, Is.Null);
+        Assert.That(unreservedRowResult.Code, Is.EqualTo(P12AResultCode.Busy),
+            "The row-based entry rejects before inspecting detached image rows without the exact source reservation.");
 
         Assert.That(application.TryBeginExclusiveOperation(session, out var replacement), Is.True);
         using (replacement)
@@ -2206,6 +2220,13 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(reservedOwners, Is.Null);
             Assert.That(reservedResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue),
                 "With the exact replacement reservation, Core proceeds to validate the detached P12-C roots first.");
+            Assert.That(application.TryStageRestoredP12DOwnersFromImageRows(
+                    null, session.Definitions, null, null, null, null, null,
+                    session, replacement, out DailyV1P12DSelectedCoreOwnerStage reservedRowOwners,
+                    out P12AResult reservedRowResult), Is.False);
+            Assert.That(reservedRowOwners, Is.Null);
+            Assert.That(reservedRowResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue),
+                "After source authorization, the row-based path validates detached roots before row hydration.");
         }
 
         DailyV1Application initialApplication = new DailyV1Application();
@@ -2217,8 +2238,14 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(initialOwners, Is.Null);
         Assert.That(initialResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue),
             "Initial P12-D staging is admitted only on the unused app's captured bootstrap thread, then validates its roots.");
+        Assert.That(initialApplication.TryStageRestoredP12DOwnersFromImageRows(
+                null, session.Definitions, null, null, null, null, null,
+                null, null, out DailyV1P12DSelectedCoreOwnerStage initialRowOwners,
+                out P12AResult initialRowResult), Is.False);
+        Assert.That(initialRowOwners, Is.Null);
+        Assert.That(initialRowResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue),
+            "The row-based path is admitted only on the unused app's captured bootstrap thread.");
     }
-
     [Test]
     public void SelectedP12EOwnerStageRequiresTheSameRestoreAuthorityAsItsRoots()
     {

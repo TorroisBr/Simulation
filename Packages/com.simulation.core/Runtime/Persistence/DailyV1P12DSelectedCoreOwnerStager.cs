@@ -58,6 +58,40 @@ internal sealed class DailyV1P12DSelectedCoreOwnerStage
 /// </summary>
 internal static class DailyV1P12DSelectedCoreOwnerStager
 {
+    internal static bool TryCreateFromRows(
+        DailyV1EffectiveDefinitions definitions,
+        IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cityInputs,
+        IReadOnlyList<P12DNpcDRow> npcDRows,
+        IReadOnlyList<P12DNpcFRow> npcFRows,
+        SpatialNetworkOwner spatialNetwork,
+        IEnumerable<string> travelPartyIds,
+        out DailyV1P12DSelectedCoreOwnerStage stage,
+        out DailyV1P12DSelectedCoreOwnerStageFailure failure)
+    {
+        stage = null;
+        failure = DailyV1P12DSelectedCoreOwnerStageFailure.InvalidInput;
+        if (definitions == null || cityInputs == null || npcDRows == null || npcFRows == null
+            || npcDRows.Count != npcFRows.Count || spatialNetwork == null || travelPartyIds == null)
+            return false;
+
+        List<DailyV1P12DNpcCoreOwnerHydrationInput> npcInputs =
+            new List<DailyV1P12DNpcCoreOwnerHydrationInput>(npcDRows.Count);
+        for (int i = 0; i < npcDRows.Count; i++)
+        {
+            if (!DailyV1P12DNpcCoreOwnerHydrationInput.TryCreateFromRows(
+                    npcDRows[i], npcFRows[i], out DailyV1P12DNpcCoreOwnerHydrationInput input)
+                || input == null)
+            {
+                failure = DailyV1P12DSelectedCoreOwnerStageFailure.InvalidNpcIdentity;
+                return false;
+            }
+            npcInputs.Add(input);
+        }
+
+        return TryCreate(
+            definitions, cityInputs, npcInputs, spatialNetwork, travelPartyIds,
+            out stage, out failure);
+    }
     internal static bool TryCreate(
         DailyV1EffectiveDefinitions definitions,
         IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cityInputs,

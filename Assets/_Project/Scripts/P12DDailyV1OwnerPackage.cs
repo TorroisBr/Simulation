@@ -508,30 +508,19 @@ internal sealed class P12DDailyV1OwnerPackage
             if (npcDRows.Count != npcFRows.Count)
             { failure = P12DDailyV1OwnerPackageFailure.InvalidOwnerSnapshot; return false; }
 
-            List<DailyV1P12DNpcCoreOwnerHydrationInput> selectedNpcInputs =
-                new List<DailyV1P12DNpcCoreOwnerHydrationInput>(npcDRows.Count);
-            for (int i = 0; i < npcDRows.Count; i++)
-            {
-                if (!P12DNpcRootOwnerSnapshot.TryCreateSelectedCoreHydrationInput(
-                        npcDRows[i], npcFRows[i], out DailyV1P12DNpcCoreOwnerHydrationInput input)
-                    || input == null)
-                { failure = P12DDailyV1OwnerPackageFailure.InvalidOwnerSnapshot; return false; }
-                selectedNpcInputs.Add(input);
-            }
-
             bool selectedCoreStageAccepted;
             if (application != null)
             {
-                selectedCoreStageAccepted = application.TryStageRestoredP12DOwners(
-                    stagedCoreRoots, selectedDefinitions, selectedCityInputs, selectedNpcInputs,
+                selectedCoreStageAccepted = application.TryStageRestoredP12DOwnersFromImageRows(
+                    stagedCoreRoots, selectedDefinitions, selectedCityInputs, npcDRows, npcFRows,
                     stagedSpatialNetwork.SelectedOwner, stagedTravelPartyIds,
                     expectedSession, replacementOperation,
                     out selectedCoreOwnerStage, out _);
             }
             else
             {
-                selectedCoreStageAccepted = DailyV1P12DSelectedCoreOwnerStager.TryCreate(
-                    selectedDefinitions, selectedCityInputs, selectedNpcInputs,
+                selectedCoreStageAccepted = DailyV1P12DSelectedCoreOwnerStager.TryCreateFromRows(
+                    selectedDefinitions, selectedCityInputs, npcDRows, npcFRows,
                     stagedSpatialNetwork.SelectedOwner, stagedTravelPartyIds,
                     out selectedCoreOwnerStage, out _);
             }
