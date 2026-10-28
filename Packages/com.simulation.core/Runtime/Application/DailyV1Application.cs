@@ -733,6 +733,78 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
+    /// Inspects the initial continuation slot when the host cannot provide a
+    /// truthful compatibility identity. Only a missing slot admits genesis;
+    /// a present or inaccessible slot keeps this application fail-closed.
+    /// </summary>
+    internal bool TryInspectInitialContinuationSlotForStart(
+        string persistentDataRoot,
+        IAtomicFileSlotOperations fileOperations,
+        out bool exists,
+        out P12AResult result)
+    {
+        exists = false;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (string.IsNullOrWhiteSpace(persistentDataRoot) || fileOperations == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            lock (activeSessionGate.SyncRoot)
+            {
+                if (!initialContinuationLoadAttempted
+                    && !initialGenesisPreparationAttempted
+                    && preparedInitialGenesis == null
+                    && preparedInitialSession == null
+                    && activeSessionGate.Current == null
+                    && activeSessionGate.ActiveOperationCount == 0)
+                {
+                    initialContinuationLoadAttempted = true;
+                    initialContinuationLoadBlocksGenesis = true;
+                }
+            }
+            return false;
+        }
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (initialContinuationLoadAttempted
+                || initialGenesisPreparationAttempted
+                || preparedInitialGenesis != null
+                || preparedInitialSession != null
+                || activeSessionGate.Current != null
+                || activeSessionGate.ActiveOperationCount != 0)
+                return false;
+
+            if (bootstrapAdmissionContext == null)
+            {
+                bootstrapAdmissionContext = new SimulationRuntimeAdmissionContext(
+                    SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+                    Thread.CurrentThread,
+                    Thread.CurrentThread.ManagedThreadId);
+            }
+
+            if (!bootstrapAdmissionContext.IsOwnedByCurrentThread())
+            {
+                initialContinuationLoadBlocksGenesis = true;
+                result = new P12AResult(P12AResultCode.WrongThread);
+                return false;
+            }
+
+            initialContinuationLoadAttempted = true;
+            initialContinuationLoadBlocksGenesis = true;
+        }
+
+        bool inspected = P12AContinuationStore.TryHasSlot(
+            persistentDataRoot, fileOperations, out exists, out result);
+        lock (activeSessionGate.SyncRoot)
+        {
+            initialContinuationLoadBlocksGenesis = !inspected
+                || exists
+                || result == null
+                || result.Code != P12AResultCode.NoSave;
+        }
+        return inspected;
+    }
+    /// <summary>
     /// Admits the initial continuation slot before genesis. A missing slot is
     /// the only outcome that permits the caller to continue into genesis;
     /// every present-but-invalid, incompatible, or inaccessible slot blocks

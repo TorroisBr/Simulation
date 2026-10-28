@@ -12371,6 +12371,44 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
     [Test]
+    public void MissingDailyV1SaveIsAdmittedByCoreBeforeGenesis()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject targetObject = new GameObject("P12-A missing slot must reach Core NoSave admission");
+        string storageRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "P12AMissingBootstrap", System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            TesteSimulacao target = targetObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(target, config);
+            int genesisIdentityAllocations = 0;
+            WritePrivateField(target, "worldIdentityAllocator", (Func<WorldId>)(() =>
+            {
+                genesisIdentityAllocations++;
+                return new WorldId(System.Guid.NewGuid());
+            }));
+            CountingReadFileOperations loadFileOperations = new CountingReadFileOperations();
+
+            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(
+                storageRoot, loadFileOperations), Is.False,
+                "Core NoSave is the only initial-load result that falls through to genesis.");
+            Assert.That(loadFileOperations.OpenReadCount, Is.GreaterThan(0),
+                "The application, not Unity, must inspect the absent continuation slot.");
+            Assert.That(ReadPrivateField<bool>(target, "bootstrapFailed"), Is.False);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(target, "activeSession"), Is.Null);
+            Assert.That(genesisIdentityAllocations, Is.Zero,
+                "The Core-owned slot decision must not allocate a world identity before genesis.");
+        }
+        finally
+        {
+            if (System.IO.Directory.Exists(storageRoot)) System.IO.Directory.Delete(storageRoot, true);
+            UnityEngine.Object.DestroyImmediate(targetObject);
+        }
+    }
+
+    [Test]
     public void PresentInvalidDailyV1SaveFailsClosedBeforeGenesis()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
@@ -12398,8 +12436,8 @@ public sealed class SimulationRuntimeAdmissionTests
                 "P12-A continuation load failed; genesis was not started. CorruptOrTruncated");
             Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(storageRoot, loadFileOperations), Is.True,
                 "A present slot is handled even when rejected, so Start cannot fall through to genesis.");
-            Assert.That(loadFileOperations.OpenReadCount, Is.EqualTo(2),
-                "The same injected file-operation port must handle slot inspection and continuation loading.");
+            Assert.That(loadFileOperations.OpenReadCount, Is.EqualTo(1),
+                "The Core application reads the slot once through the injected file-operation port.");
             Assert.That(ReadPrivateField<bool>(target, "bootstrapFailed"), Is.True);
             Assert.That(ReadPrivateField<SimulationActiveSession>(target, "activeSession"), Is.Null);
             Assert.That(genesisIdentityAllocations, Is.Zero);
@@ -12432,7 +12470,7 @@ public sealed class SimulationRuntimeAdmissionTests
             }));
 
             UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error,
-                "P12-A continuation slot inspection failed; genesis was not started.");
+                "P12-A continuation load failed; genesis was not started. StorageFailure");
             Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(
                 storageRoot, new SlotInspectionFailureFileOperations()), Is.True);
             Assert.That(ReadPrivateField<bool>(target, "bootstrapFailed"), Is.True);

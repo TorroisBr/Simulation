@@ -324,20 +324,28 @@ public class TesteSimulacao : MonoBehaviour
     private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath,
         IAtomicFileSlotOperations fileOperations)
     {
-        if (!P12AContinuationStore.TryHasSlot(persistentDataPath, fileOperations, out bool exists, out _))
-        {
-            bootstrapFailed = true;
-            UnityEngine.Debug.LogError("P12-A continuation slot inspection failed; genesis was not started.");
-            return true;
-        }
-        if (!exists) return false;
-
         if (!TryCreateCurrentDailyV1CompatibilityDescriptor(
                 out P12ACompatibilityDescriptor compatibility, out string compatibilityDiagnostic))
         {
+            bool inspected = dailyV1Application.TryInspectInitialContinuationSlotForStart(
+                persistentDataPath, fileOperations, out bool exists, out P12AResult slotResult);
+            if (inspected && !exists && slotResult?.Code == P12AResultCode.NoSave)
+                return false;
+
             bootstrapFailed = true;
-            UnityEngine.Debug.LogError("P12-A continuation is present but the current host profile cannot prove compatibility; genesis was not started. "
-                + compatibilityDiagnostic);
+            if (!inspected)
+            {
+                UnityEngine.Debug.LogError("P12-A continuation slot inspection failed; genesis was not started. "
+                    + (slotResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString()));
+            }
+            else
+            {
+                UnityEngine.Debug.LogError("P12-A current host profile cannot prove continuation compatibility; genesis was not started. "
+                    + (exists
+                        ? P12AResultCode.IncompatibleContentOrConfiguration.ToString()
+                        : (slotResult?.Code ?? P12AResultCode.StorageFailure).ToString())
+                    + " " + compatibilityDiagnostic);
+            }
             return true;
         }
         DailyV1ApplicationHost host = new DailyV1ApplicationHost(
@@ -346,6 +354,9 @@ public class TesteSimulacao : MonoBehaviour
         if (!dailyV1Application.TryLoadInitialContinuationImageForStart(
                 null, host, out P12AContinuationImage image, out P12AResult loadResult))
         {
+            if (loadResult?.Code == P12AResultCode.NoSave)
+                return false;
+
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A continuation load failed; genesis was not started. "
                 + (loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString()));

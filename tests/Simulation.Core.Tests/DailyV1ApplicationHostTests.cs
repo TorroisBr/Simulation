@@ -16,6 +16,17 @@ public sealed class DailyV1ApplicationHostTests
         public void Delete(string path) => throw new NotSupportedException();
     }
 
+    private sealed class UnavailableSlotOperations : IAtomicFileSlotOperations
+    {
+        public void CreateDirectory(string path) => throw new NotSupportedException();
+        public bool Exists(string path) => throw new System.UnauthorizedAccessException();
+        public System.IO.Stream CreateNewTemporary(string path) => throw new NotSupportedException();
+        public System.IO.Stream OpenRead(string path) => throw new System.UnauthorizedAccessException();
+        public void FlushToDisk(System.IO.Stream stream) => throw new NotSupportedException();
+        public void Replace(string source, string destination) => throw new NotSupportedException();
+        public void Move(string source, string destination) => throw new NotSupportedException();
+        public void Delete(string path) => throw new NotSupportedException();
+    }
     private sealed class CorruptSlotOperations : IAtomicFileSlotOperations
     {
         public void CreateDirectory(string path) => throw new NotSupportedException();
@@ -49,6 +60,54 @@ public sealed class DailyV1ApplicationHostTests
             "A host storage root must never enter the serialized compatibility identity.");
     }
 
+    [Test]
+    public void InitialSlotInspectionAdmitsGenesisOnlyWhenTheCoreSlotIsMissing()
+    {
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryInspectInitialContinuationSlotForStart(
+            "missing-slot-root", new MissingSlotOperations(), out bool exists, out P12AResult result), Is.True);
+        Assert.That(exists, Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.True, diagnostic);
+        Assert.That(candidate, Is.Not.Null);
+    }
+
+    [Test]
+    public void InitialSlotInspectionWithoutCompatibilityIdentityBlocksWhenSlotIsPresent()
+    {
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryInspectInitialContinuationSlotForStart(
+            "present-slot-root", new CorruptSlotOperations(), out bool exists, out P12AResult result), Is.True);
+        Assert.That(exists, Is.True);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.Loaded));
+
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.False);
+        Assert.That(candidate, Is.Null);
+        Assert.That(diagnostic, Does.Contain("cannot capture a second bootstrap"));
+    }
+
+    [Test]
+    public void InitialSlotInspectionWithoutCompatibilityIdentityFailsClosedOnStorageError()
+    {
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryInspectInitialContinuationSlotForStart(
+            "unavailable-slot-root", new UnavailableSlotOperations(), out bool exists, out P12AResult result), Is.False);
+        Assert.That(exists, Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.StorageFailure));
+
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.False);
+        Assert.That(candidate, Is.Null);
+    }
     [Test]
     public void InitialNoSaveAdmissionAllowsCoreGenesisOnTheSameApplication()
     {
