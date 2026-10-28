@@ -93,6 +93,30 @@ public sealed class SpatialNetworkRuntime
             return false;
         }
 
+        return TryCreateFromStagedOwner(
+            stagedOwner, stagedIdentityRegistry, out stagedNetwork, out failure);
+    }
+
+    /// <summary>
+    /// Creates the Unity spatial projection over an already staged exact Core
+    /// owner. The private identity registry receives the same location and
+    /// route instances; no second spatial authority is hydrated.
+    /// </summary>
+    internal static bool TryCreateFromStagedOwner(
+        SpatialNetworkOwner stagedOwner,
+        RuntimeIdentityRegistry stagedIdentityRegistry,
+        out SpatialNetworkRuntime stagedNetwork,
+        out SpatialNetworkSnapshotFailure failure)
+    {
+        stagedNetwork = null;
+        if (stagedOwner == null || stagedIdentityRegistry == null)
+        {
+            failure = SpatialNetworkSnapshotFailure.Create(
+                SpatialNetworkSnapshotFailureCode.InvalidSnapshot,
+                "A Core-staged spatial owner and unpublished identity registry are required.");
+            return false;
+        }
+
         long identityCount = (long)stagedOwner.LocationCount + stagedOwner.RouteCount;
         foreach (SpatialLocationRuntime location in stagedOwner.Locations)
         {

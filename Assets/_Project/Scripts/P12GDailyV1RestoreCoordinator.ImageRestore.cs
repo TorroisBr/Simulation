@@ -133,14 +133,12 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
 
             RuntimeIdentityRegistry stagedIdentities = new RuntimeIdentityRegistry();
-            List<string> stagedPartyIds = decoded.TravelParties.Parties
-                .Select(party => party?.TravelPartyId).ToList();
             if (!P12DDailyV1OwnerPackage.TryStageFromImage(
                     image.Sections, decoded.Cities, decoded.NpcDRows, decoded.NpcFRows,
                     decoded.SpatialNetwork, decoded.Persons, decoded.Genealogy, decoded.Sites,
                     stagedIdentities, stagedC.WorldIdentity, cityDefinitions, itemDefinitions,
                     npcDefinitions, configuration.Actions, statusDefinitions,
-                    Array.Empty<DailyV1ExplorableSiteDefinition>(), stagedPartyIds,
+                    Array.Empty<DailyV1ExplorableSiteDefinition>(), decoded.TravelParties,
                     out P12DDailyV1OwnerPackage stagedD,
                     out P12DDailyV1OwnerPackageFailure dFailure,
                     selectedDefinitions,

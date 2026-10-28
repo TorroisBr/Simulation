@@ -434,7 +434,7 @@ internal sealed class P12DDailyV1OwnerPackage
         IReadOnlyList<NpcActionData> actionDefinitions,
         IReadOnlyList<NpcStatusData> statusDefinitions,
         IReadOnlyList<DailyV1ExplorableSiteDefinition> admittedDailySiteDefinitions,
-        IReadOnlyList<string> stagedTravelPartyIds,
+        P12FTravelPartyOwnerSnapshot travelPartySnapshot,
         out P12DDailyV1OwnerPackage package,
         out P12DDailyV1OwnerPackageFailure failure,
         DailyV1EffectiveDefinitions selectedDefinitions = null,
@@ -452,20 +452,54 @@ internal sealed class P12DDailyV1OwnerPackage
             || (selectedDefinitions == null && cityDefinitions == null)
             || itemDefinitions == null || npcDefinitions == null
             || actionDefinitions == null || statusDefinitions == null || admittedDailySiteDefinitions == null
-            || admittedDailySiteDefinitions.Count != 0 || stagedTravelPartyIds == null
+            || admittedDailySiteDefinitions.Count != 0 || travelPartySnapshot?.Parties == null
             || !TryValidateStagedIdentityRegistryIsEmpty(stagedRuntimeIdentities)
             || siteSnapshot.Sites == null || siteSnapshot.Sites.Count != 0 || siteSnapshot.Revision != 0L
             || npcDRows.Count != npcFRows.Count)
             return false;
 
-        if (!SpatialNetworkRuntime.TryCreateFromOwnerSnapshot(spatialSnapshot,
-                stagedRuntimeIdentities, out SpatialNetworkRuntime stagedSpatialNetwork, out _)
-            || stagedSpatialNetwork == null
-            || !PersonStore.TryCreateFromOwnerSnapshot(personSnapshot,
-                out PersonStore stagedPersons, out _) || stagedPersons == null
-            || !GenealogyOwnerBridge.TryCreateStagedOwner(genealogySnapshot.Export,
-                out GenealogyStore stagedGenealogy, out _) || stagedGenealogy == null)
-        { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
+        List<string> stagedTravelPartyIds = travelPartySnapshot.Parties
+            .Select(party => party?.TravelPartyId).ToList();
+        DailyV1P12DCoreOwnerRestoreStage coreRestoreStage = null;
+        DailyV1P12DSelectedCoreOwnerStage selectedCoreOwnerStage = null;
+        SpatialNetworkRuntime stagedSpatialNetwork;
+        PersonStore stagedPersons;
+        GenealogyStore stagedGenealogy;
+        ExplorableSiteStore stagedSites;
+        bool coreOwnsSelectedRestore = application != null && selectedDefinitions != null;
+        if (coreOwnsSelectedRestore)
+        {
+            if (stagedCoreRoots == null
+                || !application.TryStageRestoredP12DOwnersFromImage(
+                    stagedCoreRoots, selectedDefinitions, cityInputs, npcDRows, npcFRows,
+                    spatialSnapshot, personSnapshot, genealogySnapshot, siteSnapshot,
+                    travelPartySnapshot, expectedSession, replacementOperation,
+                    out coreRestoreStage, out _)
+                || coreRestoreStage == null
+                || !SpatialNetworkRuntime.TryCreateFromStagedOwner(
+                    coreRestoreStage.SpatialNetwork, stagedRuntimeIdentities,
+                    out stagedSpatialNetwork, out _)
+                || stagedSpatialNetwork == null)
+            { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
+
+            stagedPersons = coreRestoreStage.Persons;
+            stagedGenealogy = coreRestoreStage.Genealogy;
+            stagedSites = coreRestoreStage.ExplorableSites;
+            selectedCoreOwnerStage = coreRestoreStage.SelectedOwners;
+        }
+        else
+        {
+            if (!SpatialNetworkRuntime.TryCreateFromOwnerSnapshot(spatialSnapshot,
+                    stagedRuntimeIdentities, out stagedSpatialNetwork, out _)
+                || stagedSpatialNetwork == null
+                || !PersonStore.TryCreateFromOwnerSnapshot(
+                    personSnapshot, out stagedPersons, out _) || stagedPersons == null
+                || !GenealogyOwnerBridge.TryCreateStagedOwner(genealogySnapshot.Export,
+                    out stagedGenealogy, out _) || stagedGenealogy == null)
+            { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
+
+            stagedSites = null;
+        }
 
         SpatialLocationRuntime[] stagedLocations = stagedSpatialNetwork.Locations.ToArray();
         string[] stagedRouteIds = stagedSpatialNetwork.Routes.Select(route => route?.RuntimeId).ToArray();
@@ -502,8 +536,7 @@ internal sealed class P12DDailyV1OwnerPackage
             cityLocationIds.Add(snapshot.CityRuntimeId, location.RuntimeId);
         }
 
-        DailyV1P12DSelectedCoreOwnerStage selectedCoreOwnerStage = null;
-        if (selectedDefinitions != null)
+        if (selectedDefinitions != null && !coreOwnsSelectedRestore)
         {
             if (npcDRows.Count != npcFRows.Count)
             { failure = P12DDailyV1OwnerPackageFailure.InvalidOwnerSnapshot; return false; }
@@ -519,24 +552,11 @@ internal sealed class P12DDailyV1OwnerPackage
                 selectedNpcInputs.Add(input);
             }
 
-            bool selectedCoreStageAccepted;
-            if (application != null)
-            {
-                selectedCoreStageAccepted = application.TryStageRestoredP12DOwners(
-                    stagedCoreRoots, selectedDefinitions, selectedCityInputs, selectedNpcInputs,
-                    stagedSpatialNetwork.SelectedOwner, stagedTravelPartyIds,
-                    expectedSession, replacementOperation,
-                    out selectedCoreOwnerStage, out _);
-            }
-            else
-            {
-                selectedCoreStageAccepted = DailyV1P12DSelectedCoreOwnerStager.TryCreate(
+            if (!DailyV1P12DSelectedCoreOwnerStager.TryCreate(
                     selectedDefinitions, selectedCityInputs, selectedNpcInputs,
                     stagedSpatialNetwork.SelectedOwner, stagedTravelPartyIds,
-                    out selectedCoreOwnerStage, out _);
-            }
-
-            if (!selectedCoreStageAccepted || selectedCoreOwnerStage == null)
+                    out selectedCoreOwnerStage, out _)
+                || selectedCoreOwnerStage == null)
             { failure = P12DDailyV1OwnerPackageFailure.InvalidRelation; return false; }
         }
 
@@ -575,8 +595,9 @@ internal sealed class P12DDailyV1OwnerPackage
             if (!stagedRuntimeIdentities.RegisterNpc(npc))
             { failure = P12DDailyV1OwnerPackageFailure.InvalidIdentityRoot; return false; }
 
-        if (!ExplorableSiteStore.TryCreateFromOwnerSnapshot(siteSnapshot, admittedDailySiteDefinitions,
-                stagedLocations, out ExplorableSiteStore stagedSites, out _)
+        if ((stagedSites == null
+                && !ExplorableSiteStore.TryCreateFromOwnerSnapshot(siteSnapshot, admittedDailySiteDefinitions,
+                    stagedLocations, out stagedSites, out _))
             || stagedSites == null || stagedSites.Count != 0 || stagedSites.Revision != 0L
             || !TryValidateFinalGraph(stagedCities, stagedNpcRoster, stagedPersons, stagedGenealogy,
                 stagedLocations, stagedSpatialNetwork, citySnapshots, npcDRows))

@@ -12,6 +12,34 @@ internal enum DailyV1P12FCoreOwnerRestoreStep
     Expeditions = 4
 }
 
+/// <summary>
+/// Exact Core-owned factual owners staged from one detached P12-D image.
+/// Unity may build compatibility projections around these same instances,
+/// while P12-G retains final cross-section validation and publication.
+/// </summary>
+internal sealed class DailyV1P12DCoreOwnerRestoreStage
+{
+    internal SpatialNetworkOwner SpatialNetwork { get; }
+    internal PersonStore Persons { get; }
+    internal GenealogyStore Genealogy { get; }
+    internal ExplorableSiteStore ExplorableSites { get; }
+    internal DailyV1P12DSelectedCoreOwnerStage SelectedOwners { get; }
+
+    internal DailyV1P12DCoreOwnerRestoreStage(
+        SpatialNetworkOwner spatialNetwork,
+        PersonStore persons,
+        GenealogyStore genealogy,
+        ExplorableSiteStore explorableSites,
+        DailyV1P12DSelectedCoreOwnerStage selectedOwners)
+    {
+        SpatialNetwork = spatialNetwork ?? throw new ArgumentNullException(nameof(spatialNetwork));
+        Persons = persons ?? throw new ArgumentNullException(nameof(persons));
+        Genealogy = genealogy ?? throw new ArgumentNullException(nameof(genealogy));
+        ExplorableSites = explorableSites ?? throw new ArgumentNullException(nameof(explorableSites));
+        SelectedOwners = selectedOwners ?? throw new ArgumentNullException(nameof(selectedOwners));
+    }
+}
+
 /// <summary>Private selected Core owner candidates staged together for P12-F.</summary>
 internal sealed class DailyV1P12FCoreOwnerRestoreStage
 {
@@ -1107,6 +1135,101 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        result = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Stages the complete selected Daily-v1 P12-D owner foundation from
+    /// detached image values under this application's restore authority.
+    /// Core creates spatial, person, genealogy, empty-site and selected
+    /// City/NPC owners as one unpublished result; Unity may only project those
+    /// exact owner instances after this method succeeds.
+    /// </summary>
+    internal bool TryStageRestoredP12DOwnersFromImage(
+        P12CStagedCoreContinuationRoot stagedRoots,
+        DailyV1EffectiveDefinitions definitions,
+        IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cityInputs,
+        IReadOnlyList<P12DNpcDRow> npcDRows,
+        IReadOnlyList<P12DNpcFRow> npcFRows,
+        SpatialNetworkOwnerSnapshot spatialSnapshot,
+        PersonStoreOwnerSnapshot personSnapshot,
+        GenealogyOwnerSnapshot genealogySnapshot,
+        ExplorableSiteOwnerSnapshot siteSnapshot,
+        P12FTravelPartyOwnerSnapshot travelPartySnapshot,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out DailyV1P12DCoreOwnerRestoreStage stagedOwners,
+        out P12AResult result)
+    {
+        stagedOwners = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+            return false;
+
+        if (stagedRoots == null || !stagedRoots.IsDetached || definitions == null
+            || cityInputs == null || npcDRows == null || npcFRows == null
+            || npcDRows.Count != npcFRows.Count || spatialSnapshot == null
+            || personSnapshot == null || genealogySnapshot?.Export == null
+            || siteSnapshot == null || siteSnapshot.Sites == null
+            || siteSnapshot.Sites.Count != 0 || siteSnapshot.Revision != 0L
+            || travelPartySnapshot?.Parties == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        if (!P12DSpatialNetworkOwnerHydrator.TryCreateOwner(
+                spatialSnapshot, out SpatialNetworkOwner stagedSpatialNetwork, out _)
+            || stagedSpatialNetwork == null
+            || !PersonStore.TryCreateFromOwnerSnapshot(
+                personSnapshot, out PersonStore stagedPersons, out _)
+            || stagedPersons == null
+            || !GenealogyOwnerBridge.TryCreateStagedOwner(
+                genealogySnapshot.Export, out GenealogyStore stagedGenealogy, out _,
+                afterRecordStagedForTest: null)
+            || stagedGenealogy == null
+            || !ExplorableSiteStore.TryCreateFromOwnerSnapshot(
+                siteSnapshot, Array.Empty<DailyV1ExplorableSiteDefinition>(),
+                stagedSpatialNetwork.Locations, out ExplorableSiteStore stagedSites, out _)
+            || stagedSites == null || stagedSites.Count != 0 || stagedSites.Revision != 0L)
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected, "p12d.factual-owners");
+            return false;
+        }
+
+        List<string> travelPartyIds = new List<string>(travelPartySnapshot.Parties.Count);
+        foreach (P12FTravelPartyOwnerSnapshotRecord party in travelPartySnapshot.Parties)
+            travelPartyIds.Add(party?.TravelPartyId);
+
+        List<DailyV1P12DNpcCoreOwnerHydrationInput> npcInputs =
+            new List<DailyV1P12DNpcCoreOwnerHydrationInput>(npcDRows.Count);
+        for (int index = 0; index < npcDRows.Count; index++)
+        {
+            if (!DailyV1P12DNpcCoreOwnerHydrator.TryCreateHydrationInput(
+                    npcDRows[index], npcFRows[index],
+                    out DailyV1P12DNpcCoreOwnerHydrationInput input)
+                || input == null)
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12d.npc-hydration-input");
+                return false;
+            }
+            npcInputs.Add(input);
+        }
+
+        if (!DailyV1P12DSelectedCoreOwnerStager.TryCreate(
+                definitions, cityInputs, npcInputs, stagedSpatialNetwork, travelPartyIds,
+                out DailyV1P12DSelectedCoreOwnerStage selectedOwners, out _)
+            || selectedOwners == null)
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12d.selected-core-owners");
+            return false;
+        }
+
+        stagedOwners = new DailyV1P12DCoreOwnerRestoreStage(
+            stagedSpatialNetwork, stagedPersons, stagedGenealogy, stagedSites, selectedOwners);
         result = null;
         return true;
     }

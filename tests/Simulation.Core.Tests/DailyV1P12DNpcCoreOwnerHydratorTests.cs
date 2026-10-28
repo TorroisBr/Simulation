@@ -7,6 +7,60 @@ using NUnit.Framework;
 public sealed class DailyV1P12DNpcCoreOwnerHydratorTests
 {
     [Test]
+    public void P12DImageRowsProduceCoreHydrationInputWithExactIdentityAndReceiptValues()
+    {
+        const string runtimeId = "npc/p12d-input";
+        string boundaryId = "boundary/p12d-input";
+        string operation = StableKeyEncoding.Encode(
+            "commercial-sharing-edge/v1", boundaryId,
+            "npc/p12d-sender", runtimeId);
+        Assert.That(P12DNpcCommercialShareReceiptValue.TryCreateFromOwnerSnapshot(
+            operation, "fingerprint/p12d-input", boundaryId,
+            "npc/p12d-sender", "person/p12d-sender", runtimeId,
+            "person/p12d-input", "snapshot/p12d-input", 2,
+            out P12DNpcCommercialShareReceiptValue receipt), Is.True);
+
+        P12DNpcDRow d = CreateDRow("npc-definition/p12d-input", runtimeId,
+            Array.Empty<string>(), Array.Empty<P12DNpcInventoryRowValue>(), null);
+        P12DNpcFRow f = new P12DNpcFRow(
+            runtimeId, null, 2, 5, "route/p12d-input", true,
+            "decision/p12d-input", "party/p12d-input", 8L,
+            new P12DNpcMerchantPlanValue(null, null, null, 0, 0, 0f, 0, 0, null, 0L),
+            new P12DNpcTravelPlanValue(null, null, NpcTravelReason.None, 0f, 0f, null, 9L),
+            Array.Empty<ExplorableSiteKnowledgeObservation>(), 10L,
+            new[] { "location/p12d-input" }, new[] { "route/p12d-input" }, 11L,
+            Array.Empty<AdventureOppositionObservation>(),
+            Array.Empty<AdventureNotableItemObservation>(),
+            Array.Empty<AdventureCommonResourceObservation>(),
+            Array.Empty<AdventureAccessObservation>(), 12L,
+            Array.Empty<P12DNpcCommercialMarketValue>(),
+            Array.Empty<P12DNpcCommercialLiquidityValue>(), new[] { receipt }, 13L);
+
+        Assert.That(DailyV1P12DNpcCoreOwnerHydrator.TryCreateHydrationInput(
+            d, f, out DailyV1P12DNpcCoreOwnerHydrationInput input), Is.True);
+        Assert.That(input.DRow, Is.SameAs(d));
+        Assert.That(input.TravelDaysRemaining, Is.EqualTo(2));
+        Assert.That(input.TravelDaysTotal, Is.EqualTo(5));
+        Assert.That(input.TravelRouteRuntimeId, Is.EqualTo("route/p12d-input"));
+        Assert.That(input.TravelStartedToday, Is.True);
+        Assert.That(input.TravelOriginDecisionId, Is.EqualTo("decision/p12d-input"));
+        Assert.That(input.ActiveTravelPartyId, Is.EqualTo("party/p12d-input"));
+        Assert.That(input.TravelRevision, Is.EqualTo(8L));
+        Assert.That(input.CommercialKnowledgeRevision, Is.EqualTo(13L));
+        DailyV1CommercialKnowledgeShareReceipt copiedReceipt = input.CommercialShareReceipts.Single();
+        Assert.That(copiedReceipt.OperationIdentity, Is.EqualTo(operation));
+        Assert.That(copiedReceipt.Fingerprint, Is.EqualTo("fingerprint/p12d-input"));
+        Assert.That(copiedReceipt.BoundaryOccurrenceId, Is.EqualTo(boundaryId));
+        Assert.That(copiedReceipt.AppliedObservationCount, Is.EqualTo(2));
+
+        P12DNpcDRow mismatched = CreateDRow("npc-definition/p12d-input",
+            "npc/p12d-other", Array.Empty<string>(), Array.Empty<P12DNpcInventoryRowValue>(), null);
+        Assert.That(DailyV1P12DNpcCoreOwnerHydrator.TryCreateHydrationInput(
+            mismatched, f, out DailyV1P12DNpcCoreOwnerHydrationInput rejected), Is.False);
+        Assert.That(rejected, Is.Null);
+    }
+
+    [Test]
     public void P12DRowsHydrateSelectedNpcOwnersFromCanonicalDefinitionsWithExactRevisions()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
