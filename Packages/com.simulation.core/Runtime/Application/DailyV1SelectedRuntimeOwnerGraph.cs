@@ -109,42 +109,43 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
 
     /// <summary>
     /// Confirms that each P8-C census witness for an owner already bound into
-    /// this graph refers to that exact instance. During the source migration,
-    /// an unbound P8-C owner remains the host protocol's responsibility.
+    /// this graph matches that exact owner's live identity, cardinality, and
+    /// revision. During the source migration, an unbound P8-C owner remains the
+    /// host protocol's responsibility.
     /// </summary>
-    internal bool MatchesSelectedP8CensusOwnerIdentities(
+    internal bool MatchesSelectedP8CensusOwnerWitnesses(
         IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections)
     {
         return ownerSections != null
             && (PersonSpatialPositionStore == null
-                || HasCensusOwnerIdentity(
+                || HasCensusOwnerWitness(
                     ownerSections,
-                    PersonSpatialPositionCensusProvider.SectionId,
-                    PersonSpatialPositionStore))
+                    new PersonSpatialPositionCensusProvider(PersonSpatialPositionStore).GetCurrentCensus()))
             && (LegacySpatialAnchors == null
-                || HasCensusOwnerIdentity(
+                || HasCensusOwnerWitness(
                     ownerSections,
-                    LegacySpatialAnchorBindingCensusProvider.SectionId,
-                    LegacySpatialAnchors));
+                    new LegacySpatialAnchorBindingCensusProvider(LegacySpatialAnchors).GetCurrentCensus()));
     }
 
-    private static bool HasCensusOwnerIdentity(
+    private static bool HasCensusOwnerWitness(
         IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
-        string sectionId,
-        object expectedOwner)
+        OwnerSectionCensusWitness expected)
     {
-        if (ownerSections == null || string.IsNullOrWhiteSpace(sectionId) || expectedOwner == null)
-            return false;
+        if (ownerSections == null || expected == null) return false;
 
         OwnerSectionCensusSnapshot found = null;
         foreach (OwnerSectionCensusSnapshot section in ownerSections)
         {
-            if (!string.Equals(section?.SectionId, sectionId, StringComparison.Ordinal)) continue;
+            if (!string.Equals(section?.SectionId, expected.SectionId, StringComparison.Ordinal)) continue;
             if (found != null) return false;
             found = section;
         }
 
-        return found != null && ReferenceEquals(found.OwnerInstanceIdentity, expectedOwner);
+        return found != null
+            && found.SchemaVersion == expected.SchemaVersion
+            && ReferenceEquals(found.OwnerInstanceIdentity, expected.OwnerInstanceIdentity)
+            && found.Cardinality == expected.Cardinality
+            && found.Revision == expected.Revision;
     }
 
     /// <summary>

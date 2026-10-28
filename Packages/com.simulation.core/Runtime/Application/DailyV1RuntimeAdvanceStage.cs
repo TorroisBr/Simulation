@@ -314,7 +314,7 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
-        if (!executionState.SelectedRuntimeOwnerGraph.MatchesSelectedP8CensusOwnerIdentities(
+        if (!executionState.SelectedRuntimeOwnerGraph.MatchesSelectedP8CensusOwnerWitnesses(
                 ownerSections))
         {
             ownerSections = null;

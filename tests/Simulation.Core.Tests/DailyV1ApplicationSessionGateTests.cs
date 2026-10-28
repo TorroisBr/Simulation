@@ -420,6 +420,34 @@ public sealed class DailyV1ApplicationSessionGateTests
             ownerInstanceIdentity, previous.Cardinality, previous.Revision);
     }
 
+    private static void ReplaceOwnerSectionWithCardinality(
+        OwnerSectionCensusSnapshot[] sections,
+        string sectionId,
+        int cardinality)
+    {
+        int index = Array.FindIndex(sections,
+            section => string.Equals(section.SectionId, sectionId, StringComparison.Ordinal));
+        Assert.That(index, Is.GreaterThanOrEqualTo(0), sectionId);
+        OwnerSectionCensusSnapshot previous = sections[index];
+        sections[index] = new OwnerSectionCensusSnapshot(
+            previous.SectionId, previous.SchemaVersion, previous.Role,
+            previous.OwnerInstanceIdentity, cardinality, previous.Revision);
+    }
+
+    private static void ReplaceOwnerSectionWithRevision(
+        OwnerSectionCensusSnapshot[] sections,
+        string sectionId,
+        long revision)
+    {
+        int index = Array.FindIndex(sections,
+            section => string.Equals(section.SectionId, sectionId, StringComparison.Ordinal));
+        Assert.That(index, Is.GreaterThanOrEqualTo(0), sectionId);
+        OwnerSectionCensusSnapshot previous = sections[index];
+        sections[index] = new OwnerSectionCensusSnapshot(
+            previous.SectionId, previous.SchemaVersion, previous.Role,
+            previous.OwnerInstanceIdentity, previous.Cardinality, revision);
+    }
+
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundP12FSectionVector(
         DailyV1ActiveRuntimeSession session)
         => CreateCoreBoundCityAndP12FSectionVector(session);
@@ -1717,6 +1745,48 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(substitutedEpoch, Is.Zero);
         Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(2));
 
+        OwnerSectionCensusSnapshot[] wrongP8Cardinality =
+            (OwnerSectionCensusSnapshot[])complete.Clone();
+        int anchorIndex = Array.FindIndex(wrongP8Cardinality,
+            section => string.Equals(section.SectionId,
+                LegacySpatialAnchorBindingCensusProvider.SectionId, StringComparison.Ordinal));
+        Assert.That(anchorIndex, Is.GreaterThanOrEqualTo(0));
+        ReplaceOwnerSectionWithCardinality(wrongP8Cardinality,
+            LegacySpatialAnchorBindingCensusProvider.SectionId,
+            wrongP8Cardinality[anchorIndex].Cardinality + 1);
+        hostPorts.SetAdmissionEvidence(wrongP8Cardinality, mutationEpoch: 23L);
+        Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+            sessionReplacement: false,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> wrongCardinality,
+            out long wrongCardinalityEpoch,
+            out failure), Is.False,
+            "Core rejects a census cardinality that differs from its bound P8 owner.");
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
+        Assert.That(wrongCardinality, Is.Null);
+        Assert.That(wrongCardinalityEpoch, Is.Zero);
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(3));
+
+        OwnerSectionCensusSnapshot[] wrongP8Revision =
+            (OwnerSectionCensusSnapshot[])complete.Clone();
+        int revisionIndex = Array.FindIndex(wrongP8Revision,
+            section => string.Equals(section.SectionId,
+                LegacySpatialAnchorBindingCensusProvider.SectionId, StringComparison.Ordinal));
+        Assert.That(revisionIndex, Is.GreaterThanOrEqualTo(0));
+        ReplaceOwnerSectionWithRevision(wrongP8Revision,
+            LegacySpatialAnchorBindingCensusProvider.SectionId,
+            wrongP8Revision[revisionIndex].Revision + 1L);
+        hostPorts.SetAdmissionEvidence(wrongP8Revision, mutationEpoch: 23L);
+        Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+            sessionReplacement: false,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> wrongRevision,
+            out long wrongRevisionEpoch,
+            out failure), Is.False,
+            "Core rejects a census revision that differs from its bound P8 owner.");
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
+        Assert.That(wrongRevision, Is.Null);
+        Assert.That(wrongRevisionEpoch, Is.Zero);
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(4));
+
         hostPorts.SetAdmissionEvidence(new[] { complete[0] }, mutationEpoch: 23L);
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
             sessionReplacement: false,
@@ -1727,7 +1797,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
         Assert.That(incomplete, Is.Null);
         Assert.That(incompleteEpoch, Is.Zero);
-        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(3));
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(5));
     }
     [Test]
     public void CoreDropsCensusEvidenceWhenHostFailsOrScopeChangesDuringCapture()
