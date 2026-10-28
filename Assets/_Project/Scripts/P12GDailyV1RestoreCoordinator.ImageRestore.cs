@@ -4,6 +4,133 @@ using System.Linq;
 
 internal static partial class P12GDailyV1RestoreCoordinator
 {
+    private sealed class RestoredCandidateCertificationHost
+        : IDailyV1RestoredCandidateCertificationHost
+    {
+        private readonly SimulationActiveSession candidate;
+        private readonly DailyV1P12OwnerGraphRestoreStage ownerGraph;
+        private readonly P12EDailyV1OwnerPackage stagedEOwners;
+
+        internal RestoredCandidateCertificationHost(
+            SimulationActiveSession candidate,
+            DailyV1P12OwnerGraphRestoreStage ownerGraph,
+            P12EDailyV1OwnerPackage stagedEOwners)
+        {
+            this.candidate = candidate ?? throw new ArgumentNullException(nameof(candidate));
+            this.ownerGraph = ownerGraph ?? throw new ArgumentNullException(nameof(ownerGraph));
+            this.stagedEOwners = stagedEOwners ?? throw new ArgumentNullException(nameof(stagedEOwners));
+        }
+
+        public bool TryValidatePersonNpcGenealogyBindings(out string diagnostic) =>
+            P12GDailyV1RestoreCoordinator.TryValidatePersonNpcGenealogyBindings(
+                candidate.Runtime, out diagnostic);
+
+        public bool TryCaptureUnadmittedRestoredDailyOwnerVector(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out string failure)
+        {
+            bool captured = candidate.Runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                out ownerSections, out mutationEpoch, out ContinuationCensusFailure censusFailure);
+            failure = censusFailure.ToString();
+            return captured;
+        }
+
+        public bool TryValidatePreImageOwnerVectorChecks(
+            IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out string diagnostic)
+        {
+            if (!TryValidateDailyV1ExpeditionExactZero(
+                    candidate.Composition, ownerSections, out diagnostic))
+                return false;
+            return TryValidateAllocatorHighWater(candidate, out diagnostic);
+        }
+
+        public bool TryValidateTargetSentinels(
+            IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out string diagnostic) =>
+            P12GDailyV1RestoreCoordinator.TryValidateTargetSentinels(
+                candidate.Composition, ownerSections, out diagnostic);
+
+        public bool TryValidatePoliticalKnowledgeBindings(out string diagnostic) =>
+            P12GDailyV1RestoreCoordinator.TryValidatePoliticalKnowledgeBindings(
+                stagedEOwners.UnresolvedPoliticalKnowledgeBindings,
+                candidate.Runtime, out diagnostic);
+
+        public bool TryValidateSpatialInvariants(out string diagnostic)
+        {
+            SimulationRuntimeSpatialInvariantReport report = candidate.Runtime.ValidateSpatialInvariants();
+            diagnostic = report == null || !report.IsValid
+                ? "The private target failed spatial invariant validation."
+                : null;
+            return report != null && report.IsValid;
+        }
+
+        public bool TryAssessNpcRosterCensus(out string failure)
+        {
+            bool valid = candidate.Runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure censusFailure);
+            failure = censusFailure.ToString();
+            return valid;
+        }
+
+        public bool TryValidateTravelPartyBindings(out string diagnostic) =>
+            P12GDailyV1RestoreCoordinator.TryValidateTravelPartyBindings(candidate, out diagnostic);
+
+        public bool TryBindRestoredCandidateMutationGuard(out string diagnostic) =>
+            candidate.Runtime.TryBindRestoredCandidateMutationGuard(out diagnostic);
+
+        public bool TryAdmitRestoredDailyBoundary(
+            WorldId expectedWorldId,
+            long preservedAbsoluteDay,
+            long preservedCompletedCoreSequence,
+            IReadOnlyList<OwnerSectionCensusSnapshot> validatedOwnerSections,
+            long validatedMutationEpoch,
+            out DailyCaptureEligibilityFailure failure) =>
+            candidate.Runtime.TryAdmitRestoredDailyBoundary(
+                expectedWorldId, preservedAbsoluteDay, preservedCompletedCoreSequence,
+                validatedOwnerSections, validatedMutationEpoch, out failure);
+
+        public bool HasValidRestoredDailyBoundaryAdmission() =>
+            candidate.Runtime.HasValidRestoredDailyBoundaryAdmission();
+
+        public bool IsHealthyDailyOwnerThreadBoundary() =>
+            candidate.Runtime.IsHealthyDailyOwnerThreadBoundary();
+    }
+
+    private static P12GDailyV1RestoreStage MapCertificationStage(
+        DailyV1P12RestoredCandidateCertificationStep step)
+    {
+        switch (step)
+        {
+            case DailyV1P12RestoredCandidateCertificationStep.PersonNpcGenealogyBindingsValidated:
+                return P12GDailyV1RestoreStage.TargetPersonNpcGenealogyBindingsValidated;
+            case DailyV1P12RestoredCandidateCertificationStep.TargetOwnerVectorCaptured:
+                return P12GDailyV1RestoreStage.TargetOwnerVectorCaptured;
+            case DailyV1P12RestoredCandidateCertificationStep.TargetOwnerVectorValidated:
+                return P12GDailyV1RestoreStage.TargetOwnerVectorValidated;
+            case DailyV1P12RestoredCandidateCertificationStep.TargetSentinelsValidated:
+                return P12GDailyV1RestoreStage.TargetSentinelsValidated;
+            case DailyV1P12RestoredCandidateCertificationStep.TargetPoliticalKnowledgeBindingsValidated:
+                return P12GDailyV1RestoreStage.TargetPoliticalKnowledgeBindingsValidated;
+            case DailyV1P12RestoredCandidateCertificationStep.TargetSpatialInvariantsValidated:
+                return P12GDailyV1RestoreStage.TargetSpatialInvariantsValidated;
+            case DailyV1P12RestoredCandidateCertificationStep.TargetNpcCensusValidated:
+                return P12GDailyV1RestoreStage.TargetNpcCensusValidated;
+            case DailyV1P12RestoredCandidateCertificationStep.TargetTravelPartyBindingsValidated:
+                return P12GDailyV1RestoreStage.TargetTravelPartyBindingsValidated;
+            case DailyV1P12RestoredCandidateCertificationStep.CandidateGuardBound:
+                return P12GDailyV1RestoreStage.CandidateGuardBound;
+            case DailyV1P12RestoredCandidateCertificationStep.TargetOwnerVectorRecaptured:
+                return P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured;
+            case DailyV1P12RestoredCandidateCertificationStep.BoundaryAdmitted:
+                return P12GDailyV1RestoreStage.BoundaryAdmitted;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(step), step,
+                    "The Core restore-certification stage is not mapped to the compatibility observer.");
+        }
+    }
+
     internal static bool TryCreateRestoredSessionFromImage(
         P12AContinuationImage image,
         P12ACompatibilityDescriptor expectedCompatibility,
@@ -92,6 +219,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
             P12DDailyV1OwnerPackage stagedD = null;
             P12EDailyV1OwnerPackage stagedE = null;
             P12FDailyV1OwnerPackage stagedF = null;
+            DailyV1P12OwnerGraphRestoreStage stagedCoreOwnerGraph = null;
             SimulationTime stagedTime = null;
             SimulationLogger logger = null;
             HistoryStore history = null;
@@ -223,11 +351,11 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     },
                     step => P12EDailyV1OwnerPackage.ObserveCoreOwnerRestoreStep(stageObserver, step),
                     step => P12FDailyV1OwnerPackage.ObserveP12FCoreOwnerRestoreStep(stageObserver, step),
-                    out DailyV1P12OwnerGraphRestoreStage coreOwnerGraph,
+                    out stagedCoreOwnerGraph,
                     out imageResult,
                     out DailyV1P12OwnerGraphRestoreFailure pipelineFailure);
 
-                if (!staged || coreOwnerGraph == null)
+                if (!staged || stagedCoreOwnerGraph == null)
                 {
                     switch (pipelineFailure)
                     {
@@ -236,10 +364,19 @@ internal static partial class P12GDailyV1RestoreCoordinator
                             diagnostic = "P12-C could not privately stage the persisted roots: "
                                 + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
                             break;
+                        case DailyV1P12OwnerGraphRestoreFailure.StagingAuthority:
+                            failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
+                            diagnostic = "The Core application no longer owns the required owner-thread bootstrap or session-replacement reservation for this restore attempt.";
+                            break;
                         case DailyV1P12OwnerGraphRestoreFailure.DefinitionProjection:
                             failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
                             diagnostic = "The current authored Daily-v1 definition catalog is incomplete or ambiguous: "
                                 + definitionDiagnostic;
+                            break;
+                        case DailyV1P12OwnerGraphRestoreFailure.HostPreparation:
+                            failure = P12GDailyV1RestoreFailure.TargetCompositionFailed;
+                            diagnostic = "The host could not prepare the P12-E restore projection context: "
+                                + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
                             break;
                         case DailyV1P12OwnerGraphRestoreFailure.OwnerStage:
                             failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
@@ -266,9 +403,9 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     return false;
                 }
 
-                imageCensus = coreOwnerGraph.ImageCensus;
-                decoded = coreOwnerGraph.Decoded;
-                stagedTime = coreOwnerGraph.StagedTime;
+                imageCensus = stagedCoreOwnerGraph.ImageCensus;
+                decoded = stagedCoreOwnerGraph.Decoded;
+                stagedTime = stagedCoreOwnerGraph.StagedTime;
             }
             else
             {
@@ -389,100 +526,145 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.CandidateComposed);
 
-            SimulationRuntime targetRuntime = candidate.Runtime;
-            if (!TryValidatePersonNpcGenealogyBindings(targetRuntime, out diagnostic))
+            if (application != null)
             {
-                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
-                return false;
+                DailyV1P12RestoredCandidateCertificationFailure certificationFailure =
+                    DailyV1P12RestoredCandidateCertificationFailure.CandidateMismatch;
+                string certificationDiagnostic = null;
+                bool certified = stagedCoreOwnerGraph != null && candidate.CoreRuntimeSession != null
+                    && application.TryCertifyRestoredCandidate(
+                        image, stagedCoreOwnerGraph, candidate.CoreRuntimeSession,
+                        new RestoredCandidateCertificationHost(candidate, stagedCoreOwnerGraph, stagedE),
+                        step => stageObserver?.Invoke(MapCertificationStage(step)),
+                        out certificationFailure, out certificationDiagnostic);
+                if (!certified)
+                {
+                    diagnostic = certificationDiagnostic;
+                    switch (certificationFailure)
+                    {
+                        case DailyV1P12RestoredCandidateCertificationFailure.PersonNpcBindings:
+                        case DailyV1P12RestoredCandidateCertificationFailure.SpatialValidation:
+                        case DailyV1P12RestoredCandidateCertificationFailure.NpcRosterCensus:
+                        case DailyV1P12RestoredCandidateCertificationFailure.TravelPartyBindings:
+                        case DailyV1P12RestoredCandidateCertificationFailure.MutationGuardBinding:
+                            failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                            break;
+                        case DailyV1P12RestoredCandidateCertificationFailure.OwnerVectorCapture:
+                        case DailyV1P12RestoredCandidateCertificationFailure.ImageCensusMismatch:
+                        case DailyV1P12RestoredCandidateCertificationFailure.RemainingOwnerVectorChecks:
+                        case DailyV1P12RestoredCandidateCertificationFailure.OwnerVectorRecapture:
+                            failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                            break;
+                        case DailyV1P12RestoredCandidateCertificationFailure.BoundaryAdmission:
+                            failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
+                            break;
+                        default:
+                            failure = P12GDailyV1RestoreFailure.TargetCompositionFailed;
+                            break;
+                    }
+                    if (string.IsNullOrWhiteSpace(diagnostic))
+                        diagnostic = "The Core application rejected restored-candidate certification: "
+                            + certificationFailure + ".";
+                    return false;
+                }
             }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetPersonNpcGenealogyBindingsValidated);
+            else
+            {
+                SimulationRuntime targetRuntime = candidate.Runtime;
+                if (!TryValidatePersonNpcGenealogyBindings(targetRuntime, out diagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetPersonNpcGenealogyBindingsValidated);
 
-            if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> targetSections,
-                    out long targetEpoch, out ContinuationCensusFailure censusFailure))
-            {
-                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
-                diagnostic = "The private target did not produce a complete quiescent owner vector: "
-                    + censusFailure + ".";
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorCaptured);
+                if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                        out IReadOnlyList<OwnerSectionCensusSnapshot> targetSections,
+                        out long targetEpoch, out ContinuationCensusFailure censusFailure))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                    diagnostic = "The private target did not produce a complete quiescent owner vector: "
+                        + censusFailure + ".";
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorCaptured);
 
-            if (!TryValidateDailyV1ExpeditionExactZero(candidate.Composition, targetSections,
-                    out diagnostic)
-                || !TryValidateAllocatorHighWater(candidate, out diagnostic)
-                || !P12GDailyV1OwnerVector.TryValidateRestoredImageCandidate(
-                    imageCensus, targetSections, out _, out diagnostic)
-                || !TryValidateTargetSentinels(candidate.Composition, targetSections, out diagnostic)
-                || !TryValidatePoliticalKnowledgeBindings(
-                    stagedE.UnresolvedPoliticalKnowledgeBindings, targetRuntime, out diagnostic))
-            {
-                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorValidated);
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetSentinelsValidated);
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetPoliticalKnowledgeBindingsValidated);
+                if (!TryValidateDailyV1ExpeditionExactZero(candidate.Composition, targetSections,
+                        out diagnostic)
+                    || !TryValidateAllocatorHighWater(candidate, out diagnostic)
+                    || !P12GDailyV1OwnerVector.TryValidateRestoredImageCandidate(
+                        imageCensus, targetSections, out _, out diagnostic)
+                    || !TryValidateTargetSentinels(candidate.Composition, targetSections, out diagnostic)
+                    || !TryValidatePoliticalKnowledgeBindings(
+                        stagedE.UnresolvedPoliticalKnowledgeBindings, targetRuntime, out diagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorValidated);
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetSentinelsValidated);
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetPoliticalKnowledgeBindingsValidated);
 
-            SimulationRuntimeSpatialInvariantReport spatialReport = targetRuntime.ValidateSpatialInvariants();
-            if (spatialReport == null || !spatialReport.IsValid)
-            {
-                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
-                diagnostic = "The private target failed spatial invariant validation.";
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetSpatialInvariantsValidated);
+                SimulationRuntimeSpatialInvariantReport spatialReport = targetRuntime.ValidateSpatialInvariants();
+                if (spatialReport == null || !spatialReport.IsValid)
+                {
+                    failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                    diagnostic = "The private target failed spatial invariant validation.";
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetSpatialInvariantsValidated);
 
-            if (!targetRuntime.TryAssessNpcRosterCensus(out censusFailure)
-                || !TryValidateTravelPartyBindings(candidate, out diagnostic))
-            {
-                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
-                if (string.IsNullOrWhiteSpace(diagnostic))
-                    diagnostic = "The private target failed the NPC roster census: " + censusFailure + ".";
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetNpcCensusValidated);
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetTravelPartyBindingsValidated);
+                if (!targetRuntime.TryAssessNpcRosterCensus(out censusFailure)
+                    || !TryValidateTravelPartyBindings(candidate, out diagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                    if (string.IsNullOrWhiteSpace(diagnostic))
+                        diagnostic = "The private target failed the NPC roster census: " + censusFailure + ".";
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetNpcCensusValidated);
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetTravelPartyBindingsValidated);
 
-            if (!targetRuntime.TryBindRestoredCandidateMutationGuard(out diagnostic))
-            {
-                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.CandidateGuardBound);
+                if (!targetRuntime.TryBindRestoredCandidateMutationGuard(out diagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.CandidateGuardBound);
 
-            if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedSections,
-                    out long recapturedEpoch, out censusFailure)
-                || !P12GDailyV1OwnerVector.TryMatchCurrentTargetSnapshot(
-                    targetSections, targetEpoch, recapturedSections, recapturedEpoch,
-                    out _, out diagnostic))
-            {
-                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
-                if (string.IsNullOrWhiteSpace(diagnostic))
-                    diagnostic = "The detached target owner vector changed while binding its mutation guard.";
-                return false;
-            }
-            targetSections = recapturedSections;
-            targetEpoch = recapturedEpoch;
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured);
+                if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                        out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedSections,
+                        out long recapturedEpoch, out censusFailure)
+                    || !P12GDailyV1OwnerVector.TryMatchCurrentTargetSnapshot(
+                        targetSections, targetEpoch, recapturedSections, recapturedEpoch,
+                        out _, out diagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                    if (string.IsNullOrWhiteSpace(diagnostic))
+                        diagnostic = "The detached target owner vector changed while binding its mutation guard.";
+                    return false;
+                }
+                targetSections = recapturedSections;
+                targetEpoch = recapturedEpoch;
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured);
 
-            if (!targetRuntime.TryAdmitRestoredDailyBoundary(stagedC.WorldIdentity,
-                    image.Header.Day, image.Header.Sequence, targetSections, targetEpoch,
-                    out DailyCaptureEligibilityFailure admissionFailure))
-            {
-                failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
-                diagnostic = "The detached target boundary admission failed: " + admissionFailure + ".";
-                return false;
+                if (!targetRuntime.TryAdmitRestoredDailyBoundary(stagedC.WorldIdentity,
+                        image.Header.Day, image.Header.Sequence, targetSections, targetEpoch,
+                        out DailyCaptureEligibilityFailure admissionFailure))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
+                    diagnostic = "The detached target boundary admission failed: " + admissionFailure + ".";
+                    return false;
+                }
+                if (!targetRuntime.HasValidRestoredDailyBoundaryAdmission()
+                    || !targetRuntime.IsHealthyDailyOwnerThreadBoundary())
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
+                    diagnostic = "The restored target did not retain a healthy admitted completed boundary.";
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.BoundaryAdmitted);
             }
-            if (!targetRuntime.HasValidRestoredDailyBoundaryAdmission()
-                || !targetRuntime.IsHealthyDailyOwnerThreadBoundary())
-            {
-                failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
-                diagnostic = "The restored target did not retain a healthy admitted completed boundary.";
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.BoundaryAdmitted);
 
             restoredSession = candidate;
             failure = P12GDailyV1RestoreFailure.None;
