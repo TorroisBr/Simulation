@@ -11755,10 +11755,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner)
         {
             RequireExactActor(owner);
-            if (!runtime.ExecutionBoundaryState.TryBindSelectedP12CrimeJusticeMutationCoordinator(
+            if (!runtime.ExecutionBoundaryState.TryBindSelectedP12CrimeJusticeMutationProtocol(
                     runtime.P12CrimeJusticeMutationProtocol,
-                    runtime.P12CrimeJusticeMutationCoordinator,
-                    graph))
+                    graph,
+                    out _))
                 throw new InvalidOperationException(
                     "The selected P12 Crime/Justice coordinator could not bind to its admitted Core execution state.");
             runtime.ExecutionBoundaryState.EnsureSelectedP12CrimeJusticeOwnerMutationAllowed(owner);

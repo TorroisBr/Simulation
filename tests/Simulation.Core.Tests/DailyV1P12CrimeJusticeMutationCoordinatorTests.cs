@@ -157,9 +157,12 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
                 out string diagnostic), Is.True, diagnostic);
 
         FakeProtocol protocol = new FakeProtocol();
-        int faults = 0;
-        DailyV1P12CrimeJusticeMutationCoordinator coordinator =
-            CreateCoordinator(protocol, () => faults++);
+        Assert.That(composition.ExecutionBoundaryState
+                .TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    protocol, composition.OwnerGraph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator coordinator),
+            Is.True,
+            "The Core execution state creates and pins its own coordinator to the exact census protocol.");
         object crimeProjection = new object();
         object justiceProjection = new object();
         DailyV1JusticeRecordsOwner justiceOwner = composition.OwnerGraph.JusticeRecordsOwner;
@@ -227,7 +230,7 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
             }.OrderBy(section => section, StringComparer.Ordinal))));
         Assert.That(justiceOwner.Revision, Is.EqualTo(1L),
             "Justice revision is read from the exact Core graph owner, not a host callback.");
-        Assert.That(faults, Is.Zero);
+        Assert.That(protocol.Calls, Does.Not.Contain("fault"));
         Assert.That(coordinator.CanBeginDailyMutation(), Is.True);
     }
 
@@ -561,7 +564,12 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
                 out string diagnostic), Is.True, diagnostic);
 
         FakeProtocol protocol = new FakeProtocol();
-        DailyV1P12CrimeJusticeMutationCoordinator coordinator = CreateCoordinator(protocol, () => { });
+        Assert.That(composition.ExecutionBoundaryState
+                .TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    protocol, composition.OwnerGraph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator coordinator),
+            Is.True,
+            "The execution state constructs the coordinator once for its protocol.");
         object crimeOwnerIdentity = new object();
         object justiceOwnerIdentity = new object();
         DailyV1SelectedCrimeJusticeDailyPhase[] phases =

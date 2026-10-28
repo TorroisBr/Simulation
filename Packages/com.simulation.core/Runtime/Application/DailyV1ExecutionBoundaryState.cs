@@ -553,24 +553,23 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     internal DailyV1SelectedRuntimeOwnerGraph SelectedRuntimeOwnerGraph => selectedRuntimeOwnerGraph;
 
     /// <summary>
-    /// Binds the P12 Crime/Justice writer coordinator to this exact admitted
-    /// Core execution session. The host supplies the registered census
-    /// protocol; it cannot replace the coordinator after owner writers bind.
+    /// Binds the host's registered census protocol to this exact admitted Core
+    /// execution session. The execution state constructs and retains the one
+    /// coordinator used by both daily reservations and selected owner writes.
     /// </summary>
-    internal bool TryBindSelectedP12CrimeJusticeMutationCoordinator(
+    internal bool TryBindSelectedP12CrimeJusticeMutationProtocol(
         IDailyV1P12CrimeJusticeMutationProtocol protocol,
-        DailyV1P12CrimeJusticeMutationCoordinator coordinator,
-        DailyV1SelectedRuntimeOwnerGraph graph)
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
     {
         if (protocol == null) throw new ArgumentNullException(nameof(protocol));
-        if (coordinator == null) throw new ArgumentNullException(nameof(coordinator));
+        coordinator = null;
         lock (operationSyncRoot)
         {
             if (!HasAdmittedSelectedDailyExecution
                 || AdmissionContext == null
                 || !AdmissionContext.IsOwnedByCurrentThread()
-                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
-                || !coordinator.IsBoundToProtocol(protocol))
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph))
             {
                 protocol.FaultClosed();
                 return false;
@@ -578,14 +577,23 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
             if (selectedP12CrimeJusticeMutationCoordinator == null)
             {
-                selectedP12CrimeJusticeMutationCoordinator = coordinator;
+                selectedP12CrimeJusticeMutationCoordinator =
+                    new DailyV1P12CrimeJusticeMutationCoordinator(
+                        () => HasAdmittedSelectedDailyExecution,
+                        () => AdmissionContext != null
+                            && AdmissionContext.IsOwnedByCurrentThread(),
+                        protocol.FaultClosed,
+                        protocol);
                 selectedP12CrimeJusticeMutationProtocol = protocol;
+                coordinator = selectedP12CrimeJusticeMutationCoordinator;
                 return true;
             }
 
-            if (ReferenceEquals(selectedP12CrimeJusticeMutationCoordinator, coordinator)
-                && ReferenceEquals(selectedP12CrimeJusticeMutationProtocol, protocol))
+            if (ReferenceEquals(selectedP12CrimeJusticeMutationProtocol, protocol))
+            {
+                coordinator = selectedP12CrimeJusticeMutationCoordinator;
                 return true;
+            }
 
             try { selectedP12CrimeJusticeMutationProtocol?.FaultClosed(); }
             catch { }
@@ -593,6 +601,25 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             catch { }
             return false;
         }
+    }
+
+    /// <summary>
+    /// Compatibility assertion for existing internal callers. The supplied
+    /// coordinator must be the instance created and retained by this Core
+    /// execution state; hosts cannot inject or replace it.
+    /// </summary>
+    internal bool TryBindSelectedP12CrimeJusticeMutationCoordinator(
+        IDailyV1P12CrimeJusticeMutationProtocol protocol,
+        DailyV1P12CrimeJusticeMutationCoordinator coordinator,
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (!TryBindSelectedP12CrimeJusticeMutationProtocol(
+                protocol, graph,
+                out DailyV1P12CrimeJusticeMutationCoordinator coreCoordinator))
+            return false;
+        if (ReferenceEquals(coreCoordinator, coordinator)) return true;
+        protocol.FaultClosed();
+        return false;
     }
 
     /// <summary>Admits a selected NPC Crime/Justice owner leaf through the
@@ -657,7 +684,6 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     /// </summary>
     internal void ExecuteSelectedP12CrimeJusticeDailyMutation(
         IDailyV1P12CrimeJusticeMutationProtocol protocol,
-        DailyV1P12CrimeJusticeMutationCoordinator coordinator,
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1SelectedCrimeJusticeDailyPhase phase,
         object crimeOwnerIdentity,
@@ -669,7 +695,10 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         Action mutation)
     {
         if (protocol == null) throw new ArgumentNullException(nameof(protocol));
-        if (coordinator == null) throw new ArgumentNullException(nameof(coordinator));
+        if (!TryBindSelectedP12CrimeJusticeMutationProtocol(
+                protocol, graph, out DailyV1P12CrimeJusticeMutationCoordinator coordinator))
+            throw new InvalidOperationException(
+                "The P12 Crime/Justice protocol is not bound to this admitted Core session and owner thread.");
         DailyV1P12CrimeJusticeMutationCoordinator boundCoordinator;
         lock (operationSyncRoot)
         {
@@ -677,7 +706,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || AdmissionContext == null
                 || !AdmissionContext.IsOwnedByCurrentThread()
                 || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
-                || !coordinator.IsBoundToProtocol(protocol))
+                || !ReferenceEquals(selectedP12CrimeJusticeMutationCoordinator, coordinator)
+                || !ReferenceEquals(selectedP12CrimeJusticeMutationProtocol, protocol))
             {
                 protocol.FaultClosed();
                 throw new InvalidOperationException(
@@ -715,6 +745,35 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             includeCrimeReceiptSection,
             includeJusticeReceiptSection,
             mutation);
+    }
+
+    /// <summary>
+    /// Compatibility overload that verifies a caller retained this session's
+    /// exact Core-created coordinator before delegating to the session-owned
+    /// daily operation.
+    /// </summary>
+    internal void ExecuteSelectedP12CrimeJusticeDailyMutation(
+        IDailyV1P12CrimeJusticeMutationProtocol protocol,
+        DailyV1P12CrimeJusticeMutationCoordinator coordinator,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1SelectedCrimeJusticeDailyPhase phase,
+        object crimeOwnerIdentity,
+        object crimeReceiptCensusOwnerIdentity,
+        object justiceOwnerIdentity,
+        object justiceReceiptCensusOwnerIdentity,
+        bool includeCrimeReceiptSection,
+        bool includeJusticeReceiptSection,
+        Action mutation)
+    {
+        if (!TryBindSelectedP12CrimeJusticeMutationCoordinator(
+                protocol, coordinator, graph))
+            throw new InvalidOperationException(
+                "A selected P12 Crime/Justice mutation cannot replace its Core-owned coordinator or protocol.");
+        ExecuteSelectedP12CrimeJusticeDailyMutation(
+            protocol, graph, phase, crimeOwnerIdentity,
+            crimeReceiptCensusOwnerIdentity, justiceOwnerIdentity,
+            justiceReceiptCensusOwnerIdentity, includeCrimeReceiptSection,
+            includeJusticeReceiptSection, mutation);
     }
     /// <summary>
     /// Core-owned ordered runtime identity slots used by selected Daily-v1

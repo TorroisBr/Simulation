@@ -71,12 +71,32 @@ public sealed partial class SimulationRuntime
     private IDailyV1P12CrimeJusticeMutationProtocol P12CrimeJusticeMutationProtocol =>
         p12CrimeJusticeMutationProtocol ??=
             new ContinuationCrimeJusticeMutationProtocolAdapter(() => npcRosterCensusProtocol);
-    private DailyV1P12CrimeJusticeMutationCoordinator P12CrimeJusticeMutationCoordinator =>
-        p12CrimeJusticeMutationCoordinator ??= new DailyV1P12CrimeJusticeMutationCoordinator(
-            () => runtimeAdmissionContext != null,
-            IsRuntimeAdmissionOwnerThreadCurrent,
-            FaultRuntimeAdmission,
-            P12CrimeJusticeMutationProtocol);
+    private DailyV1P12CrimeJusticeMutationCoordinator P12CrimeJusticeMutationCoordinator
+    {
+        get
+        {
+            DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
+            if (runtimeAdmissionContext != null && selectedGraph != null
+                && dailyExecutionBoundary != null)
+            {
+                if (!dailyExecutionBoundary.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                        P12CrimeJusticeMutationProtocol, selectedGraph,
+                        out DailyV1P12CrimeJusticeMutationCoordinator selectedCoordinator))
+                {
+                    FaultRuntimeAdmission();
+                    throw new InvalidOperationException(
+                        "The selected P12 Crime/Justice protocol could not bind to its Core execution state.");
+                }
+                return selectedCoordinator;
+            }
+
+            return p12CrimeJusticeMutationCoordinator ??= new DailyV1P12CrimeJusticeMutationCoordinator(
+                () => runtimeAdmissionContext != null,
+                IsRuntimeAdmissionOwnerThreadCurrent,
+                FaultRuntimeAdmission,
+                P12CrimeJusticeMutationProtocol);
+        }
+    }
 
     private bool TryRegisterP12CrimeJusticeOwnerSections(ContinuationCensusProtocol protocol)
     {
@@ -378,7 +398,6 @@ public sealed partial class SimulationRuntime
         {
             dailyExecutionBoundary.ExecuteSelectedP12CrimeJusticeDailyMutation(
                 P12CrimeJusticeMutationProtocol,
-                P12CrimeJusticeMutationCoordinator,
                 graph,
                 phase,
                 crimeCensusOwnerIdentity,
