@@ -337,9 +337,10 @@ internal static class DailyV1SelectedDailyExecutionStage
             && HasUnselectedRuntimeMemberFromCoreRoster(executionState, actorRoster);
         IDailyV1SelectedDayStartExecutionContext dayStartContext = null;
         bool hasSelectedDayStartContext = false;
-        bool dayStartContextPreflighted =
+        bool admittedSelectedBoundariesPreflighted =
             executionState?.HasAdmittedSelectedDailyExecution == true
             && !coreSelectedCompatibility;
+        bool dayStartContextPreflighted = admittedSelectedBoundariesPreflighted;
         if (dayStartContextPreflighted)
         {
             hasSelectedDayStartContext = boundary.TryCreateSelectedDayStartContext(
@@ -351,6 +352,19 @@ internal static class DailyV1SelectedDailyExecutionStage
                 throw new InvalidOperationException(
                     "The selected Daily-v1 host returned a null day-start context.");
         }
+
+        // The travel projection and P12 protocol are also required by an
+        // admitted selected day. Acquire their exact owner bindings before
+        // daily callbacks or writers; actual travel advancement remains at its
+        // established position after actor turns.
+        IDailyV1SelectedTravelDayExecutionContext travelContext = null;
+        bool travelContextPreflighted = admittedSelectedBoundariesPreflighted;
+        if (travelContextPreflighted
+            && (!boundary.TryCreateSelectedTravelDayContext(graph, out travelContext)
+                || travelContext == null
+                || travelContext.Boundary == null))
+            throw new InvalidOperationException(
+                "The selected Daily-v1 host could not provide its exact travel projection and P12 context.");
 
         boundary.BeginLoggerDay(absoluteDay);
 
@@ -532,10 +546,11 @@ internal static class DailyV1SelectedDailyExecutionStage
                 actorTurnContext.Boundary))
             throw new InvalidOperationException(
                 "The selected Core actor-turn stage could not run with the exact admitted graph and runtime roster.");
-        if (!boundary.TryCreateSelectedTravelDayContext(graph,
-                out IDailyV1SelectedTravelDayExecutionContext travelContext)
-            || travelContext == null
-            || travelContext.Boundary == null)
+        if (!travelContextPreflighted
+            && !boundary.TryCreateSelectedTravelDayContext(graph, out travelContext))
+            throw new InvalidOperationException(
+                "The selected Daily-v1 host could not provide its exact travel projection and P12 context.");
+        if (travelContext == null || travelContext.Boundary == null)
             throw new InvalidOperationException(
                 "The selected Daily-v1 host could not provide its exact travel projection and P12 context.");
         bool travelAdvanced = TryAdvanceTravelDay(

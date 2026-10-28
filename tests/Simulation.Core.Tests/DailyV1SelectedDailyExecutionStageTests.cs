@@ -165,6 +165,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "Core selects the compatibility callback from its exact roster even when the host cannot provide a selected day-start context.");
         Assert.That(boundary.DayStartPhases, Is.Empty,
             "The Core-selected day-start scopes do not run alongside the whole-stage fallback.");
+        Assert.That(boundary.Calls.IndexOf("travel-context"), Is.GreaterThan(
+            boundary.Calls.IndexOf("begin-day")),
+            "A mixed Core roster retains the whole-stage compatibility fallback before the later travel boundary is acquired.");
         Assert.That(boundary.Calls, Does.Not.Contain("merchant-plan"));
     }
 
@@ -221,6 +224,36 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "The missing required operation boundary is rejected before logger or enabled demographic writer callbacks.");
         Assert.That(boundary.PublishedDemographyResult, Is.Null,
             "No daily result is published after day-start preflight rejection.");
+    }
+
+    [Test]
+    public void AdmittedTravelBoundaryFailurePrecedesLoggerAndEnabledDemographyWriter()
+    {
+        DailyV1EffectiveDefinitions definitions = CopyWithNaturalMortalityEnabled(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(), true);
+        DailyV1GenesisComposition composition = CreateSelectedGenesis(definitions);
+        FakeBoundary boundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore)
+        {
+            UseSelectedActionExecution = true,
+            UseSelectedDayStartContext = true,
+            RejectTravelContext = true,
+            ThrowOnDemography = true
+        };
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            DailyV1SelectedDailyExecutionStage.Advance(
+                composition.ExecutionBoundaryState, composition.OwnerGraph, boundary));
+
+        Assert.That(failure.Message, Does.Contain(
+            "The selected Daily-v1 host could not provide its exact travel projection and P12 context."));
+        Assert.That(boundary.Calls,
+            Is.EqualTo(new[] { "actor-context", "day-start-context", "travel-context" }),
+            "The admitted selected stage proves its exact travel/P12 boundary before logger or enabled demographic writer callbacks.");
+        Assert.That(boundary.PublishedDemographyResult, Is.Null,
+            "No daily result is published after travel/P12 boundary preflight rejection.");
     }
 
     [Test]
@@ -960,6 +993,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool CrimeSystemPresent { get; set; }
         internal bool JusticeSystemPresent { get; set; }
         internal IReadOnlyList<DailyV1ActorTurnRosterProjection> DayStartRuntimeRosterOverride { get; set; }
+        internal bool RejectTravelContext { get; set; }
         internal bool UseSelectedActionExecution { get; set; }
         internal bool? ActorChoiceSelectedActionExecutionOverride { get; set; }
         internal bool FailDecisionRecordOwnerResolution { get; set; }
@@ -1052,6 +1086,11 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             Assert.That(graph, Is.SameAs(CurrentGraph));
             Calls.Add("travel-context");
+            if (RejectTravelContext)
+            {
+                context = null;
+                return false;
+            }
             context = new FakeTravelContext(this);
             return true;
         }
