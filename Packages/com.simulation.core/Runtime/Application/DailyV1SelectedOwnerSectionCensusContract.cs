@@ -12,6 +12,7 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
 {
     internal const int NpcSectionSchemaVersion = 1;
     internal const int CitySectionSchemaVersion = 1;
+    internal const int FixedOwnerSectionSchemaVersion = 1;
     internal const string CityImportantNpcSectionPrefix = "p12b.city.important-npcs/";
     internal const string CityMarketStockRowsSectionPrefix = "p12e.city-market-stock-rows/";
     internal const string CityPopulationAggregateSectionPrefix = "p12d.city-population.aggregate/";
@@ -48,6 +49,43 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
     internal const string JusticeRecordsSectionId = "p12b.justice-records";
     internal const string CrimeP18ReceiptsSectionId = "p12b.crime-p18-receipts";
     internal const string JusticeP18ReceiptsSectionId = "p12b.justice-p18-receipts";
+    internal const string RuntimeIdentityNpcsSectionId = "p12c.runtime-identities.npcs";
+    internal const string RuntimeIdentityCitiesSectionId = "p12c.runtime-identities.cities";
+    internal const string RuntimeIdentityLocationsSectionId = "p12c.runtime-identities.locations";
+    internal const string RuntimeIdentityRoutesSectionId = "p12c.runtime-identities.routes";
+    internal const string LegacySpatialNetworkLocationsSectionId = "p12d.legacy-spatial-network.locations";
+    internal const string LegacySpatialNetworkRoutesSectionId = "p12d.legacy-spatial-network.routes";
+    internal const string GenealogySectionId = "p12d.genealogy.parentage";
+    internal const string ExplorableSitesSectionId = "p12d.explorable-sites";
+    internal const string InstitutionRecordsSectionId = "p12e.institution.records";
+    internal const string OfficeRecordsSectionId = "p12e.office.records";
+    internal const string OfficeIncumbenciesSectionId = "p12e.office.incumbencies";
+    internal const string OfficeTenuresSectionId = "p12e.office.tenures";
+    internal const string PropertyOwnershipSectionId = "p12e.property.ownership";
+    internal const string PropertyTransferHistorySectionId = "p12e.property.transfer-history";
+    internal const string EstateRecordsSectionId = "p12e.estate.records";
+    internal const string FactionRecordsSectionId = "p12e.faction.records";
+    internal const string FactionAffiliationsSectionId = "p12e.faction.affiliations";
+    internal const string PoliticalClaimRecordsSectionId = "p12e.political-claim.records";
+    internal const string PoliticalClaimRecognitionsSectionId = "p12e.political-claim.recognitions";
+    internal const string PoliticalSupportRelationsSectionId = "p12e.political-support.relations";
+    internal const string PoliticalDecisionRecordsSectionId = "p12f.political-decisions.records";
+    internal const string ContingentManpowerStatesSectionId = "p12e.contingent-manpower.states";
+    internal const string ArmedForceSpatialPositionsSectionId = "p12e.armed-force-spatial.positions";
+    internal const string ConflictsSectionId = "p12e.conflicts";
+    internal const string WarsSectionId = "p12e.wars";
+    internal const string BattlesSectionId = "p12e.battles";
+    internal const string PoliticalKnowledgeSectionId = "p12f.political-knowledge.holders";
+    internal const string ScheduledDirectivesSectionId = "p12f.scheduled-directives";
+    internal const string ActorChoiceInputsSectionId = "p12f.actor-choice-inputs";
+    internal const string TravelPartiesSectionId = "p12f.travel-parties";
+    internal const string ExpeditionsSectionId = "p12f.expeditions";
+    internal const string ArmedForceForcesSectionId = "p12e.armed-force.forces";
+    internal const string ArmedForceContingentsSectionId = "p12e.armed-force.contingents";
+    internal const string ArmedForceRelevantPeopleSectionId = "p12e.armed-force.relevant-person-references";
+    internal const string CrimeSocialOutcomesSectionId = "p12.crime-social-appraisal.outcomes";
+    internal const string CrimeSocialKnowledgeSectionId = "p12.crime-social-appraisal.knowledge";
+    internal const string CrimeSocialReactionsSectionId = "p12.crime-social-appraisal.reactions";
 
     internal static IReadOnlyList<string> NpcPrefixes { get; } = ReadOnly(new[]
     {
@@ -73,7 +111,7 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
     {
         "p12c.runtime-identities.explorable-sites", "p12c.runtime-identities.local-places",
         "p12c.runtime-identities.local-connections", "p12c.runtime-identities.notable-items",
-        "p12d.explorable-sites", "p8b.passage-option-barrier-state", "p8b.crossings",
+        ExplorableSitesSectionId, "p8b.passage-option-barrier-state", "p8b.crossings",
         "p8c.city-site-location-bindings", "p8c.person-positions", "p8d.spatial-route-observations",
         "p8d.person-route-plan-history", "p12f.npc-decision-occurrence-receipts",
         "p12e.economy-keyed-sale-receipts"
@@ -82,36 +120,36 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
     internal static IReadOnlyList<string> FixedRequired { get; } = ReadOnly(new[]
     {
         PersonMembershipSectionId, PersonMaterializationBindingSectionId,
-        "p12c.runtime-identities.npcs", "p12c.runtime-identities.cities", "p12c.runtime-identities.locations",
-        "p12c.runtime-identities.routes", "p12d.legacy-spatial-network.locations", "p12d.legacy-spatial-network.routes",
+        RuntimeIdentityNpcsSectionId, RuntimeIdentityCitiesSectionId, RuntimeIdentityLocationsSectionId,
+        RuntimeIdentityRoutesSectionId, LegacySpatialNetworkLocationsSectionId, LegacySpatialNetworkRoutesSectionId,
         "p8a.hexes", "p8a.locations", "p8a.scale-context", "p12c.runtime-id-allocator.events",
         "p12c.runtime-id-allocator.decisions", "p12c.runtime-id-allocator.travel-parties",
-        "p12c.simulation-record-sequence", "p12d.genealogy.parentage", "p12f.political-knowledge.holders",
-        "p12f.political-decisions.records", "p12.crime-social-appraisal.outcomes",
-        "p12.crime-social-appraisal.knowledge", "p12.crime-social-appraisal.reactions", JusticeRecordsSectionId,
-        CrimeP18ReceiptsSectionId, JusticeP18ReceiptsSectionId, "p12e.armed-force.forces",
-        "p12e.armed-force.contingents", "p12e.armed-force.relevant-person-references",
-        "p12e.contingent-manpower.states", "p12e.armed-force-spatial.positions", "p12e.conflicts",
-        "p12e.wars", "p12e.battles", "p12e.institution.records", "p12e.office.records",
-        "p12e.office.incumbencies", "p12e.office.tenures", "p12e.faction.records",
-        "p12e.faction.affiliations", "p12e.political-claim.records", "p12e.political-claim.recognitions",
-        "p12e.political-support.relations", "p12e.property.ownership", "p12e.property.transfer-history",
-        "p12e.estate.records", "p12f.actor-choice-inputs", "p12f.scheduled-directives",
-        "p12f.travel-parties", "p12f.expeditions"
+        "p12c.simulation-record-sequence", GenealogySectionId, PoliticalKnowledgeSectionId,
+        PoliticalDecisionRecordsSectionId, CrimeSocialOutcomesSectionId,
+        CrimeSocialKnowledgeSectionId, CrimeSocialReactionsSectionId, JusticeRecordsSectionId,
+        CrimeP18ReceiptsSectionId, JusticeP18ReceiptsSectionId, ArmedForceForcesSectionId,
+        ArmedForceContingentsSectionId, ArmedForceRelevantPeopleSectionId,
+        ContingentManpowerStatesSectionId, ArmedForceSpatialPositionsSectionId, ConflictsSectionId,
+        WarsSectionId, BattlesSectionId, InstitutionRecordsSectionId, OfficeRecordsSectionId,
+        OfficeIncumbenciesSectionId, OfficeTenuresSectionId, FactionRecordsSectionId,
+        FactionAffiliationsSectionId, PoliticalClaimRecordsSectionId, PoliticalClaimRecognitionsSectionId,
+        PoliticalSupportRelationsSectionId, PropertyOwnershipSectionId, PropertyTransferHistorySectionId,
+        EstateRecordsSectionId, ActorChoiceInputsSectionId, ScheduledDirectivesSectionId,
+        TravelPartiesSectionId, ExpeditionsSectionId
     });
 
     internal static IReadOnlyList<IReadOnlyList<string>> FixedAliasGroups { get; } = ReadOnlyGroups(new[]
     {
         new[] { JusticeP18ReceiptsSectionId, JusticeRecordsSectionId },
         new[] { "p12c.runtime-id-allocator.decisions", "p12c.runtime-id-allocator.events", "p12c.runtime-id-allocator.travel-parties" },
-        new[] { "p12c.runtime-identities.cities", "p12c.runtime-identities.explorable-sites", "p12c.runtime-identities.local-connections", "p12c.runtime-identities.local-places", "p12c.runtime-identities.locations", "p12c.runtime-identities.notable-items", "p12c.runtime-identities.npcs", "p12c.runtime-identities.routes" },
-        new[] { "p12d.legacy-spatial-network.locations", "p12d.legacy-spatial-network.routes" },
+        new[] { RuntimeIdentityCitiesSectionId, "p12c.runtime-identities.explorable-sites", "p12c.runtime-identities.local-connections", "p12c.runtime-identities.local-places", RuntimeIdentityLocationsSectionId, "p12c.runtime-identities.notable-items", RuntimeIdentityNpcsSectionId, RuntimeIdentityRoutesSectionId },
+        new[] { LegacySpatialNetworkLocationsSectionId, LegacySpatialNetworkRoutesSectionId },
         new[] { "p12d.person.materialization-binding", "p12d.person.membership" },
-        new[] { "p12e.armed-force.contingents", "p12e.armed-force.forces", "p12e.armed-force.relevant-person-references" },
-        new[] { "p12e.faction.affiliations", "p12e.faction.records" },
-        new[] { "p12e.office.incumbencies", "p12e.office.records", "p12e.office.tenures" },
-        new[] { "p12e.political-claim.recognitions", "p12e.political-claim.records" },
-        new[] { "p12e.property.ownership", "p12e.property.transfer-history" },
+        new[] { ArmedForceContingentsSectionId, ArmedForceForcesSectionId, ArmedForceRelevantPeopleSectionId },
+        new[] { FactionAffiliationsSectionId, FactionRecordsSectionId },
+        new[] { OfficeIncumbenciesSectionId, OfficeRecordsSectionId, OfficeTenuresSectionId },
+        new[] { PoliticalClaimRecognitionsSectionId, PoliticalClaimRecordsSectionId },
+        new[] { PropertyOwnershipSectionId, PropertyTransferHistorySectionId },
         new[] { "p8a.hexes", "p8a.locations", "p8a.scale-context", "p8b.crossings" }
     });
 

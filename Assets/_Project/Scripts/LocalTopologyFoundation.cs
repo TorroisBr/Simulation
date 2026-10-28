@@ -1049,7 +1049,7 @@ public sealed class LocalTopologyRuntime
         return false;
     }
 }
-public sealed class LocalTopologyStore : IAuthoritativeMutationGuardBindable
+public sealed partial class LocalTopologyStore : IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly RuntimeIdentityRegistry identityRegistry;

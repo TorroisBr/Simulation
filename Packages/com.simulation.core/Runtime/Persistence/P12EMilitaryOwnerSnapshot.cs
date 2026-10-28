@@ -179,16 +179,16 @@ internal sealed class P12EMilitaryOwnerSnapshot
             return Fail(P12EMilitaryOwnerSnapshotFailureCode.InvalidOwnerValues,
                 "Military owner counts, revisions, and defensive views are inconsistent.", out failure);
 
-        if (!MatchesOwnerSection(sharedOwnerSectionVector, ArmedForceStoreCensusProvider.ForcesSectionId,
-                ArmedForceStoreCensusProvider.SchemaVersion, armedForceOwner, forceCount, armedForceRevision)
-            || !MatchesOwnerSection(sharedOwnerSectionVector, ArmedForceStoreCensusProvider.ContingentsSectionId,
-                ArmedForceStoreCensusProvider.SchemaVersion, armedForceOwner, contingentCount, armedForceRevision)
-            || !MatchesOwnerSection(sharedOwnerSectionVector, ArmedForceStoreCensusProvider.RelevantPersonReferencesSectionId,
-                ArmedForceStoreCensusProvider.SchemaVersion, armedForceOwner, relevantPersonCount, armedForceRevision)
-            || !MatchesOwnerSection(sharedOwnerSectionVector, ContingentManpowerCensusProvider.SectionId,
-                ContingentManpowerCensusProvider.SchemaVersion, manpowerOwner, manpowerStateCount, manpowerRevision)
-            || !MatchesOwnerSection(sharedOwnerSectionVector, ArmedForceSpatialCensusProvider.SectionId,
-                ArmedForceSpatialCensusProvider.SchemaVersion, positionOwner, positionCount, positionRevision))
+        if (!MatchesOwnerSection(sharedOwnerSectionVector, DailyV1SelectedOwnerSectionCensusContract.ArmedForceForcesSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, armedForceOwner, forceCount, armedForceRevision)
+            || !MatchesOwnerSection(sharedOwnerSectionVector, DailyV1SelectedOwnerSectionCensusContract.ArmedForceContingentsSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, armedForceOwner, contingentCount, armedForceRevision)
+            || !MatchesOwnerSection(sharedOwnerSectionVector, DailyV1SelectedOwnerSectionCensusContract.ArmedForceRelevantPeopleSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, armedForceOwner, relevantPersonCount, armedForceRevision)
+            || !MatchesOwnerSection(sharedOwnerSectionVector, DailyV1SelectedOwnerSectionCensusContract.ContingentManpowerStatesSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, manpowerOwner, manpowerStateCount, manpowerRevision)
+            || !MatchesOwnerSection(sharedOwnerSectionVector, DailyV1SelectedOwnerSectionCensusContract.ArmedForceSpatialPositionsSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, positionOwner, positionCount, positionRevision))
             return Fail(P12EMilitaryOwnerSnapshotFailureCode.InvalidOwnerSectionVector,
                 "The P12-B token vector must contain exactly one matching required witness for each of the five existing sections.", out failure);
 
@@ -299,16 +299,16 @@ internal sealed class P12EMilitaryOwnerSnapshot
             || positionOwner.LocalTopologyStore != null
             || positionOwner.HasP16ExtensionState
             || positionOwner.HasP17AProvenanceState
-            || !MatchesOwnerSection(sharedOwnerSectionVector, ArmedForceStoreCensusProvider.ForcesSectionId,
-                ArmedForceStoreCensusProvider.SchemaVersion, armedForceOwner, forceCount, armedForceRevision)
-            || !MatchesOwnerSection(sharedOwnerSectionVector, ArmedForceStoreCensusProvider.ContingentsSectionId,
-                ArmedForceStoreCensusProvider.SchemaVersion, armedForceOwner, contingentCount, armedForceRevision)
-            || !MatchesOwnerSection(sharedOwnerSectionVector, ArmedForceStoreCensusProvider.RelevantPersonReferencesSectionId,
-                ArmedForceStoreCensusProvider.SchemaVersion, armedForceOwner, relevantPersonCount, armedForceRevision)
-            || !MatchesOwnerSection(sharedOwnerSectionVector, ContingentManpowerCensusProvider.SectionId,
-                ContingentManpowerCensusProvider.SchemaVersion, manpowerOwner, manpowerStateCount, manpowerRevision)
-            || !MatchesOwnerSection(sharedOwnerSectionVector, ArmedForceSpatialCensusProvider.SectionId,
-                ArmedForceSpatialCensusProvider.SchemaVersion, positionOwner, positionCount, positionRevision))
+            || !MatchesOwnerSection(sharedOwnerSectionVector, DailyV1SelectedOwnerSectionCensusContract.ArmedForceForcesSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, armedForceOwner, forceCount, armedForceRevision)
+            || !MatchesOwnerSection(sharedOwnerSectionVector, DailyV1SelectedOwnerSectionCensusContract.ArmedForceContingentsSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, armedForceOwner, contingentCount, armedForceRevision)
+            || !MatchesOwnerSection(sharedOwnerSectionVector, DailyV1SelectedOwnerSectionCensusContract.ArmedForceRelevantPeopleSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, armedForceOwner, relevantPersonCount, armedForceRevision)
+            || !MatchesOwnerSection(sharedOwnerSectionVector, DailyV1SelectedOwnerSectionCensusContract.ContingentManpowerStatesSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, manpowerOwner, manpowerStateCount, manpowerRevision)
+            || !MatchesOwnerSection(sharedOwnerSectionVector, DailyV1SelectedOwnerSectionCensusContract.ArmedForceSpatialPositionsSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, positionOwner, positionCount, positionRevision))
             return Fail(P12EMilitaryOwnerSnapshotFailureCode.InvalidOwnerSectionVector,
                 "A military owner changed while its detached values were copied.", out failure);
 
@@ -334,7 +334,7 @@ internal sealed class P12EMilitaryOwnerSnapshot
     internal bool TryStage(
         PersonStore stagedPersons,
         SpatialAuthorityStore stagedSpatialAuthority,
-        LocalTopologyStore stagedLocalTopology,
+        ILocalTopologySpatialReferenceResolver stagedLocalTopology,
         out ArmedForceStore stagedArmedForce,
         out ContingentManpowerStateStore stagedManpower,
         out ArmedForceSpatialStateStore stagedPositions,
@@ -716,11 +716,9 @@ internal sealed class P12EMilitaryOwnerSnapshot
         foreach (P12EForcePositionSnapshotRecord row in Positions)
         {
             if (!TryBuildSpatialReference(row.Reference, out SpatialReference position)
-                || !stagedSpatialAuthority.TryResolve(
-                    position,
-                    null,
-                    out _,
-                    out _))
+                || !SpatialReferenceResolver.TryResolve(
+                    stagedSpatialAuthority, position, null,
+                    out _, out _, out _, out _))
                 return Fail(P12EMilitaryOwnerSnapshotFailureCode.InvalidSpatialReference,
                     "A typed force position does not resolve against the staged P8 authority with topology absent.", out failure);
         }

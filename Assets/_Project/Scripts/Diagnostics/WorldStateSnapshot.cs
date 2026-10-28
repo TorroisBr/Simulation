@@ -2379,8 +2379,8 @@ public static class WorldStateSnapshotBuilder
             BuildNotableItemSnapshots(context.PlaceContentStore),
             BuildLocalTopologySnapshots(
                 context.LocalTopologyStore
-                    ?? context.ArmedForceSpatialStateStore?.LocalTopologyStore
-                    ?? context.BattleStore?.LocalTopologyStore),
+                    ?? context.ArmedForceSpatialStateStore?.LocalTopologyStore as LocalTopologyStore
+                    ?? context.BattleStore?.LocalTopologyStore as LocalTopologyStore),
             calendarDate,
             persons,
             parentages,

@@ -23,7 +23,7 @@ internal static class P12EMilitaryOwnerCodec
     {
         sections = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            ArmedForceStoreCensusProvider.ForcesSectionId);
+            DailyV1SelectedOwnerSectionCensusContract.ArmedForceForcesSectionId);
         if (snapshot == null || !snapshot.TryValidateDocument(out _)) return false;
         if (snapshot.ForceCount > P12AContinuationCodec.MaxRows
             || snapshot.ContingentCount > P12AContinuationCodec.MaxRows
@@ -77,22 +77,22 @@ internal static class P12EMilitaryOwnerCodec
 
         try
         {
-            if (!TryGet(byId, ArmedForceStoreCensusProvider.ForcesSectionId,
-                    ArmedForceStoreCensusProvider.SchemaVersion, out P12AOwnerSection forceSection, out result)
-                || !TryGet(byId, ArmedForceStoreCensusProvider.ContingentsSectionId,
-                    ArmedForceStoreCensusProvider.SchemaVersion, out P12AOwnerSection contingentSection, out result)
-                || !TryGet(byId, ArmedForceStoreCensusProvider.RelevantPersonReferencesSectionId,
-                    ArmedForceStoreCensusProvider.SchemaVersion, out P12AOwnerSection personSection, out result)
-                || !TryGet(byId, ContingentManpowerCensusProvider.SectionId,
-                    ContingentManpowerCensusProvider.SchemaVersion, out P12AOwnerSection manpowerSection, out result)
-                || !TryGet(byId, ArmedForceSpatialCensusProvider.SectionId,
-                    ArmedForceSpatialCensusProvider.SchemaVersion, out P12AOwnerSection positionSection, out result))
+            if (!TryGet(byId, DailyV1SelectedOwnerSectionCensusContract.ArmedForceForcesSectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, out P12AOwnerSection forceSection, out result)
+                || !TryGet(byId, DailyV1SelectedOwnerSectionCensusContract.ArmedForceContingentsSectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, out P12AOwnerSection contingentSection, out result)
+                || !TryGet(byId, DailyV1SelectedOwnerSectionCensusContract.ArmedForceRelevantPeopleSectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, out P12AOwnerSection personSection, out result)
+                || !TryGet(byId, DailyV1SelectedOwnerSectionCensusContract.ContingentManpowerStatesSectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, out P12AOwnerSection manpowerSection, out result)
+                || !TryGet(byId, DailyV1SelectedOwnerSectionCensusContract.ArmedForceSpatialPositionsSectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, out P12AOwnerSection positionSection, out result))
                 return false;
 
             if (forceSection.Revision != contingentSection.Revision
                 || forceSection.Revision != personSection.Revision)
             {
-                result = Invalid(ArmedForceStoreCensusProvider.ForcesSectionId);
+                result = Invalid(DailyV1SelectedOwnerSectionCensusContract.ArmedForceForcesSectionId);
                 return false;
             }
 
@@ -119,7 +119,7 @@ internal static class P12EMilitaryOwnerCodec
                 forces, contingents, persons, manpower, positions);
             if (!candidate.TryValidateDocument(out _))
             {
-                result = Invalid(ArmedForceStoreCensusProvider.ForcesSectionId);
+                result = Invalid(DailyV1SelectedOwnerSectionCensusContract.ArmedForceForcesSectionId);
                 return false;
             }
             snapshot = candidate;
@@ -154,8 +154,8 @@ internal static class P12EMilitaryOwnerCodec
                 writer.Write(row.IsDetached);
             }));
         }
-        return BuildSection(ArmedForceStoreCensusProvider.ForcesSectionId,
-            ArmedForceStoreCensusProvider.SchemaVersion, snapshot.ArmedForceRevision, rows, out section, out result);
+        return BuildSection(DailyV1SelectedOwnerSectionCensusContract.ArmedForceForcesSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, snapshot.ArmedForceRevision, rows, out section, out result);
     }
 
     private static bool TryEncodeContingents(P12EMilitaryOwnerSnapshot snapshot,
@@ -178,8 +178,8 @@ internal static class P12EMilitaryOwnerCodec
                 { P12AWire.WriteString(writer, characteristic.Key); P12AWire.WriteString(writer, characteristic.Value); }
             }));
         }
-        return BuildSection(ArmedForceStoreCensusProvider.ContingentsSectionId,
-            ArmedForceStoreCensusProvider.SchemaVersion, snapshot.ArmedForceRevision, rows, out section, out result);
+        return BuildSection(DailyV1SelectedOwnerSectionCensusContract.ArmedForceContingentsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, snapshot.ArmedForceRevision, rows, out section, out result);
     }
 
     private static bool TryEncodeRelevantPersons(P12EMilitaryOwnerSnapshot snapshot,
@@ -197,8 +197,8 @@ internal static class P12EMilitaryOwnerCodec
                 P12AWire.WriteString(writer, row.RoleKey);
             }));
         }
-        return BuildSection(ArmedForceStoreCensusProvider.RelevantPersonReferencesSectionId,
-            ArmedForceStoreCensusProvider.SchemaVersion, snapshot.ArmedForceRevision, rows, out section, out result);
+        return BuildSection(DailyV1SelectedOwnerSectionCensusContract.ArmedForceRelevantPeopleSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, snapshot.ArmedForceRevision, rows, out section, out result);
     }
 
     private static bool TryEncodeManpower(P12EMilitaryOwnerSnapshot snapshot,
@@ -223,8 +223,8 @@ internal static class P12EMilitaryOwnerCodec
                 }
             }));
         }
-        return BuildSection(ContingentManpowerCensusProvider.SectionId,
-            ContingentManpowerCensusProvider.SchemaVersion, snapshot.ManpowerRevision, rows, out section, out result);
+        return BuildSection(DailyV1SelectedOwnerSectionCensusContract.ContingentManpowerStatesSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, snapshot.ManpowerRevision, rows, out section, out result);
     }
 
     private static bool TryEncodePositions(P12EMilitaryOwnerSnapshot snapshot,
@@ -240,8 +240,8 @@ internal static class P12EMilitaryOwnerCodec
                 WriteSpatialReference(writer, row.Reference);
             }));
         }
-        return BuildSection(ArmedForceSpatialCensusProvider.SectionId,
-            ArmedForceSpatialCensusProvider.SchemaVersion, snapshot.PositionRevision, rows, out section, out result);
+        return BuildSection(DailyV1SelectedOwnerSectionCensusContract.ArmedForceSpatialPositionsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, snapshot.PositionRevision, rows, out section, out result);
     }
 
     private static P12EMilitaryForceSnapshotRecord DecodeForce(BinaryReader reader)

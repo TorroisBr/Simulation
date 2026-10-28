@@ -2,6 +2,45 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
+public enum BattleOutcomeType
+{
+    Victory = 0,
+    Draw = 1
+}
+
+/// <summary>Immutable audit identities retained for a proposed Battle outcome.</summary>
+public sealed class BattleResolutionProvenance
+{
+    public BattleResolutionProvenance(
+        string policyFingerprint,
+        string numericExecutionProfileKey,
+        string projectionVersion,
+        string causalResolutionFingerprint,
+        string sourceContextFingerprint,
+        string capabilityRuleKey,
+        string randomAuthorityRuleKey,
+        string resolverSettingsIdentity)
+    {
+        PolicyFingerprint = policyFingerprint;
+        NumericExecutionProfileKey = numericExecutionProfileKey;
+        ProjectionVersion = projectionVersion;
+        CausalResolutionFingerprint = causalResolutionFingerprint;
+        SourceContextFingerprint = sourceContextFingerprint;
+        CapabilityRuleKey = capabilityRuleKey;
+        RandomAuthorityRuleKey = randomAuthorityRuleKey;
+        ResolverSettingsIdentity = resolverSettingsIdentity;
+    }
+
+    public string PolicyFingerprint { get; }
+    public string NumericExecutionProfileKey { get; }
+    public string ProjectionVersion { get; }
+    public string CausalResolutionFingerprint { get; }
+    public string SourceContextFingerprint { get; }
+    public string CapabilityRuleKey { get; }
+    public string RandomAuthorityRuleKey { get; }
+    public string ResolverSettingsIdentity { get; }
+}
+
 public sealed class ConflictId : IEquatable<ConflictId>
 {
     public string Value { get; }

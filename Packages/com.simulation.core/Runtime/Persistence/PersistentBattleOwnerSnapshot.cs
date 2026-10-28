@@ -66,7 +66,7 @@ internal sealed class PersistentBattleOwnerSnapshotFailure
 /// </summary>
 internal sealed class PersistentBattleOwnerSnapshot
 {
-    internal const string SectionId = PersistentBattleCensusProvider.SectionId;
+    internal const string SectionId = DailyV1SelectedOwnerSectionCensusContract.BattlesSectionId;
     internal const int CurrentSchemaVersion = 1;
 
     internal int SchemaVersion { get; }
@@ -160,7 +160,7 @@ internal sealed class PersistentBattleOwnerSnapshot
         if (!MatchesUniqueRequiredSection(
                 sharedOwnerSectionVector,
                 SectionId,
-                PersistentBattleCensusProvider.SchemaVersion,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion,
                 owner,
                 sourceCount,
                 sourceRevision))
@@ -190,7 +190,7 @@ internal sealed class PersistentBattleOwnerSnapshot
             || !MatchesUniqueRequiredSection(
                 sharedOwnerSectionVector,
                 SectionId,
-                PersistentBattleCensusProvider.SchemaVersion,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion,
                 owner,
                 sourceCount,
                 sourceRevision))
@@ -215,7 +215,7 @@ internal sealed class PersistentBattleOwnerSnapshot
         PersistentConflictStore stagedConflictStore,
         PersistentWarStore stagedWarStore,
         SpatialAuthorityStore stagedSpatialAuthorityStore,
-        LocalTopologyStore localTopologyStore,
+        ILocalTopologySpatialReferenceResolver localTopologyStore,
         out PersistentBattleStore stagedBattleStore,
         out PersistentBattleOwnerSnapshotFailure failure)
     {
@@ -235,7 +235,7 @@ internal sealed class PersistentBattleOwnerSnapshot
         PersistentConflictStore conflictStore,
         PersistentWarStore warStore,
         SpatialAuthorityStore spatialAuthorityStore,
-        LocalTopologyStore localTopologyStore,
+        ILocalTopologySpatialReferenceResolver localTopologyStore,
         out IReadOnlyList<PersistentBattleRecord> records,
         out PersistentBattleOwnerSnapshotFailure failure)
     {
@@ -641,7 +641,8 @@ internal sealed class PersistentBattleOwnerSnapshot
                 return InvalidSpatial(out failure);
         }
 
-        if (!spatialAuthorityStore.TryResolve(location, null, out _, out _))
+        if (!SpatialReferenceResolver.TryResolve(
+                spatialAuthorityStore, location, null, out _, out _, out _, out _))
         {
             failure = PersistentBattleOwnerSnapshotFailure.Create(
                 PersistentBattleOwnerSnapshotFailureCode.InvalidSpatialReference,

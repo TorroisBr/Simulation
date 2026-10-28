@@ -36,6 +36,38 @@ public sealed class SpatialResolution
 /// Preserves existing Unity/P10 source APIs while delegating all P8 spatial
 /// identity, binding, revision, and location resolution to Core's authority.
 /// </summary>
+public sealed partial class LocalTopologyStore : ILocalTopologySpatialReferenceResolver
+{
+    public bool TryResolveSubLocation(
+        SpatialAuthorityStore spatialAuthority,
+        SpatialReference reference,
+        out HexRecord hex,
+        out LocationRecord location,
+        out CrossingRecord crossing,
+        out SpatialAuthorityFailure failure)
+    {
+        hex = null;
+        location = null;
+        crossing = null;
+        if (spatialAuthority == null)
+        {
+            failure = SpatialAuthorityFailure.Create(
+                SpatialAuthorityFailureCode.InvalidSpatialReference,
+                "SpatialAuthorityStore is required.");
+            return false;
+        }
+
+        if (!spatialAuthority.TryResolve(
+                reference, this, out SpatialResolution projection, out failure))
+            return false;
+
+        hex = projection.Hex;
+        location = projection.Location;
+        crossing = projection.Crossing;
+        return true;
+    }
+}
+
 public static class SpatialAuthorityTopologyAdapter
 {
     public static bool TryBindLocalTopology(

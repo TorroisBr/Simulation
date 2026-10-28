@@ -19,7 +19,7 @@ internal static class P12EPersistentConflictWarBattleOwnerCodec
         out IReadOnlyList<P12AOwnerSection> sections, out P12AResult result)
     {
         sections = null;
-        result = Invalid(PersistentConflictCensusProvider.SectionId);
+        result = Invalid(DailyV1SelectedOwnerSectionCensusContract.ConflictsSectionId);
         if (!TryEncodeConflicts(conflicts, out P12AOwnerSection conflictSection, out result)
             || !TryEncodeWars(wars, out P12AOwnerSection warSection, out result)
             || !TryEncodeBattles(battles, out P12AOwnerSection battleSection, out result)) return false;
@@ -43,12 +43,12 @@ internal static class P12EPersistentConflictWarBattleOwnerCodec
             if (section == null || string.IsNullOrWhiteSpace(section.Id) || map.ContainsKey(section.Id)) return false;
             map.Add(section.Id, section);
         }
-        if (!TryGetSection(map, PersistentConflictCensusProvider.SectionId,
-                PersistentConflictCensusProvider.SchemaVersion, out P12AOwnerSection conflictSection, out result)
-            || !TryGetSection(map, PersistentWarCensusProvider.SectionId,
-                PersistentWarCensusProvider.SchemaVersion, out P12AOwnerSection warSection, out result)
-            || !TryGetSection(map, PersistentBattleCensusProvider.SectionId,
-                PersistentBattleCensusProvider.SchemaVersion, out P12AOwnerSection battleSection, out result))
+        if (!TryGetSection(map, DailyV1SelectedOwnerSectionCensusContract.ConflictsSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, out P12AOwnerSection conflictSection, out result)
+            || !TryGetSection(map, DailyV1SelectedOwnerSectionCensusContract.WarsSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, out P12AOwnerSection warSection, out result)
+            || !TryGetSection(map, DailyV1SelectedOwnerSectionCensusContract.BattlesSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, out P12AOwnerSection battleSection, out result))
             return false;
         try
         {
@@ -89,7 +89,7 @@ internal static class P12EPersistentConflictWarBattleOwnerCodec
         out P12AOwnerSection section, out P12AResult result)
     {
         section = null;
-        result = Invalid(PersistentConflictCensusProvider.SectionId);
+        result = Invalid(DailyV1SelectedOwnerSectionCensusContract.ConflictsSectionId);
         if (snapshot == null || snapshot.SchemaVersion != PersistentConflictOwnerSnapshot.CurrentSchemaVersion
             || snapshot.Revision < 0L || snapshot.RecordCount < 0 || snapshot.Records == null
             || snapshot.RecordCount != snapshot.Records.Count || snapshot.RecordCount > P12AContinuationCodec.MaxRows)
@@ -105,14 +105,14 @@ internal static class P12EPersistentConflictWarBattleOwnerCodec
                 previous = row.ConflictIdValue;
                 rows.Add(WriteRow(ConflictPrefix + row.ConflictIdValue, ConflictKind, writer => WriteConflict(writer, row)));
             }
-            return BuildSection(PersistentConflictCensusProvider.SectionId,
-                PersistentConflictCensusProvider.SchemaVersion, snapshot.Revision, rows, out section, out result);
+            return BuildSection(DailyV1SelectedOwnerSectionCensusContract.ConflictsSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, snapshot.Revision, rows, out section, out result);
         }
         catch (Exception exception) when (IsWireException(exception))
         {
             result = new P12AResult(exception is P12ALimitException || exception is OverflowException
                 ? P12AResultCode.LimitExceeded : P12AResultCode.InvalidOwnerValue,
-                PersistentConflictCensusProvider.SectionId);
+                DailyV1SelectedOwnerSectionCensusContract.ConflictsSectionId);
             return false;
         }
     }
@@ -121,7 +121,7 @@ internal static class P12EPersistentConflictWarBattleOwnerCodec
         out P12AOwnerSection section, out P12AResult result)
     {
         section = null;
-        result = Invalid(PersistentWarCensusProvider.SectionId);
+        result = Invalid(DailyV1SelectedOwnerSectionCensusContract.WarsSectionId);
         if (snapshot == null || snapshot.SchemaVersion != PersistentWarOwnerSnapshot.CurrentSchemaVersion
             || snapshot.Revision < 0L || snapshot.RecordCount < 0 || snapshot.Records == null
             || snapshot.RecordCount != snapshot.Records.Count || snapshot.RecordCount > P12AContinuationCodec.MaxRows)
@@ -137,14 +137,14 @@ internal static class P12EPersistentConflictWarBattleOwnerCodec
                 previous = row.WarIdValue;
                 rows.Add(WriteRow(WarPrefix + row.WarIdValue, WarKind, writer => WriteWar(writer, row)));
             }
-            return BuildSection(PersistentWarCensusProvider.SectionId,
-                PersistentWarCensusProvider.SchemaVersion, snapshot.Revision, rows, out section, out result);
+            return BuildSection(DailyV1SelectedOwnerSectionCensusContract.WarsSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, snapshot.Revision, rows, out section, out result);
         }
         catch (Exception exception) when (IsWireException(exception))
         {
             result = new P12AResult(exception is P12ALimitException || exception is OverflowException
                 ? P12AResultCode.LimitExceeded : P12AResultCode.InvalidOwnerValue,
-                PersistentWarCensusProvider.SectionId);
+                DailyV1SelectedOwnerSectionCensusContract.WarsSectionId);
             return false;
         }
     }
@@ -153,7 +153,7 @@ internal static class P12EPersistentConflictWarBattleOwnerCodec
         out P12AOwnerSection section, out P12AResult result)
     {
         section = null;
-        result = Invalid(PersistentBattleCensusProvider.SectionId);
+        result = Invalid(DailyV1SelectedOwnerSectionCensusContract.BattlesSectionId);
         if (snapshot == null || snapshot.SchemaVersion != PersistentBattleOwnerSnapshot.CurrentSchemaVersion
             || snapshot.Revision < 0L || snapshot.RecordCount < 0 || snapshot.Records == null
             || snapshot.RecordCount != snapshot.Records.Count || snapshot.RecordCount > P12AContinuationCodec.MaxRows)
@@ -169,14 +169,14 @@ internal static class P12EPersistentConflictWarBattleOwnerCodec
                 previous = row.BattleIdValue;
                 rows.Add(WriteRow(BattlePrefix + row.BattleIdValue, BattleKind, writer => WriteBattle(writer, row)));
             }
-            return BuildSection(PersistentBattleCensusProvider.SectionId,
-                PersistentBattleCensusProvider.SchemaVersion, snapshot.Revision, rows, out section, out result);
+            return BuildSection(DailyV1SelectedOwnerSectionCensusContract.BattlesSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion, snapshot.Revision, rows, out section, out result);
         }
         catch (Exception exception) when (IsWireException(exception))
         {
             result = new P12AResult(exception is P12ALimitException || exception is OverflowException
                 ? P12AResultCode.LimitExceeded : P12AResultCode.InvalidOwnerValue,
-                PersistentBattleCensusProvider.SectionId);
+                DailyV1SelectedOwnerSectionCensusContract.BattlesSectionId);
             return false;
         }
     }

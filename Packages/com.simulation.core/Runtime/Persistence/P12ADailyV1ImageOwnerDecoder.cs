@@ -100,20 +100,20 @@ internal static class P12ADailyV1ImageOwnerDecoder
         {
             if (!P12ARuntimeIdentityOwnerCodec.TryDecode(new[]
                 {
-                    Section(RuntimeIdentityRegistryCensusProvider.NpcsSectionId),
-                    Section(RuntimeIdentityRegistryCensusProvider.CitiesSectionId),
-                    Section(RuntimeIdentityRegistryCensusProvider.LocationsSectionId),
-                    Section(RuntimeIdentityRegistryCensusProvider.RoutesSectionId)
+                    Section(DailyV1SelectedOwnerSectionCensusContract.RuntimeIdentityNpcsSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.RuntimeIdentityCitiesSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.RuntimeIdentityLocationsSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.RuntimeIdentityRoutesSectionId)
                 }, out P12CRuntimeIdentityOwnerSnapshot identities, out result)
                 || !P12ASpatialNetworkOwnerCodec.TryDecode(
-                    Section(SpatialNetworkCensusProvider.LocationsSectionId),
-                    Section(SpatialNetworkCensusProvider.RoutesSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.LegacySpatialNetworkLocationsSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.LegacySpatialNetworkRoutesSectionId),
                     out SpatialNetworkOwnerSnapshot spatial, out result)
                 || !P12APersonStoreOwnerCodec.TryDecode(
-                    Section(PersonMembershipCensusProvider.SectionId),
-                    Section(PersonMaterializationBindingCensusProvider.SectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId),
                     out PersonStoreOwnerSnapshot persons, out result)
-                || !P12AGenealogyOwnerCodec.TryDecode(Section(GenealogyCensusProvider.SectionId),
+                || !P12AGenealogyOwnerCodec.TryDecode(Section(DailyV1SelectedOwnerSectionCensusContract.GenealogySectionId),
                     out GenealogyOwnerSnapshot genealogy, out result)) return false;
 
             List<P12AOwnerSection> citySections = image.Sections.Where(section =>
@@ -126,7 +126,7 @@ internal static class P12ADailyV1ImageOwnerDecoder
                 .Select(Section).ToArray();
             if (!TryValidateExactEmptySections(emptySections, out result)) return false;
             P12AOwnerSection siteSection = emptySections.Single(section =>
-                section.Id == ExplorableSiteCensusProvider.SectionId);
+                section.Id == DailyV1SelectedOwnerSectionCensusContract.ExplorableSitesSectionId);
             ExplorableSiteOwnerSnapshot sites = new ExplorableSiteOwnerSnapshot(
                 ExplorableSiteOwnerSnapshot.CurrentSchemaVersion, siteSection.Revision,
                 Array.Empty<ExplorableSiteOwnerSnapshotRecord>());
@@ -137,67 +137,67 @@ internal static class P12ADailyV1ImageOwnerDecoder
 
             long day = image.Header.Day;
             if (!P12EInstitutionOfficeOwnerCodec.TryDecode(
-                    Section(InstitutionOfficeCensusProvider.InstitutionsSectionId),
-                    Section(InstitutionOfficeCensusProvider.OfficesSectionId),
-                    Section(InstitutionOfficeCensusProvider.IncumbenciesSectionId),
-                    Section(InstitutionOfficeCensusProvider.TenuresSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.InstitutionRecordsSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.OfficeRecordsSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.OfficeIncumbenciesSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.OfficeTenuresSectionId),
                     out P12EInstitutionOfficeOwnerSnapshot institutionOffice, out result)
                 || !P12EPropertyEstateOwnerCodec.TryDecode(
-                    Section(PropertyOwnershipCensusProvider.OwnershipSectionId),
-                    Section(PropertyOwnershipCensusProvider.TransferHistorySectionId),
-                    Section(EstateCensusProvider.SectionId), day,
+                    Section(DailyV1SelectedOwnerSectionCensusContract.PropertyOwnershipSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.PropertyTransferHistorySectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.EstateRecordsSectionId), day,
                     out PropertyEstateOwnerSnapshot propertyEstate, out result)
                 || !P12EFactionOwnerCodec.TryDecode(
-                    Section(FactionStoreCensusProvider.FactionsSectionId),
-                    Section(FactionStoreCensusProvider.AffiliationsSectionId), day,
+                    Section(DailyV1SelectedOwnerSectionCensusContract.FactionRecordsSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.FactionAffiliationsSectionId), day,
                     out P12EFactionOwnerSnapshot faction, out result)
                 || !P12EPoliticalClaimOwnerCodec.TryDecode(
-                    Section(PoliticalClaimStoreCensusProvider.ClaimsSectionId),
-                    Section(PoliticalClaimStoreCensusProvider.RecognitionsSectionId), day,
+                    Section(DailyV1SelectedOwnerSectionCensusContract.PoliticalClaimRecordsSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.PoliticalClaimRecognitionsSectionId), day,
                     out P12EPoliticalClaimOwnerSnapshot claims, out result)
                 || !P12EPoliticalSupportOwnerCodec.TryDecode(
-                    Section(PoliticalSupportStoreCensusProvider.RelationsSectionId), day,
+                    Section(DailyV1SelectedOwnerSectionCensusContract.PoliticalSupportRelationsSectionId), day,
                     out P12EPoliticalSupportOwnerSnapshot support, out result)
                 || !P12EPoliticalDecisionOwnerCodec.TryDecode(
-                    Section(PoliticalDecisionStoreCensusProvider.SectionId), day,
+                    Section(DailyV1SelectedOwnerSectionCensusContract.PoliticalDecisionRecordsSectionId), day,
                     out P12EPoliticalDecisionOwnerSnapshot decisions, out result)
                 || !P12EMilitaryOwnerCodec.TryDecode(image.Sections.Where(section =>
                     section.Id.StartsWith("p12e.armed-force.", StringComparison.Ordinal)
-                    || section.Id == ContingentManpowerCensusProvider.SectionId
-                    || section.Id == ArmedForceSpatialCensusProvider.SectionId).ToArray(),
+                    || section.Id == DailyV1SelectedOwnerSectionCensusContract.ContingentManpowerStatesSectionId
+                    || section.Id == DailyV1SelectedOwnerSectionCensusContract.ArmedForceSpatialPositionsSectionId).ToArray(),
                     out P12EMilitaryOwnerSnapshot military, out result)
                 || !P12EPersistentConflictWarBattleOwnerCodec.TryDecode(image.Sections.Where(section =>
-                    section.Id == PersistentConflictCensusProvider.SectionId
-                    || section.Id == PersistentWarCensusProvider.SectionId
-                    || section.Id == PersistentBattleCensusProvider.SectionId).ToArray(),
+                    section.Id == DailyV1SelectedOwnerSectionCensusContract.ConflictsSectionId
+                    || section.Id == DailyV1SelectedOwnerSectionCensusContract.WarsSectionId
+                    || section.Id == DailyV1SelectedOwnerSectionCensusContract.BattlesSectionId).ToArray(),
                     out PersistentConflictOwnerSnapshot conflicts,
                     out PersistentWarOwnerSnapshot wars,
                     out PersistentBattleOwnerSnapshot battles, out result)
                 || !P12EJusticeRecordsOwnerCodec.TryDecode(
-                    Section(P12CrimeJusticeCensusProvider.JusticeRecordsSectionId), day,
+                    Section(DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId), day,
                     out P12EJusticeRecordsOwnerSnapshot justice, out result)
                 || !TryDecodeCrimeSocial(image, day,
                     out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocial, out result)
                 || !P12AReceiptOwnerCodec.TryDecode(new[]
                     {
-                        Section(P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId),
-                        Section(P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId)
+                        Section(DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId),
+                        Section(DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId)
                     }, out P12ACrimeReceiptOwnerSnapshot crimeReceipts,
                     out P12AJusticeReceiptOwnerSnapshot justiceReceipts, out result)
                 || !P12AFPoliticalKnowledgeCodec.TryDecode(
-                    Section(PoliticalKnowledgeStoreCensusProvider.SectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.PoliticalKnowledgeSectionId),
                     out P12FPoliticalKnowledgeOwnerSnapshot politicalKnowledge, out result)
                 || !P12AFScheduledDirectiveCodec.TryDecode(
-                    Section(ScheduledDirectiveCensusProvider.SectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.ScheduledDirectivesSectionId),
                     out P12FScheduledDirectiveOwnerSnapshot directives, out result)
                 || !P12AActorChoiceCodec.TryDecode(
-                    Section(ActorChoiceP11CensusProvider.SectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.ActorChoiceInputsSectionId),
                     out P12FActorChoiceSnapshot actorChoices, out result)
                 || !P12AFCommitmentOwnerCodec.TryDecodeTravelParties(
-                    Section(TravelPartyCensusProvider.SectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.TravelPartiesSectionId),
                     out P12FTravelPartyOwnerSnapshot travelParties, out result)
                 || !P12AFCommitmentOwnerCodec.TryDecodeExpeditions(
-                    Section(ExpeditionCensusProvider.SectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.ExpeditionsSectionId),
                     out P12FExpeditionOwnerSnapshot expeditions, out result)) return false;
 
             snapshots = new P12ADailyV1ImageOwnerSnapshots(c, identities, spatial, persons,
@@ -228,13 +228,13 @@ internal static class P12ADailyV1ImageOwnerDecoder
     {
         snapshot = null;
         if (!P12ECrimeSocialAppraisalOwnerCodec.TryDecodeOutcomes(
-                Find(image, P12CrimeSocialAppraisalCensusProvider.OutcomesSectionId), day,
+                Find(image, DailyV1SelectedOwnerSectionCensusContract.CrimeSocialOutcomesSectionId), day,
                 out P12ECrimeOwnerSnapshotSection<P12ECrimeOutcomeSnapshotRow> outcomes, out result)
             || !P12ECrimeSocialAppraisalOwnerCodec.TryDecodeKnowledge(
-                Find(image, P12CrimeSocialAppraisalCensusProvider.KnowledgeSectionId), day,
+                Find(image, DailyV1SelectedOwnerSectionCensusContract.CrimeSocialKnowledgeSectionId), day,
                 out P12ECrimeOwnerSnapshotSection<P12ECrimeKnowledgeSnapshotRow> knowledge, out result)
             || !P12ECrimeSocialAppraisalOwnerCodec.TryDecodeReactions(
-                Find(image, P12CrimeSocialAppraisalCensusProvider.ReactionsSectionId), day,
+                Find(image, DailyV1SelectedOwnerSectionCensusContract.CrimeSocialReactionsSectionId), day,
                 out P12ECrimeOwnerSnapshotSection<P12ESocialReactionSnapshotRow> reactions, out result))
             return false;
         snapshot = new P12ECrimeSocialAppraisalOwnerSnapshot(day, outcomes, knowledge, reactions);

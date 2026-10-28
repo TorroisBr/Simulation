@@ -324,6 +324,65 @@ internal sealed class SpatialAuthorityResolution
 /// identities to a Location. It does not provide grid generation, traversal,
 /// or travel time.
 /// </summary>
+public interface ILocalTopologySpatialReferenceResolver
+{
+    bool TryResolveSubLocation(
+        SpatialAuthorityStore spatialAuthority,
+        SpatialReference reference,
+        out HexRecord hex,
+        out LocationRecord location,
+        out CrossingRecord crossing,
+        out SpatialAuthorityFailure failure);
+}
+
+internal static class SpatialReferenceResolver
+{
+    internal static bool TryResolve(
+        SpatialAuthorityStore spatialAuthority,
+        SpatialReference reference,
+        ILocalTopologySpatialReferenceResolver localTopologyResolver,
+        out HexRecord hex,
+        out LocationRecord location,
+        out CrossingRecord crossing,
+        out SpatialAuthorityFailure failure)
+    {
+        hex = null;
+        location = null;
+        crossing = null;
+        failure = SpatialAuthorityFailure.None;
+        if (spatialAuthority == null)
+        {
+            failure = SpatialAuthorityFailure.Create(
+                SpatialAuthorityFailureCode.InvalidSpatialReference,
+                "SpatialAuthorityStore is required.");
+            return false;
+        }
+
+        if (reference != null && reference.Kind == SpatialReferenceKind.SubLocation)
+        {
+            if (localTopologyResolver == null)
+            {
+                failure = SpatialAuthorityFailure.Create(
+                    SpatialAuthorityFailureCode.TopologyNotRegistered,
+                    "SubLocation resolution requires a composed local-topology resolver.");
+                return false;
+            }
+
+            return localTopologyResolver.TryResolveSubLocation(
+                spatialAuthority, reference, out hex, out location, out crossing, out failure);
+        }
+
+        if (!spatialAuthority.TryResolveReference(
+                reference, out SpatialAuthorityResolution resolved, out failure))
+            return false;
+
+        hex = resolved.Hex;
+        location = resolved.Location;
+        crossing = resolved.Crossing;
+        return true;
+    }
+}
+
 public sealed class SpatialAuthorityStore : IAuthoritativeMutationGuardBindable, ISpatialLocationLookup
 {
     private static readonly HexCoordinate[] NeighborDeltas =

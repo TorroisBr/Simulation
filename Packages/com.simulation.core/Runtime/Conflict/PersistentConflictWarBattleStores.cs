@@ -828,7 +828,7 @@ public sealed class PersistentBattleStore : IAuthoritativeMutationGuardBindable
     private readonly PersistentConflictStore conflictStore;
     private readonly PersistentWarStore warStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
-    private readonly LocalTopologyStore localTopologyStore;
+    private readonly ILocalTopologySpatialReferenceResolver localTopologyStore;
     private readonly Dictionary<string, PersistentBattleRecord> recordsById =
         new Dictionary<string, PersistentBattleRecord>(StringComparer.Ordinal);
     private long revision;
@@ -841,7 +841,7 @@ public sealed class PersistentBattleStore : IAuthoritativeMutationGuardBindable
         PersistentConflictStore conflictStore,
         PersistentWarStore warStore,
         SpatialAuthorityStore spatialAuthorityStore = null,
-        LocalTopologyStore localTopologyStore = null)
+        ILocalTopologySpatialReferenceResolver localTopologyStore = null)
     {
         this.armedForceStore = armedForceStore ?? throw new ArgumentNullException(nameof(armedForceStore));
         this.conflictStore = conflictStore ?? throw new ArgumentNullException(nameof(conflictStore));
@@ -854,7 +854,7 @@ public sealed class PersistentBattleStore : IAuthoritativeMutationGuardBindable
     public PersistentConflictStore ConflictStore => conflictStore;
     public PersistentWarStore WarStore => warStore;
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
-    public LocalTopologyStore LocalTopologyStore => localTopologyStore;
+    public ILocalTopologySpatialReferenceResolver LocalTopologyStore => localTopologyStore;
     public int Count => recordsById.Count;
     public long Revision => revision;
 
@@ -1018,7 +1018,7 @@ public sealed class PersistentBattleStore : IAuthoritativeMutationGuardBindable
         PersistentConflictStore targetConflictStore,
         PersistentWarStore targetWarStore,
         SpatialAuthorityStore targetSpatialAuthorityStore,
-        LocalTopologyStore targetLocalTopologyStore,
+        ILocalTopologySpatialReferenceResolver targetLocalTopologyStore,
         out PersistentBattleStore stagedStore,
         out PersistentBattleOwnerSnapshotFailure failure)
     {
@@ -1223,7 +1223,9 @@ public sealed class PersistentBattleStore : IAuthoritativeMutationGuardBindable
             if (outcome.OutcomeType == BattleOutcomeType.Draw && outcome.WinningBattleSideId != null) violations.Add("Resolved Battle " + record.Id.Value + " draw has a winner.");
             if (!HasValidAcceptedProvenance(outcome.Provenance)) violations.Add("Resolved Battle " + record.Id.Value + " has incomplete accepted provenance.");
         }
-        if (record.LocationReference != null && spatialAuthorityStore.TryResolve(record.LocationReference, localTopologyStore, out _, out SpatialAuthorityFailure spatialFailure) == false)
+        if (record.LocationReference != null && !SpatialReferenceResolver.TryResolve(
+                spatialAuthorityStore, record.LocationReference, localTopologyStore,
+                out _, out _, out _, out SpatialAuthorityFailure spatialFailure))
         {
             violations.Add("Battle " + record.Id.Value + " has an invalid physical location: " + spatialFailure.Code + ".");
         }
@@ -1284,11 +1286,12 @@ public sealed class PersistentBattleStore : IAuthoritativeMutationGuardBindable
             return true;
         }
 
-        if (spatialAuthorityStore.TryResolve(
+        if (!SpatialReferenceResolver.TryResolve(
+            spatialAuthorityStore,
             record.LocationReference,
             localTopologyStore,
-            out _,
-            out SpatialAuthorityFailure spatialFailure) == false)
+            out _, out _, out _,
+            out SpatialAuthorityFailure spatialFailure))
         {
             return Fail(
                 PersistentStateFailureCode.BattleLocationInvalid,

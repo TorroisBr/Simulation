@@ -58,7 +58,7 @@ internal sealed class PersistentConflictOwnerSnapshotFailure
 /// </summary>
 internal sealed class PersistentConflictOwnerSnapshot
 {
-    internal const string SectionId = PersistentConflictCensusProvider.SectionId;
+    internal const string SectionId = DailyV1SelectedOwnerSectionCensusContract.ConflictsSectionId;
     internal const int CurrentSchemaVersion = 1;
 
     internal int SchemaVersion { get; }
@@ -483,7 +483,7 @@ internal sealed class PersistentConflictOwnerSnapshot
             if (section == null || !string.Equals(section.SectionId, SectionId, StringComparison.Ordinal))
                 continue;
             count++;
-            if (section.SchemaVersion != PersistentConflictCensusProvider.SchemaVersion
+            if (section.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion
                 || section.Role != OwnerSectionRole.Required
                 || !ReferenceEquals(section.OwnerInstanceIdentity, owner)
                 || section.Cardinality != cardinality

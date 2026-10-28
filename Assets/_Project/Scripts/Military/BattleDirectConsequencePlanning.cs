@@ -293,7 +293,7 @@ public sealed class BattleCohortConsequenceLivingDestination
 }
 
 /// <summary>Complete conservation partition for exactly one exposed cohort.</summary>
-public sealed class BattleCohortConsequencePartition
+public sealed class BattleCohortConsequencePartition : IManpowerBattlePartition
 {
     private readonly IReadOnlyList<BattleCohortConsequenceLivingDestination> livingDestinations;
 
@@ -301,6 +301,7 @@ public sealed class BattleCohortConsequencePartition
     public long InputAmount { get; }
     public long DeathAmount { get; }
     public IReadOnlyList<BattleCohortConsequenceLivingDestination> LivingDestinations => livingDestinations;
+    ContingentId IManpowerBattlePartition.ContingentId => InputIdentity?.ContingentId;
 
     public BattleCohortConsequencePartition(
         BattleDirectConsequenceCohortIdentity inputIdentity,
@@ -425,10 +426,11 @@ public sealed class BattleDirectConsequenceValidationReport
     }
 }
 
-public sealed class BattleDirectConsequenceDeathTrace
+public sealed class BattleDirectConsequenceDeathTrace : IManpowerBattleDeathTrace
 {
     public BattleDirectConsequenceCohortIdentity CohortIdentity { get; }
     public long DeathAmount { get; }
+    ContingentId IManpowerBattleDeathTrace.ContingentId => CohortIdentity?.ContingentId;
 
     internal BattleDirectConsequenceDeathTrace(
         BattleDirectConsequenceCohortIdentity cohortIdentity,
@@ -439,7 +441,7 @@ public sealed class BattleDirectConsequenceDeathTrace
     }
 }
 
-public sealed class BattleDirectConsequenceSourceGroup
+public sealed class BattleDirectConsequenceSourceGroup : IManpowerBattleSourceGroup
 {
     private readonly IReadOnlyList<BattleDirectConsequenceDeathTrace> traces;
 
@@ -447,6 +449,12 @@ public sealed class BattleDirectConsequenceSourceGroup
     public long DeathAmount { get; }
     public ManpowerSourceConsequenceProposal Proposal { get; }
     public IReadOnlyList<BattleDirectConsequenceDeathTrace> Traces => traces;
+    IEnumerable<IManpowerBattleDeathTrace> IManpowerBattleSourceGroup.Traces => traces;
+    bool IManpowerBattleSourceGroup.HasProposalEffect => Proposal?.Effect != null;
+    ManpowerSourceId IManpowerBattleSourceGroup.ProposalSourceId => Proposal?.SourceId;
+    ManpowerSourceEffectKind IManpowerBattleSourceGroup.ProposalEffectKind =>
+        Proposal?.Effect == null ? default : Proposal.Effect.Kind;
+    long IManpowerBattleSourceGroup.ProposalEffectAmount => Proposal?.Effect?.Amount ?? 0L;
 
     internal BattleDirectConsequenceSourceGroup(
         ManpowerSourceId sourceId,
@@ -464,13 +472,14 @@ public sealed class BattleDirectConsequenceSourceGroup
     }
 }
 
-public sealed class BattleDirectConsequenceContingentProjection
+public sealed class BattleDirectConsequenceContingentProjection : IManpowerBattleContingentProjection
 {
     private readonly IReadOnlyList<ContingentManpowerCohort> cohorts;
 
     public ContingentId ContingentId { get; }
     public ManpowerSourceId SourceId { get; }
     public IReadOnlyList<ContingentManpowerCohort> Cohorts => cohorts;
+    IEnumerable<ContingentManpowerCohort> IManpowerBattleContingentProjection.Cohorts => cohorts;
     public long LivingRosterAmount { get; }
     public long AvailableAmount { get; }
 
@@ -499,7 +508,7 @@ public sealed class BattleDirectConsequenceContingentProjection
     }
 }
 
-public sealed class BattleDirectConsequencePlan
+public sealed class BattleDirectConsequencePlan : IManpowerBattlePlan
 {
     private readonly IReadOnlyList<BattleDirectConsequenceCohortInput> inputs;
     private readonly IReadOnlyList<BattleCohortConsequencePartition> partitions;
@@ -520,6 +529,9 @@ public sealed class BattleDirectConsequencePlan
     public IReadOnlyList<BattleCohortConsequencePartition> Partitions => partitions;
     public IReadOnlyList<BattleDirectConsequenceSourceGroup> SourceGroups => sourceGroups;
     public IReadOnlyList<BattleDirectConsequenceContingentProjection> ContingentProjections => projections;
+    IEnumerable<IManpowerBattlePartition> IManpowerBattlePlan.Partitions => partitions;
+    IEnumerable<IManpowerBattleSourceGroup> IManpowerBattlePlan.SourceGroups => sourceGroups;
+    IEnumerable<IManpowerBattleContingentProjection> IManpowerBattlePlan.ContingentProjections => projections;
 
     internal BattleOutcomeApplicationPlan D5ApplicationPlan { get; }
     internal BattleExecutionContext SourceContext { get; }

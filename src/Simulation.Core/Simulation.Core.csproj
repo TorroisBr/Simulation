@@ -31,7 +31,9 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12ECrimeSocialAppraisalCaptureSource.cs" Link="Persistence/IP12ECrimeSocialAppraisalCaptureSource.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CrimeSocialAppraisalOwnerContract.cs" Link="Persistence/P12CrimeSocialAppraisalOwnerContract.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ECrimeSocialAppraisalOwnerSnapshot.cs" Link="Persistence/P12ECrimeSocialAppraisalOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ECrimeSocialAppraisalOwnerCodec.cs" Link="Persistence/P12ECrimeSocialAppraisalOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EJusticeRecordsOwnerSnapshot.cs" Link="Persistence/P12EJusticeRecordsOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EJusticeRecordsOwnerCodec.cs" Link="Persistence/P12EJusticeRecordsOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalClaimOwnerSnapshot.cs" Link="Persistence/P12EPoliticalClaimOwnerSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalClaimOwnerCodec.cs" Link="Persistence/P12EPoliticalClaimOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalSupportOwnerSnapshot.cs" Link="Persistence/P12EPoliticalSupportOwnerSnapshot.cs" />
@@ -239,6 +241,20 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CP9GenesisManifestCoreSnapshot.cs" Link="Persistence/P12CP9GenesisManifestCoreSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AContinuationImage.cs" Link="Persistence/P12AContinuationImage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AContinuationCodec.cs" Link="Persistence/P12AContinuationCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ArmedForce/ArmedForceContracts.cs" Link="ArmedForce/ArmedForceContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ArmedForce/ArmedForceStore.cs" Link="ArmedForce/ArmedForceStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ArmedForce/ArmedForceSpatialPosition.cs" Link="ArmedForce/ArmedForceSpatialPosition.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ArmedForce/MilitaryManpowerFoundation.cs" Link="ArmedForce/MilitaryManpowerFoundation.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Conflict/PersistentConflictWarBattleContracts.cs" Link="Conflict/PersistentConflictWarBattleContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Conflict/PersistentConflictWarBattleStores.cs" Link="Conflict/PersistentConflictWarBattleStores.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ADailyV1ImageOwnerDecoder.cs" Link="Persistence/P12ADailyV1ImageOwnerDecoder.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PersistentBattleOwnerSnapshot.cs" Link="Persistence/PersistentBattleOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PersistentWarOwnerSnapshot.cs" Link="Persistence/PersistentWarOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PersistentConflictOwnerSnapshot.cs" Link="Persistence/PersistentConflictOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPersistentConflictWarBattleOwnerCodec.cs" Link="Persistence/P12EPersistentConflictWarBattleOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EMilitaryOwnerCodec.cs" Link="Persistence/P12EMilitaryOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EMilitaryOwnerSnapshot.cs" Link="Persistence/P12EMilitaryOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AReceiptOwnerCodec.cs" Link="Persistence/P12AReceiptOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACausalRootOwnerCodec.cs" Link="Persistence/P12ACausalRootOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACausalRootImageCodec.cs" Link="Persistence/P12ACausalRootImageCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACSpatialAuthorityCodec.cs" Link="Persistence/P12ACSpatialAuthorityCodec.cs" />

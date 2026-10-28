@@ -4,6 +4,51 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Text;
 
+public enum ManpowerSourceEffectKind
+{
+    Death = 0
+}
+
+public interface IManpowerBattlePlan
+{
+    BattleId BattleId { get; }
+    bool IsComplete { get; }
+    IEnumerable<IManpowerBattlePartition> Partitions { get; }
+    IEnumerable<IManpowerBattleContingentProjection> ContingentProjections { get; }
+    IEnumerable<IManpowerBattleSourceGroup> SourceGroups { get; }
+}
+
+public interface IManpowerBattlePartition
+{
+    ContingentId ContingentId { get; }
+    long DeathAmount { get; }
+}
+
+public interface IManpowerBattleContingentProjection
+{
+    ContingentId ContingentId { get; }
+    ManpowerSourceId SourceId { get; }
+    IEnumerable<ContingentManpowerCohort> Cohorts { get; }
+    long LivingRosterAmount { get; }
+    long AvailableAmount { get; }
+}
+
+public interface IManpowerBattleDeathTrace
+{
+    ContingentId ContingentId { get; }
+    long DeathAmount { get; }
+}
+
+public interface IManpowerBattleSourceGroup
+{
+    ManpowerSourceId SourceId { get; }
+    long DeathAmount { get; }
+    IEnumerable<IManpowerBattleDeathTrace> Traces { get; }
+    bool HasProposalEffect { get; }
+    ManpowerSourceId ProposalSourceId { get; }
+    ManpowerSourceEffectKind ProposalEffectKind { get; }
+    long ProposalEffectAmount { get; }
+}
 /// <summary>Stable identity of a domain-owned offer of allocatable manpower.</summary>
 public sealed class ManpowerSourceId : IEquatable<ManpowerSourceId>
 {
@@ -690,7 +735,7 @@ public sealed class ContingentManpowerStateStore : IAuthoritativeMutationGuardBi
     }
 
     internal bool TryPrepareBattleBatch(
-        BattleDirectConsequencePlan plan,
+        IManpowerBattlePlan plan,
         out PreparedBattleManpowerBatch prepared,
         out ContingentManpowerFailure failure)
     {
@@ -704,11 +749,11 @@ public sealed class ContingentManpowerStateStore : IAuthoritativeMutationGuardBi
         Dictionary<string, long> deathsByContingent = new Dictionary<string, long>(StringComparer.Ordinal);
         try
         {
-            foreach (BattleCohortConsequencePartition partition in plan.Partitions)
+            foreach (IManpowerBattlePartition partition in plan.Partitions)
             {
-                if (partition == null || partition.InputIdentity?.ContingentId == null || partition.DeathAmount < 0L)
+                if (partition == null || partition.ContingentId == null || partition.DeathAmount < 0L)
                     return Fail(ContingentManpowerFailureCode.InvalidInvariant, "A D6B2 death partition is malformed.", out failure);
-                string id = partition.InputIdentity.ContingentId.Value;
+                string id = partition.ContingentId.Value;
                 deathsByContingent.TryGetValue(id, out long prior);
                 deathsByContingent[id] = checked(prior + partition.DeathAmount);
             }
@@ -725,7 +770,7 @@ public sealed class ContingentManpowerStateStore : IAuthoritativeMutationGuardBi
         Dictionary<string, long> touchedAfterBySource = new Dictionary<string, long>(StringComparer.Ordinal);
         try
         {
-            foreach (BattleDirectConsequenceContingentProjection projection in plan.ContingentProjections)
+            foreach (IManpowerBattleContingentProjection projection in plan.ContingentProjections)
             {
                 if (projection == null || projection.ContingentId == null
                     || !projectedIds.Add(projection.ContingentId.Value))
@@ -796,23 +841,23 @@ public sealed class ContingentManpowerStateStore : IAuthoritativeMutationGuardBi
                 return Fail(ContingentManpowerFailureCode.InvalidInvariant, "A D6B2 death partition has no contingent post-state projection.", out failure);
 
         Dictionary<string, long> deathsBySource = new Dictionary<string, long>(StringComparer.Ordinal);
-        foreach (BattleDirectConsequenceSourceGroup group in plan.SourceGroups)
+        foreach (IManpowerBattleSourceGroup group in plan.SourceGroups)
         {
-            if (group == null || group.SourceId == null || group.Proposal?.Effect == null)
+            if (group == null || group.SourceId == null || !group.HasProposalEffect || group.Traces == null)
                 return Fail(ContingentManpowerFailureCode.InvalidInvariant, "A D6B2 source group has no exact D6B1 proposal.", out failure);
             long tracedDeaths = 0L;
             try
             {
-                foreach (BattleDirectConsequenceDeathTrace trace in group.Traces)
+                foreach (IManpowerBattleDeathTrace trace in group.Traces)
                 {
-                    if (trace?.CohortIdentity?.ContingentId == null || trace.DeathAmount < 0L)
+                    if (trace?.ContingentId == null || trace.DeathAmount < 0L)
                         return Fail(ContingentManpowerFailureCode.InvalidInvariant, "A D6B2 source death trace is malformed.", out failure);
                     tracedDeaths = checked(tracedDeaths + trace.DeathAmount);
                 }
                 if (tracedDeaths != group.DeathAmount
-                    || group.Proposal.SourceId != group.SourceId
-                    || group.Proposal.Effect.Kind != ManpowerSourceEffectKind.Death
-                    || group.Proposal.Effect.Amount != group.DeathAmount)
+                    || group.ProposalSourceId != group.SourceId
+                    || group.ProposalEffectKind != ManpowerSourceEffectKind.Death
+                    || group.ProposalEffectAmount != group.DeathAmount)
                     return Fail(ContingentManpowerFailureCode.InvalidInvariant, "D6B2 source traces and the D6B1 death proposal disagree.", out failure);
                 AddAmount(deathsBySource, group.SourceId.Value, group.DeathAmount);
             }

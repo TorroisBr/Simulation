@@ -4,11 +4,6 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
-public enum ManpowerSourceEffectKind
-{
-    Death = 0
-}
-
 /// <summary>An aggregate source effect. Amount is intentionally wide until a domain adapter validates its range.</summary>
 public sealed class ManpowerSourceEffect
 {

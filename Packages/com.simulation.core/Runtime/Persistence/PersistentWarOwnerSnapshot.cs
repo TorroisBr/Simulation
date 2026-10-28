@@ -51,7 +51,7 @@ internal sealed class PersistentWarOwnerSnapshotFailure
 /// <summary>Detached schema-v1 Daily-v1 value export for the persistent War owner.</summary>
 internal sealed class PersistentWarOwnerSnapshot
 {
-    internal const string SectionId = PersistentWarCensusProvider.SectionId;
+    internal const string SectionId = DailyV1SelectedOwnerSectionCensusContract.WarsSectionId;
     internal const int CurrentSchemaVersion = 1;
 
     internal int SchemaVersion { get; }
@@ -354,7 +354,7 @@ internal sealed class PersistentWarOwnerSnapshot
             if (section == null || !string.Equals(section.SectionId, SectionId, StringComparison.Ordinal))
                 continue;
             matches++;
-            if (section.SchemaVersion != PersistentWarCensusProvider.SchemaVersion
+            if (section.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.FixedOwnerSectionSchemaVersion
                 || section.Role != OwnerSectionRole.Required
                 || !ReferenceEquals(section.OwnerInstanceIdentity, owner)
                 || section.Cardinality != count || section.Revision != revision)

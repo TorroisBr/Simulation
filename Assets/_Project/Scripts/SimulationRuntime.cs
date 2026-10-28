@@ -2649,7 +2649,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 resolvedManpowerSourceProvider);
         resolvedManpowerStateStore.AttachToArmedForceStore();
         LocalTopologyStore resolvedLocalTopologyStore = localTopologyStore
-            ?? armedForceSpatialStateStore?.LocalTopologyStore;
+            ?? armedForceSpatialStateStore?.LocalTopologyStore as LocalTopologyStore;
         ArmedForceSpatialStateStore resolvedArmedForceSpatialStateStore =
             CloneArmedForceSpatialStateStore(
                 armedForceSpatialStateStore,

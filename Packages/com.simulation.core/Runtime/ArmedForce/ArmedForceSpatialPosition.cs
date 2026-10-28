@@ -230,7 +230,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly ArmedForceStore armedForceStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
-    private readonly LocalTopologyStore localTopologyStore;
+    private readonly ILocalTopologySpatialReferenceResolver localTopologyStore;
     private readonly Dictionary<string, OperationalRecord> recordsByForceId =
         new Dictionary<string, OperationalRecord>(StringComparer.Ordinal);
     private P16AMilitaryMovementProfile p16Profile;
@@ -241,7 +241,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
     public ArmedForceSpatialStateStore(
         ArmedForceStore armedForceStore,
         SpatialAuthorityStore spatialAuthorityStore,
-        LocalTopologyStore localTopologyStore = null)
+        ILocalTopologySpatialReferenceResolver localTopologyStore = null)
     {
         this.armedForceStore = armedForceStore ?? throw new ArgumentNullException(nameof(armedForceStore));
         this.spatialAuthorityStore = spatialAuthorityStore ?? throw new ArgumentNullException(nameof(spatialAuthorityStore));
@@ -528,7 +528,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
 
     public ArmedForceStore ArmedForceStore => armedForceStore;
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
-    public LocalTopologyStore LocalTopologyStore => localTopologyStore;
+    public ILocalTopologySpatialReferenceResolver LocalTopologyStore => localTopologyStore;
     public long Revision => revision;
     public int Count
     {
@@ -590,7 +590,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
     internal static bool TryCreateFromP12EOwnerSnapshot(
         ArmedForceStore stagedArmedForceStore,
         SpatialAuthorityStore stagedSpatialAuthorityStore,
-        LocalTopologyStore stagedLocalTopologyStore,
+        ILocalTopologySpatialReferenceResolver stagedLocalTopologyStore,
         IReadOnlyList<ArmedForceSpatialPosition> stagedPositions,
         long ownerRevision,
         out ArmedForceSpatialStateStore staged,
@@ -784,32 +784,42 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
             return false;
         }
 
-        SpatialResolution requiredResolution;
+        HexRecord requiredHex;
+        LocationRecord requiredLocation;
+        CrossingRecord requiredCrossing;
         SpatialAuthorityFailure requiredFailure;
-        spatialAuthorityStore.TryResolve(
+        SpatialReferenceResolver.TryResolve(
+            spatialAuthorityStore,
             requiredArea,
             localTopologyStore,
-            out requiredResolution,
+            out requiredHex,
+            out requiredLocation,
+            out requiredCrossing,
             out requiredFailure);
-        SpatialResolution currentResolution;
+        HexRecord currentHex;
+        LocationRecord currentLocation;
+        CrossingRecord currentCrossing;
         SpatialAuthorityFailure currentFailure;
-        spatialAuthorityStore.TryResolve(
+        SpatialReferenceResolver.TryResolve(
+            spatialAuthorityStore,
             currentPosition,
             localTopologyStore,
-            out currentResolution,
+            out currentHex,
+            out currentLocation,
+            out currentCrossing,
             out currentFailure);
 
         switch (requiredArea.Kind)
         {
             case SpatialReferenceKind.Hex:
-                compatible = currentResolution.Hex != null
-                    && requiredResolution.Hex != null
-                    && currentResolution.Hex.Id == requiredResolution.Hex.Id;
+                compatible = currentHex != null
+                    && requiredHex != null
+                    && currentHex.Id == requiredHex.Id;
                 break;
             case SpatialReferenceKind.Location:
-                compatible = currentResolution.Location != null
-                    && requiredResolution.Location != null
-                    && currentResolution.Location.Id == requiredResolution.Location.Id;
+                compatible = currentLocation != null
+                    && requiredLocation != null
+                    && currentLocation.Id == requiredLocation.Id;
                 break;
             case SpatialReferenceKind.SubLocation:
                 compatible = currentPosition.Equals(requiredArea);
@@ -872,7 +882,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
     internal ArmedForceSpatialStateStore Clone(
         ArmedForceStore targetArmedForceStore,
         SpatialAuthorityStore targetSpatialAuthorityStore,
-        LocalTopologyStore targetLocalTopologyStore)
+        ILocalTopologySpatialReferenceResolver targetLocalTopologyStore)
     {
         if (targetArmedForceStore == null) throw new ArgumentNullException(nameof(targetArmedForceStore));
         if (targetSpatialAuthorityStore == null) throw new ArgumentNullException(nameof(targetSpatialAuthorityStore));
@@ -893,8 +903,11 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
                     nameof(targetArmedForceStore));
             }
 
-            if (entry.Value.Position != null && targetSpatialAuthorityStore.TryResolve(
-                    entry.Value.Position, targetLocalTopologyStore, out _, out SpatialAuthorityFailure failure) == false)
+            if (entry.Value.Position != null && !SpatialReferenceResolver.TryResolve(
+                    targetSpatialAuthorityStore,
+                    entry.Value.Position,
+                    targetLocalTopologyStore,
+                    out _, out _, out _, out SpatialAuthorityFailure failure))
             {
                 throw new ArgumentException(
                     "The ArmedForce spatial state references an area absent from the target spatial authority: " + failure,
@@ -997,11 +1010,14 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
                 out failure);
         }
 
-        if (spatialAuthorityStore.TryResolve(
+        if (!SpatialReferenceResolver.TryResolve(
+                spatialAuthorityStore,
                 position,
                 localTopologyStore,
                 out _,
-                out SpatialAuthorityFailure authorityFailure) == false)
+                out _,
+                out _,
+                out SpatialAuthorityFailure authorityFailure))
         {
             return Fail(
                 ArmedForceSpatialFailureCode.SpatialReferenceNotRegistered,
