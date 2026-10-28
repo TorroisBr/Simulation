@@ -625,7 +625,7 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         faultAdmission();
     }
 
-    private void FaultSelected(DailyV1ExecutionBoundaryState executionState)
+    internal void FaultSelected(DailyV1ExecutionBoundaryState executionState)
     {
         try { protocol.FaultClosed(); }
         catch { }

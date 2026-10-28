@@ -482,6 +482,22 @@ public class NpcRuntime : ICapabilityConditionSource
     /// Refreshes the existing status list in place and immediately publishes
     /// the P12 owner revision/epoch for this single committed status leaf.
     /// </summary>
+    internal void RefreshCoreSelectedDailyV1StatusProjection(DailyV1NpcRuntimeOwners owner)
+    {
+        if (!ReferenceEquals(selectedRuntimeOwners, owner)
+            || !ReferenceEquals(selectedDailyV1StatusOwner, owner?.Status))
+            throw new InvalidOperationException("The selected Core status owner changed during its admitted write.");
+        RefreshSelectedStatusProjection();
+    }
+
+    internal void SyncCoreSelectedDailyV1HiddenProjection(DailyV1NpcRuntimeOwners owner)
+    {
+        if (!ReferenceEquals(selectedRuntimeOwners, owner)
+            || !ReferenceEquals(owner?.HiddenState, selectedRuntimeOwners?.HiddenState))
+            throw new InvalidOperationException("The selected Core hidden-state owner changed during its admitted write.");
+        hiddenDaysRemaining = owner.HiddenState.RemainingDays;
+    }
+
     internal void NotifyCoreSelectedDailyV1StatusMutationCommitted(DailyV1NpcRuntimeOwners owner)
     {
         if (!ReferenceEquals(selectedRuntimeOwners, owner)

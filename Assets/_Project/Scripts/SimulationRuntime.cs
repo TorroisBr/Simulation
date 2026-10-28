@@ -11754,10 +11754,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
         public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner)
         {
-            if (!TryGetExactActor(owner, out NpcRuntime exactRuntime))
+            RequireExactActor(owner);
+            if (!runtime.ExecutionBoundaryState.TryBindSelectedP12CrimeJusticeMutationCoordinator(
+                    runtime.P12CrimeJusticeMutationProtocol,
+                    runtime.P12CrimeJusticeMutationCoordinator,
+                    graph))
                 throw new InvalidOperationException(
-                    "The selected Crime/Justice stage lost its exact NPC runtime projection.");
-            exactRuntime.EnsureCoreSelectedDailyV1OwnerMutationAllowed(owner);
+                    "The selected P12 Crime/Justice coordinator could not bind to its admitted Core execution state.");
+            runtime.ExecutionBoundaryState.EnsureSelectedP12CrimeJusticeOwnerMutationAllowed(owner);
         }
 
         public void NotifyStatusMutationCommitted(
@@ -11768,7 +11772,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             if (!TryGetExactActor(owner, out NpcRuntime exactRuntime))
                 throw new InvalidOperationException(
                     "The selected Crime/Justice status owner lost its exact runtime projection after mutation.");
-            exactRuntime.NotifyCoreSelectedDailyV1StatusMutationCommitted(owner);
+            exactRuntime.RefreshCoreSelectedDailyV1StatusProjection(owner);
+            runtime.ExecutionBoundaryState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
         }
 
         public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
@@ -11776,7 +11781,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             if (!TryGetExactActor(owner, out NpcRuntime exactRuntime))
                 throw new InvalidOperationException(
                     "The selected Crime/Justice hidden-state owner lost its exact runtime projection after mutation.");
-            exactRuntime.NotifyCoreSelectedDailyV1HiddenMutationCommitted(owner);
+            exactRuntime.SyncCoreSelectedDailyV1HiddenProjection(owner);
+            runtime.ExecutionBoundaryState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
         }
 
         public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence)

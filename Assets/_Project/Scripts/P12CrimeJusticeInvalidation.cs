@@ -198,6 +198,7 @@ public sealed partial class SimulationRuntime
                 return false;
             p12CrimeJusticeBoundNpcs.Add(npc);
         }
+
         return true;
     }
 

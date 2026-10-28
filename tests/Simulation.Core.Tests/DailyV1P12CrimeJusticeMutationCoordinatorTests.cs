@@ -180,6 +180,10 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
         string changedNpcSection = DailyV1SelectedOwnerSectionCensusContract
             .NpcStatusCrimeSectionIdFor(changedNpc.RuntimeId);
 
+        Assert.That(composition.ExecutionBoundaryState.TryBindSelectedP12CrimeJusticeMutationCoordinator(
+            protocol, coordinator, composition.OwnerGraph), Is.True,
+            "The exact P12 coordinator is pinned to the Core execution session before its writers use it.");
+
         coordinator.ExecuteSelectedDailyMutation(
             composition.ExecutionBoundaryState,
             composition.OwnerGraph,
@@ -192,10 +196,10 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
             includeJusticeReceiptSection: true,
             () =>
             {
-                Assert.That(coordinator.CanCommit(changedNpc, changedNpcSection), Is.True,
-                    "The selected Core status owner is admitted directly from its exact graph instance.");
-                changedNpc.NotifyCrimeJusticeMutationCommitted();
-                coordinator.NotifyCommitted(changedNpc, changedNpcSection);
+                composition.ExecutionBoundaryState.EnsureSelectedP12CrimeJusticeOwnerMutationAllowed(changedNpc);
+                composition.ExecutionBoundaryState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(changedNpc);
+                Assert.That(changedNpc.CrimeJusticeRevision, Is.EqualTo(1L),
+                    "The Core session publishes the exact Core owner revision and P12 section commit.");
 
                 Assert.That(coordinator.CanCommit(justiceProjection,
                     DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId), Is.True);
@@ -583,6 +587,10 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
                 includeJusticeReceiptSection: true,
                 mutation: () => { });
         }
+
+        Assert.That(composition.ExecutionBoundaryState.TryBindSelectedP12CrimeJusticeMutationCoordinator(
+            protocol, coordinator, composition.OwnerGraph), Is.True,
+            "Daily execution retains both the exact coordinator and protocol for subsequent owner writes.");
 
         Assert.That(protocol.Calls.Count(call => call == "reserve"), Is.EqualTo(4),
             "Each established Crime/Justice phase owns a separate epoch reservation.");
