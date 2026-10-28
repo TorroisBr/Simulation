@@ -329,6 +329,29 @@ internal static class DailyV1SelectedDailyExecutionStage
                     + executionRootFailure + ".");
         }
 
+        // A fully selected admitted day must prove the required day-start
+        // operation and projection ports before any daily callback or writer
+        // can mutate state. A mixed roster is handled from Core's exact roster
+        // below and retains the established Unity whole-stage compatibility.
+        bool coreSelectedCompatibility = executionState != null
+            && HasUnselectedRuntimeMemberFromCoreRoster(executionState, actorRoster);
+        IDailyV1SelectedDayStartExecutionContext dayStartContext = null;
+        bool hasSelectedDayStartContext = false;
+        bool dayStartContextPreflighted =
+            executionState?.HasAdmittedSelectedDailyExecution == true
+            && !coreSelectedCompatibility;
+        if (dayStartContextPreflighted)
+        {
+            hasSelectedDayStartContext = boundary.TryCreateSelectedDayStartContext(
+                graph, out dayStartContext);
+            if (!hasSelectedDayStartContext)
+                throw new InvalidOperationException(
+                    "The admitted Daily-v1 host could not provide its selected day-start boundary.");
+            if (dayStartContext == null)
+                throw new InvalidOperationException(
+                    "The selected Daily-v1 host returned a null day-start context.");
+        }
+
         boundary.BeginLoggerDay(absoluteDay);
 
         // The accepted Daily-v1 proving profile disables both demographic
@@ -369,8 +392,9 @@ internal static class DailyV1SelectedDailyExecutionStage
             demographyResult = new DailyV1SelectedDemographyResult(absoluteDay);
         }
         boundary.PublishSelectedDemographyResult(demographyResult);
-        bool hasSelectedDayStartContext = boundary.TryCreateSelectedDayStartContext(
-            graph, out IDailyV1SelectedDayStartExecutionContext dayStartContext);
+        if (!dayStartContextPreflighted && !coreSelectedCompatibility)
+            hasSelectedDayStartContext = boundary.TryCreateSelectedDayStartContext(
+                graph, out dayStartContext);
         if (hasSelectedDayStartContext)
         {
             if (dayStartContext == null)
@@ -447,8 +471,6 @@ internal static class DailyV1SelectedDailyExecutionStage
             // admitted execution state must not silently delegate a missing
             // selected boundary back to Unity: Core has already bound its
             // exact owner graph and selected runtime roots.
-            bool coreSelectedCompatibility = executionState != null
-                && HasUnselectedRuntimeMemberFromCoreRoster(executionState, actorRoster);
             if (executionState != null && !coreSelectedCompatibility)
                 throw new InvalidOperationException(
                     "The admitted Daily-v1 host could not provide its selected day-start boundary.");

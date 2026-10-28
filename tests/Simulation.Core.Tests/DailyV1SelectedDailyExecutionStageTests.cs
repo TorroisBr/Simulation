@@ -187,12 +187,40 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
 
         Assert.That(failure.Message, Does.Contain(
             "The admitted Daily-v1 host could not provide its selected day-start boundary."));
-        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context", "logger:0" }),
-            "A selected execution cannot fall back to Unity's whole-day authority when its exact owner boundary is missing.");
+        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }),
+            "A selected execution proves its exact day-start boundary before logger or gameplay callbacks.");
         Assert.That(boundary.Calls, Does.Not.Contain("begin-day"));
         Assert.That(boundary.Calls, Does.Not.Contain("economy-preflight"));
         Assert.That(boundary.Calls, Does.Not.Contain("knowledge-preflight"));
         Assert.That(boundary.Calls, Does.Not.Contain("travel-context"));
+    }
+
+    [Test]
+    public void AdmittedDayStartBoundaryFailurePrecedesEnabledDemographyWriter()
+    {
+        DailyV1EffectiveDefinitions definitions = CopyWithNaturalMortalityEnabled(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(), true);
+        DailyV1GenesisComposition composition = CreateSelectedGenesis(definitions);
+        FakeBoundary boundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore)
+        {
+            UseSelectedActionExecution = true,
+            UseSelectedDayStartContext = false,
+            ThrowOnDemography = true
+        };
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            DailyV1SelectedDailyExecutionStage.Advance(
+                composition.ExecutionBoundaryState, composition.OwnerGraph, boundary));
+
+        Assert.That(failure.Message, Does.Contain(
+            "The admitted Daily-v1 host could not provide its selected day-start boundary."));
+        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }),
+            "The missing required operation boundary is rejected before logger or enabled demographic writer callbacks.");
+        Assert.That(boundary.PublishedDemographyResult, Is.Null,
+            "No daily result is published after day-start preflight rejection.");
     }
 
     [Test]
@@ -678,10 +706,14 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         return directives;
     }
 
-    private static DailyV1GenesisComposition CreateSelectedGenesis()
+    private static DailyV1GenesisComposition CreateSelectedGenesis() =>
+        CreateSelectedGenesis(DailyV1CapturedSelectedContentFixture.CreateDefinitions());
+
+    private static DailyV1GenesisComposition CreateSelectedGenesis(
+        DailyV1EffectiveDefinitions definitions)
     {
         Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
-            DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
+            definitions,
             SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
             out DailyV1GenesisComposition composition, out string diagnostic), Is.True, diagnostic);
         Assert.That(composition.ExecutionBoundaryState.TryBindOrValidateSelectedRuntimeActorRoster(
