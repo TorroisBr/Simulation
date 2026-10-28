@@ -2601,24 +2601,35 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     resolvedSpatialAuthorityStore,
                     resolvedTraversalOptionResolver);
         SpatialRouteKnowledgeStore resolvedSpatialRouteKnowledgeStore =
-            CloneSpatialRouteKnowledgeStore(
-                spatialRouteKnowledgeStore,
-                resolvedPersonStore,
-                this.simulationTime.AbsoluteDay);
+            selectedCoreOwnerGraph?.SpatialRouteKnowledgeStore != null
+                ? RetainSelectedCoreSpatialRouteKnowledgeStore(
+                    spatialRouteKnowledgeStore, selectedCoreOwnerGraph, resolvedPersonStore)
+                : CloneSpatialRouteKnowledgeStore(
+                    spatialRouteKnowledgeStore,
+                    resolvedPersonStore,
+                    this.simulationTime.AbsoluteDay);
         PersonRoutePlanStore resolvedPersonRoutePlanStore =
-            ClonePersonRoutePlanStore(
-                personRoutePlanStore,
-                resolvedPersonStore,
-                resolvedSpatialRouteKnowledgeStore,
-                actor => resolvedPersonSpatialPositionStore.TryGetPosition(actor, out PersonSpatialPosition currentPosition)
-                    && currentPosition.IsInTransit,
-                () => this.simulationTime.AbsoluteDay,
-                this.simulationTime.AbsoluteDay);
+            selectedCoreOwnerGraph?.PersonRoutePlanStore != null
+                ? RetainSelectedCorePersonRoutePlanStore(
+                    personRoutePlanStore, selectedCoreOwnerGraph,
+                    resolvedPersonStore, resolvedSpatialRouteKnowledgeStore)
+                : ClonePersonRoutePlanStore(
+                    personRoutePlanStore,
+                    resolvedPersonStore,
+                    resolvedSpatialRouteKnowledgeStore,
+                    actor => resolvedPersonSpatialPositionStore.TryGetPosition(actor, out PersonSpatialPosition currentPosition)
+                        && currentPosition.IsInTransit,
+                    () => this.simulationTime.AbsoluteDay,
+                    this.simulationTime.AbsoluteDay);
         SpatialRoutePlanningSystem resolvedSpatialRoutePlanningSystem =
-            new SpatialRoutePlanningSystem(
-                resolvedPersonStore,
-                resolvedSpatialAuthorityStore,
-                resolvedSpatialRouteKnowledgeStore);
+            selectedCoreOwnerGraph?.SpatialRoutePlanningSystem != null
+                ? RetainSelectedCoreSpatialRoutePlanningSystem(
+                    selectedCoreOwnerGraph, resolvedPersonStore,
+                    resolvedSpatialAuthorityStore, resolvedSpatialRouteKnowledgeStore)
+                : new SpatialRoutePlanningSystem(
+                    resolvedPersonStore,
+                    resolvedSpatialAuthorityStore,
+                    resolvedSpatialRouteKnowledgeStore);
         InstitutionStore resolvedInstitutionStore = ResolveInstitutionStore(
             institutionStore,
             officeStore,
@@ -2709,10 +2720,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         this.personSpatialPositionStore = resolvedPersonSpatialPositionStore;
         this.spatialRouteKnowledgeStore = resolvedSpatialRouteKnowledgeStore;
         this.personRoutePlanStore = resolvedPersonRoutePlanStore;
-        p8eTravelTransactionCoordinator = new P8ETravelTransactionCoordinator(
-            resolvedPersonSpatialPositionStore, resolvedPersonRoutePlanStore, resolvedSpatialRouteKnowledgeStore,
-            resolvedSpatialAuthorityStore.PassageAuthority,
-            () => CurrentDay);
+        p8eTravelTransactionCoordinator = selectedCoreOwnerGraph?.P8ETravelCoordinator != null
+            ? RetainSelectedCoreP8ETravelCoordinator(
+                selectedCoreOwnerGraph, resolvedPersonSpatialPositionStore,
+                resolvedPersonRoutePlanStore, resolvedSpatialRouteKnowledgeStore,
+                resolvedSpatialAuthorityStore.PassageAuthority)
+            : new P8ETravelTransactionCoordinator(
+                resolvedPersonSpatialPositionStore, resolvedPersonRoutePlanStore, resolvedSpatialRouteKnowledgeStore,
+                resolvedSpatialAuthorityStore.PassageAuthority,
+                () => CurrentDay);
         this.spatialRoutePlanningSystem = resolvedSpatialRoutePlanningSystem;
         this.armedForceStore = resolvedArmedForceStore;
         this.contingentManpowerStateStore = resolvedManpowerStateStore;
@@ -2938,10 +2954,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         {
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
         }
+        if (selectedOwnerGraph != null
+            && !selectedOwnerGraph.TryBindP8DRouteOwners(
+                this.spatialRouteKnowledgeStore, this.personRoutePlanStore))
+            throw new InvalidOperationException(
+                "The selected runtime graph could not bind its exact P8-D route owners.");
         if (selectedOwnerGraph != null && this.politicalKnowledgeStore != null
             && !selectedOwnerGraph.TryBindPoliticalKnowledgeStore(this.politicalKnowledgeStore))
             throw new InvalidOperationException(
                 "The selected owner graph could not bind the exact PoliticalKnowledge authority installed by this runtime.");
+        if (selectedOwnerGraph != null
+            && !selectedOwnerGraph.TryBindSpatialAuthorityStore(this.spatialAuthorityStore))
+            throw new InvalidOperationException(
+                "The selected owner graph could not bind the exact SpatialAuthorityStore installed by this runtime.");
         if (selectedOwnerGraph != null
             && !selectedOwnerGraph.TryBindPersonSpatialPositionStore(resolvedPersonSpatialPositionStore))
             throw new InvalidOperationException(
@@ -2950,6 +2975,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             && !selectedOwnerGraph.TryBindLegacySpatialAnchorBindingStore(this.legacySpatialAnchorBindingStore))
             throw new InvalidOperationException(
                 "The selected owner graph could not bind the exact P8 City-anchor authority installed by this runtime.");
+        if (selectedOwnerGraph != null
+            && !selectedOwnerGraph.TryBindP8ETravelComponents(
+                this.spatialRoutePlanningSystem, p8eTravelTransactionCoordinator))
+            throw new InvalidOperationException(
+                "The selected owner graph could not bind the exact P8-E planner and travel coordinator installed by this runtime.");
         if (selectedOwnerGraph != null
             && !dailyExecutionBoundary.TryBindOrValidateSelectedRuntimeActorRoster(
                 this.npcRuntimes.Select(npc => npc == null
@@ -13174,6 +13204,65 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 + string.Join("; ", report.Violations), nameof(supplied));
         return owner;
     }
+    private static SpatialRouteKnowledgeStore RetainSelectedCoreSpatialRouteKnowledgeStore(
+        SpatialRouteKnowledgeStore supplied,
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph,
+        PersonStore personStore)
+    {
+        SpatialRouteKnowledgeStore owner = selectedGraph?.SpatialRouteKnowledgeStore;
+        if (owner == null || (supplied != null && !ReferenceEquals(supplied, owner))
+            || !owner.IsBoundToPersonStore(personStore))
+            throw new ArgumentException(
+                "The selected Core graph must retain the exact P8-D route Knowledge owner bound to its PersonStore.",
+                nameof(supplied));
+        return owner;
+    }
+
+    private static PersonRoutePlanStore RetainSelectedCorePersonRoutePlanStore(
+        PersonRoutePlanStore supplied,
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph,
+        PersonStore personStore,
+        SpatialRouteKnowledgeStore knowledgeStore)
+    {
+        PersonRoutePlanStore owner = selectedGraph?.PersonRoutePlanStore;
+        if (owner == null || (supplied != null && !ReferenceEquals(supplied, owner))
+            || !owner.IsBoundTo(personStore, knowledgeStore))
+            throw new ArgumentException(
+                "The selected Core graph must retain the exact P8-D PersonRoutePlanStore bound to its Person and Knowledge owners.",
+                nameof(supplied));
+        return owner;
+    }
+
+    private static SpatialRoutePlanningSystem RetainSelectedCoreSpatialRoutePlanningSystem(
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph,
+        PersonStore personStore,
+        SpatialAuthorityStore spatialAuthorityStore,
+        SpatialRouteKnowledgeStore knowledgeStore)
+    {
+        SpatialRoutePlanningSystem planner = selectedGraph?.SpatialRoutePlanningSystem;
+        if (planner == null || !planner.IsBoundTo(personStore, spatialAuthorityStore, knowledgeStore))
+            throw new ArgumentException(
+                "The selected Core graph must retain its exact P8-E route planner over the admitted owners.",
+                nameof(selectedGraph));
+        return planner;
+    }
+
+    private static P8ETravelTransactionCoordinator RetainSelectedCoreP8ETravelCoordinator(
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph,
+        PersonSpatialPositionStore positions,
+        PersonRoutePlanStore plans,
+        SpatialRouteKnowledgeStore knowledge,
+        SpatialPassageAuthority passageAuthority)
+    {
+        P8ETravelTransactionCoordinator coordinator = selectedGraph?.P8ETravelCoordinator;
+        if (coordinator == null
+            || !coordinator.IsBoundTo(positions, plans, knowledge, passageAuthority))
+            throw new ArgumentException(
+                "The selected Core graph must retain its exact P8-E transaction coordinator over the admitted owners.",
+                nameof(selectedGraph));
+        return coordinator;
+    }
+
     private static LegacySpatialAnchorBindingStore CloneLegacySpatialAnchorBindingStore(
         LegacySpatialAnchorBindingStore source,
         SpatialAuthorityStore spatialAuthorityStore,

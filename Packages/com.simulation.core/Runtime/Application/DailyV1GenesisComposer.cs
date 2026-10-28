@@ -260,6 +260,9 @@ internal static class DailyV1GenesisComposer
                     P8ETravelTransactionCoordinator travelCoordinator =
                         new P8ETravelTransactionCoordinator(personSpatialPositions, routePlans,
                             routeKnowledge, spatialAuthority.PassageAuthority, currentWorldDayProvider);
+                    if (routeKnowledge.ObservationCount != 0 || routeKnowledge.Revision != 0L
+                        || routePlans.PlanCount != 0 || routePlans.Revision != 0L)
+                        return Fail("Core genesis requires the selected P8-D route owners to start exactly empty.", out diagnostic);
                     if (!graph.TryBindSpatialAuthorityStore(spatialAuthority)
                         || !graph.TryBindPersonStore(personStore)
                         || !ReferenceEquals(actorChoiceStore.PersonStore, personStore)

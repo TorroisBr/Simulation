@@ -136,9 +136,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
 
     /// <summary>
     /// Binds the exact P8-D route Knowledge and plan owners to this selected
-    /// graph. The admitted Daily-v1 profile requires both owners to start at
-    /// their contractual exact-empty state; the same stores remain the source
-    /// for the P8-E planner and transaction coordinator.
+    /// graph. Profile-specific exact-empty requirements are checked at genesis
+    /// and restore admission; the live graph may retain populated owners.
     /// </summary>
     internal bool TryBindP8DRouteOwners(
         SpatialRouteKnowledgeStore knowledge,
@@ -146,9 +145,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     {
         if (PersonStore == null || knowledge == null || plans == null
             || !knowledge.IsBoundToPersonStore(PersonStore)
-            || !plans.IsBoundTo(PersonStore, knowledge)
-            || knowledge.ObservationCount != 0 || knowledge.Revision != 0L
-            || plans.PlanCount != 0 || plans.Revision != 0L)
+            || !plans.IsBoundTo(PersonStore, knowledge))
             return false;
 
         if (SpatialRouteKnowledgeStore != null

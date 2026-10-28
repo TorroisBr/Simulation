@@ -1220,6 +1220,22 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void SelectedRuntimeGraphUsesTheExactP8DAndP8EOwnersInstalledByRuntime()
+    {
+        SimulationRuntime runtime = CreateUnpublishedDailyCaptureRuntime(new SimulationTime());
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+
+        Assert.That(graph, Is.Not.Null);
+        Assert.That(runtime.ExecutionBoundaryState.HasAdmittedSelectedDailyExecution, Is.True);
+        Assert.That(graph.SpatialRouteKnowledgeStore, Is.SameAs(runtime.SpatialRouteKnowledgeStore));
+        Assert.That(graph.PersonRoutePlanStore, Is.SameAs(runtime.PersonRoutePlanStore));
+        Assert.That(graph.SpatialRoutePlanningSystem, Is.SameAs(runtime.SpatialRoutePlanningSystem));
+        Assert.That(graph.P8ETravelCoordinator, Is.SameAs(runtime.P8ETravelTransactionCoordinator));
+        Assert.That(graph.PersonRoutePlanStore.IsBoundTo(
+            graph.PersonStore, graph.SpatialRouteKnowledgeStore), Is.True);
+    }
+
+    [Test]
     public void CompletedDailyTokenIsUnavailableInsideEveryRegisteredOperationScope()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
