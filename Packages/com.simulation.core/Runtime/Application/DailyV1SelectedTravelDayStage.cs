@@ -76,16 +76,35 @@ internal static class DailyV1SelectedTravelDayStage
 
         Dictionary<DailyV1SelectedTravelTransitionPlan, object> projectionReceipts =
             new Dictionary<DailyV1SelectedTravelTransitionPlan, object>();
+        Dictionary<DailyV1SelectedTravelTransitionPlan, IReadOnlyList<string>> mutationSectionIdsByPlan =
+            new Dictionary<DailyV1SelectedTravelTransitionPlan, IReadOnlyList<string>>();
 
         bool TryPrepareTransition(
             DailyV1NpcRuntimeOwners npc,
             DailyV1SelectedTravelTransitionPlan plan,
             bool arriving)
         {
+            IReadOnlyList<string> sectionIds = CreateTravelMutationSectionIds(graph, npc, plan);
+            if (sectionIds == null) return false;
+
+            bool coreAdmissionHandled = false;
+            if (executionState != null
+                && !executionState.TryCanCommitSelectedP12TravelPartyMutation(
+                    sectionIds, out coreAdmissionHandled))
+                return false;
+            if (sectionIds.Count != 0 && !coreAdmissionHandled)
+            {
+                if (executionState?.HasAdmittedSelectedDailyExecution == true && p12Protocol == null)
+                    return false;
+                if (p12Protocol != null && !p12Protocol.TryValidateUnchangedSections(sectionIds))
+                    return false;
+            }
+
             if (!boundary.TryPrepareTransition(npc, plan, arriving, out object receipt))
                 return false;
 
             projectionReceipts.Add(plan, receipt);
+            mutationSectionIdsByPlan.Add(plan, sectionIds);
             return true;
         }
 
@@ -97,9 +116,28 @@ internal static class DailyV1SelectedTravelDayStage
             if (!projectionReceipts.TryGetValue(plan, out object receipt))
                 throw new InvalidOperationException(
                     "A committed selected travel transition has no prepared projection receipt.");
+            if (!mutationSectionIdsByPlan.TryGetValue(plan, out IReadOnlyList<string> sectionIds))
+                throw new InvalidOperationException(
+                    "A committed selected travel transition has no prepared P12 section receipt.");
 
             projectionReceipts.Remove(plan);
+            mutationSectionIdsByPlan.Remove(plan);
             boundary.PublishCommittedTransition(npc, plan, arriving, receipt);
+
+            if (sectionIds.Count == 0) return;
+            bool coreMutationHandled = false;
+            if (executionState != null
+                && !executionState.TryRecordSelectedP12TravelPartyMutation(
+                    sectionIds, out coreMutationHandled))
+                throw new InvalidOperationException(
+                    "The Core session rejected a committed selected travel owner mutation.");
+            if (coreMutationHandled) return;
+            if (executionState?.HasAdmittedSelectedDailyExecution == true && p12Protocol == null)
+                throw new InvalidOperationException(
+                    "The admitted Core travel transition has no P12 mutation protocol.");
+            if (p12Protocol != null && !p12Protocol.NotifyCommittedMutations(sectionIds))
+                throw new InvalidOperationException(
+                    "P12 rejected a committed selected travel owner mutation.");
         }
 
         if (partyStore != null)
@@ -126,6 +164,7 @@ internal static class DailyV1SelectedTravelDayStage
             return true;
 
         projectionReceipts.Clear();
+        mutationSectionIdsByPlan.Clear();
 
         return graph.TryAdvanceSoloTravelDay(
             graph.Npcs,
@@ -134,6 +173,33 @@ internal static class DailyV1SelectedTravelDayStage
             PublishCommittedTransition,
             boundary.PublishSoloTravelResult,
             out soloResults);
+    }
+
+    private static IReadOnlyList<string> CreateTravelMutationSectionIds(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1SelectedTravelTransitionPlan plan)
+    {
+        if (graph == null || npc == null || plan == null
+            || !ReferenceEquals(plan.Npc, npc)
+            || !graph.ContainsExactNpcOwner(npc)
+            || !plan.IsPreparedFor(npc, graph))
+            return null;
+
+        List<string> sectionIds = new List<string>();
+        if (plan.TravelRevisionChanges)
+            sectionIds.Add(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(12, npc.RuntimeId));
+        foreach (DailyV1CityRuntimeOwners city in plan.ChangedCityOwners)
+        {
+            if (city == null || city.NpcPresence == null || !graph.ContainsExactCityOwner(city))
+                return null;
+            sectionIds.Add(
+                DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId));
+        }
+
+        if (new HashSet<string>(sectionIds, StringComparer.Ordinal).Count != sectionIds.Count)
+            return null;
+        return Array.AsReadOnly(sectionIds.ToArray());
     }
 
     private static HashSet<string> SnapshotManagedTravelPartyNpcRuntimeIds(

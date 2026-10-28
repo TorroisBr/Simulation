@@ -205,7 +205,7 @@ public sealed partial class SimulationRuntime
                 || !adapters.TryGetValue(npc, out NpcRuntime adapter)
                 || !runtime.travelSystem.TryGetSelectedTravelProjectionCandidates(
                     graph, plan, out CityRuntime[] candidates)
-                || !adapter.CanAdmitPreparedSelectedTravelDay(
+                || !adapter.CanPrepareSelectedTravelProjection(
                     plan, candidates, out CityRuntime[] changedCities))
                 return false;
 
@@ -230,9 +230,8 @@ public sealed partial class SimulationRuntime
                 throw new InvalidOperationException(
                     "A committed selected travel transition could not publish its Unity projection.");
 
-            // Projection precedes the P12 mutation notification so the owner
-            // census can observe the reciprocal Core/Unity presence join.
-            adapter.RecordSelectedTravelOwnerMutationCommitted(plan, changedCities);
+            // The Core execution state records the exact P12 section changes
+            // after this projection is current.
         }
 
         public bool PublishTravelPartyArrival(TravelPartyRuntime party)
