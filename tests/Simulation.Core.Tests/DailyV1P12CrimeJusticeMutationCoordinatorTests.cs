@@ -610,6 +610,28 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
         Assert.That(replacement.Calls, Is.EqualTo(new[] { "fault" }),
             "One Core execution session retains the exact protocol identity bound to its P12 coordinator.");
         Assert.That(protocol.Calls.Count(call => call == "reserve"), Is.EqualTo(4));
+
+        DailyV1P12CrimeJusticeMutationCoordinator replacementCoordinatorForSameProtocol =
+            CreateCoordinator(protocol, () => { });
+        int reservesBeforeCoordinatorReplacement = protocol.Calls.Count(call => call == "reserve");
+        Assert.Throws<InvalidOperationException>(() =>
+            composition.ExecutionBoundaryState.ExecuteSelectedP12CrimeJusticeDailyMutation(
+                protocol,
+                replacementCoordinatorForSameProtocol,
+                composition.OwnerGraph,
+                DailyV1SelectedCrimeJusticeDailyPhase.ClearArrestedToday,
+                crimeOwnerIdentity,
+                crimeOwnerIdentity,
+                justiceOwnerIdentity,
+                justiceOwnerIdentity,
+                includeCrimeReceiptSection: true,
+                includeJusticeReceiptSection: true,
+                mutation: () => Assert.Fail("A replacement coordinator must not run the mutation.")));
+        Assert.That(protocol.Calls.Last(), Is.EqualTo("fault"),
+            "Replacing only the coordinator faults through the already-bound protocol.");
+        Assert.That(protocol.Calls.Count(call => call == "reserve"),
+            Is.EqualTo(reservesBeforeCoordinatorReplacement),
+            "A replacement coordinator is rejected before reserving a new epoch.");
     }
     private static DailyV1P12CrimeJusticeMutationCoordinator CreateCoordinator(
         FakeProtocol protocol,
