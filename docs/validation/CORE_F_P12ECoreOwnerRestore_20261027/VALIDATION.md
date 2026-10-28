@@ -9,8 +9,8 @@ and keeps the established projection and observer seams.
 
 | Gate | Result | Run |
 |---|---:|---|
-| CoreValidation cold | 902/902 PASS | `e9d4223e545a429282d4ee0b5c4bda73` |
-| CoreValidation warm | 902/902 PASS | `e9d4223e545a429282d4ee0b5c4bda73` |
+| CoreValidation cold | 902/902 PASS | `080a00a72b0b433890ce7773f9c09e5f` |
+| CoreValidation warm | 902/902 PASS | `080a00a72b0b433890ce7773f9c09e5f` |
 | Focused P12-E owner composition | 1/1 PASS, stable input | `ac8f0a8c841744b5be5d4e33aaaa5aea` |
 | Focused restore stage-order regression | 1/1 PASS, stable input | `06bb6cd148f24f69828729e706676fcf` |
 | Full Unity EditMode | 3274/3274 PASS, stable input | `d1ed853985ed44b19310b2a2e9a8e45d` |
@@ -40,13 +40,23 @@ the same five Smoke identities and outcomes.
 
 ## .NET evidence limits
 
-The CoreValidation runner reported the cold/warm result above. Its original
-manifest SHA-256 is
-`d8df70cf3d318438906061d4b6aa1b0f9a7c5390c7662f75a88d3e9135ab4e3d`; the
-cold and warm TRX SHA-256 values are
-`118326a6a6ddf71749473531a715ab9292b013b84cc3f1a4dfdf593581978158` and
-`a5917d442ee8df76a1b6cac29eb21f6f2ff28c32fe579cde24950db41d004667`.
-These originals remain in protected local retention. The runner emitted
+The initial CoreValidation run (`e9d4223e545a429282d4ee0b5c4bda73`) is not
+used as exact-source evidence: independent review found that its recorded
+hashes for the two changed Core test files did not match this candidate. The
+approved runner was rerun on exact candidate commit
+`bb408eb489cccd5e8d642853d3cf164be33c129d`, tree
+`2041fbd258591a3553defc72d03a305331ef1e9b`, with stable input digest
+`e006428dcc98d73a5d69d75c541cd3fc4d6cc99748faca46d9034b356fc449f4`.
+Both changed test inputs now match the candidate: `DailyV1ApplicationSessionGateTests.cs`
+`ff7c0417a51c6ca7bce40a523571db3b3668a3c8cd05e188120c45880a226583`, and
+`P12ECoreOwnerRestoreStagerTests.cs`
+`708db3b138ffa7a313c820bc664e28d0d7aea8fb43307bd9f05353dcb65f3c9a`.
+The protected manifest SHA-256 is
+`70a5bb5e7e2385173b5964bbb87fb00fa394086b7def72ed9222744df9ee94b1`; cold
+and warm TRX SHA-256 values are
+`6d714e207c0770656f8a46ebcd8a235725d90f099c43e597defa4cfa6d81b64d` and
+`82213f2b24643d74087607501943e40ecedf4391d701043a5b7c0b46c7fe6881`.
+Original results remain in protected E: retention. The runner emitted
 `simulation-core-validation/v1`, not the separate
 `dotnet-trx-source-context-v1` required by the approved TRX packager, so no
 public DotNetTrx package or private-to-public comparison is claimed. No
