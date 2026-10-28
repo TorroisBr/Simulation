@@ -71,6 +71,24 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
+    public void InvalidInitialHostBlocksGenesisOnTheSameApplication()
+    {
+        DailyV1Application application = new DailyV1Application();
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+
+        Assert.That(application.TryLoadInitialContinuationImageForStart(
+            definitions, null, out P12AContinuationImage image, out P12AResult loadResult), Is.False);
+        Assert.That(image, Is.Null);
+        Assert.That(loadResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.False);
+        Assert.That(candidate, Is.Null);
+        Assert.That(diagnostic, Does.Contain("cannot capture a second bootstrap"));
+    }
+
+    [Test]
     public void InvalidInitialSlotBlocksGenesisOnTheSameApplication()
     {
         DailyV1Application application = new DailyV1Application();

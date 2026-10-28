@@ -748,12 +748,29 @@ internal sealed class DailyV1Application
     {
         image = null;
         result = new P12AResult(P12AResultCode.Busy);
-        if (host == null
+        bool invalidHost = host == null
             || string.IsNullOrWhiteSpace(host.PersistentDataRoot)
             || host.FileOperations == null
-            || (host.UnityV1Identity == null && definitions == null))
+            || (host.UnityV1Identity == null && definitions == null);
+        if (invalidHost)
         {
             result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            lock (activeSessionGate.SyncRoot)
+            {
+                // Invalid input is still a failed initial-load attempt. Only a
+                // completed NoSave result may let this application fall through
+                // to genesis.
+                if (!initialContinuationLoadAttempted
+                    && !initialGenesisPreparationAttempted
+                    && preparedInitialGenesis == null
+                    && preparedInitialSession == null
+                    && activeSessionGate.Current == null
+                    && activeSessionGate.ActiveOperationCount == 0)
+                {
+                    initialContinuationLoadAttempted = true;
+                    initialContinuationLoadBlocksGenesis = true;
+                }
+            }
             return false;
         }
 
