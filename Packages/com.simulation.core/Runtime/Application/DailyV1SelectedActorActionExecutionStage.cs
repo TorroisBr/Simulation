@@ -241,6 +241,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
 
         return TryExecuteInstalledAction(
             graph, actor, randomSource, absoluteDay, boundary,
+            projectionlessActionExecution: projectionBoundary == null,
             out _, out _, out _);
     }
 
@@ -464,6 +465,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
 
         if (!TryExecuteInstalledAction(
                 graph, actor, randomSource, absoluteDay, boundary,
+                projectionlessActionExecution: projectionBoundary == null,
                 out bool actionSucceeded,
                 out NpcActionResultType? resultType,
                 out string resultMessage))
@@ -623,6 +625,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
         IAuthoritativeRandomSource randomSource,
         long absoluteDay,
         IDailyV1SelectedActorActionExecutionBoundary boundary,
+        bool projectionlessActionExecution,
         out bool actionSucceeded,
         out NpcActionResultType? resultType,
         out string resultMessage)
@@ -684,9 +687,16 @@ internal static class DailyV1SelectedActorActionExecutionStage
                 dispatch, out actionSucceeded, out NpcActionResultType coreResultType))
             throw new InvalidOperationException(
                 "Core produced an invalid selected-action dispatch outcome.");
-        if (!boundary.TryCompleteDispatch(actor, dispatch, out resultMessage))
+        // A projectionless Core-owned Normal action has no host action object
+        // to complete. Its authoritative outcome is already the Core dispatch
+        // result; keep Unity's projection/report callback for other paths.
+        bool completeHostProjection = !(projectionlessActionExecution && coreOwnedNormalAction);
+        if (completeHostProjection
+            && !boundary.TryCompleteDispatch(actor, dispatch, out resultMessage))
             throw new InvalidOperationException(
                 "The selected Daily-v1 action projection could not be completed by its host adapter.");
+        if (!completeHostProjection)
+            resultMessage = null;
         resultType = coreResultType;
 
         if (!actionSucceeded) return true;

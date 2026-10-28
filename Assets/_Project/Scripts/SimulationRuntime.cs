@@ -11933,6 +11933,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             RequireExactActor(actor);
             if (!DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
                     graph, actor, runtime.randomSource, runtime.CurrentDay, this,
+                    projectionlessActionExecution: false,
                     out _, out NpcActionResultType? resultType, out _))
                 throw new InvalidOperationException(
                     "The selected actor-choice action could not execute through its exact Core owner graph.");
@@ -12783,6 +12784,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 new SelectedDailyV1ActorTurnExecutionBoundary(runtime, graph, runtimeByOwner);
             if (!DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
                     graph, actor, runtime.randomSource, runtime.CurrentDay, boundary,
+                    projectionlessActionExecution: false,
                     out _, out NpcActionResultType? resultType, out _))
                 throw new InvalidOperationException(
                     "The selected actor-choice action could not execute through its exact Core owner graph.");
@@ -14566,7 +14568,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
         if (!DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
                 graph, npcRuntime.SelectedRuntimeOwners, randomSource, CurrentDay,
-                boundary, out _, out NpcActionResultType? resultType, out _))
+                boundary, projectionlessActionExecution: false,
+                out _, out NpcActionResultType? resultType, out _))
             throw new InvalidOperationException(
                 "The selected Daily-v1 action could not execute through its exact Core owner graph.");
 

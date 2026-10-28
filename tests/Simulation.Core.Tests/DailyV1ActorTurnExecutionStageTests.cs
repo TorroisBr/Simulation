@@ -831,7 +831,6 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(boundary.Events, Is.EqualTo(new[]
         {
             "chosen-target",
-            "complete-dispatch",
             "status-operation"
         }), "Core owns the action-slot and dispatch result; no host projection callback is required.");
         Assert.That(boundary.Random.Calls, Is.EqualTo(1));
@@ -872,18 +871,20 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
             graph, actor, boundary.RandomSource, 12L, boundary,
+            projectionlessActionExecution: true,
             out bool succeeded, out NpcActionResultType? resultType,
             out string resultMessage), Is.True);
 
         Assert.That(succeeded, Is.True);
         Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
         Assert.That(resultMessage, Is.Null);
+        Assert.That(boundary.Events, Does.Not.Contain("complete-dispatch"));
         Assert.That(boundary.DispatchBoundaryRequests, Is.Zero);
         Assert.That(boundary.ActionStatusBoundaryRequests, Is.EqualTo(1));
         Assert.That(boundary.ChosenActionTargetLogCalls, Is.EqualTo(1));
         Assert.That(boundary.Events, Is.EqualTo(new[]
         {
-            "chosen-target", "complete-dispatch", "status-operation"
+            "chosen-target", "status-operation"
         }));
         Assert.That(boundary.Random.Calls, Is.Zero);
         Assert.That(actor.ActionSlot.Revision, Is.EqualTo(actionRevision));
