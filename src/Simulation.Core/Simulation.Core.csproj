@@ -103,6 +103,8 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/PersonSpatialPositionStore.cs" Link="Geography/PersonSpatialPositionStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialPassageTraversalOptionResolver.cs" Link="Geography/SpatialPassageTraversalOptionResolver.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/P12P8CCensusProviders.cs" Link="Geography/P12P8CCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/P12P8ACensusProviders.cs" Link="Geography/P12P8ACensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/P12P8BCensusProviders.cs" Link="Geography/P12P8BCensusProviders.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationHost.cs" Link="Application/DailyV1ApplicationHost.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1Application.cs" Link="Application/DailyV1Application.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12GContinuationSourceWitness.cs" Link="Persistence/DailyV1P12GContinuationSourceWitness.cs" />

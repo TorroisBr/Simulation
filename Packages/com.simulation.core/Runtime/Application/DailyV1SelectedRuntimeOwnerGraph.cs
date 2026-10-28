@@ -21,6 +21,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex { get; }
     internal ExpeditionStore Expeditions { get; private set; }
     internal PersonStore PersonStore { get; private set; }
+    internal SpatialAuthorityStore SpatialAuthority { get; private set; }
     internal PersonSpatialPositionStore PersonSpatialPositionStore { get; private set; }
     internal LegacySpatialAnchorBindingStore LegacySpatialAnchors { get; private set; }
     internal ScheduledDirectiveStore ScheduledDirectives { get; private set; }
@@ -76,11 +77,31 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         return true;
     }
 
+    /// <summary>
+    /// Binds the exact Core spatial authority composed for the selected
+    /// runtime. P8 census witnesses and the P8-C child owners must all refer
+    /// to this same authority instance.
+    /// </summary>
+    internal bool TryBindSpatialAuthorityStore(SpatialAuthorityStore store)
+    {
+        if (store == null || store.PassageAuthority == null
+            || (PersonSpatialPositionStore != null
+                && !ReferenceEquals(PersonSpatialPositionStore.SpatialAuthorityStore, store))
+            || (LegacySpatialAnchors != null
+                && !ReferenceEquals(LegacySpatialAnchors.SpatialLocationLookup, store))) return false;
+        if (SpatialAuthority != null)
+            return ReferenceEquals(SpatialAuthority, store);
+        SpatialAuthority = store;
+        return true;
+    }
+
     /// <summary>Binds the exact P8-C position owner installed by the runtime.</summary>
     internal bool TryBindPersonSpatialPositionStore(PersonSpatialPositionStore store)
     {
         if (store == null || PersonStore == null
             || !ReferenceEquals(store.PersonStore, PersonStore)
+            || (SpatialAuthority != null
+                && !ReferenceEquals(SpatialAuthority, store.SpatialAuthorityStore))
             || (LegacySpatialAnchors != null
                 && !ReferenceEquals(LegacySpatialAnchors.SpatialLocationLookup,
                     store.SpatialAuthorityStore))) return false;
@@ -99,6 +120,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     {
         PersonSpatialPositionStore positions = PersonSpatialPositionStore;
         if (store == null || positions == null
+            || (SpatialAuthority != null
+                && !ReferenceEquals(SpatialAuthority, store.SpatialLocationLookup))
             || !ReferenceEquals(store.SpatialLocationLookup, positions.SpatialAuthorityStore))
             return false;
         if (LegacySpatialAnchors != null)
@@ -108,15 +131,31 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     }
 
     /// <summary>
-    /// Confirms that each P8-C census witness for an owner already bound into
+    /// Confirms that each P8 census witness for an owner already bound into
     /// this graph matches that exact owner's live identity, cardinality, and
-    /// revision. During the source migration, an unbound P8-C owner remains the
-    /// host protocol's responsibility.
+    /// revision. During the source migration, unbound P8 owners remain the host
+    /// protocol's responsibility.
     /// </summary>
     internal bool MatchesSelectedP8CensusOwnerWitnesses(
         IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections)
     {
         return ownerSections != null
+            && (SpatialAuthority == null
+                || (HasCensusOwnerWitness(
+                        ownerSections,
+                        new SpatialHexCensusProvider(SpatialAuthority).GetCurrentCensus())
+                    && HasCensusOwnerWitness(
+                        ownerSections,
+                        new SpatialLocationCensusProvider(SpatialAuthority).GetCurrentCensus())
+                    && HasCensusOwnerWitness(
+                        ownerSections,
+                        new SpatialScaleContextCensusProvider(SpatialAuthority).GetCurrentCensus())
+                    && HasCensusOwnerWitness(
+                        ownerSections,
+                        new SpatialPassageStateCensusProvider(SpatialAuthority).GetCurrentCensus())
+                    && HasCensusOwnerWitness(
+                        ownerSections,
+                        new SpatialCrossingCensusProvider(SpatialAuthority).GetCurrentCensus())))
             && (PersonSpatialPositionStore == null
                 || HasCensusOwnerWitness(
                     ownerSections,
@@ -1183,6 +1222,12 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
 
         if ((ScheduledDirectives != null && !graph.TryBindScheduledDirectives(ScheduledDirectives))
             || (Expeditions != null && !graph.TryBindExpeditionStore(Expeditions)))
+        {
+            graph = null;
+            return false;
+        }
+        if (SpatialAuthority != null
+            && !graph.TryBindSpatialAuthorityStore(SpatialAuthority))
         {
             graph = null;
             return false;

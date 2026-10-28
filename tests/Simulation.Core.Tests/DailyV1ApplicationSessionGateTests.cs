@@ -518,6 +518,19 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1SelectedRuntimeOwnerGraph graph,
         OwnerSectionCensusSnapshot[] sections)
     {
+        if (graph?.SpatialAuthority != null)
+        {
+            ReplaceOwnerSectionWithCurrentCensus(sections,
+                new SpatialHexCensusProvider(graph.SpatialAuthority).GetCurrentCensus());
+            ReplaceOwnerSectionWithCurrentCensus(sections,
+                new SpatialLocationCensusProvider(graph.SpatialAuthority).GetCurrentCensus());
+            ReplaceOwnerSectionWithCurrentCensus(sections,
+                new SpatialScaleContextCensusProvider(graph.SpatialAuthority).GetCurrentCensus());
+            ReplaceOwnerSectionWithCurrentCensus(sections,
+                new SpatialPassageStateCensusProvider(graph.SpatialAuthority).GetCurrentCensus());
+            ReplaceOwnerSectionWithCurrentCensus(sections,
+                new SpatialCrossingCensusProvider(graph.SpatialAuthority).GetCurrentCensus());
+        }
         if (graph?.PersonSpatialPositionStore != null)
             ReplaceOwnerSectionWithCurrentCensus(sections,
                 new PersonSpatialPositionCensusProvider(
@@ -964,6 +977,51 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(operation, Is.Null);
         Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
         Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedP8OwnerWitnessesRequireExactCoreIdentityCardinalityAndRevision()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null,
+            out DailyV1ActiveRuntimeSession session,
+            out _,
+            bindP8Owners: true);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        Assert.That(graph.SpatialAuthority,
+            Is.SameAs(session.GenesisComposition.SpatialAuthority));
+        OwnerSectionCensusSnapshot[] complete = CreateCoreBoundCompleteOwnerSectionVector(session);
+        Assert.That(graph.MatchesSelectedP8CensusOwnerWitnesses(complete), Is.True);
+
+        string[] p8SectionIds =
+        {
+            "p8a.hexes",
+            "p8a.locations",
+            "p8a.scale-context",
+            "p8b.passage-option-barrier-state",
+            "p8b.crossings"
+        };
+
+        foreach (string sectionId in p8SectionIds)
+        {
+            OwnerSectionCensusSnapshot[] wrongIdentity = (OwnerSectionCensusSnapshot[])complete.Clone();
+            ReplaceOwnerSectionWithOwnerIdentity(wrongIdentity, sectionId, new object());
+            Assert.That(graph.MatchesSelectedP8CensusOwnerWitnesses(wrongIdentity), Is.False,
+                sectionId + " must identify the exact P8 Core owner instance.");
+
+            OwnerSectionCensusSnapshot[] wrongCardinality = (OwnerSectionCensusSnapshot[])complete.Clone();
+            OwnerSectionCensusSnapshot current = wrongCardinality.Single(section => section.SectionId == sectionId);
+            ReplaceOwnerSectionWithCardinality(wrongCardinality, sectionId, current.Cardinality + 1);
+            Assert.That(graph.MatchesSelectedP8CensusOwnerWitnesses(wrongCardinality), Is.False,
+                sectionId + " must report the live owner cardinality.");
+
+            OwnerSectionCensusSnapshot[] wrongRevision = (OwnerSectionCensusSnapshot[])complete.Clone();
+            current = wrongRevision.Single(section => section.SectionId == sectionId);
+            ReplaceOwnerSectionWithRevision(wrongRevision, sectionId, current.Revision + 1L);
+            Assert.That(graph.MatchesSelectedP8CensusOwnerWitnesses(wrongRevision), Is.False,
+                sectionId + " must report the live owner revision.");
+        }
     }
 
     private static void RecordNoOpDailyEconomyReceipt(DailyV1CityRuntimeOwners city)

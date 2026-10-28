@@ -333,6 +333,9 @@ public sealed class DailyV1GenesisComposerTests
             Is.True, diagnostic);
         Assert.That(composition.Definitions, Is.SameAs(definitions));
         Assert.That(composition.OwnerGraph.Definitions, Is.SameAs(definitions));
+        Assert.That(composition.OwnerGraph.SpatialAuthority,
+            Is.SameAs(composition.SpatialAuthority),
+            "The selected Core graph must retain the exact spatial authority used by P8 census owners.");
         Assert.That(WorldId.TryParse(composition.WorldId.Value, out WorldId parsedWorld), Is.True);
         Assert.That(parsedWorld, Is.Not.SameAs(composition.WorldId));
         Assert.That(composition.SimulationTime.AbsoluteDay, Is.Zero);

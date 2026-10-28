@@ -247,7 +247,8 @@ internal static class DailyV1GenesisComposer
                     PersonSpatialPositionStore personSpatialPositions =
                         new PersonSpatialPositionStore(personStore, spatialAuthority,
                             new SpatialPassageTraversalOptionResolver(spatialAuthority.PassageAuthority));
-                    if (!graph.TryBindPersonStore(personStore)
+                    if (!graph.TryBindSpatialAuthorityStore(spatialAuthority)
+                        || !graph.TryBindPersonStore(personStore)
                         || !ReferenceEquals(actorChoiceStore.PersonStore, personStore)
                         || !graph.TryBindPersonSpatialPositionStore(personSpatialPositions)
                         || !graph.TryBindLegacySpatialAnchorBindingStore(anchorBindings)
