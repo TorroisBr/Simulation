@@ -31,6 +31,7 @@ internal interface IDailyV1SelectedMerchantTradeStateBoundary
         DailyV1NpcRuntimeOwners actor,
         string targetLocationRuntimeId,
         CommercialDecisionEvidence evidence);
+    void LogTradeDecisionFailure(string message);
     void LogTrade(string message);
 }
 
@@ -71,7 +72,8 @@ internal static class DailyV1SelectedMerchantTradeStateOperation
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         long absoluteDay,
-        IDailyV1SelectedMerchantTradeStateBoundary boundary)
+        IDailyV1SelectedMerchantTradeStateBoundary boundary,
+        DailyV1ActorTurnCoreRoots coreRoots = null)
     {
         if (graph == null || actor == null || boundary == null || absoluteDay < 0L
             || !graph.ContainsExactNpcOwner(actor)
@@ -162,8 +164,11 @@ internal static class DailyV1SelectedMerchantTradeStateOperation
             plan, absoluteDay, trade, knowledge);
         if (redirect != null)
         {
-            NpcDecisionRecord decision = boundary.RecordTradeRedirect(actor,
-                redirect.TargetCity.LocationRuntimeId, redirect.Evidence);
+            NpcDecisionRecord decision = coreRoots == null
+                ? boundary.RecordTradeRedirect(actor,
+                    redirect.TargetCity.LocationRuntimeId, redirect.Evidence)
+                : RecordTradeRedirectFromCore(
+                    graph, actor, redirect, absoluteDay, coreRoots, boundary);
             int nextWaitDays = string.Equals(plan.TargetCityRuntimeId,
                 redirect.TargetCity.RuntimeId, StringComparison.Ordinal)
                 ? plan.WaitDaysAtDestination : 0;
@@ -181,6 +186,39 @@ internal static class DailyV1SelectedMerchantTradeStateOperation
 
         IncrementWait(actor, boundary, plan);
         return true;
+    }
+
+    private static NpcDecisionRecord RecordTradeRedirectFromCore(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        TradeOpportunity redirect,
+        long absoluteDay,
+        DailyV1ActorTurnCoreRoots coreRoots,
+        IDailyV1SelectedMerchantTradeStateBoundary boundary)
+    {
+        if (coreRoots == null || !coreRoots.IsBoundToGraph(graph))
+            throw new InvalidOperationException(
+                "The selected Merchant redirect received Core decision roots from another owner graph.");
+        try
+        {
+            return DailyV1DecisionRecordOperation.Record(
+                coreRoots.IdAllocator, coreRoots.RecordSequence, coreRoots.DecisionStore,
+                absoluteDay, actor.RuntimeId, NpcDecisionType.TradeRedirect,
+                NpcDecisionOrigin.Autonomous, null, null, null,
+                redirect.TargetCity.LocationRuntimeId, redirect.Evidence, null);
+        }
+        catch (ArgumentException exception)
+        {
+            boundary.LogTradeDecisionFailure(
+                "Cannot create NPC decision record: " + exception.Message);
+            return null;
+        }
+        catch (InvalidOperationException exception)
+        {
+            boundary.LogTradeDecisionFailure(
+                "Cannot allocate NPC decision identity: " + exception.Message);
+            return null;
+        }
     }
 
     /// <summary>

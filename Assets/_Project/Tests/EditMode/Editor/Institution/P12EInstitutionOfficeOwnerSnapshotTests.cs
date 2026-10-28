@@ -28,7 +28,7 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
             Is.True, advanceFailure.ToString());
 
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(runtime,
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(runtime,
             out P12EInstitutionOfficeOwnerSnapshot snapshot,
             out P12EInstitutionOfficeSnapshotFailure captureFailure), Is.True, captureFailure.Message);
         Assert.That(snapshot.Institutions.RecordCount, Is.Zero);
@@ -87,7 +87,7 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
 
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
             Is.True, advanceFailure.ToString());
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(runtime,
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(runtime,
             out P12EInstitutionOfficeOwnerSnapshot snapshot,
             out P12EInstitutionOfficeSnapshotFailure captureFailure), Is.True, captureFailure.Message);
         Assert.That(snapshot.Institutions.Records, Has.Count.EqualTo(2));
@@ -138,9 +138,9 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
         Assert.That(runtime.TryRegisterOffice(new OfficeRecord(office, institution, "Before"), out _), Is.True);
         Assert.That(runtime.TryAssignIncumbent(office, person, 4L, out _), Is.True);
         Assert.That(runtime.TryAdvanceDay(out _), Is.True);
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(runtime, out var first, out var firstFailure),
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(runtime, out var first, out var firstFailure),
             Is.True, firstFailure.Message);
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(runtime, out var second, out var secondFailure),
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(runtime, out var second, out var secondFailure),
             Is.True, secondFailure.Message);
         Assert.That(first.Institutions.Records[0].DisplayName, Is.EqualTo(second.Institutions.Records[0].DisplayName));
         Assert.That(first.Offices.Records[0].DisplayName, Is.EqualTo(second.Offices.Records[0].DisplayName));
@@ -267,7 +267,7 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
     public void CaptureRejectsRuntimeWithoutCompletedBoundary()
     {
         SimulationRuntime runtime = CreateDailyRuntime();
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(runtime,
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(runtime,
             out P12EInstitutionOfficeOwnerSnapshot snapshot,
             out P12EInstitutionOfficeSnapshotFailure failure), Is.False);
         Assert.That(snapshot, Is.Null);
@@ -282,7 +282,7 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(out _, out _), Is.True);
         Assert.That(runtime.TryRegisterInstitution(
             new InstitutionRecord(new InstitutionId("p12e-stale-capture")), out _), Is.True);
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(runtime,
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(runtime,
             out P12EInstitutionOfficeOwnerSnapshot snapshot,
             out P12EInstitutionOfficeSnapshotFailure failure), Is.False);
         Assert.That(snapshot, Is.Null);
@@ -301,7 +301,7 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
         Assert.That(runtime.TryRegisterOffice(new OfficeRecord(office, institution), out _), Is.True);
         Assert.That(runtime.TryAssignIncumbent(office, person, 12L, out _), Is.True);
         Assert.That(runtime.TryAdvanceDay(out _), Is.True);
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(runtime, out var occupied, out var occupiedFailure),
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(runtime, out var occupied, out var occupiedFailure),
             Is.True, occupiedFailure.Message);
         Assert.That(occupied.Incumbencies.RecordCount, Is.EqualTo(1));
         Assert.That(occupied.Tenures.RecordCount, Is.EqualTo(1));
@@ -310,7 +310,7 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
 
         Assert.That(runtime.TryVacateOffice(office, out _), Is.True);
         Assert.That(runtime.TryAdvanceDay(out _), Is.True);
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(runtime, out var vacant, out var vacantFailure),
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(runtime, out var vacant, out var vacantFailure),
             Is.True, vacantFailure.Message);
         Assert.That(vacant.Incumbencies.RecordCount, Is.Zero);
         Assert.That(vacant.Tenures.RecordCount, Is.EqualTo(1));
@@ -425,7 +425,7 @@ public sealed class P12EInstitutionOfficeOwnerSnapshotTests
             currentToken.CompletedCoreSequence,
             currentToken.MutationEpoch,
             alteredSections);
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(runtime, synthetic, alteredSections,
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(runtime, synthetic, alteredSections,
             out P12EInstitutionOfficeOwnerSnapshot snapshot,
             out P12EInstitutionOfficeSnapshotFailure failure), Is.False);
         Assert.That(snapshot, Is.Null);

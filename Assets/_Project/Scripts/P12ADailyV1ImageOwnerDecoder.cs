@@ -11,7 +11,7 @@ internal sealed class P12ADailyV1ImageOwnerSnapshots
     internal PersonStoreOwnerSnapshot Persons { get; }
     internal GenealogyOwnerSnapshot Genealogy { get; }
     internal ExplorableSiteOwnerSnapshot Sites { get; }
-    internal IReadOnlyList<P12DCityRootOwnerSnapshot> Cities { get; }
+    internal IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> Cities { get; }
     internal IReadOnlyList<P12DNpcDRow> NpcDRows { get; }
     internal IReadOnlyList<P12DNpcFRow> NpcFRows { get; }
     internal P12EInstitutionOfficeOwnerSnapshot InstitutionOffice { get; }
@@ -41,7 +41,7 @@ internal sealed class P12ADailyV1ImageOwnerSnapshots
         PersonStoreOwnerSnapshot persons,
         GenealogyOwnerSnapshot genealogy,
         ExplorableSiteOwnerSnapshot sites,
-        IReadOnlyList<P12DCityRootOwnerSnapshot> cities,
+        IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cities,
         IReadOnlyList<P12DNpcDRow> npcDRows,
         IReadOnlyList<P12DNpcFRow> npcFRows,
         P12EInstitutionOfficeOwnerSnapshot institutionOffice,
@@ -90,7 +90,7 @@ internal static class P12ADailyV1ImageOwnerDecoder
         snapshots = null;
         result = new P12AResult(P12AResultCode.OwnerGraphRejected);
         if (image == null || !P12ADailyV1Census.TryCreateForImage(image, out _, out result)
-            || !P12ACausalRootImageAdapter.TryDecode(image,
+            || !P12ACausalRootImageCodec.TryDecode(image,
                 out P12ACausalRootImageSnapshots c, out result)) return false;
 
         P12AOwnerSection Section(string id) => Unique(image, id, out P12AResult sectionError)
@@ -119,8 +119,8 @@ internal static class P12ADailyV1ImageOwnerDecoder
             List<P12AOwnerSection> citySections = image.Sections.Where(section =>
                 P12ADailyV1Census.CitySectionPrefixes.Any(prefix =>
                     section.Id.StartsWith(prefix, StringComparison.Ordinal))).ToList();
-            if (!P12ACityOwnerSetCodec.TryDecode(citySections,
-                    out IReadOnlyList<P12DCityRootOwnerSnapshot> cities, out result)) return false;
+            if (!P12DCityOwnerSetImageDecoder.TryDecode(citySections,
+                    out IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cities, out result)) return false;
 
             P12AOwnerSection[] emptySections = P12ADailyV1Census.FixedEmptySectionIds
                 .Select(Section).ToArray();
@@ -131,18 +131,9 @@ internal static class P12ADailyV1ImageOwnerDecoder
                 ExplorableSiteOwnerSnapshot.CurrentSchemaVersion, siteSection.Revision,
                 Array.Empty<ExplorableSiteOwnerSnapshotRecord>());
 
-            List<string> npcIds = identities.IdentityValues
-                .Where(pair => pair.Key == "npc").Select(pair => pair.Value)
-                .OrderBy(value => value, StringComparer.Ordinal).ToList();
-            List<P12DNpcDRow> npcDRows = new List<P12DNpcDRow>(npcIds.Count);
-            List<P12DNpcFRow> npcFRows = new List<P12DNpcFRow>(npcIds.Count);
-            foreach (string npcId in npcIds)
-            {
-                if (!P12ANpcOwnerDecoder.TryDecode(image, npcId,
-                        out P12DNpcDRow dRow, out P12DNpcFRow fRow, out result)) return false;
-                npcDRows.Add(dRow);
-                npcFRows.Add(fRow);
-            }
+            if (!P12ADailyV1NpcOwnerBatchDecoder.TryDecode(image, identities, persons,
+                    out IReadOnlyList<P12DNpcDRow> npcDRows,
+                    out IReadOnlyList<P12DNpcFRow> npcFRows, out result)) return false;
 
             long day = image.Header.Day;
             if (!P12EInstitutionOfficeOwnerCodec.TryDecode(
@@ -210,7 +201,7 @@ internal static class P12ADailyV1ImageOwnerDecoder
                     out P12FExpeditionOwnerSnapshot expeditions, out result)) return false;
 
             snapshots = new P12ADailyV1ImageOwnerSnapshots(c, identities, spatial, persons,
-                genealogy, sites, cities, npcDRows.AsReadOnly(), npcFRows.AsReadOnly(),
+                genealogy, sites, cities, npcDRows, npcFRows,
                 institutionOffice, propertyEstate, faction, claims, support, decisions,
                 military, conflicts, wars, battles, justice, crimeSocial, crimeReceipts,
                 justiceReceipts, politicalKnowledge, directives, actorChoices,

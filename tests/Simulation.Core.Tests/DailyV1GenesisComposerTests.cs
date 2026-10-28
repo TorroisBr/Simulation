@@ -24,6 +24,18 @@ public sealed class DailyV1GenesisComposerTests
 
         Assert.That(allocations, Is.EqualTo(1));
         Assert.That(composition.WorldId, Is.SameAs(expectedWorldId));
+        Assert.That(composition.OwnerGraph.Expeditions, Is.SameAs(composition.Expeditions),
+            "The Core graph must retain the exact ExpeditionStore created by genesis.");
+        Assert.That(composition.OwnerGraph.TryBindExpeditionStore(new ExpeditionStore()), Is.False,
+            "A different ExpeditionStore cannot replace the genesis owner identity.");
+        Assert.That(composition.P9ManifestSnapshot, Is.Not.Null,
+            "Core genesis retains the exact P9-B manifest facts needed by detached P12-C capture.");
+        Assert.That(composition.P9ManifestSnapshot.TryValidate(out string p9Diagnostic), Is.True, p9Diagnostic);
+        Assert.That(composition.P9ManifestSnapshot.Fingerprint, Is.EqualTo(composition.P9ProfileFingerprint));
+        Assert.That(composition.P9ManifestSnapshot.CanonicalProvenanceRecords,
+            Is.EqualTo(composition.P9ProvenanceRecords));
+        Assert.That(composition.P9ManifestSnapshot.EffectiveConfiguration, Is.Not.Null);
+        Assert.That(composition.P9ManifestSnapshot.StageOrder, Is.EqualTo(definitions.StageOrder));
         Assert.That(completed, Is.EqualTo(definitions.StageOrder.Take(definitions.StageOrder.Count - 2)));
     }
 
@@ -40,7 +52,8 @@ public sealed class DailyV1GenesisComposerTests
             out DailyV1GenesisComposition source,
             out string sourceDiagnostic), Is.True, sourceDiagnostic);
 
-        Assert.That(source.OwnerGraph.TryBindExpeditionStore(new ExpeditionStore()), Is.True);
+        Assert.That(source.OwnerGraph.TryBindExpeditionStore(new ExpeditionStore()), Is.False,
+            "A restored graph cannot replace the exact ExpeditionStore retained by Core genesis.");
         SimulationRuntimeAdmissionContext restoredAdmission =
             source.AdmissionContext.CreateRestoredContinuationContext();
         SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
@@ -78,6 +91,217 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(restoredSession.ExecutionBoundaryState, Is.SameAs(restoredBoundary));
         Assert.That(restoredSession.Definitions, Is.SameAs(definitions));
         Assert.That(restoredSession.RuntimeAdvanceBoundary, Is.Null);
+    }
+
+    [Test]
+    public void RestoredExecutionBoundaryComposerOwnsSelectedP12DOwnerGraphAdmission()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition source,
+            out string sourceDiagnostic), Is.True, sourceDiagnostic);
+
+        SimulationRuntimeAdmissionContext restoredAdmission =
+            source.AdmissionContext.CreateRestoredContinuationContext();
+        SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
+        CalendarDefinition calendarDefinition = definitions.Calendar.monthLengths != null
+            && definitions.Calendar.monthLengths.Count > 0
+            ? new CalendarDefinition(new List<int>(definitions.Calendar.monthLengths),
+                definitions.Calendar.daysPerWeek)
+            : new CalendarDefinition(definitions.Calendar.monthsPerYear,
+                definitions.Calendar.weeksPerMonth, definitions.Calendar.daysPerWeek);
+        ScheduledDirectiveStore directives = new ScheduledDirectiveStore(restoredTime);
+
+        Assert.That(DailyV1RestoredExecutionBoundaryComposer.TryCreate(
+            definitions,
+            source.EffectiveConfiguration,
+            calendarDefinition,
+            restoredTime,
+            restoredAdmission,
+            source.WorldId,
+            source.OwnerGraph.Cities,
+            source.OwnerGraph.Npcs,
+            source.OwnerGraph.SpatialNetwork,
+            source.OwnerGraph.JusticeRecordsOwner,
+            source.TravelPartyStore,
+            source.OwnerGraph.RuntimeIdentityIndex,
+            source.PersonStore,
+            directives,
+            source.Expeditions,
+            source.RuntimeIdAllocator,
+            source.RandomSource,
+            source.RecordSequence,
+            source.DecisionStore,
+            source.ActorChoiceStore,
+            out DailyV1ExecutionBoundaryState restoredBoundary,
+            out SimulationCalendar restoredCalendar,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(restoredCalendar.SemanticVersion, Is.EqualTo(source.Calendar.SemanticVersion));
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph, Is.Not.SameAs(source.OwnerGraph));
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph.Cities,
+            Is.EqualTo(source.OwnerGraph.Cities).AsCollection);
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph.Npcs,
+            Is.EqualTo(source.OwnerGraph.Npcs).AsCollection);
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph.ScheduledDirectives,
+            Is.SameAs(directives));
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph.Expeditions,
+            Is.SameAs(source.Expeditions));
+        Assert.That(restoredBoundary.HasExactSelectedRuntimeExecutionRoots(
+            restoredBoundary.SelectedRuntimeOwnerGraph,
+            source.PersonStore,
+            source.ActorChoiceStore,
+            source.RandomSource,
+            source.RuntimeIdAllocator,
+            source.RecordSequence,
+            source.DecisionStore), Is.True);
+    }
+
+    [Test]
+    public void RestoredExecutionBoundaryComposerRejectsDuplicateOwnerBeforePublishingBoundary()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition source,
+            out string sourceDiagnostic), Is.True, sourceDiagnostic);
+
+        DailyV1CityRuntimeOwners firstCity = source.OwnerGraph.Cities[0];
+        List<DailyV1CityRuntimeOwners> duplicateCities =
+            new List<DailyV1CityRuntimeOwners>(source.OwnerGraph.Cities) { firstCity };
+        SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
+        CalendarDefinition calendarDefinition = new CalendarDefinition(
+            definitions.Calendar.monthsPerYear,
+            definitions.Calendar.weeksPerMonth,
+            definitions.Calendar.daysPerWeek);
+
+        Assert.That(DailyV1RestoredExecutionBoundaryComposer.TryCreate(
+            definitions,
+            source.EffectiveConfiguration,
+            calendarDefinition,
+            restoredTime,
+            source.AdmissionContext.CreateRestoredContinuationContext(),
+            source.WorldId,
+            duplicateCities,
+            source.OwnerGraph.Npcs,
+            source.OwnerGraph.SpatialNetwork,
+            source.OwnerGraph.JusticeRecordsOwner,
+            source.TravelPartyStore,
+            source.OwnerGraph.RuntimeIdentityIndex,
+            source.PersonStore,
+            new ScheduledDirectiveStore(restoredTime),
+            source.Expeditions,
+            source.RuntimeIdAllocator,
+            source.RandomSource,
+            source.RecordSequence,
+            source.DecisionStore,
+            source.ActorChoiceStore,
+            out DailyV1ExecutionBoundaryState restoredBoundary,
+            out SimulationCalendar restoredCalendar,
+            out string diagnostic), Is.False);
+
+        Assert.That(restoredBoundary, Is.Null);
+        Assert.That(restoredCalendar, Is.Null);
+        Assert.That(diagnostic, Does.Contain("cross-owner relationships"));
+    }
+
+    [Test]
+    public void ApplicationComposesRestoredOwnerGraphBoundaryAndUnpublishedSessionTogether()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext bootstrapAdmission), Is.True);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            bootstrapAdmission,
+            out DailyV1GenesisComposition source,
+            out string sourceDiagnostic), Is.True, sourceDiagnostic);
+
+        SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
+        SimulationRuntimeAdmissionContext restoredAdmission =
+            bootstrapAdmission.CreateRestoredContinuationContext();
+        CalendarDefinition calendarDefinition = definitions.Calendar.monthLengths != null
+            && definitions.Calendar.monthLengths.Count > 0
+            ? new CalendarDefinition(new List<int>(definitions.Calendar.monthLengths),
+                definitions.Calendar.daysPerWeek)
+            : new CalendarDefinition(definitions.Calendar.monthsPerYear,
+                definitions.Calendar.weeksPerMonth, definitions.Calendar.daysPerWeek);
+        ScheduledDirectiveStore directives = new ScheduledDirectiveStore(restoredTime);
+
+        Assert.That(application.TryCreateRestoredActiveRuntimeSession(
+            definitions,
+            source.EffectiveConfiguration,
+            calendarDefinition,
+            restoredTime,
+            restoredAdmission,
+            source.WorldId,
+            source.OwnerGraph.Cities,
+            source.OwnerGraph.Npcs,
+            source.OwnerGraph.SpatialNetwork,
+            source.OwnerGraph.JusticeRecordsOwner,
+            source.TravelPartyStore,
+            source.OwnerGraph.RuntimeIdentityIndex,
+            source.PersonStore,
+            directives,
+            source.Expeditions,
+            source.RuntimeIdAllocator,
+            source.RandomSource,
+            source.RecordSequence,
+            source.DecisionStore,
+            source.ActorChoiceStore,
+            lastEconomySnapshotDay: 0L,
+            replacementOperation: null,
+            out DailyV1ActiveRuntimeSession candidate,
+            out SimulationCalendar restoredCalendar,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(candidate, Is.Not.Null);
+        Assert.That(candidate.Definitions, Is.SameAs(definitions));
+        Assert.That(candidate.ExecutionBoundaryState.SimulationTime, Is.SameAs(restoredTime));
+        Assert.That(candidate.ExecutionBoundaryState.AdmissionContext, Is.SameAs(restoredAdmission));
+        Assert.That(candidate.ExecutionBoundaryState.WorldId, Is.SameAs(source.WorldId));
+        Assert.That(candidate.OwnerGraph.Definitions, Is.SameAs(definitions));
+        Assert.That(candidate.OwnerGraph.ScheduledDirectives, Is.SameAs(directives));
+        Assert.That(candidate.OwnerGraph.Expeditions, Is.SameAs(source.Expeditions));
+        Assert.That(restoredCalendar.SemanticVersion, Is.EqualTo(source.Calendar.SemanticVersion));
+        Assert.That(candidate.RuntimeAdvanceBoundary, Is.Null);
+        Assert.That(application.ActiveSession, Is.Null,
+            "Composition returns one unpublished Core candidate; only the existing restore commit may exchange the active session.");
+
+        Assert.That(application.TryCreateRestoredActiveRuntimeSession(
+            definitions,
+            null,
+            calendarDefinition,
+            restoredTime,
+            restoredAdmission,
+            source.WorldId,
+            source.OwnerGraph.Cities,
+            source.OwnerGraph.Npcs,
+            source.OwnerGraph.SpatialNetwork,
+            source.OwnerGraph.JusticeRecordsOwner,
+            source.TravelPartyStore,
+            source.OwnerGraph.RuntimeIdentityIndex,
+            source.PersonStore,
+            directives,
+            source.Expeditions,
+            source.RuntimeIdAllocator,
+            source.RandomSource,
+            source.RecordSequence,
+            source.DecisionStore,
+            source.ActorChoiceStore,
+            lastEconomySnapshotDay: 0L,
+            replacementOperation: null,
+            out DailyV1ActiveRuntimeSession rejectedCandidate,
+            out SimulationCalendar rejectedCalendar,
+            out string rejectedDiagnostic), Is.False);
+        Assert.That(rejectedCandidate, Is.Null);
+        Assert.That(rejectedCalendar, Is.Null);
+        Assert.That(rejectedDiagnostic, Does.Contain("exact selected definitions"));
+        Assert.That(application.ActiveSession, Is.Null);
     }
 
     [Test]
@@ -123,8 +347,8 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(composition.Expeditions, Is.Not.Null);
         Assert.That(composition.Expeditions.ActiveExpeditions, Is.Empty);
         Assert.That(composition.Expeditions.Revision, Is.Zero);
-        Assert.That(composition.OwnerGraph.Expeditions, Is.Null,
-            "P9 genesis retains the P12 exact-empty owner without admitting P10 expedition participation into the selected profile graph.");
+        Assert.That(composition.OwnerGraph.Expeditions, Is.SameAs(composition.Expeditions),
+            "P9 genesis binds the exact P12 owner instance while its supported initial content remains exact-empty.");
         Assert.That(composition.ExecutionBoundaryState.SelectedRuntimeOwnerGraph,
             Is.SameAs(composition.OwnerGraph));
         IReadOnlyList<DailyV1ActorTurnRosterProjection> actorRoster =
@@ -217,8 +441,10 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(composition.OwnerGraph.ScheduledDirectives.Directives, Is.Empty);
         Assert.That(composition.OwnerGraph.TravelParties, Is.SameAs(composition.TravelPartyStore));
         Assert.That(composition.TravelPartyStore.ActiveParties, Is.Empty);
-        Assert.That(composition.OwnerGraph.Expeditions, Is.Null,
-            "The accepted Daily-v1 profile has no selected P10 expedition content.");
+        Assert.That(composition.OwnerGraph.Expeditions, Is.SameAs(composition.Expeditions),
+            "The accepted Daily-v1 profile binds its exact P12 owner while selecting no P10 expedition content.");
+        Assert.That(composition.OwnerGraph.Expeditions.ActiveExpeditions, Is.Empty);
+        Assert.That(composition.OwnerGraph.Expeditions.Revision, Is.Zero);
         Assert.That(composition.LegacySpatialAnchorBindings.Count, Is.Zero,
             "No City anchor is fabricated when the accepted definitions contain no City material-flow LocationId.");
         Assert.That(definitions.ExplorableSites, Is.Empty,

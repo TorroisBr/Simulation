@@ -28,12 +28,67 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal MoneyAccountRuntime MoneyAccount { get; }
     internal DailyV1CommercialKnowledgeOwner CommercialKnowledge { get; }
     internal SpatialKnowledgeRuntime SpatialKnowledge { get; }
+    internal DailyV1ExplorableSiteKnowledgeOwner ExplorableSiteKnowledge { get; }
+    internal DailyV1AdventureSiteIntelKnowledgeOwner AdventureSiteIntelKnowledge { get; }
+    internal DailyV1NpcLocalTopologyKnowledgeEmptyOwner LocalTopologyKnowledgeEmptyOwner { get; }
     internal DailyV1NpcLifecycleOwner Lifecycle { get; }
     internal DailyV1NpcActionSlotOwner ActionSlot { get; }
     internal DailyV1NpcTravelOwner Travel { get; }
     internal DailyV1NpcTravelPlanOwner TravelPlan { get; }
     internal DailyV1NpcHiddenStateOwner HiddenState { get; }
+    internal DailyV1NpcResidenceOwner Residence { get; }
     internal long CrimeJusticeRevision { get; private set; }
+
+    internal bool CanCommitPersonDeathAfterValidation(
+        NpcInjurySeverity injurySeverity,
+        DailyV1ActionDefinition expectedAction,
+        DailyV1NpcActionPayloadOwner expectedPayload)
+    {
+        if (!NpcInjuryRules.IsValid(injurySeverity)
+            || Lifecycle == null
+            || ActionSlot == null
+            || Lifecycle.LifeState != NpcLifeState.Alive
+            || !ReferenceEquals(ActionSlot.CurrentAction, expectedAction)
+            || !ReferenceEquals(ActionSlot.CurrentPayload, expectedPayload)
+            || (expectedAction == null && expectedPayload != null)
+            || (expectedPayload != null && !ReferenceEquals(expectedPayload.Action, expectedAction))
+            || (expectedAction != null
+                && (!Definitions.Actions.TryGetValue(expectedAction.DefinitionId, out DailyV1ActionDefinition admitted)
+                    || !ReferenceEquals(admitted, expectedAction)))
+            || !Lifecycle.CanAdvanceRevision(1)
+            || !ActionSlot.CanAdvanceRevision(expectedAction == null ? 0 : 1)
+            || !ActionSlot.CanSetCurrentAction(null, null))
+            return false;
+
+        return true;
+    }
+
+    internal bool TryCommitPersonDeathAfterValidation(
+        NpcInjurySeverity injurySeverity,
+        DailyV1ActionDefinition expectedAction,
+        DailyV1NpcActionPayloadOwner expectedPayload,
+        out bool currentActionChanged)
+    {
+        currentActionChanged = false;
+        if (!CanCommitPersonDeathAfterValidation(injurySeverity, expectedAction, expectedPayload))
+            return false;
+
+        if (injurySeverity > Lifecycle.InjurySeverity
+            && !Lifecycle.TrySetInjurySeverity(injurySeverity))
+            return false;
+        if (!Lifecycle.TrySetLifeState(NpcLifeState.Dead))
+            return false;
+
+        Lifecycle.NotifyLifeStateMutationCommitted();
+        if (expectedAction != null)
+        {
+            if (!ActionSlot.TrySetCurrentAction(null, null))
+                return false;
+            ActionSlot.NotifyCurrentActionMutationCommitted();
+            currentActionChanged = true;
+        }
+        return true;
+    }
 
     private DailyV1NpcRuntimeOwners(
         string runtimeId,
@@ -44,7 +99,9 @@ internal sealed class DailyV1NpcRuntimeOwners
         DailyV1NpcStatusOwner status,
         MoneyAccountRuntime moneyAccount,
         DailyV1CommercialKnowledgeOwner commercialKnowledge,
-        SpatialKnowledgeRuntime spatialKnowledge)
+        SpatialKnowledgeRuntime spatialKnowledge,
+        DailyV1ExplorableSiteKnowledgeOwner explorableSiteKnowledge,
+        DailyV1AdventureSiteIntelKnowledgeOwner adventureSiteIntelKnowledge)
     {
         RuntimeId = runtimeId;
         Definitions = definitions;
@@ -55,11 +112,15 @@ internal sealed class DailyV1NpcRuntimeOwners
         MoneyAccount = moneyAccount;
         CommercialKnowledge = commercialKnowledge;
         SpatialKnowledge = spatialKnowledge;
+        ExplorableSiteKnowledge = explorableSiteKnowledge;
+        AdventureSiteIntelKnowledge = adventureSiteIntelKnowledge;
+        LocalTopologyKnowledgeEmptyOwner = new DailyV1NpcLocalTopologyKnowledgeEmptyOwner(runtimeId);
         Lifecycle = new DailyV1NpcLifecycleOwner();
         ActionSlot = new DailyV1NpcActionSlotOwner(definitions);
         Travel = new DailyV1NpcTravelOwner(runtimeId);
         TravelPlan = new DailyV1NpcTravelPlanOwner();
         HiddenState = new DailyV1NpcHiddenStateOwner();
+        Residence = new DailyV1NpcResidenceOwner(runtimeId);
     }
 
     internal static bool TryCreateInitial(
@@ -102,7 +163,8 @@ internal sealed class DailyV1NpcRuntimeOwners
         MoneyAccountRuntime moneyAccount = new MoneyAccountRuntime(initialMoney);
         return TryCreateBound(runtimeId, definitions, definition, statuses, inventory, moneyAccount,
             new DailyV1CommercialKnowledgeOwner(definitions), merchantTradePlan,
-            spatialKnowledge, out owners);
+            spatialKnowledge, new DailyV1ExplorableSiteKnowledgeOwner(runtimeId),
+            new DailyV1AdventureSiteIntelKnowledgeOwner(runtimeId), out owners);
     }
 
     internal static bool TryCreateBound(
@@ -133,6 +195,27 @@ internal sealed class DailyV1NpcRuntimeOwners
         SpatialKnowledgeRuntime spatialKnowledge,
         out DailyV1NpcRuntimeOwners owners)
     {
+        return TryCreateBound(runtimeId, definitions, definition, statuses, inventory,
+            moneyAccount, commercialKnowledge, merchantTradePlan, spatialKnowledge,
+            string.IsNullOrWhiteSpace(runtimeId) ? null : new DailyV1ExplorableSiteKnowledgeOwner(runtimeId),
+            string.IsNullOrWhiteSpace(runtimeId) ? null : new DailyV1AdventureSiteIntelKnowledgeOwner(runtimeId),
+            out owners);
+    }
+
+    internal static bool TryCreateBound(
+        string runtimeId,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1NpcDefinition definition,
+        IEnumerable<DailyV1StatusDefinition> statuses,
+        DailyV1InventoryOwner inventory,
+        MoneyAccountRuntime moneyAccount,
+        DailyV1CommercialKnowledgeOwner commercialKnowledge,
+        DailyV1NpcMerchantTradePlanOwner merchantTradePlan,
+        SpatialKnowledgeRuntime spatialKnowledge,
+        DailyV1ExplorableSiteKnowledgeOwner explorableSiteKnowledge,
+        DailyV1AdventureSiteIntelKnowledgeOwner adventureSiteIntelKnowledge,
+        out DailyV1NpcRuntimeOwners owners)
+    {
         owners = null;
         if (string.IsNullOrWhiteSpace(runtimeId)
             || !IsAdmitted(definitions, definition)
@@ -144,13 +227,18 @@ internal sealed class DailyV1NpcRuntimeOwners
             || !ReferenceEquals(merchantTradePlan.Definitions, definitions)
             || spatialKnowledge == null
             || !string.Equals(spatialKnowledge.OwnerRuntimeId, runtimeId, StringComparison.Ordinal)
+            || explorableSiteKnowledge == null
+            || !string.Equals(explorableSiteKnowledge.OwnerRuntimeId, runtimeId, StringComparison.Ordinal)
+            || adventureSiteIntelKnowledge == null
+            || !string.Equals(adventureSiteIntelKnowledge.OwnerRuntimeId, runtimeId, StringComparison.Ordinal)
             || (inventory != null && !ReferenceEquals(inventory.Definitions, definitions))
             || !DailyV1NpcStatusOwner.TryCreate(definitions, statuses, out DailyV1NpcStatusOwner statusOwner))
             return false;
 
         owners = new DailyV1NpcRuntimeOwners(
             runtimeId, definitions, definition, inventory, merchantTradePlan,
-            statusOwner, moneyAccount, commercialKnowledge, spatialKnowledge);
+            statusOwner, moneyAccount, commercialKnowledge, spatialKnowledge,
+            explorableSiteKnowledge, adventureSiteIntelKnowledge);
         return true;
     }
 
@@ -213,8 +301,13 @@ internal sealed class DailyV1NpcRuntimeOwners
             || state.CommercialKnowledge == null
             || state.MerchantTradePlan == null
             || state.SpatialKnowledge == null
+            || state.ExplorableSiteKnowledge == null
+            || state.AdventureSiteIntelKnowledge == null
             || state.ActionRevision < 0L
             || state.LifeStateRevision < 0L
+            || state.ResidenceRevision < 0L
+            || (state.ResidenceSettlementRuntimeId != null
+                && string.IsNullOrWhiteSpace(state.ResidenceSettlementRuntimeId))
             || state.CrimeJusticeRevision < 0L
             || state.HiddenDaysRemaining < 0
             || !Enum.IsDefined(typeof(NpcLifeState), state.LifeState)
@@ -229,12 +322,16 @@ internal sealed class DailyV1NpcRuntimeOwners
                 state.CommercialKnowledge,
                 state.MerchantTradePlan,
                 state.SpatialKnowledge,
+                state.ExplorableSiteKnowledge,
+                state.AdventureSiteIntelKnowledge,
                 out DailyV1NpcRuntimeOwners candidate)
             || candidate == null
             || !candidate.ActionSlot.TrySetCurrentAction(state.CurrentAction, state.CurrentActionPayload)
             || !candidate.ActionSlot.TryInstallRevision(state.ActionRevision)
             || !candidate.Lifecycle.TryInstallState(state.LifeState, state.InjurySeverity,
                 state.LifeStateRevision)
+            || !candidate.Residence.TryInstallExact(
+                state.ResidenceSettlementRuntimeId, state.ResidenceRevision)
             || !candidate.TryInstallCrimeJusticeRevision(state.CrimeJusticeRevision)
             || !candidate.HiddenState.TryInstallExact(state.HiddenDaysRemaining)
             || !candidate.Travel.TryInstallState(
@@ -260,6 +357,65 @@ internal sealed class DailyV1NpcRuntimeOwners
             return false;
 
         owners = candidate;
+        return true;
+    }
+
+    /// <summary>
+    /// Confirms that an already hydrated owner vector still represents the
+    /// exact detached P12-D values before a host projection binds to it. This
+    /// intentionally compares the existing instances and never rebuilds an
+    /// owner as a validation side effect.
+    /// </summary>
+    internal bool MatchesRestoredP12DOwner(DailyV1NpcRuntimeRestoreState state)
+    {
+        if (state == null
+            || !string.Equals(RuntimeId, state.RuntimeId, StringComparison.Ordinal)
+            || !ReferenceEquals(Definitions, state.Definitions)
+            || !ReferenceEquals(Definition, state.Definition)
+            || !ReferenceEquals(Inventory, state.Inventory)
+            || !ReferenceEquals(MoneyAccount, state.MoneyAccount)
+            || !ReferenceEquals(CommercialKnowledge, state.CommercialKnowledge)
+            || !ReferenceEquals(MerchantTradePlan, state.MerchantTradePlan)
+            || !ReferenceEquals(SpatialKnowledge, state.SpatialKnowledge)
+            || !ReferenceEquals(ExplorableSiteKnowledge, state.ExplorableSiteKnowledge)
+            || !ReferenceEquals(AdventureSiteIntelKnowledge, state.AdventureSiteIntelKnowledge)
+            || LocalTopologyKnowledgeEmptyOwner == null
+            || !LocalTopologyKnowledgeEmptyOwner.MatchesRuntimeId(RuntimeId)
+            || Residence == null
+            || !Residence.Matches(state.ResidenceSettlementRuntimeId, state.ResidenceRevision)
+            || Status == null || state.Statuses == null
+            || Status.Statuses.Count != state.Statuses.Count
+            || ActionSlot == null
+            || !ReferenceEquals(ActionSlot.CurrentAction, state.CurrentAction)
+            || !ReferenceEquals(ActionSlot.CurrentPayload, state.CurrentActionPayload)
+            || ActionSlot.Revision != state.ActionRevision
+            || Lifecycle == null || Lifecycle.LifeState != state.LifeState
+            || Lifecycle.InjurySeverity != state.InjurySeverity
+            || Lifecycle.LifeStateRevision != state.LifeStateRevision
+            || CrimeJusticeRevision != state.CrimeJusticeRevision
+            || HiddenState == null || HiddenState.RemainingDays != state.HiddenDaysRemaining
+            || Travel == null
+            || !string.Equals(Travel.CurrentLocationRuntimeId, state.CurrentLocationRuntimeId, StringComparison.Ordinal)
+            || !string.Equals(Travel.CurrentCityRuntimeId, state.CurrentCityRuntimeId, StringComparison.Ordinal)
+            || !string.Equals(Travel.DestinationLocationRuntimeId, state.DestinationLocationRuntimeId, StringComparison.Ordinal)
+            || !string.Equals(Travel.DestinationCityRuntimeId, state.DestinationCityRuntimeId, StringComparison.Ordinal)
+            || Travel.TravelDaysRemaining != state.TravelDaysRemaining
+            || Travel.TravelDaysTotal != state.TravelDaysTotal
+            || !string.Equals(Travel.TravelRouteRuntimeId, state.TravelRouteRuntimeId, StringComparison.Ordinal)
+            || Travel.TravelStartedToday != state.TravelStartedToday
+            || !string.Equals(Travel.TravelOriginDecisionId, state.TravelOriginDecisionId, StringComparison.Ordinal)
+            || !string.Equals(Travel.ActiveTravelPartyId, state.ActiveTravelPartyId, StringComparison.Ordinal)
+            || Travel.Revision != state.TravelRevision
+            || TravelPlan == null
+            || !TravelPlan.Matches(state.TravelPlanTargetLocationRuntimeId,
+                state.TravelPlanTargetCityRuntimeId, state.TravelPlanReason,
+                state.TravelPlanUtility, state.TravelPlanExpectedCost,
+                state.TravelPlanOriginDecisionId)
+            || TravelPlan.Revision != state.TravelPlanRevision)
+            return false;
+
+        for (int i = 0; i < state.Statuses.Count; i++)
+            if (!ReferenceEquals(Status.Statuses[i], state.Statuses[i])) return false;
         return true;
     }
 
@@ -301,12 +457,16 @@ internal sealed class DailyV1NpcRuntimeRestoreState
     internal DailyV1CommercialKnowledgeOwner CommercialKnowledge { get; set; }
     internal DailyV1NpcMerchantTradePlanOwner MerchantTradePlan { get; set; }
     internal SpatialKnowledgeRuntime SpatialKnowledge { get; set; }
+    internal DailyV1ExplorableSiteKnowledgeOwner ExplorableSiteKnowledge { get; set; }
+    internal DailyV1AdventureSiteIntelKnowledgeOwner AdventureSiteIntelKnowledge { get; set; }
     internal DailyV1ActionDefinition CurrentAction { get; set; }
     internal DailyV1NpcActionPayloadOwner CurrentActionPayload { get; set; }
     internal long ActionRevision { get; set; }
     internal NpcLifeState LifeState { get; set; }
     internal NpcInjurySeverity InjurySeverity { get; set; }
     internal long LifeStateRevision { get; set; }
+    internal string ResidenceSettlementRuntimeId { get; set; }
+    internal long ResidenceRevision { get; set; }
     internal long CrimeJusticeRevision { get; set; }
     internal int HiddenDaysRemaining { get; set; }
     internal string CurrentLocationRuntimeId { get; set; }
@@ -327,6 +487,55 @@ internal sealed class DailyV1NpcRuntimeRestoreState
     internal float TravelPlanExpectedCost { get; set; }
     internal string TravelPlanOriginDecisionId { get; set; }
     internal long TravelPlanRevision { get; set; }
+}
+
+/// <summary>
+/// Owns residence for a selected NPC that is not backed by a Person. Person-backed
+/// residence remains authoritative in PersonRuntime and its PersonStore census.
+/// NpcRuntime performs gameplay admission before committing this selected owner.
+/// </summary>
+internal sealed class DailyV1NpcResidenceOwner
+{
+    internal string OwnerRuntimeId { get; }
+    internal string SettlementRuntimeId { get; private set; }
+    internal long Revision { get; private set; }
+
+    internal DailyV1NpcResidenceOwner(string ownerRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(ownerRuntimeId))
+            throw new ArgumentException("An NPC runtime identity is required.", nameof(ownerRuntimeId));
+        OwnerRuntimeId = ownerRuntimeId;
+    }
+
+    internal bool CanAdvanceRevision(int increments) =>
+        increments >= 0 && Revision <= long.MaxValue - increments;
+
+    internal bool TryInstallExact(string settlementRuntimeId, long revision)
+    {
+        if (revision < 0L
+            || (settlementRuntimeId != null && string.IsNullOrWhiteSpace(settlementRuntimeId)))
+            return false;
+        SettlementRuntimeId = settlementRuntimeId;
+        Revision = revision;
+        return true;
+    }
+
+    internal bool TrySetValue(string settlementRuntimeId)
+    {
+        if (settlementRuntimeId != null && string.IsNullOrWhiteSpace(settlementRuntimeId))
+            return false;
+        SettlementRuntimeId = settlementRuntimeId;
+        return true;
+    }
+
+    internal void NotifyMutationCommitted()
+    {
+        if (Revision < long.MaxValue) Revision++;
+    }
+
+    internal bool Matches(string settlementRuntimeId, long revision) =>
+        string.Equals(SettlementRuntimeId, settlementRuntimeId, StringComparison.Ordinal)
+        && Revision == revision;
 }
 
 /// <summary>

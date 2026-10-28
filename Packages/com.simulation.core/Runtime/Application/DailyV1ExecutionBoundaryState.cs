@@ -1,6 +1,21 @@
 using System;
 using System.Collections.Generic;
 
+internal sealed class DailyV1OwnerSectionContractIdentity
+{
+    internal string SectionId { get; }
+    internal int SchemaVersion { get; }
+    internal OwnerSectionRole Role { get; }
+
+    internal DailyV1OwnerSectionContractIdentity(string sectionId, int schemaVersion, OwnerSectionRole role)
+    {
+        SectionId = sectionId;
+        SchemaVersion = schemaVersion;
+        Role = role;
+    }
+}
+
+
 internal enum DailyV1OperationScopeKind : byte
 {
     Application = 0,
@@ -27,12 +42,21 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private readonly object operationSyncRoot = new object();
     private readonly List<DailyV1OperationScopeKind> activeOperationScopes =
         new List<DailyV1OperationScopeKind>();
+    private Dictionary<string, DailyV1OwnerSectionContractIdentity> expectedOwnerSectionContracts =
+        new Dictionary<string, DailyV1OwnerSectionContractIdentity>(StringComparer.Ordinal);
+    private bool expectedOwnerSectionContractInventorySealed;
+    private long expectedOwnerSectionContractInventoryRevision;
+    private readonly HashSet<string> expectedRuntimeProtocolOperationContracts =
+        new HashSet<string>(StringComparer.Ordinal);
+    private readonly List<string> activeRuntimeProtocolOperationContracts =
+        new List<string>();
     private readonly DailyV1MutationEpochState mutationEpochState =
         new DailyV1MutationEpochState();
     private readonly AuthoritativeMutationGuard mutationGuard =
         new AuthoritativeMutationGuard();
     private bool runtimeIdentityBound;
     private bool runtimeConfigurationBound;
+    private bool runtimeProtocolOperationInventorySealed;
     private bool exclusiveSessionReplacementInProgress;
     private DailyV1AdvanceLease advanceLease;
     private long advanceLeaseInitialCompletedSequence;
@@ -47,6 +71,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private SimulationRecordSequence selectedRecordSequence;
     private NpcDecisionStore selectedDecisionStore;
     private ActorChoiceStore selectedActorChoiceStore;
+    private DailyV1ActorTurnCoreRoots selectedRuntimeActorTurnCoreRoots;
 
     internal SimulationTime SimulationTime { get; private set; }
     internal SimulationRuntimeAdmissionContext AdmissionContext { get; private set; }
@@ -140,6 +165,197 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    internal bool HasRegisteredRuntimeProtocolOperationContracts
+    {
+        get
+        {
+            lock (operationSyncRoot)
+                return expectedRuntimeProtocolOperationContracts.Count > 0;
+        }
+    }
+
+    internal bool HasRuntimeProtocolOperationInventory
+    {
+        get
+        {
+            lock (operationSyncRoot)
+                return runtimeProtocolOperationInventorySealed
+                    && expectedRuntimeProtocolOperationContracts.Count > 0;
+        }
+    }
+
+    internal bool HasRuntimeProtocolOperationContract(string operationContractId)
+    {
+        if (string.IsNullOrWhiteSpace(operationContractId)) return false;
+        lock (operationSyncRoot)
+            return runtimeProtocolOperationInventorySealed
+                && expectedRuntimeProtocolOperationContracts.Contains(operationContractId);
+    }
+
+    internal IReadOnlyList<string> GetRuntimeProtocolOperationContractIds()
+    {
+        lock (operationSyncRoot)
+        {
+            List<string> operationContractIds =
+                new List<string>(expectedRuntimeProtocolOperationContracts);
+            operationContractIds.Sort(StringComparer.Ordinal);
+            return operationContractIds.AsReadOnly();
+        }
+    }
+
+    /// <summary>
+    /// Owns the logical P12 section contracts attached to this runtime.
+    /// This is only the declared inventory; provider registration and exact
+    /// selected-profile completeness remain separately assessed by the census
+    /// adapter and its composition evidence.
+    /// </summary>
+    internal bool ExpectedOwnerSectionContractInventorySealed
+    {
+        get { lock (operationSyncRoot) return expectedOwnerSectionContractInventorySealed; }
+    }
+
+    internal long ExpectedOwnerSectionContractInventoryRevision
+    {
+        get { lock (operationSyncRoot) return expectedOwnerSectionContractInventoryRevision; }
+    }
+
+    internal IReadOnlyList<DailyV1OwnerSectionContractIdentity> GetExpectedOwnerSectionContractInventory(
+        out long revision)
+    {
+        lock (operationSyncRoot)
+        {
+            List<DailyV1OwnerSectionContractIdentity> contracts =
+                new List<DailyV1OwnerSectionContractIdentity>(expectedOwnerSectionContracts.Values);
+            contracts.Sort((left, right) =>
+                StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+            revision = expectedOwnerSectionContractInventoryRevision;
+            return contracts.AsReadOnly();
+        }
+    }
+
+    internal bool TryRegisterExpectedOwnerSectionContract(
+        string sectionId,
+        int schemaVersion,
+        OwnerSectionRole role)
+    {
+        if (string.IsNullOrWhiteSpace(sectionId)
+            || schemaVersion <= 0
+            || !Enum.IsDefined(typeof(OwnerSectionRole), role))
+            return false;
+
+        lock (operationSyncRoot)
+        {
+            if (expectedOwnerSectionContractInventorySealed
+                || activeOperationScopes.Count != 0
+                || exclusiveSessionReplacementInProgress
+                || expectedOwnerSectionContractInventoryRevision == long.MaxValue
+                || expectedOwnerSectionContracts.ContainsKey(sectionId))
+                return false;
+
+            Dictionary<string, DailyV1OwnerSectionContractIdentity> staged =
+                new Dictionary<string, DailyV1OwnerSectionContractIdentity>(
+                    expectedOwnerSectionContracts, StringComparer.Ordinal);
+            staged.Add(sectionId,
+                new DailyV1OwnerSectionContractIdentity(sectionId, schemaVersion, role));
+            expectedOwnerSectionContracts = staged;
+            expectedOwnerSectionContractInventoryRevision++;
+            return true;
+        }
+    }
+
+    internal bool TryReplaceExpectedOwnerSectionContractInventoryBeforeSeal(
+        IEnumerable<DailyV1OwnerSectionContractIdentity> contracts)
+    {
+        if (!TryCreateExpectedOwnerSectionContractMap(contracts, out var staged))
+            return false;
+
+        lock (operationSyncRoot)
+        {
+            if (expectedOwnerSectionContractInventorySealed
+                || activeOperationScopes.Count != 0
+                || exclusiveSessionReplacementInProgress
+                || expectedOwnerSectionContractInventoryRevision == long.MaxValue)
+                return false;
+
+            expectedOwnerSectionContracts = staged;
+            expectedOwnerSectionContractInventoryRevision++;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Applies the validated census roster transition's section identity set
+    /// while the runtime is inside an owner-thread operation. This does not
+    /// advance the mutation epoch; the owning operation retains that commit.
+    /// </summary>
+    internal bool TryReplaceExpectedOwnerSectionContractInventoryDuringRuntimeOperation(
+        IEnumerable<DailyV1OwnerSectionContractIdentity> contracts)
+    {
+        if (!TryCreateExpectedOwnerSectionContractMap(contracts, out var staged))
+            return false;
+
+        lock (operationSyncRoot)
+        {
+            if (!expectedOwnerSectionContractInventorySealed
+                || exclusiveSessionReplacementInProgress
+                || !activeRuntimeProtocolOperationContracts.Contains(
+                    DailyV1RuntimeProtocolOperationContracts.NpcMembership)
+                || AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || expectedOwnerSectionContractInventoryRevision == long.MaxValue)
+                return false;
+
+            expectedOwnerSectionContracts = staged;
+            expectedOwnerSectionContractInventoryRevision++;
+            return true;
+        }
+    }
+
+    internal bool TrySealExpectedOwnerSectionContractInventory()
+    {
+        lock (operationSyncRoot)
+        {
+            if (expectedOwnerSectionContractInventorySealed
+                || expectedOwnerSectionContracts.Count == 0
+                || activeOperationScopes.Count != 0
+                || exclusiveSessionReplacementInProgress)
+                return false;
+
+            expectedOwnerSectionContractInventorySealed = true;
+            return true;
+        }
+    }
+
+    private static bool TryCreateExpectedOwnerSectionContractMap(
+        IEnumerable<DailyV1OwnerSectionContractIdentity> contracts,
+        out Dictionary<string, DailyV1OwnerSectionContractIdentity> inventory)
+    {
+        inventory = null;
+        if (contracts == null) return false;
+
+        Dictionary<string, DailyV1OwnerSectionContractIdentity> staged =
+            new Dictionary<string, DailyV1OwnerSectionContractIdentity>(StringComparer.Ordinal);
+        try
+        {
+            foreach (DailyV1OwnerSectionContractIdentity contract in contracts)
+            {
+                if (contract == null
+                    || string.IsNullOrWhiteSpace(contract.SectionId)
+                    || contract.SchemaVersion <= 0
+                    || !Enum.IsDefined(typeof(OwnerSectionRole), contract.Role)
+                    || staged.ContainsKey(contract.SectionId))
+                    return false;
+                staged.Add(contract.SectionId, contract);
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        inventory = staged;
+        return true;
+    }
     internal bool TryBeginOperation(DailyV1OperationScopeKind kind = DailyV1OperationScopeKind.Application)
     {
         lock (operationSyncRoot)
@@ -164,6 +380,54 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || !Enum.IsDefined(typeof(DailyV1OperationScopeKind), kind))
                 return false;
             return TryRemoveOperationScope(kind);
+        }
+    }
+
+    /// <summary>
+    /// Records one runtime operation during selected-profile bootstrap. The
+    /// complete supported inventory is sealed before Core will admit any ID.
+    /// </summary>
+    internal bool TryRegisterRuntimeProtocolOperationContract(string operationContractId)
+    {
+        if (string.IsNullOrWhiteSpace(operationContractId)) return false;
+        lock (operationSyncRoot)
+        {
+            if (runtimeProtocolOperationInventorySealed
+                || activeOperationScopes.Count != 0
+                || exclusiveSessionReplacementInProgress
+                || AdmissionContext == null
+                || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !runtimeIdentityBound
+                || !runtimeConfigurationBound
+                || !AdmissionContext.IsOwnedByCurrentThread())
+                return false;
+
+            return expectedRuntimeProtocolOperationContracts.Add(operationContractId);
+        }
+    }
+
+    /// <summary>
+    /// Seals the Core-owned allowlist only when it exactly matches one complete
+    /// supported selected-runtime catalogue.
+    /// </summary>
+    internal bool TrySealRuntimeProtocolOperationInventory()
+    {
+        lock (operationSyncRoot)
+        {
+            if (runtimeProtocolOperationInventorySealed
+                || activeOperationScopes.Count != 0
+                || exclusiveSessionReplacementInProgress
+                || AdmissionContext == null
+                || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !runtimeIdentityBound
+                || !runtimeConfigurationBound
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !DailyV1RuntimeProtocolOperationContracts.IsSupportedSelectedOperationInventory(
+                    expectedRuntimeProtocolOperationContracts))
+                return false;
+
+            runtimeProtocolOperationInventorySealed = true;
+            return true;
         }
     }
 
@@ -222,14 +486,21 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
-    internal bool TryBeginRuntimeProtocolOperation()
+    internal bool TryBeginRuntimeProtocolOperation(string operationContractId)
     {
         lock (operationSyncRoot)
         {
             if (exclusiveSessionReplacementInProgress
-                || AdmissionContext == null || !AdmissionContext.IsOwnedByCurrentThread())
+                || AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !runtimeProtocolOperationInventorySealed
+                || string.IsNullOrWhiteSpace(operationContractId)
+                || !expectedRuntimeProtocolOperationContracts.Contains(operationContractId)
+                || activeRuntimeProtocolOperationContracts.Count == int.MaxValue)
                 return false;
-            return TryAddOperationScope(DailyV1OperationScopeKind.RuntimeProtocol);
+            if (!TryAddOperationScope(DailyV1OperationScopeKind.RuntimeProtocol)) return false;
+            activeRuntimeProtocolOperationContracts.Add(operationContractId);
+            return true;
         }
     }
 
@@ -237,9 +508,14 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     {
         lock (operationSyncRoot)
         {
-            if (AdmissionContext == null || !AdmissionContext.IsOwnedByCurrentThread())
+            if (AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || activeRuntimeProtocolOperationContracts.Count == 0
+                || !TryRemoveOperationScope(DailyV1OperationScopeKind.RuntimeProtocol))
                 return false;
-            return TryRemoveOperationScope(DailyV1OperationScopeKind.RuntimeProtocol);
+            activeRuntimeProtocolOperationContracts.RemoveAt(
+                activeRuntimeProtocolOperationContracts.Count - 1);
+            return true;
         }
     }
 
@@ -321,6 +597,13 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     internal SimulationRecordSequence SelectedRecordSequence => selectedRecordSequence;
     internal NpcDecisionStore SelectedDecisionStore => selectedDecisionStore;
     internal ActorChoiceStore SelectedActorChoiceStore => selectedActorChoiceStore;
+    /// <summary>
+    /// One immutable Core bundle for the exact decision roots bound to this
+    /// execution state. Per-day contexts reuse it; a host cannot recreate a
+    /// parallel root bundle from projected runtime values.
+    /// </summary>
+    internal DailyV1ActorTurnCoreRoots SelectedRuntimeActorTurnCoreRoots =>
+        selectedRuntimeActorTurnCoreRoots;
 
     internal bool TryBindSelectedRuntimeOwnerGraph(DailyV1SelectedRuntimeOwnerGraph graph)
     {
@@ -343,7 +626,24 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             || !ReferenceEquals(expected.Definitions, replacement.Definitions))
             return false;
 
+        DailyV1ActorTurnCoreRoots replacementActorTurnRoots = null;
+        if (selectedRuntimeExecutionRootsBound)
+        {
+            if (!ReferenceEquals(replacement.PersonStore, selectedActorChoiceStore?.PersonStore))
+                return false;
+            try
+            {
+                replacementActorTurnRoots = new DailyV1ActorTurnCoreRoots(this, replacement);
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+
         selectedRuntimeOwnerGraph = replacement;
+        if (replacementActorTurnRoots != null)
+            selectedRuntimeActorTurnCoreRoots = replacementActorTurnRoots;
         return true;
     }
 
@@ -572,8 +872,26 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 out IReadOnlyList<DailyV1ActorTurnRosterProjection> validatedRoster))
             return false;
 
+        DailyV1ActorTurnCoreRoots replacementActorTurnRoots = null;
+        if (selectedRuntimeExecutionRootsBound)
+        {
+            if (selectedActorChoiceStore == null
+                || !ReferenceEquals(replacementGraph.PersonStore, selectedActorChoiceStore.PersonStore))
+                return false;
+            try
+            {
+                replacementActorTurnRoots = new DailyV1ActorTurnCoreRoots(this, replacementGraph);
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+
         selectedRuntimeOwnerGraph = replacementGraph;
         selectedRuntimeActorRoster = validatedRoster;
+        if (replacementActorTurnRoots != null)
+            selectedRuntimeActorTurnCoreRoots = replacementActorTurnRoots;
         return true;
     }
 
@@ -645,6 +963,21 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         selectedRecordSequence = recordSequence;
         selectedDecisionStore = decisionStore;
         selectedActorChoiceStore = actorChoiceStore;
+        try
+        {
+            selectedRuntimeActorTurnCoreRoots = new DailyV1ActorTurnCoreRoots(
+                this, selectedRuntimeOwnerGraph);
+        }
+        catch (ArgumentException)
+        {
+            selectedRuntimeIdAllocator = null;
+            selectedRandomSource = null;
+            selectedRecordSequence = null;
+            selectedDecisionStore = null;
+            selectedActorChoiceStore = null;
+            selectedRuntimeActorTurnCoreRoots = null;
+            return false;
+        }
         selectedRuntimeExecutionRootsBound = true;
         return true;
     }
@@ -691,6 +1024,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         IAuthoritativeRandomSource randomSource)
     {
         return selectedRuntimeExecutionRootsBound
+            && selectedRuntimeActorTurnCoreRoots != null
+            && selectedRuntimeActorTurnCoreRoots.IsBoundTo(
+                this, graph, personStore, actorChoiceStore)
             && ReferenceEquals(selectedRuntimeOwnerGraph, graph)
             && ReferenceEquals(graph?.PersonStore, personStore)
             && ReferenceEquals(selectedActorChoiceStore, actorChoiceStore)
@@ -738,6 +1074,73 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || token.BoundaryProvenance == DailyCaptureBoundaryProvenance.RestoredContinuation)
             && token.MutationEpoch == currentMutationEpoch
             && AreOwnerSectionsEqual(token.OwnerSections, currentOwnerSections);
+    }
+
+    /// <summary>
+    /// Revalidates the current completed boundary while exactly one P12-G
+    /// continuation-save operation is registered. The returned owner list is
+    /// the exact census source which must be retained by detached staging.
+    /// </summary>
+    internal bool TryCaptureContinuationSaveBoundaryEvidence(
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
+        out DailyCaptureEligibilityToken token,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        token = null;
+        ownerSections = null;
+        mutationEpoch = 0L;
+        failure = DailyCaptureEligibilityFailure.OperationInProgress;
+        if (boundary == null || !ReferenceEquals(boundary.ExecutionState, this)
+            || !TryAssessCaptureScope(DailyV1CaptureScopeAllowance.ContinuationSave)
+            || AdmissionContext == null
+            || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !AdmissionContext.IsOwnedByCurrentThread()
+            || AdvanceLeaseHeld || !mutationGuard.CanMutate
+            || SimulationTime == null || WorldId == null
+            || !runtimeIdentityBound || !runtimeConfigurationBound)
+            return false;
+
+        DailyCaptureEligibilityToken current = currentCaptureToken;
+        if (current == null)
+        {
+            failure = DailyCaptureEligibilityFailure.NoCompletedBoundary;
+            return false;
+        }
+
+        if (current.BoundaryProvenance != DailyCaptureBoundaryProvenance.CompletedAdvance
+            && current.BoundaryProvenance != DailyCaptureBoundaryProvenance.RestoredContinuation)
+        {
+            failure = DailyCaptureEligibilityFailure.StaleToken;
+            return false;
+        }
+
+        if (!boundary.TryCaptureContinuationSaveEvidence(
+                out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+                out long capturedMutationEpoch,
+                out failure))
+            return false;
+
+        if (captured == null || capturedMutationEpoch < 0L
+            || !DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured)
+            || !TryCompareCurrentCaptureToken(
+                current, AdmissionContext, ConfigurationIdentity, CalendarIdentity,
+                CompositionProfile, WorldId, SimulationTime.AbsoluteDay,
+                captured, capturedMutationEpoch)
+            || !TryAssessCaptureScope(DailyV1CaptureScopeAllowance.ContinuationSave)
+            || !AdmissionContext.IsOwnedByCurrentThread()
+            || !mutationGuard.CanMutate)
+        {
+            failure = DailyCaptureEligibilityFailure.StaleToken;
+            return false;
+        }
+
+        token = current;
+        ownerSections = captured;
+        mutationEpoch = capturedMutationEpoch;
+        failure = DailyCaptureEligibilityFailure.None;
+        return true;
     }
 
     internal static bool AreOwnerSectionsEqual(

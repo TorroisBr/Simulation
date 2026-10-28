@@ -4,8 +4,8 @@ using System.Collections.Generic;
 /// <summary>Passive per-NPC witnesses for installed InventoryRuntime owners.</summary>
 public static class NpcInventoryCensusProvider
 {
-    public const string SectionPrefix = "p12f.inventory/";
-    public const int SchemaVersion = 1;
+    public const string SectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     internal interface INpcInventorySectionCensusProvider : IOwnerSectionCensusProvider
     {

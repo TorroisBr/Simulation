@@ -2,79 +2,20 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum ExplorableSiteKnowledgeSource
-{
-    InitialScenarioKnowledge,
-    DirectObservation
-}
-
 [Serializable]
-public sealed class ExplorableSiteKnowledgeObservation
-{
-    private readonly string siteRuntimeId;
-    private readonly string locationRuntimeId;
-    private readonly long observedDay;
-    private readonly long receivedDay;
-    private readonly ExplorableSiteKnowledgeSource source;
-
-    public string SiteRuntimeId => siteRuntimeId;
-    public string LocationRuntimeId => locationRuntimeId;
-    public long ObservedDay => observedDay;
-    public long ReceivedDay => receivedDay;
-    public ExplorableSiteKnowledgeSource Source => source;
-
-    public ExplorableSiteKnowledgeObservation(
-        string siteRuntimeId,
-        string locationRuntimeId,
-        long observedDay,
-        long receivedDay,
-        ExplorableSiteKnowledgeSource source)
-    {
-        if (string.IsNullOrWhiteSpace(siteRuntimeId) == true)
-        {
-            throw new ArgumentException("Explorable site knowledge requires a non-empty SiteRuntimeId.", nameof(siteRuntimeId));
-        }
-
-        if (string.IsNullOrWhiteSpace(locationRuntimeId) == true)
-        {
-            throw new ArgumentException("Explorable site knowledge requires a non-empty LocationRuntimeId.", nameof(locationRuntimeId));
-        }
-
-        if (observedDay < 0L)
-        {
-            throw new ArgumentOutOfRangeException(nameof(observedDay));
-        }
-
-        if (receivedDay < observedDay)
-        {
-            throw new ArgumentOutOfRangeException(nameof(receivedDay));
-        }
-
-        if (Enum.IsDefined(typeof(ExplorableSiteKnowledgeSource), source) == false)
-        {
-            throw new ArgumentOutOfRangeException(nameof(source));
-        }
-
-        this.siteRuntimeId = siteRuntimeId;
-        this.locationRuntimeId = locationRuntimeId;
-        this.observedDay = observedDay;
-        this.receivedDay = receivedDay;
-        this.source = source;
-    }
-}
-
-[Serializable]
-public sealed class ExplorableSiteKnowledgeRuntime
+public sealed class ExplorableSiteKnowledgeRuntime : ISerializationCallbackReceiver
 {
     private readonly string ownerRuntimeId;
     private readonly List<ExplorableSiteKnowledgeObservation> observations =
         new List<ExplorableSiteKnowledgeObservation>();
     private readonly IReadOnlyList<ExplorableSiteKnowledgeObservation> readOnlyObservations;
     [SerializeField] private long revision;
+    [NonSerialized] private DailyV1ExplorableSiteKnowledgeOwner selectedOwner;
 
     public string OwnerRuntimeId => ownerRuntimeId;
-    public IReadOnlyList<ExplorableSiteKnowledgeObservation> Observations => readOnlyObservations;
-    public long Revision => revision;
+    public IReadOnlyList<ExplorableSiteKnowledgeObservation> Observations => selectedOwner?.Observations ?? readOnlyObservations;
+    public long Revision => selectedOwner?.Revision ?? revision;
+    internal DailyV1ExplorableSiteKnowledgeOwner SelectedOwner => selectedOwner;
 
     public ExplorableSiteKnowledgeRuntime(string ownerRuntimeId)
     {
@@ -85,6 +26,66 @@ public sealed class ExplorableSiteKnowledgeRuntime
 
         this.ownerRuntimeId = ownerRuntimeId;
         readOnlyObservations = observations.AsReadOnly();
+    }
+
+    /// <summary>
+    /// Binds the legacy serializable view to the exact selected Core authority.
+    /// Before binding, serialized values may be imported once into a fresh empty
+    /// Core owner. After binding, all reads and writes use that owner; the local
+    /// fields are only refreshed as a Unity serialization projection.
+    /// </summary>
+    internal bool CanBindSelectedOwner(DailyV1ExplorableSiteKnowledgeOwner owner)
+    {
+        if (owner == null || !string.Equals(owner.OwnerRuntimeId, ownerRuntimeId, StringComparison.Ordinal)
+            || (selectedOwner != null && !ReferenceEquals(selectedOwner, owner))) return false;
+        if (selectedOwner != null || (revision == 0L && observations.Count == 0)) return true;
+        if (owner.Revision == 0L && owner.Observations.Count == 0)
+            return owner.CanCreateInitialSnapshot(readOnlyObservations, revision);
+        return owner.MatchesSnapshot(readOnlyObservations, revision);
+    }
+
+    internal bool TryBindSelectedOwner(DailyV1ExplorableSiteKnowledgeOwner owner)
+    {
+        if (!CanBindSelectedOwner(owner)) return false;
+
+        if (selectedOwner == null && (revision != 0L || observations.Count != 0)
+            && owner.Revision == 0L && owner.Observations.Count == 0
+            && !owner.TryCreateInitialSnapshot(readOnlyObservations, revision)) return false;
+
+        selectedOwner = owner;
+        CopySelectedOwnerToSerializationProjection();
+        return true;
+    }
+
+    internal bool TryCreateSelectedOwnerSnapshot(out DailyV1ExplorableSiteKnowledgeOwner owner)
+    {
+        if (selectedOwner != null)
+        {
+            owner = selectedOwner;
+            return true;
+        }
+        DailyV1ExplorableSiteKnowledgeOwner candidate =
+            new DailyV1ExplorableSiteKnowledgeOwner(ownerRuntimeId);
+        if (!candidate.TryCreateInitialSnapshot(readOnlyObservations, revision))
+        {
+            owner = null;
+            return false;
+        }
+        owner = candidate;
+        return true;
+    }
+
+    public void OnBeforeSerialize() => CopySelectedOwnerToSerializationProjection();
+    public void OnAfterDeserialize() => selectedOwner = null;
+
+    private void CopySelectedOwnerToSerializationProjection()
+    {
+        if (selectedOwner == null) return;
+        observations.Clear();
+        foreach (ExplorableSiteKnowledgeObservation value in selectedOwner.Observations)
+            observations.Add(new ExplorableSiteKnowledgeObservation(value.SiteRuntimeId,
+                value.LocationRuntimeId, value.ObservedDay, value.ReceivedDay, value.Source));
+        revision = selectedOwner.Revision;
     }
 
     /// <summary>Builds an unpublished owner from copied exact values without replaying observations.</summary>
@@ -115,13 +116,17 @@ public sealed class ExplorableSiteKnowledgeRuntime
 
     public bool KnowsSite(string siteRuntimeId)
     {
-        return TryGetObservation(siteRuntimeId, out _);
+        return selectedOwner != null
+            ? selectedOwner.KnowsSite(siteRuntimeId)
+            : TryGetObservation(siteRuntimeId, out _);
     }
 
     public bool TryGetObservation(
         string siteRuntimeId,
         out ExplorableSiteKnowledgeObservation observation)
     {
+        if (selectedOwner != null)
+            return selectedOwner.TryGetObservation(siteRuntimeId, out observation);
         int index = FindObservationIndex(siteRuntimeId);
 
         if (index >= 0)
@@ -136,6 +141,12 @@ public sealed class ExplorableSiteKnowledgeRuntime
 
     public bool RecordObservation(ExplorableSiteKnowledgeObservation observation)
     {
+        if (selectedOwner != null)
+        {
+            bool committed = selectedOwner.RecordObservation(observation);
+            if (committed) CopySelectedOwnerToSerializationProjection();
+            return committed;
+        }
         if (observation == null)
         {
             return false;

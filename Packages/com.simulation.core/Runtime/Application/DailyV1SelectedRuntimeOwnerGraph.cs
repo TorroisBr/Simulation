@@ -24,6 +24,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal PersonSpatialPositionStore PersonSpatialPositionStore { get; private set; }
     internal LegacySpatialAnchorBindingStore LegacySpatialAnchors { get; private set; }
     internal ScheduledDirectiveStore ScheduledDirectives { get; private set; }
+    internal PoliticalKnowledgeStore PoliticalKnowledgeStore { get; private set; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
         DailyV1EffectiveDefinitions definitions,
@@ -57,6 +58,21 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         if (PersonStore != null) return ReferenceEquals(PersonStore, personStore);
         if (!MatchesPersonStore(personStore, npcs)) return false;
         PersonStore = personStore;
+        return true;
+    }
+
+    /// <summary>
+    /// Binds the exact PoliticalKnowledge authority installed by the runtime.
+    /// It must use this graph's PersonStore so captured beliefs cannot come
+    /// from a parallel selected-owner root.
+    /// </summary>
+    internal bool TryBindPoliticalKnowledgeStore(PoliticalKnowledgeStore store)
+    {
+        if (store == null || PersonStore == null
+            || !store.IsBoundToPersonStore(PersonStore)) return false;
+        if (PoliticalKnowledgeStore != null)
+            return ReferenceEquals(PoliticalKnowledgeStore, store);
+        PoliticalKnowledgeStore = store;
         return true;
     }
 
@@ -286,6 +302,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 || !definitions.Npcs.TryGetValue(owner.Definition.DefinitionId, out DailyV1NpcDefinition npc)
                 || !ReferenceEquals(npc, owner.Definition)
                 || !runtimeIds.Add(owner.RuntimeId)
+                || owner.LocalTopologyKnowledgeEmptyOwner == null
+                || !owner.LocalTopologyKnowledgeEmptyOwner.MatchesRuntimeId(owner.RuntimeId)
                 || !MatchesCity(cities, owner.MerchantTradePlan?.OriginCityRuntimeId)
                 || !MatchesCity(cities, owner.MerchantTradePlan?.TargetCityRuntimeId)
                 || !MatchesCityLocation(cities, owner.Travel?.CurrentCityRuntimeId,
@@ -670,6 +688,27 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         SpatialKnowledgeRuntime spatialKnowledge,
         out DailyV1NpcRuntimeOwners owners)
     {
+        return TryCreateBoundNpcOwner(runtimeId, definitions, definition, statuses,
+            inventory, moneyAccount, commercialKnowledge, merchantTradePlan, spatialKnowledge,
+            string.IsNullOrWhiteSpace(runtimeId) ? null : new DailyV1ExplorableSiteKnowledgeOwner(runtimeId),
+            string.IsNullOrWhiteSpace(runtimeId) ? null : new DailyV1AdventureSiteIntelKnowledgeOwner(runtimeId),
+            out owners);
+    }
+
+    internal static bool TryCreateBoundNpcOwner(
+        string runtimeId,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1NpcDefinition definition,
+        IEnumerable<DailyV1StatusDefinition> statuses,
+        DailyV1InventoryOwner inventory,
+        MoneyAccountRuntime moneyAccount,
+        DailyV1CommercialKnowledgeOwner commercialKnowledge,
+        DailyV1NpcMerchantTradePlanOwner merchantTradePlan,
+        SpatialKnowledgeRuntime spatialKnowledge,
+        DailyV1ExplorableSiteKnowledgeOwner explorableSiteKnowledge,
+        DailyV1AdventureSiteIntelKnowledgeOwner adventureSiteIntelKnowledge,
+        out DailyV1NpcRuntimeOwners owners)
+    {
         owners = null;
         if (spatialKnowledge == null) return false;
         if (merchantTradePlan == null
@@ -678,6 +717,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         bool created = DailyV1NpcRuntimeOwners.TryCreateBound(
             runtimeId, definitions, definition, statuses, inventory, moneyAccount,
             commercialKnowledge, merchantTradePlan, spatialKnowledge,
+            explorableSiteKnowledge, adventureSiteIntelKnowledge,
             out DailyV1NpcRuntimeOwners candidate);
         // A bound NPC can be staged before its City owners are composed (notably
         // during detached P12 restore). Cross-owner City joins are validated by
@@ -2613,6 +2653,17 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
         ScheduledDirectiveStore scheduledDirectives,
         out DailyV1SelectedRuntimeOwnerGraph graph)
     {
+        return TryBuild(justiceRecordsOwner, travelParties, scheduledDirectives,
+            null, out graph);
+    }
+
+    internal bool TryBuild(
+        DailyV1JusticeRecordsOwner justiceRecordsOwner,
+        TravelPartyStore travelParties,
+        ScheduledDirectiveStore scheduledDirectives,
+        ExpeditionStore expeditions,
+        out DailyV1SelectedRuntimeOwnerGraph graph)
+    {
         graph = null;
         if (built || !MatchesConfiguredCityRows() || !MatchesConfiguredNpcRows()
             || !HasConsistentInitialPresence()) return false;
@@ -2621,7 +2672,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
                 definitions, cities, npcs, spatialNetwork, justiceRecordsOwner,
                 travelParties, identityIndex, out graph))
             return false;
-        if (scheduledDirectives != null && !graph.TryBindScheduledDirectives(scheduledDirectives))
+        if ((scheduledDirectives != null && !graph.TryBindScheduledDirectives(scheduledDirectives))
+            || (expeditions != null && !graph.TryBindExpeditionStore(expeditions)))
         {
             graph = null;
             return false;

@@ -4,9 +4,9 @@ using System.Collections.Generic;
 /// <summary>Exact per-rostered-NPC witnesses for embedded daily plan owners.</summary>
 public static class NpcPlanCensusProvider
 {
-    public const string MerchantTradePlanSectionPrefix = "p12b.merchant-trade-plan/";
-    public const string TravelPlanSectionPrefix = "p12b.npc-travel-plan/";
-    public const int SchemaVersion = 1;
+    public const string MerchantTradePlanSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix;
+    public const string TravelPlanSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanPrefix;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     public const int MerchantTradePlanKind = 0;
     public const int TravelPlanKind = 1;
@@ -54,10 +54,7 @@ public static class NpcPlanCensusProvider
     {
         if (kind != MerchantTradePlanKind && kind != TravelPlanKind)
             throw new ArgumentOutOfRangeException(nameof(kind));
-        string prefix = kind == MerchantTradePlanKind
-            ? MerchantTradePlanSectionPrefix
-            : TravelPlanSectionPrefix;
-        return prefix + runtimeId;
+        return DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(kind, runtimeId);
     }
 
     /// <summary>

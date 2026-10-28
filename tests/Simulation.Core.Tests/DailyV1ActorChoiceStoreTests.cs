@@ -92,7 +92,7 @@ public sealed class DailyV1ActorChoiceStoreTests
     }
 
     [Test]
-    public void SelectedCoreTurnPlansInstallsAndClosesTheActorChoiceAgainstExactOwners()
+    public void CoreChoiceUsesAdmittedOwnersAndRequestsOnlyTheHostActionProjection()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1SelectedRuntimeOwnerGraphBuilder builder =
@@ -121,8 +121,11 @@ public sealed class DailyV1ActorChoiceStoreTests
         SelectedActorChoiceTestBoundary boundary = new SelectedActorChoiceTestBoundary(
             graph, allocator, new SimulationRecordSequence(), decisions);
 
+        // The Core choice stage receives no Unity decision-system availability
+        // flag. It plans from the admitted owner graph and uses the boundary
+        // only to project and publish the resulting Core payload.
         Assert.That(DailyV1ActorChoiceExecutionStage.TryProcessPending(
-            graph, actor, personId, store, 20L, 3, true, true, true, boundary), Is.True);
+            graph, actor, personId, store, 20L, 3, true, true, boundary), Is.True);
 
         Assert.That(boundary.ClearCount, Is.EqualTo(1));
         Assert.That(boundary.AdmissionCount, Is.EqualTo(1));
@@ -182,7 +185,7 @@ public sealed class DailyV1ActorChoiceStoreTests
         };
 
         Assert.That(DailyV1ActorChoiceExecutionStage.TryProcessPending(
-            graph, actor, personId, store, 22L, 5, true, true, true, boundary), Is.True);
+            graph, actor, personId, store, 22L, 5, true, true, boundary), Is.True);
 
         Assert.That(boundary.AdmissionCount, Is.EqualTo(1));
         Assert.That(boundary.RefreshCount, Is.EqualTo(1));
@@ -218,7 +221,7 @@ public sealed class DailyV1ActorChoiceStoreTests
             graph, allocator, new SimulationRecordSequence(), new NpcDecisionStore());
 
         Assert.That(DailyV1ActorChoiceExecutionStage.TryProcessPending(
-            graph, actor, personId, store, 21L, 4, false, true, true, boundary), Is.True);
+            graph, actor, personId, store, 21L, 4, false, true, boundary), Is.True);
 
         Assert.That(boundary.ClearCount, Is.EqualTo(1));
         Assert.That(boundary.InstallCount, Is.Zero);
@@ -245,12 +248,13 @@ public sealed class DailyV1ActorChoiceStoreTests
             graph, actor, input.PersonId, store, 23L, 6,
             actorAtCurrentCityLocation: true,
             merchantTradeEnabled: true,
-            decisionSystemAvailable: true,
             boundary: boundary), Is.True);
 
         Assert.That(boundary.ClearCount, Is.EqualTo(1));
         Assert.That(boundary.InstallCount, Is.Zero);
         Assert.That(boundary.ExecuteCount, Is.Zero);
+        Assert.That(boundary.PrepareProjectionCount, Is.Zero,
+            "Core must reject disabled Merchant choices from admitted configuration before asking the Unity projection adapter.");
         Assert.That(store.TryGet(input.InputId, out ActorChoiceInput rejected), Is.True);
         Assert.That(rejected.Dispositions.Single().Failure,
             Is.EqualTo(ActorChoiceFailure.ActionUnavailable));
@@ -272,7 +276,6 @@ public sealed class DailyV1ActorChoiceStoreTests
             graph, actor, input.PersonId, store, 24L, 7,
             actorAtCurrentCityLocation: true,
             merchantTradeEnabled: true,
-            decisionSystemAvailable: true,
             boundary: boundary), Is.True);
 
         Assert.That(boundary.ClearCount, Is.EqualTo(1));
@@ -382,6 +385,7 @@ public sealed class DailyV1ActorChoiceStoreTests
         internal int RefreshCount { get; private set; }
         internal int InstallCount { get; private set; }
         internal int ExecuteCount { get; private set; }
+        internal int PrepareProjectionCount { get; private set; }
         internal DailyV1NpcActionPayloadOwner InstalledPayload { get; private set; }
         internal bool AllowSlotCommit { get; set; } = true;
 
@@ -403,6 +407,7 @@ public sealed class DailyV1ActorChoiceStoreTests
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionPayloadOwner payload)
         {
+            PrepareProjectionCount++;
             preparedPayload = payload;
             return true;
         }

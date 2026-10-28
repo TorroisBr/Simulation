@@ -659,7 +659,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             anchorToken.OwnerSections,
             eContext,
             stagedE,
-            config.Actions,
+            anchorComposition.SelectedDefinitions,
             out P12FDailyV1OwnerPackage stagedF,
             out P12FDailyV1OwnerPackageFailure fStageFailure), Is.True, fStageFailure.ToString());
 
@@ -1038,7 +1038,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         Assert.That(knowledgeRow.OwnerInstanceIdentity, Is.SameAs(knowledge));
         Assert.That(runtime.PoliticalDecisionRecords.Single().KnowledgeReferences,
             Is.EqualTo(new[] { KnowledgeReferenceA, KnowledgeReferenceB }));
-        Assert.That(P12EPoliticalDecisionOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalDecisionCaptureAdapter.TryCapture(
                 runtime,
                 token,
                 token.OwnerSections,
@@ -1108,7 +1108,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             OwnerSectionRole.Required, 2, claims.Revision, claims);
         AssertSection(token.OwnerSections, PoliticalClaimStoreCensusProvider.RecognitionsSectionId,
             OwnerSectionRole.Required, 2, claims.Revision, claims);
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(
             runtime,
             token,
             token.OwnerSections,
@@ -1119,7 +1119,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         Assert.That(institutionSnapshot.Tenures.Records, Has.Count.EqualTo(1));
         Assert.That(institutionSnapshot.Tenures.Records[0].StartAbsoluteDay, Is.EqualTo(ownerMutationDay));
         Assert.That(institutionSnapshot.Tenures.Records[0].EndAbsoluteDay, Is.EqualTo(ownerMutationDay));
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(
             runtime,
             token,
             token.OwnerSections,
@@ -1543,7 +1543,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
 
         PoliticalDecisionStore decisionOwner = GetOwner<PoliticalDecisionStore>(
             token.OwnerSections, PoliticalDecisionStoreCensusProvider.SectionId);
-        Assert.That(P12EPoliticalDecisionOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalDecisionCaptureAdapter.TryCapture(
             session.Runtime,
             token,
             token.OwnerSections,
@@ -1761,7 +1761,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         StringBuilder signature)
     {
         IReadOnlyList<OwnerSectionCensusSnapshot> vector = token.OwnerSections;
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EInstitutionOfficeOwnerSnapshot institutionOffice,
             out P12EInstitutionOfficeSnapshotFailure institutionFailure), Is.True, institutionFailure?.Message);
@@ -1774,19 +1774,19 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         AppendPropertyEstateSnapshot(signature, propertyEstate);
 
         FactionStore factionOwner = GetOwner<FactionStore>(vector, FactionStoreCensusProvider.FactionsSectionId);
-        Assert.That(P12EFactionOwnerSnapshot.TryCapture(
+        Assert.That(P12EFactionCaptureAdapter.TryCapture(
             runtime, factionOwner, token, vector,
             out P12EFactionOwnerSnapshot factions,
             out P12EFactionSnapshotFailure factionFailure), Is.True, factionFailure?.Message);
         AppendFactionSnapshot(signature, factions);
 
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalClaimOwnerSnapshot claims,
             out P12EPoliticalClaimSnapshotFailure claimFailure), Is.True, claimFailure?.Message);
         AppendClaimSnapshot(signature, claims);
 
-        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalSupportCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalSupportOwnerSnapshot support,
             out P12EPoliticalSupportSnapshotFailure supportFailure), Is.True, supportFailure?.Message);
@@ -1817,13 +1817,13 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             out PersistentBattleOwnerSnapshotFailure battleFailure), Is.True, battleFailure?.Message);
         AppendBattleSnapshot(signature, battles);
 
-        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(
             runtime, token, vector,
             out P12EJusticeRecordsOwnerSnapshot justice,
             out P12EJusticeSnapshotFailure justiceFailure), Is.True, justiceFailure?.Message);
         AppendJusticeSnapshot(signature, justice);
 
-        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(
+        Assert.That(P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocial,
             out P12ECrimeSocialAppraisalSnapshotFailure crimeSocialFailure), Is.True, crimeSocialFailure?.Message);
@@ -2136,7 +2136,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             AppendValue(signature, entry + "/source-runtime", observation.SourceRuntimeId);
         }
         index = 0;
-        foreach (CommercialKnowledgeShareReceipt receipt in row.CommercialShareReceipts)
+        foreach (P12DNpcCommercialShareReceiptValue receipt in row.CommercialShareReceipts)
         {
             string entry = key + "/commercial-share-receipt/" + index++;
             AppendValue(signature, entry + "/operation", receipt.OperationIdentity);
@@ -2871,7 +2871,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             AppendValue(signature, key + "/origin-decision", row.OriginDecisionId);
         }
 
-        Assert.That(P12FExpeditionOwnerSnapshotOperations.TryCapture(
+        Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(
             session.Composition.Expeditions, token, vector,
             out P12FExpeditionOwnerSnapshot expeditions,
             out P12FCommitmentSnapshotFailure expeditionFailure), Is.True, expeditionFailure.ToString());

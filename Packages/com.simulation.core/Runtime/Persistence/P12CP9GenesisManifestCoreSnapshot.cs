@@ -113,6 +113,75 @@ internal sealed class P12CP9GenesisManifestCoreSnapshot
         FirstSimulatedBoundary = firstSimulatedBoundary;
     }
 
+    /// <summary>
+    /// Captures the P9-B manifest facts already admitted by Core genesis.
+    /// This is a value projection of the retained definition graph and its
+    /// provenance; it does not resolve Unity assets or rerun genesis.
+    /// </summary>
+    internal static bool TryCreateForSelectedDailyV1Genesis(
+        DailyV1EffectiveDefinitions definitions,
+        string fingerprint,
+        IReadOnlyList<string> canonicalProvenanceRecords,
+        out P12CP9GenesisManifestCoreSnapshot snapshot,
+        out string diagnostic)
+    {
+        snapshot = null;
+        diagnostic = null;
+        if (definitions == null || definitions.Configuration == null
+            || definitions.Calendar == null || definitions.EffectiveConfiguration == null
+            || string.IsNullOrWhiteSpace(fingerprint) || canonicalProvenanceRecords == null)
+        {
+            diagnostic = "The admitted P9-B definition graph and provenance are required.";
+            return false;
+        }
+
+        if (!string.Equals(definitions.GeographyProfileContractIdentity,
+                P12CP9GenesisContract.GeographyProfileContractIdentity, StringComparison.Ordinal)
+            || !string.Equals(definitions.GeographyStageIdentity,
+                P12CP9GenesisContract.GeographyStageId, StringComparison.Ordinal))
+        {
+            diagnostic = "Core P12-C root capture requires the selected P9-B authored-geography profile.";
+            return false;
+        }
+
+        if (!TryCreateAuthoredDefinitionIds(canonicalProvenanceRecords, out List<string> authoredDefinitionIds))
+        {
+            diagnostic = "The admitted P9-B provenance does not yield a complete authored definition identity set.";
+            return false;
+        }
+
+        DailyV1SimulationConfigData configuration = definitions.Configuration;
+        DailyV1CalendarDefinition calendar = definitions.Calendar;
+        bool useFixedSeed = configuration.useFixedSimulationSeed;
+        P12CP9GenesisManifestCoreSnapshot candidate = new P12CP9GenesisManifestCoreSnapshot(
+            SnapshotContractIdentity,
+            CurrentSchemaVersion,
+            SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+            P12CP9GenesisContract.GeographyProfileContractIdentity,
+            2,
+            fingerprint,
+            fingerprint,
+            P12CP9GenesisContract.GeographyProfileContractIdentity,
+            2,
+            definitions.EffectiveConfiguration,
+            canonicalProvenanceRecords,
+            authoredDefinitionIds,
+            ExpectedOutputOwners,
+            ExpectedStageDependencies,
+            calendar.monthsPerYear,
+            calendar.weeksPerMonth,
+            calendar.daysPerWeek,
+            calendar.monthLengths,
+            useFixedSeed ? configuration.simulationSeed : 0,
+            useFixedSeed ? "authored-fixed" : "default-zero",
+            definitions.StageOrder,
+            "advance-day:1");
+
+        if (!candidate.TryValidate(out diagnostic)) return false;
+        snapshot = candidate;
+        return true;
+    }
+
     public string SnapshotContract { get; }
     public int SnapshotSchemaVersion { get; }
     public SimulationRuntimeAdmissionProfile P12AdmissionProfile { get; }
@@ -530,10 +599,24 @@ internal sealed class P12CP9GenesisManifestCoreSnapshot
 
     private bool AuthoredDefinitionIdsMatchRecords()
     {
+        if (!TryCreateAuthoredDefinitionIds(CanonicalProvenanceRecords, out List<string> orderedIds))
+            return false;
+        if (orderedIds.Count != AuthoredDefinitionIds.Count) return false;
+        for (int i = 0; i < orderedIds.Count; i++)
+            if (!string.Equals(orderedIds[i], AuthoredDefinitionIds[i], StringComparison.Ordinal)) return false;
+        return true;
+    }
+
+    private static bool TryCreateAuthoredDefinitionIds(
+        IReadOnlyList<string> canonicalProvenanceRecords,
+        out List<string> orderedIds)
+    {
+        orderedIds = null;
+        if (canonicalProvenanceRecords == null) return false;
         HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
-        for (int i = 0; i < CanonicalProvenanceRecords.Count; i++)
+        for (int i = 0; i < canonicalProvenanceRecords.Count; i++)
         {
-            string record = CanonicalProvenanceRecords[i];
+            string record = canonicalProvenanceRecords[i];
             if (!TryParseTaggedRecord(record, out string kind, out List<string> values))
             {
                 if (IsDefinitionRecordKind(kind)) return false;
@@ -632,11 +715,8 @@ internal sealed class P12CP9GenesisManifestCoreSnapshot
             }
         }
 
-        List<string> orderedIds = new List<string>(expectedIds);
+        orderedIds = new List<string>(expectedIds);
         orderedIds.Sort(StringComparer.Ordinal);
-        if (orderedIds.Count != AuthoredDefinitionIds.Count) return false;
-        for (int i = 0; i < orderedIds.Count; i++)
-            if (!string.Equals(orderedIds[i], AuthoredDefinitionIds[i], StringComparison.Ordinal)) return false;
         return true;
     }
 

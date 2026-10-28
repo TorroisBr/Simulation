@@ -82,6 +82,7 @@ internal sealed class P12AContinuationHeader
                 && Compatibility.P8Fingerprint == P8GeographyFingerprint
                 && Compatibility.ProfileId == Profile && Compatibility.ProfileVersion == ProfileVersion)
             || (Compatibility == null && CompatibilityV2 != null
+                && CompatibilityV2.HostKind == 1
                 && CompatibilityV2.P9Fingerprint == P9ManifestFingerprint
                 && CompatibilityV2.P8Fingerprint == P8GeographyFingerprint
                 && CompatibilityV2.ProfileId == Profile && CompatibilityV2.ProfileVersion == ProfileVersion));

@@ -80,8 +80,8 @@ public sealed class SimulationRuntimeSpatialInvariantReport
     }
 }
 
-public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDailyV1RuntimeAdvanceBoundary,
-    IDailyV1RestoredSessionCommitBoundary
+public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
+    IDailyV1RuntimeAdvanceBoundary, IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     [ThreadStatic]
     private static DailyGameplayExecutionProbeForTest activeDailyGameplayExecutionProbeForTest;
@@ -127,24 +127,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     {
         GenealogyCensusProvider.SectionId
     };
-
-    private const string NpcMembershipCensusOperationId = "runtime.npc-membership";
-    private const string PersonParentageCensusOperationId = "runtime.person.parentage";
-    private const string BootstrapPublicationCensusOperationId = "runtime.bootstrap-publication";
-    private const string DailyAdvanceCensusOperationId = "runtime.advance-day";
-    private const string SoloTravelStartCensusOperationId = "runtime.travel.start";
-    private const string TravelPartyAdvanceCensusOperationId = "runtime.travel-party.advance";
-    private const string NpcTradeCensusOperationId = "runtime.economy.npc-trade";
-    private const string NpcMoneyTransferCensusOperationId = "runtime.economy.money-transfer";
-    private const string MarketPurchaseCensusOperationId = "runtime.economy.market-purchase";
-    private const string MarketSaleCensusOperationId = "runtime.economy.market-sale";
-    private const string MerchantDailyNpcTradeCensusOperationId = "runtime.merchant.advance-npc-trade-state";
-    private const string InstitutionOfficeOwnerCommitCensusOperationId = "p12.institution-office.owner-commit";
-    private const string FactionStoreOwnerCommitCensusOperationId = "p12.faction.owner-commit";
-    private const string PoliticalClaimOwnerCommitCensusOperationId = "p12.political-claim.owner-commit";
-    private const string PoliticalSupportOwnerCommitCensusOperationId = "p12.political-support.owner-commit";
-    private const string PropertyOwnerCommitCensusOperationId = "p12.property.owner-commit";
-    private const string EstateOwnerCommitCensusOperationId = "p12.estate.owner-commit";
 
     private sealed class NpcMembershipCensusContext
     {
@@ -1738,6 +1720,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     private AuthoritativeMutationGuard mutationGuard => dailyExecutionBoundary.MutationGuard;
     private bool coreMutationGuardAuthoritiesBound;
     private readonly DailyV1ExecutionBoundaryState dailyExecutionBoundary;
+    private readonly object dailyV1ApplicationAdvanceAuthorityGate = new object();
+    private DailyV1Application dailyV1ApplicationAdvanceAuthority;
+    private DailyV1ActiveRuntimeSession dailyV1ApplicationAdvanceSession;
     private Func<DailyV1SelectedRuntimeOwnerGraph> selectedRuntimeOwnerGraphProvider;
     private Func<string, NpcRuntime> selectedNpcPresenceProjectionResolver;
     private bool advanceLeaseHeld => dailyExecutionBoundary.AdvanceLeaseHeld;
@@ -2578,7 +2563,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         GenealogyStore resolvedGenealogyStore = genealogyStore ?? new GenealogyStore();
         ValidateGenealogyStore(resolvedPersonStore, resolvedGenealogyStore);
-        SpatialAuthorityStore resolvedSpatialAuthorityStore = CloneSpatialAuthorityStore(spatialAuthorityStore);
+        // The admitted Core Daily-v1 session already owns this exact P8
+        // authority as a causal root. Retaining it is required for one
+        // authoritative owner across genesis, runtime execution, and P12-C
+        // capture. Compatibility runtimes keep the historical defensive
+        // clone behavior.
+        SpatialAuthorityStore resolvedSpatialAuthorityStore =
+            selectedExecutionBoundaryState != null
+            && selectedExecutionBoundaryState.HasAdmittedSelectedDailyExecution
+                ? RetainSelectedSpatialAuthorityStore(spatialAuthorityStore)
+                : CloneSpatialAuthorityStore(spatialAuthorityStore);
         StructureStore resolvedStructureStore = structureStore == null
             ? null
             : structureStore.Clone(resolvedSpatialAuthorityStore);
@@ -2934,6 +2928,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         {
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
         }
+        if (selectedOwnerGraph != null && this.politicalKnowledgeStore != null
+            && !selectedOwnerGraph.TryBindPoliticalKnowledgeStore(this.politicalKnowledgeStore))
+            throw new InvalidOperationException(
+                "The selected owner graph could not bind the exact PoliticalKnowledge authority installed by this runtime.");
         if (selectedOwnerGraph != null
             && !selectedOwnerGraph.TryBindPersonSpatialPositionStore(resolvedPersonSpatialPositionStore))
             throw new InvalidOperationException(
@@ -3710,66 +3708,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return;
         }
 
-        bool operationsRegistered = protocol.RegisterExpectedOperation(
-            NpcMembershipCensusOperationId,
-            out _);
-        if (operationsRegistered && runtimeAdmissionContext != null)
+        IReadOnlyList<string> expectedOperationContractIds =
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                runtimeAdmissionContext != null,
+                travelPartySystem != null,
+                travelSystem != null);
+        bool operationsRegistered = true;
+        foreach (string operationContractId in expectedOperationContractIds)
         {
-            operationsRegistered = protocol.RegisterExpectedOperation(
-                    BootstrapPublicationCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    DailyAdvanceCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    PersonParentageCensusOperationId,
-                    out _)
-                && (travelPartySystem == null
-                    || protocol.RegisterExpectedOperation(
-                        TravelPartyStartCensusOperationId,
-                        out _))
-                && (travelPartySystem == null
-                    || protocol.RegisterExpectedOperation(
-                        TravelPartyAdvanceCensusOperationId,
-                        out _))
-                && (travelSystem == null
-                    || protocol.RegisterExpectedOperation(
-                        SoloTravelStartCensusOperationId,
-                        out _))
-                && protocol.RegisterExpectedOperation(
-                    NpcTradeCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    NpcMoneyTransferCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    MarketPurchaseCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    MarketSaleCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    MerchantDailyNpcTradeCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    InstitutionOfficeOwnerCommitCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    FactionStoreOwnerCommitCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    PoliticalClaimOwnerCommitCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    PoliticalSupportOwnerCommitCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    PropertyOwnerCommitCensusOperationId,
-                    out _)
-                && protocol.RegisterExpectedOperation(
-                    EstateOwnerCommitCensusOperationId,
-                    out _)
-                && TryRegisterP12PopulationLifecycleOperations(protocol);
+            if (protocol.RegisterExpectedOperation(operationContractId, out _)) continue;
+            operationsRegistered = false;
+            break;
         }
 
         bool ownerThreadBound = false;
@@ -4469,13 +4418,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         {
             IReadOnlyList<IOwnerSectionCensusProvider> providers =
                 CityMarketCensusProvider.CreateProviders(cities);
+            HashSet<CityRuntime> owners = new HashSet<CityRuntime>();
             for (int i = 0; i < providers.Count; i++)
             {
                 IOwnerSectionCensusProvider provider = providers[i];
                 OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
-                if (!(witness.OwnerInstanceIdentity is MarketRuntime market)
-                    || string.IsNullOrWhiteSpace(witness.SectionId)
-                    || marketSectionIdsByOwner.ContainsKey(market)
+                if (!TryResolveCurrentCityMarketWitness(witness, out CityRuntime city)
+                    || !owners.Add(city)
+                    || marketSectionIdsByOwner.ContainsKey(city.Market)
                     || !protocol.RegisterExpectedSection(
                         new OwnerSectionContract(
                             witness.SectionId,
@@ -4488,9 +4438,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     return false;
                 }
 
-                marketSectionIdsByOwner.Add(market, witness.SectionId);
+                marketSectionIdsByOwner.Add(city.Market, witness.SectionId);
             }
 
+            if (providers.Count != cities.Count || owners.Count != cities.Count)
+            {
+                protocol.FaultClosed();
+                return false;
+            }
             return true;
         }
         catch
@@ -4663,17 +4618,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             {
                 IOwnerSectionCensusProvider provider = providers[i];
                 OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
-                if (witness == null
-                    || !(witness.OwnerInstanceIdentity is CityRuntime city)
-                    || !cities.Contains(city)
+                if (!TryResolveCurrentCityNpcPresenceWitness(witness, out CityRuntime city)
                     || !owners.Add(city)
-                    || witness.SchemaVersion != CityNpcPresenceCensusProvider.SchemaVersion
-                    || !string.Equals(
-                        witness.SectionId,
-                        CityNpcPresenceCensusProvider.SectionIdFor(city.RuntimeId),
-                        StringComparison.Ordinal)
-                    || witness.Cardinality != city.ImportantNpcs.Count
-                    || witness.Revision != city.ImportantNpcRevision
                     || !sectionIds.Add(witness.SectionId)
                     || !protocol.RegisterExpectedSection(
                         new OwnerSectionContract(
@@ -4705,6 +4651,89 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             protocol.FaultClosed();
             return false;
         }
+    }
+
+    private bool TryResolveCurrentCityMarketWitness(
+        OwnerSectionCensusWitness witness,
+        out CityRuntime city)
+    {
+        city = null;
+        if (witness == null || string.IsNullOrWhiteSpace(witness.SectionId)) return false;
+
+        CityRuntime match = null;
+        for (int index = 0; index < cities.Count; index++)
+        {
+            CityRuntime candidate = cities[index];
+            if (candidate == null
+                || !string.Equals(witness.SectionId,
+                    CityMarketCensusProvider.SectionIdFor(candidate.RuntimeId),
+                    StringComparison.Ordinal))
+                continue;
+            if (match != null) return false;
+            match = candidate;
+        }
+
+        if (match == null
+            || !ReferenceEquals(match.Market.SelectedDailyV1Owner,
+                match.SelectedRuntimeOwners?.Market))
+            return false;
+
+        DailyV1MarketOwner selectedOwner = match.SelectedRuntimeOwners?.Market;
+        object expectedIdentity = (object)selectedOwner ?? match.Market;
+        int expectedCardinality = selectedOwner != null
+            ? selectedOwner.Items.Count
+            : match.Market.Items.Count;
+        long expectedRevision = selectedOwner != null
+            ? selectedOwner.Revision
+            : match.Market.Revision;
+        if (!ReferenceEquals(witness.OwnerInstanceIdentity, expectedIdentity)
+            || witness.SchemaVersion != CityMarketCensusProvider.SchemaVersion
+            || witness.Cardinality != expectedCardinality
+            || witness.Revision != expectedRevision)
+            return false;
+
+        city = match;
+        return true;
+    }
+
+    private bool TryResolveCurrentCityNpcPresenceWitness(
+        OwnerSectionCensusWitness witness,
+        out CityRuntime city)
+    {
+        city = null;
+        if (witness == null || string.IsNullOrWhiteSpace(witness.SectionId)) return false;
+
+        CityRuntime match = null;
+        for (int index = 0; index < cities.Count; index++)
+        {
+            CityRuntime candidate = cities[index];
+            if (candidate == null
+                || !string.Equals(witness.SectionId,
+                    CityNpcPresenceCensusProvider.SectionIdFor(candidate.RuntimeId),
+                    StringComparison.Ordinal))
+                continue;
+            if (match != null) return false;
+            match = candidate;
+        }
+
+        if (match == null) return false;
+        DailyV1CityNpcPresenceOwner selectedOwner = match.SelectedRuntimeOwners?.NpcPresence;
+        object expectedIdentity = (object)selectedOwner ?? match;
+        int expectedCardinality = selectedOwner != null
+            ? selectedOwner.OrderedNpcRuntimeIds.Count
+            : match.ImportantNpcs.Count;
+        long expectedRevision = selectedOwner != null
+            ? selectedOwner.Revision
+            : match.ImportantNpcRevision;
+        if (!ReferenceEquals(witness.OwnerInstanceIdentity, expectedIdentity)
+            || witness.SchemaVersion != CityNpcPresenceCensusProvider.SchemaVersion
+            || witness.Cardinality != expectedCardinality
+            || witness.Revision != expectedRevision
+            || (selectedOwner != null && !match.HasConsistentSelectedNpcPresence))
+            return false;
+
+        city = match;
+        return true;
     }
 
     private bool TryRebindNpcOwnerMutationBoundaries()
@@ -5740,7 +5769,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
             || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
             || !TryEnterRuntimeAdmissionOperation(
-                SoloTravelStartCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.SoloTravelStart,
                 out SimulationOperationScope protocolScope))
         {
             FaultRuntimeAdmission();
@@ -5883,9 +5912,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             foreach (IOwnerSectionCensusProvider provider in cityNpcPresenceCensusProviders)
             {
                 OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
-                if (witness == null
-                    || !(witness.OwnerInstanceIdentity is CityRuntime city)
-                    || !cities.Contains(city)
+                if (!TryResolveCurrentCityNpcPresenceWitness(witness, out CityRuntime city)
                     || !cityNpcPresenceSectionIdsByOwner.TryGetValue(city, out string sectionId)
                     || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal))
                 {
@@ -5931,7 +5958,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         if (distinct.Count != sectionIds.Count
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
             || !TryEnterRuntimeAdmissionOperation(
-                TravelPartyAdvanceCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.TravelPartyAdvance,
                 out SimulationOperationScope protocolScope))
         {
             FaultRuntimeAdmission();
@@ -6015,7 +6042,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         HashSet<string> distinctSections = new HashSet<string>(sectionIds, StringComparer.Ordinal);
         if (distinctSections.Count != sectionIds.Count
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
-            || !TryEnterRuntimeAdmissionOperation(MerchantDailyNpcTradeCensusOperationId, out SimulationOperationScope protocolScope))
+            || !TryEnterRuntimeAdmissionOperation(DailyV1RuntimeProtocolOperationContracts.MerchantDailyNpcTrade, out SimulationOperationScope protocolScope))
         {
             FaultRuntimeAdmission();
             return false;
@@ -6622,7 +6649,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return false;
 
         return TryEnterRuntimeAdmissionOperation(
-            BootstrapPublicationCensusOperationId,
+            DailyV1RuntimeProtocolOperationContracts.BootstrapPublication,
             out scope);
     }
 
@@ -6657,9 +6684,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         if (runtimeAdmissionContext == null) return false;
 
         string operationContractId = transactionType == EconomyTransactionType.OpenMarketPurchase
-            ? MarketPurchaseCensusOperationId
+            ? DailyV1RuntimeProtocolOperationContracts.MarketPurchase
             : transactionType == EconomyTransactionType.OpenMarketSale
-                ? MarketSaleCensusOperationId
+                ? DailyV1RuntimeProtocolOperationContracts.MarketSale
                 : null;
 
         if (!IsRuntimeAdmissionOwnerThreadCurrent()
@@ -6771,7 +6798,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return false;
         }
 
-        return TryEnterRuntimeAdmissionOperation(NpcTradeCensusOperationId, out scope);
+        return TryEnterRuntimeAdmissionOperation(DailyV1RuntimeProtocolOperationContracts.NpcTrade, out scope);
     }
 
     internal bool TryBeginNpcMoneyTransferCensusOperation(
@@ -6803,7 +6830,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             return false;
         }
 
-        return TryEnterRuntimeAdmissionOperation(NpcMoneyTransferCensusOperationId, out scope);
+        return TryEnterRuntimeAdmissionOperation(DailyV1RuntimeProtocolOperationContracts.NpcMoneyTransfer, out scope);
     }
 
     internal void NotifyNpcTradeOwnerMutation(string sectionId)
@@ -6955,7 +6982,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
             || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
             || !TryEnterRuntimeAdmissionOperation(
-                InstitutionOfficeOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.InstitutionOfficeOwnerCommit,
                 out scope))
         {
             FaultRuntimeAdmission();
@@ -6974,7 +7001,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             || npcRosterCensusProtocol == null
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(P12GenealogyOwnerSectionIds, out _)
             || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
-            || !TryEnterRuntimeAdmissionOperation(PersonParentageCensusOperationId, out scope))
+            || !TryEnterRuntimeAdmissionOperation(DailyV1RuntimeProtocolOperationContracts.PersonParentage, out scope))
         {
             FaultRuntimeAdmission();
             return false;
@@ -7062,7 +7089,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
             || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
             || !TryEnterRuntimeAdmissionOperation(
-                FactionStoreOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.FactionStoreOwnerCommit,
                 out scope))
         {
             FaultRuntimeAdmission();
@@ -7106,7 +7133,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
             || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
             || !TryEnterRuntimeAdmissionOperation(
-                PoliticalClaimOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.PoliticalClaimOwnerCommit,
                 out scope))
         {
             FaultRuntimeAdmission();
@@ -7149,7 +7176,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
             || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
             || !TryEnterRuntimeAdmissionOperation(
-                PoliticalSupportOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.PoliticalSupportOwnerCommit,
                 out scope))
         {
             FaultRuntimeAdmission();
@@ -7255,7 +7282,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             && TryAssessP12LifecycleOwnerRoster()
             && TryValidateP12RuntimeIdentitySpatialOwnerBaselines()
             && npcRosterCensusProtocol.TryEnterOperation(
-                NpcMembershipCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.NpcMembership,
                 out SimulationOperationScope protocolScope,
                 out _))
         {
@@ -8050,6 +8077,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
     internal RepresentedResidentFloorSnapshot BuildRepresentedResidentFloorSnapshot()
     {
         Dictionary<string, int> floors = new Dictionary<string, int>(StringComparer.Ordinal);
+        Dictionary<string, int> hostSupplements = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (CityRuntime city in cities)
         {
             if (city == null || string.IsNullOrWhiteSpace(city.RuntimeId))
@@ -8062,10 +8090,23 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                     city,
                     npcRuntimeSnapshot,
                     personStore.Persons);
-            floors[city.RuntimeId] = presence?.RepresentedResidentCount ?? 0;
+            int representedResidents = presence?.RepresentedResidentCount ?? 0;
+            int corePersonResidents = 0;
+            foreach (PersonRuntime person in personStore.Persons)
+            {
+                if (person == null || person.PersonId == null || person.DeathAbsoluteDay.HasValue
+                    || !string.Equals(person.ResidenceSettlementRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+                    continue;
+                if (corePersonResidents < int.MaxValue) corePersonResidents++;
+            }
+
+            floors[city.RuntimeId] = representedResidents;
+            hostSupplements[city.RuntimeId] = representedResidents >= corePersonResidents
+                ? representedResidents - corePersonResidents
+                : -1;
         }
 
-        return new RepresentedResidentFloorSnapshot(floors);
+        return new RepresentedResidentFloorSnapshot(floors, hostSupplements);
     }
 
     internal bool TryGetManpowerSourceSettlementContext(
@@ -8190,7 +8231,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             int personRevisionIncrements = resident ? 2 : 1;
             bool actionChanged = materializedNpc?.CurrentActionRuntime != null;
             if (!TryBeginP12PopulationOperation(
-                    PersonDeathCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.PersonDeath,
                     sectionIds,
                     () => PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(
                         transition.ExpectedPerson,
@@ -8198,6 +8239,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                         && (materializedNpc == null
                             || materializedNpc.CanAdvanceP12LifecycleRevisions(
                                 1, 0, actionChanged ? 1 : 0))
+                        && (materializedNpc == null
+                            || materializedNpc.CanCommitSelectedPersonDeathAfterValidation(
+                                NpcInjurySeverity.None, out _))
                         && (!resident || PopulationOwnerBridge.CanAdvanceP12AggregateRevision(settlement.Population)),
                     out P12PopulationOperationScope p12Scope))
             {
@@ -9008,7 +9052,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         };
         SimulationOperationScope p12Scope = null;
         if (!TryBeginP12PropertyEstateOwnerCommit(
-                PropertyOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.PropertyOwnerCommit,
                 changedSections,
                 out p12Scope))
         {
@@ -9073,7 +9117,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         string[] changedSections = { EstateCensusProvider.SectionId };
         SimulationOperationScope p12Scope = null;
         if (!TryBeginP12PropertyEstateOwnerCommit(
-                EstateOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.EstateOwnerCommit,
                 changedSections,
                 out p12Scope))
         {
@@ -9200,7 +9244,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         };
         SimulationOperationScope p12Scope = null;
         if (!TryBeginP12PropertyEstateOwnerCommit(
-                PropertyOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.PropertyOwnerCommit,
                 changedSections,
                 out p12Scope))
         {
@@ -9353,7 +9397,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         };
         SimulationOperationScope p12Scope = null;
         if (!TryBeginP12PropertyEstateOwnerCommit(
-                PropertyOwnerCommitCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.PropertyOwnerCommit,
                 changedSections,
                 out p12Scope))
         {
@@ -9944,7 +9988,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         {
             string sectionId = PersonLifeResidenceCensusProvider.SectionIdFor(personId);
             if (!TryBeginP12PopulationOperation(
-                    PersonResidenceBindCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.PersonResidenceBind,
                     new[] { sectionId },
                     () => PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(person, 1),
                     out P12PopulationOperationScope p12Scope))
@@ -9996,7 +10040,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 out Func<bool> localRevisionCapacity))
         {
             if (!TryBeginP12PopulationOperation(
-                    PopulationImmigrationCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.PopulationImmigration,
                     sectionIds,
                     localRevisionCapacity,
                     out P12PopulationOperationScope p12Scope))
@@ -10049,7 +10093,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 out Func<bool> localRevisionCapacity))
         {
             if (!TryBeginP12PopulationOperation(
-                    PopulationEmigrationCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.PopulationEmigration,
                     sectionIds,
                     localRevisionCapacity,
                     out P12PopulationOperationScope p12Scope))
@@ -10103,7 +10147,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 out Func<bool> localRevisionCapacity))
         {
             if (!TryBeginP12PopulationOperation(
-                    PopulationResidenceMigrationCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.PopulationResidenceMigration,
                     sectionIds,
                     localRevisionCapacity,
                     out P12PopulationOperationScope p12Scope))
@@ -10151,7 +10195,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 out Func<bool> localRevisionCapacity))
         {
             if (!TryBeginP12PopulationOperation(
-                    PopulationResidentDeathCensusOperationId,
+                    DailyV1RuntimeProtocolOperationContracts.PopulationResidentDeath,
                     sectionIds,
                     localRevisionCapacity,
                     out P12PopulationOperationScope p12Scope))
@@ -10754,30 +10798,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     internal bool HasValidCompletedDailyBoundaryAdmission()
     {
-        return HasValidDailyBoundaryAdmission(requiredProvenance: null);
+        return dailyExecutionBoundary.HasValidCompletedDailyBoundaryAdmission(
+            this, sessionReplacement: true);
     }
 
     internal bool HasValidRestoredDailyBoundaryAdmission()
     {
-        return HasValidDailyBoundaryAdmission(DailyCaptureBoundaryProvenance.RestoredContinuation);
-    }
-
-    private bool HasValidDailyBoundaryAdmission(DailyCaptureBoundaryProvenance? requiredProvenance)
-    {
-        if (!TryReadDailyCaptureEvidence(
-                finalizingHeldAdvance: false,
-                requiredProvenance.HasValue
-                    ? DailyV1CaptureScopeAllowance.None
-                    : DailyV1CaptureScopeAllowance.SessionReplacementValidation,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
-                out long mutationEpoch,
-                out _))
-            return false;
-
-        DailyCaptureEligibilityToken current = currentDailyCaptureToken;
-        return current != null
-            && (!requiredProvenance.HasValue || current.BoundaryProvenance == requiredProvenance.Value)
-            && TryCompareDailyCaptureToken(current, ownerSections, mutationEpoch);
+        return dailyExecutionBoundary.HasValidRestoredDailyBoundaryAdmission(this);
     }
 
     internal bool TryValidateCompletedDailyCaptureToken(
@@ -10880,7 +10907,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
     public bool TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure)
     {
+        if (TryGetBoundDailyV1ApplicationAdvanceAuthority(
+                out DailyV1Application application,
+                out DailyV1ActiveRuntimeSession session))
+            return application.TryAdvanceDay(session, out failure);
+
         return dailyExecutionBoundary.TryAdvanceDay(this, out failure);
+    }
+
+    private bool TryGetBoundDailyV1ApplicationAdvanceAuthority(
+        out DailyV1Application application,
+        out DailyV1ActiveRuntimeSession session)
+    {
+        lock (dailyV1ApplicationAdvanceAuthorityGate)
+        {
+            application = dailyV1ApplicationAdvanceAuthority;
+            session = dailyV1ApplicationAdvanceSession;
+            return application != null && session != null;
+        }
     }
 
     private bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
@@ -10917,29 +10961,22 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         return true;
     }
 
-    DailyV1ExecutionBoundaryState IDailyV1RuntimeAdvanceBoundary.ExecutionState => dailyExecutionBoundary;
+    DailyV1ExecutionBoundaryState IDailyV1RuntimeAdvanceEvidenceBoundary.ExecutionState => dailyExecutionBoundary;
     bool IDailyV1RuntimeAdvanceBoundary.HasIntradayTimeline => p18dTimeline != null;
-    DailyV1ExecutionBoundaryState IDailyV1RestoredSessionCommitBoundary.ExecutionState => dailyExecutionBoundary;
-    bool IDailyV1RestoredSessionCommitBoundary.IsHealthyDailyOwnerThreadBoundary() =>
-        IsHealthyDailyOwnerThreadBoundary();
-    bool IDailyV1RestoredSessionCommitBoundary.HasValidCompletedDailyBoundaryAdmission() =>
-        HasValidCompletedDailyBoundaryAdmission();
-    bool IDailyV1RestoredSessionCommitBoundary.HasValidRestoredDailyBoundaryAdmission() =>
-        HasValidRestoredDailyBoundaryAdmission();
 
-    bool IDailyV1RuntimeAdvanceBoundary.TryEnterDailyAdvanceOperation(
+    bool IDailyV1RuntimeAdvanceEvidenceBoundary.TryEnterDailyAdvanceOperation(
         out IDisposable operationScope)
     {
         operationScope = null;
         if (!TryEnterRuntimeAdmissionOperation(
-                DailyAdvanceCensusOperationId,
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
                 out SimulationOperationScope hostScope))
             return false;
         operationScope = hostScope;
         return true;
     }
 
-    bool IDailyV1RuntimeAdvanceBoundary.TryCreateSelectedDailyExecutionBoundary(
+    bool IDailyV1RuntimeAdvanceEvidenceBoundary.TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
     {
         DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
@@ -10977,13 +11014,114 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         return advanced;
     }
 
-    bool IDailyV1RuntimeAdvanceBoundary.TryCaptureCompletedDailyCaptureEvidence(
+    bool IDailyV1RuntimeAdvanceEvidenceBoundary.TryCaptureCompletedDailyCaptureEvidence(
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure) =>
         TryCaptureCompletedDailyCaptureEvidence(out ownerSections, out mutationEpoch, out failure);
 
-    void IDailyV1RuntimeAdvanceBoundary.FaultRuntimeAdmission() => FaultRuntimeAdmission();
+    bool IDailyV1RuntimeAdvanceEvidenceBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+        bool sessionReplacement,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure) =>
+        TryReadDailyCaptureEvidence(
+            finalizingHeldAdvance: false,
+            sessionReplacement
+                ? DailyV1CaptureScopeAllowance.SessionReplacementValidation
+                : DailyV1CaptureScopeAllowance.None,
+            out ownerSections,
+            out mutationEpoch,
+            out failure);
+
+    bool IDailyV1RuntimeAdvanceEvidenceBoundary.TryCaptureContinuationSaveEvidence(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure) =>
+        TryReadDailyCaptureEvidence(
+            finalizingHeldAdvance: false,
+            DailyV1CaptureScopeAllowance.ContinuationSave,
+            out ownerSections,
+            out mutationEpoch,
+            out failure);
+
+    void IDailyV1RuntimeAdvanceEvidenceBoundary.FaultRuntimeAdmission() => FaultRuntimeAdmission();
+
+    // Selected Daily-v1 sessions bind a Core-owned boundary to these narrow
+    // P12/projection ports. The Unity runtime's legacy day and intraday
+    // methods remain available only to the non-selected compatibility path.
+    DailyV1ExecutionBoundaryState IDailyV1SelectedRuntimeAdvanceHostPorts.ExecutionState =>
+        dailyExecutionBoundary;
+
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryBindApplicationAdvanceAuthority(
+        DailyV1Application application,
+        DailyV1ActiveRuntimeSession session)
+    {
+        if (application == null || session == null
+            || !ReferenceEquals(session.ExecutionBoundaryState, dailyExecutionBoundary)
+            || !dailyExecutionBoundary.HasAdmittedSelectedDailyExecution
+            || dailyExecutionBoundary.AdmissionContext?.Profile
+                != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+            return false;
+
+        lock (dailyV1ApplicationAdvanceAuthorityGate)
+        {
+            if (dailyV1ApplicationAdvanceAuthority == null
+                && dailyV1ApplicationAdvanceSession == null)
+            {
+                dailyV1ApplicationAdvanceAuthority = application;
+                dailyV1ApplicationAdvanceSession = session;
+                return true;
+            }
+
+            return ReferenceEquals(dailyV1ApplicationAdvanceAuthority, application)
+                && ReferenceEquals(dailyV1ApplicationAdvanceSession, session);
+        }
+    }
+
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryEnterRuntimeProtocolOperation(
+        string operationContractId,
+        out IDisposable operationScope)
+    {
+        operationScope = null;
+        if (!TryEnterRuntimeAdmissionOperation(
+                operationContractId, out SimulationOperationScope hostScope))
+            return false;
+        operationScope = hostScope;
+        return true;
+    }
+
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCreateSelectedDailyExecutionBoundary(
+        out IDailyV1SelectedDailyExecutionBoundary executionBoundary) =>
+        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).TryCreateSelectedDailyExecutionBoundary(
+            out executionBoundary);
+
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCaptureOwnerSectionCensus(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        if (!Enum.IsDefined(typeof(DailyV1CaptureScopeAllowance), allowedOuterScope))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+            return false;
+        }
+
+        // Core chooses the exact capture scope; Unity remains the adapter for
+        // the live census providers and the existing protocol-level P12 checks.
+        return TryReadDailyCaptureEvidence(
+            finalizingHeldAdvance: allowedOuterScope == DailyV1CaptureScopeAllowance.DailyAdvance,
+            allowedOuterScope,
+            out ownerSections,
+            out mutationEpoch,
+            out failure);
+    }
+
+    void IDailyV1SelectedRuntimeAdvanceHostPorts.FaultRuntimeAdmission() =>
+        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).FaultRuntimeAdmission();
 
     /// <summary>
     /// Acquires this runtime's single-writer advance lease for a larger composed
@@ -11553,6 +11691,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
         public PersonStore PersonStore { get; }
         public ActorChoiceStore ActorChoiceStore { get; }
+        public DailyV1ActorTurnCoreRoots CoreRoots => null;
         public IDailyV1ActorTurnExecutionBoundary Boundary { get; }
     }
 
@@ -11600,7 +11739,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             Action mutation)
         {
             if (mutation == null) throw new ArgumentNullException(nameof(mutation));
-            runtime.RunP12CrimeJusticeDailyMutation(mutation);
+            runtime.RunP12CrimeJusticeDailyMutation(graph, phase, mutation);
         }
 
         public DailyV1JusticeRecordsOwner JusticeRecordsOwner => graph.JusticeRecordsOwner;
@@ -11670,11 +11809,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         public bool TryGetActorChoiceExecutionContext(
             DailyV1NpcRuntimeOwners actor,
-            out bool decisionSystemAvailable,
             out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
         {
-            NpcRuntime exactRuntime = RequireExactActor(actor);
-            decisionSystemAvailable = runtime.npcDecisionSystem != null;
+            RequireExactActor(actor);
             executionBoundary = this;
             return true;
         }
@@ -11861,6 +11998,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 null, null, targetLocationRuntimeId, evidence);
         }
 
+        public void LogTradeDecisionFailure(string message)
+        {
+            runtime.logger?.LogError(message);
+        }
+
         public void LogTrade(string message)
         {
             runtime.merchantSystem?.LogSelectedTradeState(message);
@@ -11882,15 +12024,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
 
         public IAuthoritativeRandomSource RandomSource => runtime.randomSource;
 
-        public bool TryCreateDecisionBoundary(
+        public bool TryCreateActionProjectionBoundary(
             DailyV1NpcRuntimeOwners actor,
-            out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary)
+            out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
         {
-            decisionBoundary = null;
+            projectionBoundary = null;
             NpcRuntime exactRuntime = RequireExactActor(actor);
             return runtime.npcDecisionSystem != null
-                && runtime.npcDecisionSystem.TryCreateSelectedDailyV1ActionDecisionBoundary(
-                    exactRuntime, out decisionBoundary);
+                && runtime.npcDecisionSystem.TryCreateSelectedDailyV1ActionProjectionBoundary(
+                    exactRuntime, out projectionBoundary);
         }
 
         public bool TryGetDecisionRecordOwners(
@@ -11931,7 +12073,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public bool TryPrepareSelectedActionProjection(
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionCandidate selected,
-            IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+            IDailyV1SelectedActionProjectionBoundary projectionBoundary,
             DailyV1NpcActionPayloadOwner payload)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
@@ -11942,7 +12084,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 return false;
 
             if (!runtime.npcDecisionSystem.TryProjectSelectedDailyV1ActionCandidate(
-                    exactRuntime, selected, decisionBoundary,
+                    exactRuntime, selected, projectionBoundary,
                     out NpcActionRuntime actionRuntime)
                 || actionRuntime == null
                 || !ReferenceEquals(actionRuntime.SelectedOwner, payload)
@@ -12175,8 +12317,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         public bool TryCompleteDispatch(
             DailyV1NpcRuntimeOwners actor,
             DailyV1SelectedActionDispatchResult dispatch,
-            out bool actionSucceeded,
-            out NpcActionResultType? resultType,
             out string resultMessage)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
@@ -12190,8 +12330,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 if (normalResult != null && !string.IsNullOrEmpty(normalResult.Message))
                     runtime.logger?.Log(SimulationLogCategory.NpcAction,
                         normalResult.Message);
-                actionSucceeded = normalResult?.Success == true;
-                resultType = normalResult?.ResultType;
                 resultMessage = normalResult?.Message;
                 return true;
             }
@@ -12203,8 +12341,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
             if (actionResult != null && !string.IsNullOrEmpty(actionResult.Message))
                 runtime.logger?.Log(SimulationLogCategory.NpcAction,
                     actionResult.Message);
-            actionSucceeded = actionResult?.Success == true;
-            resultType = actionResult?.ResultType;
             resultMessage = actionResult?.Message;
             return actionRuntime != null && action != null;
         }
@@ -12652,9 +12788,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
                 actorChoiceStore,
                 CurrentDay,
                 actorTurnRosterOrdinal,
-                npcRuntime.CurrentCity != null && IsActorAtCurrentCityLocation(npcRuntime),
+                graph.IsActorAtCurrentCityLocation(npcRuntime.SelectedRuntimeOwners),
                 graph.Definitions.EffectiveConfiguration?.MerchantTrade?.Enabled == true,
-                npcDecisionSystem != null,
                 new SelectedActorChoiceExecutionBoundary(this, npcRuntime));
         }
 
@@ -12914,6 +13049,25 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         }
 
         return source.Clone();
+    }
+
+    private static SpatialAuthorityStore RetainSelectedSpatialAuthorityStore(SpatialAuthorityStore source)
+    {
+        if (source == null)
+            throw new ArgumentException(
+                "An admitted Core Daily-v1 runtime requires its exact P8 SpatialAuthorityStore owner.",
+                nameof(source));
+
+        SpatialAuthorityInvariantReport report = source.ValidateInvariants();
+        if (report.IsValid == false)
+        {
+            throw new ArgumentException(
+                "The Core-owned SimulationRuntime SpatialAuthorityStore contains invalid world state: "
+                + string.Join("; ", report.Violations),
+                nameof(source));
+        }
+
+        return source;
     }
 
     private static LegacySpatialAnchorBindingStore CloneLegacySpatialAnchorBindingStore(
@@ -13938,6 +14092,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState, IDaily
         out int daysAdvanced,
         out SimulationRuntimeAdvanceFailure failure)
     {
+        if (TryGetBoundDailyV1ApplicationAdvanceAuthority(
+                out DailyV1Application application,
+                out DailyV1ActiveRuntimeSession session))
+            return application.TryAdvanceDays(session, dayCount, out daysAdvanced, out failure);
+
         return dailyExecutionBoundary.TryAdvanceDays(this, dayCount, out daysAdvanced, out failure);
     }
 

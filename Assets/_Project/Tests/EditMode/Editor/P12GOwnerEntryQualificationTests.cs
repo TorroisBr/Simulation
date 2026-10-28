@@ -35,6 +35,10 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         P12AContinuationImage image = DecodeCompletedImage(sourceImageBytes, source.Session, anchor.NormalContext);
         AssertImageContainsIntegratedOwnerRows(image, source.Session.Runtime.NpcRuntimes.First().RuntimeId);
 
+        DailyV1Application restoreApplication = new DailyV1Application();
+        Assert.That(restoreApplication.TryCaptureBootstrapAdmissionContext(
+                out SimulationRuntimeAdmissionContext restoreBootstrapContext), Is.True);
+
         Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
                 image,
                 image.Header.Compatibility,
@@ -42,10 +46,11 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 anchor.Runtime.Configuration,
                 anchor.Composition.Calendar,
                 anchor.Composition.SelectedDefinitions,
-                anchor.NormalContext,
+                restoreBootstrapContext,
                 out SimulationActiveSession restored,
                 out P12GDailyV1RestoreFailure restoreFailure,
-                out string restoreDiagnostic),
+                out string restoreDiagnostic,
+                application: restoreApplication),
             Is.True, restoreFailure + ": " + restoreDiagnostic);
         Assert.That(restored, Is.Not.Null);
         Assert.That(restored.Composition.SelectedDefinitions,
@@ -59,7 +64,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             "source/image-restored at the captured boundary");
         AssertDailyV1Parity(restored, restoredToken, control.Session, controlToken,
             "image-restored/control at the captured boundary");
-        Assert.That(EncodeCompletedImage(restored, anchor.NormalContext), Is.EqualTo(sourceImageBytes),
+        Assert.That(EncodeCompletedImage(restored, restoreBootstrapContext), Is.EqualTo(sourceImageBytes),
             "Every persisted owner payload, alias group, root and revision must be reproduced exactly after image restore.");
 
         for (int boundary = 1; boundary <= 2; boundary++)
@@ -80,7 +85,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             AssertDailyV1Parity(source.Session, nextSourceToken, control.Session, nextControlToken,
                 "independent deterministic control T+" + boundary);
             Assert.That(EncodeCompletedImage(source.Session, anchor.NormalContext),
-                Is.EqualTo(EncodeCompletedImage(restored, anchor.NormalContext)),
+                Is.EqualTo(EncodeCompletedImage(restored, restoreBootstrapContext)),
                 "Complete Daily-v1 serialized images must remain byte-identical at T+" + boundary + ".");
             Assert.That(EncodeCompletedImage(source.Session, anchor.NormalContext),
                 Is.EqualTo(EncodeCompletedImage(control.Session, anchor.NormalContext)),
@@ -351,13 +356,20 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         string notable = NpcKnowledgeCensusProvider.SectionIdFor(4, npc.RuntimeId);
         string resources = NpcKnowledgeCensusProvider.SectionIdFor(5, npc.RuntimeId);
         string access = NpcKnowledgeCensusProvider.SectionIdFor(6, npc.RuntimeId);
-        AssertSection(rows, site, npc.ExistingExplorableSiteKnowledge, 1, 1L);
-        AssertSection(rows, places, npc.ExistingLocalTopologyKnowledge, 0, 0L);
-        AssertSection(rows, connections, npc.ExistingLocalTopologyKnowledge, 0, 0L);
-        AssertSection(rows, opposition, npc.ExistingAdventureSiteIntelKnowledge, 1, 4L);
-        AssertSection(rows, notable, npc.ExistingAdventureSiteIntelKnowledge, 1, 4L);
-        AssertSection(rows, resources, npc.ExistingAdventureSiteIntelKnowledge, 1, 4L);
-        AssertSection(rows, access, npc.ExistingAdventureSiteIntelKnowledge, 1, 4L);
+        DailyV1NpcRuntimeOwners selectedOwners = npc.SelectedRuntimeOwners;
+        Assert.That(selectedOwners, Is.Not.Null,
+            "The selected Daily-v1 restore fixture must publish its exact Core NPC owner graph.");
+        Assert.That(npc.ExistingExplorableSiteKnowledge.SelectedOwner,
+            Is.SameAs(selectedOwners.ExplorableSiteKnowledge));
+        Assert.That(npc.ExistingAdventureSiteIntelKnowledge.SelectedOwner,
+            Is.SameAs(selectedOwners.AdventureSiteIntelKnowledge));
+        AssertSection(rows, site, selectedOwners.ExplorableSiteKnowledge, 1, 1L);
+        AssertSection(rows, places, selectedOwners.LocalTopologyKnowledgeEmptyOwner, 0, 0L);
+        AssertSection(rows, connections, selectedOwners.LocalTopologyKnowledgeEmptyOwner, 0, 0L);
+        AssertSection(rows, opposition, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
+        AssertSection(rows, notable, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
+        AssertSection(rows, resources, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
+        AssertSection(rows, access, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
         Assert.That(rows.Single(row => row.SectionId == places).OwnerInstanceIdentity,
             Is.SameAs(rows.Single(row => row.SectionId == connections).OwnerInstanceIdentity));
         Assert.That(rows.Single(row => row.SectionId == places).Role, Is.EqualTo(OwnerSectionRole.Required));

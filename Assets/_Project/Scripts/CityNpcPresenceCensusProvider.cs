@@ -4,8 +4,8 @@ using System.Collections.Generic;
 /// <summary>Passive per-City witnesses for the ImportantNpcs presence projection.</summary>
 public static class CityNpcPresenceCensusProvider
 {
-    public const string SectionIdPrefix = "p12b.city.important-npcs/";
-    public const int SchemaVersion = 1;
+    public const string SectionIdPrefix = DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion;
 
     private sealed class SectionProvider : IOwnerSectionCensusProvider
     {
@@ -26,6 +26,18 @@ public static class CityNpcPresenceCensusProvider
         public OwnerSectionCensusWitness GetCurrentCensus()
         {
             ValidateReciprocalPresenceProjection();
+            DailyV1CityRuntimeOwners selectedOwners = owner.SelectedRuntimeOwners;
+            if (selectedOwners != null)
+            {
+                DailyV1CityNpcPresenceOwner selectedOwner = selectedOwners.NpcPresence;
+                return new OwnerSectionCensusWitness(
+                    sectionId,
+                    SchemaVersion,
+                    selectedOwner,
+                    selectedOwner.OrderedNpcRuntimeIds.Count,
+                    selectedOwner.Revision);
+            }
+
             return new OwnerSectionCensusWitness(
                 sectionId,
                 SchemaVersion,

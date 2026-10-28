@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 /// <summary>
 /// Builds the Core execution boundary for one already staged Daily-v1
@@ -8,6 +9,90 @@ using System;
 /// </summary>
 internal static class DailyV1RestoredExecutionBoundaryComposer
 {
+    /// <summary>
+    /// Admits the exact staged P12-D owner instances and composes their shared
+    /// execution boundary as one Core-owned operation. The host may decode
+    /// persisted values and create compatibility projections, but it does not
+    /// choose owner order, validate cross-owner restore relationships, or
+    /// assemble the authoritative restored graph.
+    /// </summary>
+    internal static bool TryCreate(
+        DailyV1EffectiveDefinitions definitions,
+        EffectiveSimulationConfiguration effectiveConfiguration,
+        CalendarDefinition calendarDefinition,
+        SimulationTime simulationTime,
+        SimulationRuntimeAdmissionContext admissionContext,
+        WorldId worldId,
+        IReadOnlyList<DailyV1CityRuntimeOwners> cityOwners,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecords,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        PersonStore personStore,
+        ScheduledDirectiveStore directives,
+        ExpeditionStore expeditions,
+        RuntimeIdAllocator runtimeIdAllocator,
+        IAuthoritativeRandomSource randomSource,
+        SimulationRecordSequence recordSequence,
+        NpcDecisionStore decisionStore,
+        ActorChoiceStore actorChoiceStore,
+        out DailyV1ExecutionBoundaryState executionBoundaryState,
+        out SimulationCalendar calendar,
+        out string diagnostic)
+    {
+        executionBoundaryState = null;
+        calendar = null;
+        diagnostic = null;
+        if (calendarDefinition == null)
+        {
+            diagnostic = "The restored Core boundary requires the selected calendar definition.";
+            return false;
+        }
+
+        if (!DailyV1P12DSelectedOwnerGraphStager.TryCreate(
+                definitions,
+                cityOwners,
+                npcOwners,
+                spatialNetwork,
+                justiceRecords,
+                travelParties,
+                runtimeIdentityIndex,
+                personStore,
+                directives,
+                expeditions,
+                out DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+                out DailyV1P12DSelectedOwnerGraphFailure graphFailure)
+            || ownerGraph == null
+            || graphFailure != DailyV1P12DSelectedOwnerGraphFailure.None)
+        {
+            diagnostic = "Core rejected the exact staged P12 City/NPC owners or their cross-owner relationships.";
+            return false;
+        }
+
+        SimulationCalendar candidateCalendar = new SimulationCalendar(calendarDefinition);
+        if (!TryCreate(
+                definitions,
+                effectiveConfiguration,
+                candidateCalendar,
+                simulationTime,
+                admissionContext,
+                worldId,
+                ownerGraph,
+                runtimeIdAllocator,
+                randomSource,
+                recordSequence,
+                decisionStore,
+                actorChoiceStore,
+                out DailyV1ExecutionBoundaryState candidateBoundary,
+                out diagnostic))
+            return false;
+
+        executionBoundaryState = candidateBoundary;
+        calendar = candidateCalendar;
+        return true;
+    }
+
     internal static bool TryCreate(
         DailyV1EffectiveDefinitions definitions,
         EffectiveSimulationConfiguration effectiveConfiguration,

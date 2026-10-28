@@ -105,7 +105,10 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
 
             stageObserver?.Invoke(P12GDailyV1RestoreStage.SourceCaptured);
-            if (!P12ACausalRootImageAdapter.TryStage(image,
+            if (!P12ACausalRootImageAdapter.TryStage(application,
+                    replacementOperation?.ExpectedSession,
+                    replacementOperation,
+                    image,
                     out P12CStagedContinuationRoot stagedC, out imageResult, stageObserver)
                 || stagedC == null || !stagedC.IsDetached)
             {
@@ -140,7 +143,11 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     Array.Empty<DailyV1ExplorableSiteDefinition>(), stagedPartyIds,
                     out P12DDailyV1OwnerPackage stagedD,
                     out P12DDailyV1OwnerPackageFailure dFailure,
-                    selectedDefinitions)
+                    selectedDefinitions,
+                    application,
+                    stagedC.CoreRoot,
+                    replacementOperation?.ExpectedSession,
+                    replacementOperation)
                 || stagedD == null || stagedD.StagingAttempt != null)
             {
                 failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
@@ -164,7 +171,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             P12EDailyV1OwnerStagingContext eContext = new P12EDailyV1OwnerStagingContext(
                 null, stagedC, stagedD, stagedTime, configuration.freeStatus,
                 configuration.wantedStatus, configuration.arrestedStatus,
-                configuration.hiddenStatus, eventRecorder, logger);
+                configuration.hiddenStatus, eventRecorder, logger,
+                application, replacementOperation?.ExpectedSession, replacementOperation);
 
             if (!P12EDailyV1OwnerPackage.TryStageFromImage(image, decoded, eContext,
                     out P12EDailyV1OwnerPackage stagedE,
@@ -178,7 +186,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
             stageObserver?.Invoke(P12GDailyV1RestoreStage.EStaged);
 
             if (!P12FDailyV1OwnerPackage.TryStageFromImage(image, decoded, eContext,
-                    stagedE, configuration.Actions,
+                    stagedE, selectedDefinitions,
                     out P12FDailyV1OwnerPackage stagedF,
                     out P12FDailyV1OwnerPackageFailure fFailure)
                 || stagedF == null || stagedF.StagingAttempt != null)
@@ -346,42 +354,17 @@ internal static partial class P12GDailyV1RestoreCoordinator
             return false;
         }
 
-        DailyV1CityRuntimeOwners[] cities = stagedD.Cities
-            .Select(city => city?.SelectedRuntimeOwners)
-            .OrderBy(owner => owner?.RuntimeId ?? string.Empty, StringComparer.Ordinal)
-            .ToArray();
-        DailyV1NpcRuntimeOwners[] npcs = stagedD.Npcs
-            .Select(npc => npc?.SelectedRuntimeOwners)
-            .OrderBy(owner => owner?.RuntimeId ?? string.Empty, StringComparer.Ordinal)
-            .ToArray();
-        if (cities.Any(owner => owner == null) || npcs.Any(owner => owner == null)
-            || !DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
-                cities, npcs,
-                stagedD.SpatialNetwork.SelectedOwner,
-                stagedE.Justice.CoreOwner,
-                stagedF.TravelParties,
-                stagedD.RuntimeIdentities.CoreIdentityIndex,
-                stagedD.Persons,
-                out DailyV1SelectedRuntimeOwnerGraph ownerGraph)
-            || ownerGraph == null
-            || !ownerGraph.TryBindScheduledDirectives(stagedF.ScheduledDirectives)
-            || !ownerGraph.TryBindExpeditionStore(stagedF.Expeditions))
-        {
-            diagnostic = "Core rejected the exact staged P12 City/NPC owners or their cross-owner relationships.";
-            return false;
-        }
-
-        selectedCalendar = new SimulationCalendar(calendarDefinition);
         if (!DailyV1RestoredExecutionBoundaryComposer.TryCreate(
-                selectedDefinitions, effectiveConfiguration, selectedCalendar, stagedTime,
-                restoredAdmissionContext, stagedC.WorldIdentity, ownerGraph,
+                selectedDefinitions, effectiveConfiguration, calendarDefinition, stagedTime,
+                restoredAdmissionContext, stagedC.WorldIdentity,
+                stagedD.SelectedCityOwners, stagedD.SelectedNpcOwners,
+                stagedD.SpatialNetwork.SelectedOwner, stagedE.Justice.CoreOwner,
+                stagedF.TravelParties, stagedD.RuntimeIdentities.CoreIdentityIndex,
+                stagedD.Persons, stagedF.ScheduledDirectives, stagedF.Expeditions,
                 stagedC.RuntimeIdAllocator, stagedC.DeterministicRandom,
                 stagedC.RecordSequence, decisionStore, stagedF.ActorChoices,
-                out executionBoundaryState, out diagnostic))
-        {
-            selectedCalendar = null;
+                out executionBoundaryState, out selectedCalendar, out diagnostic))
             return false;
-        }
 
         return true;
     }

@@ -2,255 +2,24 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum AdventureIntelSource
-{
-    InitialScenarioKnowledge,
-    SharedByNpc,
-    DirectObservation
-}
-
-public enum AdventureOppositionObservedState
-{
-    Active,
-    Resolved
-}
-
 [Serializable]
-public abstract class AdventureSiteIntelObservation
-{
-    private readonly string siteRuntimeId;
-    private readonly string localPlaceRuntimeId;
-    private readonly long observedDay;
-    private readonly long receivedDay;
-    private readonly AdventureIntelSource source;
-    private readonly string sourceRuntimeId;
-
-    public string SiteRuntimeId => siteRuntimeId;
-    public string LocalPlaceRuntimeId => localPlaceRuntimeId;
-    public long ObservedDay => observedDay;
-    public long ReceivedDay => receivedDay;
-    public AdventureIntelSource Source => source;
-    public string SourceRuntimeId => sourceRuntimeId;
-
-    protected AdventureSiteIntelObservation(
-        string siteRuntimeId,
-        string localPlaceRuntimeId,
-        long observedDay,
-        long receivedDay,
-        AdventureIntelSource source,
-        string sourceRuntimeId = null)
-    {
-        if (string.IsNullOrWhiteSpace(siteRuntimeId) == true)
-        {
-            throw new ArgumentException("Adventure intel requires a SiteRuntimeId.", nameof(siteRuntimeId));
-        }
-
-        if (observedDay < 0L || receivedDay < observedDay)
-        {
-            throw new ArgumentOutOfRangeException(nameof(receivedDay));
-        }
-
-        if (Enum.IsDefined(typeof(AdventureIntelSource), source) == false)
-        {
-            throw new ArgumentOutOfRangeException(nameof(source));
-        }
-
-        if (source == AdventureIntelSource.SharedByNpc && string.IsNullOrWhiteSpace(sourceRuntimeId) == true)
-        {
-            throw new ArgumentException("Shared adventure intel requires a source NPC RuntimeId.", nameof(sourceRuntimeId));
-        }
-
-        this.siteRuntimeId = siteRuntimeId;
-        this.localPlaceRuntimeId = Normalize(localPlaceRuntimeId);
-        this.observedDay = observedDay;
-        this.receivedDay = receivedDay;
-        this.source = source;
-        this.sourceRuntimeId = Normalize(sourceRuntimeId);
-    }
-
-    protected bool HasSameScope(AdventureSiteIntelObservation other)
-    {
-        return other != null
-            && string.Equals(siteRuntimeId, other.SiteRuntimeId, StringComparison.Ordinal)
-            && string.Equals(localPlaceRuntimeId, other.LocalPlaceRuntimeId, StringComparison.Ordinal);
-    }
-
-    internal abstract bool HasSameIdentity(AdventureSiteIntelObservation other);
-
-    private static string Normalize(string value)
-    {
-        return string.IsNullOrWhiteSpace(value) == true ? null : value;
-    }
-}
-
-[Serializable]
-public sealed class AdventureOppositionObservation : AdventureSiteIntelObservation
-{
-    private readonly string oppositionRuntimeId;
-    private readonly AdventureOppositionObservedState observedState;
-
-    public string OppositionRuntimeId => oppositionRuntimeId;
-    public AdventureOppositionObservedState ObservedState => observedState;
-
-    public AdventureOppositionObservation(
-        string siteRuntimeId,
-        string localPlaceRuntimeId,
-        string oppositionRuntimeId,
-        AdventureOppositionObservedState observedState,
-        long observedDay,
-        long receivedDay,
-        AdventureIntelSource source,
-        string sourceRuntimeId = null)
-        : base(siteRuntimeId, localPlaceRuntimeId, observedDay, receivedDay, source, sourceRuntimeId)
-    {
-        if (string.IsNullOrWhiteSpace(oppositionRuntimeId) == true)
-        {
-            throw new ArgumentException("Opposition intel requires an OppositionRuntimeId.", nameof(oppositionRuntimeId));
-        }
-
-        if (Enum.IsDefined(typeof(AdventureOppositionObservedState), observedState) == false)
-        {
-            throw new ArgumentOutOfRangeException(nameof(observedState));
-        }
-
-        this.oppositionRuntimeId = oppositionRuntimeId;
-        this.observedState = observedState;
-    }
-
-    internal override bool HasSameIdentity(AdventureSiteIntelObservation other)
-    {
-        return other is AdventureOppositionObservation opposition
-            && HasSameScope(opposition)
-            && string.Equals(oppositionRuntimeId, opposition.OppositionRuntimeId, StringComparison.Ordinal);
-    }
-}
-
-[Serializable]
-public sealed class AdventureNotableItemObservation : AdventureSiteIntelObservation
-{
-    private readonly string notableItemRuntimeId;
-    private readonly string itemDefinitionId;
-
-    public string NotableItemRuntimeId => notableItemRuntimeId;
-    public string ItemDefinitionId => itemDefinitionId;
-
-    public AdventureNotableItemObservation(
-        string siteRuntimeId,
-        string localPlaceRuntimeId,
-        string notableItemRuntimeId,
-        string itemDefinitionId,
-        long observedDay,
-        long receivedDay,
-        AdventureIntelSource source,
-        string sourceRuntimeId = null)
-        : base(siteRuntimeId, localPlaceRuntimeId, observedDay, receivedDay, source, sourceRuntimeId)
-    {
-        if (string.IsNullOrWhiteSpace(notableItemRuntimeId) == true
-            || string.IsNullOrWhiteSpace(itemDefinitionId) == true)
-        {
-            throw new ArgumentException("Notable-item intel requires runtime and definition IDs.");
-        }
-
-        this.notableItemRuntimeId = notableItemRuntimeId;
-        this.itemDefinitionId = itemDefinitionId;
-    }
-
-    internal override bool HasSameIdentity(AdventureSiteIntelObservation other)
-    {
-        return other is AdventureNotableItemObservation notable
-            && HasSameScope(notable)
-            && string.Equals(notableItemRuntimeId, notable.NotableItemRuntimeId, StringComparison.Ordinal);
-    }
-}
-
-[Serializable]
-public sealed class AdventureCommonResourceObservation : AdventureSiteIntelObservation
-{
-    private readonly string itemDefinitionId;
-    private readonly int observedAmount;
-    private readonly string resourceCategory;
-
-    public string ItemDefinitionId => itemDefinitionId;
-    public int ObservedAmount => observedAmount;
-    public string ResourceCategory => resourceCategory;
-
-    public AdventureCommonResourceObservation(
-        string siteRuntimeId,
-        string localPlaceRuntimeId,
-        string itemDefinitionId,
-        int observedAmount,
-        string resourceCategory,
-        long observedDay,
-        long receivedDay,
-        AdventureIntelSource source,
-        string sourceRuntimeId = null)
-        : base(siteRuntimeId, localPlaceRuntimeId, observedDay, receivedDay, source, sourceRuntimeId)
-    {
-        if (string.IsNullOrWhiteSpace(itemDefinitionId) == true || observedAmount < 0)
-        {
-            throw new ArgumentException("Common-resource intel requires a definition ID and non-negative amount.");
-        }
-
-        this.itemDefinitionId = itemDefinitionId;
-        this.observedAmount = observedAmount;
-        this.resourceCategory = string.IsNullOrWhiteSpace(resourceCategory) == true ? null : resourceCategory;
-    }
-
-    internal override bool HasSameIdentity(AdventureSiteIntelObservation other)
-    {
-        return other is AdventureCommonResourceObservation resource
-            && HasSameScope(resource)
-            && string.Equals(itemDefinitionId, resource.ItemDefinitionId, StringComparison.Ordinal);
-    }
-}
-
-[Serializable]
-public sealed class AdventureAccessObservation : AdventureSiteIntelObservation
-{
-    private readonly PlaceAccessState observedAccessState;
-
-    public PlaceAccessState ObservedAccessState => observedAccessState;
-
-    public AdventureAccessObservation(
-        string siteRuntimeId,
-        string localPlaceRuntimeId,
-        PlaceAccessState observedAccessState,
-        long observedDay,
-        long receivedDay,
-        AdventureIntelSource source,
-        string sourceRuntimeId = null)
-        : base(siteRuntimeId, localPlaceRuntimeId, observedDay, receivedDay, source, sourceRuntimeId)
-    {
-        if (Enum.IsDefined(typeof(PlaceAccessState), observedAccessState) == false)
-        {
-            throw new ArgumentOutOfRangeException(nameof(observedAccessState));
-        }
-
-        this.observedAccessState = observedAccessState;
-    }
-
-    internal override bool HasSameIdentity(AdventureSiteIntelObservation other)
-    {
-        return other is AdventureAccessObservation access && HasSameScope(access);
-    }
-}
-
-[Serializable]
-public sealed class AdventureSiteIntelKnowledgeRuntime
+public sealed class AdventureSiteIntelKnowledgeRuntime : ISerializationCallbackReceiver
 {
     private readonly string ownerRuntimeId;
     [SerializeField] private long revision;
+    [NonSerialized] private DailyV1AdventureSiteIntelKnowledgeOwner selectedOwner;
     private readonly List<AdventureOppositionObservation> oppositionObservations = new List<AdventureOppositionObservation>();
     private readonly List<AdventureNotableItemObservation> notableItemObservations = new List<AdventureNotableItemObservation>();
     private readonly List<AdventureCommonResourceObservation> commonResourceObservations = new List<AdventureCommonResourceObservation>();
     private readonly List<AdventureAccessObservation> accessObservations = new List<AdventureAccessObservation>();
 
     public string OwnerRuntimeId => ownerRuntimeId;
-    public long Revision => revision;
-    public IReadOnlyList<AdventureOppositionObservation> OppositionObservations => oppositionObservations.AsReadOnly();
-    public IReadOnlyList<AdventureNotableItemObservation> NotableItemObservations => notableItemObservations.AsReadOnly();
-    public IReadOnlyList<AdventureCommonResourceObservation> CommonResourceObservations => commonResourceObservations.AsReadOnly();
-    public IReadOnlyList<AdventureAccessObservation> AccessObservations => accessObservations.AsReadOnly();
+    public long Revision => selectedOwner?.Revision ?? revision;
+    public IReadOnlyList<AdventureOppositionObservation> OppositionObservations => selectedOwner?.OppositionObservations ?? oppositionObservations.AsReadOnly();
+    public IReadOnlyList<AdventureNotableItemObservation> NotableItemObservations => selectedOwner?.NotableItemObservations ?? notableItemObservations.AsReadOnly();
+    public IReadOnlyList<AdventureCommonResourceObservation> CommonResourceObservations => selectedOwner?.CommonResourceObservations ?? commonResourceObservations.AsReadOnly();
+    public IReadOnlyList<AdventureAccessObservation> AccessObservations => selectedOwner?.AccessObservations ?? accessObservations.AsReadOnly();
+    internal DailyV1AdventureSiteIntelKnowledgeOwner SelectedOwner => selectedOwner;
 
     public AdventureSiteIntelKnowledgeRuntime(string ownerRuntimeId)
     {
@@ -260,6 +29,78 @@ public sealed class AdventureSiteIntelKnowledgeRuntime
         }
 
         this.ownerRuntimeId = ownerRuntimeId;
+    }
+
+    internal bool CanBindSelectedOwner(DailyV1AdventureSiteIntelKnowledgeOwner owner)
+    {
+        if (owner == null || !string.Equals(owner.OwnerRuntimeId, ownerRuntimeId, StringComparison.Ordinal)
+            || (selectedOwner != null && !ReferenceEquals(selectedOwner, owner))) return false;
+        if (selectedOwner != null) return true;
+
+        bool hasProjection = revision != 0L || oppositionObservations.Count != 0
+            || notableItemObservations.Count != 0 || commonResourceObservations.Count != 0
+            || accessObservations.Count != 0;
+        if (!hasProjection) return true;
+        if (owner.Revision == 0L && owner.OppositionObservations.Count == 0
+            && owner.NotableItemObservations.Count == 0 && owner.CommonResourceObservations.Count == 0
+            && owner.AccessObservations.Count == 0)
+            return owner.CanCreateInitialSnapshot(oppositionObservations, notableItemObservations,
+                commonResourceObservations, accessObservations, revision);
+        return owner.MatchesSnapshot(oppositionObservations, notableItemObservations,
+            commonResourceObservations, accessObservations, revision);
+    }
+
+    internal bool TryBindSelectedOwner(DailyV1AdventureSiteIntelKnowledgeOwner owner)
+    {
+        if (!CanBindSelectedOwner(owner)) return false;
+        bool hasProjection = revision != 0L || oppositionObservations.Count != 0
+            || notableItemObservations.Count != 0 || commonResourceObservations.Count != 0
+            || accessObservations.Count != 0;
+        if (selectedOwner == null && hasProjection && owner.Revision == 0L
+            && owner.OppositionObservations.Count == 0 && owner.NotableItemObservations.Count == 0
+            && owner.CommonResourceObservations.Count == 0 && owner.AccessObservations.Count == 0
+            && !owner.TryCreateInitialSnapshot(oppositionObservations, notableItemObservations,
+                commonResourceObservations, accessObservations, revision)) return false;
+        selectedOwner = owner;
+        CopySelectedOwnerToSerializationProjection();
+        return true;
+    }
+
+    internal bool TryCreateSelectedOwnerSnapshot(
+        out DailyV1AdventureSiteIntelKnowledgeOwner owner)
+    {
+        if (selectedOwner != null)
+        {
+            owner = selectedOwner;
+            return true;
+        }
+        DailyV1AdventureSiteIntelKnowledgeOwner candidate =
+            new DailyV1AdventureSiteIntelKnowledgeOwner(ownerRuntimeId);
+        if (!candidate.TryCreateInitialSnapshot(oppositionObservations, notableItemObservations,
+            commonResourceObservations, accessObservations, revision))
+        {
+            owner = null;
+            return false;
+        }
+        owner = candidate;
+        return true;
+    }
+
+    public void OnBeforeSerialize() => CopySelectedOwnerToSerializationProjection();
+    public void OnAfterDeserialize() => selectedOwner = null;
+
+    private void CopySelectedOwnerToSerializationProjection()
+    {
+        if (selectedOwner == null) return;
+        oppositionObservations.Clear();
+        oppositionObservations.AddRange(selectedOwner.OppositionObservations);
+        notableItemObservations.Clear();
+        notableItemObservations.AddRange(selectedOwner.NotableItemObservations);
+        commonResourceObservations.Clear();
+        commonResourceObservations.AddRange(selectedOwner.CommonResourceObservations);
+        accessObservations.Clear();
+        accessObservations.AddRange(selectedOwner.AccessObservations);
+        revision = selectedOwner.Revision;
     }
 
     /// <summary>Builds an unpublished owner from copied exact values without replaying observations.</summary>
@@ -332,7 +173,7 @@ public sealed class AdventureSiteIntelKnowledgeRuntime
         string oppositionRuntimeId,
         out AdventureOppositionObservation observation)
     {
-        foreach (AdventureOppositionObservation candidate in oppositionObservations)
+        foreach (AdventureOppositionObservation candidate in OppositionObservations)
         {
             if (candidate != null
                 && string.Equals(candidate.SiteRuntimeId, siteRuntimeId, StringComparison.Ordinal)
@@ -349,7 +190,7 @@ public sealed class AdventureSiteIntelKnowledgeRuntime
 
     public bool KnowsNotableItem(string siteRuntimeId, string notableItemRuntimeId)
     {
-        foreach (AdventureNotableItemObservation observation in notableItemObservations)
+        foreach (AdventureNotableItemObservation observation in NotableItemObservations)
         {
             if (observation != null
                 && string.Equals(observation.SiteRuntimeId, siteRuntimeId, StringComparison.Ordinal)
@@ -364,7 +205,7 @@ public sealed class AdventureSiteIntelKnowledgeRuntime
 
     public bool KnowsCommonResource(string siteRuntimeId, string itemDefinitionId)
     {
-        foreach (AdventureCommonResourceObservation observation in commonResourceObservations)
+        foreach (AdventureCommonResourceObservation observation in CommonResourceObservations)
         {
             if (observation != null
                 && observation.ObservedAmount > 0
@@ -380,6 +221,20 @@ public sealed class AdventureSiteIntelKnowledgeRuntime
 
     private bool Record<T>(List<T> observations, T incoming) where T : AdventureSiteIntelObservation
     {
+        if (selectedOwner != null)
+        {
+            bool committed = incoming is AdventureOppositionObservation opposition
+                ? selectedOwner.RecordObservation(opposition)
+                : incoming is AdventureNotableItemObservation notable
+                    ? selectedOwner.RecordObservation(notable)
+                    : incoming is AdventureCommonResourceObservation resource
+                        ? selectedOwner.RecordObservation(resource)
+                        : incoming is AdventureAccessObservation access
+                            && selectedOwner.RecordObservation(access);
+            if (committed) CopySelectedOwnerToSerializationProjection();
+            return committed;
+        }
+
         if (incoming == null)
         {
             return false;

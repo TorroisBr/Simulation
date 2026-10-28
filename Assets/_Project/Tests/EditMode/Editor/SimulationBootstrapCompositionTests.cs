@@ -389,7 +389,8 @@ public sealed class SimulationBootstrapCompositionTests
 
         Assert.That(failure.InnerException, Is.TypeOf<System.InvalidOperationException>());
         AssertPublicWorldAccessorsUnavailable(simulation, "after failure");
-        Assert.That(identityAllocationCount, Is.EqualTo(1));
+        Assert.That(identityAllocationCount, Is.Zero,
+            "A failed selected Daily-v1 genesis does not invoke Unity identity allocation on retry.");
         Assert.That(typeof(TesteSimulacao).GetField("unpublishedWorldId", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(simulation), Is.Null);
         Assert.That(typeof(TesteSimulacao).GetField("draftComposition", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -401,7 +402,8 @@ public sealed class SimulationBootstrapCompositionTests
         int retryCallbackCount = 0;
         InvokeBootstrapInitialize(simulation, _ => retryCallbackCount++);
         Assert.That(retryCallbackCount, Is.Zero);
-        Assert.That(identityAllocationCount, Is.EqualTo(1));
+        Assert.That(identityAllocationCount, Is.Zero,
+            "A failed selected Daily-v1 genesis does not invoke Unity identity allocation on retry.");
         AssertPublicWorldAccessorsUnavailable(simulation, "after retry attempts");
     }
 
@@ -855,9 +857,7 @@ public sealed class SimulationBootstrapCompositionTests
         ContinuationCensusProtocol censusProtocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
             .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(runtime);
-        HashSet<string> expectedOperations = (HashSet<string>)typeof(ContinuationCensusProtocol)
-            .GetField("expectedOperations", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(censusProtocol);
+        IReadOnlyCollection<string> expectedOperations = censusProtocol.RegisteredOperationContractIds;
         Assert.That(expectedOperations, Does.Contain("p12.institution-office.owner-commit"));
         Assert.That(expectedOperations, Does.Contain("p12.faction.owner-commit"));
         Assert.That(expectedOperations, Does.Contain("p12.political-claim.owner-commit"));
@@ -1324,41 +1324,46 @@ public sealed class SimulationBootstrapCompositionTests
                 Assert.That((int)projected.Source, Is.EqualTo((int)coreRow.Source));
             }
 
+            LocalTopologyKnowledgeRuntime localTopologyProjection =
+                ReadPrivateField<LocalTopologyKnowledgeRuntime>(npc, "localTopologyKnowledge");
+            Assert.That(localTopologyProjection.PlaceObservations, Is.Empty);
+            Assert.That(localTopologyProjection.ConnectionObservations, Is.Empty);
+            Assert.That(localTopologyProjection.Revision, Is.Zero);
             object[] typedOwners =
             {
-                ReadPrivateField<ExplorableSiteKnowledgeRuntime>(npc, "explorableSiteKnowledge"),
-                ReadPrivateField<LocalTopologyKnowledgeRuntime>(npc, "localTopologyKnowledge"),
-                ReadPrivateField<LocalTopologyKnowledgeRuntime>(npc, "localTopologyKnowledge"),
-                ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge"),
-                ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge"),
-                ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge"),
-                ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge"),
+                coreNpc.ExplorableSiteKnowledge,
+                coreNpc.LocalTopologyKnowledgeEmptyOwner,
+                coreNpc.LocalTopologyKnowledgeEmptyOwner,
+                coreNpc.AdventureSiteIntelKnowledge,
+                coreNpc.AdventureSiteIntelKnowledge,
+                coreNpc.AdventureSiteIntelKnowledge,
+                coreNpc.AdventureSiteIntelKnowledge,
                 commercial,
                 commercial,
                 commercial
             };
             int[] expectedCardinalities =
             {
-                ((ExplorableSiteKnowledgeRuntime)typedOwners[0]).Observations.Count,
-                ((LocalTopologyKnowledgeRuntime)typedOwners[1]).PlaceObservations.Count,
-                ((LocalTopologyKnowledgeRuntime)typedOwners[2]).ConnectionObservations.Count,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[3]).OppositionObservations.Count,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[4]).NotableItemObservations.Count,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[5]).CommonResourceObservations.Count,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[6]).AccessObservations.Count,
+                coreNpc.ExplorableSiteKnowledge.Observations.Count,
+                coreNpc.LocalTopologyKnowledgeEmptyOwner.PlaceObservationCount,
+                coreNpc.LocalTopologyKnowledgeEmptyOwner.ConnectionObservationCount,
+                coreNpc.AdventureSiteIntelKnowledge.OppositionObservations.Count,
+                coreNpc.AdventureSiteIntelKnowledge.NotableItemObservations.Count,
+                coreNpc.AdventureSiteIntelKnowledge.CommonResourceObservations.Count,
+                coreNpc.AdventureSiteIntelKnowledge.AccessObservations.Count,
                 marketCount,
                 liquidityCount,
                 shareReceiptCount
             };
             long[] expectedRevisions =
             {
-                ((ExplorableSiteKnowledgeRuntime)typedOwners[0]).Revision,
-                ((LocalTopologyKnowledgeRuntime)typedOwners[1]).Revision,
-                ((LocalTopologyKnowledgeRuntime)typedOwners[2]).Revision,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[3]).Revision,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[4]).Revision,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[5]).Revision,
-                ((AdventureSiteIntelKnowledgeRuntime)typedOwners[6]).Revision,
+                coreNpc.ExplorableSiteKnowledge.Revision,
+                coreNpc.LocalTopologyKnowledgeEmptyOwner.Revision,
+                coreNpc.LocalTopologyKnowledgeEmptyOwner.Revision,
+                coreNpc.AdventureSiteIntelKnowledge.Revision,
+                coreNpc.AdventureSiteIntelKnowledge.Revision,
+                coreNpc.AdventureSiteIntelKnowledge.Revision,
+                coreNpc.AdventureSiteIntelKnowledge.Revision,
                 commercialRevision,
                 commercialRevision,
                 commercialRevision
@@ -1823,7 +1828,8 @@ public sealed class SimulationBootstrapCompositionTests
             Assert.That(witness.SectionId, Is.EqualTo(
                 CityNpcPresenceCensusProvider.SectionIdPrefix + city.RuntimeId));
             Assert.That(witness.SchemaVersion, Is.EqualTo(CityNpcPresenceCensusProvider.SchemaVersion));
-            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(city));
+            object expectedPresenceOwner = (object)city.SelectedRuntimeOwners?.NpcPresence ?? city;
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expectedPresenceOwner));
             Assert.That(witness.Cardinality, Is.EqualTo(city.ImportantNpcs.Count));
             Assert.That(witness.Revision, Is.EqualTo(city.ImportantNpcRevision));
             Assert.That(city.ImportantNpcs.Distinct().Count(), Is.EqualTo(city.ImportantNpcs.Count));
@@ -1839,7 +1845,8 @@ public sealed class SimulationBootstrapCompositionTests
                 + city.RuntimeId.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 + ":" + city.RuntimeId));
             Assert.That(marketWitness.SchemaVersion, Is.EqualTo(CityMarketCensusProvider.SchemaVersion));
-            Assert.That(marketWitness.OwnerInstanceIdentity, Is.SameAs(city.Market));
+            object expectedMarketOwner = (object)city.SelectedRuntimeOwners?.Market ?? city.Market;
+            Assert.That(marketWitness.OwnerInstanceIdentity, Is.SameAs(expectedMarketOwner));
             Assert.That(marketWitness.Cardinality, Is.EqualTo(city.Market.Items.Count));
             Assert.That(marketWitness.Cardinality, Is.EqualTo(5));
             Assert.That(marketWitness.Revision, Is.EqualTo(city.Market.Revision));
@@ -2027,7 +2034,7 @@ public sealed class SimulationBootstrapCompositionTests
     }
 
     [Test]
-    public void SelectedDailyV1DefinitionGraphIsPreparedBeforeWorldIdentityAllocation()
+    public void SelectedDailyV1CoreGenesisOwnsWorldIdentityAllocation()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
@@ -2040,34 +2047,30 @@ public sealed class SimulationBootstrapCompositionTests
         typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
 
-        DailyV1EffectiveDefinitions graphAtIdentityAllocation = null;
-        string fingerprintAtIdentityAllocation = null;
-        WorldId worldId = new WorldId(new System.Guid("2e6212da-7d5a-4b99-81f1-4881df17049a"));
+        int unityWorldIdentityAllocatorCalls = 0;
         typeof(TesteSimulacao).GetField("worldIdentityAllocator", BindingFlags.Instance | BindingFlags.NonPublic)
             .SetValue(simulation, new System.Func<WorldId>(() =>
             {
-                graphAtIdentityAllocation = (DailyV1EffectiveDefinitions)typeof(TesteSimulacao)
-                    .GetField("selectedDefinitions", BindingFlags.Instance | BindingFlags.NonPublic)
-                    .GetValue(simulation);
-                if (graphAtIdentityAllocation != null)
-                    fingerprintAtIdentityAllocation = DailyV1DefinitionIdentity.CreateP9Fingerprint(
-                        graphAtIdentityAllocation, out _);
-                return worldId;
+                unityWorldIdentityAllocatorCalls++;
+                return new WorldId(new System.Guid("2e6212da-7d5a-4b99-81f1-4881df17049a"));
             }));
 
         simulation.Start();
 
-        Assert.That(graphAtIdentityAllocation, Is.Not.Null,
-            "The selected typed graph must be built and admitted before any world identity is allocated.");
-        Assert.That(simulation.Bootstrap.SelectedDefinitions, Is.SameAs(graphAtIdentityAllocation),
-            "The exact pre-allocation graph must be retained by the published composition.");
-        Assert.That(fingerprintAtIdentityAllocation, Is.EqualTo(simulation.Bootstrap.ProfileFingerprint),
-            "Moving graph construction earlier must preserve the canonical P9 fingerprint.");
-        Assert.That(simulation.Bootstrap.WorldId, Is.SameAs(worldId));
+        DailyV1EffectiveDefinitions graph = simulation.Bootstrap.SelectedDefinitions;
+        Assert.That(graph, Is.Not.Null,
+            "The selected typed graph must be admitted before Core genesis publishes its composition.");
+        Assert.That(unityWorldIdentityAllocatorCalls, Is.Zero,
+            "Selected Daily-v1 WorldId allocation belongs to Core genesis; the Unity allocator remains only a legacy host hook.");
+        Assert.That(simulation.Bootstrap.WorldId, Is.Not.Null,
+            "Core genesis publishes the WorldId it allocated for the admitted selected graph.");
+        Assert.That(DailyV1DefinitionIdentity.CreateP9Fingerprint(graph, out _),
+            Is.EqualTo(simulation.Bootstrap.ProfileFingerprint),
+            "Core-owned identity allocation preserves the selected graph's canonical P9 fingerprint.");
 
         foreach (CityRuntime city in simulation.Runtime.Cities)
         {
-            Assert.That(graphAtIdentityAllocation.Cities.TryGetValue(city.DefinitionId, out DailyV1CityDefinition cityNode), Is.True);
+            Assert.That(graph.Cities.TryGetValue(city.DefinitionId, out DailyV1CityDefinition cityNode), Is.True);
             Assert.That(city.SelectedDailyV1Definition, Is.SameAs(cityNode),
                 "The live City must retain the exact typed node admitted before runtime identity allocation.");
             Assert.That(city.CityName, Is.EqualTo(cityNode.Values.cityName));
@@ -2076,7 +2079,7 @@ public sealed class SimulationBootstrapCompositionTests
         }
         foreach (NpcRuntime npc in simulation.Runtime.NpcRuntimes)
         {
-            Assert.That(graphAtIdentityAllocation.Npcs.TryGetValue(npc.DefinitionId, out DailyV1NpcDefinition npcNode), Is.True);
+            Assert.That(graph.Npcs.TryGetValue(npc.DefinitionId, out DailyV1NpcDefinition npcNode), Is.True);
             Assert.That(npc.SelectedDailyV1Definition, Is.SameAs(npcNode),
                 "The live NPC must retain the exact typed node admitted before runtime identity allocation.");
             Assert.That(npc.NpcName, Is.EqualTo(npcNode.Values.name));
@@ -2703,10 +2706,16 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(runtime.TryApplyInjury(NpcInjurySeverity.Hurt), Is.True);
         Assert.That(runtime.InjurySeverity, Is.EqualTo(NpcInjurySeverity.Hurt));
         Assert.That(runtime.SelectedRuntimeOwners.Lifecycle.InjurySeverity, Is.EqualTo(NpcInjurySeverity.Hurt));
+        runtime.SetCurrentActionRuntime(new NpcActionRuntime(actionAsset));
+        long actionRevisionBeforeDeath = runtime.CurrentActionRevision;
+        Assert.That(runtime.CurrentActionRuntime, Is.Not.Null);
         Assert.That(runtime.TryApplyDeath(), Is.True);
         Assert.That(runtime.LifeState, Is.EqualTo(NpcLifeState.Dead));
         Assert.That(runtime.SelectedRuntimeOwners.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Dead));
         Assert.That(runtime.LifeStateRevision, Is.EqualTo(1L));
+        Assert.That(runtime.CurrentActionRuntime, Is.Null);
+        Assert.That(runtime.SelectedRuntimeOwners.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(runtime.CurrentActionRevision, Is.EqualTo(actionRevisionBeforeDeath + 1L));
     }
 
     [Test]
@@ -3618,6 +3627,12 @@ public sealed class SimulationBootstrapCompositionTests
                 ReadPrivateField<AdventureSiteIntelKnowledgeRuntime>(npc, "adventureSiteIntelKnowledge");
             CommercialKnowledgeRuntime commercial =
                 ReadPrivateField<CommercialKnowledgeRuntime>(npc, "commercialKnowledge");
+            DailyV1NpcRuntimeOwners selected = npc.SelectedRuntimeOwners;
+            if (selected != null)
+            {
+                Assert.That(explorable.SelectedOwner, Is.SameAs(selected.ExplorableSiteKnowledge));
+                Assert.That(adventure.SelectedOwner, Is.SameAs(selected.AdventureSiteIntelKnowledge));
+            }
             List<CommercialKnowledgeShareReceipt> receipts =
                 ReadPrivateField<List<CommercialKnowledgeShareReceipt>>(commercial, "shareReceipts");
             int marketCount = commercial.Observations.Count;
@@ -3625,15 +3640,16 @@ public sealed class SimulationBootstrapCompositionTests
             int receiptCount = receipts.Count;
             long commercialRevision = commercial.Revision;
 
+            object localTopologyOwner = (object)selected?.LocalTopologyKnowledgeEmptyOwner ?? local;
             object[] owners =
             {
-                explorable,
-                local,
-                local,
-                adventure,
-                adventure,
-                adventure,
-                adventure,
+                (object)selected?.ExplorableSiteKnowledge ?? explorable,
+                localTopologyOwner,
+                localTopologyOwner,
+                (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
+                (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
+                (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
+                (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
                 commercial,
                 commercial,
                 commercial
@@ -3641,8 +3657,8 @@ public sealed class SimulationBootstrapCompositionTests
             int[] cardinalities =
             {
                 explorable.Observations.Count,
-                local.PlaceObservations.Count,
-                local.ConnectionObservations.Count,
+                selected == null ? local.PlaceObservations.Count : selected.LocalTopologyKnowledgeEmptyOwner.PlaceObservationCount,
+                selected == null ? local.ConnectionObservations.Count : selected.LocalTopologyKnowledgeEmptyOwner.ConnectionObservationCount,
                 adventure.OppositionObservations.Count,
                 adventure.NotableItemObservations.Count,
                 adventure.CommonResourceObservations.Count,
@@ -3654,8 +3670,8 @@ public sealed class SimulationBootstrapCompositionTests
             long[] revisions =
             {
                 explorable.Revision,
-                local.Revision,
-                local.Revision,
+                selected == null ? local.Revision : selected.LocalTopologyKnowledgeEmptyOwner.Revision,
+                selected == null ? local.Revision : selected.LocalTopologyKnowledgeEmptyOwner.Revision,
                 adventure.Revision,
                 adventure.Revision,
                 adventure.Revision,
@@ -3752,9 +3768,11 @@ public sealed class SimulationBootstrapCompositionTests
             string encodedCityId = city.RuntimeId.Length.ToString(
                 System.Globalization.CultureInfo.InvariantCulture) + ":" + city.RuntimeId;
             AddExpectedDailyV1OwnerIdentity(
-                expected, CityNpcPresenceCensusProvider.SectionIdPrefix + city.RuntimeId, city);
+                expected, CityNpcPresenceCensusProvider.SectionIdPrefix + city.RuntimeId,
+                (object)city.SelectedRuntimeOwners?.NpcPresence ?? city);
             AddExpectedDailyV1OwnerIdentity(
-                expected, CityMarketCensusProvider.SectionIdPrefix + encodedCityId, city.Market);
+                expected, CityMarketCensusProvider.SectionIdPrefix + encodedCityId,
+                (object)city.SelectedRuntimeOwners?.Market ?? city.Market);
             AddExpectedDailyV1OwnerIdentity(
                 expected, SettlementPopulationCensusProvider.AggregateSectionPrefix + encodedCityId,
                 city.Population);
@@ -3780,15 +3798,29 @@ public sealed class SimulationBootstrapCompositionTests
             candidate => candidate.RuntimeId, System.StringComparer.Ordinal))
         {
             string runtimeId = npc.RuntimeId;
-            object explorableKnowledge = ReadNonPublicProperty(npc, "ExistingExplorableSiteKnowledge");
-            object localKnowledge = ReadNonPublicProperty(npc, "ExistingLocalTopologyKnowledge");
-            object adventureKnowledge = ReadNonPublicProperty(npc, "ExistingAdventureSiteIntelKnowledge");
+            ExplorableSiteKnowledgeRuntime explorableProjection =
+                (ExplorableSiteKnowledgeRuntime)ReadNonPublicProperty(npc, "ExistingExplorableSiteKnowledge");
+            LocalTopologyKnowledgeRuntime localKnowledge =
+                (LocalTopologyKnowledgeRuntime)ReadNonPublicProperty(npc, "ExistingLocalTopologyKnowledge");
+            AdventureSiteIntelKnowledgeRuntime adventureProjection =
+                (AdventureSiteIntelKnowledgeRuntime)ReadNonPublicProperty(npc, "ExistingAdventureSiteIntelKnowledge");
             object commercialKnowledge = ReadNonPublicProperty(npc, "ExistingCommercialKnowledge");
+            DailyV1NpcRuntimeOwners selectedOwners = npc.SelectedRuntimeOwners;
+            if (selectedOwners != null)
+            {
+                Assert.That(explorableProjection.SelectedOwner, Is.SameAs(selectedOwners.ExplorableSiteKnowledge),
+                    "The Unity serialization projection must bind to the selected Core ExplorableSiteKnowledge owner.");
+                Assert.That(adventureProjection.SelectedOwner, Is.SameAs(selectedOwners.AdventureSiteIntelKnowledge),
+                    "The Unity serialization projection must bind to the selected Core AdventureSiteIntelKnowledge owner.");
+            }
+            object explorableKnowledge = (object)selectedOwners?.ExplorableSiteKnowledge ?? explorableProjection;
+            object localTopologyKnowledge = (object)selectedOwners?.LocalTopologyKnowledgeEmptyOwner ?? localKnowledge;
+            object adventureKnowledge = (object)selectedOwners?.AdventureSiteIntelKnowledge ?? adventureProjection;
             object[] knowledgeOwners =
             {
                 explorableKnowledge,
-                localKnowledge,
-                localKnowledge,
+                localTopologyKnowledge,
+                localTopologyKnowledge,
                 adventureKnowledge,
                 adventureKnowledge,
                 adventureKnowledge,
@@ -4542,7 +4574,8 @@ public sealed class SimulationBootstrapCompositionTests
         ContinuationCensusProtocol censusProtocol = ReadPrivateField<ContinuationCensusProtocol>(
             runtime,
             "npcRosterCensusProtocol");
-        Assert.That(initialCityPresence.OwnerInstanceIdentity, Is.SameAs(startingCity));
+        object expectedPresenceOwner = (object)startingCity.SelectedRuntimeOwners?.NpcPresence ?? startingCity;
+        Assert.That(initialCityPresence.OwnerInstanceIdentity, Is.SameAs(expectedPresenceOwner));
         Assert.That(initialCityPresence.Cardinality, Is.EqualTo(initialCityPresenceCardinality));
         Assert.That(initialCityPresence.Revision, Is.EqualTo(initialCityPresenceRevision));
 
@@ -4568,7 +4601,7 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(startingCity.ImportantNpcs, Has.Member(materializedNpc));
         AssertSelectedDailyNpcOwnerFamilies(runtime);
         OwnerSectionCensusWitness materializedCityPresence = cityPresenceProvider.GetCurrentCensus();
-        Assert.That(materializedCityPresence.OwnerInstanceIdentity, Is.SameAs(startingCity));
+        Assert.That(materializedCityPresence.OwnerInstanceIdentity, Is.SameAs(expectedPresenceOwner));
         Assert.That(materializedCityPresence.Cardinality, Is.EqualTo(initialCityPresenceCardinality + 1));
         Assert.That(materializedCityPresence.Revision, Is.EqualTo(initialCityPresenceRevision + 1));
         Assert.That(censusProtocol.TryReadMutationEpoch(

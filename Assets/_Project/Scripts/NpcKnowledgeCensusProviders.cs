@@ -4,22 +4,23 @@ using System.Collections.Generic;
 /// <summary>Passive per-NPC census witnesses for the selected P12 Knowledge owners.</summary>
 public static class NpcKnowledgeCensusProvider
 {
-    public const int SchemaVersion = 1;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
     private static readonly string[] Prefixes =
     {
-        "p12f.explorable-site-knowledge/",
-        "p12f.local-topology-knowledge.places/",
-        "p12f.local-topology-knowledge.connections/",
-        "p12f.adventure-intel.opposition/",
-        "p12f.adventure-intel.notable-items/",
-        "p12f.adventure-intel.common-resources/",
-        "p12f.adventure-intel.access/",
-        "p12f.commercial-knowledge.markets/",
-        "p12f.commercial-knowledge.liquidity/",
-        "p12f.commercial-knowledge.share-receipts/"
+        DailyV1SelectedOwnerSectionCensusContract.NpcExplorableSiteKnowledgePrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyPlacesPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyConnectionsPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcAdventureOppositionPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcAdventureNotableItemsPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcAdventureCommonResourcesPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcAdventureAccessPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix
     };
 
-    internal static string SectionIdFor(int kind, string runtimeId) => Prefixes[kind] + runtimeId;
+    internal static string SectionIdFor(int kind, string runtimeId) =>
+        DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(kind, runtimeId);
 
     internal interface INpcKnowledgeSectionCensusProvider : IOwnerSectionCensusProvider
     {
@@ -51,21 +52,67 @@ public static class NpcKnowledgeCensusProvider
         public string RuntimeId => npc.RuntimeId;
         public NpcRuntime NpcOwner => npc;
         public int SectionKind => kind;
-        public object TypedOwner => kind == 0 ? (object)explorable : kind <= 2 ? local : kind <= 6 ? adventure : commercial;
+        public object TypedOwner
+        {
+            get
+            {
+                DailyV1NpcRuntimeOwners selected = npc.SelectedRuntimeOwners;
+                if (selected == null) return kind == 0 ? (object)explorable : kind <= 2 ? local : kind <= 6 ? adventure : commercial;
+                return kind == 0 ? (object)selected.ExplorableSiteKnowledge
+                    : kind <= 2 ? selected.LocalTopologyKnowledgeEmptyOwner
+                    : kind <= 6 ? selected.AdventureSiteIntelKnowledge
+                    : commercial;
+            }
+        }
 
         public OwnerSectionCensusWitness GetCurrentCensus()
         {
             int cardinality;
             long revision;
+            DailyV1NpcRuntimeOwners selected = npc.SelectedRuntimeOwners;
             switch (kind)
             {
-                case 0: cardinality = explorable.Observations.Count; revision = explorable.Revision; break;
-                case 1: cardinality = local.PlaceObservations.Count; revision = local.Revision; break;
-                case 2: cardinality = local.ConnectionObservations.Count; revision = local.Revision; break;
-                case 3: cardinality = adventure.OppositionObservations.Count; revision = adventure.Revision; break;
-                case 4: cardinality = adventure.NotableItemObservations.Count; revision = adventure.Revision; break;
-                case 5: cardinality = adventure.CommonResourceObservations.Count; revision = adventure.Revision; break;
-                case 6: cardinality = adventure.AccessObservations.Count; revision = adventure.Revision; break;
+                case 0:
+                    cardinality = selected == null ? explorable.Observations.Count : selected.ExplorableSiteKnowledge.Observations.Count;
+                    revision = selected == null ? explorable.Revision : selected.ExplorableSiteKnowledge.Revision;
+                    break;
+                case 1:
+                case 2:
+                    if (selected == null)
+                    {
+                        cardinality = kind == 1 ? local.PlaceObservations.Count : local.ConnectionObservations.Count;
+                        revision = local.Revision;
+                    }
+                    else
+                    {
+                        DailyV1NpcLocalTopologyKnowledgeEmptyOwner emptyOwner = selected.LocalTopologyKnowledgeEmptyOwner;
+                        if (emptyOwner == null || !emptyOwner.MatchesProjection(
+                                npc.RuntimeId, local.OwnerRuntimeId,
+                                local.PlaceObservations.Count, local.ConnectionObservations.Count, local.Revision))
+                            throw new InvalidOperationException(
+                                "Selected Daily-v1 LocalTopology census requires the exact empty Core owner projection.");
+                        cardinality = kind == 1
+                            ? emptyOwner.PlaceObservationCount
+                            : emptyOwner.ConnectionObservationCount;
+                        revision = emptyOwner.Revision;
+                    }
+                    break;
+                case 3:
+                    cardinality = selected == null ? adventure.OppositionObservations.Count : selected.AdventureSiteIntelKnowledge.OppositionObservations.Count;
+                    revision = selected == null ? adventure.Revision : selected.AdventureSiteIntelKnowledge.Revision;
+                    break;
+                case 4:
+                    cardinality = selected == null ? adventure.NotableItemObservations.Count : selected.AdventureSiteIntelKnowledge.NotableItemObservations.Count;
+                    revision = selected == null ? adventure.Revision : selected.AdventureSiteIntelKnowledge.Revision;
+                    break;
+                case 5:
+                    cardinality = selected == null ? adventure.CommonResourceObservations.Count : selected.AdventureSiteIntelKnowledge.CommonResourceObservations.Count;
+                    revision = selected == null ? adventure.Revision : selected.AdventureSiteIntelKnowledge.Revision;
+                    break;
+                case 6:
+                    cardinality = selected == null ? adventure.AccessObservations.Count : selected.AdventureSiteIntelKnowledge.AccessObservations.Count;
+                    revision = selected == null ? adventure.Revision : selected.AdventureSiteIntelKnowledge.Revision;
+                    break;
                 default:
                     if (!commercial.TryReadCensus(out int markets, out int liquidity, out int receipts, out revision))
                         throw new InvalidOperationException("Commercial Knowledge census requires all backing lists to exist.");
@@ -89,11 +136,19 @@ public static class NpcKnowledgeCensusProvider
             LocalTopologyKnowledgeRuntime local = npc.ExistingLocalTopologyKnowledge;
             AdventureSiteIntelKnowledgeRuntime adventure = npc.ExistingAdventureSiteIntelKnowledge;
             CommercialKnowledgeRuntime commercial = npc.ExistingCommercialKnowledge;
+            DailyV1NpcRuntimeOwners selected = npc.SelectedRuntimeOwners;
             if (explorable == null || local == null || adventure == null || commercial == null
                 || !string.Equals(explorable.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
                 || !string.Equals(local.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
-                || !string.Equals(adventure.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal))
-                throw new InvalidOperationException("Knowledge census requires existing exact NPC-owned Knowledge runtimes.");
+                || !string.Equals(adventure.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
+                || (selected != null
+                    && (!ReferenceEquals(explorable.SelectedOwner, selected.ExplorableSiteKnowledge)
+                        || !ReferenceEquals(adventure.SelectedOwner, selected.AdventureSiteIntelKnowledge)
+                        || selected.LocalTopologyKnowledgeEmptyOwner == null
+                        || !selected.LocalTopologyKnowledgeEmptyOwner.MatchesProjection(
+                            npc.RuntimeId, local.OwnerRuntimeId,
+                            local.PlaceObservations.Count, local.ConnectionObservations.Count, local.Revision))))
+                throw new InvalidOperationException("Knowledge census requires existing exact NPC-owned Knowledge runtimes and their bound Core owners.");
             ordered.Add(npc);
         }
         ordered.Sort((a, b) => StringComparer.Ordinal.Compare(a.RuntimeId, b.RuntimeId));

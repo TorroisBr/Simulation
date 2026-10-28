@@ -10,24 +10,63 @@ using System.Collections.ObjectModel;
 /// </summary>
 internal static class DailyV1SelectedOwnerSectionCensusContract
 {
+    internal const int NpcSectionSchemaVersion = 1;
+    internal const int CitySectionSchemaVersion = 1;
+    internal const string CityImportantNpcSectionPrefix = "p12b.city.important-npcs/";
+    internal const string CityMarketStockRowsSectionPrefix = "p12e.city-market-stock-rows/";
+    internal const string CityPopulationAggregateSectionPrefix = "p12d.city-population.aggregate/";
+    internal const string CityPopulationOperationReceiptsSectionPrefix = "p12d.city-population.operation-receipts/";
+    internal const int NpcMerchantTradePlanKind = 0;
+    internal const int NpcTravelPlanKind = 1;
+
+    internal const string NpcExplorableSiteKnowledgePrefix = "p12f.explorable-site-knowledge/";
+    internal const string NpcLocalTopologyPlacesPrefix = "p12f.local-topology-knowledge.places/";
+    internal const string NpcLocalTopologyConnectionsPrefix = "p12f.local-topology-knowledge.connections/";
+    internal const string NpcAdventureOppositionPrefix = "p12f.adventure-intel.opposition/";
+    internal const string NpcAdventureNotableItemsPrefix = "p12f.adventure-intel.notable-items/";
+    internal const string NpcAdventureCommonResourcesPrefix = "p12f.adventure-intel.common-resources/";
+    internal const string NpcAdventureAccessPrefix = "p12f.adventure-intel.access/";
+    internal const string NpcCommercialMarketsPrefix = "p12f.commercial-knowledge.markets/";
+    internal const string NpcCommercialLiquidityPrefix = "p12f.commercial-knowledge.liquidity/";
+    internal const string NpcCommercialShareReceiptsPrefix = "p12f.commercial-knowledge.share-receipts/";
+    internal const string NpcSpatialKnowledgeLocationsPrefix = "p12f.spatial-knowledge.locations/";
+    internal const string NpcSpatialKnowledgeRoutesPrefix = "p12f.spatial-knowledge.routes/";
+    internal const string NpcTravelStatePrefix = "p12f.npc-travel-state/";
+    internal const string NpcInventoryPrefix = "p12f.inventory/";
+    internal const string NpcMoneyAccountPrefix = "p12e.npc-money-account/";
+    internal const string NpcMerchantTradePlanPrefix = "p12b.merchant-trade-plan/";
+    internal const string NpcTravelPlanPrefix = "p12b.npc-travel-plan/";
+    internal const string NpcLocalObservationReceiptsPrefix = "p12d.npc-local-observation-receipts/";
+    internal const string NpcMerchantTradeStateReceiptsPrefix = "p12d.npc-merchant-trade-state-receipts/";
+    internal const string NpcStatusCrimePrefix = "p12b.npc-status-crime-state/";
+    internal const string NpcCurrentActionPrefix = "p12b.npc-current-action/";
+    internal const string NpcLifeStatePrefix = "p12b.npc-life-state/";
+    internal const string NpcResidencePrefix = "p12b.npc-residence/";
+    internal const string PersonLifeResidencePrefix = "p12b.person-life-residence/";
+    internal const string PersonMembershipSectionId = "p12d.person.membership";
+    internal const string PersonMaterializationBindingSectionId = "p12d.person.materialization-binding";
+    internal const string JusticeRecordsSectionId = "p12b.justice-records";
+    internal const string CrimeP18ReceiptsSectionId = "p12b.crime-p18-receipts";
+    internal const string JusticeP18ReceiptsSectionId = "p12b.justice-p18-receipts";
+
     internal static IReadOnlyList<string> NpcPrefixes { get; } = ReadOnly(new[]
     {
-        "p12f.explorable-site-knowledge/", "p12f.local-topology-knowledge.places/",
-        "p12f.local-topology-knowledge.connections/", "p12f.adventure-intel.opposition/",
-        "p12f.adventure-intel.notable-items/", "p12f.adventure-intel.common-resources/",
-        "p12f.adventure-intel.access/", "p12f.commercial-knowledge.markets/",
-        "p12f.commercial-knowledge.liquidity/", "p12f.commercial-knowledge.share-receipts/",
-        "p12f.spatial-knowledge.locations/", "p12f.spatial-knowledge.routes/",
-        "p12f.npc-travel-state/", "p12f.inventory/", "p12e.npc-money-account/",
-        "p12b.merchant-trade-plan/", "p12b.npc-travel-plan/",
-        "p12d.npc-local-observation-receipts/", "p12d.npc-merchant-trade-state-receipts/",
-        "p12b.npc-status-crime-state/", "p12b.npc-current-action/", "p12b.npc-life-state/"
+        NpcExplorableSiteKnowledgePrefix, NpcLocalTopologyPlacesPrefix,
+        NpcLocalTopologyConnectionsPrefix, NpcAdventureOppositionPrefix,
+        NpcAdventureNotableItemsPrefix, NpcAdventureCommonResourcesPrefix,
+        NpcAdventureAccessPrefix, NpcCommercialMarketsPrefix,
+        NpcCommercialLiquidityPrefix, NpcCommercialShareReceiptsPrefix,
+        NpcSpatialKnowledgeLocationsPrefix, NpcSpatialKnowledgeRoutesPrefix,
+        NpcTravelStatePrefix, NpcInventoryPrefix, NpcMoneyAccountPrefix,
+        NpcMerchantTradePlanPrefix, NpcTravelPlanPrefix,
+        NpcLocalObservationReceiptsPrefix, NpcMerchantTradeStateReceiptsPrefix,
+        NpcStatusCrimePrefix, NpcCurrentActionPrefix, NpcLifeStatePrefix
     });
 
     internal static IReadOnlyList<string> CityPrefixes { get; } = ReadOnly(new[]
     {
-        "p12b.city.important-npcs/", "p12e.city-market-stock-rows/",
-        "p12d.city-population.aggregate/", "p12d.city-population.operation-receipts/"
+        CityImportantNpcSectionPrefix, CityMarketStockRowsSectionPrefix,
+        CityPopulationAggregateSectionPrefix, CityPopulationOperationReceiptsSectionPrefix
     });
 
     internal static IReadOnlyList<string> FixedEmpty { get; } = ReadOnly(new[]
@@ -42,15 +81,15 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
 
     internal static IReadOnlyList<string> FixedRequired { get; } = ReadOnly(new[]
     {
-        "p12d.person.membership", "p12d.person.materialization-binding",
+        PersonMembershipSectionId, PersonMaterializationBindingSectionId,
         "p12c.runtime-identities.npcs", "p12c.runtime-identities.cities", "p12c.runtime-identities.locations",
         "p12c.runtime-identities.routes", "p12d.legacy-spatial-network.locations", "p12d.legacy-spatial-network.routes",
         "p8a.hexes", "p8a.locations", "p8a.scale-context", "p12c.runtime-id-allocator.events",
         "p12c.runtime-id-allocator.decisions", "p12c.runtime-id-allocator.travel-parties",
         "p12c.simulation-record-sequence", "p12d.genealogy.parentage", "p12f.political-knowledge.holders",
         "p12f.political-decisions.records", "p12.crime-social-appraisal.outcomes",
-        "p12.crime-social-appraisal.knowledge", "p12.crime-social-appraisal.reactions", "p12b.justice-records",
-        "p12b.crime-p18-receipts", "p12b.justice-p18-receipts", "p12e.armed-force.forces",
+        "p12.crime-social-appraisal.knowledge", "p12.crime-social-appraisal.reactions", JusticeRecordsSectionId,
+        CrimeP18ReceiptsSectionId, JusticeP18ReceiptsSectionId, "p12e.armed-force.forces",
         "p12e.armed-force.contingents", "p12e.armed-force.relevant-person-references",
         "p12e.contingent-manpower.states", "p12e.armed-force-spatial.positions", "p12e.conflicts",
         "p12e.wars", "p12e.battles", "p12e.institution.records", "p12e.office.records",
@@ -63,7 +102,7 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
 
     internal static IReadOnlyList<IReadOnlyList<string>> FixedAliasGroups { get; } = ReadOnlyGroups(new[]
     {
-        new[] { "p12b.justice-p18-receipts", "p12b.justice-records" },
+        new[] { JusticeP18ReceiptsSectionId, JusticeRecordsSectionId },
         new[] { "p12c.runtime-id-allocator.decisions", "p12c.runtime-id-allocator.events", "p12c.runtime-id-allocator.travel-parties" },
         new[] { "p12c.runtime-identities.cities", "p12c.runtime-identities.explorable-sites", "p12c.runtime-identities.local-connections", "p12c.runtime-identities.local-places", "p12c.runtime-identities.locations", "p12c.runtime-identities.notable-items", "p12c.runtime-identities.npcs", "p12c.runtime-identities.routes" },
         new[] { "p12d.legacy-spatial-network.locations", "p12d.legacy-spatial-network.routes" },
@@ -87,8 +126,40 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
 
     internal static IReadOnlyList<string> CityPopulationAliasFamily { get; } = ReadOnly(new[]
     {
-        "p12d.city-population.aggregate/", "p12d.city-population.operation-receipts/"
+        CityPopulationAggregateSectionPrefix, CityPopulationOperationReceiptsSectionPrefix
     });
+
+    internal static string CityImportantNpcSectionIdFor(string cityRuntimeId) =>
+        CityImportantNpcSectionPrefix + cityRuntimeId;
+    internal static string NpcSectionPrefixFor(int familyIndex) => NpcPrefixes[familyIndex];
+
+    internal static string NpcSectionIdFor(int familyIndex, string runtimeId) =>
+        NpcPrefixes[familyIndex] + runtimeId;
+
+    internal static string NpcStatusCrimeSectionIdFor(string runtimeId)
+    {
+        if (string.IsNullOrWhiteSpace(runtimeId))
+            throw new ArgumentException("NPC status census requires a RuntimeId.", nameof(runtimeId));
+        return NpcStatusCrimePrefix + runtimeId;
+    }
+
+    internal static string NpcResidenceSectionIdFor(string runtimeId) => NpcResidencePrefix + runtimeId;
+
+    internal static string NpcLocalObservationReceiptsSectionIdFor(string runtimeId) =>
+        NpcLocalObservationReceiptsPrefix + runtimeId;
+
+    internal static string NpcMerchantTradeStateReceiptsSectionIdFor(string runtimeId) =>
+        NpcMerchantTradeStateReceiptsPrefix + runtimeId;
+
+    internal static string NpcPlanSectionIdFor(int planKind, string runtimeId) => planKind switch
+    {
+        NpcMerchantTradePlanKind => NpcSectionIdFor(15, runtimeId),
+        NpcTravelPlanKind => NpcSectionIdFor(16, runtimeId),
+        _ => throw new ArgumentOutOfRangeException(nameof(planKind))
+    };
+
+    internal static string NpcLifeResidenceSectionIdFor(PersonId personId) =>
+        DailyV1PersonCensusIdentity.SectionIdFor(personId);
 
     internal static bool IsCompleteSnapshot(IReadOnlyList<OwnerSectionCensusSnapshot> snapshots)
     {

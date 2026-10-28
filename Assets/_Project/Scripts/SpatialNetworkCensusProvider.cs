@@ -7,9 +7,9 @@ using System.Collections.Generic;
 /// </summary>
 public static class SpatialNetworkCensusProvider
 {
-    public const string LocationsSectionId = "p12d.legacy-spatial-network.locations";
-    public const string RoutesSectionId = "p12d.legacy-spatial-network.routes";
-    public const int SchemaVersion = 1;
+    public const string LocationsSectionId = P12ASpatialNetworkOwnerCodec.LocationsSectionId;
+    public const string RoutesSectionId = P12ASpatialNetworkOwnerCodec.RoutesSectionId;
+    public const int SchemaVersion = P12ASpatialNetworkOwnerCodec.SchemaVersion;
 
     private enum Section
     {

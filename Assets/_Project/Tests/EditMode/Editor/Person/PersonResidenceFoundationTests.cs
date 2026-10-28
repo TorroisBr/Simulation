@@ -85,6 +85,23 @@ public sealed class PersonResidenceFoundationTests
     }
 
     [Test]
+    public void RepresentedResidentSnapshotSeparatesCorePersonRowsFromHostSupplement()
+    {
+        CityRuntime city = CreateCity("residence-floor-snapshot", 5);
+        NpcRuntime legacy = CreateLegacyResident(city, "npc-floor-snapshot");
+        SimulationRuntime world = CreateWorldWithNpcs(new[] { legacy }, city);
+        PersonRuntime person = RegisterPerson(world, "person-floor-snapshot");
+        Assert.That(world.TryBindExistingPersonResident(person.PersonId, city, out _), Is.True);
+
+        RepresentedResidentFloorSnapshot snapshot = world.BuildRepresentedResidentFloorSnapshot();
+
+        Assert.That(snapshot.TryGetFloor(city.RuntimeId, out int representedFloor), Is.True);
+        Assert.That(representedFloor, Is.EqualTo(2));
+        Assert.That(snapshot.TryGetHostSupplement(city.RuntimeId, out int hostSupplement), Is.True);
+        Assert.That(hostSupplement, Is.EqualTo(1));
+    }
+
+    [Test]
     public void LegacyAdoption_ResidenceConflictIsAtomic()
     {
         CityRuntime origin = CreateCity("residence-conflict-origin", 5);

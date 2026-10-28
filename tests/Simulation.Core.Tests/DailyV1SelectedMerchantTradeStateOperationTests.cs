@@ -439,6 +439,7 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
             return null;
         }
 
+        public void LogTradeDecisionFailure(string message) { }
         public void LogTrade(string message) { }
     }
 
@@ -469,11 +470,11 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
         public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) =>
             graph.ContainsExactNpcOwner(actor);
         public void LogSkippedDirective(ScheduledDirective directive, string reason) { }
-        public bool TryCreateDecisionBoundary(
+        public bool TryCreateActionProjectionBoundary(
             DailyV1NpcRuntimeOwners actor,
-            out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary)
+            out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
         {
-            decisionBoundary = null;
+            projectionBoundary = null;
             return false;
         }
         public bool TryGetDecisionRecordOwners(
@@ -490,7 +491,7 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
         public bool TryPrepareSelectedActionProjection(
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionCandidate selected,
-            IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+            IDailyV1SelectedActionProjectionBoundary decisionBoundary,
             DailyV1NpcActionPayloadOwner payload) => false;
         public bool CanCommitSelectedActionSlot(
             DailyV1NpcRuntimeOwners actor,
@@ -519,12 +520,8 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
         public bool TryCompleteDispatch(
             DailyV1NpcRuntimeOwners actor,
             DailyV1SelectedActionDispatchResult dispatch,
-            out bool actionSucceeded,
-            out NpcActionResultType? resultType,
             out string resultMessage)
         {
-            actionSucceeded = false;
-            resultType = null;
             resultMessage = null;
             return false;
         }
@@ -552,10 +549,8 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
 
         public bool TryGetActorChoiceExecutionContext(
             DailyV1NpcRuntimeOwners actor,
-            out bool decisionSystemAvailable,
             out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
         {
-            decisionSystemAvailable = true;
             executionBoundary = graph.ContainsExactNpcOwner(actor) ? this : null;
             return executionBoundary != null;
         }
@@ -609,6 +604,7 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
         public void ClearTradeTravelPlan(DailyV1NpcRuntimeOwners actor) { }
         public NpcDecisionRecord RecordTradeRedirect(DailyV1NpcRuntimeOwners actor,
             string targetLocationRuntimeId, CommercialDecisionEvidence evidence) => null;
+        public void LogTradeDecisionFailure(string message) { }
         public void LogTrade(string message) { }
     }
 }

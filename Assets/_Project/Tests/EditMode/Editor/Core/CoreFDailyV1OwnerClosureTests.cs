@@ -67,6 +67,28 @@ public sealed class CoreFDailyV1OwnerClosureTests
             || row.Role == OwnerSectionRole.ExplicitlyEmpty), Is.True);
         CoreFDailyV1OwnerClosureVectors.AssertAliasGroupsMatchReferences(initial, initialCensus);
 
+        DailyV1Application application = (DailyV1Application)typeof(TesteSimulacao)
+            .GetField("dailyV1Application", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(simulation);
+        DailyV1ActiveRuntimeSession coreSession = application.ActiveSession;
+        Assert.That(coreSession, Is.Not.Null);
+        Assert.That(application.TryBeginExclusiveOperation(coreSession, out var exclusiveOperation), Is.True);
+        using (exclusiveOperation)
+        {
+            long heldDay = runtime.CurrentDay;
+            Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure heldAdvanceFailure), Is.False);
+            Assert.That(heldAdvanceFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress));
+            Assert.That(runtime.TryAdvanceDays(
+                2,
+                out int heldDaysAdvanced,
+                out SimulationRuntimeAdvanceFailure heldMultiAdvanceFailure), Is.False);
+            Assert.That(heldMultiAdvanceFailure,
+                Is.EqualTo(SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress));
+            Assert.That(heldDaysAdvanced, Is.Zero);
+            Assert.That(runtime.CurrentDay, Is.EqualTo(heldDay),
+                "The Unity runtime projection must pass through the Core application session gate.");
+        }
+
         AssertOwnerAlias(initial,
             RuntimeIdentityRegistryCensusProvider.NpcsSectionId,
             RuntimeIdentityRegistryCensusProvider.CitiesSectionId,

@@ -83,7 +83,7 @@ public sealed class DailyV1MerchantActionPlanningTests
         Assert.That(selected, Is.Null);
         Assert.That(projection.Calls, Is.EqualTo(1));
         Assert.That(random.Calls, Is.Zero,
-            "The legacy Unity provider could make a planned action unavailable before the weighted RNG draw.");
+            "The Core weighted draw occurs only after its required host projection preflight.");
     }
 
     [Test]
@@ -623,7 +623,7 @@ public sealed class DailyV1MerchantActionPlanningTests
         public DeterministicRandomStream CreateStream(string streamKey) => null;
     }
 
-    private sealed class ProjectionDecisionBoundary : IDailyV1SelectedNpcActionDecisionBoundary
+    private sealed class ProjectionDecisionBoundary : IDailyV1SelectedActionProjectionBoundary
     {
         private readonly bool canProject;
         internal int Calls { get; private set; }
@@ -638,13 +638,5 @@ public sealed class DailyV1MerchantActionPlanningTests
             return canProject && actor != null && candidate?.PreparedPayload != null;
         }
 
-        public bool TryPrepareAutonomousProviderAction(
-            DailyV1NpcRuntimeOwners actor,
-            DailyV1NpcActionCandidate candidate,
-            out float utility)
-        {
-            utility = 0f;
-            return false;
-        }
     }
 }

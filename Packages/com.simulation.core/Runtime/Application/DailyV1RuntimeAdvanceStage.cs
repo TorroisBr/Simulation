@@ -1,15 +1,117 @@
 using System;
 using System.Collections.Generic;
 
+internal static class DailyV1RuntimeProtocolOperationContracts
+{
+    internal const string NpcMembership = "runtime.npc-membership";
+    internal const string PersonParentage = "runtime.person.parentage";
+    internal const string BootstrapPublication = "runtime.bootstrap-publication";
+    internal const string DailyAdvance = "runtime.advance-day";
+    internal const string SoloTravelStart = "runtime.travel.start";
+    internal const string TravelPartyStart = "runtime.travel-party.start";
+    internal const string TravelPartyAdvance = "runtime.travel-party.advance";
+    internal const string NpcTrade = "runtime.economy.npc-trade";
+    internal const string NpcMoneyTransfer = "runtime.economy.money-transfer";
+    internal const string MarketPurchase = "runtime.economy.market-purchase";
+    internal const string MarketSale = "runtime.economy.market-sale";
+    internal const string MerchantDailyNpcTrade = "runtime.merchant.advance-npc-trade-state";
+    internal const string InstitutionOfficeOwnerCommit = "p12.institution-office.owner-commit";
+    internal const string FactionStoreOwnerCommit = "p12.faction.owner-commit";
+    internal const string PoliticalClaimOwnerCommit = "p12.political-claim.owner-commit";
+    internal const string PoliticalSupportOwnerCommit = "p12.political-support.owner-commit";
+    internal const string PropertyOwnerCommit = "p12.property.owner-commit";
+    internal const string EstateOwnerCommit = "p12.estate.owner-commit";
+    internal const string PopulationImmigration = "runtime.population.immigration";
+    internal const string PopulationEmigration = "runtime.population.emigration";
+    internal const string PopulationResidentDeath = "runtime.population.resident-death";
+    internal const string PopulationResidenceMigration = "runtime.population.residence-migration";
+    internal const string PersonDeath = "runtime.person.death";
+    internal const string PersonResidenceBind = "runtime.person.residence-bind";
+
+    internal static IReadOnlyList<string> GetExpectedOperationContractIds(
+        bool hasRuntimeAdmission,
+        bool hasTravelPartySystem,
+        bool hasTravelSystem)
+    {
+        var operationContractIds = new List<string>(24) { NpcMembership };
+        if (!hasRuntimeAdmission) return operationContractIds.AsReadOnly();
+
+        operationContractIds.Add(BootstrapPublication);
+        operationContractIds.Add(DailyAdvance);
+        operationContractIds.Add(PersonParentage);
+        if (hasTravelPartySystem)
+        {
+            operationContractIds.Add(TravelPartyStart);
+            operationContractIds.Add(TravelPartyAdvance);
+        }
+        if (hasTravelSystem) operationContractIds.Add(SoloTravelStart);
+        operationContractIds.Add(NpcTrade);
+        operationContractIds.Add(NpcMoneyTransfer);
+        operationContractIds.Add(MarketPurchase);
+        operationContractIds.Add(MarketSale);
+        operationContractIds.Add(MerchantDailyNpcTrade);
+        operationContractIds.Add(InstitutionOfficeOwnerCommit);
+        operationContractIds.Add(FactionStoreOwnerCommit);
+        operationContractIds.Add(PoliticalClaimOwnerCommit);
+        operationContractIds.Add(PoliticalSupportOwnerCommit);
+        operationContractIds.Add(PropertyOwnerCommit);
+        operationContractIds.Add(EstateOwnerCommit);
+        operationContractIds.Add(PopulationImmigration);
+        operationContractIds.Add(PopulationEmigration);
+        operationContractIds.Add(PopulationResidentDeath);
+        operationContractIds.Add(PopulationResidenceMigration);
+        operationContractIds.Add(PersonDeath);
+        operationContractIds.Add(PersonResidenceBind);
+        return operationContractIds.AsReadOnly();
+    }
+
+    /// <summary>
+    /// Accepts only a complete selected-runtime inventory emitted by this Core
+    /// catalogue. A host may register the IDs during composition, but it cannot
+    /// admit a partial or host-invented operation set.
+    /// </summary>
+    internal static bool IsSupportedSelectedOperationInventory(
+        IEnumerable<string> operationContractIds)
+    {
+        if (operationContractIds == null) return false;
+
+        HashSet<string> supplied = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string operationContractId in operationContractIds)
+            if (string.IsNullOrWhiteSpace(operationContractId)
+                || !supplied.Add(operationContractId)) return false;
+
+        if (supplied.Count == 0) return false;
+        for (int travelParty = 0; travelParty <= 1; travelParty++)
+        for (int travel = 0; travel <= 1; travel++)
+        {
+            IReadOnlyList<string> expected = GetExpectedOperationContractIds(
+                hasRuntimeAdmission: true,
+                hasTravelPartySystem: travelParty == 1,
+                hasTravelSystem: travel == 1);
+            if (expected.Count != supplied.Count) continue;
+
+            bool matches = true;
+            foreach (string operationContractId in expected)
+                if (!supplied.Contains(operationContractId))
+                {
+                    matches = false;
+                    break;
+                }
+
+            if (matches) return true;
+        }
+
+        return false;
+    }
+}
+
 /// <summary>
-/// Narrow clock, census, timeline and publication operations required by the
-/// Core-owned advance protocol. The host cannot reorder lease, operation,
-/// completed-boundary, or capture-token handling.
+/// Common P12 scope, projection, census and fault ports used by Core-owned
+/// selected execution and legacy runtime advancement.
 /// </summary>
-internal interface IDailyV1RuntimeAdvanceBoundary
+internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
-    bool HasIntradayTimeline { get; }
     bool TryEnterDailyAdvanceOperation(out IDisposable operationScope);
     /// <summary>
     /// Builds and validates the exact selected stage adapters without mutating
@@ -18,9 +120,27 @@ internal interface IDailyV1RuntimeAdvanceBoundary
     /// </summary>
     bool TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary);
-    bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure);
-    bool TryAdvanceIntradayToNextDayBoundary(out SimulationRuntimeAdvanceFailure failure);
     bool TryCaptureCompletedDailyCaptureEvidence(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure);
+    /// <summary>
+    /// Re-captures owner evidence for Core's exact-session continuation
+    /// admission. This is distinct from advance-finalization evidence: the
+    /// source may be under its exclusive replacement reservation, while a
+    /// detached candidate must be idle without that reservation.
+    /// </summary>
+    bool TryCaptureDailyBoundaryAdmissionEvidence(
+        bool sessionReplacement,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure);
+    /// <summary>
+    /// Captures the live census for the one registered continuation-save
+    /// operation. This is distinct from idle admission evidence: P12-G keeps
+    /// the save operation registered while it stages detached owners.
+    /// </summary>
+    bool TryCaptureContinuationSaveEvidence(
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure);
@@ -28,16 +148,158 @@ internal interface IDailyV1RuntimeAdvanceBoundary
 }
 
 /// <summary>
-/// Read-only host attestations required when Core commits an already staged
-/// restore candidate. These inspect the exact bound execution state; the Core
-/// application owns all replacement policy and the active-session exchange.
+/// Host-owned ports for the selected Daily-v1 session. This intentionally
+/// excludes runtime clocks, whole-day advancement, and intraday timeline
+/// selection; Core binds those authorities to the exact execution state.
 /// </summary>
-internal interface IDailyV1RestoredSessionCommitBoundary
+internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
-    bool IsHealthyDailyOwnerThreadBoundary();
-    bool HasValidCompletedDailyBoundaryAdmission();
-    bool HasValidRestoredDailyBoundaryAdmission();
+    bool TryBindApplicationAdvanceAuthority(
+        DailyV1Application application,
+        DailyV1ActiveRuntimeSession session);
+    bool TryEnterRuntimeProtocolOperation(
+        string operationContractId,
+        out IDisposable operationScope);
+    bool TryCreateSelectedDailyExecutionBoundary(
+        out IDailyV1SelectedDailyExecutionBoundary executionBoundary);
+    bool TryCaptureOwnerSectionCensus(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure);
+    void FaultRuntimeAdmission();
+}
+
+/// <summary>
+/// Legacy boundary for callers that still own their own day or intraday
+/// implementation. Selected Daily-v1 application sessions use the Core
+/// selected boundary and cannot reach these host advancement members.
+/// </summary>
+internal interface IDailyV1RuntimeAdvanceBoundary
+    : IDailyV1RuntimeAdvanceEvidenceBoundary
+{
+    bool HasIntradayTimeline { get; }
+    bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure);
+    bool TryAdvanceIntradayToNextDayBoundary(out SimulationRuntimeAdvanceFailure failure);
+}
+
+/// <summary>
+/// Core's binding between one selected session's exact execution state and
+/// the host's P12/projection ports. It implements only the evidence boundary;
+/// the Core state performs the selected advance and has no host-day fallback.
+/// </summary>
+internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
+    : IDailyV1RuntimeAdvanceEvidenceBoundary
+{
+    private readonly DailyV1ExecutionBoundaryState executionState;
+    private readonly IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts;
+
+    internal DailyV1CoreSelectedRuntimeAdvanceBoundary(
+        DailyV1ExecutionBoundaryState executionState,
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts)
+    {
+        this.executionState = executionState
+            ?? throw new ArgumentNullException(nameof(executionState));
+        this.hostPorts = hostPorts
+            ?? throw new ArgumentNullException(nameof(hostPorts));
+        if (!executionState.HasAdmittedSelectedDailyExecution
+            || executionState.SelectedRuntimeOwnerGraph == null
+            || executionState.AdmissionContext?.Profile
+                != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !ReferenceEquals(hostPorts.ExecutionState, executionState))
+            throw new ArgumentException(
+                "The Core selected runtime boundary requires the admitted Daily-v1 graph and profile.",
+                nameof(executionState));
+    }
+
+    internal bool IsBoundTo(
+        DailyV1ExecutionBoundaryState candidateState,
+        IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts) =>
+        ReferenceEquals(executionState, candidateState)
+        && ReferenceEquals(hostPorts, candidateHostPorts);
+
+    public DailyV1ExecutionBoundaryState ExecutionState => executionState;
+
+    public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope) =>
+        hostPorts.TryEnterRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+            out operationScope);
+
+    public bool TryCreateSelectedDailyExecutionBoundary(
+        out IDailyV1SelectedDailyExecutionBoundary executionBoundary) =>
+        hostPorts.TryCreateSelectedDailyExecutionBoundary(out executionBoundary);
+
+    public bool TryCaptureCompletedDailyCaptureEvidence(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure) =>
+        TryCaptureOwnerSectionCensus(
+            DailyV1CaptureScopeAllowance.DailyAdvance,
+            out ownerSections, out mutationEpoch, out failure);
+
+    public bool TryCaptureDailyBoundaryAdmissionEvidence(
+        bool sessionReplacement,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure) =>
+        TryCaptureOwnerSectionCensus(
+            sessionReplacement
+                ? DailyV1CaptureScopeAllowance.SessionReplacementValidation
+                : DailyV1CaptureScopeAllowance.None,
+            out ownerSections, out mutationEpoch, out failure);
+
+    public bool TryCaptureContinuationSaveEvidence(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure) =>
+        TryCaptureOwnerSectionCensus(
+            DailyV1CaptureScopeAllowance.ContinuationSave,
+            out ownerSections, out mutationEpoch, out failure);
+
+    private bool TryCaptureOwnerSectionCensus(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        ownerSections = null;
+        mutationEpoch = 0L;
+        if (!Enum.IsDefined(typeof(DailyV1CaptureScopeAllowance), allowedOuterScope))
+        {
+            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+            return false;
+        }
+
+        // Core selects the only scope that may remain active around this
+        // snapshot. Recheck after the host reads the owner census so a
+        // reentrant scope change cannot authorize a stale capture.
+        if (!executionState.TryAssessCaptureScope(allowedOuterScope))
+        {
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        if (!hostPorts.TryCaptureOwnerSectionCensus(
+                allowedOuterScope, out ownerSections, out mutationEpoch, out failure))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            return false;
+        }
+
+        if (!executionState.TryAssessCaptureScope(allowedOuterScope))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        return true;
+    }
+
+    public void FaultRuntimeAdmission() => hostPorts.FaultRuntimeAdmission();
 }
 
 /// <summary>
@@ -49,13 +311,102 @@ internal interface IDailyV1RestoredSessionCommitBoundary
 /// </summary>
 internal sealed partial class DailyV1ExecutionBoundaryState
 {
+    internal bool IsHealthyDailyOwnerThreadBoundary()
+    {
+        return AdmissionContext != null
+            && AdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            && AdmissionContext.IsOwnedByCurrentThread()
+            && !AdvanceLeaseHeld
+            && ActiveOperationCount == 0
+            && WorldId != null
+            && mutationGuard.CanMutate;
+    }
+
+    internal bool HasValidCompletedDailyBoundaryAdmission(
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
+        bool sessionReplacement) => HasValidDailyBoundaryAdmission(
+            boundary,
+            sessionReplacement
+                ? (DailyCaptureBoundaryProvenance?)null
+                : DailyCaptureBoundaryProvenance.CompletedAdvance,
+            sessionReplacement);
+
+    internal bool HasValidRestoredDailyBoundaryAdmission(
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary) => HasValidDailyBoundaryAdmission(
+            boundary, DailyCaptureBoundaryProvenance.RestoredContinuation, sessionReplacement: false);
+
+    private bool HasValidDailyBoundaryAdmission(
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
+        DailyCaptureBoundaryProvenance? expectedProvenance,
+        bool sessionReplacement)
+    {
+        DailyCaptureEligibilityToken current = currentCaptureToken;
+        if (boundary == null || !ReferenceEquals(boundary.ExecutionState, this)
+            || !IsHealthyDailyOwnerThreadBoundary()
+            || current == null
+            || !HasAllowedDailyBoundaryProvenance(current, expectedProvenance, sessionReplacement)
+            || !boundary.TryCaptureDailyBoundaryAdmissionEvidence(
+                sessionReplacement,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+                out long mutationEpoch,
+                out _))
+            return false;
+
+        return IsHealthyDailyOwnerThreadBoundary()
+            && ReferenceEquals(currentCaptureToken, current)
+            && HasAllowedDailyBoundaryProvenance(current, expectedProvenance, sessionReplacement)
+            && SimulationTime != null
+            && TryCompareCurrentCaptureToken(
+                current,
+                AdmissionContext,
+                ConfigurationIdentity,
+                CalendarIdentity,
+                CompositionProfile,
+                WorldId,
+                SimulationTime.AbsoluteDay,
+                ownerSections,
+                mutationEpoch);
+    }
+
+    private static bool HasAllowedDailyBoundaryProvenance(
+        DailyCaptureEligibilityToken token,
+        DailyCaptureBoundaryProvenance? expectedProvenance,
+        bool sessionReplacement)
+    {
+        if (token == null) return false;
+        if (expectedProvenance.HasValue)
+            return token.BoundaryProvenance == expectedProvenance.Value;
+
+        return sessionReplacement
+            && (token.BoundaryProvenance == DailyCaptureBoundaryProvenance.CompletedAdvance
+                || token.BoundaryProvenance == DailyCaptureBoundaryProvenance.RestoredContinuation);
+    }
+
     internal bool TryAdvanceDay(
         IDailyV1RuntimeAdvanceBoundary boundary,
+        out SimulationRuntimeAdvanceFailure failure) =>
+        TryAdvanceDayCore(boundary, allowLegacyAdvance: true, out failure);
+
+    /// <summary>
+    /// Advances a selected Daily-v1 execution state through the Core-owned
+    /// boundary bound to its active session. This path cannot select a Unity
+    /// day or intraday implementation.
+    /// </summary>
+    internal bool TryAdvanceSelectedDailyV1Day(
+        DailyV1CoreSelectedRuntimeAdvanceBoundary boundary,
+        out SimulationRuntimeAdvanceFailure failure) =>
+        TryAdvanceDayCore(boundary, allowLegacyAdvance: false, out failure);
+
+    private bool TryAdvanceDayCore(
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
+        bool allowLegacyAdvance,
         out SimulationRuntimeAdvanceFailure failure)
     {
         if (boundary == null) throw new ArgumentNullException(nameof(boundary));
         failure = SimulationRuntimeAdvanceFailure.None;
-        if (!ReferenceEquals(boundary.ExecutionState, this))
+        if (!ReferenceEquals(boundary.ExecutionState, this)
+            || (!allowLegacyAdvance
+                && (!IsDailyCaptureProfile || !HasAdmittedSelectedDailyExecution)))
         {
             failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
             return false;
@@ -73,7 +424,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         bool scopeClosed = true;
         try
         {
-            advanced = TryAdvanceDayWithinOperationScope(boundary, out failure);
+            advanced = TryAdvanceDayWithinOperationScope(
+                boundary, allowLegacyAdvance, out failure);
         }
         finally
         {
@@ -97,7 +449,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     }
 
     private bool TryAdvanceDayWithinOperationScope(
-        IDailyV1RuntimeAdvanceBoundary boundary,
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
+        bool allowLegacyAdvance,
         out SimulationRuntimeAdvanceFailure failure)
     {
         failure = SimulationRuntimeAdvanceFailure.None;
@@ -151,7 +504,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     using (operationScope)
                     {
                         advanced = TryAdvanceOneCore(
-                            boundary, preferIntradayTimeline: false, out failure);
+                            boundary, preferIntradayTimeline: false,
+                            allowLegacyAdvance, out failure);
                         if (advanced && !TryRecordCompletedCoreBoundary(boundary, out failure))
                             advanced = false;
                     }
@@ -172,10 +526,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 return true;
             }
 
-            if (boundary.HasIntradayTimeline)
-                return boundary.TryAdvanceIntradayToNextDayBoundary(out failure);
-
-            return boundary.TryAdvanceDayCore(out failure);
+            return TryAdvanceLegacyBoundary(boundary, out failure);
         }
     }
 
@@ -183,12 +534,31 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         IDailyV1RuntimeAdvanceBoundary boundary,
         int dayCount,
         out int daysAdvanced,
+        out SimulationRuntimeAdvanceFailure failure) =>
+        TryAdvanceDaysCore(boundary, dayCount, allowLegacyAdvance: true,
+            out daysAdvanced, out failure);
+
+    internal bool TryAdvanceSelectedDailyV1Days(
+        DailyV1CoreSelectedRuntimeAdvanceBoundary boundary,
+        int dayCount,
+        out int daysAdvanced,
+        out SimulationRuntimeAdvanceFailure failure) =>
+        TryAdvanceDaysCore(boundary, dayCount, allowLegacyAdvance: false,
+            out daysAdvanced, out failure);
+
+    private bool TryAdvanceDaysCore(
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
+        int dayCount,
+        bool allowLegacyAdvance,
+        out int daysAdvanced,
         out SimulationRuntimeAdvanceFailure failure)
     {
         if (boundary == null) throw new ArgumentNullException(nameof(boundary));
         daysAdvanced = 0;
         failure = SimulationRuntimeAdvanceFailure.None;
-        if (!ReferenceEquals(boundary.ExecutionState, this))
+        if (!ReferenceEquals(boundary.ExecutionState, this)
+            || (!allowLegacyAdvance
+                && (!IsDailyCaptureProfile || !HasAdmittedSelectedDailyExecution)))
         {
             failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
             return false;
@@ -213,7 +583,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         try
         {
             advanced = TryAdvanceDaysWithinOperationScope(
-                boundary, dayCount, out daysAdvanced, out failure);
+                boundary, dayCount, allowLegacyAdvance, out daysAdvanced, out failure);
         }
         finally
         {
@@ -237,8 +607,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     }
 
     private bool TryAdvanceDaysWithinOperationScope(
-        IDailyV1RuntimeAdvanceBoundary boundary,
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
         int dayCount,
+        bool allowLegacyAdvance,
         out int daysAdvanced,
         out SimulationRuntimeAdvanceFailure failure)
     {
@@ -295,7 +666,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     for (int index = 0; index < dayCount; index++)
                     {
                         bool advanced = TryAdvanceOneCore(
-                            boundary, preferIntradayTimeline: true, out failure);
+                            boundary, preferIntradayTimeline: true,
+                            allowLegacyAdvance, out failure);
                         if (!advanced) return false;
                         if (!TryRecordCompletedCoreBoundary(boundary, out failure)) return false;
                         daysAdvanced++;
@@ -321,12 +693,15 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     }
 
     private bool TryAdvanceOneCore(
-        IDailyV1RuntimeAdvanceBoundary boundary,
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
         bool preferIntradayTimeline,
+        bool allowLegacyAdvance,
         out SimulationRuntimeAdvanceFailure failure)
     {
-        if (preferIntradayTimeline && boundary.HasIntradayTimeline)
-            return boundary.TryAdvanceIntradayToNextDayBoundary(out failure);
+        IDailyV1RuntimeAdvanceBoundary legacyBoundary =
+            allowLegacyAdvance ? boundary as IDailyV1RuntimeAdvanceBoundary : null;
+        if (preferIntradayTimeline && legacyBoundary?.HasIntradayTimeline == true)
+            return legacyBoundary.TryAdvanceIntradayToNextDayBoundary(out failure);
 
         if (HasAdmittedSelectedDailyExecution)
         {
@@ -364,14 +739,26 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return true;
         }
 
-        if (boundary.HasIntradayTimeline)
-            return boundary.TryAdvanceIntradayToNextDayBoundary(out failure);
+        return TryAdvanceLegacyBoundary(boundary, out failure);
+    }
 
-        return boundary.TryAdvanceDayCore(out failure);
+    private bool TryAdvanceLegacyBoundary(
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
+        out SimulationRuntimeAdvanceFailure failure)
+    {
+        if (boundary is IDailyV1RuntimeAdvanceBoundary legacyBoundary)
+        {
+            if (legacyBoundary.HasIntradayTimeline)
+                return legacyBoundary.TryAdvanceIntradayToNextDayBoundary(out failure);
+            return legacyBoundary.TryAdvanceDayCore(out failure);
+        }
+
+        failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+        return false;
     }
 
     private bool TryRecordCompletedCoreBoundary(
-        IDailyV1RuntimeAdvanceBoundary boundary,
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
         out SimulationRuntimeAdvanceFailure failure)
     {
         failure = SimulationRuntimeAdvanceFailure.None;
@@ -384,7 +771,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     }
 
     private bool TryPublishCompletedDailyCaptureToken(
-        IDailyV1RuntimeAdvanceBoundary boundary,
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
         out SimulationRuntimeAdvanceFailure failure)
     {
         failure = SimulationRuntimeAdvanceFailure.None;
@@ -418,7 +805,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         return valid;
     }
 
-    private bool IsAdmissionOwnerThreadCurrent(IDailyV1RuntimeAdvanceBoundary boundary)
+    private bool IsAdmissionOwnerThreadCurrent(IDailyV1RuntimeAdvanceEvidenceBoundary boundary)
     {
         if (AdmissionContext == null || AdmissionContext.IsOwnedByCurrentThread())
             return true;

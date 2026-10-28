@@ -356,7 +356,7 @@ public sealed class DailyV1RuntimeAdvanceStageTests
         internal int OperationCountAtP12ScopeBegin { get; private set; }
         internal int OperationCountAtCapture { get; private set; }
         internal IReadOnlyList<OwnerSectionCensusSnapshot> CapturedOwnerSections { get; private set; }
-        DailyV1ExecutionBoundaryState IDailyV1RuntimeAdvanceBoundary.ExecutionState => state;
+        DailyV1ExecutionBoundaryState IDailyV1RuntimeAdvanceEvidenceBoundary.ExecutionState => state;
         bool IDailyV1RuntimeAdvanceBoundary.HasIntradayTimeline => HasIntradayTimeline;
 
         public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
@@ -396,6 +396,26 @@ public sealed class DailyV1RuntimeAdvanceStageTests
             failure = DailyCaptureEligibilityFailure.None;
             return true;
         }
+
+        public bool TryCaptureDailyBoundaryAdmissionEvidence(
+            bool sessionReplacement,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            Calls.Add("admission-evidence");
+            ownerSections = DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+            mutationEpoch = 1L;
+            failure = DailyCaptureEligibilityFailure.None;
+            return true;
+        }
+
+        public bool TryCaptureContinuationSaveEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure) =>
+            TryCaptureDailyBoundaryAdmissionEvidence(
+                sessionReplacement: false, out ownerSections, out mutationEpoch, out failure);
 
         public void FaultRuntimeAdmission() => Calls.Add("fault");
 

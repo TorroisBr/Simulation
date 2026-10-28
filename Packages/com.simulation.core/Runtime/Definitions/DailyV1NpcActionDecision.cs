@@ -375,19 +375,25 @@ internal static class DailyV1NpcActionDecision
 }
 
 /// <summary>
-/// Legacy provider planner retained only for the graphless compatibility path.
-/// An admitted owner graph never calls this boundary: Core determines supported
-/// action rules and payloads from its own canonical definitions and owners. The
-/// graph-backed path asks the host only to prepare an exact action projection
-/// before the RNG draw, preserving fail-closed adapter compatibility without
-/// delegating action planning to a provider.
+/// Host projection port for a graph-backed Core decision. It cannot choose the
+/// action, change utility, consume decision RNG, or provide provider planning.
+/// Core decides eligibility and payloads from the admitted definitions/owners;
+/// this port only proves that Unity can project a candidate before the RNG draw.
 /// </summary>
-internal interface IDailyV1SelectedNpcActionDecisionBoundary
+internal interface IDailyV1SelectedActionProjectionBoundary
 {
     bool TryProjectSelectedCandidate(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionCandidate candidate);
+}
 
+/// <summary>
+/// Legacy provider planner retained only for the graphless compatibility path.
+/// The selected owner-graph execution stage does not receive this capability.
+/// </summary>
+internal interface IDailyV1SelectedNpcActionDecisionBoundary
+    : IDailyV1SelectedActionProjectionBoundary
+{
     bool TryPrepareAutonomousProviderAction(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionCandidate candidate,
@@ -538,7 +544,7 @@ internal static class DailyV1SelectedNpcActionDecisionStage
         IAuthoritativeRandomSource randomSource,
         out DailyV1NpcActionCandidate selected,
         PersonStore personStore = null,
-        IDailyV1SelectedNpcActionDecisionBoundary projectionBoundary = null)
+        IDailyV1SelectedActionProjectionBoundary projectionBoundary = null)
     {
         selected = null;
         if (graph == null || actor == null || availableActions == null
@@ -685,7 +691,7 @@ internal static class DailyV1SelectedNpcActionDecisionStage
     private static void ProjectCandidateOrDisable(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionCandidate candidate,
-        IDailyV1SelectedNpcActionDecisionBoundary projectionBoundary)
+        IDailyV1SelectedActionProjectionBoundary projectionBoundary)
     {
         if (actor == null || candidate?.Action == null || candidate.Utility <= 0f)
             return;

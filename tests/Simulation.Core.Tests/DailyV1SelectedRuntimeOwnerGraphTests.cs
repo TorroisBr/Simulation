@@ -2296,6 +2296,7 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
             public PersonStore PersonStore { get; }
             public ActorChoiceStore ActorChoiceStore { get; }
+            public DailyV1ActorTurnCoreRoots CoreRoots => null;
             public IDailyV1ActorTurnExecutionBoundary Boundary { get; }
         }
 

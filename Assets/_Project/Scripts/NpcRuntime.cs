@@ -168,7 +168,9 @@ public class NpcRuntime : ICapabilityConditionSource
     }
     public string ResidenceSettlementRuntimeId => personRuntime != null
         ? personRuntime.ResidenceSettlementRuntimeId
-        : residenceSettlementRuntimeId;
+        : selectedRuntimeOwners != null
+            ? selectedRuntimeOwners.Residence.SettlementRuntimeId
+            : residenceSettlementRuntimeId;
     internal PersonRuntime BoundPersonRuntime => personRuntime;
     internal IReadOnlyList<NpcStatusData> ExistingCurrentStatus => currentStatus;
     public IReadOnlyList<NpcStatusData> CurrentStatus
@@ -268,7 +270,9 @@ public class NpcRuntime : ICapabilityConditionSource
     internal long LifeStateRevision => selectedRuntimeOwners != null
         ? selectedRuntimeOwners.Lifecycle.LifeStateRevision
         : lifeStateRevision;
-    internal long ResidenceRevision => residenceRevision;
+    internal long ResidenceRevision => selectedRuntimeOwners != null
+        ? selectedRuntimeOwners.Residence.Revision
+        : residenceRevision;
     internal long P12CrimeJusticeRevision =>
         selectedRuntimeOwners?.CrimeJusticeRevision ?? p12CrimeJusticeRevision;
     internal bool IsP12CrimeJusticeBound => p12CrimeJusticeMutationAdmission != null;
@@ -1176,7 +1180,9 @@ public class NpcRuntime : ICapabilityConditionSource
                 && (selectedRuntimeOwners != null
                     ? selectedRuntimeOwners.Lifecycle.CanAdvanceRevision(lifeStateIncrements)
                     : lifeStateRevision <= long.MaxValue - lifeStateIncrements)
-                && residenceRevision <= long.MaxValue - residenceIncrements
+                && (selectedRuntimeOwners != null
+                    ? selectedRuntimeOwners.Residence.CanAdvanceRevision(residenceIncrements)
+                    : residenceRevision <= long.MaxValue - residenceIncrements)
                 && (selectedRuntimeOwners != null
                     ? selectedRuntimeOwners.ActionSlot.CanAdvanceRevision(currentActionIncrements)
                     : currentActionRevision <= long.MaxValue - currentActionIncrements));
@@ -1211,16 +1217,23 @@ public class NpcRuntime : ICapabilityConditionSource
         bool lifeStateChanged,
         bool residenceChanged,
         bool currentActionChanged = false,
-        bool currentActionRevisionAlreadyCommitted = false)
+        bool currentActionRevisionAlreadyCommitted = false,
+        bool lifeStateRevisionAlreadyCommitted = false)
     {
-        if (lifeStateChanged)
+        if (lifeStateChanged && !lifeStateRevisionAlreadyCommitted)
         {
             if (selectedRuntimeOwners != null)
                 selectedRuntimeOwners.Lifecycle.NotifyLifeStateMutationCommitted();
             else if (lifeStateRevision < long.MaxValue)
                 lifeStateRevision++;
         }
-        if (residenceChanged && residenceRevision < long.MaxValue) residenceRevision++;
+        if (residenceChanged)
+        {
+            if (selectedRuntimeOwners != null)
+                selectedRuntimeOwners.Residence.NotifyMutationCommitted();
+            else if (residenceRevision < long.MaxValue)
+                residenceRevision++;
+        }
         if (currentActionChanged && !currentActionRevisionAlreadyCommitted)
         {
             if (selectedRuntimeOwners != null)
@@ -1325,7 +1338,10 @@ public class NpcRuntime : ICapabilityConditionSource
 		DailyV1EffectiveDefinitions selectedDefinitions = null,
 		DailyV1DefinitionAdapter.SelectedBindings selectedBindings = null,
 		DailyV1NpcRuntimeOwners initialSelectedOwners = null,
-		CityRuntime initialSelectedCityProjection = null)
+		CityRuntime initialSelectedCityProjection = null,
+		bool attachInitialSelectedCityProjection = true,
+		SpatialLocationRuntime initialSelectedLocationProjection = null,
+		bool deferInitialSelectedTravelPlanBinding = false)
 	{
 		if (string.IsNullOrWhiteSpace(runtimeId) == true)
         {
@@ -1382,7 +1398,8 @@ public class NpcRuntime : ICapabilityConditionSource
                 throw new ArgumentException(
                     "The Unity SpatialKnowledge serialization adapter could not bind the selected Core owner.",
                     nameof(selectedDefinition));
-            if (!TravelPlan.TryBindSelectedOwner(selectedOwners.TravelPlan))
+            if (!deferInitialSelectedTravelPlanBinding
+                && !TravelPlan.TryBindSelectedOwner(selectedOwners.TravelPlan))
                 throw new ArgumentException(
                     "The selected NPC travel plan could not bind to its Core owner.",
                     nameof(selectedDefinition));
@@ -1400,6 +1417,12 @@ public class NpcRuntime : ICapabilityConditionSource
         explorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime(runtimeId);
         localTopologyKnowledge = new LocalTopologyKnowledgeRuntime(runtimeId);
         adventureSiteIntelKnowledge = new AdventureSiteIntelKnowledgeRuntime(runtimeId);
+        if (selectedRuntimeOwners != null
+            && (!explorableSiteKnowledge.TryBindSelectedOwner(selectedRuntimeOwners.ExplorableSiteKnowledge)
+                || !adventureSiteIntelKnowledge.TryBindSelectedOwner(selectedRuntimeOwners.AdventureSiteIntelKnowledge)))
+            throw new ArgumentException(
+                "The selected NPC Knowledge projections must bind the exact Core owners.",
+                nameof(selectedDefinition));
 		if (selectedDefinition == null)
             moneyAccount = new MoneyAccountRuntime(initialMoney);
 
@@ -1426,24 +1449,30 @@ public class NpcRuntime : ICapabilityConditionSource
                 if (!string.Equals(initialSelectedOwners.Travel.CurrentCityRuntimeId,
                         initialSelectedCityProjection.RuntimeId, StringComparison.Ordinal)
                     || !string.Equals(initialSelectedOwners.Travel.CurrentLocationRuntimeId,
-                        initialSelectedCityProjection.Location?.RuntimeId, StringComparison.Ordinal))
+                        initialSelectedCityProjection.Location?.RuntimeId, StringComparison.Ordinal)
+                    || (initialSelectedLocationProjection != null
+                        && !ReferenceEquals(initialSelectedLocationProjection,
+                            initialSelectedCityProjection.Location)))
                     throw new ArgumentException(
                         "The selected NPC Core presence does not match its initial City projection.",
                         nameof(initialSelectedCityProjection));
                 currentCity = initialSelectedCityProjection;
                 currentLocation = initialSelectedCityProjection.Location;
-                if (!initialSelectedCityProjection.TryAttachInitialSelectedNpcProjection(this))
+                if (attachInitialSelectedCityProjection
+                    && !initialSelectedCityProjection.TryAttachInitialSelectedNpcProjection(this))
                     throw new ArgumentException(
                         "The selected NPC Core presence could not bind its initial Unity projection.",
                         nameof(initialSelectedCityProjection));
             }
             else if (initialSelectedOwners.Travel.CurrentCityRuntimeId != null
-                || initialSelectedOwners.Travel.CurrentLocationRuntimeId != null)
+                || !string.Equals(initialSelectedOwners.Travel.CurrentLocationRuntimeId,
+                    initialSelectedLocationProjection?.RuntimeId, StringComparison.Ordinal))
             {
                 throw new ArgumentException(
-                    "The selected NPC has Core presence without a matching initial City projection.",
-                    nameof(initialSelectedCityProjection));
+                    "The selected NPC Core presence does not match its initial location projection.",
+                    nameof(initialSelectedLocationProjection));
             }
+            else currentLocation = initialSelectedLocationProjection;
         }
         else if (startingCity != null)
         {
@@ -1479,6 +1508,55 @@ public class NpcRuntime : ICapabilityConditionSource
         NpcRuntime candidate = new NpcRuntime(runtimeId, npcData);
         candidate.currentCity = currentCity;
         candidate.currentLocation = currentLocation;
+        staged = candidate;
+        return true;
+    }
+
+    /// <summary>
+    /// Creates the Unity projection only after its selected Core owner vector
+    /// has been hydrated from a detached P12-D row. The Core instances remain
+    /// authoritative; this overload binds the compatibility adapters to those
+    /// exact objects and does not create another selected owner graph.
+    /// </summary>
+    internal static bool TryCreateForStagedPresence(
+        string runtimeId,
+        NpcData npcData,
+        CityRuntime currentCity,
+        SpatialLocationRuntime currentLocation,
+        DailyV1NpcRuntimeOwners selectedOwners,
+        out NpcRuntime staged)
+    {
+        staged = null;
+        if (selectedOwners == null
+            || !string.Equals(selectedOwners.RuntimeId, runtimeId, StringComparison.Ordinal)
+            || selectedOwners.Definitions == null
+            || selectedOwners.Definition == null
+            || !string.Equals(selectedOwners.Definition.DefinitionId,
+                npcData?.DefinitionId, StringComparison.Ordinal)
+            || !selectedOwners.Definitions.Npcs.TryGetValue(
+                selectedOwners.Definition.DefinitionId, out DailyV1NpcDefinition admitted)
+            || !ReferenceEquals(admitted, selectedOwners.Definition)
+            || (currentCity != null
+                && !ReferenceEquals(currentLocation, currentCity.Location)))
+            return false;
+
+        NpcRuntime candidate;
+        try
+        {
+            candidate = new NpcRuntime(runtimeId, null, null, 0f,
+                selectedOwners.Definition, selectedOwners.Definitions, null,
+                selectedOwners, currentCity, false, currentLocation,
+                deferInitialSelectedTravelPlanBinding: true);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+
+        // Keep this authoring asset only as the compatibility projection for
+        // existing Unity consumers. Selected Core behavior is read from the
+        // already-hydrated owner vector above.
+        candidate.npcData = npcData;
         staged = candidate;
         return true;
     }
@@ -1563,6 +1641,11 @@ public class NpcRuntime : ICapabilityConditionSource
             if (!MerchantTradePlan.TryBindSelectedOwner(
                     selectedRuntimeOwners.MerchantTradePlan, bindings,
                     resolveCityRuntime ?? (_ => null))) return false;
+            if (!ExplorableSiteKnowledge.CanBindSelectedOwner(selectedRuntimeOwners.ExplorableSiteKnowledge)
+                || !AdventureSiteIntelKnowledge.CanBindSelectedOwner(selectedRuntimeOwners.AdventureSiteIntelKnowledge)
+                || !ExplorableSiteKnowledge.TryBindSelectedOwner(selectedRuntimeOwners.ExplorableSiteKnowledge)
+                || !AdventureSiteIntelKnowledge.TryBindSelectedOwner(selectedRuntimeOwners.AdventureSiteIntelKnowledge))
+                return false;
 
             // A detached P12 stage already owns the canonical status nodes.
             // Bind only the Unity compatibility projection here; never rebuild
@@ -1634,6 +1717,11 @@ public class NpcRuntime : ICapabilityConditionSource
         if (currentActionRuntime != null
             && !currentActionRuntime.TryBindSelectedOwner(
                 stagedCurrentActionPayload, definitions, bindings)) return false;
+        if (!ExplorableSiteKnowledge.CanBindSelectedOwner(stagedOwners.ExplorableSiteKnowledge)
+            || !AdventureSiteIntelKnowledge.CanBindSelectedOwner(stagedOwners.AdventureSiteIntelKnowledge)
+            || !ExplorableSiteKnowledge.TryBindSelectedOwner(stagedOwners.ExplorableSiteKnowledge)
+            || !AdventureSiteIntelKnowledge.TryBindSelectedOwner(stagedOwners.AdventureSiteIntelKnowledge))
+            return false;
         selectedRuntimeOwners = stagedOwners;
         p12CrimeJusticeRevision = 0L;
         selectedDefinitionBindings = bindings;
@@ -1735,7 +1823,10 @@ public class NpcRuntime : ICapabilityConditionSource
             || (state.SelectedDefinitions != null
                 && (state.SelectedMerchantTradePlanOwner == null
                     || !ReferenceEquals(state.SelectedMerchantTradePlanOwner.Definitions,
-                        state.SelectedDefinitions)))
+                            state.SelectedDefinitions)
+                        || (state.SelectedRuntimeOwners != null
+                            && !ReferenceEquals(state.MerchantTradePlan.SelectedOwner,
+                                state.SelectedMerchantTradePlanOwner))))
             || state.LifeStateRevision < 0L || state.ResidenceRevision < 0L
             || state.CrimeJusticeRevision < 0L || state.CurrentActionRevision < 0L
             || state.TravelStateRevision < 0L || state.HiddenDaysRemaining < 0
@@ -1795,10 +1886,25 @@ public class NpcRuntime : ICapabilityConditionSource
                 return false;
             NpcTravelPlanState stagedTravelPlanState = state.TravelPlan.CaptureOwnerState();
             if (stagedTravelPlanState == null) return false;
-            DailyV1NpcActionPayloadOwner stagedCurrentActionPayload = null;
-            if (state.CurrentActionRuntime != null
-                && !state.CurrentActionRuntime.TryCreateSelectedOwner(
-                    state.SelectedDefinitions, stagedCurrentAction, out stagedCurrentActionPayload))
+            DailyV1ExplorableSiteKnowledgeOwner stagedExplorableOwner =
+                state.SelectedRuntimeOwners?.ExplorableSiteKnowledge;
+            if (stagedExplorableOwner == null
+                && !state.ExplorableSiteKnowledge.TryCreateSelectedOwnerSnapshot(out stagedExplorableOwner))
+                return false;
+            DailyV1AdventureSiteIntelKnowledgeOwner stagedAdventureOwner =
+                state.SelectedRuntimeOwners?.AdventureSiteIntelKnowledge;
+            if (stagedAdventureOwner == null
+                && !state.AdventureSiteIntelKnowledge.TryCreateSelectedOwnerSnapshot(out stagedAdventureOwner))
+                return false;
+            if (!state.ExplorableSiteKnowledge.CanBindSelectedOwner(stagedExplorableOwner)
+                || !state.AdventureSiteIntelKnowledge.CanBindSelectedOwner(stagedAdventureOwner))
+                return false;
+            DailyV1NpcActionPayloadOwner stagedCurrentActionPayload = state.SelectedCurrentActionPayload;
+            if ((state.CurrentActionRuntime == null && stagedCurrentActionPayload != null)
+                || (state.CurrentActionRuntime != null
+                    && (stagedCurrentActionPayload == null
+                        || !state.CurrentActionRuntime.TryBindSelectedOwner(
+                            stagedCurrentActionPayload, state.SelectedDefinitions, null))))
                 return false;
 
             DailyV1NpcRuntimeRestoreState restoreState = new DailyV1NpcRuntimeRestoreState
@@ -1812,12 +1918,20 @@ public class NpcRuntime : ICapabilityConditionSource
                 CommercialKnowledge = state.CommercialKnowledge.SelectedOwner,
                 MerchantTradePlan = state.SelectedMerchantTradePlanOwner,
                 SpatialKnowledge = state.SpatialKnowledge,
+                ExplorableSiteKnowledge = stagedExplorableOwner,
+                AdventureSiteIntelKnowledge = stagedAdventureOwner,
                 CurrentAction = stagedCurrentAction,
                 CurrentActionPayload = stagedCurrentActionPayload,
                 ActionRevision = state.CurrentActionRevision,
                 LifeState = state.LifeState,
                 InjurySeverity = state.InjurySeverity,
                 LifeStateRevision = state.LifeStateRevision,
+                ResidenceSettlementRuntimeId = state.SelectedRuntimeOwners != null
+                    ? state.SelectedRuntimeOwners.Residence.SettlementRuntimeId
+                    : state.ResidenceSettlementRuntimeId,
+                ResidenceRevision = state.SelectedRuntimeOwners != null
+                    ? state.SelectedRuntimeOwners.Residence.Revision
+                    : state.ResidenceRevision,
                 CrimeJusticeRevision = state.CrimeJusticeRevision,
                 HiddenDaysRemaining = state.HiddenDaysRemaining,
                 CurrentLocationRuntimeId = state.CurrentLocation?.RuntimeId,
@@ -1839,12 +1953,20 @@ public class NpcRuntime : ICapabilityConditionSource
                 TravelPlanOriginDecisionId = stagedTravelPlanState.OriginDecisionId,
                 TravelPlanRevision = state.TravelPlan.Revision
             };
-            if (!DailyV1NpcRuntimeOwners.TryCreateRestoredP12DOwner(
-                    restoreState, out stagedSelectedOwners)
+            stagedSelectedOwners = state.SelectedRuntimeOwners;
+            bool selectedOwnerMatches = stagedSelectedOwners != null
+                ? stagedSelectedOwners.MatchesRestoredP12DOwner(restoreState)
+                : DailyV1NpcRuntimeOwners.TryCreateRestoredP12DOwner(
+                    restoreState, out stagedSelectedOwners);
+            if (!selectedOwnerMatches
                 || !state.TravelPlan.TryBindSelectedOwner(stagedSelectedOwners.TravelPlan)
                 || (state.CurrentActionRuntime != null
-                    && !state.CurrentActionRuntime.TryBindSelectedOwner(
-                        stagedCurrentActionPayload, state.SelectedDefinitions, null)))
+                    && !ReferenceEquals(state.CurrentActionRuntime.SelectedOwner,
+                        stagedCurrentActionPayload))
+                || !state.ExplorableSiteKnowledge.CanBindSelectedOwner(
+                    stagedSelectedOwners.ExplorableSiteKnowledge)
+                || !state.AdventureSiteIntelKnowledge.CanBindSelectedOwner(
+                    stagedSelectedOwners.AdventureSiteIntelKnowledge))
                 return false;
         }
         else if (state.SelectedNpcDefinition != null
@@ -1872,7 +1994,9 @@ public class NpcRuntime : ICapabilityConditionSource
         personRuntime = state.PersonRuntime;
         selectedRuntimeOwners = stagedSelectedOwners;
         selectedDefinitionBindings = null;
-        residenceSettlementRuntimeId = state.ResidenceSettlementRuntimeId;
+        residenceSettlementRuntimeId = stagedSelectedOwners == null
+            ? state.ResidenceSettlementRuntimeId
+            : null;
         lifeState = state.LifeState;
         injurySeverity = state.InjurySeverity;
         currentStatus = new List<NpcStatusData>(state.CurrentStatus);
@@ -1897,8 +2021,14 @@ public class NpcRuntime : ICapabilityConditionSource
         explorableSiteKnowledge = state.ExplorableSiteKnowledge;
         localTopologyKnowledge = state.LocalTopologyKnowledge;
         adventureSiteIntelKnowledge = state.AdventureSiteIntelKnowledge;
+        if (stagedSelectedOwners != null
+            && (!explorableSiteKnowledge.TryBindSelectedOwner(stagedSelectedOwners.ExplorableSiteKnowledge)
+                || !adventureSiteIntelKnowledge.TryBindSelectedOwner(stagedSelectedOwners.AdventureSiteIntelKnowledge)))
+            return false;
         lifeStateRevision = stagedSelectedOwners == null ? state.LifeStateRevision : 0L;
-        residenceRevision = state.ResidenceRevision;
+        residenceRevision = stagedSelectedOwners == null
+            ? state.ResidenceRevision
+            : 0L;
         p12CrimeJusticeRevision = stagedSelectedOwners == null ? state.CrimeJusticeRevision : 0L;
         currentActionRevision = stagedSelectedOwners == null ? state.CurrentActionRevision : 0L;
         travelStateRevision = state.TravelStateRevision;
@@ -2108,6 +2238,42 @@ public class NpcRuntime : ICapabilityConditionSource
         return true;
     }
 
+    internal bool CanCommitSelectedPersonDeathAfterValidation(
+        NpcInjurySeverity severity,
+        out bool currentActionChanged)
+    {
+        currentActionChanged = currentActionRuntime != null;
+        DailyV1NpcRuntimeOwners owners = selectedRuntimeOwners;
+        if (owners == null) return true;
+        if (!HasConsistentCurrentActionSlot) return false;
+
+        if (!owners.CanCommitPersonDeathAfterValidation(
+            severity,
+            owners.ActionSlot.CurrentAction,
+            owners.ActionSlot.CurrentPayload))
+            return false;
+        return (owners.ActionSlot.CurrentAction != null) == currentActionChanged;
+    }
+
+    private bool TryCommitSelectedPersonDeathAfterValidation(
+        NpcInjurySeverity severity,
+        out bool currentActionChanged)
+    {
+        currentActionChanged = currentActionRuntime != null;
+        DailyV1NpcRuntimeOwners owners = selectedRuntimeOwners;
+        if (owners == null || !HasConsistentCurrentActionSlot
+            || !owners.TryCommitPersonDeathAfterValidation(
+                severity,
+                owners.ActionSlot.CurrentAction,
+                owners.ActionSlot.CurrentPayload,
+                out bool ownerActionChanged))
+            return false;
+
+        currentActionChanged = ownerActionChanged;
+        ClearCurrentActionSlotAfterAdmission();
+        return true;
+    }
+
     public bool TryApplyInjury(NpcInjurySeverity severity)
     {
         // Injury severity has no owner section or operation in this bounded P12 profile.
@@ -2132,6 +2298,18 @@ public class NpcRuntime : ICapabilityConditionSource
             || !CanCommitP12LifecycleMutation(true, false, currentActionChanged))
         {
             return false;
+        }
+
+        if (selectedRuntimeOwners != null)
+        {
+            if (!CanCommitSelectedPersonDeathAfterValidation(NpcInjurySeverity.None, out currentActionChanged)
+                || !TryCommitSelectedPersonDeathAfterValidation(NpcInjurySeverity.None, out currentActionChanged))
+                return false;
+            NotifyP12LifecycleMutationCommitted(
+                true, false, currentActionChanged,
+                currentActionRevisionAlreadyCommitted: currentActionChanged,
+                lifeStateRevisionAlreadyCommitted: true);
+            return true;
         }
 
         if (!TrySetLifeStateAfterValidation(NpcLifeState.Dead)) return false;
@@ -2159,6 +2337,18 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
+        if (selectedRuntimeOwners != null)
+        {
+            if (!CanCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged)
+                || !TryCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged))
+                return false;
+            NotifyP12LifecycleMutationCommitted(
+                true, false, currentActionChanged,
+                currentActionRevisionAlreadyCommitted: currentActionChanged,
+                lifeStateRevisionAlreadyCommitted: true);
+            return true;
+        }
+
         if (severity > InjurySeverity && !TrySetInjurySeverityAfterValidation(severity)) return false;
 
         if (!TrySetLifeStateAfterValidation(NpcLifeState.Dead)) return false;
@@ -2183,7 +2373,7 @@ public class NpcRuntime : ICapabilityConditionSource
     /// </summary>
     internal bool ApplyResidentDeathAfterPopulationValidation(NpcInjurySeverity severity)
     {
-        bool residenceChanged = !string.IsNullOrWhiteSpace(residenceSettlementRuntimeId);
+        bool residenceChanged = !string.IsNullOrWhiteSpace(ResidenceSettlementRuntimeId);
         bool currentActionChanged = currentActionRuntime != null;
         if (NpcInjuryRules.IsValid(severity) == false
             || IsDead
@@ -2192,10 +2382,25 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
+        if (selectedRuntimeOwners != null)
+        {
+            if (!CanCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged)
+                || !TryCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged))
+                return false;
+            if (residenceChanged && !TrySetNpcOnlyResidenceValueAfterAdmission(null))
+                return false;
+            NotifyP12LifecycleMutationCommitted(
+                true, residenceChanged, currentActionChanged,
+                currentActionRevisionAlreadyCommitted: currentActionChanged,
+                lifeStateRevisionAlreadyCommitted: true);
+            return true;
+        }
+
         if (severity > InjurySeverity && !TrySetInjurySeverityAfterValidation(severity)) return false;
 
         if (!TrySetLifeStateAfterValidation(NpcLifeState.Dead)) return false;
-        if (residenceChanged) residenceSettlementRuntimeId = null;
+        if (residenceChanged && !TrySetNpcOnlyResidenceValueAfterAdmission(null))
+            return false;
         ClearCurrentActionSlotAfterAdmission();
         NotifyP12LifecycleMutationCommitted(true, residenceChanged, currentActionChanged);
         return true;
@@ -2215,8 +2420,24 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         }
 
+        if (selectedRuntimeOwners != null
+            && !CanCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged))
+            return false;
+
         if (!PersonRuntimeOwnerBridge.RecordDeathAfterValidation(personRuntime, personDeathTransition.DeathAbsoluteDay))
             return false;
+
+        if (selectedRuntimeOwners != null)
+        {
+            SetResidenceSettlementRuntimeId(null);
+            if (!TryCommitSelectedPersonDeathAfterValidation(severity, out currentActionChanged))
+                return false;
+            NotifyP12LifecycleMutationCommitted(
+                true, false, currentActionChanged,
+                currentActionRevisionAlreadyCommitted: currentActionChanged,
+                lifeStateRevisionAlreadyCommitted: true);
+            return true;
+        }
 
         if (severity > InjurySeverity && !TrySetInjurySeverityAfterValidation(severity)) return false;
 
@@ -3102,12 +3323,21 @@ public class NpcRuntime : ICapabilityConditionSource
         string normalized = string.IsNullOrWhiteSpace(settlementRuntimeId) == true
             ? null
             : settlementRuntimeId;
-        if (string.Equals(residenceSettlementRuntimeId, normalized, StringComparison.Ordinal))
+        if (string.Equals(ResidenceSettlementRuntimeId, normalized, StringComparison.Ordinal))
             return true;
         if (!CanCommitP12LifecycleMutation(false, true))
             return false;
-        residenceSettlementRuntimeId = normalized;
+        if (!TrySetNpcOnlyResidenceValueAfterAdmission(normalized))
+            return false;
         NotifyP12LifecycleMutationCommitted(false, true);
+        return true;
+    }
+
+    private bool TrySetNpcOnlyResidenceValueAfterAdmission(string settlementRuntimeId)
+    {
+        if (selectedRuntimeOwners != null)
+            return selectedRuntimeOwners.Residence.TrySetValue(settlementRuntimeId);
+        residenceSettlementRuntimeId = settlementRuntimeId;
         return true;
     }
 

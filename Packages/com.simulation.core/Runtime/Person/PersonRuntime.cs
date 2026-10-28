@@ -219,7 +219,7 @@ internal static class DailyV1PersonCensusIdentity
     internal static string SectionIdFor(PersonId personId)
     {
         if (personId == null) throw new ArgumentNullException(nameof(personId));
-        return "p12b.person-life-residence/"
+        return DailyV1SelectedOwnerSectionCensusContract.PersonLifeResidencePrefix
             + personId.Value.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
             + ":" + personId.Value;
     }

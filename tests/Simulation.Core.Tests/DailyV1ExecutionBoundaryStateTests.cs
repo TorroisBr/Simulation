@@ -4,6 +4,70 @@ using NUnit.Framework;
 
 public sealed class DailyV1ExecutionBoundaryStateTests
 {
+    private sealed class AdmissionEvidenceBoundary : IDailyV1RuntimeAdvanceBoundary
+    {
+        private readonly DailyV1ExecutionBoundaryState state;
+
+        internal AdmissionEvidenceBoundary(
+            DailyV1ExecutionBoundaryState state,
+            IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            long mutationEpoch)
+        {
+            this.state = state;
+            OwnerSections = ownerSections;
+            MutationEpoch = mutationEpoch;
+        }
+
+        internal IReadOnlyList<OwnerSectionCensusSnapshot> OwnerSections { get; set; }
+        internal long MutationEpoch { get; set; }
+        internal bool AdmissionCaptureAllowed { get; set; } = true;
+        internal bool? RequestedSessionReplacement { get; private set; }
+        public DailyV1ExecutionBoundaryState ExecutionState => state;
+        public bool HasIntradayTimeline => false;
+
+        public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
+        { operationScope = null; return false; }
+        public bool TryCreateSelectedDailyExecutionBoundary(
+            out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
+        { executionBoundary = null; return false; }
+        public bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
+        { failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted; return false; }
+        public bool TryAdvanceIntradayToNextDayBoundary(out SimulationRuntimeAdvanceFailure failure)
+        { failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted; return false; }
+        public bool TryCaptureCompletedDailyCaptureEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+        public bool TryCaptureDailyBoundaryAdmissionEvidence(
+            bool sessionReplacement,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            RequestedSessionReplacement = sessionReplacement;
+            ownerSections = AdmissionCaptureAllowed ? OwnerSections : null;
+            mutationEpoch = AdmissionCaptureAllowed ? MutationEpoch : 0L;
+            failure = AdmissionCaptureAllowed
+                ? DailyCaptureEligibilityFailure.None
+                : DailyCaptureEligibilityFailure.OperationInProgress;
+            return AdmissionCaptureAllowed;
+        }
+
+        public bool TryCaptureContinuationSaveEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure) =>
+            TryCaptureDailyBoundaryAdmissionEvidence(
+                sessionReplacement: false, out ownerSections, out mutationEpoch, out failure);
+        public void FaultRuntimeAdmission() { }
+    }
+
     [Test]
     public void CoreAdvanceLeaseIsReentrantGuardAndCanBeReleasedExactlyOnce()
     {
@@ -83,6 +147,8 @@ public sealed class DailyV1ExecutionBoundaryStateTests
         Assert.That(state.AdmissionContext, Is.SameAs(admission));
         Assert.That(state.WorldId, Is.SameAs(world));
         Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True);
+        Assert.That(state.IsHealthyDailyOwnerThreadBoundary(), Is.True,
+            "An idle admitted runtime is healthy before its first completed capture token exists.");
         Assert.That(state.ConfigurationIdentity, Is.SameAs(configuration));
         Assert.That(state.CalendarIdentity, Is.SameAs(calendar));
         Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True,
@@ -263,6 +329,78 @@ public sealed class DailyV1ExecutionBoundaryStateTests
         Assert.That(restored.CompletedCoreSequence, Is.EqualTo(11L));
         Assert.That(state.CompletedCoreSequence, Is.EqualTo(11L));
         Assert.That(state.CurrentCaptureToken, Is.SameAs(restored));
+    }
+
+    [Test]
+    public void CompletedBoundaryAdmissionRechecksExactCensusEpochAndReplacementScope()
+    {
+        SimulationTime clock = new SimulationTime(8L);
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
+        WorldId world = new WorldId(Guid.NewGuid());
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState(
+            clock, admission, SimulationRuntimeCompositionProfile.Standard, world);
+        Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True);
+        Assert.That(state.TryRecordCompletedCore(), Is.True);
+        OwnerSectionCensusSnapshot[] sections = CreateCompleteSnapshot();
+        Assert.That(state.TryCreateCompletedAdvanceToken(
+            admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
+            world, 8L, 9L, sections, out _), Is.True);
+
+        AdmissionEvidenceBoundary boundary = new AdmissionEvidenceBoundary(state, sections, 9L);
+        Assert.That(state.HasValidCompletedDailyBoundaryAdmission(boundary, sessionReplacement: false), Is.True);
+        Assert.That(boundary.RequestedSessionReplacement, Is.EqualTo(false));
+        Assert.That(state.HasValidCompletedDailyBoundaryAdmission(boundary, sessionReplacement: true), Is.True);
+        Assert.That(boundary.RequestedSessionReplacement, Is.EqualTo(true),
+            "Replacement admission must request the host's explicitly scoped census allowance.");
+
+        boundary.MutationEpoch = 10L;
+        Assert.That(state.HasValidCompletedDailyBoundaryAdmission(boundary, sessionReplacement: false), Is.False,
+            "The current owner mutation epoch must still match the published capture token.");
+
+        boundary.MutationEpoch = 9L;
+        List<OwnerSectionCensusSnapshot> changedOwners = new List<OwnerSectionCensusSnapshot>(sections);
+        OwnerSectionCensusSnapshot original = changedOwners[0];
+        changedOwners[0] = new OwnerSectionCensusSnapshot(
+            original.SectionId, original.SchemaVersion, original.Role, new object(),
+            original.Cardinality, original.Revision);
+        boundary.OwnerSections = changedOwners;
+        Assert.That(state.HasValidCompletedDailyBoundaryAdmission(boundary, sessionReplacement: false), Is.False,
+            "A different live owner instance must not reuse the completed capture token.");
+
+        boundary.OwnerSections = sections;
+        boundary.AdmissionCaptureAllowed = false;
+        Assert.That(state.HasValidCompletedDailyBoundaryAdmission(boundary, sessionReplacement: false), Is.False,
+            "A failed live admission census must reject the session boundary.");
+    }
+
+    [Test]
+    public void RestoredBoundaryAdmissionRequiresRestoredProvenanceAndExactCensus()
+    {
+        SimulationTime clock = new SimulationTime(12L);
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        EffectiveSimulationConfiguration configuration = SimulationConfigurationResolver.ResolveOrThrow();
+        SimulationCalendar calendar = new SimulationCalendar(new CalendarDefinition(1, 1, 1));
+        WorldId world = new WorldId(Guid.NewGuid());
+        DailyV1ExecutionBoundaryState state = new DailyV1ExecutionBoundaryState(
+            clock, admission, SimulationRuntimeCompositionProfile.Standard, world);
+        Assert.That(state.TryBindRuntimeConfiguration(configuration, calendar), Is.True);
+        OwnerSectionCensusSnapshot[] sections = CreateCompleteSnapshot();
+        Assert.That(state.TryCreateRestoredContinuationToken(
+            admission, configuration, calendar, SimulationRuntimeCompositionProfile.Standard,
+            world, 12L, 4L, 9L, sections, out _), Is.True);
+
+        AdmissionEvidenceBoundary boundary = new AdmissionEvidenceBoundary(state, sections, 9L);
+        Assert.That(state.HasValidRestoredDailyBoundaryAdmission(boundary), Is.True);
+        Assert.That(boundary.RequestedSessionReplacement, Is.EqualTo(false));
+        Assert.That(state.HasValidCompletedDailyBoundaryAdmission(boundary, sessionReplacement: false), Is.False,
+            "A restored token must not be accepted as a completed advance, or vice versa.");
+
+        boundary.MutationEpoch = 8L;
+        Assert.That(state.HasValidRestoredDailyBoundaryAdmission(boundary), Is.False);
     }
 
     [Test]

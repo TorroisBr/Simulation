@@ -4,8 +4,8 @@ using System.Collections.Generic;
 /// <summary>Passive per-NPC witness for travel commitment identity and revision.</summary>
 public sealed class NpcTravelStateCensusProvider : IOwnerSectionCensusProvider
 {
-    public const string SectionPrefix = "p12f.npc-travel-state/";
-    public const int SchemaVersion = 1;
+    public const string SectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     private readonly NpcRuntime owner;
 
@@ -34,7 +34,7 @@ public sealed class NpcTravelStateCensusProvider : IOwnerSectionCensusProvider
     {
         if (string.IsNullOrWhiteSpace(runtimeId))
             throw new ArgumentException("NPC travel-state section requires a RuntimeId.", nameof(runtimeId));
-        return SectionPrefix + runtimeId;
+        return DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(12, runtimeId);
     }
 
     public static IReadOnlyList<IOwnerSectionCensusProvider> CreateProviders(

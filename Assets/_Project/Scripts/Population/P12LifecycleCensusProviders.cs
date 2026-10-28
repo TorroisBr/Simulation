@@ -5,8 +5,8 @@ using System.Globalization;
 /// <summary>Exact singleton witness for one registered Person's life and residence facts.</summary>
 public sealed class PersonLifeResidenceCensusProvider : IOwnerSectionCensusProvider
 {
-    public const string SectionPrefix = "p12b.person-life-residence/";
-    public const int SchemaVersion = 1;
+    public const string SectionPrefix = DailyV1SelectedOwnerSectionCensusContract.PersonLifeResidencePrefix;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     private readonly PersonRuntime owner;
 
@@ -26,7 +26,7 @@ public sealed class PersonLifeResidenceCensusProvider : IOwnerSectionCensusProvi
     public static string SectionIdFor(PersonId personId)
     {
         if (personId == null) throw new ArgumentNullException(nameof(personId));
-        return DailyV1PersonCensusIdentity.SectionIdFor(personId);
+        return DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(personId);
     }
 
     public static IReadOnlyList<IOwnerSectionCensusProvider> CreateProviders(
@@ -56,9 +56,9 @@ public sealed class PersonLifeResidenceCensusProvider : IOwnerSectionCensusProvi
 /// <summary>Exact singleton witness for one NPC's lifecycle owner revision.</summary>
 public sealed class NpcLifecycleCensusProvider : IOwnerSectionCensusProvider
 {
-    public const string LifeStateSectionPrefix = "p12b.npc-life-state/";
-    public const string ResidenceSectionPrefix = "p12b.npc-residence/";
-    public const int SchemaVersion = 1;
+    public const string LifeStateSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcLifeStatePrefix;
+    public const string ResidenceSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     private readonly NpcRuntime owner;
     private readonly bool residence;
@@ -91,7 +91,9 @@ public sealed class NpcLifecycleCensusProvider : IOwnerSectionCensusProvider
     {
         if (string.IsNullOrWhiteSpace(runtimeId))
             throw new ArgumentException("NPC lifecycle section requires a RuntimeId.", nameof(runtimeId));
-        return (residence ? ResidenceSectionPrefix : LifeStateSectionPrefix) + runtimeId;
+        return residence
+            ? DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(runtimeId)
+            : DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(21, runtimeId);
     }
 
     public static IReadOnlyList<IOwnerSectionCensusProvider> CreateProviders(

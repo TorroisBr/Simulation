@@ -4,7 +4,8 @@ using NUnit.Framework;
 
 public sealed class SimulationRuntimeOrchestrationTests
 {
-    private sealed class RejectedApplicationAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary
+    private sealed class RejectedApplicationAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary,
+        IDailyV1SelectedRuntimeAdvanceHostPorts
     {
         internal RejectedApplicationAdvanceBoundary(DailyV1ExecutionBoundaryState state) =>
             ExecutionState = state;
@@ -12,7 +13,22 @@ public sealed class SimulationRuntimeOrchestrationTests
         public DailyV1ExecutionBoundaryState ExecutionState { get; }
         public bool HasIntradayTimeline => false;
 
+        public bool TryBindApplicationAdvanceAuthority(
+            DailyV1Application application,
+            DailyV1ActiveRuntimeSession session) =>
+            application != null
+            && session != null
+            && ReferenceEquals(session.ExecutionBoundaryState, ExecutionState);
+
         public bool TryEnterDailyAdvanceOperation(out System.IDisposable operationScope)
+        {
+            operationScope = null;
+            return false;
+        }
+
+        public bool TryEnterRuntimeProtocolOperation(
+            string operationContractId,
+            out System.IDisposable operationScope)
         {
             operationScope = null;
             return false;
@@ -38,6 +54,41 @@ public sealed class SimulationRuntimeOrchestrationTests
         }
 
         public bool TryCaptureCompletedDailyCaptureEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        public bool TryCaptureDailyBoundaryAdmissionEvidence(
+            bool sessionReplacement,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        public bool TryCaptureContinuationSaveEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        public bool TryCaptureOwnerSectionCensus(
+            DailyV1CaptureScopeAllowance allowedOuterScope,
             out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
             out long mutationEpoch,
             out DailyCaptureEligibilityFailure failure)
@@ -620,7 +671,7 @@ public sealed class SimulationRuntimeOrchestrationTests
         SimulationRuntime runtime = new SimulationRuntime(
             new SimulationTime(0L), null, null, economyEnabled: false);
         System.InvalidOperationException exception = Assert.Throws<System.InvalidOperationException>(
-            () => TesteSimulacao.AdvanceCoreSessionThroughApplication(application, session, runtime));
+            () => TesteSimulacao.AdvanceCoreSessionThroughApplication(application, runtime));
 
         Assert.That(exception.Message,
             Is.EqualTo("A faulted SimulationRuntime cannot advance its world."));

@@ -877,22 +877,25 @@ public sealed class P12DCityRootOwnerSnapshotTests
 
         string encodedRuntimeId = city.RuntimeId.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
             + ":" + city.RuntimeId;
+        DailyV1CityRuntimeOwners selectedOwners = city.SelectedRuntimeOwners;
+        DailyV1CityNpcPresenceOwner selectedPresenceOwner = selectedOwners?.NpcPresence;
+        DailyV1MarketOwner selectedMarketOwner = selectedOwners?.Market;
         return new List<OwnerSectionCensusSnapshot>
         {
             new OwnerSectionCensusSnapshot(
                 CityNpcPresenceCensusProvider.SectionIdFor(city.RuntimeId),
                 CityNpcPresenceCensusProvider.SchemaVersion,
                 OwnerSectionRole.Required,
-                city,
-                memberIds.Count,
-                membershipRevision),
+                (object)selectedPresenceOwner ?? city,
+                selectedPresenceOwner != null ? selectedPresenceOwner.OrderedNpcRuntimeIds.Count : memberIds.Count,
+                selectedPresenceOwner != null ? selectedPresenceOwner.Revision : membershipRevision),
             new OwnerSectionCensusSnapshot(
-                CityMarketCensusProvider.SectionIdPrefix + encodedRuntimeId,
+                CityMarketCensusProvider.SectionIdFor(city.RuntimeId),
                 CityMarketCensusProvider.SchemaVersion,
                 OwnerSectionRole.Required,
-                city.Market,
-                city.Market.Items.Count,
-                city.Market.Revision),
+                (object)selectedMarketOwner ?? city.Market,
+                selectedMarketOwner != null ? selectedMarketOwner.Items.Count : city.Market.Items.Count,
+                selectedMarketOwner != null ? selectedMarketOwner.Revision : city.Market.Revision),
             new OwnerSectionCensusSnapshot(
                 SettlementPopulationCensusProvider.AggregateSectionPrefix + encodedRuntimeId,
                 SettlementPopulationCensusProvider.SchemaVersion,

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
@@ -71,4 +72,85 @@ internal sealed class P12FExpeditionOwnerSnapshot
         Expeditions = new ReadOnlyCollection<P12FExpeditionOwnerSnapshotRecord>(
             new List<P12FExpeditionOwnerSnapshotRecord>(expeditions));
     }
+
+    internal static bool TryCapture(ExpeditionStore source, DailyCaptureEligibilityToken token,
+        IReadOnlyList<OwnerSectionCensusSnapshot> exactOwnerSectionVector,
+        out P12FExpeditionOwnerSnapshot snapshot, out P12FCommitmentSnapshotFailure failure)
+    {
+        snapshot = null;
+        failure = P12FCommitmentSnapshotFailure.InvalidCaptureContext;
+        if (source == null || !P12FCommitmentSnapshotValidation.HasExactContext(token, exactOwnerSectionVector))
+            return false;
+        using (source.EnterReadWindow())
+        {
+            if (!P12FCommitmentSnapshotValidation.MatchesSection(token, exactOwnerSectionVector,
+                    ExpeditionCensusProvider.SectionId, ExpeditionCensusProvider.SchemaVersion,
+                    source, out int expectedCount, out long expectedRevision))
+            {
+                failure = P12FCommitmentSnapshotFailure.InvalidOwnerSection;
+                return false;
+            }
+            if (!source.ValidateCensus(out int count, out long revision)
+                || count != expectedCount || revision != expectedRevision
+                || !source.TryCaptureOwnerSnapshot(out snapshot) || snapshot == null
+                || snapshot.Expeditions.Count != expectedCount || snapshot.Revision != expectedRevision)
+            {
+                snapshot = null;
+                failure = P12FCommitmentSnapshotFailure.InvalidOwner;
+                return false;
+            }
+            if (!source.ValidateCensus(out int afterCount, out long afterRevision)
+                || afterCount != expectedCount || afterRevision != expectedRevision
+                || !P12FCommitmentSnapshotValidation.MatchesSection(token, exactOwnerSectionVector,
+                    ExpeditionCensusProvider.SectionId, ExpeditionCensusProvider.SchemaVersion,
+                    source, out int finalCount, out long finalRevision)
+                || finalCount != afterCount || finalRevision != afterRevision)
+            {
+                snapshot = null;
+                failure = P12FCommitmentSnapshotFailure.StaleCapture;
+                return false;
+            }
+            failure = P12FCommitmentSnapshotFailure.None;
+            return true;
+        }
+    }
+
+    internal static bool IsValidRecord(P12FExpeditionOwnerSnapshotRecord value)
+    {
+        if (value == null || string.IsNullOrWhiteSpace(value.ExpeditionId)
+            || string.IsNullOrWhiteSpace(value.TargetSiteRuntimeId)
+            || string.IsNullOrWhiteSpace(value.OriginLocationRuntimeId)
+            || string.IsNullOrWhiteSpace(value.TargetLocationRuntimeId)
+            || string.IsNullOrWhiteSpace(value.OutboundRouteRuntimeId)
+            || !IsOptionalId(value.TravelPartyId) || !IsOptionalId(value.OriginDecisionId)
+            || !IsOptionalId(value.CurrentLocalPlaceRuntimeId)
+            || !IsOptionalId(value.TargetItemDefinitionId) || !IsOptionalId(value.TargetNotableItemRuntimeId)
+            || !IsOptionalId(value.TargetOppositionRuntimeId)
+            || !Enum.IsDefined(typeof(ExpeditionState), value.State)
+            || !Enum.IsDefined(typeof(ExpeditionObjectiveType), value.ObjectiveType)
+            || value.MemberRuntimeIds == null || value.PerformerRuntimeIds == null || value.SupportRuntimeIds == null
+            || value.VisitedLocalPlaceRuntimeIds == null || value.ObservedLocalConnectionRuntimeIds == null
+            || value.RequiredProgress <= 0 || value.Progress < 0 || value.Progress > value.RequiredProgress
+            || (value.ObjectiveCompleted != (value.Progress == value.RequiredProgress))) return false;
+        if ((value.State == ExpeditionState.TravelingToSite || value.State == ExpeditionState.Returning)
+            && string.IsNullOrWhiteSpace(value.TravelPartyId)) return false;
+        foreach (string id in value.MemberRuntimeIds)
+            if (string.IsNullOrWhiteSpace(id)) return false;
+        foreach (string id in value.PerformerRuntimeIds)
+            if (string.IsNullOrWhiteSpace(id)) return false;
+        foreach (string id in value.SupportRuntimeIds)
+            if (string.IsNullOrWhiteSpace(id)) return false;
+        foreach (string id in value.VisitedLocalPlaceRuntimeIds)
+            if (string.IsNullOrWhiteSpace(id)) return false;
+        foreach (string id in value.ObservedLocalConnectionRuntimeIds)
+            if (string.IsNullOrWhiteSpace(id)) return false;
+        HashSet<string> members = new HashSet<string>(value.MemberRuntimeIds, StringComparer.Ordinal);
+        if (members.Count != value.MemberRuntimeIds.Count || members.Count == 0) return false;
+        HashSet<string> roles = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string id in value.PerformerRuntimeIds) if (!members.Contains(id) || !roles.Add(id)) return false;
+        foreach (string id in value.SupportRuntimeIds) if (!members.Contains(id) || !roles.Add(id)) return false;
+        return roles.Count == members.Count;
+    }
+
+    private static bool IsOptionalId(string value) => value == null || !string.IsNullOrWhiteSpace(value);
 }

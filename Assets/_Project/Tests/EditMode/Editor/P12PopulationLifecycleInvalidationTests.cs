@@ -102,6 +102,51 @@ public sealed class P12PopulationLifecycleInvalidationTests
     }
 
     [Test]
+    public void SelectedResidenceSetterUsesCoreOwnerValueForIdempotency()
+    {
+        NpcRuntime npc = CreateSelectedNpc("p12-selected-residence-idempotency");
+
+        Assert.That(npc.ResidenceRevision, Is.Zero);
+        Assert.That(npc.SetResidenceSettlementRuntimeId("city/selected-residence"), Is.True);
+        Assert.That(npc.ResidenceSettlementRuntimeId, Is.EqualTo("city/selected-residence"));
+        Assert.That(npc.ResidenceRevision, Is.EqualTo(1L));
+
+        Assert.That(npc.SetResidenceSettlementRuntimeId("city/selected-residence"), Is.True);
+        Assert.That(npc.ResidenceRevision, Is.EqualTo(1L),
+            "A same-value assignment must not create a second Core residence mutation.");
+    }
+
+    [Test]
+    public void SelectedResidentDeathClearsCoreResidenceAndAdvancesRevisionOnce()
+    {
+        CityRuntime city = CreateCity("p12-selected-resident-death-city", 5);
+        NpcRuntime npc = CreateSelectedNpc("p12-selected-resident-death");
+        SimulationRuntime runtime = CreateP12Runtime(new[] { city }, new[] { npc });
+        AssertEpoch(runtime, 0L);
+        AssertCensus(runtime);
+
+        Assert.That(runtime.TryApplyImmigration(
+            npc, city, out _, out NpcPopulationLifecycleFailure immigrationFailure),
+            Is.True, immigrationFailure.ToString());
+        Assert.That(npc.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        AssertNpcRevision(runtime, npc.RuntimeId, residence: true, expected: 1L);
+        AssertEpoch(runtime, 1L);
+        AssertCensus(runtime);
+
+        Assert.That(runtime.TryApplyResidentDeath(
+            npc, city, out _, out NpcPopulationLifecycleFailure deathFailure),
+            Is.True, deathFailure.ToString());
+
+        Assert.That(npc.IsDead, Is.True);
+        Assert.That(npc.ResidenceSettlementRuntimeId, Is.Null);
+        AssertNpcRevision(runtime, npc.RuntimeId, residence: true, expected: 2L);
+        AssertNpcRevision(runtime, npc.RuntimeId, residence: false, expected: 1L);
+        Assert.That(city.CurrentPopulation, Is.EqualTo(5));
+        AssertEpoch(runtime, 2L);
+        AssertCensus(runtime);
+    }
+
+    [Test]
     public void PairedResidenceMigrationRequiresRuntimeBoundaryAndAdvancesOneEpoch()
     {
         CityRuntime origin = CreateCity("p12-migration-origin", 10);
@@ -933,6 +978,22 @@ public sealed class P12PopulationLifecycleInvalidationTests
             configuration: configuration,
             personStore: people,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+    }
+
+    private static NpcRuntime CreateSelectedNpc(string runtimeId)
+    {
+        SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        NpcData npcAsset = SimulationTestFactory.CreateNpc(runtimeId + "-definition");
+        authoring.Npcs.Add(new NpcSimulationConfig { npc = npcAsset, initialMoney = 0f });
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: authoring.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(authoring.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            authoring, effective, calendar,
+            out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        DailyV1NpcDefinition definition = definitions.Npcs[npcAsset.DefinitionId];
+        return NpcRuntime.CreateSelectedDailyV1(
+            runtimeId, npcAsset, definition, definitions, bindings, null, 0f);
     }
 
     private static (SimulationRuntime Runtime, CityRuntime City, PersonRuntime Person, NpcRuntime Npc)

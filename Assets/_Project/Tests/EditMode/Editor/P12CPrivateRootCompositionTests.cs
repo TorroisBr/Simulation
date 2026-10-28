@@ -303,7 +303,7 @@ public sealed class P12CPrivateRootCompositionTests
             captureToken.OwnerSections,
             eContext,
             stagedE,
-            config.Actions,
+            sourceBootstrap.SelectedDefinitions,
             out P12FDailyV1OwnerPackage stagedF,
             out P12FDailyV1OwnerPackageFailure fFailure), Is.True, fFailure.ToString());
         Assert.That(stagedF, Is.Not.Null);

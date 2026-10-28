@@ -9,7 +9,7 @@ public sealed class P12ANpcCommercialKnowledgeOwnerCodecTests
     [Test]
     public void RoundTripsCapturedMarketLiquidityAndReceiptValues()
     {
-        CommercialKnowledgeShareReceipt receipt = CreateReceipt("edge-1", "npc-sender", "npc-owner", 1);
+        P12DNpcCommercialShareReceiptValue receipt = CreateReceipt("edge-1", "npc-sender", "npc-owner", 1);
         P12DNpcFRow source = CreateRow("npc-owner", 3L,
             new[] { Market("loc/a", "item/a", 12.25f, 7, 2, 4,
                 CommercialKnowledgeSource.SharedByNpc, "npc-sender") },
@@ -63,7 +63,7 @@ public sealed class P12ANpcCommercialKnowledgeOwnerCodecTests
     [Test]
     public void MultipleMarketRowsCanResultFromOneSuccessfulShareRevision()
     {
-        CommercialKnowledgeShareReceipt receipt = CreateReceipt("edge-many", "npc-sender", "npc-owner", 2);
+        P12DNpcCommercialShareReceiptValue receipt = CreateReceipt("edge-many", "npc-sender", "npc-owner", 2);
         P12DNpcFRow source = CreateRow("npc-owner", 1L,
             new[] { Market("loc-a", "item-a", 1f, 1, 0, 0, CommercialKnowledgeSource.DirectObservation, null),
                 Market("loc-b", "item-b", 2f, 2, 0, 0, CommercialKnowledgeSource.DirectObservation, null) },
@@ -99,7 +99,7 @@ public sealed class P12ANpcCommercialKnowledgeOwnerCodecTests
     [Test]
     public void DecoderRejectsTrailingReceiptPayload()
     {
-        CommercialKnowledgeShareReceipt receipt = CreateReceipt("edge-1", "npc-sender", "npc-owner", 1);
+        P12DNpcCommercialShareReceiptValue receipt = CreateReceipt("edge-1", "npc-sender", "npc-owner", 1);
         Assert.That(P12ANpcCommercialKnowledgeOwnerCodec.TryEncode(CreateRow("npc-owner", 1L,
             null, null, new[] { receipt }), out P12AOwnerSection markets,
             out P12AOwnerSection liquidity, out P12AOwnerSection receipts, out _), Is.True);
@@ -154,7 +154,7 @@ public sealed class P12ANpcCommercialKnowledgeOwnerCodecTests
     private static P12DNpcFRow CreateRow(string runtimeId, long revision,
         P12DNpcCommercialMarketValue[] markets = null,
         P12DNpcCommercialLiquidityValue[] liquidity = null,
-        CommercialKnowledgeShareReceipt[] receipts = null)
+        P12DNpcCommercialShareReceiptValue[] receipts = null)
         => new P12DNpcFRow(runtimeId, null, 0, 0, null, false, null, null, 0L,
             null, null, Array.Empty<ExplorableSiteKnowledgeObservation>(), 0L,
             Array.Empty<string>(), Array.Empty<string>(), 0L,
@@ -162,7 +162,7 @@ public sealed class P12ANpcCommercialKnowledgeOwnerCodecTests
             Array.Empty<AdventureCommonResourceObservation>(), Array.Empty<AdventureAccessObservation>(), 0L,
             markets ?? Array.Empty<P12DNpcCommercialMarketValue>(),
             liquidity ?? Array.Empty<P12DNpcCommercialLiquidityValue>(),
-            receipts ?? Array.Empty<CommercialKnowledgeShareReceipt>(), revision);
+            receipts ?? Array.Empty<P12DNpcCommercialShareReceiptValue>(), revision);
 
     private static P12DNpcCommercialMarketValue Market(string location, string item, float price,
         int stock, long observed, long received, CommercialKnowledgeSource source, string sourceNpc)
@@ -172,13 +172,13 @@ public sealed class P12ANpcCommercialKnowledgeOwnerCodecTests
         float power, long observed, long received, CommercialKnowledgeSource source, string sourceNpc)
         => new P12DNpcCommercialLiquidityValue(location, mode, power, observed, received, source, sourceNpc);
 
-    private static CommercialKnowledgeShareReceipt CreateReceipt(string boundary, string sender,
+    private static P12DNpcCommercialShareReceiptValue CreateReceipt(string boundary, string sender,
         string receiver, int applied)
     {
-        string operation = SpatialStableKey.Encode("commercial-sharing-edge/v1", boundary, sender, receiver);
-        Assert.That(CommercialKnowledgeShareReceipt.TryCreateFromOwnerSnapshot(operation, "batch-fingerprint",
+        string operation = StableKeyEncoding.Encode("commercial-sharing-edge/v1", boundary, sender, receiver);
+        Assert.That(P12DNpcCommercialShareReceiptValue.TryCreateFromOwnerSnapshot(operation, "batch-fingerprint",
             boundary, sender, "sender-person", receiver, "receiver-person", "source-fingerprint",
-            applied, out CommercialKnowledgeShareReceipt receipt), Is.True);
+            applied, out P12DNpcCommercialShareReceiptValue receipt), Is.True);
         return receipt;
     }
 

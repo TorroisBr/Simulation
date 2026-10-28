@@ -10,6 +10,73 @@ using System.Collections.Generic;
 internal static class DailyV1SelectedActorActionExecutionStage
 {
     /// <summary>
+    /// Resolves an action's authoritative result from the dispatch produced by
+    /// Core. A host may publish the matching Unity projection and presentation
+    /// message, but it cannot change whether the admitted owner operation
+    /// succeeded.
+    /// </summary>
+    internal static bool TryResolveDispatchOutcome(
+        DailyV1SelectedActionDispatchResult dispatch,
+        out bool actionSucceeded,
+        out NpcActionResultType resultType)
+    {
+        actionSucceeded = false;
+        resultType = default;
+        if (dispatch == null
+            || !Enum.IsDefined(typeof(DailyV1SelectedActionDispatchKind), dispatch.Kind)
+            || (!dispatch.ActionRollSucceeded && dispatch.Succeeded))
+            return false;
+
+        bool detailedSuccess;
+        switch (dispatch.Kind)
+        {
+            case DailyV1SelectedActionDispatchKind.Normal:
+                detailedSuccess = true;
+                break;
+            case DailyV1SelectedActionDispatchKind.PlannedNpcSale:
+                detailedSuccess = dispatch.PlannedNpcSale?.Succeeded == true
+                    && dispatch.PlannedNpcSale.Sale?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.PlannedMarketSale:
+                detailedSuccess = dispatch.PlannedMarketSale?.Succeeded == true
+                    && dispatch.PlannedMarketSale.Sale?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.OpenMarket:
+                detailedSuccess = dispatch.OpenMarket?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.CrossCityBuy:
+                detailedSuccess = dispatch.CrossCityBuy?.Purchase?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.SoloTravel:
+                detailedSuccess = dispatch.SoloTravel?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.FleeCity:
+                detailedSuccess = dispatch.FleeCity?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.GuardArrest:
+                detailedSuccess = dispatch.GuardArrest?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.Steal:
+                detailedSuccess = dispatch.Steal?.Succeeded == true;
+                break;
+            case DailyV1SelectedActionDispatchKind.Crime:
+                detailedSuccess = dispatch.Crime?.Succeeded == true;
+                break;
+            default:
+                return false;
+        }
+
+        if (dispatch.Succeeded && !detailedSuccess)
+            return false;
+
+        actionSucceeded = dispatch.ActionRollSucceeded && dispatch.Succeeded;
+        resultType = actionSucceeded
+            ? NpcActionResultType.Success
+            : NpcActionResultType.Failure;
+        return true;
+    }
+
+    /// <summary>
     /// Identifies a targetless Normal action whose exact Core slot and typed
     /// action-status plan are sufficient for dispatch. Actor status effects
     /// still commit through the Core status owner and the existing host P12
@@ -106,8 +173,16 @@ internal static class DailyV1SelectedActorActionExecutionStage
         PersonStore personStore,
         IAuthoritativeRandomSource randomSource,
         long absoluteDay,
-        IDailyV1SelectedActorActionExecutionBoundary boundary)
+        IDailyV1SelectedActorActionExecutionBoundary boundary,
+        DailyV1ActorTurnCoreRoots coreRoots = null)
     {
+        if (coreRoots != null)
+        {
+            if (!coreRoots.IsBoundToGraph(graph))
+                throw new InvalidOperationException(
+                    "The selected action received Core decision roots from another owner graph.");
+            randomSource = coreRoots.RandomSource;
+        }
         if (graph == null || actor == null || personStore == null
             || randomSource == null || boundary == null
             || absoluteDay < 0L
@@ -116,10 +191,10 @@ internal static class DailyV1SelectedActorActionExecutionStage
             || actor.Status == null || actor.ActionSlot == null)
             return false;
 
-        if (!boundary.TryCreateDecisionBoundary(actor,
-                out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary)
-            || decisionBoundary == null)
-            return true; // No configured decision service preserves the old no-op turn.
+        if (!boundary.TryCreateActionProjectionBoundary(actor,
+                out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
+            || projectionBoundary == null)
+            return true; // A missing host projection adapter preserves the existing no-action turn.
 
         if (!DailyV1SelectedNpcActionDecisionStage.TryResolveConfiguredActions(
                 graph.Definitions, out IReadOnlyList<DailyV1ActionDefinition> availableActions)
@@ -138,7 +213,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
         if (!DailyV1SelectedNpcActionDecisionStage.TryChoose(
                 graph, actor, availableActions, actor.Status.Statuses,
                 absoluteDay, randomSource,
-                out DailyV1NpcActionCandidate selected, personStore, decisionBoundary))
+                out DailyV1NpcActionCandidate selected, personStore, projectionBoundary))
             return false;
 
         // Preserve the legacy no-selection clear and the exact decision-record,
@@ -148,8 +223,8 @@ internal static class DailyV1SelectedActorActionExecutionStage
             if (!TryClearCurrentAction(graph, actor, boundary)) return false;
         }
         else if (!TryCommitSelectedActionSlot(
-                     graph, actor, selected, decisionBoundary, NpcDecisionOrigin.Autonomous,
-                     absoluteDay, boundary))
+                     graph, actor, selected, projectionBoundary, NpcDecisionOrigin.Autonomous,
+                     absoluteDay, boundary, coreRoots))
             throw new InvalidOperationException(
                 "The exact selected Daily-v1 action could not be installed through its admitted Core owner boundary.");
 
@@ -172,17 +247,21 @@ internal static class DailyV1SelectedActorActionExecutionStage
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionCandidate selected,
-        IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary,
+        IDailyV1SelectedActionProjectionBoundary projectionBoundary,
         NpcDecisionOrigin origin,
         long absoluteDay,
-        IDailyV1SelectedActorActionExecutionBoundary boundary)
+        IDailyV1SelectedActorActionExecutionBoundary boundary,
+        DailyV1ActorTurnCoreRoots coreRoots)
     {
         DailyV1NpcActionPayloadOwner payload = selected?.PreparedPayload;
         if (graph == null || actor == null || selected?.Action == null
-            || decisionBoundary == null || boundary == null
+            || projectionBoundary == null || boundary == null
             || !graph.ContainsExactNpcOwner(actor)
             || !ReferenceEquals(graph.Definitions, actor.Definitions))
             return false;
+        if (coreRoots != null && !coreRoots.IsBoundToGraph(graph))
+            throw new InvalidOperationException(
+                "The selected action slot cannot use decision roots from another owner graph.");
 
         if (payload == null
             && !DailyV1NpcActionPayloadOwner.TryCreate(
@@ -195,12 +274,31 @@ internal static class DailyV1SelectedActorActionExecutionStage
         Func<DailyV1NpcActionPayloadOwner, bool> prepareProjection = candidate =>
             ReferenceEquals(candidate, payload)
             && boundary.TryPrepareSelectedActionProjection(
-                actor, selected, decisionBoundary, candidate);
+                actor, selected, projectionBoundary, candidate);
         Func<bool> slotAdmission = () => boundary.CanCommitSelectedActionSlot(actor, payload);
-        bool hasDecisionOwners = boundary.TryGetDecisionRecordOwners(
-            actor, out RuntimeIdAllocator idAllocator,
-            out SimulationRecordSequence recordSequence,
-            out NpcDecisionStore decisionStore);
+        RuntimeIdAllocator idAllocator;
+        SimulationRecordSequence recordSequence;
+        NpcDecisionStore decisionStore;
+        bool hasDecisionOwners;
+        if (coreRoots != null)
+        {
+            idAllocator = coreRoots.IdAllocator;
+            recordSequence = coreRoots.RecordSequence;
+            decisionStore = coreRoots.DecisionStore;
+            hasDecisionOwners = true;
+        }
+        else if (boundary is IDailyV1ActorChoiceExecutionBoundary actorChoiceBoundary)
+        {
+            hasDecisionOwners = actorChoiceBoundary.TryGetDecisionRecordOwners(
+                actor, out idAllocator, out recordSequence, out decisionStore);
+        }
+        else
+        {
+            idAllocator = null;
+            recordSequence = null;
+            decisionStore = null;
+            hasDecisionOwners = false;
+        }
 
         bool committed;
         bool existingTravelDecision = selected.Action.Values.actionType?.Value
@@ -295,10 +393,18 @@ internal static class DailyV1SelectedActorActionExecutionStage
         ScheduledDirective directive,
         IAuthoritativeRandomSource randomSource,
         long absoluteDay,
-        IDailyV1SelectedActorActionExecutionBoundary boundary)
+        IDailyV1SelectedActorActionExecutionBoundary boundary,
+        DailyV1ActorTurnCoreRoots coreRoots = null)
     {
         const string incompatibleReason =
             "Actor is not in a compatible state for the requested action.";
+        if (coreRoots != null)
+        {
+            if (!coreRoots.IsBoundToGraph(graph))
+                throw new InvalidOperationException(
+                    "The scheduled selected action received Core decision roots from another owner graph.");
+            randomSource = coreRoots.RandomSource;
+        }
         if (graph == null || actor == null || directive == null
             || randomSource == null || boundary == null || absoluteDay < 0L
             || !graph.ContainsExactNpcOwner(actor)
@@ -325,9 +431,9 @@ internal static class DailyV1SelectedActorActionExecutionStage
         }
 
         DailyV1NpcActionCandidate requested = new DailyV1NpcActionCandidate(action, 0f);
-        if (!boundary.TryCreateDecisionBoundary(actor,
-                out IDailyV1SelectedNpcActionDecisionBoundary decisionBoundary)
-            || decisionBoundary == null
+        if (!boundary.TryCreateActionProjectionBoundary(actor,
+                out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
+            || projectionBoundary == null
             || !DailyV1CrimeActionPlanning.TryPrepareSelectedEscapePrison(
                 graph, actor, requested)
             || requested.PreparedPayload == null)
@@ -337,8 +443,8 @@ internal static class DailyV1SelectedActorActionExecutionStage
         }
 
         if (!TryCommitSelectedActionSlot(
-                graph, actor, requested, decisionBoundary,
-                NpcDecisionOrigin.ScheduledDirective, absoluteDay, boundary))
+                graph, actor, requested, projectionBoundary,
+                NpcDecisionOrigin.ScheduledDirective, absoluteDay, boundary, coreRoots))
         {
             directive.MarkSkipped(absoluteDay, incompatibleReason);
             return;
@@ -558,11 +664,14 @@ internal static class DailyV1SelectedActorActionExecutionStage
             throw new InvalidOperationException(
                 "The exact selected Daily-v1 action could not execute through its Core owner operation.");
 
-        if (!boundary.TryCompleteDispatch(
-                actor, dispatch, out actionSucceeded, out resultType,
-                out resultMessage))
+        if (!TryResolveDispatchOutcome(
+                dispatch, out actionSucceeded, out NpcActionResultType coreResultType))
             throw new InvalidOperationException(
-                "The selected Daily-v1 action result could not be published by its host adapter.");
+                "Core produced an invalid selected-action dispatch outcome.");
+        if (!boundary.TryCompleteDispatch(actor, dispatch, out resultMessage))
+            throw new InvalidOperationException(
+                "The selected Daily-v1 action projection could not be completed by its host adapter.");
+        resultType = coreResultType;
 
         if (!actionSucceeded) return true;
 

@@ -8,11 +8,9 @@ using System.Runtime.CompilerServices;
 /// </summary>
 public static class P12DNpcReceiptOwnerCensusProvider
 {
-    public const string LocalObservationSectionPrefix =
-        "p12d.npc-local-observation-receipts/";
-    public const string MerchantTradeStateSectionPrefix =
-        "p12d.npc-merchant-trade-state-receipts/";
-    public const int SchemaVersion = 1;
+    public const string LocalObservationSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix;
+    public const string MerchantTradeStateSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     internal enum ReceiptOwnerKind
     {

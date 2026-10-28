@@ -1145,14 +1145,21 @@ internal static class DailyV1ActorChoiceExecutionStage
         int actorTurnRosterOrdinal,
         bool actorAtCurrentCityLocation,
         bool merchantTradeEnabled,
-        bool decisionSystemAvailable,
-        IDailyV1ActorChoiceExecutionBoundary boundary)
+        IDailyV1ActorChoiceExecutionBoundary boundary,
+        bool requireCoreOwnedSelectedOperations = false,
+        DailyV1ActorTurnCoreRoots coreRoots = null)
     {
         if (graph == null || actor == null || personId == null || store == null || boundary == null)
             throw new ArgumentNullException("Selected actor-choice execution requires its exact graph, actor, person, store and host boundary.");
         if (!graph.ContainsExactNpcOwner(actor)
             || !ReferenceEquals(graph.Definitions, actor.Definitions))
             throw new InvalidOperationException("Actor choice referenced an NPC owner outside the selected runtime graph.");
+        if (coreRoots != null && !coreRoots.IsBoundToGraph(graph))
+            throw new InvalidOperationException(
+                "Actor choice received Core decision roots from another owner graph.");
+        if (requireCoreOwnedSelectedOperations && coreRoots == null)
+            throw new InvalidOperationException(
+                "The admitted actor-choice path requires Core-owned runtime decision roots.");
         if (!store.TryGetNextPendingForActor(personId, out ActorChoiceInput input))
             return false;
 
@@ -1176,9 +1183,7 @@ internal static class DailyV1ActorChoiceExecutionStage
             return true;
         }
 
-        if (!merchantTradeEnabled
-            || actor.MerchantTradePlan?.IsActive == true
-            || !decisionSystemAvailable)
+        if (!merchantTradeEnabled || actor.MerchantTradePlan?.IsActive == true)
         {
             Reject(store, input, absoluteDay, actorTurnRosterOrdinal, ActorChoiceFailure.ActionUnavailable);
             return true;
@@ -1212,10 +1217,22 @@ internal static class DailyV1ActorChoiceExecutionStage
             && boundary.TryRefreshRequestedActionProjection(actor, candidate);
         Func<bool> slotAdmission = () =>
             boundary.CanCommitRequestedActionSlot(actor, selectedPayload);
-        bool hasDecisionOwners = boundary.TryGetDecisionRecordOwners(
-            actor, out RuntimeIdAllocator idAllocator,
-            out SimulationRecordSequence recordSequence,
-            out NpcDecisionStore decisionStore);
+        RuntimeIdAllocator idAllocator;
+        SimulationRecordSequence recordSequence;
+        NpcDecisionStore decisionStore;
+        bool hasDecisionOwners;
+        if (coreRoots != null)
+        {
+            idAllocator = coreRoots.IdAllocator;
+            recordSequence = coreRoots.RecordSequence;
+            decisionStore = coreRoots.DecisionStore;
+            hasDecisionOwners = true;
+        }
+        else
+        {
+            hasDecisionOwners = boundary.TryGetDecisionRecordOwners(
+                actor, out idAllocator, out recordSequence, out decisionStore);
+        }
         NpcDecisionRecord decision = null;
         bool committed;
         if (!hasDecisionOwners)
@@ -1283,10 +1300,15 @@ internal static class DailyV1ActorChoiceExecutionStage
             if (committed)
             {
                 if (boundary is IDailyV1CoreActorChoiceExecutionBoundary coreBoundary
-                    && coreBoundary.UsesSelectedDailyV1ActionExecution(actor))
+                    && (requireCoreOwnedSelectedOperations
+                        || coreBoundary.UsesSelectedDailyV1ActionExecution(actor)))
                 {
                     if (!DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
-                            graph, actor, coreBoundary.RandomSource, absoluteDay,
+                            graph, actor,
+                            requireCoreOwnedSelectedOperations
+                                ? coreRoots.RandomSource
+                                : coreRoots?.RandomSource ?? coreBoundary.RandomSource,
+                            absoluteDay,
                             coreBoundary, out _, out resultStatus, out _))
                         throw new InvalidOperationException(
                             "The selected actor-choice action could not execute through its admitted Core owner graph.");

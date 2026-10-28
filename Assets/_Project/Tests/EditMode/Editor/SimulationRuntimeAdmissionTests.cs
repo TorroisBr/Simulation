@@ -1270,7 +1270,7 @@ public sealed class SimulationRuntimeAdmissionTests
             "runtime.person.residence-bind",
             "runtime.person.parentage"
         };
-        HashSet<string> registeredOperations = ReadPrivateField<HashSet<string>>(protocol, "expectedOperations");
+        IReadOnlyCollection<string> registeredOperations = protocol.RegisteredOperationContractIds;
         CollectionAssert.AreEquivalent(operationIds, registeredOperations,
             "the probes must cover the full currently registered Daily-v1 operation inventory");
 
@@ -4563,11 +4563,9 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusBeforeFailure), Is.True,
             censusBeforeFailure.ToString());
 
-        FieldInfo dailyAdvanceOperationField = typeof(SimulationRuntime).GetField(
-            "DailyAdvanceCensusOperationId", BindingFlags.Static | BindingFlags.NonPublic);
-        Assert.That(dailyAdvanceOperationField, Is.Not.Null);
-        string dailyAdvanceOperationId = dailyAdvanceOperationField.GetRawConstantValue() as string;
-        Assert.That(dailyAdvanceOperationId, Is.Not.Null.And.Not.Empty);
+        string dailyAdvanceOperationId =
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance;
+        Assert.That(dailyAdvanceOperationId, Is.EqualTo("runtime.advance-day"));
         MethodInfo enterDailyAdvanceOperation = typeof(SimulationRuntime).GetMethod(
             "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(enterDailyAdvanceOperation, Is.Not.Null);
@@ -4601,6 +4599,58 @@ public sealed class SimulationRuntimeAdmissionTests
             "Only the two changing Justice scopes and the changing Crime scope consume a mutation epoch.");
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusAfterFailure), Is.True,
             censusAfterFailure.ToString());
+    }
+
+    [Test]
+    public void SelectedCrimeJusticeDailyMutationRejectsMissingExactCrimeReceiptIdentity()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12 selected Crime receipt identity mismatch");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+        Assert.That(ReadPrivateField<CrimeSystem>(runtime, "crimeSystem"), Is.Not.Null);
+
+        FieldInfo boundCrimeField = typeof(SimulationRuntime).GetField(
+            "p12CrimeJusticeBoundCrimeSystem", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(boundCrimeField, Is.Not.Null);
+        boundCrimeField.SetValue(runtime, null);
+
+        MethodInfo runMutation = typeof(SimulationRuntime).GetMethod(
+            "RunP12CrimeJusticeDailyMutation",
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            types: new[]
+            {
+                typeof(DailyV1SelectedRuntimeOwnerGraph),
+                typeof(DailyV1SelectedCrimeJusticeDailyPhase),
+                typeof(Action)
+            },
+            modifiers: null);
+        Assert.That(runMutation, Is.Not.Null);
+        int mutationCalls = 0;
+        TargetInvocationException failure = Assert.Throws<TargetInvocationException>(() =>
+            runMutation.Invoke(runtime, new object[]
+            {
+                graph,
+                DailyV1SelectedCrimeJusticeDailyPhase.AdvanceHiddenStatuses,
+                (Action)(() => mutationCalls++)
+            }));
+
+        Assert.That(failure.InnerException, Is.TypeOf<InvalidOperationException>());
+        Assert.That(failure.InnerException.Message,
+            Does.Contain("exact Crime receipt census identity"));
+        Assert.That(mutationCalls, Is.Zero,
+            "A missing exact Crime receipt census binding is rejected before the admitted mutation runs.");
     }
 
     [Test]
@@ -11789,7 +11839,7 @@ public sealed class SimulationRuntimeAdmissionTests
             out ExplorableSiteOwnerSnapshot siteSnapshot, out var siteFailure), Is.True, siteFailure?.Message);
         snapshots.Add("D/EmptyExplorableSites", siteSnapshot);
 
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EInstitutionOfficeOwnerSnapshot institutionOfficeSnapshot,
             out P12EInstitutionOfficeSnapshotFailure institutionFailure), Is.True,
@@ -11801,26 +11851,26 @@ public sealed class SimulationRuntimeAdmissionTests
             out PropertyEstateOwnerSnapshotFailure propertyEstateFailure), Is.True,
             propertyEstateFailure?.Message);
         snapshots.Add("E/PropertyEstate", propertyEstateSnapshot);
-        Assert.That(P12EFactionOwnerSnapshot.TryCapture(
+        Assert.That(P12EFactionCaptureAdapter.TryCapture(
             runtime, GetRequiredOwner<FactionStore>(vector, FactionStoreCensusProvider.FactionsSectionId),
             token, vector,
             out P12EFactionOwnerSnapshot factionSnapshot,
             out P12EFactionSnapshotFailure factionFailure), Is.True,
             factionFailure?.Message);
         snapshots.Add("E/Factions", factionSnapshot);
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalClaimOwnerSnapshot claimSnapshot,
             out P12EPoliticalClaimSnapshotFailure claimFailure), Is.True,
             claimFailure?.Message);
         snapshots.Add("E/PoliticalClaims", claimSnapshot);
-        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalSupportCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalSupportOwnerSnapshot supportSnapshot,
             out P12EPoliticalSupportSnapshotFailure supportFailure), Is.True,
             supportFailure?.Message);
         snapshots.Add("E/PoliticalSupport", supportSnapshot);
-        Assert.That(P12EPoliticalDecisionOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalDecisionCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalDecisionOwnerSnapshot decisionSnapshot,
             out P12EPoliticalDecisionSnapshotFailure decisionFailure), Is.True,
@@ -11853,13 +11903,13 @@ public sealed class SimulationRuntimeAdmissionTests
             out PersistentBattleOwnerSnapshotFailure battleFailure), Is.True,
             battleFailure?.Message);
         snapshots.Add("E/Battles", battleSnapshot);
-        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(
             runtime, token, vector,
             out P12EJusticeRecordsOwnerSnapshot justiceSnapshot,
             out P12EJusticeSnapshotFailure justiceFailure), Is.True,
             justiceFailure?.Message);
         snapshots.Add("E/Justice", justiceSnapshot);
-        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(
+        Assert.That(P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialSnapshot,
             out P12ECrimeSocialAppraisalSnapshotFailure crimeSocialFailure), Is.True,
@@ -11886,7 +11936,7 @@ public sealed class SimulationRuntimeAdmissionTests
             out P12FTravelPartyOwnerSnapshot travelPartySnapshot,
             out P12FCommitmentSnapshotFailure travelPartyFailure), Is.True, travelPartyFailure.ToString());
         snapshots.Add("F/TravelParties", travelPartySnapshot);
-        Assert.That(P12FExpeditionOwnerSnapshotOperations.TryCapture(
+        Assert.That(P12FExpeditionOwnerSnapshot.TryCapture(
             composition.Expeditions, token, vector,
             out P12FExpeditionOwnerSnapshot expeditionSnapshot,
             out P12FCommitmentSnapshotFailure expeditionFailure), Is.True, expeditionFailure.ToString());
@@ -12069,6 +12119,132 @@ public sealed class SimulationRuntimeAdmissionTests
             .Append(':').Append(value).Append(';');
     }
 
+    [TestCase((int)P12GDailyV1RestoreStage.OwnersStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.TargetChecksCompleted)]
+    [TestCase((int)P12GDailyV1RestoreStage.BoundaryAdmitted)]
+    public void CoreContinuationSaveRejectsOperationClosedByRestoreStageCallback(
+        int invalidateAtValue)
+    {
+        P12GDailyV1RestoreStage invalidateAt = (P12GDailyV1RestoreStage)invalidateAtValue;
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G Core save operation callback invalidation");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession sourceSession =
+                ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(sourceSession?.CoreRuntimeSession, Is.Not.Null);
+            foreach (CityRuntime city in sourceSession.Runtime.Cities)
+            {
+                Assert.That(city.SelectedRuntimeOwners, Is.Not.Null,
+                    "The selected Daily-v1 save source must be bound to Core City owners.");
+
+                OwnerSectionCensusWitness presenceWitness = null;
+                foreach (IOwnerSectionCensusProvider provider in
+                    sourceSession.Composition.CityNpcPresenceCensusProviders)
+                {
+                    OwnerSectionCensusWitness candidate = provider.GetCurrentCensus();
+                    if (string.Equals(candidate.SectionId,
+                        CityNpcPresenceCensusProvider.SectionIdFor(city.RuntimeId),
+                        StringComparison.Ordinal))
+                    {
+                        presenceWitness = candidate;
+                        break;
+                    }
+                }
+                Assert.That(presenceWitness, Is.Not.Null);
+                Assert.That(presenceWitness.OwnerInstanceIdentity,
+                    Is.SameAs(city.SelectedRuntimeOwners.NpcPresence));
+                Assert.That(presenceWitness.Cardinality,
+                    Is.EqualTo(city.SelectedRuntimeOwners.NpcPresence.OrderedNpcRuntimeIds.Count));
+                Assert.That(presenceWitness.Revision,
+                    Is.EqualTo(city.SelectedRuntimeOwners.NpcPresence.Revision));
+
+                OwnerSectionCensusWitness marketWitness = null;
+                foreach (IOwnerSectionCensusProvider provider in
+                    sourceSession.Composition.CityMarketCensusProviders)
+                {
+                    OwnerSectionCensusWitness candidate = provider.GetCurrentCensus();
+                    if (string.Equals(candidate.SectionId,
+                        CityMarketCensusProvider.SectionIdFor(city.RuntimeId),
+                        StringComparison.Ordinal))
+                    {
+                        marketWitness = candidate;
+                        break;
+                    }
+                }
+                Assert.That(marketWitness, Is.Not.Null);
+                Assert.That(marketWitness.OwnerInstanceIdentity,
+                    Is.SameAs(city.SelectedRuntimeOwners.Market));
+                Assert.That(marketWitness.Cardinality,
+                    Is.EqualTo(city.SelectedRuntimeOwners.Market.Items.Count));
+                Assert.That(marketWitness.Revision,
+                    Is.EqualTo(city.SelectedRuntimeOwners.Market.Revision));
+            }
+            Assert.That(sourceSession.Composition.SpatialAuthority,
+                Is.SameAs(sourceSession.CoreRuntimeSession.GenesisComposition.SpatialAuthority),
+                "The admitted Unity runtime must retain Core's exact P12-C SpatialAuthorityStore owner.");
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+
+            DailyV1Application application =
+                ReadPrivateField<DailyV1Application>(source, "dailyV1Application");
+            DailyV1ActiveRuntimeSession coreSession = sourceSession.CoreRuntimeSession;
+            Assert.That(application, Is.Not.Null);
+            Assert.That(application.TryBeginContinuationSaveOperation(
+                coreSession,
+                out DailyV1P12GContinuationSaveOperation operation,
+                out DailyCaptureEligibilityFailure beginFailure), Is.True, beginFailure.ToString());
+
+            bool callbackInvoked = false;
+            P12AContinuationImage image;
+            SimulationActiveSession restored;
+            P12GDailyV1RestoreFailure failure;
+            string diagnostic;
+            using (operation)
+            {
+                Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                    sourceSession,
+                    sourceSession.AdmissionContext,
+                    operation,
+                    out image,
+                    out restored,
+                    out failure,
+                    out diagnostic,
+                    stage =>
+                    {
+                        if (stage != invalidateAt) return;
+                        callbackInvoked = true;
+                        operation.Dispose();
+                    }), Is.False,
+                    "A closed Core continuation-save operation must not fall back to Unity token validation.");
+            }
+
+            Assert.That(callbackInvoked, Is.True,
+                invalidateAt + ": " + failure + ": " + diagnostic);
+            Assert.That(image, Is.Null);
+            Assert.That(restored, Is.Null);
+            Assert.That(failure, Is.Not.EqualTo(P12GDailyV1RestoreFailure.None), diagnostic);
+            Assert.That(application.ActiveSession, Is.SameAs(coreSession));
+            Assert.That(application.ActiveOperationCount, Is.Zero);
+            Assert.That(sourceSession.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+
+            Assert.That(application.TryBeginContinuationSaveOperation(
+                coreSession,
+                out DailyV1P12GContinuationSaveOperation retry,
+                out DailyCaptureEligibilityFailure retryFailure), Is.True, retryFailure.ToString());
+            retry.Dispose();
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
     [Test]
     public void PersistedDailyV1ImageRestoresWithoutUsingSourceSessionAndContinuesIdentically()
     {
@@ -12090,6 +12266,9 @@ public sealed class SimulationRuntimeAdmissionTests
             InvokeInitializeSimulation(source, null);
             SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
             Assert.That(sourceSession, Is.Not.Null);
+            Assert.That(sourceSession.CoreRuntimeSession?.GenesisComposition, Is.Not.Null,
+                "A freshly bootstrapped source session must retain its exact Core genesis composition.");
+            string expectedP9ManifestFingerprint = sourceSession.CoreRuntimeSession.P12CRoots.Manifest.Fingerprint;
 
             TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
             ConfigureSelectedBootstrap(control, config);
@@ -12105,6 +12284,8 @@ public sealed class SimulationRuntimeAdmissionTests
                     GetCompletedDailyToken(sourceSession.Runtime)),
                 Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession,
                     GetCompletedDailyToken(controlSession.Runtime))));
+            Assert.That(sourceSession.CoreRuntimeSession.GenesisComposition, Is.Not.Null,
+                "The original Core session must retain its genesis roots after the completed advance.");
             Assert.That(source.TrySaveDailyV1ContinuationToPathForTest(storageRoot, out string saveCode), Is.True, saveCode);
             Assert.That(saveCode, Is.EqualTo(P12AResultCode.Saved.ToString()));
 
@@ -12127,6 +12308,12 @@ public sealed class SimulationRuntimeAdmissionTests
 
             SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(target, "activeSession");
             Assert.That(restored, Is.Not.Null);
+            Assert.That(restored.CoreRuntimeSession?.GenesisComposition, Is.Null,
+                "A detached continuation must not be mislabeled as an initial genesis composition.");
+            Assert.That(restored.CoreRuntimeSession?.P12CRoots, Is.Not.Null,
+                "A detached continuation must retain its exact reconstructed P12-C roots for a later save.");
+            Assert.That(restored.CoreRuntimeSession.P12CRoots.Manifest.Fingerprint,
+                Is.EqualTo(expectedP9ManifestFingerprint));
             Assert.That(restored.Runtime, Is.Not.SameAs(controlSession.Runtime));
             Assert.That(restored.IdentityRegistry, Is.Not.SameAs(controlSession.IdentityRegistry));
             Assert.That(restored.Runtime.CurrentDay, Is.EqualTo(controlSession.Runtime.CurrentDay));

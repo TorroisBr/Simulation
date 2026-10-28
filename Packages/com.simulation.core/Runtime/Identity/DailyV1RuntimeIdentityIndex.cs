@@ -88,18 +88,18 @@ internal sealed class DailyV1RuntimeIdentityIndex
         string sectionId;
         switch (kind)
         {
-            case DailyV1RuntimeIdentityKind.Npc: sectionId = "p12c.runtime-identities.npcs"; break;
-            case DailyV1RuntimeIdentityKind.City: sectionId = "p12c.runtime-identities.cities"; break;
-            case DailyV1RuntimeIdentityKind.Location: sectionId = "p12c.runtime-identities.locations"; break;
-            case DailyV1RuntimeIdentityKind.Route: sectionId = "p12c.runtime-identities.routes"; break;
-            case DailyV1RuntimeIdentityKind.ExplorableSite: sectionId = "p12c.runtime-identities.explorable-sites"; break;
-            case DailyV1RuntimeIdentityKind.LocalPlace: sectionId = "p12c.runtime-identities.local-places"; break;
-            case DailyV1RuntimeIdentityKind.LocalConnection: sectionId = "p12c.runtime-identities.local-connections"; break;
-            case DailyV1RuntimeIdentityKind.NotableItem: sectionId = "p12c.runtime-identities.notable-items"; break;
+            case DailyV1RuntimeIdentityKind.Npc: sectionId = P12CRuntimeIdentitySectionContract.NpcsSectionId; break;
+            case DailyV1RuntimeIdentityKind.City: sectionId = P12CRuntimeIdentitySectionContract.CitiesSectionId; break;
+            case DailyV1RuntimeIdentityKind.Location: sectionId = P12CRuntimeIdentitySectionContract.LocationsSectionId; break;
+            case DailyV1RuntimeIdentityKind.Route: sectionId = P12CRuntimeIdentitySectionContract.RoutesSectionId; break;
+            case DailyV1RuntimeIdentityKind.ExplorableSite: sectionId = P12CRuntimeIdentitySectionContract.ExplorableSitesSectionId; break;
+            case DailyV1RuntimeIdentityKind.LocalPlace: sectionId = P12CRuntimeIdentitySectionContract.LocalPlacesSectionId; break;
+            case DailyV1RuntimeIdentityKind.LocalConnection: sectionId = P12CRuntimeIdentitySectionContract.LocalConnectionsSectionId; break;
+            case DailyV1RuntimeIdentityKind.NotableItem: sectionId = P12CRuntimeIdentitySectionContract.NotableItemsSectionId; break;
             default: throw new ArgumentOutOfRangeException(nameof(kind));
         }
 
-        return new OwnerSectionCensusWitness(sectionId, 1, this,
+        return new OwnerSectionCensusWitness(sectionId, P12CRuntimeIdentitySectionContract.SchemaVersion, this,
             GetCardinality(kind), CensusRevision);
     }
 
