@@ -1468,6 +1468,33 @@ internal sealed class DailyV1SelectedActionDispatchResult
 /// </summary>
 internal static class DailyV1SelectedActionDispatchStage
 {
+    /// <summary>
+    /// Formats the selected Normal-action result from the exact Core-owned
+    /// actor definition and dispatch payload. Hosts forward this message to
+    /// their output sink; producing it does not require a Unity action object.
+    /// </summary>
+    internal static bool TryFormatNormalActionResultMessage(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1SelectedActionDispatchResult dispatch,
+        out string message)
+    {
+        message = null;
+        if (actor?.Definitions == null || actor.Definition == null
+            || dispatch?.Kind != DailyV1SelectedActionDispatchKind.Normal
+            || !dispatch.ActionRollSucceeded || !dispatch.Succeeded
+            || !actor.Definitions.Npcs.TryGetValue(
+                actor.Definition.DefinitionId,
+                out DailyV1NpcDefinition admittedDefinition)
+            || !ReferenceEquals(admittedDefinition, actor.Definition))
+            return false;
+
+        string actorName = actor.Definition.Values.name;
+        message = !string.IsNullOrEmpty(dispatch.NormalActionLogText)
+            ? $"{actorName} {dispatch.NormalActionLogText}"
+            : $"{actorName} realizou {dispatch.NormalActionName ?? string.Empty}.";
+        return true;
+    }
+
     internal static bool TryDispatch(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,

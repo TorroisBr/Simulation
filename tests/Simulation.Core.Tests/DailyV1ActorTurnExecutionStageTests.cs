@@ -877,7 +877,12 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         Assert.That(succeeded, Is.True);
         Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
-        Assert.That(resultMessage, Is.Null);
+        string expectedResultMessage = !string.IsNullOrEmpty(normal.Values.normalActionLogText)
+            ? $"{actor.Definition.Values.name} {normal.Values.normalActionLogText}"
+            : $"{actor.Definition.Values.name} realizou {normal.Values.actionName ?? string.Empty}.";
+        Assert.That(resultMessage, Is.EqualTo(expectedResultMessage));
+        Assert.That(boundary.LastReportedResultMessage, Is.EqualTo(expectedResultMessage),
+            "The projectionless host reporting port receives the exact Core-formatted Normal result.");
         Assert.That(boundary.DispatchBoundaryRequests, Is.Zero);
         Assert.That(boundary.ActionStatusBoundaryRequests, Is.EqualTo(1));
         Assert.That(boundary.ChosenActionTargetLogCalls, Is.EqualTo(1));
@@ -914,6 +919,23 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         {
             "clear-prepare", "clear-admission", "clear-projection"
         }));
+    }
+
+    [Test]
+    public void CoreNormalActionReportUsesActionNameWhenNoLogTextIsAuthored()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
+        DailyV1SelectedActionDispatchResult dispatch = new DailyV1SelectedActionDispatchResult(
+            DailyV1SelectedActionDispatchKind.Normal,
+            actionRollSucceeded: true,
+            succeeded: true,
+            normalActionName: "Ação de teste",
+            normalActionLogText: string.Empty);
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryFormatNormalActionResultMessage(
+            actor, dispatch, out string message), Is.True);
+        Assert.That(message, Is.EqualTo(
+            $"{actor.Definition.Values.name} realizou Ação de teste."));
     }
 
     [Test]
@@ -1421,6 +1443,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         internal int DispatchBoundaryRequests;
         internal int ActionStatusBoundaryRequests;
         internal int ChosenActionTargetLogCalls;
+        internal string LastReportedResultMessage;
         internal int SaleAdmissionCount;
         internal int ActionSlotAdmissionCount;
         internal int SaleReceiptCount;
@@ -1701,6 +1724,14 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             out string resultMessage)
         {
             Events.Add("complete-dispatch");
+            if (dispatch?.Kind == DailyV1SelectedActionDispatchKind.Normal)
+            {
+                if (!DailyV1SelectedActionDispatchStage.TryFormatNormalActionResultMessage(
+                        actor, dispatch, out resultMessage))
+                    return false;
+                LastReportedResultMessage = resultMessage;
+                return true;
+            }
             resultMessage = null;
             return true;
         }

@@ -12353,15 +12353,26 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             NpcRuntime exactRuntime = RequireExactActor(actor);
             if (dispatch?.Kind == DailyV1SelectedActionDispatchKind.Normal)
             {
-                // Normal dispatch reports success from the exact Core slot.
-                // Any actor/target status effects are committed by the later
-                // Core status plan; Unity action objects are presentation only.
-                NpcActionResult normalResult = runtime.CompleteSelectedActionDispatch(
+                if (dispatch.ActionRollSucceeded && dispatch.Succeeded)
+                {
+                    if (!DailyV1SelectedActionDispatchStage.TryFormatNormalActionResultMessage(
+                            actor, dispatch, out resultMessage))
+                        return false;
+                    if (!string.IsNullOrEmpty(resultMessage))
+                        runtime.logger?.Log(SimulationLogCategory.NpcAction, resultMessage);
+                    return true;
+                }
+
+                // Failure reporting still uses the established Unity failure
+                // formatter; its provider-specific details are not part of a
+                // successful Core-owned Normal dispatch.
+                NpcActionResult failedNormalResult = runtime.CompleteSelectedActionDispatch(
                     exactRuntime, null, null, dispatch);
-                if (normalResult != null && !string.IsNullOrEmpty(normalResult.Message))
+                if (failedNormalResult != null
+                    && !string.IsNullOrEmpty(failedNormalResult.Message))
                     runtime.logger?.Log(SimulationLogCategory.NpcAction,
-                        normalResult.Message);
-                resultMessage = normalResult?.Message;
+                        failedNormalResult.Message);
+                resultMessage = failedNormalResult?.Message;
                 return true;
             }
 
