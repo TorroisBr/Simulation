@@ -139,6 +139,9 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         this.protocol = protocol ?? throw new ArgumentNullException(nameof(protocol));
     }
 
+    internal bool IsBoundToProtocol(IDailyV1P12CrimeJusticeMutationProtocol candidate) =>
+        ReferenceEquals(protocol, candidate);
+
     internal bool CanBeginDailyMutation() => !isAdmissionEnabled()
         || (isOwnerThreadCurrent() && activeContext == null);
 

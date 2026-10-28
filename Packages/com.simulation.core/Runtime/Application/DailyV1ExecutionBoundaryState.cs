@@ -72,6 +72,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private NpcDecisionStore selectedDecisionStore;
     private ActorChoiceStore selectedActorChoiceStore;
     private DailyV1ActorTurnCoreRoots selectedRuntimeActorTurnCoreRoots;
+    private DailyV1P12CrimeJusticeMutationCoordinator selectedP12CrimeJusticeMutationCoordinator;
 
     internal SimulationTime SimulationTime { get; private set; }
     internal SimulationRuntimeAdmissionContext AdmissionContext { get; private set; }
@@ -549,6 +550,69 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     /// </summary>
     internal DailyV1MutationEpochState MutationEpochState => mutationEpochState;
     internal DailyV1SelectedRuntimeOwnerGraph SelectedRuntimeOwnerGraph => selectedRuntimeOwnerGraph;
+    /// <summary>
+    /// Owns selected Crime/Justice daily reservation state for this exact Core
+    /// execution session. The host supplies only the protocol that reads the
+    /// registered continuation census; the coordinator and its active scope
+    /// remain attached to this Core state.
+    /// </summary>
+    internal void ExecuteSelectedP12CrimeJusticeDailyMutation(
+        IDailyV1P12CrimeJusticeMutationProtocol protocol,
+        DailyV1P12CrimeJusticeMutationCoordinator coordinator,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1SelectedCrimeJusticeDailyPhase phase,
+        object crimeOwnerIdentity,
+        object crimeReceiptCensusOwnerIdentity,
+        object justiceOwnerIdentity,
+        object justiceReceiptCensusOwnerIdentity,
+        bool includeCrimeReceiptSection,
+        bool includeJusticeReceiptSection,
+        Action mutation)
+    {
+        if (protocol == null) throw new ArgumentNullException(nameof(protocol));
+        if (coordinator == null) throw new ArgumentNullException(nameof(coordinator));
+        DailyV1P12CrimeJusticeMutationCoordinator boundCoordinator;
+        lock (operationSyncRoot)
+        {
+            if (!HasAdmittedSelectedDailyExecution
+                || AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+                || !coordinator.IsBoundToProtocol(protocol))
+            {
+                protocol.FaultClosed();
+                throw new InvalidOperationException(
+                    "The P12 Crime/Justice operation is not bound to this admitted Core session, its exact census protocol, and its owner thread.");
+            }
+
+            if (selectedP12CrimeJusticeMutationCoordinator == null)
+                selectedP12CrimeJusticeMutationCoordinator = coordinator;
+            else if (!ReferenceEquals(selectedP12CrimeJusticeMutationCoordinator, coordinator))
+            {
+                protocol.FaultClosed();
+                throw new InvalidOperationException(
+                    "The Core execution session cannot replace the P12 Crime/Justice coordinator already bound to its writers.");
+            }
+
+            boundCoordinator = selectedP12CrimeJusticeMutationCoordinator;
+        }
+
+        if (!boundCoordinator.CanBeginSelectedDailyMutation(this, graph))
+            throw new InvalidOperationException(
+                "The Core-owned P12 Crime/Justice daily operation could not begin.");
+
+        boundCoordinator.ExecuteSelectedDailyMutation(
+            this,
+            graph,
+            phase,
+            crimeOwnerIdentity,
+            crimeReceiptCensusOwnerIdentity,
+            justiceOwnerIdentity,
+            justiceReceiptCensusOwnerIdentity,
+            includeCrimeReceiptSection,
+            includeJusticeReceiptSection,
+            mutation);
+    }
     /// <summary>
     /// Core-owned ordered runtime identity slots used by selected Daily-v1
     /// turns. Null holes and unselected host identities remain in this exact

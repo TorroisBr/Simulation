@@ -545,6 +545,72 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
         Assert.That(protocol.Calls, Does.Not.Contain("notify:" + NpcSection));
     }
 
+    [Test]
+    public void SelectedDailyP12CoordinatorLivesWithCoreExecutionStateAndKeepsOneProtocolBinding()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition,
+                out string diagnostic), Is.True, diagnostic);
+
+        FakeProtocol protocol = new FakeProtocol();
+        DailyV1P12CrimeJusticeMutationCoordinator coordinator = CreateCoordinator(protocol, () => { });
+        object crimeOwnerIdentity = new object();
+        object justiceOwnerIdentity = new object();
+        DailyV1SelectedCrimeJusticeDailyPhase[] phases =
+        {
+            DailyV1SelectedCrimeJusticeDailyPhase.ClearArrestedToday,
+            DailyV1SelectedCrimeJusticeDailyPhase.AdvanceHiddenStatuses,
+            DailyV1SelectedCrimeJusticeDailyPhase.AdvanceSentences,
+            DailyV1SelectedCrimeJusticeDailyPhase.SyncWantedStatuses
+        };
+
+        foreach (DailyV1SelectedCrimeJusticeDailyPhase phase in phases)
+        {
+            composition.ExecutionBoundaryState.ExecuteSelectedP12CrimeJusticeDailyMutation(
+                protocol,
+                coordinator,
+                composition.OwnerGraph,
+                phase,
+                crimeOwnerIdentity,
+                crimeOwnerIdentity,
+                justiceOwnerIdentity,
+                justiceOwnerIdentity,
+                includeCrimeReceiptSection: true,
+                includeJusticeReceiptSection: true,
+                mutation: () => { });
+        }
+
+        Assert.That(protocol.Calls.Count(call => call == "reserve"), Is.EqualTo(4),
+            "Each established Crime/Justice phase owns a separate epoch reservation.");
+        Assert.That(protocol.Calls.Count(call => call == "release"), Is.EqualTo(4),
+            "Each no-op phase releases only its own reservation.");
+        Assert.That(protocol.Calls.Count(call => call.StartsWith("validate:", StringComparison.Ordinal)),
+            Is.EqualTo(4));
+
+        FakeProtocol replacement = new FakeProtocol();
+        DailyV1P12CrimeJusticeMutationCoordinator replacementCoordinator =
+            CreateCoordinator(replacement, () => { });
+        Assert.Throws<InvalidOperationException>(() =>
+            composition.ExecutionBoundaryState.ExecuteSelectedP12CrimeJusticeDailyMutation(
+                replacement,
+                replacementCoordinator,
+                composition.OwnerGraph,
+                DailyV1SelectedCrimeJusticeDailyPhase.ClearArrestedToday,
+                crimeOwnerIdentity,
+                crimeOwnerIdentity,
+                justiceOwnerIdentity,
+                justiceOwnerIdentity,
+                includeCrimeReceiptSection: true,
+                includeJusticeReceiptSection: true,
+                mutation: () => Assert.Fail("A replacement census protocol must not run the mutation.")));
+        Assert.That(replacement.Calls, Is.EqualTo(new[] { "fault" }),
+            "One Core execution session retains the exact protocol identity bound to its P12 coordinator.");
+        Assert.That(protocol.Calls.Count(call => call == "reserve"), Is.EqualTo(4));
+    }
     private static DailyV1P12CrimeJusticeMutationCoordinator CreateCoordinator(
         FakeProtocol protocol,
         Action fault) => new DailyV1P12CrimeJusticeMutationCoordinator(

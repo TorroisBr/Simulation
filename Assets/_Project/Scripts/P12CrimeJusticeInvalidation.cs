@@ -21,6 +21,7 @@ public sealed partial class SimulationRuntime
     private JusticeSystem p12CrimeJusticeBoundJusticeSystem;
     private CrimeSystem p12CrimeJusticeBoundCrimeSystem;
     private DailyV1P12CrimeJusticeMutationCoordinator p12CrimeJusticeMutationCoordinator;
+    private IDailyV1P12CrimeJusticeMutationProtocol p12CrimeJusticeMutationProtocol;
 
     private sealed class ContinuationCrimeJusticeMutationProtocolAdapter
         : IDailyV1P12CrimeJusticeMutationProtocol
@@ -67,12 +68,15 @@ public sealed partial class SimulationRuntime
             resolveProtocol()?.NotifyCommittedMutation(sectionId, out _) == true;
     }
 
+    private IDailyV1P12CrimeJusticeMutationProtocol P12CrimeJusticeMutationProtocol =>
+        p12CrimeJusticeMutationProtocol ??=
+            new ContinuationCrimeJusticeMutationProtocolAdapter(() => npcRosterCensusProtocol);
     private DailyV1P12CrimeJusticeMutationCoordinator P12CrimeJusticeMutationCoordinator =>
         p12CrimeJusticeMutationCoordinator ??= new DailyV1P12CrimeJusticeMutationCoordinator(
             () => runtimeAdmissionContext != null,
             IsRuntimeAdmissionOwnerThreadCurrent,
             FaultRuntimeAdmission,
-            new ContinuationCrimeJusticeMutationProtocolAdapter(() => npcRosterCensusProtocol));
+            P12CrimeJusticeMutationProtocol);
 
     private bool TryRegisterP12CrimeJusticeOwnerSections(ContinuationCensusProtocol protocol)
     {
@@ -340,11 +344,6 @@ public sealed partial class SimulationRuntime
             return;
         }
 
-        if (!P12CrimeJusticeMutationCoordinator.CanBeginSelectedDailyMutation(
-                dailyExecutionBoundary, graph))
-            throw new InvalidOperationException(
-                "P12 selected Crime/Justice daily mutation lost its Core admission state or owner thread.");
-
         if (npcRosterCensusProtocol == null)
         {
             FaultRuntimeAdmission();
@@ -376,8 +375,9 @@ public sealed partial class SimulationRuntime
 
         try
         {
-            P12CrimeJusticeMutationCoordinator.ExecuteSelectedDailyMutation(
-                dailyExecutionBoundary,
+            dailyExecutionBoundary.ExecuteSelectedP12CrimeJusticeDailyMutation(
+                P12CrimeJusticeMutationProtocol,
+                P12CrimeJusticeMutationCoordinator,
                 graph,
                 phase,
                 crimeCensusOwnerIdentity,
