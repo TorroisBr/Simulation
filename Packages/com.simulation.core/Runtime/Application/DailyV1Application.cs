@@ -65,6 +65,296 @@ internal sealed class DailyV1P12FCoreOwnerRestoreStage
 }
 
 /// <summary>
+/// One unpublished restore attempt, bound to the exact decoded image roots
+/// and application replacement reservation. The transaction preserves the
+/// existing host projection order while requiring Core's C, D, E, and F
+/// owners to advance as one ordered, single-use staging chain.
+/// </summary>
+internal sealed class DailyV1P12RestoreStageTransaction
+{
+    internal sealed class Step : IDisposable
+    {
+        private readonly DailyV1P12RestoreStageTransaction owner;
+        private readonly int stage;
+        private int completed;
+
+        internal Step(DailyV1P12RestoreStageTransaction owner, int stage)
+        {
+            this.owner = owner;
+            this.stage = stage;
+        }
+
+        internal bool TryComplete(object stagedValue)
+        {
+            if (stagedValue == null || completed != 0
+                || !owner.TryCompleteStep(stage, stagedValue))
+                return false;
+            completed = 1;
+            return true;
+        }
+
+        public void Dispose()
+        {
+            if (completed == 0)
+                owner.AbortStep(stage);
+            completed = 1;
+        }
+    }
+
+    private const int RootsStaged = 1;
+    private const int DStaged = 2;
+    private const int EStaged = 3;
+    private const int FStaged = 4;
+    private const int CandidateComposed = 5;
+
+    private readonly object syncRoot = new object();
+    private readonly DailyV1Application application;
+    private readonly P12AContinuationImage image;
+    private readonly DailyV1ActiveRuntimeSession expectedSession;
+    private readonly DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation;
+    private P12CStagedCoreContinuationRoot roots;
+    private DailyV1EffectiveDefinitions definitions;
+    private DailyV1P12DCoreOwnerRestoreStage dOwners;
+    private P12ECoreOwnerRestoreStage eOwners;
+    private DailyV1P12FCoreOwnerRestoreStage fOwners;
+    private DailyV1RuntimeIdentityIndex runtimeIdentityIndex;
+    private int completedStage;
+    private int activeStage;
+
+    internal DailyV1P12RestoreStageTransaction(
+        DailyV1Application application,
+        P12AContinuationImage image,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation)
+    {
+        this.application = application ?? throw new ArgumentNullException(nameof(application));
+        this.image = image ?? throw new ArgumentNullException(nameof(image));
+        this.expectedSession = expectedSession;
+        this.replacementOperation = replacementOperation;
+    }
+
+    internal P12AContinuationImage SourceImage => image;
+    internal DailyV1ActiveRuntimeSession ExpectedSession => expectedSession;
+    internal P12CStagedCoreContinuationRoot Roots => roots;
+
+    internal bool TryBindRoots(P12CStagedCoreContinuationRoot stagedRoots)
+    {
+        lock (syncRoot)
+        {
+            if (completedStage != 0 || activeStage != 0 || roots != null
+                || stagedRoots == null || !stagedRoots.IsDetached
+                || !stagedRoots.TryBindRestoreStageTransaction(this))
+                return false;
+            roots = stagedRoots;
+            completedStage = RootsStaged;
+            return true;
+        }
+    }
+
+    internal Step TryBeginP12D(
+        DailyV1Application candidateApplication,
+        P12CStagedCoreContinuationRoot stagedRoots,
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        DailyV1ActiveRuntimeSession candidateExpectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation candidateOperation)
+    {
+        lock (syncRoot)
+        {
+            if (!Matches(candidateApplication, stagedRoots, candidateExpectedSession, candidateOperation)
+                || selectedDefinitions == null || completedStage != RootsStaged || activeStage != 0)
+                return null;
+            activeStage = DStaged;
+            definitions = selectedDefinitions;
+            return new Step(this, DStaged);
+        }
+    }
+
+    internal Step TryBeginP12E(
+        DailyV1Application candidateApplication,
+        P12CStagedCoreContinuationRoot stagedRoots,
+        PersonStore persons,
+        IReadOnlyList<DailyV1CityRuntimeOwners> cities,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcs,
+        long capturedDay,
+        DailyV1ActiveRuntimeSession candidateExpectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation candidateOperation)
+    {
+        lock (syncRoot)
+        {
+            if (!Matches(candidateApplication, stagedRoots, candidateExpectedSession, candidateOperation)
+                || completedStage != DStaged || activeStage != 0
+                || dOwners == null || !ReferenceEquals(persons, dOwners.Persons)
+                || !SameReferences(cities, dOwners.SelectedOwners.Cities)
+                || !SameReferences(npcs, dOwners.SelectedOwners.Npcs)
+                || capturedDay != image.Header.Day)
+                return null;
+            activeStage = EStaged;
+            return new Step(this, EStaged);
+        }
+    }
+
+    internal Step TryBeginP12F(
+        DailyV1Application candidateApplication,
+        P12CStagedCoreContinuationRoot stagedRoots,
+        PersonStore persons,
+        InstitutionStore institutions,
+        PoliticalClaimStore politicalClaims,
+        FactionStore factions,
+        OfficeStore offices,
+        PropertyOwnershipStore properties,
+        long capturedDay,
+        SimulationTime stagedTime,
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> stagedNpcOwners,
+        DailyV1RuntimeIdentityIndex stagedIdentities,
+        SpatialNetworkOwner stagedSpatialNetwork,
+        ExplorableSiteStore stagedExplorableSites,
+        DailyV1ActiveRuntimeSession candidateExpectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation candidateOperation)
+    {
+        lock (syncRoot)
+        {
+            if (!Matches(candidateApplication, stagedRoots, candidateExpectedSession, candidateOperation)
+                || completedStage != EStaged || activeStage != 0 || dOwners == null || eOwners == null
+                || !ReferenceEquals(persons, dOwners.Persons)
+                || !ReferenceEquals(institutions, eOwners.Institutions)
+                || !ReferenceEquals(politicalClaims, eOwners.PoliticalClaims)
+                || !ReferenceEquals(factions, eOwners.Factions)
+                || !ReferenceEquals(offices, eOwners.Offices)
+                || !ReferenceEquals(properties, eOwners.PropertyOwnership)
+                || !ReferenceEquals(stagedSpatialNetwork, dOwners.SpatialNetwork)
+                || !ReferenceEquals(stagedExplorableSites, dOwners.ExplorableSites)
+                || !ReferenceEquals(selectedDefinitions, definitions)
+                || !SameReferences(stagedNpcOwners, dOwners.SelectedOwners.Npcs)
+                || stagedIdentities == null
+                || capturedDay != image.Header.Day || stagedTime == null
+                || stagedTime.AbsoluteDay != image.Header.Day)
+                return null;
+            activeStage = FStaged;
+            runtimeIdentityIndex = stagedIdentities;
+            return new Step(this, FStaged);
+        }
+    }
+
+    internal bool CanComposeSession(
+        DailyV1Application candidateApplication,
+        P12CStagedCoreContinuationRoot stagedRoots,
+        P12CP9GenesisManifestCoreSnapshot p9Manifest,
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        EffectiveSimulationConfiguration effectiveConfiguration,
+        SimulationTime simulationTime,
+        long lastEconomySnapshotDay,
+        WorldId worldId,
+        IReadOnlyList<DailyV1CityRuntimeOwners> cities,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcs,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecords,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex identities,
+        PersonStore persons,
+        ScheduledDirectiveStore directives,
+        ExpeditionStore expeditions,
+        SpatialAuthorityStore spatialAuthority,
+        RuntimeIdAllocator allocator,
+        IAuthoritativeRandomSource randomSource,
+        SimulationRecordSequence recordSequence,
+        ActorChoiceStore actorChoices,
+        DailyV1ActiveRuntimeSession candidateExpectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation candidateOperation)
+    {
+        lock (syncRoot)
+        {
+            return Matches(candidateApplication, stagedRoots, candidateExpectedSession, candidateOperation)
+                && completedStage == FStaged && activeStage == 0
+                && dOwners != null && eOwners != null && fOwners != null
+                && ReferenceEquals(selectedDefinitions, definitions)
+                && ReferenceEquals(effectiveConfiguration, selectedDefinitions.EffectiveConfiguration)
+                && simulationTime != null && simulationTime.AbsoluteDay == image.Header.Day
+                && lastEconomySnapshotDay == image.Header.LastEconomySnapshotDay
+                && ReferenceEquals(p9Manifest, roots.GenesisManifest)
+                && ReferenceEquals(worldId, roots.WorldIdentity)
+                && SameReferences(cities, dOwners.SelectedOwners.Cities)
+                && SameReferences(npcs, dOwners.SelectedOwners.Npcs)
+                && ReferenceEquals(spatialNetwork, dOwners.SpatialNetwork)
+                && ReferenceEquals(justiceRecords, eOwners.JusticeRecords)
+                && ReferenceEquals(travelParties, fOwners.TravelParties)
+                && ReferenceEquals(identities, runtimeIdentityIndex)
+                && ReferenceEquals(persons, dOwners.Persons)
+                && ReferenceEquals(directives, fOwners.ScheduledDirectives)
+                && ReferenceEquals(expeditions, fOwners.Expeditions)
+                && ReferenceEquals(actorChoices, fOwners.ActorChoices)
+                && ReferenceEquals(spatialAuthority, roots.SpatialAuthority)
+                && ReferenceEquals(allocator, roots.RuntimeIdAllocator)
+                && ReferenceEquals(randomSource, roots.DeterministicRandom)
+                && ReferenceEquals(recordSequence, roots.RecordSequence);
+        }
+    }
+
+    internal bool TryCompleteSessionCandidate(DailyV1ActiveRuntimeSession candidate)
+    {
+        lock (syncRoot)
+        {
+            DailyV1SelectedRuntimeOwnerGraph candidateGraph =
+                candidate?.ExecutionBoundaryState?.SelectedRuntimeOwnerGraph;
+            if (candidateGraph == null || completedStage != FStaged || activeStage != 0
+                || !ReferenceEquals(candidateGraph.Definitions, definitions))
+                return false;
+            completedStage = CandidateComposed;
+            return true;
+        }
+    }
+
+    private bool Matches(
+        DailyV1Application candidateApplication,
+        P12CStagedCoreContinuationRoot stagedRoots,
+        DailyV1ActiveRuntimeSession candidateExpectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation candidateOperation) =>
+        ReferenceEquals(candidateApplication, application)
+        && ReferenceEquals(stagedRoots, roots)
+        && ReferenceEquals(stagedRoots?.RestoreStageTransaction, this)
+        && ReferenceEquals(candidateExpectedSession, expectedSession)
+        && ReferenceEquals(candidateOperation, replacementOperation);
+
+    private bool TryCompleteStep(int stage, object stagedValue)
+    {
+        lock (syncRoot)
+        {
+            if (activeStage != stage || stagedValue == null)
+                return false;
+            if (stage == DStaged && stagedValue is DailyV1P12DCoreOwnerRestoreStage d)
+                dOwners = d;
+            else if (stage == EStaged && stagedValue is P12ECoreOwnerRestoreStage e)
+                eOwners = e;
+            else if (stage == FStaged && stagedValue is DailyV1P12FCoreOwnerRestoreStage f)
+                fOwners = f;
+            else
+                return false;
+            completedStage = stage;
+            activeStage = 0;
+            return true;
+        }
+    }
+
+    private void AbortStep(int stage)
+    {
+        lock (syncRoot)
+            if (activeStage == stage)
+                activeStage = 0;
+    }
+
+    private static bool SameReferences<T>(IReadOnlyList<T> actual, IReadOnlyList<T> expected)
+        where T : class
+    {
+        if (actual == null || expected == null || actual.Count != expected.Count)
+            return false;
+        for (int index = 0; index < actual.Count; index++)
+            if (!ReferenceEquals(actual[index], expected[index]))
+                return false;
+        return true;
+    }
+}
+
+/// <summary>
 /// Core-owned lifetime and operation gate for one selected Daily-v1
 /// application. Host adapters may retain projections, but this instance owns
 /// the exact active Core session and its serialized publication boundary.
@@ -368,12 +658,48 @@ internal sealed class DailyV1Application
         out SimulationCalendar calendar,
         out string diagnostic) =>
         TryCreateRestoredActiveRuntimeSession(
+            definitions, effectiveConfiguration, calendarDefinition,
+            simulationTime, admissionContext, worldId, cityOwners, npcOwners,
+            spatialNetwork, justiceRecords, travelParties, runtimeIdentityIndex,
+            personStore, directives, expeditions, runtimeIdAllocator,
+            randomSource, recordSequence, decisionStore, actorChoiceStore,
+            lastEconomySnapshotDay, replacementOperation, null, out candidate,
+            out calendar, out diagnostic);
+
+    internal bool TryCreateRestoredActiveRuntimeSession(
+        DailyV1EffectiveDefinitions definitions,
+        EffectiveSimulationConfiguration effectiveConfiguration,
+        CalendarDefinition calendarDefinition,
+        SimulationTime simulationTime,
+        SimulationRuntimeAdmissionContext admissionContext,
+        WorldId worldId,
+        IReadOnlyList<DailyV1CityRuntimeOwners> cityOwners,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecords,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        PersonStore personStore,
+        ScheduledDirectiveStore directives,
+        ExpeditionStore expeditions,
+        RuntimeIdAllocator runtimeIdAllocator,
+        IAuthoritativeRandomSource randomSource,
+        SimulationRecordSequence recordSequence,
+        NpcDecisionStore decisionStore,
+        ActorChoiceStore actorChoiceStore,
+        long lastEconomySnapshotDay,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        DailyV1P12RestoreStageTransaction restoreStageTransaction,
+        out DailyV1ActiveRuntimeSession candidate,
+        out SimulationCalendar calendar,
+        out string diagnostic) =>
+        TryCreateRestoredActiveRuntimeSession(
             definitions, null, effectiveConfiguration, calendarDefinition,
             simulationTime, admissionContext, worldId, cityOwners, npcOwners,
             spatialNetwork, justiceRecords, travelParties, runtimeIdentityIndex,
             personStore, directives, expeditions, null, runtimeIdAllocator,
             randomSource, recordSequence, decisionStore, actorChoiceStore,
-            lastEconomySnapshotDay, replacementOperation, out candidate,
+            lastEconomySnapshotDay, replacementOperation, restoreStageTransaction, out candidate,
             out calendar, out diagnostic);
 
     internal bool TryCreateRestoredActiveRuntimeSession(
@@ -403,6 +729,44 @@ internal sealed class DailyV1Application
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
         out DailyV1ActiveRuntimeSession candidate,
         out SimulationCalendar calendar,
+        out string diagnostic) =>
+        TryCreateRestoredActiveRuntimeSession(
+            definitions, p9Manifest, effectiveConfiguration, calendarDefinition,
+            simulationTime, admissionContext, worldId, cityOwners, npcOwners,
+            spatialNetwork, justiceRecords, travelParties, runtimeIdentityIndex,
+            personStore, directives, expeditions, spatialAuthority,
+            runtimeIdAllocator, randomSource, recordSequence, decisionStore,
+            actorChoiceStore, lastEconomySnapshotDay, replacementOperation,
+            null, out candidate, out calendar, out diagnostic);
+
+    internal bool TryCreateRestoredActiveRuntimeSession(
+        DailyV1EffectiveDefinitions definitions,
+        P12CP9GenesisManifestCoreSnapshot p9Manifest,
+        EffectiveSimulationConfiguration effectiveConfiguration,
+        CalendarDefinition calendarDefinition,
+        SimulationTime simulationTime,
+        SimulationRuntimeAdmissionContext admissionContext,
+        WorldId worldId,
+        IReadOnlyList<DailyV1CityRuntimeOwners> cityOwners,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecords,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        PersonStore personStore,
+        ScheduledDirectiveStore directives,
+        ExpeditionStore expeditions,
+        SpatialAuthorityStore spatialAuthority,
+        RuntimeIdAllocator runtimeIdAllocator,
+        IAuthoritativeRandomSource randomSource,
+        SimulationRecordSequence recordSequence,
+        NpcDecisionStore decisionStore,
+        ActorChoiceStore actorChoiceStore,
+        long lastEconomySnapshotDay,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        DailyV1P12RestoreStageTransaction restoreStageTransaction,
+        out DailyV1ActiveRuntimeSession candidate,
+        out SimulationCalendar calendar,
         out string diagnostic)
     {
         candidate = null;
@@ -412,6 +776,20 @@ internal sealed class DailyV1Application
             || !ReferenceEquals(definitions.EffectiveConfiguration, effectiveConfiguration))
         {
             diagnostic = "Restored Core session composition requires the exact selected definitions and configuration.";
+            return false;
+        }
+
+        if (restoreStageTransaction != null
+            && !restoreStageTransaction.CanComposeSession(
+                this, restoreStageTransaction.Roots, p9Manifest, definitions, effectiveConfiguration,
+                simulationTime, lastEconomySnapshotDay, worldId, cityOwners, npcOwners,
+                spatialNetwork, justiceRecords,
+                travelParties, runtimeIdentityIndex, personStore, directives,
+                expeditions, spatialAuthority, runtimeIdAllocator, randomSource,
+                recordSequence, actorChoiceStore, restoreStageTransaction.ExpectedSession,
+                replacementOperation))
+        {
+            diagnostic = "The restored Core owner graph does not match the exact ordered C/D/E/F staging transaction.";
             return false;
         }
 
@@ -441,6 +819,16 @@ internal sealed class DailyV1Application
                 out diagnostic))
             return false;
 
+        DailyV1SelectedRuntimeOwnerGraph restoredOwnerGraph =
+            executionBoundaryState.SelectedRuntimeOwnerGraph;
+        if (restoredOwnerGraph == null
+            || !restoredOwnerGraph.TryValidateRestoredTravelPartyBindings(out diagnostic))
+        {
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The restored Core owner graph is unavailable for TravelParty relation validation.";
+            return false;
+        }
+
         if (!TryCreateRestoredActiveRuntimeSession(
                 executionBoundaryState,
                 definitions,
@@ -451,6 +839,15 @@ internal sealed class DailyV1Application
                 out DailyV1ActiveRuntimeSession candidateSession,
                 out diagnostic))
             return false;
+
+        if (restoreStageTransaction != null
+            && !restoreStageTransaction.TryCompleteSessionCandidate(candidateSession))
+        {
+            candidate = null;
+            calendar = null;
+            diagnostic = "The restored Core session candidate did not complete its ordered P12 staging transaction.";
+            return false;
+        }
 
         candidate = candidateSession;
         calendar = candidateCalendar;
@@ -1087,6 +1484,17 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        DailyV1P12RestoreStageTransaction restoreTransaction =
+            new DailyV1P12RestoreStageTransaction(this, image, expectedSession, replacementOperation);
+        if (!restoreTransaction.TryBindRoots(stagedRoots))
+        {
+            stagedRoots = null;
+            result = new P12AResult(
+                P12AResultCode.OwnerGraphRejected,
+                "p12c.restore-stage-transaction");
+            return false;
+        }
+
         result = null;
         return true;
     }
@@ -1226,20 +1634,46 @@ internal sealed class DailyV1Application
             npcInputs.Add(input);
         }
 
-        if (!DailyV1P12DSelectedCoreOwnerStager.TryCreate(
-                definitions, cityInputs, npcInputs, stagedSpatialNetwork, travelPartyIds,
-                out DailyV1P12DSelectedCoreOwnerStage selectedOwners, out _)
-            || selectedOwners == null)
+        DailyV1P12RestoreStageTransaction restoreTransaction = stagedRoots.RestoreStageTransaction;
+        DailyV1P12RestoreStageTransaction.Step restoreStep =
+            restoreTransaction?.TryBeginP12D(this, stagedRoots, definitions,
+                expectedSession, replacementOperation);
+        if (restoreTransaction != null && restoreStep == null)
         {
             result = new P12AResult(P12AResultCode.OwnerGraphRejected,
-                "p12d.selected-core-owners");
+                "p12d.restore-stage-transaction");
             return false;
         }
 
-        stagedOwners = new DailyV1P12DCoreOwnerRestoreStage(
-            stagedSpatialNetwork, stagedPersons, stagedGenealogy, stagedSites, selectedOwners);
-        result = null;
-        return true;
+        try
+        {
+            if (!DailyV1P12DSelectedCoreOwnerStager.TryCreate(
+                    definitions, cityInputs, npcInputs, stagedSpatialNetwork, travelPartyIds,
+                    out DailyV1P12DSelectedCoreOwnerStage selectedOwners, out _)
+                || selectedOwners == null)
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12d.selected-core-owners");
+                return false;
+            }
+
+            stagedOwners = new DailyV1P12DCoreOwnerRestoreStage(
+                stagedSpatialNetwork, stagedPersons, stagedGenealogy, stagedSites, selectedOwners);
+            if (restoreStep != null && !restoreStep.TryComplete(stagedOwners))
+            {
+                stagedOwners = null;
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12d.restore-stage-transaction");
+                return false;
+            }
+
+            result = null;
+            return true;
+        }
+        finally
+        {
+            restoreStep?.Dispose();
+        }
     }
 
     /// <summary>
@@ -1283,23 +1717,50 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        if (!DailyV1P12ECoreOwnerRestoreStager.TryStage(
-                institutionOffice, propertyEstate, faction, politicalClaims,
-                politicalSupport, politicalDecisions, military, conflicts, wars, battles,
-                justiceRecords, persons, stagedRoots.SpatialAuthority,
-                stagedCities, stagedNpcs, capturedDay, stageObserver,
-                out stagedOwners, out _)
-            || stagedOwners == null)
+        DailyV1P12RestoreStageTransaction restoreTransaction = stagedRoots.RestoreStageTransaction;
+        DailyV1P12RestoreStageTransaction.Step restoreStep =
+            restoreTransaction?.TryBeginP12E(this, stagedRoots, persons, stagedCities, stagedNpcs,
+                capturedDay, expectedSession, replacementOperation);
+        if (restoreTransaction != null && restoreStep == null)
         {
-            stagedOwners = null;
             result = new P12AResult(
                 P12AResultCode.OwnerGraphRejected,
-                "p12e.core-owners");
+                "p12e.restore-stage-transaction");
             return false;
         }
 
-        result = null;
-        return true;
+        try
+        {
+            if (!DailyV1P12ECoreOwnerRestoreStager.TryStage(
+                    institutionOffice, propertyEstate, faction, politicalClaims,
+                    politicalSupport, politicalDecisions, military, conflicts, wars, battles,
+                    justiceRecords, persons, stagedRoots.SpatialAuthority,
+                    stagedCities, stagedNpcs, capturedDay, stageObserver,
+                    out stagedOwners, out _)
+                || stagedOwners == null)
+            {
+                stagedOwners = null;
+                result = new P12AResult(
+                    P12AResultCode.OwnerGraphRejected,
+                    "p12e.core-owners");
+                return false;
+            }
+
+            if (restoreStep != null && !restoreStep.TryComplete(stagedOwners))
+            {
+                stagedOwners = null;
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12e.restore-stage-transaction");
+                return false;
+            }
+
+            result = null;
+            return true;
+        }
+        finally
+        {
+            restoreStep?.Dispose();
+        }
     }
 
     /// <summary>
@@ -1350,6 +1811,19 @@ internal sealed class DailyV1Application
             || stagedSpatialNetwork == null || stagedExplorableSites == null)
         {
             result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        DailyV1P12RestoreStageTransaction restoreTransaction = stagedRoots.RestoreStageTransaction;
+        DailyV1P12RestoreStageTransaction.Step restoreStep = restoreTransaction?.TryBeginP12F(
+            this, stagedRoots, persons, institutions, politicalClaims, factions, offices,
+            properties, capturedDay, stagedTime, selectedDefinitions, stagedSelectedNpcOwners,
+            stagedIdentities, stagedSpatialNetwork, stagedExplorableSites,
+            expectedSession, replacementOperation);
+        if (restoreTransaction != null && restoreStep == null)
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12f.restore-stage-transaction");
             return false;
         }
 
@@ -1425,6 +1899,13 @@ internal sealed class DailyV1Application
             stagedOwners = new DailyV1P12FCoreOwnerRestoreStage(
                 stagedPoliticalKnowledge, stagedDirectives, stagedActorChoices,
                 stagedTravelParties, stagedExpeditions);
+            if (restoreStep != null && !restoreStep.TryComplete(stagedOwners))
+            {
+                stagedOwners = null;
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12f.restore-stage-transaction");
+                return false;
+            }
             result = null;
             return true;
         }
@@ -1436,6 +1917,10 @@ internal sealed class DailyV1Application
             result = new P12AResult(P12AResultCode.OwnerGraphRejected,
                 "p12f.core-owners");
             return false;
+        }
+        finally
+        {
+            restoreStep?.Dispose();
         }
     }
 

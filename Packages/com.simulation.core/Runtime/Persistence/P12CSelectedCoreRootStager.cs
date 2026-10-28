@@ -6,6 +6,8 @@ using System.Text;
 /// <summary>Core-owned private reconstruction of the selected P12-C value roots.</summary>
 internal sealed class P12CStagedCoreContinuationRoot
 {
+    private DailyV1P12RestoreStageTransaction restoreStageTransaction;
+
     internal P12CStagedCoreContinuationRoot(
         bool isDetached,
         WorldId worldIdentity,
@@ -31,6 +33,15 @@ internal sealed class P12CStagedCoreContinuationRoot
     internal SpatialAuthorityStore SpatialAuthority { get; }
     internal P12CP9GenesisManifestCoreSnapshot GenesisManifest { get; }
     internal DeterministicRandomSource DeterministicRandom { get; }
+    internal DailyV1P12RestoreStageTransaction RestoreStageTransaction => restoreStageTransaction;
+
+    internal bool TryBindRestoreStageTransaction(DailyV1P12RestoreStageTransaction transaction)
+    {
+        if (transaction == null || restoreStageTransaction != null)
+            return false;
+        restoreStageTransaction = transaction;
+        return true;
+    }
 }
 
 /// <summary>

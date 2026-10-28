@@ -1453,6 +1453,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     stagedF.ActorChoices,
                     lastEconomySnapshotDay,
                     replacementOperation,
+                    stagedC.CoreRoot.RestoreStageTransaction,
                     out coreRuntimeSession,
                     out restoredCalendar,
                     out diagnostic))

@@ -36,6 +36,75 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
     }
 
     [Test]
+    public void RestoredTravelPartyBindingsAreValidatedAgainstTheExactCoreOwnerGraph()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        SpatialNetworkOwner spatial = new SpatialNetworkOwner();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions, spatial);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredCityRoutes(allocator), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityId => builder.ResolveUniqueStartingCity(cityId)?.RuntimeId), Is.True);
+        TravelPartyStore parties = new TravelPartyStore();
+        Assert.That(builder.TryBuild(null, parties,
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1NpcRuntimeOwners member = graph.Npcs.First(npc =>
+            string.Equals(npc.Definition.DefinitionId, "JORGE", StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners destination = graph.Cities.First(city =>
+            !string.Equals(city.RuntimeId, member.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners origin = graph.Cities.Single(city =>
+            string.Equals(city.RuntimeId, member.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        Assert.That(graph.SpatialNetwork.TryGetLocation(origin.LocationRuntimeId,
+            out SpatialLocationRuntime originLocation), Is.True);
+        Assert.That(graph.SpatialNetwork.TryGetLocation(destination.LocationRuntimeId,
+            out SpatialLocationRuntime destinationLocation), Is.True);
+        SpatialRouteRuntime route = graph.SpatialNetwork.Routes.Single(candidate =>
+            ReferenceEquals(candidate.Origin, originLocation)
+            && ReferenceEquals(candidate.Destination, destinationLocation));
+        Assert.That(graph.TryValidateRestoredTravelPartyBindings(out string emptyDiagnostic), Is.True,
+            emptyDiagnostic);
+
+        const string decisionId = "decision/restored-party";
+        const string partyId = "party/restored-party";
+        Assert.That(DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+            member, origin, origin.LocationRuntimeId, destination.LocationRuntimeId,
+            destination, route.TravelDays, decisionId, route.RuntimeId,
+            out DailyV1SelectedTravelTransitionPlan startPlan), Is.True);
+        Assert.That(graph.TryCommitTravelTransition(member, startPlan, null), Is.True);
+        TravelPartyRuntime party = new TravelPartyRuntime(
+            partyId, origin.LocationRuntimeId, destination.LocationRuntimeId,
+            route.RuntimeId, new[] { member.RuntimeId }, Array.Empty<string>(),
+            route.TravelDays, decisionId,
+            new[] { new TravelPartyMemberCost(member.RuntimeId, 0f) });
+        Assert.That(graph.TravelParties.Add(party), Is.True);
+        Assert.That(DailyV1SelectedTravelTransitionPlan.TrySetActiveTravelParty(
+            member, partyId, out DailyV1SelectedTravelTransitionPlan partyPlan), Is.True);
+        Assert.That(graph.TryCommitTravelTransition(member, partyPlan, null), Is.True);
+
+        Assert.That(graph.TryValidateRestoredTravelPartyBindings(out string validDiagnostic), Is.True,
+            validDiagnostic);
+        Assert.That(member.Travel.ActiveTravelPartyId, Is.EqualTo(partyId));
+        Assert.That(graph.TravelParties.ActiveParties, Is.EqualTo(new[] { party }));
+
+        Assert.That(member.Travel.TryInstallState(
+            member.Travel.CurrentLocationRuntimeId,
+            member.Travel.CurrentCityRuntimeId,
+            member.Travel.DestinationLocationRuntimeId,
+            member.Travel.DestinationCityRuntimeId,
+            member.Travel.TravelDaysRemaining,
+            member.Travel.TravelDaysTotal,
+            member.Travel.TravelRouteRuntimeId,
+            member.Travel.TravelStartedToday,
+            member.Travel.TravelOriginDecisionId,
+            "party/different-owner-binding",
+            member.Travel.Revision), Is.True);
+        Assert.That(graph.TryValidateRestoredTravelPartyBindings(out string mismatchDiagnostic), Is.False);
+        Assert.That(mismatchDiagnostic, Is.Not.Empty);
+    }
+
+    [Test]
     public void SelectedGraphTransitReadUsesItsExactCorePersonPositionOwner()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
