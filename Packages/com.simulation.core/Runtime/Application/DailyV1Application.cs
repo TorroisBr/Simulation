@@ -1112,11 +1112,10 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
-    /// Stages the selected Core-owned P12-E institution, property, political,
-    /// and justice owners under the same bootstrap or exact-session
-    /// replacement authority as the P12-C/D roots. Unity supplies only the
-    /// already decoded immutable owner snapshots and staged P12-C/D roots;
-    /// Core creates the authoritative P12-E owners.
+    /// Stages the selected Core-owned P12-E owner vector under the same
+    /// bootstrap or exact-session replacement authority as the P12-C/D roots.
+    /// Unity supplies decoded immutable snapshots and staged P12-C/D roots;
+    /// Core creates the authoritative owners in dependency order.
     /// </summary>
     internal bool TryStageRestoredP12EOwners(
         P12CStagedCoreContinuationRoot stagedRoots,
@@ -1126,6 +1125,10 @@ internal sealed class DailyV1Application
         P12EPoliticalClaimOwnerSnapshot politicalClaims,
         P12EPoliticalSupportOwnerSnapshot politicalSupport,
         P12EPoliticalDecisionOwnerSnapshot politicalDecisions,
+        P12EMilitaryOwnerSnapshot military,
+        PersistentConflictOwnerSnapshot conflicts,
+        PersistentWarOwnerSnapshot wars,
+        PersistentBattleOwnerSnapshot battles,
         P12EJusticeRecordsOwnerSnapshot justiceRecords,
         PersonStore persons,
         IReadOnlyList<DailyV1CityRuntimeOwners> stagedCities,
@@ -1151,8 +1154,9 @@ internal sealed class DailyV1Application
 
         if (!DailyV1P12ECoreOwnerRestoreStager.TryStage(
                 institutionOffice, propertyEstate, faction, politicalClaims,
-                politicalSupport, politicalDecisions, justiceRecords,
-                persons, stagedCities, stagedNpcs, capturedDay, stageObserver,
+                politicalSupport, politicalDecisions, military, conflicts, wars, battles,
+                justiceRecords, persons, stagedRoots.SpatialAuthority,
+                stagedCities, stagedNpcs, capturedDay, stageObserver,
                 out stagedOwners, out _)
             || stagedOwners == null)
         {

@@ -11,7 +11,7 @@ public enum BattleOutcomeType
 /// <summary>Immutable audit identities retained for a proposed Battle outcome.</summary>
 public sealed class BattleResolutionProvenance
 {
-    public BattleResolutionProvenance(
+    internal BattleResolutionProvenance(
         string policyFingerprint,
         string numericExecutionProfileKey,
         string projectionVersion,
