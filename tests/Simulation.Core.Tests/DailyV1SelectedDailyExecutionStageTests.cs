@@ -104,6 +104,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     public void StateBackedDayStartUsesCoreBoundRosterInsteadOfHostProjection()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        Assert.That(composition.ExecutionBoundaryState.HasAdmittedSelectedDailyExecution, Is.True,
+            "This regression exercises a published selected-profile admission contract.");
         FakeBoundary boundary = new FakeBoundary(
             composition.RuntimeIdAllocator, composition.RandomSource,
             composition.RecordSequence, composition.DecisionStore,
@@ -112,8 +114,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             UseSelectedActionExecution = true,
             UseSelectedDayStartContext = true,
             HasUnselectedLiveRuntimeMember = true,
-            CrimeSystemPresent = true,
-            JusticeSystemPresent = true,
+            CrimeSystemPresent = false,
+            JusticeSystemPresent = false,
             DayStartRuntimeRosterOverride = Array.Empty<DailyV1ActorTurnRosterProjection>()
         };
 
@@ -126,7 +128,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             DailyV1SelectedCrimeJusticeDailyPhase.AdvanceHiddenStatuses,
             DailyV1SelectedCrimeJusticeDailyPhase.AdvanceSentences,
             DailyV1SelectedCrimeJusticeDailyPhase.SyncWantedStatuses
-        }), "The admitted state-backed day-start stages use the roster already bound to Core state.");
+        }), "The admitted state-backed day-start stages use the roster and selected system-presence facts already bound to Core state, not host flags.");
         Assert.That(boundary.Calls, Does.Not.Contain("begin-day"));
     }
 

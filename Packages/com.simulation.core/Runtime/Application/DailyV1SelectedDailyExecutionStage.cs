@@ -412,11 +412,23 @@ internal static class DailyV1SelectedDailyExecutionStage
                     throw new InvalidOperationException(
                         "The selected Daily-v1 day-start roster does not match the exact Core NPC owners.");
 
+                // The admitted selected profile requires both existing
+                // Crime/Justice infrastructures. Crime.Enabled controls action
+                // provider admission; it does not suppress hidden timers or
+                // Justice day-start work. Do not let parallel Unity presence
+                // flags suppress those Core-owned phases. If the required
+                // Justice owner is absent, TryRun rejects before any mutation.
+                bool admittedSelectedExecution =
+                    executionState?.HasAdmittedSelectedDailyExecution == true;
+                bool selectedJusticeInfrastructurePresent = admittedSelectedExecution
+                    || dayStartContext.JusticeSystemPresent;
+                bool selectedCrimeInfrastructurePresent = admittedSelectedExecution
+                    || dayStartContext.CrimeSystemPresent;
                 if (!DailyV1SelectedCrimeJusticeDailyStage.TryRun(
                         graph,
                         dayStartRoster,
-                        dayStartContext.CrimeSystemPresent,
-                        dayStartContext.JusticeSystemPresent,
+                        selectedCrimeInfrastructurePresent,
+                        selectedJusticeInfrastructurePresent,
                         dayStartContext.CrimeJusticeBoundary))
                     throw new InvalidOperationException(
                         "The selected Core Crime/Justice day-start stage rejected its exact owner graph.");
