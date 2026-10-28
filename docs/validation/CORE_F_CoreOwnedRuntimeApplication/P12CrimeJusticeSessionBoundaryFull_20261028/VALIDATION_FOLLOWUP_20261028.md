@@ -6,7 +6,7 @@ This follow-up addresses the sole actionable finding in independent review of ca
 
 The existing coordinator-binding test now also supplies a different coordinator while retaining the already-bound census protocol. It asserts that the Core execution state faults before running the mutation or reserving another mutation epoch. This specifically exercises the pinned-coordinator identity check; the existing replacement-protocol case remains intact.
 
-Only `tests/Simulation.Core.Tests/DailyV1P12CrimeJusticeMutationCoordinatorTests.cs` changed after candidate `5368a269`. Production files and the reviewed Unity implementation are unchanged.
+The only implementation/test source file changed after candidate `5368a269` is `tests/Simulation.Core.Tests/DailyV1P12CrimeJusticeMutationCoordinatorTests.cs`. Production files and the reviewed Unity implementation are unchanged.
 
 ## Validation
 
@@ -17,4 +17,6 @@ Only `tests/Simulation.Core.Tests/DailyV1P12CrimeJusticeMutationCoordinatorTests
 - `git diff --check`: PASS.
 - Unity was not rerun for this test-only follow-up. The implementation and Unity test sources are unchanged from the previously validated checkpoint.
 
-Independent exact-tip review of the follow-up candidate is pending. This is a candidate validation record, not CORE-F acceptance or Core canonical promotion.
+Independent exact-tip review: PASS for candidate `d6185904` at review commit `26b2b48d9d0a4d8f1eb5610f83c3e699056ebee5`, published on `codex/review/core/CORE-F-P12CrimeJusticeSessionBoundary-d6185904`. The reviewer confirmed the test reaches the pinned-coordinator identity comparison, faults before mutation or reservation, and matches the local owner-only validation manifest. The published review commit contains only its review record.
+
+This is a candidate validation record, not CORE-F acceptance or Core canonical promotion.
