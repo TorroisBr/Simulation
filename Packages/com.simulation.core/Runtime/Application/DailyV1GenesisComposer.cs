@@ -247,11 +247,26 @@ internal static class DailyV1GenesisComposer
                     PersonSpatialPositionStore personSpatialPositions =
                         new PersonSpatialPositionStore(personStore, spatialAuthority,
                             new SpatialPassageTraversalOptionResolver(spatialAuthority.PassageAuthority));
+                    Func<long> currentWorldDayProvider = () => time.AbsoluteDay;
+                    Func<PersonId, bool> actorInTransitProvider =
+                        personId => graph.IsPersonInSpatialTransit(personId);
+                    SpatialRouteKnowledgeStore routeKnowledge =
+                        new SpatialRouteKnowledgeStore(personStore);
+                    PersonRoutePlanStore routePlans = new PersonRoutePlanStore(
+                        personStore, routeKnowledge, currentWorldDayProvider,
+                        actorInTransitProvider);
+                    SpatialRoutePlanningSystem routePlanner =
+                        new SpatialRoutePlanningSystem(personStore, spatialAuthority, routeKnowledge);
+                    P8ETravelTransactionCoordinator travelCoordinator =
+                        new P8ETravelTransactionCoordinator(personSpatialPositions, routePlans,
+                            routeKnowledge, spatialAuthority.PassageAuthority, currentWorldDayProvider);
                     if (!graph.TryBindSpatialAuthorityStore(spatialAuthority)
                         || !graph.TryBindPersonStore(personStore)
                         || !ReferenceEquals(actorChoiceStore.PersonStore, personStore)
                         || !graph.TryBindPersonSpatialPositionStore(personSpatialPositions)
                         || !graph.TryBindLegacySpatialAnchorBindingStore(anchorBindings)
+                        || !graph.TryBindP8DRouteOwners(routeKnowledge, routePlans)
+                        || !graph.TryBindP8ETravelComponents(routePlanner, travelCoordinator)
                         || !executionBoundaryState.TryBindSelectedRuntimeOwnerGraph(graph)
                         || !executionBoundaryState.TryBindInitialSelectedRuntimeActorRosterFromOwnerGraph()
                         || !executionBoundaryState.TryBindSelectedRuntimeExecutionRoots(

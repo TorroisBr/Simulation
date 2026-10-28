@@ -26,6 +26,10 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal LegacySpatialAnchorBindingStore LegacySpatialAnchors { get; private set; }
     internal ScheduledDirectiveStore ScheduledDirectives { get; private set; }
     internal PoliticalKnowledgeStore PoliticalKnowledgeStore { get; private set; }
+    internal SpatialRouteKnowledgeStore SpatialRouteKnowledgeStore { get; private set; }
+    internal PersonRoutePlanStore PersonRoutePlanStore { get; private set; }
+    internal SpatialRoutePlanningSystem SpatialRoutePlanningSystem { get; private set; }
+    internal P8ETravelTransactionCoordinator P8ETravelCoordinator { get; private set; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
         DailyV1EffectiveDefinitions definitions,
@@ -131,6 +135,57 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     }
 
     /// <summary>
+    /// Binds the exact P8-D route Knowledge and plan owners to this selected
+    /// graph. The admitted Daily-v1 profile requires both owners to start at
+    /// their contractual exact-empty state; the same stores remain the source
+    /// for the P8-E planner and transaction coordinator.
+    /// </summary>
+    internal bool TryBindP8DRouteOwners(
+        SpatialRouteKnowledgeStore knowledge,
+        PersonRoutePlanStore plans)
+    {
+        if (PersonStore == null || knowledge == null || plans == null
+            || !knowledge.IsBoundToPersonStore(PersonStore)
+            || !plans.IsBoundTo(PersonStore, knowledge)
+            || knowledge.ObservationCount != 0 || knowledge.Revision != 0L
+            || plans.PlanCount != 0 || plans.Revision != 0L)
+            return false;
+
+        if (SpatialRouteKnowledgeStore != null
+            && !ReferenceEquals(SpatialRouteKnowledgeStore, knowledge)) return false;
+        if (PersonRoutePlanStore != null
+            && !ReferenceEquals(PersonRoutePlanStore, plans)) return false;
+
+        SpatialRouteKnowledgeStore = knowledge;
+        PersonRoutePlanStore = plans;
+        return true;
+    }
+
+    /// <summary>Installs the P8-E read and transaction objects over these exact owners.</summary>
+    internal bool TryBindP8ETravelComponents(
+        SpatialRoutePlanningSystem planner,
+        P8ETravelTransactionCoordinator coordinator)
+    {
+        if (SpatialRouteKnowledgeStore == null || PersonRoutePlanStore == null
+            || PersonStore == null || SpatialAuthority == null
+            || PersonSpatialPositionStore == null
+            || planner == null || coordinator == null
+            || !planner.IsBoundTo(PersonStore, SpatialAuthority, SpatialRouteKnowledgeStore)
+            || !coordinator.IsBoundTo(PersonSpatialPositionStore, PersonRoutePlanStore,
+                SpatialRouteKnowledgeStore, SpatialAuthority.PassageAuthority))
+            return false;
+
+        if (SpatialRoutePlanningSystem != null
+            && !ReferenceEquals(SpatialRoutePlanningSystem, planner)) return false;
+        if (P8ETravelCoordinator != null
+            && !ReferenceEquals(P8ETravelCoordinator, coordinator)) return false;
+
+        SpatialRoutePlanningSystem = planner;
+        P8ETravelCoordinator = coordinator;
+        return true;
+    }
+
+    /// <summary>
     /// Confirms that each P8 census witness for an owner already bound into
     /// this graph matches that exact owner's live identity, cardinality, and
     /// revision. During the source migration, unbound P8 owners remain the host
@@ -140,6 +195,12 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections)
     {
         return ownerSections != null
+            && ((SpatialRouteKnowledgeStore == null && PersonRoutePlanStore == null)
+                || (SpatialRouteKnowledgeStore != null && PersonRoutePlanStore != null
+                    && HasCensusOwnerWitness(ownerSections,
+                        new SpatialRouteObservationCensusProvider(SpatialRouteKnowledgeStore).GetCurrentCensus())
+                    && HasCensusOwnerWitness(ownerSections,
+                        new PersonRoutePlanHistoryCensusProvider(PersonRoutePlanStore).GetCurrentCensus())))
             && (SpatialAuthority == null
                 || (HasCensusOwnerWitness(
                         ownerSections,
@@ -1240,6 +1301,16 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         }
         if (LegacySpatialAnchors != null
             && !graph.TryBindLegacySpatialAnchorBindingStore(LegacySpatialAnchors))
+        {
+            graph = null;
+            return false;
+        }
+
+        if (SpatialRouteKnowledgeStore != null
+            && (!graph.TryBindP8DRouteOwners(SpatialRouteKnowledgeStore, PersonRoutePlanStore)
+                || ((SpatialRoutePlanningSystem != null || P8ETravelCoordinator != null)
+                    && !graph.TryBindP8ETravelComponents(
+                        SpatialRoutePlanningSystem, P8ETravelCoordinator))))
         {
             graph = null;
             return false;

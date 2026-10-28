@@ -181,6 +181,13 @@ public sealed class SpatialRoutePlanningSystem
         this.knowledgeStore = knowledgeStore ?? throw new ArgumentNullException(nameof(knowledgeStore));
     }
 
+    internal bool IsBoundTo(PersonStore persons, SpatialAuthorityStore spatialAuthority,
+        SpatialRouteKnowledgeStore knowledge) => persons != null
+        && spatialAuthority != null && knowledge != null
+        && ReferenceEquals(personStore, persons)
+        && ReferenceEquals(spatialAuthorityStore, spatialAuthority)
+        && ReferenceEquals(knowledgeStore, knowledge);
+
     public SpatialRoutePlanningOutcome BuildKnownCandidates(SpatialRoutePlanningRequest request)
     {
         if (!ValidateRequest(request, out SpatialRoutePlanningFailureCode failure, out string message))

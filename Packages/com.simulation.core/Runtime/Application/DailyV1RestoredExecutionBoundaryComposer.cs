@@ -143,6 +143,9 @@ internal static class DailyV1RestoredExecutionBoundaryComposer
             return false;
         }
 
+        if (!TryBindRestoredP8DRouteOwners(ownerGraph, simulationTime, out diagnostic))
+            return false;
+
         DailyV1ExecutionBoundaryState candidate = new DailyV1ExecutionBoundaryState(
             simulationTime,
             admissionContext,
@@ -160,6 +163,68 @@ internal static class DailyV1RestoredExecutionBoundaryComposer
         }
 
         executionBoundaryState = candidate;
+        return true;
+    }
+
+    private static bool TryBindRestoredP8DRouteOwners(
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+        SimulationTime simulationTime,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (ownerGraph.SpatialRouteKnowledgeStore == null
+            && ownerGraph.PersonRoutePlanStore == null)
+        {
+            SpatialRouteKnowledgeStore knowledge =
+                new SpatialRouteKnowledgeStore(ownerGraph.PersonStore);
+            PersonRoutePlanStore plans = new PersonRoutePlanStore(
+                ownerGraph.PersonStore, knowledge,
+                () => simulationTime.AbsoluteDay,
+                ownerGraph.IsPersonInSpatialTransit);
+            if (!ownerGraph.TryBindP8DRouteOwners(knowledge, plans))
+            {
+                diagnostic = "Core rejected the exact-empty restored P8-D route owners.";
+                return false;
+            }
+        }
+
+        if (ownerGraph.SpatialRouteKnowledgeStore == null
+            || ownerGraph.PersonRoutePlanStore == null
+            || ownerGraph.SpatialRouteKnowledgeStore.ObservationCount != 0
+            || ownerGraph.SpatialRouteKnowledgeStore.Revision != 0L
+            || ownerGraph.PersonRoutePlanStore.PlanCount != 0
+            || ownerGraph.PersonRoutePlanStore.Revision != 0L)
+        {
+            diagnostic = "Core requires the selected restored Daily-v1 P8-D route sections to remain exactly empty.";
+            return false;
+        }
+
+        if (ownerGraph.SpatialAuthority != null
+            && ownerGraph.PersonSpatialPositionStore != null
+            && ownerGraph.SpatialRoutePlanningSystem == null
+            && ownerGraph.P8ETravelCoordinator == null)
+        {
+            Func<long> currentWorldDayProvider = () => simulationTime.AbsoluteDay;
+            SpatialRoutePlanningSystem planner = new SpatialRoutePlanningSystem(
+                ownerGraph.PersonStore, ownerGraph.SpatialAuthority,
+                ownerGraph.SpatialRouteKnowledgeStore);
+            P8ETravelTransactionCoordinator coordinator =
+                new P8ETravelTransactionCoordinator(ownerGraph.PersonSpatialPositionStore,
+                    ownerGraph.PersonRoutePlanStore, ownerGraph.SpatialRouteKnowledgeStore,
+                    ownerGraph.SpatialAuthority.PassageAuthority, currentWorldDayProvider);
+            if (!ownerGraph.TryBindP8ETravelComponents(planner, coordinator))
+            {
+                diagnostic = "Core rejected the restored P8-E components over the exact staged owners.";
+                return false;
+            }
+        }
+        else if ((ownerGraph.SpatialRoutePlanningSystem == null)
+            != (ownerGraph.P8ETravelCoordinator == null))
+        {
+            diagnostic = "The restored P8-E planner and transaction coordinator must be present together.";
+            return false;
+        }
+
         return true;
     }
 }

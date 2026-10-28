@@ -13081,7 +13081,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 nameof(source));
         }
 
-        return source.Clone(personStore);
+        return source.CloneForRuntime(personStore);
     }
 
     private static SpatialAuthorityStore CloneSpatialAuthorityStore(SpatialAuthorityStore source)

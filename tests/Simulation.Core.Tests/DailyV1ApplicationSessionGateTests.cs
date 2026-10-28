@@ -539,6 +539,14 @@ public sealed class DailyV1ApplicationSessionGateTests
             ReplaceOwnerSectionWithCurrentCensus(sections,
                 new LegacySpatialAnchorBindingCensusProvider(
                     graph.LegacySpatialAnchors).GetCurrentCensus());
+        if (graph?.SpatialRouteKnowledgeStore != null)
+            ReplaceOwnerSectionWithCurrentCensus(sections,
+                new SpatialRouteObservationCensusProvider(
+                    graph.SpatialRouteKnowledgeStore).GetCurrentCensus());
+        if (graph?.PersonRoutePlanStore != null)
+            ReplaceOwnerSectionWithCurrentCensus(sections,
+                new PersonRoutePlanHistoryCensusProvider(
+                    graph.PersonRoutePlanStore).GetCurrentCensus());
         return sections;
     }
 
@@ -1000,7 +1008,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             "p8a.locations",
             "p8a.scale-context",
             "p8b.passage-option-barrier-state",
-            "p8b.crossings"
+            "p8b.crossings",
+            "p8d.spatial-route-observations",
+            "p8d.person-route-plan-history"
         };
 
         foreach (string sectionId in p8SectionIds)

@@ -141,7 +141,7 @@ function Get-CoreInputSnapshot {
         'Assets/_Project/Scripts/CoreAdapters/DailyV1DefinitionAdapter.cs.meta',
         'Assets/_Project/Scripts/CoreAdapters/P12ADailyV1ContentAdapter.cs',
         'Assets/_Project/Scripts/CoreAdapters/P12ADailyV1ContentAdapter.cs.meta',
-        'Assets/_Project/Scripts/SpatialRouteKnowledge.cs',
+        'Packages/com.simulation.core/Runtime/Geography/SpatialRouteKnowledge.cs',
         'Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs',
         'Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs.meta',
         'Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarParityTests.cs',

@@ -14,7 +14,7 @@ public sealed class P8ETravelTransactionCoordinator
     private readonly SpatialPassageAuthority passage;
     private readonly Func<long> currentWorldDayProvider;
 
-    internal P8ETravelTransactionCoordinator(PersonSpatialPositionStore positions,
+    public P8ETravelTransactionCoordinator(PersonSpatialPositionStore positions,
         PersonRoutePlanStore plans, SpatialRouteKnowledgeStore knowledge, SpatialPassageAuthority passage,
         Func<long> currentWorldDayProvider)
     {
@@ -24,6 +24,14 @@ public sealed class P8ETravelTransactionCoordinator
         this.passage = passage ?? throw new ArgumentNullException(nameof(passage));
         this.currentWorldDayProvider = currentWorldDayProvider ?? throw new ArgumentNullException(nameof(currentWorldDayProvider));
     }
+
+    internal bool IsBoundTo(PersonSpatialPositionStore positionOwner, PersonRoutePlanStore planOwner,
+        SpatialRouteKnowledgeStore knowledgeOwner, SpatialPassageAuthority passageAuthority) =>
+        positionOwner != null && planOwner != null && knowledgeOwner != null && passageAuthority != null
+        && ReferenceEquals(positions, positionOwner)
+        && ReferenceEquals(plans, planOwner)
+        && ReferenceEquals(knowledge, knowledgeOwner)
+        && ReferenceEquals(passage, passageAuthority);
 
     public bool TryBeginNextSegment(PersonId actor, TraversalCostContext movementContext,
         out P8ETravelFailure failure)

@@ -625,6 +625,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 && ReferenceEquals(graph.Definitions.EffectiveConfiguration, ConfigurationIdentity)
                 && graph.PersonStore != null
                 && graph.ScheduledDirectives != null
+                && graph.SpatialRouteKnowledgeStore != null
+                && graph.PersonRoutePlanStore != null
                 && graph.SpatialNetwork != null
                 && graph.JusticeRecordsOwner != null
                 && graph.TravelParties != null
@@ -653,6 +655,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
     internal bool TryBindSelectedRuntimeOwnerGraph(DailyV1SelectedRuntimeOwnerGraph graph)
     {
+        if (graph == null) return false;
         if (selectedRuntimeOwnerGraphBound)
             return ReferenceEquals(selectedRuntimeOwnerGraph, graph);
 

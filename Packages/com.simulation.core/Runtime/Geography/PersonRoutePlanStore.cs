@@ -104,6 +104,11 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
         this.actorInTransitProvider = actorInTransitProvider;
     }
 
+    internal bool IsBoundTo(PersonStore persons, SpatialRouteKnowledgeStore knowledge) =>
+        persons != null && knowledge != null
+        && ReferenceEquals(personStore, persons)
+        && ReferenceEquals(knowledgeStore, knowledge);
+
     /// <summary>Mutation version; lifecycle transitions advance it independently of accepted plan count.</summary>
     public long Revision => revision;
     internal bool TryPrepareStatusChange(PersonId actor, long expectedStoreRevision, long expectedPlanRevision,
@@ -291,7 +296,7 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
         return CloneCore(targetPersons, targetKnowledge, null, null);
     }
 
-    internal PersonRoutePlanStore CloneForRuntime(
+    public PersonRoutePlanStore CloneForRuntime(
         PersonStore targetPersons,
         SpatialRouteKnowledgeStore targetKnowledge,
         Func<long> currentWorldDayProvider,

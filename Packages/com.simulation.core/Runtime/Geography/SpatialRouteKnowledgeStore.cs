@@ -19,6 +19,9 @@ public sealed class SpatialRouteKnowledgeStore : IAuthoritativeMutationGuardBind
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
     }
 
+    internal bool IsBoundToPersonStore(PersonStore candidate) =>
+        candidate != null && ReferenceEquals(personStore, candidate);
+
     public long Revision => revision;
     internal bool TryPrepareObservation(PersonId actor, SpatialObservation observation, long currentWorldDay,
         long expectedRevision, out PreparedSpatialKnowledgeChange prepared, out SpatialKnowledgeFailure failure)
@@ -300,6 +303,9 @@ public sealed class SpatialRouteKnowledgeStore : IAuthoritativeMutationGuardBind
         copy.revision = revision;
         return copy;
     }
+
+    /// <summary>Creates the existing runtime-owned copy against its exact target PersonStore.</summary>
+    public SpatialRouteKnowledgeStore CloneForRuntime(PersonStore targetPersons) => Clone(targetPersons);
 
     private bool ValidateObservation(SpatialObservation observation, long currentWorldDay, out SpatialKnowledgeFailure failure)
     {

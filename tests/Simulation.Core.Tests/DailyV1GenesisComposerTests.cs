@@ -26,6 +26,17 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(composition.WorldId, Is.SameAs(expectedWorldId));
         Assert.That(composition.OwnerGraph.Expeditions, Is.SameAs(composition.Expeditions),
             "The Core graph must retain the exact ExpeditionStore created by genesis.");
+        Assert.That(composition.OwnerGraph.SpatialRouteKnowledgeStore, Is.Not.Null);
+        Assert.That(composition.OwnerGraph.PersonRoutePlanStore, Is.Not.Null);
+        Assert.That(composition.OwnerGraph.PersonRoutePlanStore.IsBoundTo(
+            composition.PersonStore, composition.OwnerGraph.SpatialRouteKnowledgeStore), Is.True,
+            "The route-plan authority must share the exact selected Core Person and Knowledge owners.");
+        Assert.That(composition.OwnerGraph.SpatialRouteKnowledgeStore.ObservationCount, Is.Zero);
+        Assert.That(composition.OwnerGraph.SpatialRouteKnowledgeStore.Revision, Is.Zero);
+        Assert.That(composition.OwnerGraph.PersonRoutePlanStore.PlanCount, Is.Zero);
+        Assert.That(composition.OwnerGraph.PersonRoutePlanStore.Revision, Is.Zero);
+        Assert.That(composition.OwnerGraph.P8ETravelCoordinator, Is.Not.Null);
+        Assert.That(composition.OwnerGraph.SpatialRoutePlanningSystem, Is.Not.Null);
         Assert.That(composition.OwnerGraph.TryBindExpeditionStore(new ExpeditionStore()), Is.False,
             "A different ExpeditionStore cannot replace the genesis owner identity.");
         Assert.That(composition.P9ManifestSnapshot, Is.Not.Null,
@@ -78,6 +89,10 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(restoredBoundary.SimulationTime, Is.SameAs(restoredTime));
         Assert.That(restoredBoundary.AdmissionContext, Is.SameAs(restoredAdmission));
         Assert.That(restoredBoundary.WorldId, Is.SameAs(source.WorldId));
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph.SpatialRouteKnowledgeStore, Is.Not.Null);
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph.PersonRoutePlanStore, Is.Not.Null);
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph.SpatialRouteKnowledgeStore.ObservationCount, Is.Zero);
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph.PersonRoutePlanStore.PlanCount, Is.Zero);
         Assert.That(restoredBoundary.SelectedRuntimeActorRoster.Select(member => member.RuntimeId),
             Is.EqualTo(source.OwnerGraph.Npcs.Select(owner => owner.RuntimeId)));
         Assert.That(restoredBoundary.HasAdmittedSelectedDailyExecution, Is.True);
@@ -149,6 +164,12 @@ public sealed class DailyV1GenesisComposerTests
             Is.SameAs(directives));
         Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph.Expeditions,
             Is.SameAs(source.Expeditions));
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph.SpatialRouteKnowledgeStore,
+            Is.Not.SameAs(source.OwnerGraph.SpatialRouteKnowledgeStore),
+            "A detached target receives its own exact-empty P8-D owner instance.");
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph.PersonRoutePlanStore,
+            Is.Not.SameAs(source.OwnerGraph.PersonRoutePlanStore),
+            "A detached target receives its own exact-empty route-plan owner instance.");
         Assert.That(restoredBoundary.HasExactSelectedRuntimeExecutionRoots(
             restoredBoundary.SelectedRuntimeOwnerGraph,
             source.PersonStore,

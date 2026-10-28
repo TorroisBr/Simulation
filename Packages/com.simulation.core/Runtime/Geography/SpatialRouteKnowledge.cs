@@ -394,9 +394,9 @@ public sealed class SpatialKnowledgeBasis
     }
 }
 
-internal static class SpatialStableKey
+public static class SpatialStableKey
 {
-    internal static string Encode(params string[] parts)
+    public static string Encode(params string[] parts)
     {
         return StableKeyEncoding.Encode(parts);
     }
