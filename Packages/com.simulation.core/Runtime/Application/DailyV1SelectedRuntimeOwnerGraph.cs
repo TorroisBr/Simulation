@@ -21,6 +21,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex { get; }
     internal ExpeditionStore Expeditions { get; private set; }
     internal PersonStore PersonStore { get; private set; }
+    internal GenealogyStore GenealogyStore { get; private set; }
     internal PersonSpatialPositionStore PersonSpatialPositionStore { get; private set; }
     internal LegacySpatialAnchorBindingStore LegacySpatialAnchors { get; private set; }
     internal ScheduledDirectiveStore ScheduledDirectives { get; private set; }
@@ -58,6 +59,19 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         if (PersonStore != null) return ReferenceEquals(PersonStore, personStore);
         if (!MatchesPersonStore(personStore, npcs)) return false;
         PersonStore = personStore;
+        return true;
+    }
+
+    /// <summary>
+    /// Binds the exact P12-D Genealogy owner admitted with this restored graph.
+    /// The graph retains the authority reference; it does not clone or mutate
+    /// the owner while composing the detached execution boundary.
+    /// </summary>
+    internal bool TryBindGenealogyStore(GenealogyStore genealogyStore)
+    {
+        if (genealogyStore == null) return false;
+        if (GenealogyStore != null) return ReferenceEquals(GenealogyStore, genealogyStore);
+        GenealogyStore = genealogyStore;
         return true;
     }
 

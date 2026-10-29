@@ -30,6 +30,7 @@ internal static class DailyV1RestoredExecutionBoundaryComposer
         TravelPartyStore travelParties,
         DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
         PersonStore personStore,
+        GenealogyStore genealogyStore,
         ScheduledDirectiveStore directives,
         ExpeditionStore expeditions,
         RuntimeIdAllocator runtimeIdAllocator,
@@ -67,6 +68,12 @@ internal static class DailyV1RestoredExecutionBoundaryComposer
             || graphFailure != DailyV1P12DSelectedOwnerGraphFailure.None)
         {
             diagnostic = "Core rejected the exact staged P12 City/NPC owners or their cross-owner relationships.";
+            return false;
+        }
+
+        if (genealogyStore != null && !ownerGraph.TryBindGenealogyStore(genealogyStore))
+        {
+            diagnostic = "Core rejected the exact staged P12-D Genealogy owner.";
             return false;
         }
 

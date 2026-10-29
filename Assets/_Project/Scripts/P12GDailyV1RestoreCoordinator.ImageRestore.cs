@@ -538,7 +538,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 stagedD.SelectedCityOwners, stagedD.SelectedNpcOwners,
                 stagedD.SpatialNetwork.SelectedOwner, stagedE.Justice.CoreOwner,
                 stagedF.TravelParties, stagedD.RuntimeIdentities.CoreIdentityIndex,
-                stagedD.Persons, stagedF.ScheduledDirectives, stagedF.Expeditions,
+                stagedD.Persons, null,
+                stagedF.ScheduledDirectives, stagedF.Expeditions,
                 stagedC.RuntimeIdAllocator, stagedC.DeterministicRandom,
                 stagedC.RecordSequence, decisionStore, stagedF.ActorChoices,
                 out executionBoundaryState, out selectedCalendar, out diagnostic))

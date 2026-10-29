@@ -458,6 +458,9 @@ internal sealed class P12DDailyV1OwnerPackage
                 ? !TryValidateStagedIdentityRegistryIsEmpty(stagedRuntimeIdentities)
                 : stagedCoreOwnerGraph.SpatialNetwork == null
                     || stagedCoreOwnerGraph.SelectedOwners == null
+                    || stagedCoreOwnerGraph.Persons == null
+                    || stagedCoreOwnerGraph.Genealogy == null
+                    || !stagedCoreOwnerGraph.MatchesImageOwnerValues(personSnapshot, genealogySnapshot)
                     || !ReferenceEquals(stagedCoreOwnerGraph.RuntimeIdentityIndex,
                         stagedRuntimeIdentities.CoreIdentityIndex)
                     || !stagedRuntimeIdentities.HasNoBoundRuntimeProjections
@@ -468,6 +471,8 @@ internal sealed class P12DDailyV1OwnerPackage
 
         SpatialNetworkRuntime stagedSpatialNetwork;
         SpatialNetworkSnapshotFailure spatialFailure;
+        PersonStore stagedPersons;
+        GenealogyStore stagedGenealogy;
         bool spatialProjectionCreated = stagedCoreOwnerGraph != null
             ? SpatialNetworkRuntime.TryCreateProjectionFromCoreOwner(
                 stagedCoreOwnerGraph.SpatialNetwork, stagedRuntimeIdentities,
@@ -475,12 +480,24 @@ internal sealed class P12DDailyV1OwnerPackage
             : SpatialNetworkRuntime.TryCreateFromOwnerSnapshot(
                 spatialSnapshot, stagedRuntimeIdentities,
                 out stagedSpatialNetwork, out spatialFailure);
-        if (!spatialProjectionCreated || stagedSpatialNetwork == null
-            || !PersonStore.TryCreateFromOwnerSnapshot(personSnapshot,
-                out PersonStore stagedPersons, out _) || stagedPersons == null
-            || !GenealogyOwnerBridge.TryCreateStagedOwner(genealogySnapshot.Export,
-                out GenealogyStore stagedGenealogy, out _) || stagedGenealogy == null)
+        if (!spatialProjectionCreated || stagedSpatialNetwork == null)
         { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
+
+        if (stagedCoreOwnerGraph != null)
+        {
+            if (!stagedCoreOwnerGraph.MatchesImageOwnerValues(personSnapshot, genealogySnapshot))
+            { failure = P12DDailyV1OwnerPackageFailure.InvalidOwnerSnapshot; return false; }
+            stagedPersons = stagedCoreOwnerGraph.Persons;
+            stagedGenealogy = stagedCoreOwnerGraph.Genealogy;
+        }
+        else
+        {
+            if (!PersonStore.TryCreateFromOwnerSnapshot(personSnapshot,
+                    out stagedPersons, out _) || stagedPersons == null
+                || !GenealogyOwnerBridge.TryCreateStagedOwner(genealogySnapshot.Export,
+                    out stagedGenealogy, out _) || stagedGenealogy == null)
+            { failure = P12DDailyV1OwnerPackageFailure.StageFailed; return false; }
+        }
 
         SpatialLocationRuntime[] stagedLocations = stagedSpatialNetwork.Locations.ToArray();
         string[] stagedRouteIds = stagedSpatialNetwork.Routes.Select(route => route?.RuntimeId).ToArray();

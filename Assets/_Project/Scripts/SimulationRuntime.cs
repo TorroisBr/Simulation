@@ -2728,9 +2728,22 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             this.battleExecutionContextBuilder,
             this.simulationTime,
             this.battleResolutionPolicy);
-        this.genealogyStore = runtimeAdmissionContext?.IsRestoredContinuation == true
-            ? CloneRestoredGenealogyStore(resolvedGenealogyStore)
-            : CloneGenealogyStore(resolvedGenealogyStore);
+        GenealogyStore coreStagedGenealogy = selectedExecutionBoundaryState?
+            .SelectedRuntimeOwnerGraph?.GenealogyStore;
+        if (coreStagedGenealogy != null)
+        {
+            if (!ReferenceEquals(coreStagedGenealogy, resolvedGenealogyStore))
+                throw new ArgumentException(
+                    "The Unity runtime must project the exact GenealogyStore admitted by its Core execution boundary.",
+                    nameof(genealogyStore));
+            this.genealogyStore = coreStagedGenealogy;
+        }
+        else
+        {
+            this.genealogyStore = runtimeAdmissionContext?.IsRestoredContinuation == true
+                ? CloneRestoredGenealogyStore(resolvedGenealogyStore)
+                : CloneGenealogyStore(resolvedGenealogyStore);
+        }
         this.institutionStore = resolvedInstitutionStore;
         this.officeStore = resolvedOfficeStore;
         this.propertyOwnershipStore = resolvedPropertyOwnershipStore;

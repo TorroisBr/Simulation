@@ -12306,6 +12306,40 @@ public sealed class SimulationRuntimeAdmissionTests
             SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
             Assert.That(controlSession, Is.Not.Null);
 
+            PersonId parentId = new PersonId("p12a-image-restore-genealogy-parent");
+            PersonId childId = new PersonId("p12a-image-restore-genealogy-child");
+            Assert.That(sourceSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(parentId, 0L), out PersonStoreFailure sourceParentFailure),
+                Is.True, sourceParentFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(childId, 0L), out PersonStoreFailure sourceChildFailure),
+                Is.True, sourceChildFailure.ToString());
+            Assert.That(controlSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(parentId, 0L), out PersonStoreFailure controlParentFailure),
+                Is.True, controlParentFailure.ToString());
+            Assert.That(controlSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(childId, 0L), out PersonStoreFailure controlChildFailure),
+                Is.True, controlChildFailure.ToString());
+
+            NpcRuntime sourceNpc = sourceSession.Runtime.NpcRuntimes
+                .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal)
+                .First(npc => npc.PersonId == null);
+            NpcRuntime controlNpc = controlSession.Runtime.NpcRuntimes
+                .Single(npc => string.Equals(npc.RuntimeId, sourceNpc.RuntimeId, StringComparison.Ordinal));
+            Assert.That(controlNpc.PersonId, Is.Null);
+            Assert.That(sourceSession.Runtime.TryBindExistingNpcToPerson(
+                childId, sourceNpc.RuntimeId, out PersonMaterializationFailure sourceBindFailure),
+                Is.True, sourceBindFailure.ToString());
+            Assert.That(controlSession.Runtime.TryBindExistingNpcToPerson(
+                childId, controlNpc.RuntimeId, out PersonMaterializationFailure controlBindFailure),
+                Is.True, controlBindFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryAddParentage(
+                parentId, childId, out PersonGenealogyFailure sourceGenealogyFailure),
+                Is.True, sourceGenealogyFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAddParentage(
+                parentId, childId, out PersonGenealogyFailure controlGenealogyFailure),
+                Is.True, controlGenealogyFailure.ToString());
+
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
                 Is.True, advanceFailure.ToString());
             Assert.That(controlSession.Runtime.TryAdvanceDay(out advanceFailure), Is.True, advanceFailure.ToString());
@@ -12346,6 +12380,23 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(restored.Runtime, Is.Not.SameAs(controlSession.Runtime));
             Assert.That(restored.IdentityRegistry, Is.Not.SameAs(controlSession.IdentityRegistry));
             DailyV1SelectedRuntimeOwnerGraph restoredOwnerGraph = restored.CoreRuntimeSession.OwnerGraph;
+            Assert.That(restoredOwnerGraph.PersonStore, Is.SameAs(restored.Runtime.PersonStore),
+                "The app-backed P12-D stage must carry the exact Core PersonStore into both Core and Unity composition.");
+            Assert.That(restoredOwnerGraph.GenealogyStore,
+                Is.SameAs(restored.Runtime.GenealogyStoreForWorldBoundary),
+                "The app-backed P12-D stage must carry the exact Core GenealogyStore into both Core and Unity composition.");
+            Assert.That(restored.Runtime.PersonStore.Revision,
+                Is.EqualTo(controlSession.Runtime.PersonStore.Revision));
+            Assert.That(restored.Runtime.PersonStore.MaterializedBindingCount,
+                Is.EqualTo(controlSession.Runtime.PersonStore.MaterializedBindingCount));
+            Assert.That(restored.Runtime.PersonStore.Persons.Select(person => person.PersonId.Value),
+                Is.EqualTo(controlSession.Runtime.PersonStore.Persons.Select(person => person.PersonId.Value)));
+            Assert.That(restored.Runtime.PersonStore.TryGet(childId, out PersonRuntime restoredChild), Is.True);
+            Assert.That(restoredChild.MaterializedNpcRuntimeId, Is.EqualTo(sourceNpc.RuntimeId));
+            Assert.That(restored.Runtime.GenealogyStoreForWorldBoundary.Revision,
+                Is.EqualTo(controlSession.Runtime.GenealogyStoreForWorldBoundary.Revision));
+            Assert.That(restored.Runtime.GenealogyStoreForWorldBoundary.Records,
+                Is.EqualTo(controlSession.Runtime.GenealogyStoreForWorldBoundary.Records).AsCollection);
             Assert.That(restored.SpatialNetwork.SelectedOwner, Is.SameAs(restoredOwnerGraph.SpatialNetwork),
                 "The Unity spatial runtime must project the exact Core-staged SpatialNetworkOwner.");
             Assert.That(restored.IdentityRegistry.CoreIdentityIndex,

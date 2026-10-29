@@ -1454,6 +1454,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     stagedF.TravelParties,
                     stagedD.RuntimeIdentities.CoreIdentityIndex,
                     stagedD.Persons,
+                    stagedD.Genealogy,
                     stagedF.ScheduledDirectives,
                     stagedF.Expeditions,
                     stagedC.SpatialAuthority,

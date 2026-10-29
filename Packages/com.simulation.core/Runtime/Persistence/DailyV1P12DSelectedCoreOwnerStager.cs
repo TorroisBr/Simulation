@@ -13,7 +13,9 @@ internal enum DailyV1P12DSelectedCoreOwnerStageFailure
     CityHydrationRejected,
     NpcHydrationRejected,
     InvalidCityMembership,
-    InvalidSpatialOwnerSnapshot
+    InvalidSpatialOwnerSnapshot,
+    PersonStoreHydrationRejected,
+    GenealogyHydrationRejected
 }
 
 /// <summary>
@@ -58,20 +60,92 @@ internal sealed class DailyV1P12DSelectedCoreOwnerStage
 /// </summary>
 internal sealed class DailyV1P12DCoreRestoreOwnerStage
 {
+    private readonly PersonStoreOwnerSnapshot personSnapshot;
+    private readonly GenealogyOwnerSnapshot genealogySnapshot;
+
     internal SpatialNetworkOwner SpatialNetwork { get; }
     internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex { get; }
     internal DailyV1P12DSelectedCoreOwnerStage SelectedOwners { get; }
+    internal PersonStore Persons { get; }
+    internal GenealogyStore Genealogy { get; }
     internal IReadOnlyList<DailyV1CityRuntimeOwners> Cities => SelectedOwners?.Cities;
     internal IReadOnlyList<DailyV1NpcRuntimeOwners> Npcs => SelectedOwners?.Npcs;
 
     internal DailyV1P12DCoreRestoreOwnerStage(
         SpatialNetworkOwner spatialNetwork,
         DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
-        DailyV1P12DSelectedCoreOwnerStage selectedOwners)
+        DailyV1P12DSelectedCoreOwnerStage selectedOwners,
+        PersonStore persons,
+        GenealogyStore genealogy,
+        PersonStoreOwnerSnapshot personSnapshot,
+        GenealogyOwnerSnapshot genealogySnapshot)
     {
         SpatialNetwork = spatialNetwork ?? throw new ArgumentNullException(nameof(spatialNetwork));
         RuntimeIdentityIndex = runtimeIdentityIndex ?? throw new ArgumentNullException(nameof(runtimeIdentityIndex));
         SelectedOwners = selectedOwners ?? throw new ArgumentNullException(nameof(selectedOwners));
+        Persons = persons ?? throw new ArgumentNullException(nameof(persons));
+        Genealogy = genealogy ?? throw new ArgumentNullException(nameof(genealogy));
+        this.personSnapshot = personSnapshot ?? throw new ArgumentNullException(nameof(personSnapshot));
+        this.genealogySnapshot = genealogySnapshot ?? throw new ArgumentNullException(nameof(genealogySnapshot));
+    }
+
+    internal bool MatchesImageOwnerValues(
+        PersonStoreOwnerSnapshot expectedPersons,
+        GenealogyOwnerSnapshot expectedGenealogy)
+    {
+        if (!ReferenceEquals(personSnapshot, expectedPersons)
+            || !ReferenceEquals(genealogySnapshot, expectedGenealogy)
+            || Persons == null || Genealogy == null
+            || expectedPersons == null || expectedGenealogy == null)
+            return false;
+
+        PersonStoreOwnerSnapshot actualPersons = Persons.CaptureOwnerSnapshot();
+        if (!MatchesPersonSnapshot(actualPersons, expectedPersons)) return false;
+
+        GenealogyOwnerExport actualGenealogy = GenealogyOwnerBridge.CaptureOwnerSnapshot(Genealogy);
+        GenealogyOwnerExport expectedExport = expectedGenealogy.Export;
+        if (actualGenealogy == null || expectedExport == null
+            || actualGenealogy.SchemaVersion != expectedExport.SchemaVersion
+            || actualGenealogy.Revision != expectedExport.Revision
+            || actualGenealogy.Records == null || expectedExport.Records == null
+            || actualGenealogy.Records.Count != expectedExport.Records.Count)
+            return false;
+
+        for (int i = 0; i < actualGenealogy.Records.Count; i++)
+            if (!Equals(actualGenealogy.Records[i], expectedExport.Records[i])) return false;
+        return true;
+    }
+
+    private static bool MatchesPersonSnapshot(
+        PersonStoreOwnerSnapshot actual,
+        PersonStoreOwnerSnapshot expected)
+    {
+        if (actual == null || expected == null
+            || !string.Equals(actual.SchemaId, expected.SchemaId, StringComparison.Ordinal)
+            || actual.SchemaVersion != expected.SchemaVersion
+            || actual.Revision != expected.Revision
+            || actual.MembershipCount != expected.MembershipCount
+            || actual.BindingCount != expected.BindingCount
+            || actual.Rows == null || expected.Rows == null
+            || actual.Rows.Count != expected.Rows.Count)
+            return false;
+
+        for (int i = 0; i < actual.Rows.Count; i++)
+        {
+            PersonStoreOwnerSnapshotRow left = actual.Rows[i];
+            PersonStoreOwnerSnapshotRow right = expected.Rows[i];
+            if (left == null || right == null
+                || !string.Equals(left.PersonIdValue, right.PersonIdValue, StringComparison.Ordinal)
+                || left.BirthAbsoluteDay != right.BirthAbsoluteDay
+                || left.DeathAbsoluteDay != right.DeathAbsoluteDay
+                || !string.Equals(left.ResidenceSettlementRuntimeId,
+                    right.ResidenceSettlementRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(left.MaterializedNpcRuntimeId,
+                    right.MaterializedNpcRuntimeId, StringComparison.Ordinal)
+                || left.LifeResidenceRevision != right.LifeResidenceRevision)
+                return false;
+        }
+        return true;
     }
 }
 /// <summary>
@@ -91,6 +165,8 @@ internal static class DailyV1P12DSelectedCoreOwnerStager
         DailyV1EffectiveDefinitions definitions,
         SpatialNetworkOwnerSnapshot spatialSnapshot,
         P12CRuntimeIdentityOwnerSnapshot runtimeIdentitySnapshot,
+        PersonStoreOwnerSnapshot personSnapshot,
+        GenealogyOwnerSnapshot genealogySnapshot,
         IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cityInputs,
         IReadOnlyList<P12DNpcDRow> npcDRows,
         IReadOnlyList<P12DNpcFRow> npcFRows,
@@ -101,9 +177,26 @@ internal static class DailyV1P12DSelectedCoreOwnerStager
         stage = null;
         failure = DailyV1P12DSelectedCoreOwnerStageFailure.InvalidInput;
         if (definitions == null || spatialSnapshot == null || runtimeIdentitySnapshot == null
+            || personSnapshot == null || genealogySnapshot?.Export == null
             || cityInputs == null || npcDRows == null || npcFRows == null
             || travelPartySnapshot?.Parties == null)
             return false;
+
+        if (!PersonStore.TryCreateFromOwnerSnapshot(
+                personSnapshot, out PersonStore persons, out _)
+            || persons == null)
+        {
+            failure = DailyV1P12DSelectedCoreOwnerStageFailure.PersonStoreHydrationRejected;
+            return false;
+        }
+
+        if (!GenealogyOwnerBridge.TryCreateStagedOwner(
+                genealogySnapshot.Export, out GenealogyStore genealogy, out _)
+            || genealogy == null)
+        {
+            failure = DailyV1P12DSelectedCoreOwnerStageFailure.GenealogyHydrationRejected;
+            return false;
+        }
 
         if (!P12DSpatialNetworkOwnerHydrator.TryCreateOwner(
                 spatialSnapshot, out SpatialNetworkOwner spatialNetwork, out _)
@@ -137,7 +230,8 @@ internal static class DailyV1P12DSelectedCoreOwnerStager
         }
 
         stage = new DailyV1P12DCoreRestoreOwnerStage(
-            spatialNetwork, runtimeIdentityIndex, selectedOwners);
+            spatialNetwork, runtimeIdentityIndex, selectedOwners,
+            persons, genealogy, personSnapshot, genealogySnapshot);
         failure = DailyV1P12DSelectedCoreOwnerStageFailure.None;
         return true;
     }

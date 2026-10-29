@@ -425,6 +425,46 @@ internal sealed class DailyV1Application
         out SimulationCalendar calendar,
         out string diagnostic)
     {
+        return TryCreateRestoredActiveRuntimeSession(
+            definitions, p9Manifest, effectiveConfiguration, calendarDefinition,
+            simulationTime, admissionContext, worldId, cityOwners, npcOwners,
+            spatialNetwork, justiceRecords, travelParties, runtimeIdentityIndex,
+            personStore, null, directives, expeditions, spatialAuthority,
+            runtimeIdAllocator, randomSource, recordSequence, decisionStore,
+            actorChoiceStore, lastEconomySnapshotDay, replacementOperation,
+            out candidate, out calendar, out diagnostic);
+    }
+
+    internal bool TryCreateRestoredActiveRuntimeSession(
+        DailyV1EffectiveDefinitions definitions,
+        P12CP9GenesisManifestCoreSnapshot p9Manifest,
+        EffectiveSimulationConfiguration effectiveConfiguration,
+        CalendarDefinition calendarDefinition,
+        SimulationTime simulationTime,
+        SimulationRuntimeAdmissionContext admissionContext,
+        WorldId worldId,
+        IReadOnlyList<DailyV1CityRuntimeOwners> cityOwners,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecords,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        PersonStore personStore,
+        GenealogyStore genealogyStore,
+        ScheduledDirectiveStore directives,
+        ExpeditionStore expeditions,
+        SpatialAuthorityStore spatialAuthority,
+        RuntimeIdAllocator runtimeIdAllocator,
+        IAuthoritativeRandomSource randomSource,
+        SimulationRecordSequence recordSequence,
+        NpcDecisionStore decisionStore,
+        ActorChoiceStore actorChoiceStore,
+        long lastEconomySnapshotDay,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out DailyV1ActiveRuntimeSession candidate,
+        out SimulationCalendar calendar,
+        out string diagnostic)
+    {
         candidate = null;
         calendar = null;
         diagnostic = null;
@@ -440,7 +480,7 @@ internal sealed class DailyV1Application
         return TryCreateRestoredActiveRuntimeSession(
             definitions, p9Manifest, effectiveConfiguration, calendarDefinition,
             simulationTime, admissionContext, worldId, cityOwners, npcOwners, spatialNetwork,
-            justiceRecords, travelParties, runtimeIdentityIndex, personStore, directives,
+            justiceRecords, travelParties, runtimeIdentityIndex, personStore, genealogyStore, directives,
             expeditions, spatialAuthority, eventAuthority, runtimeIdAllocator, randomSource,
             recordSequence, decisionStore, actorChoiceStore, lastEconomySnapshotDay,
             replacementOperation, out candidate, out calendar, out diagnostic);
@@ -461,6 +501,7 @@ internal sealed class DailyV1Application
         TravelPartyStore travelParties,
         DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
         PersonStore personStore,
+        GenealogyStore genealogyStore,
         ScheduledDirectiveStore directives,
         ExpeditionStore expeditions,
         SpatialAuthorityStore spatialAuthority,
@@ -502,6 +543,7 @@ internal sealed class DailyV1Application
                 travelParties,
                 runtimeIdentityIndex,
                 personStore,
+                genealogyStore,
                 directives,
                 expeditions,
                 runtimeIdAllocator,
@@ -1490,7 +1532,8 @@ internal sealed class DailyV1Application
 
         if (stagedRoots == null || !stagedRoots.IsDetached || snapshots == null
             || definitions == null || snapshots.SpatialNetwork == null
-            || snapshots.RuntimeIdentities == null || snapshots.Cities == null
+            || snapshots.RuntimeIdentities == null || snapshots.Persons == null
+            || snapshots.Genealogy == null || snapshots.Cities == null
             || snapshots.NpcDRows == null || snapshots.NpcFRows == null
             || snapshots.TravelParties == null)
         {
@@ -1502,6 +1545,8 @@ internal sealed class DailyV1Application
                 definitions,
                 snapshots.SpatialNetwork,
                 snapshots.RuntimeIdentities,
+                snapshots.Persons,
+                snapshots.Genealogy,
                 snapshots.Cities,
                 snapshots.NpcDRows,
                 snapshots.NpcFRows,
