@@ -213,7 +213,7 @@ internal sealed class DailyV1ActiveRuntimeSession
             eventAuthority = DailyV1DomainEventAuthority.Create(
                 executionBoundaryState.SelectedRuntimeIdAllocator,
                 executionBoundaryState.SimulationTime,
-                executionBoundaryState.SelectedRecordSequence);
+                executionBoundaryState.SelectedRecordSequence, executionBoundaryState.SelectedDecisionStore);
         }
         catch (ArgumentException exception)
         {
@@ -321,7 +321,7 @@ internal sealed class DailyV1ActiveRuntimeSession
             || !eventAuthority.IsFor(
                 executionBoundaryState.SelectedRuntimeIdAllocator,
                 executionBoundaryState.SimulationTime,
-                executionBoundaryState.SelectedRecordSequence))
+                executionBoundaryState.SelectedRecordSequence, executionBoundaryState.SelectedDecisionStore))
         {
             diagnostic = "The Core execution boundary is not the exact admitted selected Daily-v1 runtime for these definitions.";
             return false;

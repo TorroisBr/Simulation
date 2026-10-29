@@ -80,7 +80,7 @@ internal sealed class DailyV1GenesisComposition
             ?? throw new ArgumentNullException(nameof(executionBoundaryState));
         SpatialAuthority = spatialAuthority ?? throw new ArgumentNullException(nameof(spatialAuthority));
         EventAuthority = eventAuthority ?? throw new ArgumentNullException(nameof(eventAuthority));
-        if (!EventAuthority.IsFor(RuntimeIdAllocator, SimulationTime, RecordSequence))
+        if (!EventAuthority.IsFor(RuntimeIdAllocator, SimulationTime, RecordSequence, DecisionStore))
             throw new ArgumentException(
                 "The genesis event authority must retain the exact Core runtime identity roots.",
                 nameof(eventAuthority));
@@ -170,7 +170,7 @@ internal static class DailyV1GenesisComposer
         ActorChoiceStore actorChoiceStore = new ActorChoiceStore(personStore);
         RuntimeIdAllocator runtimeIds = new RuntimeIdAllocator();
         DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
-            runtimeIds, time, recordSequence, diagnosticLogger);
+            runtimeIds, time, recordSequence, decisionStore, diagnosticLogger);
         CalendarDefinition calendarDefinition = definitions.Calendar.monthLengths != null
             && definitions.Calendar.monthLengths.Count > 0
             ? new CalendarDefinition(

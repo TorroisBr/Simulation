@@ -3,23 +3,20 @@ using System.Collections.Generic;
 
 public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
 {
-    public const string OccurrenceReceiptSectionId = "p12f.npc-decision-occurrence-receipts";
-    public const int OccurrenceReceiptSectionSchemaVersion = 1;
+    public const string OccurrenceReceiptSectionId = DailyV1DecisionOccurrenceReceiptAuthority.SectionId;
+    public const int OccurrenceReceiptSectionSchemaVersion = DailyV1DecisionOccurrenceReceiptAuthority.SectionSchemaVersion;
 
-    private readonly RuntimeIdAllocator idAllocator;
-    private readonly SimulationTime simulationTime;
-    private readonly SimulationRecordSequence recordSequence;
-    private readonly NpcDecisionStore decisionStore;
+    private readonly DailyV1DecisionOccurrenceReceiptAuthority receiptAuthority;
     private readonly SimulationLogger logger;
-    private readonly object occurrenceReceiptsOwnerIdentity = new object();
-    private readonly Dictionary<string, NpcDecisionOccurrenceReceipt> occurrenceReceipts =
-        new Dictionary<string, NpcDecisionOccurrenceReceipt>(StringComparer.Ordinal);
-    private long occurrenceReceiptsRevision;
+
+    private RuntimeIdAllocator idAllocator => receiptAuthority.RuntimeIdAllocator;
+    private SimulationTime simulationTime => receiptAuthority.SimulationTime;
+    private SimulationRecordSequence recordSequence => receiptAuthority.RecordSequence;
+    private NpcDecisionStore decisionStore => receiptAuthority.DecisionStore;
 
     internal RuntimeIdAllocator DecisionIdAllocator => idAllocator;
     internal SimulationRecordSequence RecordSequence => recordSequence;
     internal NpcDecisionStore DecisionStore => decisionStore;
-
     internal bool TryRecordAndInstallSelectedAction(
         NpcRuntime actor,
         NpcActionRuntime actionRuntime,
@@ -92,28 +89,27 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
         SimulationRecordSequence recordSequence,
         NpcDecisionStore decisionStore,
         SimulationLogger logger = null)
+        : this(DailyV1DecisionOccurrenceReceiptAuthority.Create(
+            idAllocator, simulationTime, recordSequence, decisionStore, logger), logger)
     {
-        this.idAllocator = idAllocator ?? throw new ArgumentNullException(nameof(idAllocator));
-        this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
-        this.recordSequence = recordSequence ?? throw new ArgumentNullException(nameof(recordSequence));
-        this.decisionStore = decisionStore ?? throw new ArgumentNullException(nameof(decisionStore));
-        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
     }
 
+    internal NpcDecisionRecorder(
+        DailyV1DecisionOccurrenceReceiptAuthority receiptAuthority,
+        SimulationLogger logger = null)
+    {
+        this.receiptAuthority = receiptAuthority
+            ?? throw new ArgumentNullException(nameof(receiptAuthority));
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
+    }
     /// <summary>
     /// Reports the exact live cardinality and revision of the recorder-owned
     /// idempotency receipt section. This is census evidence only, not an export.
     /// </summary>
     public OwnerSectionCensusWitness GetOccurrenceReceiptCensus()
     {
-        return new OwnerSectionCensusWitness(
-            OccurrenceReceiptSectionId,
-            OccurrenceReceiptSectionSchemaVersion,
-            occurrenceReceiptsOwnerIdentity,
-            occurrenceReceipts.Count,
-            occurrenceReceiptsRevision);
+        return receiptAuthority.GetCensus();
     }
-
     OwnerSectionCensusWitness IOwnerSectionCensusProvider.GetCurrentCensus()
     {
         return GetOccurrenceReceiptCensus();
@@ -251,52 +247,11 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
         string actionDefinitionId,
         string targetLocationRuntimeId,
         CommercialDecisionEvidence commercialEvidence,
-        out NpcDecisionRecord decision)
-    {
-        decision = null;
-        if (string.IsNullOrWhiteSpace(operationIdentity)
-            || string.IsNullOrWhiteSpace(operationFingerprint)
-            || string.IsNullOrWhiteSpace(primaryActorRuntimeId)) return false;
-
-        if (occurrenceReceipts.TryGetValue(operationIdentity,
-                out NpcDecisionOccurrenceReceipt existing))
-        {
-            if (existing.OperationFingerprint != operationFingerprint) return false;
-            decision = existing.Decision;
-            return true;
-        }
-
-        if (occurrenceReceiptsRevision == long.MaxValue) return false;
-        long nextReceiptRevision = occurrenceReceiptsRevision + 1L;
-
-        try
-        {
-            NpcDecisionRecord candidate = new NpcDecisionRecord(
-                idAllocator.AllocateDecisionId(), simulationTime.AbsoluteDay,
-                recordSequence.Allocate(), primaryActorRuntimeId, decisionType,
-                origin, actionDefinitionId, null, null, targetLocationRuntimeId,
-                commercialEvidence, null);
-            if (!decisionStore.Record(candidate)) return false;
-
-            NpcDecisionOccurrenceReceipt receipt = new NpcDecisionOccurrenceReceipt(
-                operationIdentity, operationFingerprint, candidate);
-            occurrenceReceipts.Add(operationIdentity, receipt);
-            occurrenceReceiptsRevision = nextReceiptRevision;
-            decision = candidate;
-            return true;
-        }
-        catch (ArgumentException exception)
-        {
-            logger.LogError("Cannot create NPC decision record: " + exception.Message);
-            return false;
-        }
-        catch (InvalidOperationException exception)
-        {
-            logger.LogError("Cannot allocate NPC decision record identity: " + exception.Message);
-            return false;
-        }
-    }
-
+        out NpcDecisionRecord decision) =>
+        receiptAuthority.TryRecordOccurrenceOnce(
+            operationIdentity, operationFingerprint, primaryActorRuntimeId,
+            decisionType, origin, actionDefinitionId, targetLocationRuntimeId,
+            commercialEvidence, out decision);
     internal static NpcDecisionType GetDecisionType(NpcActionRuntime actionRuntime)
     {
         if (actionRuntime?.SelectedOwner is DailyV1NpcActionPayloadOwner selectedPayload)
@@ -327,20 +282,5 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
             default:
                 return NpcDecisionType.Action;
         }
-    }
-}
-
-internal sealed class NpcDecisionOccurrenceReceipt
-{
-    public string OperationIdentity { get; }
-    public string OperationFingerprint { get; }
-    public NpcDecisionRecord Decision { get; }
-
-    public NpcDecisionOccurrenceReceipt(string operationIdentity,
-        string operationFingerprint, NpcDecisionRecord decision)
-    {
-        OperationIdentity = operationIdentity;
-        OperationFingerprint = operationFingerprint;
-        Decision = decision;
     }
 }

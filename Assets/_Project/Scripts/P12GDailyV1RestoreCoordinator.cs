@@ -552,14 +552,14 @@ internal static partial class P12GDailyV1RestoreCoordinator
 
             SimulationTime stagedTime = new SimulationTime(sourceToken.AbsoluteDay);
             SimulationLogger logger = UnitySimulationLoggerAdapter.Create(sourceSession.Configuration.LogSettings);
+            NpcDecisionStore decisions = new NpcDecisionStore();
             DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
-                stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, logger);
+                stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, decisions, logger);
             HistoryStore history = eventAuthority.History;
             DomainEventStore eventStore = eventAuthority.EventStore;
-            NpcDecisionStore decisions = new NpcDecisionStore();
             DomainEventRecorder eventRecorder = eventAuthority.Recorder;
             NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(
-                stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, decisions, logger);
+                eventAuthority.DecisionOccurrenceReceipts, logger);
             EconomyTransactionService economyTransactions = new EconomyTransactionService();
 
             P12EDailyV1OwnerStagingContext eContext = new P12EDailyV1OwnerStagingContext(
@@ -1270,7 +1270,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         if (eventAuthority == null
             || stagedC == null
             || time == null
-            || !eventAuthority.IsFor(stagedC.RuntimeIdAllocator, time, stagedC.RecordSequence))
+            || !eventAuthority.IsFor(stagedC.RuntimeIdAllocator, time, stagedC.RecordSequence, decisions))
         {
             diagnostic = "The detached Core event/history roots do not match their staged runtime identities.";
             return false;

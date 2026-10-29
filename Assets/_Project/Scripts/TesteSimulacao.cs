@@ -2828,14 +2828,14 @@ public class TesteSimulacao : MonoBehaviour
 
         DailyV1DomainEventAuthority eventAuthority = composition.EventAuthority;
         if (eventAuthority == null
-            || !eventAuthority.IsFor(runtimeIdAllocator, simulationTime, recordSequence))
+            || !eventAuthority.IsFor(runtimeIdAllocator, simulationTime, recordSequence, decisionStore))
             throw new System.InvalidOperationException(
                 "Core Daily-v1 genesis did not retain the exact event/history runtime authority.");
         historyStore = eventAuthority.History;
         domainEventStore = eventAuthority.EventStore;
         domainEventRecorder = eventAuthority.Recorder;
         decisionRecorder = new NpcDecisionRecorder(
-            runtimeIdAllocator, simulationTime, recordSequence, decisionStore, logger);
+            eventAuthority.DecisionOccurrenceReceipts, logger);
         npcChronicleService = new NpcChronicleService(decisionStore, domainEventStore);
         explorableSiteStore = new ExplorableSiteStore();
         explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();

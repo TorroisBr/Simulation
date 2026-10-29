@@ -17,7 +17,7 @@ public sealed class DomainEventAuthorityCoreTests
         Assert.That(authority, Is.Not.Null);
         Assert.That(authority.IsFor(
             composition.RuntimeIdAllocator, composition.SimulationTime,
-            composition.RecordSequence), Is.True);
+            composition.RecordSequence, composition.DecisionStore), Is.True);
         Assert.That(authority.EventStore.UsesHistoryStore(authority.History), Is.True);
         Assert.That(authority.Recorder.UsesEventStore(authority.EventStore), Is.True);
         Assert.That(authority.EventStore.Events, Is.Empty);
@@ -39,6 +39,77 @@ public sealed class DomainEventAuthorityCoreTests
             "The Unity host must validate Core's exact recorder idempotently.");
     }
 
+    [Test]
+    public void DecisionOccurrenceReceiptAuthorityOwnsReplayFingerprintAndP12Census()
+    {
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        SimulationTime time = new SimulationTime(12L);
+        SimulationRecordSequence sequence = new SimulationRecordSequence();
+        NpcDecisionStore decisions = new NpcDecisionStore();
+        DailyV1DecisionOccurrenceReceiptAuthority authority =
+            DailyV1DecisionOccurrenceReceiptAuthority.Create(
+                allocator, time, sequence, decisions);
+
+        OwnerSectionCensusWitness initial = authority.GetCensus();
+        Assert.That(initial.SectionId, Is.EqualTo("p12f.npc-decision-occurrence-receipts"));
+        Assert.That(initial.SchemaVersion, Is.EqualTo(1));
+        Assert.That(initial.Cardinality, Is.Zero);
+        Assert.That(initial.Revision, Is.Zero);
+        Assert.That(initial.OwnerInstanceIdentity, Is.Not.Null);
+        Assert.That(authority.IsFor(allocator, time, sequence, decisions), Is.True);
+        Assert.That(authority.IsFor(
+            allocator, time, sequence, new NpcDecisionStore()), Is.False);
+
+        Assert.That(authority.TryRecordOccurrenceOnce(
+            "merchant.trade.once",
+            "fingerprint-v1",
+            "npc-receipt-owner",
+            NpcDecisionType.TradeSale,
+            NpcDecisionOrigin.Autonomous,
+            "action-sell",
+            "location-receipt-target",
+            null,
+            out NpcDecisionRecord first), Is.True);
+        Assert.That(first, Is.Not.Null);
+        Assert.That(first.DecisionId, Is.EqualTo("decision-000001"));
+        Assert.That(first.AbsoluteDay, Is.EqualTo(12L));
+        Assert.That(first.RecordSequence, Is.EqualTo(1L));
+        Assert.That(decisions.Decisions, Has.Count.EqualTo(1));
+
+        Assert.That(authority.TryRecordOccurrenceOnce(
+            "merchant.trade.once",
+            "fingerprint-v1",
+            "npc-receipt-owner",
+            NpcDecisionType.TradeSale,
+            NpcDecisionOrigin.Autonomous,
+            "action-sell",
+            "location-receipt-target",
+            null,
+            out NpcDecisionRecord replay), Is.True);
+        Assert.That(replay, Is.SameAs(first));
+        Assert.That(decisions.Decisions, Has.Count.EqualTo(1));
+        Assert.That(sequence.CaptureSnapshot().NextSequence, Is.EqualTo(2L));
+
+        Assert.That(authority.TryRecordOccurrenceOnce(
+            "merchant.trade.once",
+            "fingerprint-v2",
+            "npc-receipt-owner",
+            NpcDecisionType.TradeSale,
+            NpcDecisionOrigin.Autonomous,
+            "action-sell",
+            "location-receipt-target",
+            null,
+            out NpcDecisionRecord conflict), Is.False);
+        Assert.That(conflict, Is.Null);
+        Assert.That(decisions.Decisions, Has.Count.EqualTo(1));
+        Assert.That(sequence.CaptureSnapshot().NextSequence, Is.EqualTo(2L));
+        Assert.That(allocator.AllocateDecisionId(), Is.EqualTo("decision-000002"));
+
+        OwnerSectionCensusWitness completed = authority.GetCensus();
+        Assert.That(completed.OwnerInstanceIdentity, Is.SameAs(initial.OwnerInstanceIdentity));
+        Assert.That(completed.Cardinality, Is.EqualTo(1));
+        Assert.That(completed.Revision, Is.EqualTo(1L));
+    }
     [Test]
     public void RecorderUsesExactAllocatorClockAndSequenceOwnersAndRecordsArrivalIdentity()
     {

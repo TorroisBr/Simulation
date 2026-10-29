@@ -160,14 +160,14 @@ internal static partial class P12GDailyV1RestoreCoordinator
             SimulationLogger logger = UnitySimulationLoggerAdapter.Create(configuration.LogSettings);
             logger.BeginSimulation(configuration.simulationName, configuration.EnabledModules,
                 configuration.Cities.Count, configuration.Npcs.Count);
+            NpcDecisionStore decisions = new NpcDecisionStore(logger);
             DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
-                stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, logger);
+                stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, decisions, logger);
             HistoryStore history = eventAuthority.History;
             DomainEventStore eventStore = eventAuthority.EventStore;
-            NpcDecisionStore decisions = new NpcDecisionStore(logger);
             DomainEventRecorder eventRecorder = eventAuthority.Recorder;
             NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(
-                stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, decisions, logger);
+                eventAuthority.DecisionOccurrenceReceipts, logger);
             EconomyTransactionService economyTransactions = new EconomyTransactionService();
             P12EDailyV1OwnerStagingContext eContext = new P12EDailyV1OwnerStagingContext(
                 null, stagedC, stagedD, stagedTime, configuration.freeStatus,

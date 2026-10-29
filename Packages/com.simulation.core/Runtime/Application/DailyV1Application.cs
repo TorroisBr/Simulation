@@ -254,7 +254,7 @@ internal sealed class DailyV1Application
         DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
             executionBoundaryState.SelectedRuntimeIdAllocator,
             executionBoundaryState.SimulationTime,
-            executionBoundaryState.SelectedRecordSequence);
+            executionBoundaryState.SelectedRecordSequence, executionBoundaryState.SelectedDecisionStore);
         return TryCreateRestoredActiveRuntimeSession(
             executionBoundaryState, expectedDefinitions, lastEconomySnapshotDay,
             p9Manifest, spatialAuthority, eventAuthority, replacementOperation,
@@ -288,7 +288,7 @@ internal sealed class DailyV1Application
             || !eventAuthority.IsFor(
                 executionBoundaryState.SelectedRuntimeIdAllocator,
                 executionBoundaryState.SimulationTime,
-                executionBoundaryState.SelectedRecordSequence))
+                executionBoundaryState.SelectedRecordSequence, executionBoundaryState.SelectedDecisionStore))
         {
             diagnostic = "The restored Core execution boundary is not admitted for the exact selected definitions.";
             return false;
@@ -434,7 +434,7 @@ internal sealed class DailyV1Application
         }
 
         DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
-            runtimeIdAllocator, simulationTime, recordSequence);
+            runtimeIdAllocator, simulationTime, recordSequence, decisionStore);
         return TryCreateRestoredActiveRuntimeSession(
             definitions, p9Manifest, effectiveConfiguration, calendarDefinition,
             simulationTime, admissionContext, worldId, cityOwners, npcOwners, spatialNetwork,
@@ -480,7 +480,7 @@ internal sealed class DailyV1Application
         if (definitions == null
             || !ReferenceEquals(definitions.EffectiveConfiguration, effectiveConfiguration)
             || eventAuthority == null
-            || !eventAuthority.IsFor(runtimeIdAllocator, simulationTime, recordSequence))
+            || !eventAuthority.IsFor(runtimeIdAllocator, simulationTime, recordSequence, decisionStore))
         {
             diagnostic = "Restored Core session composition requires the exact selected definitions and configuration.";
             return false;
