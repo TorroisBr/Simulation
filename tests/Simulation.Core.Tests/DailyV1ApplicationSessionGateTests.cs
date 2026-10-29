@@ -221,6 +221,23 @@ public sealed class DailyV1ApplicationSessionGateTests
                 && !ReturnPartialOwnerEvidenceThenFail;
         }
 
+        public bool TryBindRestoredCandidateMutationGuard(out string diagnostic)
+        {
+            diagnostic = "The session-gate test boundary does not compose restored candidates.";
+            return false;
+        }
+
+        public bool TryCaptureUnadmittedRestoredDailyOwnerVector(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out string diagnostic)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            diagnostic = "The session-gate test boundary does not compose restored candidates.";
+            return false;
+        }
+
         public void FaultRuntimeAdmission()
         {
             Faulted = true;

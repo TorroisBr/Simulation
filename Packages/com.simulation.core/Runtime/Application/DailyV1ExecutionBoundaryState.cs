@@ -33,6 +33,23 @@ internal enum DailyV1CaptureScopeAllowance : byte
     SessionReplacementValidation = 3
 }
 
+internal enum DailyV1RestoredBoundaryFinalizationStage : byte
+{
+    MutationGuardBound = 1,
+    OwnerVectorRecaptured = 2,
+    BoundaryAdmitted = 3
+}
+
+internal enum DailyV1RestoredBoundaryFinalizationFailure : byte
+{
+    None = 0,
+    StagingAuthorityUnavailable = 1,
+    CandidateHostBoundaryUnavailable = 2,
+    MutationGuardBindingFailed = 3,
+    OwnerVectorValidationFailed = 4,
+    BoundaryAdmissionFailed = 5
+}
+
 /// <summary>
 /// Owns the per-runtime single-writer advance lease and completed Daily-v1
 /// core sequence. This is execution state, not a thread lock or persisted data.
@@ -55,6 +72,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         new DailyV1MutationEpochState();
     private readonly AuthoritativeMutationGuard mutationGuard =
         new AuthoritativeMutationGuard();
+    private bool coreMutationGuardAuthoritiesBound;
+    private volatile bool factualReadWorldPublished;
     private bool runtimeIdentityBound;
     private bool runtimeConfigurationBound;
     private bool runtimeProtocolOperationInventorySealed;
@@ -118,6 +137,24 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     internal SimulationCalendar CalendarIdentity { get; private set; }
     internal AuthoritativeMutationGuard MutationGuard => mutationGuard;
     internal bool CanMutate => mutationGuard.CanMutate;
+    internal bool CoreMutationGuardAuthoritiesBound => coreMutationGuardAuthoritiesBound;
+    internal bool IsFactualReadWorldPublished => factualReadWorldPublished;
+
+    internal bool TryMarkCoreMutationGuardAuthoritiesBound()
+    {
+        if (coreMutationGuardAuthoritiesBound || !mutationGuard.CanMutate)
+            return false;
+        coreMutationGuardAuthoritiesBound = true;
+        return true;
+    }
+
+    internal bool TryMarkFactualReadWorldPublished()
+    {
+        if (factualReadWorldPublished)
+            return false;
+        factualReadWorldPublished = true;
+        return true;
+    }
 
     internal DailyV1ExecutionBoundaryState() { }
 

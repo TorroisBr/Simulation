@@ -1152,29 +1152,72 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
-    /// Confirms that owner identities, census values, and the shared mutation
-    /// epoch did not change after detached-graph validation and guard binding.
+    /// Finalizes the private restored Daily-v1 boundary while this application
+    /// owns the exact initial or replacement staging authority. Core binds and
+    /// revalidates the selected execution boundary, publishes the restored
+    /// continuation token, and marks factual-read state before the host can
+    /// publish its compatibility projection.
     /// </summary>
-    internal bool TryValidateRestoredTargetOwnerVectorUnchanged(
+    internal bool TryFinalizeRestoredCandidateBoundary(
+        DailyV1ActiveRuntimeSession candidateSession,
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts,
+        WorldId expectedWorldId,
+        long preservedAbsoluteDay,
+        long preservedCompletedCoreSequence,
         IReadOnlyList<OwnerSectionCensusSnapshot> validatedTargetSections,
         long validatedMutationEpoch,
-        IReadOnlyList<OwnerSectionCensusSnapshot> currentTargetSections,
-        long currentMutationEpoch,
         DailyV1ActiveRuntimeSession expectedSession,
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
-        out P12GDailyV1OwnerVectorFailure failure,
+        Action<DailyV1RestoredBoundaryFinalizationStage> stageObserver,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedOwnerSections,
+        out long recapturedMutationEpoch,
+        out DailyV1RestoredBoundaryFinalizationFailure failure,
         out string diagnostic)
     {
+        recapturedOwnerSections = null;
+        recapturedMutationEpoch = 0L;
+        failure = DailyV1RestoredBoundaryFinalizationFailure.None;
+        diagnostic = null;
+
         if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
         {
-            failure = P12GDailyV1OwnerVectorFailure.OwnerVectorChanged;
+            failure = DailyV1RestoredBoundaryFinalizationFailure.StagingAuthorityUnavailable;
             diagnostic = "The application no longer holds the exact restored-continuation staging authority.";
             return false;
         }
 
-        return DailyV1RestoredOwnerVectorContract.TryMatchCurrentTargetSnapshot(
-            validatedTargetSections, validatedMutationEpoch,
-            currentTargetSections, currentMutationEpoch, out failure, out diagnostic);
+        if (candidateSession == null || hostPorts == null
+            || !ReferenceEquals(candidateSession.ExecutionBoundaryState, hostPorts.ExecutionState)
+            || !IsBootstrapOrRestoredDescendant(candidateSession.AdmissionContext)
+            || !TryBindRuntimeAdvanceBoundary(candidateSession, hostPorts))
+        {
+            failure = DailyV1RestoredBoundaryFinalizationFailure.CandidateHostBoundaryUnavailable;
+            diagnostic = "The private restored candidate could not bind its exact Core application and host boundary.";
+            return false;
+        }
+
+        if (candidateSession.RuntimeAdvanceBoundary == null
+            || !ReferenceEquals(candidateSession.RuntimeAdvanceBoundary.ExecutionState,
+                candidateSession.ExecutionBoundaryState))
+        {
+            failure = DailyV1RestoredBoundaryFinalizationFailure.CandidateHostBoundaryUnavailable;
+            diagnostic = "The private restored candidate has no exact Core runtime evidence boundary.";
+            return false;
+        }
+
+        return candidateSession.ExecutionBoundaryState.TryFinalizeRestoredDailyBoundary(
+            candidateSession.RuntimeAdvanceBoundary,
+            hostPorts,
+            expectedWorldId,
+            preservedAbsoluteDay,
+            preservedCompletedCoreSequence,
+            validatedTargetSections,
+            validatedMutationEpoch,
+            stageObserver,
+            out recapturedOwnerSections,
+            out recapturedMutationEpoch,
+            out failure,
+            out diagnostic);
     }
     /// <summary>
     /// Stages the detached P12-C roots for an image through this application.

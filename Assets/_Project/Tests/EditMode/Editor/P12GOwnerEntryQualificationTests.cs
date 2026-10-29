@@ -92,6 +92,17 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         Assert.That(EncodeCompletedImage(restored, restoreBootstrapContext), Is.EqualTo(sourceImageBytes),
             "Every persisted owner payload, alias group, root and revision must be reproduced exactly after image restore.");
 
+        Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure unpublishedAdvanceFailure),
+            Is.False,
+            "A restored Core session must not advance through its application authority before atomic publication.");
+        Assert.That(unpublishedAdvanceFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
+        Assert.That(restoreApplication.TryCommitRestoredCandidate(
+                expectedSession: null,
+                candidate: restored.CoreRuntimeSession,
+                replacementOperation: null,
+                out string publishDiagnostic),
+            Is.True, publishDiagnostic);
+
         for (int boundary = 1; boundary <= 2; boundary++)
         {
             Assert.That(source.Session.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextSource),

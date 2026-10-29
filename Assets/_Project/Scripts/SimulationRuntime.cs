@@ -1718,7 +1718,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     // Unity forwards legacy callers to the same guard owned by Core's runtime
     // execution boundary; this is not a second mutation authority.
     private AuthoritativeMutationGuard mutationGuard => dailyExecutionBoundary.MutationGuard;
-    private bool coreMutationGuardAuthoritiesBound;
+    private bool coreMutationGuardAuthoritiesBound =>
+        dailyExecutionBoundary.CoreMutationGuardAuthoritiesBound;
     private readonly DailyV1ExecutionBoundaryState dailyExecutionBoundary;
     private readonly object dailyV1ApplicationAdvanceAuthorityGate = new object();
     private DailyV1Application dailyV1ApplicationAdvanceAuthority;
@@ -1743,7 +1744,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     private ScheduledDirectiveCensusProvider scheduledDirectiveCensusProvider;
     private ActorChoiceP11CensusProvider actorChoiceP11CensusProvider;
     private readonly FactualReadCoordinator factualReadCoordinator;
-    private volatile bool factualReadWorldPublished;
+    private bool factualReadWorldPublished =>
+        dailyExecutionBoundary.IsFactualReadWorldPublished;
     private SimulationTime simulationTime => dailyExecutionBoundary.SimulationTime;
     private readonly List<CityRuntime> cities;
     private readonly IReadOnlyList<CityRuntime> cityRuntimeSnapshot;
@@ -3009,7 +3011,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         if (runtimeAdmissionContext?.IsRestoredContinuation != true)
         {
             BindCoreMutationGuardAuthorities();
-            coreMutationGuardAuthoritiesBound = true;
         }
         if (this.crimeSystem != null
             && this.crimeSystem.TryBindSimulationTime(this.simulationTime) == false)
@@ -3142,8 +3143,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        factualReadWorldPublished = true;
-        return true;
+        return dailyExecutionBoundary.TryMarkFactualReadWorldPublished();
     }
 
     internal bool TryCompleteP15AProvingPublication()
@@ -7623,7 +7623,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             }
         }
 
-        coreMutationGuardAuthoritiesBound = true;
+        if (!dailyExecutionBoundary.TryMarkCoreMutationGuardAuthoritiesBound())
+        {
+            throw new InvalidOperationException(
+                "The Core execution boundary could not retain its complete mutation-guard binding state.");
+        }
     }
 
     internal bool AreCoreMutationGuardAuthoritiesBound => coreMutationGuardAuthoritiesBound;
@@ -10724,8 +10728,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        factualReadWorldPublished = true;
-        return true;
+        return dailyExecutionBoundary.TryMarkFactualReadWorldPublished();
     }
 
     internal bool TryGetCompletedDailyCaptureToken(
@@ -11209,6 +11212,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             out ContinuationCensusFailure censusFailure);
         failure = captured ? DailyCaptureEligibilityFailure.None
             : MapDailyCaptureFailure(censusFailure);
+        return captured;
+    }
+
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryBindRestoredCandidateMutationGuard(
+        out string diagnostic) =>
+        TryBindRestoredCandidateMutationGuard(out diagnostic);
+
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCaptureUnadmittedRestoredDailyOwnerVector(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out string diagnostic)
+    {
+        bool captured = TryCaptureUnadmittedRestoredDailyOwnerVector(
+            out ownerSections, out mutationEpoch, out ContinuationCensusFailure failure);
+        diagnostic = captured ? null : failure.ToString();
         return captured;
     }
 

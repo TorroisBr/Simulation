@@ -169,6 +169,11 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure);
+    bool TryBindRestoredCandidateMutationGuard(out string diagnostic);
+    bool TryCaptureUnadmittedRestoredDailyOwnerVector(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out string diagnostic);
     void FaultRuntimeAdmission();
 }
 
@@ -921,4 +926,152 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         failure == SimulationTimeAdvanceFailure.AbsoluteDayOverflow
             ? SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow
             : SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+
+    /// <summary>
+    /// Finalizes an unpublished restored candidate under this exact Core
+    /// execution state. The host supplies only the complete owner census and
+    /// one-way guard-binding ports; Core owns revalidation, restored-token
+    /// creation, and factual-read publication.
+    /// </summary>
+    internal bool TryFinalizeRestoredDailyBoundary(
+        IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts,
+        WorldId expectedWorldId,
+        long preservedAbsoluteDay,
+        long preservedCompletedCoreSequence,
+        IReadOnlyList<OwnerSectionCensusSnapshot> validatedTargetOwnerSections,
+        long validatedTargetMutationEpoch,
+        Action<DailyV1RestoredBoundaryFinalizationStage> stageObserver,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedOwnerSections,
+        out long recapturedMutationEpoch,
+        out DailyV1RestoredBoundaryFinalizationFailure failure,
+        out string diagnostic)
+    {
+        recapturedOwnerSections = null;
+        recapturedMutationEpoch = 0L;
+        failure = DailyV1RestoredBoundaryFinalizationFailure.None;
+        diagnostic = null;
+
+        if (boundary == null || !ReferenceEquals(boundary.ExecutionState, this)
+            || hostPorts == null || !ReferenceEquals(hostPorts.ExecutionState, this))
+        {
+            failure = DailyV1RestoredBoundaryFinalizationFailure.CandidateHostBoundaryUnavailable;
+            diagnostic = "The private restored candidate is not bound to this exact Core execution state.";
+            return false;
+        }
+
+        if (AdmissionContext == null
+            || !AdmissionContext.IsRestoredContinuation
+            || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !AdmissionContext.IsOwnedByCurrentThread()
+            || expectedWorldId == null
+            || !ReferenceEquals(expectedWorldId, WorldId)
+            || SimulationTime == null
+            || SimulationTime.AbsoluteDay != preservedAbsoluteDay
+            || preservedAbsoluteDay < 0L
+            || preservedCompletedCoreSequence <= 0L
+            || validatedTargetMutationEpoch < 0L
+            || !DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(
+                validatedTargetOwnerSections)
+            || currentCaptureToken != null
+            || completedCoreSequence != 0L
+            || factualReadWorldPublished
+            || hostPorts.IsFactualReadWorldPublished
+            || AdvanceLeaseHeld
+            || ActiveOperationCount != 0
+            || hostPorts.HasActiveDailyOperationContext
+            || !mutationGuard.CanMutate
+            || !runtimeIdentityBound
+            || !runtimeConfigurationBound
+            || CoreMutationGuardAuthoritiesBound)
+        {
+            failure = DailyV1RestoredBoundaryFinalizationFailure.BoundaryAdmissionFailed;
+            diagnostic = "The private restored candidate is not at its exact unadmitted Core owner-thread boundary.";
+            return false;
+        }
+
+        if (!hostPorts.TryBindRestoredCandidateMutationGuard(out diagnostic)
+            || !CoreMutationGuardAuthoritiesBound)
+        {
+            failure = DailyV1RestoredBoundaryFinalizationFailure.MutationGuardBindingFailed;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The private restored candidate mutation guard did not bind to its complete owner graph.";
+            return false;
+        }
+        stageObserver?.Invoke(DailyV1RestoredBoundaryFinalizationStage.MutationGuardBound);
+
+        if (!TryCaptureUnadmittedRestoredOwnerVector(
+                hostPorts, out IReadOnlyList<OwnerSectionCensusSnapshot> firstRecapture,
+                out long firstRecapturedEpoch, out diagnostic)
+            || !DailyV1RestoredOwnerVectorContract.TryMatchCurrentTargetSnapshot(
+                validatedTargetOwnerSections, validatedTargetMutationEpoch,
+                firstRecapture, firstRecapturedEpoch, out _, out diagnostic))
+        {
+            failure = DailyV1RestoredBoundaryFinalizationFailure.OwnerVectorValidationFailed;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The detached target owner vector changed while binding its mutation guard.";
+            return false;
+        }
+
+        recapturedOwnerSections = firstRecapture;
+        recapturedMutationEpoch = firstRecapturedEpoch;
+        stageObserver?.Invoke(DailyV1RestoredBoundaryFinalizationStage.OwnerVectorRecaptured);
+
+        if (!TryCaptureUnadmittedRestoredOwnerVector(
+                hostPorts, out IReadOnlyList<OwnerSectionCensusSnapshot> finalOwnerSections,
+                out long finalMutationEpoch, out diagnostic)
+            || !DailyV1RestoredOwnerVectorContract.TryMatchCurrentTargetSnapshot(
+                validatedTargetOwnerSections, validatedTargetMutationEpoch,
+                finalOwnerSections, finalMutationEpoch, out _, out diagnostic))
+        {
+            failure = DailyV1RestoredBoundaryFinalizationFailure.OwnerVectorValidationFailed;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The detached target owner vector changed before restored-boundary admission.";
+            return false;
+        }
+
+        if (!TryCreateRestoredContinuationToken(
+                AdmissionContext, ConfigurationIdentity, CalendarIdentity,
+                CompositionProfile, expectedWorldId, preservedAbsoluteDay,
+                preservedCompletedCoreSequence, finalMutationEpoch,
+                validatedTargetOwnerSections, out _)
+            || !TryMarkFactualReadWorldPublished())
+        {
+            failure = DailyV1RestoredBoundaryFinalizationFailure.BoundaryAdmissionFailed;
+            diagnostic = "The Core execution state could not publish the restored continuation boundary.";
+            return false;
+        }
+
+        if (!hostPorts.IsFactualReadWorldPublished
+            || !IsHealthyDailyOwnerThreadBoundary()
+            || !HasValidRestoredDailyBoundaryAdmission(boundary))
+        {
+            failure = DailyV1RestoredBoundaryFinalizationFailure.BoundaryAdmissionFailed;
+            diagnostic = "The restored target did not retain a healthy admitted completed boundary.";
+            return false;
+        }
+
+        stageObserver?.Invoke(DailyV1RestoredBoundaryFinalizationStage.BoundaryAdmitted);
+        return true;
+    }
+
+    private static bool TryCaptureUnadmittedRestoredOwnerVector(
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        mutationEpoch = 0L;
+        diagnostic = null;
+        if (!hostPorts.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                out ownerSections, out mutationEpoch, out string captureDiagnostic))
+        {
+            diagnostic = "The private target did not produce a complete quiescent owner vector: "
+                + (string.IsNullOrWhiteSpace(captureDiagnostic) ? "OwnerCoverageIncomplete" : captureDiagnostic) + ".";
+            return false;
+        }
+
+        return true;
+    }
 }

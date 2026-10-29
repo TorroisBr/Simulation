@@ -36,6 +36,23 @@ public sealed class SimulationRuntimeOrchestrationTests
             return false;
         }
 
+        public bool TryBindRestoredCandidateMutationGuard(out string diagnostic)
+        {
+            diagnostic = "This rejected advance-boundary fixture does not bind restored candidates.";
+            return false;
+        }
+
+        public bool TryCaptureUnadmittedRestoredDailyOwnerVector(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out string diagnostic)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            diagnostic = "This rejected advance-boundary fixture does not capture restored candidates.";
+            return false;
+        }
+
         public bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
         {
             failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;

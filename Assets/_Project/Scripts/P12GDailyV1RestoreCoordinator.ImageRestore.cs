@@ -312,51 +312,82 @@ internal static partial class P12GDailyV1RestoreCoordinator
             stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetNpcCensusValidated);
             stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetTravelPartyBindingsValidated);
 
-            if (!targetRuntime.TryBindRestoredCandidateMutationGuard(out diagnostic))
+            if (application != null)
             {
-                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.CandidateGuardBound);
+                if (candidate.CoreRuntimeSession == null)
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetCompositionFailed;
+                    return false;
+                }
 
-            bool targetOwnerVectorRecaptured = targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
-                out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedSections,
-                out long recapturedEpoch, out censusFailure);
-            bool targetOwnerVectorStillCurrent = targetOwnerVectorRecaptured
-                && (application != null
-                    ? application.TryValidateRestoredTargetOwnerVectorUnchanged(
-                        targetSections, targetEpoch, recapturedSections, recapturedEpoch,
-                        replacementOperation?.ExpectedSession, replacementOperation, out _, out diagnostic)
-                    : P12GDailyV1OwnerVector.TryMatchCurrentTargetSnapshot(
-                        targetSections, targetEpoch, recapturedSections, recapturedEpoch,
-                        out _, out diagnostic));
-            if (!targetOwnerVectorStillCurrent)
-            {
-                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
-                if (string.IsNullOrWhiteSpace(diagnostic))
-                    diagnostic = "The detached target owner vector changed while binding its mutation guard.";
-                return false;
-            }
-            targetSections = recapturedSections;
-            targetEpoch = recapturedEpoch;
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured);
+                if (!application.TryFinalizeRestoredCandidateBoundary(
+                        candidate.CoreRuntimeSession,
+                        targetRuntime,
+                        stagedC.WorldIdentity,
+                        image.Header.Day,
+                        image.Header.Sequence,
+                        targetSections,
+                        targetEpoch,
+                        replacementOperation?.ExpectedSession,
+                        replacementOperation,
+                        finalizationStage => stageObserver?.Invoke(
+                            MapRestoreFinalizationStage(finalizationStage)),
+                        out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedSections,
+                        out long recapturedEpoch,
+                        out DailyV1RestoredBoundaryFinalizationFailure finalizationFailure,
+                        out diagnostic))
+                {
+                    failure = MapRestoreFinalizationFailure(finalizationFailure);
+                    return false;
+                }
 
-            if (!targetRuntime.TryAdmitRestoredDailyBoundary(stagedC.WorldIdentity,
-                    image.Header.Day, image.Header.Sequence, targetSections, targetEpoch,
-                    out DailyCaptureEligibilityFailure admissionFailure))
-            {
-                failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
-                diagnostic = "The detached target boundary admission failed: " + admissionFailure + ".";
-                return false;
+                targetSections = recapturedSections;
+                targetEpoch = recapturedEpoch;
             }
-            if (!targetRuntime.HasValidRestoredDailyBoundaryAdmission()
-                || !targetRuntime.IsHealthyDailyOwnerThreadBoundary())
+            else
             {
-                failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
-                diagnostic = "The restored target did not retain a healthy admitted completed boundary.";
-                return false;
+                if (!targetRuntime.TryBindRestoredCandidateMutationGuard(out diagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.CandidateGuardBound);
+
+                bool targetOwnerVectorRecaptured = targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedSections,
+                    out long recapturedEpoch, out censusFailure);
+                bool targetOwnerVectorStillCurrent = targetOwnerVectorRecaptured
+                    && P12GDailyV1OwnerVector.TryMatchCurrentTargetSnapshot(
+                        targetSections, targetEpoch, recapturedSections, recapturedEpoch,
+                        out _, out diagnostic);
+                if (!targetOwnerVectorStillCurrent)
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                    if (string.IsNullOrWhiteSpace(diagnostic))
+                        diagnostic = "The detached target owner vector changed while binding its mutation guard.";
+                    return false;
+                }
+                targetSections = recapturedSections;
+                targetEpoch = recapturedEpoch;
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured);
+
+                if (!targetRuntime.TryAdmitRestoredDailyBoundary(stagedC.WorldIdentity,
+                        image.Header.Day, image.Header.Sequence, targetSections, targetEpoch,
+                        out DailyCaptureEligibilityFailure admissionFailure))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
+                    diagnostic = "The detached target boundary admission failed: " + admissionFailure + ".";
+                    return false;
+                }
+                if (!targetRuntime.HasValidRestoredDailyBoundaryAdmission()
+                    || !targetRuntime.IsHealthyDailyOwnerThreadBoundary())
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
+                    diagnostic = "The restored target did not retain a healthy admitted completed boundary.";
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.BoundaryAdmitted);
             }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.BoundaryAdmitted);
 
             restoredSession = candidate;
             failure = P12GDailyV1RestoreFailure.None;
@@ -374,6 +405,35 @@ internal static partial class P12GDailyV1RestoreCoordinator
             return false;
         }
     }
+
+    private static P12GDailyV1RestoreStage MapRestoreFinalizationStage(
+        DailyV1RestoredBoundaryFinalizationStage stage)
+    {
+        switch (stage)
+        {
+            case DailyV1RestoredBoundaryFinalizationStage.MutationGuardBound:
+                return P12GDailyV1RestoreStage.CandidateGuardBound;
+            case DailyV1RestoredBoundaryFinalizationStage.OwnerVectorRecaptured:
+                return P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured;
+            case DailyV1RestoredBoundaryFinalizationStage.BoundaryAdmitted:
+                return P12GDailyV1RestoreStage.BoundaryAdmitted;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(stage), stage,
+                    "Unknown Core restored-boundary finalization stage.");
+        }
+    }
+
+    private static P12GDailyV1RestoreFailure MapRestoreFinalizationFailure(
+        DailyV1RestoredBoundaryFinalizationFailure failure) =>
+        failure == DailyV1RestoredBoundaryFinalizationFailure.MutationGuardBindingFailed
+            ? P12GDailyV1RestoreFailure.BindingValidationFailed
+            : failure == DailyV1RestoredBoundaryFinalizationFailure.OwnerVectorValidationFailed
+                ? P12GDailyV1RestoreFailure.TargetOwnerVectorFailed
+                : failure == DailyV1RestoredBoundaryFinalizationFailure.StagingAuthorityUnavailable
+                    || failure == DailyV1RestoredBoundaryFinalizationFailure.CandidateHostBoundaryUnavailable
+                    || failure == DailyV1RestoredBoundaryFinalizationFailure.BoundaryAdmissionFailed
+                    ? P12GDailyV1RestoreFailure.TargetAdmissionFailed
+                    : P12GDailyV1RestoreFailure.TargetAdmissionFailed;
 
 
     private static bool TryCreateRestoredCoreExecutionBoundary(
