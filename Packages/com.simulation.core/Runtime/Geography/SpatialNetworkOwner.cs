@@ -33,6 +33,30 @@ internal sealed class SpatialNetworkOwner
     }
     internal IReadOnlyList<SpatialRouteRuntime> Routes => Array.AsReadOnly(routes.ToArray());
 
+    /// <summary>Captures the exact selected spatial owner as detached P12 values.</summary>
+    internal SpatialNetworkOwnerSnapshot CaptureOwnerSnapshot()
+    {
+        List<string> locationIds = new List<string>(locationsById.Keys);
+        locationIds.Sort(StringComparer.Ordinal);
+
+        List<SpatialRouteOwnerSnapshotRecord> routeRecords =
+            new List<SpatialRouteOwnerSnapshotRecord>(routes.Count);
+        foreach (SpatialRouteRuntime route in routes)
+        {
+            routeRecords.Add(new SpatialRouteOwnerSnapshotRecord(
+                route.RuntimeId,
+                route.Origin.RuntimeId,
+                route.Destination.RuntimeId,
+                route.TravelDays));
+        }
+
+        return new SpatialNetworkOwnerSnapshot(
+            SpatialNetworkOwnerSnapshot.CurrentSchemaVersion,
+            revision,
+            locationIds,
+            routeRecords);
+    }
+
     internal bool ContainsLocation(SpatialLocationRuntime location) =>
         location != null && locations.Contains(location);
 

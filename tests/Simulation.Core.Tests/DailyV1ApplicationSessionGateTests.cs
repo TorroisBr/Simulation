@@ -367,6 +367,26 @@ public sealed class DailyV1ApplicationSessionGateTests
             census.OwnerInstanceIdentity, census.Cardinality, census.Revision);
     }
 
+    private static void ReplaceSelectedSpatialOwnerCensus(
+        OwnerSectionCensusSnapshot[] sections,
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        Assert.That(sections, Is.Not.Null);
+        Assert.That(graph?.SpatialNetwork, Is.Not.Null);
+        ReplaceOwnerSectionWithCurrentCensus(sections, new OwnerSectionCensusWitness(
+            P12ASpatialNetworkOwnerCodec.LocationsSectionId,
+            P12ASpatialNetworkOwnerCodec.SchemaVersion,
+            graph.SpatialNetwork,
+            graph.SpatialNetwork.LocationCount,
+            graph.SpatialNetwork.Revision));
+        ReplaceOwnerSectionWithCurrentCensus(sections, new OwnerSectionCensusWitness(
+            P12ASpatialNetworkOwnerCodec.RoutesSectionId,
+            P12ASpatialNetworkOwnerCodec.SchemaVersion,
+            graph.SpatialNetwork,
+            graph.SpatialNetwork.RouteCount,
+            graph.SpatialNetwork.Revision));
+    }
+
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundP12FSectionVector(
         DailyV1ActiveRuntimeSession session)
         => CreateCoreBoundCityAndP12FSectionVector(session);
@@ -382,6 +402,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
         Assert.That(graph.PersonStore, Is.Not.Null);
         Assert.That(graph.GenealogyStore, Is.Not.Null);
+        ReplaceSelectedSpatialOwnerCensus(sections, graph);
         ReplaceOwnerSectionWithCurrentCensus(sections,
             graph.PersonStore.GetMembershipCensusWitness());
         ReplaceOwnerSectionWithCurrentCensus(sections,
@@ -433,6 +454,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
         Assert.That(graph.PersonStore, Is.Not.Null);
         Assert.That(graph.GenealogyStore, Is.Not.Null);
+        ReplaceSelectedSpatialOwnerCensus(sections, graph);
         ReplaceOwnerSectionWithCurrentCensus(sections,
             graph.PersonStore.GetMembershipCensusWitness());
         ReplaceOwnerSectionWithCurrentCensus(sections,
@@ -783,6 +805,19 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(demographic.PersonSnapshot.Revision, Is.EqualTo(membership.Revision));
         Assert.That(demographic.PersonSnapshot.Revision, Is.EqualTo(bindings.Revision));
         Assert.That(demographic.GenealogySnapshot.Revision, Is.EqualTo(genealogy.Revision));
+        DailyV1P12GCoreBoundSpatialOwnerSources spatial = operation.CoreSpatialOwnerSources;
+        Assert.That(spatial, Is.Not.Null);
+        Assert.That(spatial.IsFor(operation), Is.True);
+        Assert.That(spatial.Owner, Is.SameAs(session.OwnerGraph.SpatialNetwork));
+        OwnerSectionCensusSnapshot locations = operation.SourceWitness.TokenOwnerSections.Single(
+            section => section.SectionId == P12ASpatialNetworkOwnerCodec.LocationsSectionId);
+        OwnerSectionCensusSnapshot routes = operation.SourceWitness.TokenOwnerSections.Single(
+            section => section.SectionId == P12ASpatialNetworkOwnerCodec.RoutesSectionId);
+        Assert.That(locations.OwnerInstanceIdentity, Is.SameAs(routes.OwnerInstanceIdentity));
+        Assert.That(locations.Cardinality, Is.EqualTo(spatial.Snapshot.LocationRuntimeIds.Count));
+        Assert.That(routes.Cardinality, Is.EqualTo(spatial.Snapshot.Routes.Count));
+        Assert.That(spatial.Snapshot.Revision, Is.EqualTo(locations.Revision));
+        Assert.That(spatial.Snapshot.Revision, Is.EqualTo(routes.Revision));
         Assert.That(sources.Cities.Count, Is.EqualTo(session.OwnerGraph.Cities.Count));
         for (int index = 0; index < sources.Cities.Count; index++)
         {
@@ -821,6 +856,44 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
         Assert.That(operation.TryRevalidate(out DailyCaptureEligibilityFailure revalidationFailure), Is.True);
         Assert.That(revalidationFailure, Is.EqualTo(DailyCaptureEligibilityFailure.None));
+        operation.Dispose();
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void CoreBoundSpatialSourcesRejectStaleOwnerWitnessAfterLeaseAdmission()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCompleteOwnerSectionVector(session);
+        InstallCompletedBoundaryToken(session, boundary, sections);
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
+
+        int invalidateAt = boundary.ContinuationSaveEvidenceCaptureCount + 1;
+        boundary.SetContinuationSaveEvidenceCaptureCallback(captureCount =>
+        {
+            if (captureCount != invalidateAt) return;
+            int index = Array.FindIndex(sections, section =>
+                section.SectionId == P12ASpatialNetworkOwnerCodec.LocationsSectionId);
+            Assert.That(index, Is.GreaterThanOrEqualTo(0));
+            OwnerSectionCensusSnapshot current = sections[index];
+            sections[index] = new OwnerSectionCensusSnapshot(
+                current.SectionId, current.SchemaVersion, current.Role,
+                current.OwnerInstanceIdentity, current.Cardinality, current.Revision + 1L);
+        });
+
+        Assert.That(DailyV1P12GCoreBoundSpatialOwnerSources.TryCapture(
+            operation, out DailyV1P12GCoreBoundSpatialOwnerSources sources,
+            out DailyV1P12GCoreBoundOwnerSourceCaptureFailure failure,
+            out string diagnostic), Is.False, diagnostic);
+        Assert.That(sources, Is.Null);
+        Assert.That(failure, Is.EqualTo(
+            DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary));
+        Assert.That(operation.CoreSpatialOwnerSources, Is.Not.Null,
+            "The initial exact source remains bound until the active save lease is disposed.");
+        Assert.That(application.ActiveOperationCount, Is.EqualTo(1));
         operation.Dispose();
         Assert.That(application.ActiveOperationCount, Is.Zero);
     }

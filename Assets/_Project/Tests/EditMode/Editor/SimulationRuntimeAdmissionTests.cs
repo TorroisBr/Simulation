@@ -4912,6 +4912,30 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(demographic.GenealogySnapshot.Revision,
                     Is.EqualTo(operation.SourceWitness.TokenOwnerSections.Single(section =>
                         section.SectionId == "p12d.genealogy.parentage").Revision));
+                DailyV1P12GCoreBoundSpatialOwnerSources spatial = operation.CoreSpatialOwnerSources;
+                SpatialNetworkRuntime spatialProjection = restoredSession.SpatialNetwork;
+                Assert.That(spatial, Is.Not.Null);
+                Assert.That(spatial.Owner, Is.SameAs(coreSession.OwnerGraph.SpatialNetwork));
+                Assert.That(spatialProjection, Is.Not.Null);
+                Assert.That(spatial.Owner, Is.SameAs(spatialProjection.SelectedOwner));
+                Assert.That(spatial.Snapshot.LocationRuntimeIds.Count,
+                    Is.EqualTo(spatialProjection.LocationCount));
+                Assert.That(spatial.Snapshot.Routes.Count,
+                    Is.EqualTo(spatialProjection.RouteCount));
+                OwnerSectionCensusSnapshot spatialLocations = operation.SourceWitness.TokenOwnerSections.Single(
+                    section => section.SectionId == P12ASpatialNetworkOwnerCodec.LocationsSectionId);
+                OwnerSectionCensusSnapshot spatialRoutes = operation.SourceWitness.TokenOwnerSections.Single(
+                    section => section.SectionId == P12ASpatialNetworkOwnerCodec.RoutesSectionId);
+                Assert.That(spatialLocations.OwnerInstanceIdentity,
+                    Is.SameAs(spatialProjection));
+                Assert.That(spatialLocations.OwnerInstanceIdentity,
+                    Is.SameAs(spatialRoutes.OwnerInstanceIdentity));
+                Assert.That(spatialLocations.Cardinality,
+                    Is.EqualTo(spatial.Snapshot.LocationRuntimeIds.Count));
+                Assert.That(spatialRoutes.Cardinality,
+                    Is.EqualTo(spatial.Snapshot.Routes.Count));
+                Assert.That(spatial.Snapshot.Revision, Is.EqualTo(spatialLocations.Revision));
+                Assert.That(spatial.Snapshot.Revision, Is.EqualTo(spatialRoutes.Revision));
 
                 Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
                     restoredSession,
@@ -4928,6 +4952,10 @@ public sealed class SimulationRuntimeAdmissionTests
                     section.Id == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);
                 P12AOwnerSection genealogySection = capturedImage.Sections.Single(section =>
                     section.Id == "p12d.genealogy.parentage");
+                P12AOwnerSection spatialLocationsSection = capturedImage.Sections.Single(section =>
+                    section.Id == P12ASpatialNetworkOwnerCodec.LocationsSectionId);
+                P12AOwnerSection spatialRoutesSection = capturedImage.Sections.Single(section =>
+                    section.Id == P12ASpatialNetworkOwnerCodec.RoutesSectionId);
                 Assert.That(personMembershipSection.Rows.Count,
                     Is.EqualTo(demographic.PersonSnapshot.MembershipCount));
                 Assert.That(personMembershipSection.Revision,
@@ -4936,6 +4964,14 @@ public sealed class SimulationRuntimeAdmissionTests
                     Is.EqualTo(demographic.GenealogySnapshot.Records.Count));
                 Assert.That(genealogySection.Revision,
                     Is.EqualTo(demographic.GenealogySnapshot.Revision));
+                Assert.That(spatialLocationsSection.Rows.Count,
+                    Is.EqualTo(spatial.Snapshot.LocationRuntimeIds.Count));
+                Assert.That(spatialLocationsSection.Revision,
+                    Is.EqualTo(spatial.Snapshot.Revision));
+                Assert.That(spatialRoutesSection.Rows.Count,
+                    Is.EqualTo(spatial.Snapshot.Routes.Count));
+                Assert.That(spatialRoutesSection.Revision,
+                    Is.EqualTo(spatial.Snapshot.Revision));
             }
 
             for (int boundary = 0; boundary < 2; boundary++)

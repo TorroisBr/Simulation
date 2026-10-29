@@ -652,6 +652,21 @@ internal sealed class DailyV1Application
                         ? DailyCaptureEligibilityFailure.StaleToken
                         : DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
                 }
+
+                if (witnessCaptured
+                    && (!DailyV1P12GCoreBoundSpatialOwnerSources.TryCapture(
+                            candidateOperation,
+                            out DailyV1P12GCoreBoundSpatialOwnerSources spatialOwnerSources,
+                            out DailyV1P12GCoreBoundOwnerSourceCaptureFailure spatialCaptureFailure,
+                            out _)
+                        || !candidateOperation.TryBindCoreSpatialOwnerSources(spatialOwnerSources)))
+                {
+                    witnessCaptured = false;
+                    failure = spatialCaptureFailure ==
+                        DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary
+                        ? DailyCaptureEligibilityFailure.StaleToken
+                        : DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                }
             }
         }
         catch (Exception captureException)

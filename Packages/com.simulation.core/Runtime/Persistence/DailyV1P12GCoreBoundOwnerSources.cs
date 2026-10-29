@@ -468,3 +468,151 @@ internal sealed class DailyV1P12GCoreBoundDemographicOwnerSources
             && match.Revision == revision;
     }
 }
+
+/// <summary>
+/// Detached P12-D spatial values captured from the exact SpatialNetworkOwner
+/// retained by the active Core session. Unity may project that owner, but does
+/// not select or recapture the app-backed source authority.
+/// </summary>
+internal sealed class DailyV1P12GCoreBoundSpatialOwnerSources
+{
+    private readonly DailyV1P12GContinuationSaveOperation operation;
+    private readonly DailyV1P12GSourceBoundaryWitness witness;
+
+    private DailyV1P12GCoreBoundSpatialOwnerSources(
+        DailyV1P12GContinuationSaveOperation operation,
+        SpatialNetworkOwner owner,
+        SpatialNetworkOwnerSnapshot snapshot)
+    {
+        this.operation = operation;
+        witness = operation.SourceWitness;
+        Owner = owner;
+        Snapshot = snapshot;
+    }
+
+    internal SpatialNetworkOwner Owner { get; }
+    internal SpatialNetworkOwnerSnapshot Snapshot { get; }
+
+    internal bool IsFor(DailyV1P12GContinuationSaveOperation candidate) =>
+        candidate != null
+        && ReferenceEquals(operation, candidate)
+        && candidate.IsActive
+        && ReferenceEquals(witness, candidate.SourceWitness)
+        && ReferenceEquals(witness.Token, candidate.SourceWitness.Token)
+        && ReferenceEquals(witness.TokenOwnerSections, candidate.SourceWitness.TokenOwnerSections);
+
+    internal static bool TryCapture(
+        DailyV1P12GContinuationSaveOperation operation,
+        out DailyV1P12GCoreBoundSpatialOwnerSources sources,
+        out DailyV1P12GCoreBoundOwnerSourceCaptureFailure failure,
+        out string diagnostic)
+    {
+        sources = null;
+        failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.InvalidSaveOperation;
+        diagnostic = null;
+        if (operation == null || !operation.IsActive)
+        {
+            diagnostic = "A current active Core continuation-save operation is required.";
+            return false;
+        }
+        if (!operation.TryRevalidate(out DailyCaptureEligibilityFailure initialFailure))
+        {
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary;
+            diagnostic = "The Core continuation-save witness is stale: " + initialFailure + ".";
+            return false;
+        }
+
+        DailyV1ActiveRuntimeSession session = operation.Session;
+        DailyV1SelectedRuntimeOwnerGraph graph = session?.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = session?.ExecutionBoundaryState;
+        SpatialNetworkOwner owner = graph?.SpatialNetwork;
+        if (graph == null || state == null || owner == null
+            || !ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph))
+        {
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.MissingCoreOwnerBinding;
+            diagnostic = "The active Core session does not retain the exact selected SpatialNetwork owner.";
+            return false;
+        }
+
+        try
+        {
+            SpatialNetworkOwnerSnapshot snapshot = owner.CaptureOwnerSnapshot();
+            if (snapshot == null
+                || snapshot.LocationRuntimeIds == null
+                || snapshot.Routes == null
+                || snapshot.LocationRuntimeIds.Count != owner.LocationCount
+                || snapshot.Routes.Count != owner.RouteCount
+                || snapshot.Revision != owner.Revision
+                || !TryMatchSpatialSection(
+                    operation.SourceWitness.TokenOwnerSections,
+                    P12ASpatialNetworkOwnerCodec.LocationsSectionId,
+                    snapshot.LocationRuntimeIds.Count,
+                    snapshot.Revision,
+                    out object locationsOwnerIdentity)
+                || !TryMatchSpatialSection(
+                    operation.SourceWitness.TokenOwnerSections,
+                    P12ASpatialNetworkOwnerCodec.RoutesSectionId,
+                    snapshot.Routes.Count,
+                    snapshot.Revision,
+                    out object routesOwnerIdentity)
+                || !ReferenceEquals(locationsOwnerIdentity, routesOwnerIdentity))
+            {
+                failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.OwnerCensusMismatch;
+                diagnostic = "The exact Core SpatialNetwork snapshot does not match the operation's admitted Location/Route census vector.";
+                return false;
+            }
+
+            if (!operation.TryRevalidate(out DailyCaptureEligibilityFailure staleFailure))
+            {
+                failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary;
+                diagnostic = "The Core save witness changed during spatial owner capture: "
+                    + staleFailure + ".";
+                return false;
+            }
+
+            sources = new DailyV1P12GCoreBoundSpatialOwnerSources(operation, owner, snapshot);
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.None;
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.OwnerCaptureFailed;
+            diagnostic = "The Core SpatialNetwork owner failed while making its detached snapshot: "
+                + exception.GetType().Name + ".";
+            return false;
+        }
+    }
+
+    private static bool TryMatchSpatialSection(
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+        string sectionId,
+        int cardinality,
+        long revision,
+        out object ownerIdentity)
+    {
+        ownerIdentity = null;
+        if (sections == null || cardinality < 0 || revision < 0L) return false;
+        OwnerSectionCensusSnapshot match = null;
+        for (int index = 0; index < sections.Count; index++)
+        {
+            OwnerSectionCensusSnapshot section = sections[index];
+            if (section == null || !string.Equals(section.SectionId, sectionId, StringComparison.Ordinal))
+                continue;
+            if (match != null) return false;
+            match = section;
+        }
+
+        if (match == null
+            || match.SchemaVersion != P12ASpatialNetworkOwnerCodec.SchemaVersion
+            || match.Role != OwnerSectionRole.Required
+            || match.OwnerInstanceIdentity == null
+            || match.Cardinality != cardinality
+            || match.Revision != revision)
+            return false;
+        ownerIdentity = match.OwnerInstanceIdentity;
+        return true;
+    }
+}

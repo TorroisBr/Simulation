@@ -95,6 +95,7 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
     private DailyV1Application application;
     private DailyV1P12GCoreBoundCityOwnerSources coreCityOwnerSources;
     private DailyV1P12GCoreBoundDemographicOwnerSources coreDemographicOwnerSources;
+    private DailyV1P12GCoreBoundSpatialOwnerSources coreSpatialOwnerSources;
 
     internal DailyV1P12GContinuationSaveOperation(
         DailyV1Application application,
@@ -112,6 +113,8 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
         Volatile.Read(ref coreCityOwnerSources);
     internal DailyV1P12GCoreBoundDemographicOwnerSources CoreDemographicOwnerSources =>
         Volatile.Read(ref coreDemographicOwnerSources);
+    internal DailyV1P12GCoreBoundSpatialOwnerSources CoreSpatialOwnerSources =>
+        Volatile.Read(ref coreSpatialOwnerSources);
     internal bool IsActive => Volatile.Read(ref application) != null;
 
     internal bool TryBindCoreCityOwnerSources(
@@ -126,6 +129,13 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
     {
         if (!IsActive || sources == null || !sources.IsFor(this)) return false;
         return Interlocked.CompareExchange(ref coreDemographicOwnerSources, sources, null) == null;
+    }
+
+    internal bool TryBindCoreSpatialOwnerSources(
+        DailyV1P12GCoreBoundSpatialOwnerSources sources)
+    {
+        if (!IsActive || sources == null || !sources.IsFor(this)) return false;
+        return Interlocked.CompareExchange(ref coreSpatialOwnerSources, sources, null) == null;
     }
 
     internal bool TryRevalidate(out DailyCaptureEligibilityFailure failure)

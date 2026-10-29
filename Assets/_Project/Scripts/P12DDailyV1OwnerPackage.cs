@@ -141,6 +141,10 @@ internal sealed class P12DDailyV1OwnerPackage
                 && (continuationSaveOperation.CoreDemographicOwnerSources == null
                     || !continuationSaveOperation.CoreDemographicOwnerSources.IsFor(
                         continuationSaveOperation)))
+            || (continuationSaveOperation != null
+                && (continuationSaveOperation.CoreSpatialOwnerSources == null
+                    || !continuationSaveOperation.CoreSpatialOwnerSources.IsFor(
+                        continuationSaveOperation)))
             || !sourceRuntime.HasSameP12RuntimeIdentitySpatialOwners(
                 sourceRuntimeIdentities, sourceSpatialNetwork, sourceExplorableSites))
         {
@@ -149,6 +153,8 @@ internal sealed class P12DDailyV1OwnerPackage
 
         DailyV1P12GCoreBoundDemographicOwnerSources coreDemographicOwnerSources =
             continuationSaveOperation?.CoreDemographicOwnerSources;
+        DailyV1P12GCoreBoundSpatialOwnerSources coreSpatialOwnerSources =
+            continuationSaveOperation?.CoreSpatialOwnerSources;
         PersonStore sourcePersons = coreDemographicOwnerSources?.Persons ?? sourceRuntime.PersonStore;
         GenealogyStore sourceGenealogy = coreDemographicOwnerSources?.Genealogy
             ?? sourceRuntime.GenealogyStoreForWorldBoundary;
@@ -158,6 +164,16 @@ internal sealed class P12DDailyV1OwnerPackage
                 || !ReferenceEquals(sourceRuntime.PersonStore, coreDemographicOwnerSources.Persons)
                 || !ReferenceEquals(sourceRuntime.GenealogyStoreForWorldBoundary,
                     coreDemographicOwnerSources.Genealogy)))
+        {
+            failure = P12DDailyV1OwnerPackageFailure.InvalidOwnerEvidence;
+            return false;
+        }
+        if (continuationSaveOperation != null
+            && (coreSpatialOwnerSources == null
+                || !coreSpatialOwnerSources.IsFor(continuationSaveOperation)
+                || !ReferenceEquals(sourceSpatialNetwork.SelectedOwner, coreSpatialOwnerSources.Owner)
+                || !ReferenceEquals(sourceRuntime.SelectedRuntimeOwnerGraph?.SpatialNetwork,
+                    coreSpatialOwnerSources.Owner)))
         {
             failure = P12DDailyV1OwnerPackageFailure.InvalidOwnerEvidence;
             return false;
@@ -256,7 +272,8 @@ internal sealed class P12DDailyV1OwnerPackage
             ?? sourcePersons.CaptureOwnerSnapshot();
         GenealogyOwnerSnapshot genealogySnapshot = coreDemographicOwnerSources?.GenealogySnapshot
             ?? new GenealogyOwnerSnapshot(GenealogyOwnerBridge.CaptureOwnerSnapshot(sourceGenealogy));
-        SpatialNetworkOwnerSnapshot spatialSnapshot = sourceSpatialNetwork.CaptureOwnerSnapshot();
+        SpatialNetworkOwnerSnapshot spatialSnapshot = coreSpatialOwnerSources?.Snapshot
+            ?? sourceSpatialNetwork.CaptureOwnerSnapshot();
         if (!sourceExplorableSites.TryCaptureOwnerSnapshot(
                 out ExplorableSiteOwnerSnapshot siteSnapshot, out _)
             || siteSnapshot == null
