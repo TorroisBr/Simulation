@@ -118,6 +118,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationHost.cs" Link="Application/DailyV1ApplicationHost.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1Application.cs" Link="Application/DailyV1Application.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12GContinuationSourceWitness.cs" Link="Persistence/DailyV1P12GContinuationSourceWitness.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12ECoreOwnerSourceCapture.cs" Link="Persistence/DailyV1P12ECoreOwnerSourceCapture.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12GCoreBoundOwnerSources.cs" Link="Persistence/DailyV1P12GCoreBoundOwnerSources.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12GCoreBoundCityOwnerSources.cs" Link="Persistence/DailyV1P12GCoreBoundCityOwnerSources.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationSessionGate.cs" Link="Application/DailyV1ApplicationSessionGate.cs" />

@@ -33,6 +33,7 @@ internal sealed class P12EDailyV1OwnerStagingContext
     internal DailyV1Application Application { get; }
     internal DailyV1ActiveRuntimeSession ExpectedSession { get; }
     internal DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation ReplacementOperation { get; }
+    internal DailyV1P12GContinuationSaveOperation ContinuationSaveOperation { get; }
 
     internal P12EDailyV1OwnerStagingContext(
         DailyCaptureStagingAttempt stagingAttempt,
@@ -47,7 +48,8 @@ internal sealed class P12EDailyV1OwnerStagingContext
         SimulationLogger logger,
         DailyV1Application application = null,
         DailyV1ActiveRuntimeSession expectedSession = null,
-        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation = null)
     {
         StagingAttempt = stagingAttempt;
         P12CRoots = p12cRoots;
@@ -62,6 +64,7 @@ internal sealed class P12EDailyV1OwnerStagingContext
         Application = application;
         ExpectedSession = expectedSession;
         ReplacementOperation = replacementOperation;
+        ContinuationSaveOperation = continuationSaveOperation;
     }
 }
 
@@ -226,42 +229,6 @@ internal sealed class P12EDailyV1OwnerPackage
             }
 
             if (!TryFindRequiredOwner(exactTokenOwnerSections,
-                    PropertyOwnershipCensusProvider.OwnershipSectionId,
-                    PropertyOwnershipCensusProvider.SchemaVersion,
-                    out PropertyOwnershipStore propertyOwner)
-                || !TryFindRequiredOwner(exactTokenOwnerSections,
-                    EstateCensusProvider.SectionId,
-                    EstateCensusProvider.SchemaVersion,
-                    out EstateStore estateOwner)
-                || !TryFindRequiredOwner(exactTokenOwnerSections,
-                    FactionStoreCensusProvider.FactionsSectionId,
-                    FactionStoreCensusProvider.SchemaVersion,
-                    out FactionStore factionOwner)
-                || !TryFindRequiredOwner(exactTokenOwnerSections,
-                    ArmedForceStoreCensusProvider.ForcesSectionId,
-                    ArmedForceStoreCensusProvider.SchemaVersion,
-                    out ArmedForceStore armedForceOwner)
-                || !TryFindRequiredOwner(exactTokenOwnerSections,
-                    ContingentManpowerCensusProvider.SectionId,
-                    ContingentManpowerCensusProvider.SchemaVersion,
-                    out ContingentManpowerStateStore manpowerOwner)
-                || !TryFindRequiredOwner(exactTokenOwnerSections,
-                    ArmedForceSpatialCensusProvider.SectionId,
-                    ArmedForceSpatialCensusProvider.SchemaVersion,
-                    out ArmedForceSpatialStateStore positionOwner)
-                || !TryFindRequiredOwner(exactTokenOwnerSections,
-                    PersistentConflictCensusProvider.SectionId,
-                    PersistentConflictCensusProvider.SchemaVersion,
-                    out PersistentConflictStore conflictOwner)
-                || !TryFindRequiredOwner(exactTokenOwnerSections,
-                    PersistentWarCensusProvider.SectionId,
-                    PersistentWarCensusProvider.SchemaVersion,
-                    out PersistentWarStore warOwner)
-                || !TryFindRequiredOwner(exactTokenOwnerSections,
-                    PersistentBattleCensusProvider.SectionId,
-                    PersistentBattleCensusProvider.SchemaVersion,
-                    out PersistentBattleStore battleOwner)
-                || !TryFindRequiredOwner(exactTokenOwnerSections,
                     P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId,
                     P12CrimeJusticeCensusProvider.SchemaVersion,
                     out JusticeSystem justiceOwner))
@@ -269,6 +236,34 @@ internal sealed class P12EDailyV1OwnerPackage
                 failure = P12EDailyV1OwnerPackageFailure.InvalidOwnerEvidence;
                 return false;
             }
+
+            if (!DailyV1P12ECoreOwnerSourceSnapshots.TryCapture(
+                    exactCompletedToken,
+                    exactTokenOwnerSections,
+                    context.ContinuationSaveOperation,
+                    new LegacyCoreOwnerCaptureBoundary(sourceRuntime, context.StagingAttempt),
+                    out DailyV1P12ECoreOwnerSourceSnapshots coreOwnerSnapshots,
+                    out DailyV1P12ECoreOwnerSourceCaptureFailure coreCaptureFailure,
+                    out _))
+            {
+                failure = coreCaptureFailure == DailyV1P12ECoreOwnerSourceCaptureFailure.InvalidOwnerEvidence
+                    ? P12EDailyV1OwnerPackageFailure.InvalidOwnerEvidence
+                    : coreCaptureFailure == DailyV1P12ECoreOwnerSourceCaptureFailure.StaleBoundary
+                        ? P12EDailyV1OwnerPackageFailure.StaleBoundary
+                        : P12EDailyV1OwnerPackageFailure.CaptureFailed;
+                return false;
+            }
+
+            P12EInstitutionOfficeOwnerSnapshot institutionOfficeSnapshot = coreOwnerSnapshots.InstitutionOffice;
+            PropertyEstateOwnerSnapshot propertyEstateSnapshot = coreOwnerSnapshots.PropertyEstate;
+            P12EFactionOwnerSnapshot factionSnapshot = coreOwnerSnapshots.Faction;
+            P12EPoliticalClaimOwnerSnapshot claimSnapshot = coreOwnerSnapshots.PoliticalClaims;
+            P12EPoliticalSupportOwnerSnapshot supportSnapshot = coreOwnerSnapshots.PoliticalSupport;
+            P12EPoliticalDecisionOwnerSnapshot decisionSnapshot = coreOwnerSnapshots.PoliticalDecisions;
+            P12EMilitaryOwnerSnapshot militarySnapshot = coreOwnerSnapshots.Military;
+            PersistentConflictOwnerSnapshot conflictSnapshot = coreOwnerSnapshots.Conflicts;
+            PersistentWarOwnerSnapshot warSnapshot = coreOwnerSnapshots.Wars;
+            PersistentBattleOwnerSnapshot battleSnapshot = coreOwnerSnapshots.Battles;
 
             P12ACrimeReceiptOwnerSnapshot crimeReceiptSnapshot = null;
             if (crimeReceiptOwner != null
@@ -280,38 +275,7 @@ internal sealed class P12EDailyV1OwnerPackage
                 return false;
             }
 
-            if (!P12EInstitutionOfficeCaptureAdapter.TryCapture(
-                    sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
-                    out P12EInstitutionOfficeOwnerSnapshot institutionOfficeSnapshot, out _, context.StagingAttempt)
-                || !PropertyEstateOwnerSnapshot.TryCapture(
-                    propertyOwner, estateOwner, exactCompletedToken, exactTokenOwnerSections,
-                    out PropertyEstateOwnerSnapshot propertyEstateSnapshot, out _)
-                || !P12EFactionCaptureAdapter.TryCapture(
-                    sourceRuntime, factionOwner, exactCompletedToken, exactTokenOwnerSections,
-                    out P12EFactionOwnerSnapshot factionSnapshot, out _, context.StagingAttempt)
-                || !P12EPoliticalClaimCaptureAdapter.TryCapture(
-                    sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
-                    out P12EPoliticalClaimOwnerSnapshot claimSnapshot, out _, context.StagingAttempt)
-                || !P12EPoliticalSupportCaptureAdapter.TryCapture(
-                    sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
-                    out P12EPoliticalSupportOwnerSnapshot supportSnapshot, out _, context.StagingAttempt)
-                || !P12EPoliticalDecisionCaptureAdapter.TryCapture(
-                    sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
-                    out P12EPoliticalDecisionOwnerSnapshot decisionSnapshot, out _, context.StagingAttempt)
-                || !P12EMilitaryOwnerSnapshot.TryCapture(
-                    armedForceOwner, manpowerOwner, positionOwner,
-                    exactCompletedToken, exactTokenOwnerSections,
-                    out P12EMilitaryOwnerSnapshot militarySnapshot, out _)
-                || !PersistentConflictOwnerSnapshot.TryCapture(
-                    conflictOwner, exactCompletedToken, exactTokenOwnerSections,
-                    out PersistentConflictOwnerSnapshot conflictSnapshot, out _)
-                || !PersistentWarOwnerSnapshot.TryCapture(
-                    warOwner, exactCompletedToken, exactTokenOwnerSections,
-                    out PersistentWarOwnerSnapshot warSnapshot, out _)
-                || !PersistentBattleOwnerSnapshot.TryCapture(
-                    battleOwner, exactCompletedToken, exactTokenOwnerSections,
-                    out PersistentBattleOwnerSnapshot battleSnapshot, out _)
-                || !P12EJusticeRecordsSnapshotAdapter.TryCapture(
+            if (!P12EJusticeRecordsSnapshotAdapter.TryCapture(
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
                     out P12EJusticeRecordsOwnerSnapshot justiceSnapshot, out _, context.StagingAttempt)
                 || !justiceOwner.TryCaptureP12AReceiptOwnerSnapshot(
@@ -746,6 +710,31 @@ internal sealed class P12EDailyV1OwnerPackage
             return false;
 
         return true;
+    }
+
+    /// <summary>
+    /// Compatibility freshness bridge for image staging and focused package
+    /// tests. It delegates only to the existing P12 staging attempt; Core
+    /// still selects exact owners and constructs every Core-owned snapshot.
+    /// </summary>
+    private sealed class LegacyCoreOwnerCaptureBoundary : IDailyV1P12ECoreOwnerCaptureBoundary
+    {
+        private readonly SimulationRuntime runtime;
+        private readonly DailyCaptureStagingAttempt stagingAttempt;
+
+        internal LegacyCoreOwnerCaptureBoundary(
+            SimulationRuntime runtime,
+            DailyCaptureStagingAttempt stagingAttempt)
+        {
+            this.runtime = runtime;
+            this.stagingAttempt = stagingAttempt;
+        }
+
+        public bool IsCaptureCurrent(
+            DailyCaptureEligibilityToken token,
+            IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionVector) =>
+            DailyCaptureStagingAttempt.IsCaptureCurrent(
+                runtime, token, ownerSectionVector, stagingAttempt);
     }
 
     private static bool TryFindRequiredOwner<TOwner>(

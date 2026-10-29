@@ -572,7 +572,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 sourceSession.Configuration.arrestedStatus,
                 sourceSession.Configuration.hiddenStatus,
                 eventRecorder,
-                logger);
+                logger,
+                continuationSaveOperation: continuationSaveOperation);
             if (!P12EDailyV1OwnerPackage.TryCaptureAndStage(
                     sourceRuntime,
                     sourceToken,

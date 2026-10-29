@@ -12210,6 +12210,9 @@ public sealed class SimulationRuntimeAdmissionTests
                 coreSession,
                 out DailyV1P12GContinuationSaveOperation operation,
                 out DailyCaptureEligibilityFailure beginFailure), Is.True, beginFailure.ToString());
+            DailyCaptureEligibilityToken exactToken = operation.SourceWitness.Token;
+            IReadOnlyList<OwnerSectionCensusSnapshot> exactOwnerSections =
+                operation.SourceWitness.TokenOwnerSections;
 
             bool callbackInvoked = false;
             P12AContinuationImage image;
@@ -12243,6 +12246,21 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(application.ActiveSession, Is.SameAs(coreSession));
             Assert.That(application.ActiveOperationCount, Is.Zero);
             Assert.That(sourceSession.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+
+            var legacyBoundary = new AlwaysCurrentP12ECoreOwnerCaptureBoundary();
+            Assert.That(DailyV1P12ECoreOwnerSourceSnapshots.TryCapture(
+                    exactToken,
+                    exactOwnerSections,
+                    operation,
+                    legacyBoundary,
+                    out DailyV1P12ECoreOwnerSourceSnapshots coreSnapshots,
+                    out DailyV1P12ECoreOwnerSourceCaptureFailure coreFailure,
+                    out _), Is.False,
+                "An explicitly supplied closed Core operation must not fall back to a permissive legacy host boundary.");
+            Assert.That(coreSnapshots, Is.Null);
+            Assert.That(coreFailure, Is.EqualTo(DailyV1P12ECoreOwnerSourceCaptureFailure.StaleBoundary));
+            Assert.That(legacyBoundary.WasConsulted, Is.False,
+                "The Unity staging boundary is reserved for legacy/image staging without a Core save operation.");
 
             Assert.That(application.TryBeginContinuationSaveOperation(
                 coreSession,
@@ -12829,6 +12847,19 @@ public sealed class SimulationRuntimeAdmissionTests
         public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
         {
             return NpcActionResult.Succeeded();
+        }
+    }
+
+    private sealed class AlwaysCurrentP12ECoreOwnerCaptureBoundary : IDailyV1P12ECoreOwnerCaptureBoundary
+    {
+        internal bool WasConsulted { get; private set; }
+
+        public bool IsCaptureCurrent(
+            DailyCaptureEligibilityToken token,
+            IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionVector)
+        {
+            WasConsulted = true;
+            return true;
         }
     }
 }
