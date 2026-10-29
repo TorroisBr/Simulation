@@ -11084,6 +11084,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     DailyV1ExecutionBoundaryState IDailyV1SelectedRuntimeAdvanceHostPorts.ExecutionState =>
         dailyExecutionBoundary;
 
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.IsFactualReadWorldPublished =>
+        factualReadWorldPublished;
+
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.HasActiveDailyOperationContext =>
+        HasActiveDailyOperationContext();
+
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryBindApplicationAdvanceAuthority(
         DailyV1Application application,
         DailyV1ActiveRuntimeSession session)
@@ -11133,22 +11139,23 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure)
     {
-        if (!Enum.IsDefined(typeof(DailyV1CaptureScopeAllowance), allowedOuterScope))
+        ownerSections = null;
+        mutationEpoch = 0L;
+        ContinuationCensusProtocol census = npcRosterCensusProtocol;
+        if (census == null)
         {
-            ownerSections = null;
-            mutationEpoch = 0L;
             failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
             return false;
         }
 
-        // Core chooses the exact capture scope; Unity remains the adapter for
-        // the live census providers and the existing protocol-level P12 checks.
-        return TryReadDailyCaptureEvidence(
-            finalizingHeldAdvance: allowedOuterScope == DailyV1CaptureScopeAllowance.DailyAdvance,
+        bool captured = census.TryCaptureQuiescentOwnerSectionSnapshot(
             allowedOuterScope,
             out ownerSections,
             out mutationEpoch,
-            out failure);
+            out ContinuationCensusFailure censusFailure);
+        failure = captured ? DailyCaptureEligibilityFailure.None
+            : MapDailyCaptureFailure(censusFailure);
+        return captured;
     }
 
     void IDailyV1SelectedRuntimeAdvanceHostPorts.FaultRuntimeAdmission() =>

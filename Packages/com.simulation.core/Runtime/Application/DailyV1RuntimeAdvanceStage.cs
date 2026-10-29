@@ -155,6 +155,8 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
+    bool IsFactualReadWorldPublished { get; }
+    bool HasActiveDailyOperationContext { get; }
     bool TryBindApplicationAdvanceAuthority(
         DailyV1Application application,
         DailyV1ActiveRuntimeSession session);
@@ -271,24 +273,66 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
+        SimulationRuntimeAdmissionContext admissionContext = executionState.AdmissionContext;
+        if (admissionContext == null
+            || admissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+        {
+            failure = DailyCaptureEligibilityFailure.UnsupportedProfile;
+            return false;
+        }
+
+        if (!admissionContext.IsOwnedByCurrentThread())
+        {
+            hostPorts.FaultRuntimeAdmission();
+            failure = DailyCaptureEligibilityFailure.WrongOwnerThread;
+            return false;
+        }
+
+        bool dailyAdvanceScope = allowedOuterScope == DailyV1CaptureScopeAllowance.DailyAdvance;
+        if (executionState.AdvanceLeaseHeld != dailyAdvanceScope
+            || hostPorts.HasActiveDailyOperationContext)
+        {
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        if (!hostPorts.IsFactualReadWorldPublished || executionState.WorldId == null)
+        {
+            failure = DailyCaptureEligibilityFailure.WorldNotPublished;
+            return false;
+        }
+
+        if (!executionState.CanMutate)
+        {
+            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+            return false;
+        }
+
         // Core selects the only scope that may remain active around this
-        // snapshot. Recheck after the host reads the owner census so a
-        // reentrant scope change cannot authorize a stale capture.
+        // snapshot. The second assessment below rejects reentrant scope changes.
         if (!executionState.TryAssessCaptureScope(allowedOuterScope))
         {
             failure = DailyCaptureEligibilityFailure.OperationInProgress;
             return false;
         }
 
-        if (!hostPorts.TryCaptureOwnerSectionCensus(
-                allowedOuterScope, out ownerSections, out mutationEpoch, out failure))
+        bool captured = hostPorts.TryCaptureOwnerSectionCensus(
+            allowedOuterScope,
+            out ownerSections,
+            out mutationEpoch,
+            out failure);
+        if (!captured)
         {
             ownerSections = null;
             mutationEpoch = 0L;
+            if (failure == DailyCaptureEligibilityFailure.None)
+                failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
             return false;
         }
 
-        if (!executionState.TryAssessCaptureScope(allowedOuterScope))
+        if (executionState.AdvanceLeaseHeld != dailyAdvanceScope
+            || hostPorts.HasActiveDailyOperationContext
+            || !executionState.TryAssessCaptureScope(allowedOuterScope))
         {
             ownerSections = null;
             mutationEpoch = 0L;
@@ -296,8 +340,10 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
+        failure = DailyCaptureEligibilityFailure.None;
         return true;
     }
+
 
     public void FaultRuntimeAdmission() => hostPorts.FaultRuntimeAdmission();
 }

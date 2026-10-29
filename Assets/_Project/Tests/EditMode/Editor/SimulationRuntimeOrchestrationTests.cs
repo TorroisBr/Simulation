@@ -11,6 +11,8 @@ public sealed class SimulationRuntimeOrchestrationTests
             ExecutionState = state;
 
         public DailyV1ExecutionBoundaryState ExecutionState { get; }
+        public bool IsFactualReadWorldPublished => true;
+        public bool HasActiveDailyOperationContext => false;
         public bool HasIntradayTimeline => false;
 
         public bool TryBindApplicationAdvanceAuthority(
