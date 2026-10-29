@@ -1260,6 +1260,8 @@ internal sealed class DailyV1Application
         P12EPoliticalDecisionOwnerSnapshot politicalDecisions,
         P12EJusticeRecordsOwnerSnapshot justiceRecords,
         P12EMilitaryOwnerSnapshot military,
+        PersistentConflictOwnerSnapshot conflicts,
+        PersistentWarOwnerSnapshot wars,
         PersonStore persons,
         IReadOnlyList<DailyV1CityRuntimeOwners> stagedCities,
         IReadOnlyList<DailyV1NpcRuntimeOwners> stagedNpcs,
@@ -1284,7 +1286,7 @@ internal sealed class DailyV1Application
 
         if (!DailyV1P12ECoreOwnerRestoreStager.TryStage(
                 institutionOffice, propertyEstate, faction, politicalClaims,
-                politicalSupport, politicalDecisions, justiceRecords, military,
+                politicalSupport, politicalDecisions, justiceRecords, military, conflicts, wars,
                 persons, stagedRoots.SpatialAuthority, stagedCities, stagedNpcs,
                 capturedDay, stageObserver,
                 out stagedOwners, out _)

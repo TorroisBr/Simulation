@@ -2435,7 +2435,7 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         Assert.That(application.TryStageRestoredP12EOwners(
                 null, null, null, null, null, null, null, null,
-                null, null, null, null, 0L, session, null,
+                null, null, null, null, null, null, 0L, session, null,
                 out P12ECoreOwnerRestoreStage unreservedOwners,
                 out P12AResult unreservedResult), Is.False);
         Assert.That(unreservedOwners, Is.Null);
@@ -2447,7 +2447,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         {
             Assert.That(application.TryStageRestoredP12EOwners(
                     null, null, null, null, null, null, null, null,
-                    null, null, null, null, 0L, session, replacement,
+                    null, null, null, null, null, null, 0L, session, replacement,
                     out P12ECoreOwnerRestoreStage reservedOwners,
                     out P12AResult reservedResult), Is.False);
             Assert.That(reservedOwners, Is.Null);
@@ -2459,7 +2459,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(initialApplication.TryCaptureBootstrapAdmissionContext(out _), Is.True);
         Assert.That(initialApplication.TryStageRestoredP12EOwners(
                 null, null, null, null, null, null, null, null,
-                null, null, null, null, 0L, null, null,
+                null, null, null, null, null, null, 0L, null, null,
                 out P12ECoreOwnerRestoreStage initialOwners,
                 out P12AResult initialResult), Is.False);
         Assert.That(initialOwners, Is.Null);

@@ -27,6 +27,12 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EMilitaryOwnerSnapshot.cs" Link="Persistence/P12EMilitaryOwnerSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EMilitaryOwnerCodec.cs" Link="Persistence/P12EMilitaryOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EMilitaryOwnerCensusProviders.cs" Link="Persistence/P12EMilitaryOwnerCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Conflict/PersistentConflictWarContracts.cs" Link="Conflict/PersistentConflictWarBattleContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Conflict/PersistentConflictWarStores.cs" Link="Conflict/PersistentConflictWarStores.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PersistentConflictCensusProvider.cs" Link="Persistence/PersistentConflictCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PersistentWarCensusProvider.cs" Link="Persistence/PersistentWarCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PersistentConflictOwnerSnapshot.cs" Link="Persistence/PersistentConflictOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PersistentWarOwnerSnapshot.cs" Link="Persistence/PersistentWarOwnerSnapshot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EFactionCaptureSource.cs" Link="Persistence/IP12EFactionCaptureSource.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EPoliticalClaimCaptureSource.cs" Link="Persistence/IP12EPoliticalClaimCaptureSource.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EPoliticalSupportCaptureSource.cs" Link="Persistence/IP12EPoliticalSupportCaptureSource.cs" />
