@@ -168,12 +168,6 @@ public sealed class BattleResolutionPolicy
     }
 }
 
-public enum BattleOutcomeType
-{
-    Victory = 0,
-    Draw = 1
-}
-
 /// <summary>
 /// Minimal proposed Battle-semantic outcome. It contains no raw scores and is
 /// neither accepted nor persistent world truth.
@@ -220,38 +214,6 @@ public sealed class BattleOutcome
 }
 
 /// <summary>Minimal immutable audit identities for a proposed outcome.</summary>
-public sealed class BattleResolutionProvenance
-{
-    internal BattleResolutionProvenance(
-        string policyFingerprint,
-        string numericExecutionProfileKey,
-        string projectionVersion,
-        string causalResolutionFingerprint,
-        string sourceContextFingerprint,
-        string capabilityRuleKey,
-        string randomAuthorityRuleKey,
-        string resolverSettingsIdentity)
-    {
-        PolicyFingerprint = policyFingerprint;
-        NumericExecutionProfileKey = numericExecutionProfileKey;
-        ProjectionVersion = projectionVersion;
-        CausalResolutionFingerprint = causalResolutionFingerprint;
-        SourceContextFingerprint = sourceContextFingerprint;
-        CapabilityRuleKey = capabilityRuleKey;
-        RandomAuthorityRuleKey = randomAuthorityRuleKey;
-        ResolverSettingsIdentity = resolverSettingsIdentity;
-    }
-
-    public string PolicyFingerprint { get; }
-    public string NumericExecutionProfileKey { get; }
-    public string ProjectionVersion { get; }
-    public string CausalResolutionFingerprint { get; }
-    public string SourceContextFingerprint { get; }
-    public string CapabilityRuleKey { get; }
-    public string RandomAuthorityRuleKey { get; }
-    public string ResolverSettingsIdentity { get; }
-}
-
 public enum BattleDirectConsequencePlanStatus
 {
     NotProvided = 0

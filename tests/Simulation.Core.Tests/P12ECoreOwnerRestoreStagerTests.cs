@@ -15,6 +15,7 @@ public sealed class P12ECoreOwnerRestoreStagerTests
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
             EmptyPoliticalSupport(), EmptyPoliticalDecisions(), EmptyJustice(4L), EmptyMilitary(), EmptyConflict(), EmptyWar(),
+            EmptyBattle(), false,
             persons, spatialAuthority,
             roots.Cities, roots.Npcs, 4L, order.Add,
             out P12ECoreOwnerRestoreStage staged,
@@ -44,6 +45,11 @@ public sealed class P12ECoreOwnerRestoreStagerTests
         Assert.That(staged.Conflicts.ArmedForceStore, Is.SameAs(staged.ArmedForces));
         Assert.That(staged.Wars.ArmedForceStore, Is.SameAs(staged.ArmedForces));
         Assert.That(staged.Wars.ConflictStore, Is.SameAs(staged.Conflicts));
+        Assert.That(staged.Battles.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Battles.ConflictStore, Is.SameAs(staged.Conflicts));
+        Assert.That(staged.Battles.WarStore, Is.SameAs(staged.Wars));
+        Assert.That(staged.Battles.Count, Is.Zero);
+        Assert.That(staged.Battles.Revision, Is.Zero);
         Assert.That(staged.Conflicts.Revision, Is.Zero);
         Assert.That(staged.Wars.Revision, Is.Zero);
         Assert.That(staged.Manpower.Revision, Is.Zero);
@@ -59,7 +65,8 @@ public sealed class P12ECoreOwnerRestoreStagerTests
             P12ECoreOwnerRestoreStep.JusticeRecords,
             P12ECoreOwnerRestoreStep.Military,
             P12ECoreOwnerRestoreStep.Conflict,
-            P12ECoreOwnerRestoreStep.War
+            P12ECoreOwnerRestoreStep.War,
+            P12ECoreOwnerRestoreStep.Battle
         }));
     }
 
@@ -184,6 +191,7 @@ public sealed class P12ECoreOwnerRestoreStagerTests
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), invalidClaims,
             EmptyPoliticalSupport(), EmptyPoliticalDecisions(), EmptyJustice(4L), EmptyMilitary(), EmptyConflict(), EmptyWar(),
+            EmptyBattle(), false,
             persons, new SpatialAuthorityStore(),
             Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(), 4L, null,
             out P12ECoreOwnerRestoreStage staged,
@@ -201,7 +209,8 @@ public sealed class P12ECoreOwnerRestoreStagerTests
 
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
-            invalidSupport, EmptyPoliticalDecisions(), EmptyJustice(4L), EmptyMilitary(), EmptyConflict(), EmptyWar(), persons,
+            invalidSupport, EmptyPoliticalDecisions(), EmptyJustice(4L), EmptyMilitary(), EmptyConflict(), EmptyWar(),
+            EmptyBattle(), false, persons,
             new SpatialAuthorityStore(),
             Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(), 4L, null,
             out P12ECoreOwnerRestoreStage staged,
@@ -219,7 +228,8 @@ public sealed class P12ECoreOwnerRestoreStagerTests
 
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
-            EmptyPoliticalSupport(), invalidDecisions, EmptyJustice(4L), EmptyMilitary(), EmptyConflict(), EmptyWar(), persons,
+            EmptyPoliticalSupport(), invalidDecisions, EmptyJustice(4L), EmptyMilitary(), EmptyConflict(), EmptyWar(),
+            EmptyBattle(), false, persons,
             new SpatialAuthorityStore(),
             Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(), 4L, null,
             out P12ECoreOwnerRestoreStage staged,
@@ -244,6 +254,7 @@ public sealed class P12ECoreOwnerRestoreStagerTests
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
             EmptyPoliticalSupport(), EmptyPoliticalDecisions(), EmptyJustice(4L), invalidMilitary, EmptyConflict(), EmptyWar(),
+            EmptyBattle(), false,
             new PersonStore(), new SpatialAuthorityStore(),
             Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(),
             4L, null, out P12ECoreOwnerRestoreStage staged,
@@ -273,7 +284,7 @@ public sealed class P12ECoreOwnerRestoreStagerTests
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(),
             EmptyPoliticalClaims(), EmptyPoliticalSupport(), EmptyPoliticalDecisions(),
-            EmptyJustice(4L), EmptyMilitary(), conflicts, wars,
+            EmptyJustice(4L), EmptyMilitary(), conflicts, wars, EmptyBattle(), false,
             new PersonStore(), new SpatialAuthorityStore(),
             Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(),
             4L, null, out P12ECoreOwnerRestoreStage staged,
@@ -291,6 +302,11 @@ public sealed class P12ECoreOwnerRestoreStagerTests
         new PersistentWarOwnerSnapshot(
             PersistentWarOwnerSnapshot.CurrentSchemaVersion, 0, 0L,
             Array.Empty<PersistentWarOwnerSnapshotRecord>());
+
+    private static PersistentBattleOwnerSnapshot EmptyBattle() =>
+        new PersistentBattleOwnerSnapshot(
+            PersistentBattleOwnerSnapshot.CurrentSchemaVersion, 0, 0L,
+            Array.Empty<PersistentBattleOwnerSnapshotRecord>());
     private static P12EInstitutionOfficeOwnerSnapshot EmptyInstitutionOffice() =>
         new P12EInstitutionOfficeOwnerSnapshot(
             InstitutionSection(InstitutionOfficeCensusProvider.InstitutionsSectionId, 0, 0,

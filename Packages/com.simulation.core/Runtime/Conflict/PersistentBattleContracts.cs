@@ -2,6 +2,45 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
+public enum BattleOutcomeType
+{
+    Victory = 0,
+    Draw = 1
+}
+
+/// <summary>Minimal immutable D5 resolution identity retained with an accepted Battle outcome.</summary>
+public sealed class BattleResolutionProvenance
+{
+    internal BattleResolutionProvenance(
+        string policyFingerprint,
+        string numericExecutionProfileKey,
+        string projectionVersion,
+        string causalResolutionFingerprint,
+        string sourceContextFingerprint,
+        string capabilityRuleKey,
+        string randomAuthorityRuleKey,
+        string resolverSettingsIdentity)
+    {
+        PolicyFingerprint = policyFingerprint;
+        NumericExecutionProfileKey = numericExecutionProfileKey;
+        ProjectionVersion = projectionVersion;
+        CausalResolutionFingerprint = causalResolutionFingerprint;
+        SourceContextFingerprint = sourceContextFingerprint;
+        CapabilityRuleKey = capabilityRuleKey;
+        RandomAuthorityRuleKey = randomAuthorityRuleKey;
+        ResolverSettingsIdentity = resolverSettingsIdentity;
+    }
+
+    public string PolicyFingerprint { get; }
+    public string NumericExecutionProfileKey { get; }
+    public string ProjectionVersion { get; }
+    public string CausalResolutionFingerprint { get; }
+    public string SourceContextFingerprint { get; }
+    public string CapabilityRuleKey { get; }
+    public string RandomAuthorityRuleKey { get; }
+    public string ResolverSettingsIdentity { get; }
+}
+
 public sealed class BattleId : IEquatable<BattleId>
 {
     public string Value { get; }

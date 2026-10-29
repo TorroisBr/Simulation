@@ -553,7 +553,7 @@ public sealed class BattleExecutionContextBuilder
         this.spatialStateStore = spatialStateStore ?? throw new ArgumentNullException(nameof(spatialStateStore));
         this.spatialAuthorityStore = spatialAuthorityStore ?? throw new ArgumentNullException(nameof(spatialAuthorityStore));
         this.localTopologyStore = localTopologyStore
-            ?? battleStore.LocalTopologyStore
+            ?? (battleStore.SubLocationResolver as LocalTopologyArmedForceSubLocationResolver)?.LocalTopologyStore
             ?? (spatialStateStore.SubLocationResolver as LocalTopologyArmedForceSubLocationResolver)?.LocalTopologyStore;
         this.personStore = personStore ?? armedForceStore.PersonStore;
         this.manpowerStateStore = manpowerStateStore;

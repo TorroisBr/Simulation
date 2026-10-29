@@ -336,7 +336,8 @@ internal sealed class P12EDailyV1OwnerPackage
             P12CStagedContinuationRoot stagedC = context.P12CRoots;
             if (!TryStageCoreOwnerRestore(institutionOfficeSnapshot, propertyEstateSnapshot,
                     factionSnapshot, claimSnapshot, supportSnapshot, decisionSnapshot, justiceSnapshot,
-                    militarySnapshot, conflictSnapshot, warSnapshot, stagedD.Persons, stagedC.SpatialAuthority,
+                    militarySnapshot, conflictSnapshot, warSnapshot, battleSnapshot, false,
+                    stagedD.Persons, stagedC.SpatialAuthority,
                     stagedD.SelectedCityOwners, stagedD.SelectedNpcOwners,
                     exactCompletedToken.AbsoluteDay, stageObserver,
                     out P12ECoreOwnerRestoreStage coreOwnerStage,
@@ -360,18 +361,7 @@ internal sealed class P12EDailyV1OwnerPackage
             ArmedForceSpatialStateStore stagedPositions = coreOwnerStage.Positions;
             PersistentConflictStore stagedConflicts = coreOwnerStage.Conflicts;
             PersistentWarStore stagedWars = coreOwnerStage.Wars;
-
-
-
-            if (!battleSnapshot.TryStage(
-                    stagedArmedForces, stagedConflicts, stagedWars,
-                    stagedC.SpatialAuthority, null,
-                    out PersistentBattleStore stagedBattles, out _))
-            {
-                failure = P12EDailyV1OwnerPackageFailure.StageFailed;
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.EBattleOwnerStaged);
+            PersistentBattleStore stagedBattles = coreOwnerStage.Battles;
 
             if (!P12EJusticeRecordsSnapshotAdapter.TryStage(justiceSnapshot,
                     stagedD.Cities, stagedD.Npcs, stagedD.Persons, coreOwnerStage.JusticeRecords,
@@ -507,7 +497,8 @@ internal sealed class P12EDailyV1OwnerPackage
                 coreOwnerStageAccepted = context.Application.TryStageRestoredP12EOwners(
                     stagedC.CoreRoot, institutionOfficeSnapshot, propertyEstateSnapshot,
                     factionSnapshot, claimSnapshot, supportSnapshot, decisionSnapshot,
-                    justiceSnapshot, militarySnapshot, conflictSnapshot, warSnapshot, stagedD.Persons, stagedD.SelectedCityOwners,
+                    justiceSnapshot, militarySnapshot, conflictSnapshot, warSnapshot,
+                    battleSnapshot, false, stagedD.Persons, stagedD.SelectedCityOwners,
                     stagedD.SelectedNpcOwners, day, context.ExpectedSession,
                     context.ReplacementOperation,
                     out coreOwnerStage, out _,
@@ -521,7 +512,7 @@ internal sealed class P12EDailyV1OwnerPackage
                 coreOwnerStageAccepted = DailyV1P12ECoreOwnerRestoreStager.TryStage(
                     institutionOfficeSnapshot, propertyEstateSnapshot, factionSnapshot,
                     claimSnapshot, supportSnapshot, decisionSnapshot, justiceSnapshot, militarySnapshot,
-                    conflictSnapshot, warSnapshot,
+                    conflictSnapshot, warSnapshot, battleSnapshot, false,
                     stagedD.Persons, stagedC.SpatialAuthority,
                     stagedD.SelectedCityOwners, stagedD.SelectedNpcOwners,
                     day, step => ObserveCoreOwnerRestoreStep(stageObserver, step),
@@ -542,13 +533,7 @@ internal sealed class P12EDailyV1OwnerPackage
             ArmedForceSpatialStateStore stagedPositions = coreOwnerStage.Positions;
             PersistentConflictStore stagedConflicts = coreOwnerStage.Conflicts;
             PersistentWarStore stagedWars = coreOwnerStage.Wars;
-
-
-
-            if (!battleSnapshot.TryStage(stagedArmedForces, stagedConflicts, stagedWars,
-                    stagedC.SpatialAuthority, null, out PersistentBattleStore stagedBattles, out _))
-                return StageFailed(out failure);
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.EBattleOwnerStaged);
+            PersistentBattleStore stagedBattles = coreOwnerStage.Battles;
 
             if (!P12EJusticeRecordsSnapshotAdapter.TryStage(justiceSnapshot, stagedD.Cities, stagedD.Npcs,
                     stagedD.Persons, coreOwnerStage.JusticeRecords,
@@ -607,6 +592,8 @@ internal sealed class P12EDailyV1OwnerPackage
         P12EMilitaryOwnerSnapshot military,
         PersistentConflictOwnerSnapshot conflicts,
         PersistentWarOwnerSnapshot wars,
+        PersistentBattleOwnerSnapshot battles,
+        bool localTopologyComposed,
         PersonStore persons,
         SpatialAuthorityStore stagedSpatialAuthority,
         IReadOnlyList<DailyV1CityRuntimeOwners> stagedCities,
@@ -671,6 +658,9 @@ internal sealed class P12EDailyV1OwnerPackage
         if (!builder.TryStageWar(wars, out _))
             return false;
         ObserveCoreOwnerRestoreStep(stageObserver, P12ECoreOwnerRestoreStep.War);
+        if (!builder.TryStageBattle(battles, localTopologyComposed, out _))
+            return false;
+        ObserveCoreOwnerRestoreStep(stageObserver, P12ECoreOwnerRestoreStep.Battle);
         return builder.TryBuild(out staged, out _);
     }
 
@@ -710,6 +700,9 @@ internal sealed class P12EDailyV1OwnerPackage
                 break;
             case P12ECoreOwnerRestoreStep.War:
                 stageObserver(P12GDailyV1RestoreStage.EWarOwnerStaged);
+                break;
+            case P12ECoreOwnerRestoreStep.Battle:
+                stageObserver(P12GDailyV1RestoreStage.EBattleOwnerStaged);
                 break;
         }
     }

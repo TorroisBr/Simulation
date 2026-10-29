@@ -26,7 +26,7 @@ public sealed class PersistentBattleOwnerSnapshotTests
             stagedParents.Conflicts,
             stagedParents.Wars,
             stagedParents.Spatial,
-            null,
+            false,
             out PersistentBattleStore staged,
             out PersistentBattleOwnerSnapshotFailure failure), Is.True, failure.Message);
         Assert.That(failure.Code, Is.EqualTo(PersistentBattleOwnerSnapshotFailureCode.None));
@@ -38,7 +38,7 @@ public sealed class PersistentBattleOwnerSnapshotTests
         Assert.That(staged.ConflictStore, Is.SameAs(stagedParents.Conflicts));
         Assert.That(staged.WarStore, Is.SameAs(stagedParents.Wars));
         Assert.That(staged.SpatialAuthorityStore, Is.SameAs(stagedParents.Spatial));
-        Assert.That(staged.LocalTopologyStore, Is.Null);
+        Assert.That(staged.HasSubLocationResolver, Is.False);
 
         ArmedForceStore unrelatedForces = new ArmedForceStore(new PersonStore());
         PersistentConflictStore unrelatedConflicts = new PersistentConflictStore(unrelatedForces);
@@ -47,7 +47,7 @@ public sealed class PersistentBattleOwnerSnapshotTests
             unrelatedConflicts,
             stagedParents.Wars,
             stagedParents.Spatial,
-            null,
+            false,
             out PersistentBattleStore wrongParentStage,
             out PersistentBattleOwnerSnapshotFailure wrongParentFailure), Is.False);
         Assert.That(wrongParentStage, Is.Null);
@@ -97,7 +97,7 @@ public sealed class PersistentBattleOwnerSnapshotTests
 
         BattleWorld stagedParents = CreateWorld();
         Assert.That(pending.TryStage(
-            stagedParents.Forces, stagedParents.Conflicts, stagedParents.Wars, stagedParents.Spatial, null,
+            stagedParents.Forces, stagedParents.Conflicts, stagedParents.Wars, stagedParents.Spatial, false,
             out PersistentBattleStore stagedPending, out PersistentBattleOwnerSnapshotFailure pendingFailure),
             Is.True, pendingFailure.Message);
         Assert.That(stagedPending.TryGet(new BattleId("snapshot-battle"), out PersistentBattleRecord stagedPendingRow), Is.True);
@@ -123,7 +123,7 @@ public sealed class PersistentBattleOwnerSnapshotTests
         Assert.That(active.Revision, Is.EqualTo(3L));
         Assert.That(active.Records[0].ParticipantBindings, Has.Count.EqualTo(2));
         Assert.That(active.TryStage(
-            stagedParents.Forces, stagedParents.Conflicts, stagedParents.Wars, stagedParents.Spatial, null,
+            stagedParents.Forces, stagedParents.Conflicts, stagedParents.Wars, stagedParents.Spatial, false,
             out PersistentBattleStore stagedActive, out PersistentBattleOwnerSnapshotFailure activeFailure),
             Is.True, activeFailure.Message);
         Assert.That(stagedActive.TryGet(battleId, out PersistentBattleRecord stagedActiveRow), Is.True);
@@ -150,7 +150,7 @@ public sealed class PersistentBattleOwnerSnapshotTests
         Assert.That(resolved.Records[0].TerminalOutcome.WinningBattleSideIdValue, Is.EqualTo("side-a"));
         Assert.That(resolved.Records[0].TerminalOutcome.ResolvedAbsoluteDay, Is.EqualTo(5L));
         Assert.That(resolved.TryStage(
-            stagedParents.Forces, stagedParents.Conflicts, stagedParents.Wars, stagedParents.Spatial, null,
+            stagedParents.Forces, stagedParents.Conflicts, stagedParents.Wars, stagedParents.Spatial, false,
             out PersistentBattleStore stagedResolved, out PersistentBattleOwnerSnapshotFailure resolvedFailure),
             Is.True, resolvedFailure.Message);
         Assert.That(stagedResolved.TryGet(battleId, out PersistentBattleRecord stagedResolvedRow), Is.True);
@@ -276,7 +276,8 @@ public sealed class PersistentBattleOwnerSnapshotTests
 
         PersistentBattleStore injectedTopology = new PersistentBattleStore(
             world.Forces, world.Conflicts, world.Wars, world.Spatial,
-            new LocalTopologyStore(new RuntimeIdentityRegistry()));
+            new LocalTopologyArmedForceSubLocationResolver(
+                new LocalTopologyStore(new RuntimeIdentityRegistry())));
         IReadOnlyList<OwnerSectionCensusSnapshot> injectedSections = CreateOwnerSections(injectedTopology);
         Assert.That(PersistentBattleOwnerSnapshot.TryCapture(injectedTopology,
             CreateToken(injectedSections, 0L), injectedSections,
@@ -374,7 +375,7 @@ public sealed class PersistentBattleOwnerSnapshotTests
             PersistentBattleOwnerSnapshotFailureCode.ContradictoryParents);
 
         AssertStageRejected(valid, target, PersistentBattleOwnerSnapshotFailureCode.LocalTopologyComposed,
-            new LocalTopologyStore(new RuntimeIdentityRegistry()));
+            true);
         Assert.That(owner.Count, Is.EqualTo(1));
         Assert.That(owner.Revision, Is.EqualTo(2L));
         Assert.That(target.Forces.Count, Is.EqualTo(2));
@@ -391,7 +392,7 @@ public sealed class PersistentBattleOwnerSnapshotTests
             0,
             long.MaxValue,
             Array.Empty<PersistentBattleOwnerSnapshotRecord>());
-        Assert.That(snapshot.TryStage(world.Forces, world.Conflicts, world.Wars, world.Spatial, null,
+        Assert.That(snapshot.TryStage(world.Forces, world.Conflicts, world.Wars, world.Spatial, false,
             out PersistentBattleStore staged, out PersistentBattleOwnerSnapshotFailure failure), Is.True, failure.Message);
         Assert.That(staged.Revision, Is.EqualTo(long.MaxValue));
         Assert.That(staged.TryRegister(CreateBattle(new BattleId("saturated-write")),
@@ -405,14 +406,14 @@ public sealed class PersistentBattleOwnerSnapshotTests
         PersistentBattleOwnerSnapshot snapshot,
         BattleWorld target,
         PersistentBattleOwnerSnapshotFailureCode expected,
-        LocalTopologyStore localTopologyStore = null)
+        bool localTopologyComposed = false)
     {
         Assert.That(snapshot.TryStage(
             target.Forces,
             target.Conflicts,
             target.Wars,
             target.Spatial,
-            localTopologyStore,
+            localTopologyComposed,
             out PersistentBattleStore staged,
             out PersistentBattleOwnerSnapshotFailure failure), Is.False);
         Assert.That(staged, Is.Null);

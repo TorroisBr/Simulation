@@ -2380,7 +2380,7 @@ public static class WorldStateSnapshotBuilder
             BuildLocalTopologySnapshots(
                 context.LocalTopologyStore
                     ?? (context.ArmedForceSpatialStateStore?.SubLocationResolver as LocalTopologyArmedForceSubLocationResolver)?.LocalTopologyStore
-                    ?? context.BattleStore?.LocalTopologyStore),
+                    ?? (context.BattleStore?.SubLocationResolver as LocalTopologyArmedForceSubLocationResolver)?.LocalTopologyStore),
             calendarDate,
             persons,
             parentages,

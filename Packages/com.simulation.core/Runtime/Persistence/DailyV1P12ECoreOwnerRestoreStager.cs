@@ -12,7 +12,8 @@ internal enum P12ECoreOwnerRestoreStep
     JusticeRecords = 6,
     Military = 7,
     Conflict = 8,
-    War = 9
+    War = 9,
+    Battle = 10
 }
 
 internal enum P12ECoreOwnerRestoreFailure
@@ -40,6 +41,7 @@ internal sealed class P12ECoreOwnerRestoreStage
     internal ArmedForceSpatialStateStore Positions { get; }
     internal PersistentConflictStore Conflicts { get; }
     internal PersistentWarStore Wars { get; }
+    internal PersistentBattleStore Battles { get; }
 
     internal P12ECoreOwnerRestoreStage(
         PersonStore persons,
@@ -56,7 +58,8 @@ internal sealed class P12ECoreOwnerRestoreStage
         ContingentManpowerStateStore manpower,
         ArmedForceSpatialStateStore positions,
         PersistentConflictStore conflicts,
-        PersistentWarStore wars)
+        PersistentWarStore wars,
+        PersistentBattleStore battles)
     {
         Persons = persons;
         Institutions = institutions;
@@ -73,6 +76,7 @@ internal sealed class P12ECoreOwnerRestoreStage
         Positions = positions;
         Conflicts = conflicts;
         Wars = wars;
+        Battles = battles;
     }
 }
 
@@ -101,6 +105,7 @@ internal sealed class DailyV1P12ECoreOwnerRestoreBuilder
     private ArmedForceSpatialStateStore positions;
     private PersistentConflictStore conflicts;
     private PersistentWarStore wars;
+    private PersistentBattleStore battles;
 
     private DailyV1P12ECoreOwnerRestoreBuilder(
         PersonStore persons,
@@ -364,22 +369,47 @@ internal sealed class DailyV1P12ECoreOwnerRestoreBuilder
             return MarkFailed(out failure);
         }
     }
+
+    internal bool TryStageBattle(
+        PersistentBattleOwnerSnapshot snapshot,
+        bool localTopologyComposed,
+        out P12ECoreOwnerRestoreFailure failure)
+    {
+        if (!CanStage(P12ECoreOwnerRestoreStep.Battle, out failure)) return false;
+        try
+        {
+            if (snapshot == null || armedForces == null || conflicts == null || wars == null
+                || !snapshot.TryStage(armedForces, conflicts, wars, spatialAuthority,
+                    localTopologyComposed, out PersistentBattleStore stagedBattles, out _))
+                return MarkFailed(out failure);
+            battles = stagedBattles;
+            nextStep++;
+            failure = P12ECoreOwnerRestoreFailure.None;
+            return true;
+        }
+        catch (Exception exception) when (IsStageException(exception))
+        {
+            return MarkFailed(out failure);
+        }
+    }
+
     internal bool TryBuild(
         out P12ECoreOwnerRestoreStage staged,
         out P12ECoreOwnerRestoreFailure failure)
     {
         staged = null;
-        if (failed || nextStep != 10 || persons == null || institutions == null || offices == null
+        if (failed || nextStep != 11 || persons == null || institutions == null || offices == null
             || propertyOwnership == null || estates == null || factions == null || politicalClaims == null
             || politicalSupport == null || politicalDecisions == null || justiceRecords == null
-            || armedForces == null || manpower == null || positions == null || conflicts == null || wars == null)
+            || armedForces == null || manpower == null || positions == null || conflicts == null || wars == null
+            || battles == null)
         {
             failure = P12ECoreOwnerRestoreFailure.StageFailed;
             return false;
         }
         staged = new P12ECoreOwnerRestoreStage(persons, institutions, offices,
             propertyOwnership, estates, factions, politicalClaims, politicalSupport,
-            politicalDecisions, justiceRecords, armedForces, manpower, positions, conflicts, wars);
+            politicalDecisions, justiceRecords, armedForces, manpower, positions, conflicts, wars, battles);
         failure = P12ECoreOwnerRestoreFailure.None;
         return true;
     }
@@ -424,6 +454,8 @@ internal static class DailyV1P12ECoreOwnerRestoreStager
         P12EMilitaryOwnerSnapshot military,
         PersistentConflictOwnerSnapshot conflicts,
         PersistentWarOwnerSnapshot wars,
+        PersistentBattleOwnerSnapshot battles,
+        bool localTopologyComposed,
         PersonStore persons,
         SpatialAuthorityStore stagedSpatialAuthority,
         IReadOnlyList<DailyV1CityRuntimeOwners> stagedCities,
@@ -458,6 +490,8 @@ internal static class DailyV1P12ECoreOwnerRestoreStager
         stageObserver?.Invoke(P12ECoreOwnerRestoreStep.Conflict);
         if (!builder.TryStageWar(wars, out failure)) return false;
         stageObserver?.Invoke(P12ECoreOwnerRestoreStep.War);
+        if (!builder.TryStageBattle(battles, localTopologyComposed, out failure)) return false;
+        stageObserver?.Invoke(P12ECoreOwnerRestoreStep.Battle);
 
         return builder.TryBuild(out staged, out failure);
     }

@@ -129,11 +129,11 @@ internal sealed class PersistentBattleOwnerSnapshot
             return false;
         }
 
-        if (owner.LocalTopologyStore != null)
+        if (owner.HasSubLocationResolver)
         {
             failure = PersistentBattleOwnerSnapshotFailure.Create(
                 PersistentBattleOwnerSnapshotFailureCode.LocalTopologyComposed,
-                "Daily-v1 LocalTopology is NOT_COMPOSED; an injected owner rejects Battle capture.");
+                "Daily-v1 LocalTopology is NOT_COMPOSED; an injected sub-location resolver rejects Battle capture.");
             return false;
         }
         if (!ReferenceEquals(owner.ConflictStore.ArmedForceStore, owner.ArmedForceStore)
@@ -215,7 +215,7 @@ internal sealed class PersistentBattleOwnerSnapshot
         PersistentConflictStore stagedConflictStore,
         PersistentWarStore stagedWarStore,
         SpatialAuthorityStore stagedSpatialAuthorityStore,
-        LocalTopologyStore localTopologyStore,
+        bool localTopologyComposed,
         out PersistentBattleStore stagedBattleStore,
         out PersistentBattleOwnerSnapshotFailure failure)
     {
@@ -225,7 +225,7 @@ internal sealed class PersistentBattleOwnerSnapshot
             stagedConflictStore,
             stagedWarStore,
             stagedSpatialAuthorityStore,
-            localTopologyStore,
+            localTopologyComposed,
             out stagedBattleStore,
             out failure);
     }
@@ -235,7 +235,7 @@ internal sealed class PersistentBattleOwnerSnapshot
         PersistentConflictStore conflictStore,
         PersistentWarStore warStore,
         SpatialAuthorityStore spatialAuthorityStore,
-        LocalTopologyStore localTopologyStore,
+        bool localTopologyComposed,
         out IReadOnlyList<PersistentBattleRecord> records,
         out PersistentBattleOwnerSnapshotFailure failure)
     {
@@ -280,7 +280,7 @@ internal sealed class PersistentBattleOwnerSnapshot
                 "Staged Battle parents must be the exact ArmedForce/Conflict/War authority graph.");
             return false;
         }
-        if (localTopologyStore != null)
+        if (localTopologyComposed)
         {
             failure = PersistentBattleOwnerSnapshotFailure.Create(
                 PersistentBattleOwnerSnapshotFailureCode.LocalTopologyComposed,
@@ -641,7 +641,7 @@ internal sealed class PersistentBattleOwnerSnapshot
                 return InvalidSpatial(out failure);
         }
 
-        if (!spatialAuthorityStore.TryResolve(location, null, out _, out _))
+        if (!spatialAuthorityStore.TryResolveReference(location, out _, out _))
         {
             failure = PersistentBattleOwnerSnapshotFailure.Create(
                 PersistentBattleOwnerSnapshotFailureCode.InvalidSpatialReference,
