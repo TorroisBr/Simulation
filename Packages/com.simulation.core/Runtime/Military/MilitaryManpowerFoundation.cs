@@ -343,6 +343,122 @@ public sealed class ContingentManpowerInvariantReport
 /// <summary>
 /// Owns contingent source bindings and cohort rosters. It never mutates the source domain or population.
 /// </summary>
+/// <summary>
+/// Runtime-neutral input to the authoritative manpower owner's atomic Battle
+/// batch preparation. Unity-side Battle planning adapts its richer plan into
+/// this closed mutation input; the Core owner remains responsible for all
+/// roster, source-allocation, mirror, revision, and atomicity checks.
+/// </summary>
+internal sealed class ContingentManpowerBattleBatchInput
+{
+    internal string BattleId { get; }
+    internal bool IsComplete { get; }
+    internal IReadOnlyList<ContingentManpowerBattlePartitionInput> Partitions { get; }
+    internal IReadOnlyList<ContingentManpowerBattleSourceGroupInput> SourceGroups { get; }
+    internal IReadOnlyList<ContingentManpowerBattleProjectionInput> ContingentProjections { get; }
+
+    internal ContingentManpowerBattleBatchInput(
+        string battleId,
+        bool isComplete,
+        IEnumerable<ContingentManpowerBattlePartitionInput> partitions,
+        IEnumerable<ContingentManpowerBattleSourceGroupInput> sourceGroups,
+        IEnumerable<ContingentManpowerBattleProjectionInput> contingentProjections)
+    {
+        BattleId = battleId;
+        IsComplete = isComplete;
+        Partitions = CopyOrNull(partitions);
+        SourceGroups = CopyOrNull(sourceGroups);
+        ContingentProjections = CopyOrNull(contingentProjections);
+    }
+
+    private static IReadOnlyList<T> CopyOrNull<T>(IEnumerable<T> values)
+    {
+        return values == null
+            ? null
+            : (IReadOnlyList<T>)new ReadOnlyCollection<T>(new List<T>(values));
+    }
+}
+
+internal sealed class ContingentManpowerBattlePartitionInput
+{
+    internal ContingentId ContingentId { get; }
+    internal long DeathAmount { get; }
+
+    internal ContingentManpowerBattlePartitionInput(ContingentId contingentId, long deathAmount)
+    {
+        ContingentId = contingentId;
+        DeathAmount = deathAmount;
+    }
+}
+
+internal sealed class ContingentManpowerBattleProjectionInput
+{
+    internal ContingentId ContingentId { get; }
+    internal ManpowerSourceId SourceId { get; }
+    internal IReadOnlyList<ContingentManpowerCohort> Cohorts { get; }
+    internal long LivingRosterAmount { get; }
+    internal long AvailableAmount { get; }
+
+    internal ContingentManpowerBattleProjectionInput(
+        ContingentId contingentId,
+        ManpowerSourceId sourceId,
+        IEnumerable<ContingentManpowerCohort> cohorts,
+        long livingRosterAmount,
+        long availableAmount)
+    {
+        ContingentId = contingentId;
+        SourceId = sourceId;
+        Cohorts = cohorts == null
+            ? null
+            : (IReadOnlyList<ContingentManpowerCohort>)new ReadOnlyCollection<ContingentManpowerCohort>(new List<ContingentManpowerCohort>(cohorts));
+        LivingRosterAmount = livingRosterAmount;
+        AvailableAmount = availableAmount;
+    }
+}
+
+internal sealed class ContingentManpowerBattleTraceInput
+{
+    internal ContingentId ContingentId { get; }
+    internal long DeathAmount { get; }
+
+    internal ContingentManpowerBattleTraceInput(ContingentId contingentId, long deathAmount)
+    {
+        ContingentId = contingentId;
+        DeathAmount = deathAmount;
+    }
+}
+
+internal sealed class ContingentManpowerBattleSourceGroupInput
+{
+    internal ManpowerSourceId SourceId { get; }
+    internal long DeathAmount { get; }
+    internal bool HasProposalEffect { get; }
+    internal ManpowerSourceId ProposalSourceId { get; }
+    internal bool HasDeathEffect { get; }
+    internal long ProposalEffectAmount { get; }
+    internal IReadOnlyList<ContingentManpowerBattleTraceInput> Traces { get; }
+
+    internal ContingentManpowerBattleSourceGroupInput(
+        ManpowerSourceId sourceId,
+        long deathAmount,
+        bool hasProposalEffect,
+        ManpowerSourceId proposalSourceId,
+        bool hasDeathEffect,
+        long proposalEffectAmount,
+        IEnumerable<ContingentManpowerBattleTraceInput> traces)
+    {
+        SourceId = sourceId;
+        DeathAmount = deathAmount;
+        HasProposalEffect = hasProposalEffect;
+        ProposalSourceId = proposalSourceId;
+        HasDeathEffect = hasDeathEffect;
+        ProposalEffectAmount = proposalEffectAmount;
+        Traces = traces == null
+            ? null
+            : (IReadOnlyList<ContingentManpowerBattleTraceInput>)new ReadOnlyCollection<ContingentManpowerBattleTraceInput>(new List<ContingentManpowerBattleTraceInput>(traces));
+    }
+}
+
 public sealed class ContingentManpowerStateStore : IAuthoritativeMutationGuardBindable
 {
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
@@ -690,7 +806,7 @@ public sealed class ContingentManpowerStateStore : IAuthoritativeMutationGuardBi
     }
 
     internal bool TryPrepareBattleBatch(
-        BattleDirectConsequencePlan plan,
+        ContingentManpowerBattleBatchInput plan,
         out PreparedBattleManpowerBatch prepared,
         out ContingentManpowerFailure failure)
     {
@@ -704,11 +820,11 @@ public sealed class ContingentManpowerStateStore : IAuthoritativeMutationGuardBi
         Dictionary<string, long> deathsByContingent = new Dictionary<string, long>(StringComparer.Ordinal);
         try
         {
-            foreach (BattleCohortConsequencePartition partition in plan.Partitions)
+            foreach (ContingentManpowerBattlePartitionInput partition in plan.Partitions)
             {
-                if (partition == null || partition.InputIdentity?.ContingentId == null || partition.DeathAmount < 0L)
+                if (partition == null || partition.ContingentId == null || partition.DeathAmount < 0L)
                     return Fail(ContingentManpowerFailureCode.InvalidInvariant, "A D6B2 death partition is malformed.", out failure);
-                string id = partition.InputIdentity.ContingentId.Value;
+                string id = partition.ContingentId.Value;
                 deathsByContingent.TryGetValue(id, out long prior);
                 deathsByContingent[id] = checked(prior + partition.DeathAmount);
             }
@@ -725,7 +841,7 @@ public sealed class ContingentManpowerStateStore : IAuthoritativeMutationGuardBi
         Dictionary<string, long> touchedAfterBySource = new Dictionary<string, long>(StringComparer.Ordinal);
         try
         {
-            foreach (BattleDirectConsequenceContingentProjection projection in plan.ContingentProjections)
+            foreach (ContingentManpowerBattleProjectionInput projection in plan.ContingentProjections)
             {
                 if (projection == null || projection.ContingentId == null
                     || !projectedIds.Add(projection.ContingentId.Value))
@@ -796,23 +912,23 @@ public sealed class ContingentManpowerStateStore : IAuthoritativeMutationGuardBi
                 return Fail(ContingentManpowerFailureCode.InvalidInvariant, "A D6B2 death partition has no contingent post-state projection.", out failure);
 
         Dictionary<string, long> deathsBySource = new Dictionary<string, long>(StringComparer.Ordinal);
-        foreach (BattleDirectConsequenceSourceGroup group in plan.SourceGroups)
+        foreach (ContingentManpowerBattleSourceGroupInput group in plan.SourceGroups)
         {
-            if (group == null || group.SourceId == null || group.Proposal?.Effect == null)
+            if (group == null || group.SourceId == null || !group.HasProposalEffect)
                 return Fail(ContingentManpowerFailureCode.InvalidInvariant, "A D6B2 source group has no exact D6B1 proposal.", out failure);
             long tracedDeaths = 0L;
             try
             {
-                foreach (BattleDirectConsequenceDeathTrace trace in group.Traces)
+                foreach (ContingentManpowerBattleTraceInput trace in group.Traces)
                 {
-                    if (trace?.CohortIdentity?.ContingentId == null || trace.DeathAmount < 0L)
+                    if (trace?.ContingentId == null || trace.DeathAmount < 0L)
                         return Fail(ContingentManpowerFailureCode.InvalidInvariant, "A D6B2 source death trace is malformed.", out failure);
                     tracedDeaths = checked(tracedDeaths + trace.DeathAmount);
                 }
                 if (tracedDeaths != group.DeathAmount
-                    || group.Proposal.SourceId != group.SourceId
-                    || group.Proposal.Effect.Kind != ManpowerSourceEffectKind.Death
-                    || group.Proposal.Effect.Amount != group.DeathAmount)
+                    || group.ProposalSourceId != group.SourceId
+                    || !group.HasDeathEffect
+                    || group.ProposalEffectAmount != group.DeathAmount)
                     return Fail(ContingentManpowerFailureCode.InvalidInvariant, "D6B2 source traces and the D6B1 death proposal disagree.", out failure);
                 AddAmount(deathsBySource, group.SourceId.Value, group.DeathAmount);
             }
