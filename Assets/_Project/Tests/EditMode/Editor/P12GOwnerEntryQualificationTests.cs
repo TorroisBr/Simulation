@@ -38,6 +38,31 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         DailyV1Application restoreApplication = new DailyV1Application();
         Assert.That(restoreApplication.TryCaptureBootstrapAdmissionContext(
                 out SimulationRuntimeAdmissionContext restoreBootstrapContext), Is.True);
+        Assert.That(restoreApplication.TryAdmitAndDecodeRestoredContinuationImage(
+                image, image.Header.Compatibility, null, restoreBootstrapContext,
+                out bool imageAdmissionPassed, out P12ADailyV1Census admittedImageCensus,
+                out P12ADailyV1ImageOwnerSnapshots decodedOwners, out P12AResult imageDecodeResult),
+            Is.True, imageDecodeResult?.SectionCode + ":" + imageDecodeResult?.Code);
+        Assert.That(imageAdmissionPassed, Is.True,
+            "Core must own selected-profile census admission and typed owner-image decoding.");
+        Assert.That(admittedImageCensus, Is.Not.Null);
+        Assert.That(decodedOwners, Is.Not.Null);
+        Assert.That(decodedOwners.C, Is.Not.Null);
+        Assert.That(decodedOwners.Cities, Is.Not.Empty);
+
+        DailyV1Application foreignApplication = new DailyV1Application();
+        Assert.That(foreignApplication.TryCaptureBootstrapAdmissionContext(
+                out SimulationRuntimeAdmissionContext foreignBootstrapContext), Is.True);
+        Assert.That(restoreApplication.TryAdmitAndDecodeRestoredContinuationImage(
+                image, image.Header.Compatibility, null, foreignBootstrapContext,
+                out bool foreignAdmissionPassed, out P12ADailyV1Census foreignCensus,
+                out P12ADailyV1ImageOwnerSnapshots foreignDecodedOwners, out P12AResult foreignImageResult),
+            Is.False);
+        Assert.That(foreignAdmissionPassed, Is.False,
+            "A foreign application's bootstrap identity must fail before owner-image decoding.");
+        Assert.That(foreignCensus, Is.Null);
+        Assert.That(foreignDecodedOwners, Is.Null);
+        Assert.That(foreignImageResult?.Code, Is.EqualTo(P12AResultCode.WrongThread));
 
         Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
                 image,

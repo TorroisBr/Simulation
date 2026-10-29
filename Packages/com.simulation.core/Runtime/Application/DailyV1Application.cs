@@ -1028,8 +1028,8 @@ internal sealed class DailyV1Application
     /// <summary>
     /// Admits a persisted owner image's host identity and complete Daily-v1
     /// census under the exact bootstrap context owned by this application.
-    /// Unity may decode and stage the resulting owners through its compatibility
-    /// adapter, but it cannot independently decide which image is admissible.
+    /// The typed decoder remains a separate Core step for callers that need to
+    /// distinguish census admission from value decoding.
     /// </summary>
     internal bool TryAdmitRestoredContinuationImage(
         P12AContinuationImage image,
@@ -1088,6 +1088,42 @@ internal sealed class DailyV1Application
         }
 
         result = new P12AResult(P12AResultCode.Decoded);
+        return true;
+    }
+
+    /// <summary>
+    /// Admits and decodes one persisted owner image within the Core
+    /// application's bootstrap identity. The compatibility adapter may stage
+    /// the returned detached values, but cannot bypass Core's host/census gate
+    /// or choose a different image decoder.
+    /// </summary>
+    internal bool TryAdmitAndDecodeRestoredContinuationImage(
+        P12AContinuationImage image,
+        P12ACompatibilityDescriptor unityV1Identity,
+        P12ACompatibilityDescriptorV2 dotNetV2Identity,
+        SimulationRuntimeAdmissionContext admissionContext,
+        out bool admissionPassed,
+        out P12ADailyV1Census census,
+        out P12ADailyV1ImageOwnerSnapshots snapshots,
+        out P12AResult result)
+    {
+        admissionPassed = false;
+        census = null;
+        snapshots = null;
+        result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        if (!TryAdmitRestoredContinuationImage(
+                image, unityV1Identity, dotNetV2Identity, admissionContext,
+                out census, out result))
+            return false;
+
+        admissionPassed = true;
+        if (!P12ADailyV1ImageOwnerDecoder.TryDecode(image, out snapshots, out result)
+            || snapshots == null)
+        {
+            snapshots = null;
+            return false;
+        }
+
         return true;
     }
 

@@ -81,10 +81,11 @@ internal static partial class P12GDailyV1RestoreCoordinator
             P12AResult imageResult;
             if (application != null)
             {
-                bool admitted = application.TryAdmitRestoredContinuationImage(
+                bool decodedAndAdmitted = application.TryAdmitAndDecodeRestoredContinuationImage(
                     image, expectedCompatibilityV1, expectedCompatibilityV2,
-                    bootstrapAdmissionContext, out imageCensus, out imageResult);
-                if (!admitted)
+                    bootstrapAdmissionContext, out bool admissionPassed,
+                    out imageCensus, out decoded, out imageResult);
+                if (!admissionPassed)
                 {
                     bool hostIdentityRejected = imageResult?.Code == P12AResultCode.WrongThread
                         || imageResult?.Code == P12AResultCode.IncompatibleContentOrConfiguration
@@ -99,9 +100,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                             + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "InvalidOwnerValue") + ".";
                     return false;
                 }
-                if (!P12ADailyV1ImageOwnerDecoder.TryDecode(
-                    image, out decoded, out imageResult)
-                    || decoded == null)
+                if (!decodedAndAdmitted || decoded == null)
                 {
                     failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
                     diagnostic = "The persisted Daily-v1 typed owner image could not be decoded: "
