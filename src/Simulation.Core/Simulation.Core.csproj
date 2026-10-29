@@ -12,6 +12,8 @@
   <ItemGroup>
     <Compile Include="../../Packages/com.simulation.core/Runtime/IAuthoritativeMutationStatus.cs" Link="IAuthoritativeMutationStatus.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/ActionExecution.cs" Link="ActionExecution.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/DomainEvents.cs" Link="DomainEvents.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/NpcChronicle.cs" Link="NpcChronicle.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/WorldCommandValues.cs" Link="WorldCommandValues.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/DailyV1DecisionRecords.cs" Link="DailyV1DecisionRecords.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/DailyV1DecisionRecordOperation.cs" Link="DailyV1DecisionRecordOperation.cs" />
