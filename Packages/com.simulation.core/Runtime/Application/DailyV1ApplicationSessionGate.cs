@@ -344,15 +344,21 @@ internal sealed class DailyV1ActiveRuntimeSession
             return false;
         }
 
-        session = new DailyV1ActiveRuntimeSession(
+        DailyV1ActiveRuntimeSession candidateSession = new DailyV1ActiveRuntimeSession(
             executionBoundaryState, expectedDefinitions, profileFingerprint,
             lastEconomySnapshotDay, genesisComposition, p12CRoots, eventAuthority);
-        if (p12CRoots != null && !p12CRoots.IsFor(session))
+        if (p12CRoots != null && !p12CRoots.IsFor(candidateSession))
         {
-            session = null;
             diagnostic = "The active Core session does not retain its exact P12-C roots.";
             return false;
         }
+        if (!eventAuthority.TryBindSelectedTravelEventRecorders(executionBoundaryState))
+        {
+            diagnostic = "The Core active session could not bind its exact travel event recorder.";
+            return false;
+        }
+
+        session = candidateSession;
         return true;
     }
 

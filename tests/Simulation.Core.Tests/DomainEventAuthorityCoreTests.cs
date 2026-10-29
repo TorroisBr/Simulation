@@ -25,6 +25,9 @@ public sealed class DomainEventAuthorityCoreTests
         Assert.That(session.EventAuthority, Is.SameAs(authority));
         Assert.That(session.EventAuthority.EventStore, Is.SameAs(authority.EventStore));
         Assert.That(session.EventAuthority.History, Is.SameAs(authority.History));
+        Assert.That(authority.TryBindSelectedTravelEventRecorders(
+            composition.ExecutionBoundaryState), Is.True,
+            "The Core session must bind the same recorder the Unity host later validates.");
     }
 
     [Test]

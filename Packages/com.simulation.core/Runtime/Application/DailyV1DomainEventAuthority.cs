@@ -50,4 +50,17 @@ internal sealed class DailyV1DomainEventAuthority
         EventStore.UsesHistoryStore(History)
         && Recorder.UsesEventStore(EventStore)
         && Recorder.UsesIdentityOwners(runtimeIdAllocator, simulationTime, recordSequence);
+
+    internal bool TryBindSelectedTravelEventRecorders(
+        DailyV1ExecutionBoundaryState executionBoundaryState)
+    {
+        if (executionBoundaryState == null
+            || !IsFor(executionBoundaryState.SelectedRuntimeIdAllocator,
+                executionBoundaryState.SimulationTime,
+                executionBoundaryState.SelectedRecordSequence))
+            return false;
+
+        return executionBoundaryState.TryBindSelectedTravelEventRecorders(
+            Recorder, Recorder);
+    }
 }
