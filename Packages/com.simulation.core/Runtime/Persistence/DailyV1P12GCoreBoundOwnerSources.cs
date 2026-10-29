@@ -8,7 +8,8 @@ internal enum DailyV1P12GCoreBoundOwnerSourceCaptureFailure
     MissingCoreOwnerBinding,
     OwnerCensusMismatch,
     OwnerCaptureFailed,
-    StaleSourceBoundary
+    StaleSourceBoundary,
+    IncompleteSelectedNpcRoster
 }
 internal enum DailyV1P12GCoreBoundCausalRootCaptureFailure
 {
@@ -614,5 +615,256 @@ internal sealed class DailyV1P12GCoreBoundSpatialOwnerSources
             return false;
         ownerIdentity = match.OwnerInstanceIdentity;
         return true;
+    }
+}
+
+/// <summary>
+/// P12-D/F NPC rows captured from the ordered Core-selected NPC owner graph
+/// while its continuation-save operation is active. The Unity adapter may
+/// validate that its projections correspond to this complete graph, but it
+/// does not select the persisted rows.
+/// </summary>
+internal sealed class DailyV1P12GCoreBoundNpcOwnerSources
+{
+    private readonly DailyV1P12GContinuationSaveOperation operation;
+    private readonly DailyV1P12GSourceBoundaryWitness witness;
+    private readonly System.Collections.ObjectModel.ReadOnlyCollection<DailyV1NpcRuntimeOwners> owners;
+    private readonly System.Collections.ObjectModel.ReadOnlyCollection<P12DNpcDRow> dRows;
+    private readonly System.Collections.ObjectModel.ReadOnlyCollection<P12DNpcFRow> fRows;
+
+    private DailyV1P12GCoreBoundNpcOwnerSources(
+        DailyV1P12GContinuationSaveOperation operation,
+        IList<DailyV1NpcRuntimeOwners> owners,
+        IList<P12DNpcDRow> dRows,
+        IList<P12DNpcFRow> fRows)
+    {
+        this.operation = operation;
+        witness = operation.SourceWitness;
+        this.owners = new System.Collections.ObjectModel.ReadOnlyCollection<DailyV1NpcRuntimeOwners>(
+            new List<DailyV1NpcRuntimeOwners>(owners));
+        this.dRows = new System.Collections.ObjectModel.ReadOnlyCollection<P12DNpcDRow>(
+            new List<P12DNpcDRow>(dRows));
+        this.fRows = new System.Collections.ObjectModel.ReadOnlyCollection<P12DNpcFRow>(
+            new List<P12DNpcFRow>(fRows));
+    }
+
+    internal IReadOnlyList<DailyV1NpcRuntimeOwners> Owners => owners;
+    internal IReadOnlyList<P12DNpcDRow> DRows => dRows;
+    internal IReadOnlyList<P12DNpcFRow> FRows => fRows;
+
+    internal bool IsFor(DailyV1P12GContinuationSaveOperation candidate) =>
+        candidate != null
+        && ReferenceEquals(operation, candidate)
+        && candidate.IsActive
+        && ReferenceEquals(witness, candidate.SourceWitness)
+        && ReferenceEquals(witness.Token, candidate.SourceWitness.Token)
+        && ReferenceEquals(witness.TokenOwnerSections, candidate.SourceWitness.TokenOwnerSections);
+
+    internal static bool TryCapture(
+        DailyV1P12GContinuationSaveOperation operation,
+        out DailyV1P12GCoreBoundNpcOwnerSources sources,
+        out DailyV1P12GCoreBoundOwnerSourceCaptureFailure failure,
+        out string diagnostic)
+    {
+        sources = null;
+        failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.InvalidSaveOperation;
+        diagnostic = null;
+        if (operation == null || !operation.IsActive)
+        {
+            diagnostic = "A current active Core continuation-save operation is required.";
+            return false;
+        }
+        if (!operation.TryRevalidate(out DailyCaptureEligibilityFailure initialFailure))
+        {
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary;
+            diagnostic = "The Core continuation-save witness is stale: " + initialFailure + ".";
+            return false;
+        }
+
+        DailyV1SelectedRuntimeOwnerGraph graph = operation.Session?.OwnerGraph;
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections = operation.SourceWitness.TokenOwnerSections;
+        if (graph == null || graph.Npcs == null || graph.PersonStore == null
+            || !ReferenceEquals(graph, operation.Session.ExecutionBoundaryState.SelectedRuntimeOwnerGraph)
+            || !DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(sections))
+        {
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.MissingCoreOwnerBinding;
+            diagnostic = "The active Core session does not retain a complete selected NPC graph and census vector.";
+            return false;
+        }
+
+        // A selected Core graph is the whole-roster authority only when its
+        // exact RuntimeId set equals the 22 dynamic NPC census families. A
+        // smaller graph is a supported mixed-roster host case: leave row
+        // capture to the documented whole-roster Unity compatibility path.
+        if (!HasExactSelectedNpcRoster(graph.Npcs, sections))
+        {
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.IncompleteSelectedNpcRoster;
+            diagnostic = "The selected Core NPC graph does not cover the complete admitted NPC roster.";
+            return false;
+        }
+
+        try
+        {
+            List<P12DNpcDRow> dRows = new List<P12DNpcDRow>(graph.Npcs.Count);
+            List<P12DNpcFRow> fRows = new List<P12DNpcFRow>(graph.Npcs.Count);
+            for (int index = 0; index < graph.Npcs.Count; index++)
+            {
+                DailyV1NpcRuntimeOwners owner = graph.Npcs[index];
+                PersonRuntime person = null;
+                if (graph.PersonStore.TryGetByMaterializedNpcRuntimeId(owner.RuntimeId,
+                        out PersonRuntime boundPerson))
+                    person = boundPerson;
+
+                if (!DailyV1P12DNpcCoreOwnerExporter.TryCreate(
+                        graph, owner, person,
+                        out P12DNpcDRow dRow,
+                        out P12DNpcFRow fRow,
+                        out DailyV1P12DNpcCoreOwnerExportFailure exportFailure)
+                    || dRow == null || fRow == null
+                    || !string.Equals(dRow.RuntimeId, owner.RuntimeId, StringComparison.Ordinal)
+                    || !string.Equals(fRow.RuntimeId, owner.RuntimeId, StringComparison.Ordinal)
+                    || !MatchesOwnerSections(owner, person, sections))
+                {
+                    failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.OwnerCensusMismatch;
+                    diagnostic = "The exact Core NPC owner or its admitted 22-family census vector is invalid: "
+                        + exportFailure + ".";
+                    return false;
+                }
+
+                dRows.Add(dRow);
+                fRows.Add(fRow);
+            }
+
+            if (!operation.TryRevalidate(out DailyCaptureEligibilityFailure staleFailure))
+            {
+                failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary;
+                diagnostic = "The Core save witness changed during NPC owner capture: "
+                    + staleFailure + ".";
+                return false;
+            }
+
+            sources = new DailyV1P12GCoreBoundNpcOwnerSources(
+                operation, new List<DailyV1NpcRuntimeOwners>(graph.Npcs), dRows, fRows);
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.None;
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.OwnerCaptureFailed;
+            diagnostic = "A Core NPC owner failed while making its detached P12-D/F snapshot: "
+                + exception.GetType().Name + ".";
+            return false;
+        }
+    }
+
+    private static bool HasExactSelectedNpcRoster(
+        IReadOnlyList<DailyV1NpcRuntimeOwners> owners,
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections)
+    {
+        if (owners == null || sections == null || owners.Count == 0) return false;
+        HashSet<string> ownerIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1NpcRuntimeOwners owner in owners)
+            if (owner == null || string.IsNullOrWhiteSpace(owner.RuntimeId) || !ownerIds.Add(owner.RuntimeId))
+                return false;
+
+        string prefix = DailyV1SelectedOwnerSectionCensusContract.NpcSectionPrefixFor(0);
+        HashSet<string> admittedIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot section in sections)
+        {
+            if (section == null || !section.SectionId.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            string runtimeId = section.SectionId.Substring(prefix.Length);
+            if (string.IsNullOrWhiteSpace(runtimeId)
+                || !string.Equals(section.SectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(0, runtimeId),
+                    StringComparison.Ordinal)
+                || !admittedIds.Add(runtimeId)) return false;
+        }
+        return admittedIds.Count == ownerIds.Count && admittedIds.SetEquals(ownerIds);
+    }
+
+    private static bool MatchesOwnerSections(
+        DailyV1NpcRuntimeOwners owner,
+        PersonRuntime person,
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections)
+    {
+        if (owner == null || sections == null) return false;
+        if (!owner.Inventory.TryGetCensusCardinality(out int inventoryCardinality)
+            || !owner.CommercialKnowledge.TryReadCensus(
+                out int commercialMarkets, out int commercialLiquidity,
+                out int commercialReceipts, out long commercialRevision))
+            return false;
+
+        return Match(0, owner.ExplorableSiteKnowledge,
+                owner.ExplorableSiteKnowledge.Observations.Count, owner.ExplorableSiteKnowledge.Revision)
+            && Match(1, owner.LocalTopologyKnowledgeEmptyOwner,
+                owner.LocalTopologyKnowledgeEmptyOwner.PlaceObservationCount,
+                owner.LocalTopologyKnowledgeEmptyOwner.Revision)
+            && Match(2, owner.LocalTopologyKnowledgeEmptyOwner,
+                owner.LocalTopologyKnowledgeEmptyOwner.ConnectionObservationCount,
+                owner.LocalTopologyKnowledgeEmptyOwner.Revision)
+            && Match(3, owner.AdventureSiteIntelKnowledge,
+                owner.AdventureSiteIntelKnowledge.OppositionObservations.Count,
+                owner.AdventureSiteIntelKnowledge.Revision)
+            && Match(4, owner.AdventureSiteIntelKnowledge,
+                owner.AdventureSiteIntelKnowledge.NotableItemObservations.Count,
+                owner.AdventureSiteIntelKnowledge.Revision)
+            && Match(5, owner.AdventureSiteIntelKnowledge,
+                owner.AdventureSiteIntelKnowledge.CommonResourceObservations.Count,
+                owner.AdventureSiteIntelKnowledge.Revision)
+            && Match(6, owner.AdventureSiteIntelKnowledge,
+                owner.AdventureSiteIntelKnowledge.AccessObservations.Count,
+                owner.AdventureSiteIntelKnowledge.Revision)
+            && Match(7, null, commercialMarkets, commercialRevision)
+            && Match(8, null, commercialLiquidity, commercialRevision)
+            && Match(9, null, commercialReceipts, commercialRevision)
+            && Match(10, owner.SpatialKnowledge,
+                owner.SpatialKnowledge.KnownLocationCount, owner.SpatialKnowledge.Revision)
+            && Match(11, owner.SpatialKnowledge,
+                owner.SpatialKnowledge.KnownRouteCount, owner.SpatialKnowledge.Revision)
+            && Match(12, null, 1, owner.Travel.Revision)
+            && Match(13, owner.Inventory, inventoryCardinality, owner.Inventory.Revision)
+            && Match(14, owner.MoneyAccount, 1, owner.MoneyAccount.Revision)
+            && Match(15, owner.MerchantTradePlan, 1, owner.MerchantTradePlan.Revision)
+            && Match(16, null, 1, owner.TravelPlan.Revision)
+            && Match(17, null, 0, 0L)
+            && Match(18, null, 0, 0L)
+            && Match(19, null, 1, owner.CrimeJusticeRevision)
+            && Match(20, null, owner.ActionSlot.CurrentAction == null ? 0 : 1,
+                owner.ActionSlot.Revision)
+            && Match(21, null, 1, owner.Lifecycle.LifeStateRevision)
+            && (person != null
+                ? MatchSection(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(person.PersonId),
+                    person, 1, PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person))
+                : MatchSection(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(owner.RuntimeId),
+                    null, 1, owner.Residence.Revision));
+
+        bool Match(int family, object ownerIdentity, int cardinality, long revision) =>
+            MatchSection(
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(family, owner.RuntimeId),
+                ownerIdentity, cardinality, revision);
+
+        bool MatchSection(string sectionId, object ownerIdentity, int cardinality, long revision)
+        {
+            OwnerSectionCensusSnapshot match = null;
+            foreach (OwnerSectionCensusSnapshot section in sections)
+            {
+                if (section == null || !string.Equals(section.SectionId, sectionId, StringComparison.Ordinal)) continue;
+                if (match != null) return false;
+                match = section;
+            }
+
+            return match != null
+                && match.SchemaVersion == DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+                && match.Role == OwnerSectionRole.Required
+                && match.OwnerInstanceIdentity != null
+                && (ownerIdentity == null || ReferenceEquals(match.OwnerInstanceIdentity, ownerIdentity))
+                && match.Cardinality == cardinality
+                && match.Revision == revision;
+        }
     }
 }

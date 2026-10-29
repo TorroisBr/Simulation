@@ -135,7 +135,9 @@ internal static class P12DNpcRootOwnerSnapshot
         out P12DNpcDProjection dProjection,
         out P12DNpcFProjection fProjection,
         out P12DNpcRootOwnerSnapshotFailure failure,
-        DailyCaptureStagingAttempt stagingAttempt = null)
+        DailyCaptureStagingAttempt stagingAttempt = null,
+        DailyV1P12GCoreBoundNpcOwnerSources coreBoundNpcOwnerSources = null,
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation = null)
     {
         dProjection = null;
         fProjection = null;
@@ -146,6 +148,16 @@ internal static class P12DNpcRootOwnerSnapshot
             || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || token.CompletedCoreSequence <= 0L || token.AbsoluteDay < 0L || token.MutationEpoch < 0L)
             return false;
+
+        if (continuationSaveOperation != null
+            && (!continuationSaveOperation.IsActive
+                || !ReferenceEquals(continuationSaveOperation.SourceWitness.Token, token)
+                || !ReferenceEquals(continuationSaveOperation.SourceWitness.TokenOwnerSections, ownerSectionVector)
+                || !continuationSaveOperation.TryRevalidate(out _)))
+        {
+            failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;
+            return false;
+        }
 
         if (!DailyCaptureStagingAttempt.IsCaptureCurrent(
                 runtime, token, ownerSectionVector, stagingAttempt))
@@ -167,6 +179,44 @@ internal static class P12DNpcRootOwnerSnapshot
         {
             failure = P12DNpcRootOwnerSnapshotFailure.InvalidNpcIdentity;
             return false;
+        }
+
+        bool useCoreOwnerRows = coreBoundNpcOwnerSources != null;
+        if (useCoreOwnerRows)
+        {
+            if (continuationSaveOperation == null
+                || !coreBoundNpcOwnerSources.IsFor(continuationSaveOperation)
+                || !ReferenceEquals(continuationSaveOperation.CoreNpcOwnerSources,
+                    coreBoundNpcOwnerSources)
+                || coreBoundNpcOwnerSources.Owners == null
+                || coreBoundNpcOwnerSources.DRows == null
+                || coreBoundNpcOwnerSources.FRows == null
+                || coreBoundNpcOwnerSources.Owners.Count != roster.Count
+                || coreBoundNpcOwnerSources.DRows.Count != roster.Count
+                || coreBoundNpcOwnerSources.FRows.Count != roster.Count)
+            {
+                failure = P12DNpcRootOwnerSnapshotFailure.InvalidOwner;
+                return false;
+            }
+
+            for (int i = 0; i < roster.Count; i++)
+            {
+                NpcRuntime projection = roster[i];
+                DailyV1NpcRuntimeOwners coreOwner = coreBoundNpcOwnerSources.Owners[i];
+                if (projection == null || coreOwner == null
+                    || !ReferenceEquals(projection.SelectedRuntimeOwners, coreOwner)
+                    || !ReferenceEquals(projection.SelectedDailyV1DefinitionGraph, coreOwner.Definitions)
+                    || !ReferenceEquals(projection.SelectedDailyV1Definition, coreOwner.Definition)
+                    || !string.Equals(projection.RuntimeId, coreOwner.RuntimeId, StringComparison.Ordinal)
+                    || !string.Equals(coreBoundNpcOwnerSources.DRows[i]?.RuntimeId,
+                        projection.RuntimeId, StringComparison.Ordinal)
+                    || !string.Equals(coreBoundNpcOwnerSources.FRows[i]?.RuntimeId,
+                        projection.RuntimeId, StringComparison.Ordinal))
+                {
+                    failure = P12DNpcRootOwnerSnapshotFailure.InvalidOwner;
+                    return false;
+                }
+            }
         }
 
         bool useSelectedCoreInventoryCensus = true;
@@ -217,14 +267,20 @@ internal static class P12DNpcRootOwnerSnapshot
                     inventoryOwners, accountOwners, merchantPlanOwners, travelPlanOwners,
                     commercialOwners, spatialOwners, siteKnowledgeOwners, adventureOwners,
                     actionOwners, selectedActionPayloadOwners, cityOwners,
-                    out P12DNpcDRow dRow, out P12DNpcFRow fRow, out failure))
+                    out P12DNpcDRow projectedDRow, out P12DNpcFRow projectedFRow, out failure))
                 return false;
-            dRows.Add(dRow);
-            fRows.Add(fRow);
+            // Keep the compatibility projection's identity and definition checks,
+            // but publish the operation-bound Core owner rows when the complete
+            // roster maps exactly to the selected graph. Mixed rosters never enter
+            // this branch and retain the established whole-roster fallback above.
+            dRows.Add(useCoreOwnerRows ? coreBoundNpcOwnerSources.DRows[i] : projectedDRow);
+            fRows.Add(useCoreOwnerRows ? coreBoundNpcOwnerSources.FRows[i] : projectedFRow);
         }
 
         if (!DailyCaptureStagingAttempt.IsCaptureCurrent(
                 runtime, token, ownerSectionVector, stagingAttempt)
+            || (continuationSaveOperation != null
+                && !continuationSaveOperation.TryRevalidate(out _))
             || !evidence.AreReceiptOwnersStillExactZero())
         {
             failure = P12DNpcRootOwnerSnapshotFailure.StaleCapture;

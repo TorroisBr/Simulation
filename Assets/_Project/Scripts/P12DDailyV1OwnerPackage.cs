@@ -145,6 +145,10 @@ internal sealed class P12DDailyV1OwnerPackage
                 && (continuationSaveOperation.CoreSpatialOwnerSources == null
                     || !continuationSaveOperation.CoreSpatialOwnerSources.IsFor(
                         continuationSaveOperation)))
+            || (continuationSaveOperation != null
+                && continuationSaveOperation.CoreNpcOwnerSources != null
+                && !continuationSaveOperation.CoreNpcOwnerSources.IsFor(
+                    continuationSaveOperation))
             || !sourceRuntime.HasSameP12RuntimeIdentitySpatialOwners(
                 sourceRuntimeIdentities, sourceSpatialNetwork, sourceExplorableSites))
         {
@@ -155,6 +159,8 @@ internal sealed class P12DDailyV1OwnerPackage
             continuationSaveOperation?.CoreDemographicOwnerSources;
         DailyV1P12GCoreBoundSpatialOwnerSources coreSpatialOwnerSources =
             continuationSaveOperation?.CoreSpatialOwnerSources;
+        DailyV1P12GCoreBoundNpcOwnerSources coreNpcOwnerSources =
+            continuationSaveOperation?.CoreNpcOwnerSources;
         PersonStore sourcePersons = coreDemographicOwnerSources?.Persons ?? sourceRuntime.PersonStore;
         GenealogyStore sourceGenealogy = coreDemographicOwnerSources?.Genealogy
             ?? sourceRuntime.GenealogyStoreForWorldBoundary;
@@ -259,7 +265,7 @@ internal sealed class P12DDailyV1OwnerPackage
                 sourceRuntime, token, sharedStamp, vector,
                 out P12DNpcDProjection dProjection,
                 out P12DNpcFProjection fProjection,
-                out _, stagingAttempt)
+                out _, stagingAttempt, coreNpcOwnerSources, continuationSaveOperation)
             || dProjection == null || fProjection == null
             || dProjection.Rows.Count != sourceRuntime.NpcRuntimes.Count
             || fProjection.Rows.Count != sourceRuntime.NpcRuntimes.Count)

@@ -4509,6 +4509,34 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(epochAfter, Is.GreaterThan(epochBefore));
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalCensusFailure), Is.True,
             finalCensusFailure.ToString());
+
+        DailyV1Application application = ReadPrivateField<DailyV1Application>(host, "dailyV1Application");
+        DailyV1ActiveRuntimeSession coreSession = session.CoreRuntimeSession;
+        Assert.That(application, Is.Not.Null);
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            coreSession, out DailyV1P12GContinuationSaveOperation operation,
+            out DailyCaptureEligibilityFailure beginFailure), Is.True, beginFailure.ToString());
+        using (operation)
+        {
+            Assert.That(operation.CoreNpcOwnerSources, Is.Null,
+                "A partial Core graph must not bind a partial D/F vector for a mixed roster.");
+            DailyCaptureEligibilityToken token = operation.SourceWitness.Token;
+            Assert.That(P12DNpcRootOwnerSnapshot.TryCapture(
+                runtime, token, new object(), operation.SourceWitness.TokenOwnerSections,
+                out P12DNpcDProjection dProjection, out P12DNpcFProjection fProjection,
+                out P12DNpcRootOwnerSnapshotFailure captureFailure,
+                coreBoundNpcOwnerSources: operation.CoreNpcOwnerSources,
+                continuationSaveOperation: operation), Is.True, captureFailure.ToString());
+            Assert.That(dProjection.Rows, Has.Count.EqualTo(runtime.NpcRuntimes.Count));
+            Assert.That(fProjection.Rows, Has.Count.EqualTo(runtime.NpcRuntimes.Count));
+            Assert.That(dProjection.Rows.Single(row => row.RuntimeId == unselected.RuntimeId), Is.Not.Null,
+                "The established compatibility path must capture the unselected member in the same whole roster.");
+            Assert.That(operation.TryRevalidate(out DailyCaptureEligibilityFailure revalidationFailure), Is.True,
+                revalidationFailure.ToString());
+            Assert.That(application.ActiveSession, Is.SameAs(coreSession));
+            Assert.That(application.ActiveOperationCount, Is.EqualTo(1));
+        }
+        Assert.That(application.ActiveOperationCount, Is.Zero);
     }
 
     [Test]
@@ -12457,6 +12485,67 @@ public sealed class SimulationRuntimeAdmissionTests
                     GetCompletedDailyToken(controlSession.Runtime))));
             Assert.That(sourceSession.CoreRuntimeSession.GenesisComposition, Is.Not.Null,
                 "The original Core session must retain its genesis roots after the completed advance.");
+            DailyV1Application sourceApplication =
+                ReadPrivateField<DailyV1Application>(source, "dailyV1Application");
+            DailyV1ActiveRuntimeSession sourceCoreSession = sourceSession.CoreRuntimeSession;
+            Assert.That(sourceApplication.TryBeginContinuationSaveOperation(
+                sourceCoreSession, out DailyV1P12GContinuationSaveOperation captureOperation,
+                out DailyCaptureEligibilityFailure captureBeginFailure), Is.True,
+                captureBeginFailure.ToString());
+            using (captureOperation)
+            {
+                DailyV1P12GCoreBoundNpcOwnerSources coreNpcSources =
+                    captureOperation.CoreNpcOwnerSources;
+                Assert.That(coreNpcSources, Is.Not.Null);
+                Assert.That(coreNpcSources.Owners.Count, Is.EqualTo(sourceSession.Runtime.NpcRuntimes.Count));
+                Assert.That(P12DNpcRootOwnerSnapshot.TryCapture(
+                    sourceSession.Runtime,
+                    captureOperation.SourceWitness.Token,
+                    new object(),
+                    captureOperation.SourceWitness.TokenOwnerSections,
+                    out P12DNpcDProjection coreBackedD,
+                    out P12DNpcFProjection coreBackedF,
+                    out P12DNpcRootOwnerSnapshotFailure coreCaptureFailure,
+                    coreBoundNpcOwnerSources: coreNpcSources,
+                    continuationSaveOperation: captureOperation), Is.True,
+                    coreCaptureFailure.ToString());
+                for (int index = 0; index < coreNpcSources.Owners.Count; index++)
+                {
+                    DailyV1NpcRuntimeOwners exactCoreOwner = coreNpcSources.Owners[index];
+                    NpcRuntime compatibilityProjection = sourceSession.Runtime.NpcRuntimes[index];
+                    Assert.That(compatibilityProjection.SelectedRuntimeOwners, Is.SameAs(exactCoreOwner));
+                    Assert.That(coreBackedD.Rows[index], Is.SameAs(coreNpcSources.DRows[index]),
+                        "The staged D row must be the immutable operation-owned Core row, not a Unity reconstruction.");
+                    Assert.That(coreBackedF.Rows[index], Is.SameAs(coreNpcSources.FRows[index]),
+                        "The staged F row must be the immutable operation-owned Core row, not a Unity reconstruction.");
+                    Assert.That(coreBackedD.Rows[index].RuntimeId, Is.EqualTo(exactCoreOwner.RuntimeId));
+                    Assert.That(coreBackedD.Rows[index].InventoryRevision,
+                        Is.EqualTo(exactCoreOwner.Inventory.Revision));
+                    Assert.That(coreBackedD.Rows[index].MoneyRevision,
+                        Is.EqualTo(exactCoreOwner.MoneyAccount.Revision));
+                    Assert.That(coreBackedF.Rows[index].TravelStateRevision,
+                        Is.EqualTo(exactCoreOwner.Travel.Revision));
+                    Assert.That(coreBackedF.Rows[index].TravelPlan.Revision,
+                        Is.EqualTo(exactCoreOwner.TravelPlan.Revision));
+                    Assert.That(coreBackedF.Rows[index].MerchantPlan.Revision,
+                        Is.EqualTo(exactCoreOwner.MerchantTradePlan.Revision));
+                    DailyV1NpcActionPayloadOwner payload = exactCoreOwner.ActionSlot.CurrentPayload;
+                    Assert.That(coreBackedF.Rows[index].Action?.ActionDefinitionId,
+                        Is.EqualTo(payload?.Action.DefinitionId));
+                    Assert.That(coreBackedF.Rows[index].Action?.TargetNpcRuntimeId,
+                        Is.EqualTo(payload?.TargetNpcRuntimeId));
+                    Assert.That(coreBackedF.Rows[index].Action?.TargetCityRuntimeId,
+                        Is.EqualTo(payload?.TargetCityRuntimeId));
+                    Assert.That(coreBackedF.Rows[index].Action?.TargetItemDefinitionId,
+                        Is.EqualTo(payload?.TargetItem?.DefinitionId));
+                    Assert.That(coreBackedF.Rows[index].Action?.Amount,
+                        Is.EqualTo(payload?.Amount));
+                    Assert.That(coreBackedF.Rows[index].Action?.OriginDecisionId,
+                        Is.EqualTo(payload?.OriginDecisionId));
+                    Assert.That(coreBackedF.Rows[index].Action?.StableOccurrenceKey,
+                        Is.EqualTo(payload?.StableOccurrenceKey));
+                }
+            }
             Assert.That(source.TrySaveDailyV1ContinuationToPathForTest(storageRoot, out string saveCode), Is.True, saveCode);
             Assert.That(saveCode, Is.EqualTo(P12AResultCode.Saved.ToString()));
 

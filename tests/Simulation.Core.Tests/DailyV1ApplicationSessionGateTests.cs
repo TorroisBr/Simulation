@@ -461,7 +461,99 @@ public sealed class DailyV1ApplicationSessionGateTests
             graph.PersonStore.GetMaterializationBindingCensusWitness());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new GenealogyCensusProvider(graph.GenealogyStore).GetCurrentCensus());
-        return ReplaceCityOwnerSectionVector(session, sections);
+        sections = ReplaceCityOwnerSectionVector(session, sections);
+        return ReplaceSelectedNpcOwnerSectionVector(session, sections);
+    }
+
+    private static OwnerSectionCensusSnapshot[] ReplaceSelectedNpcOwnerSectionVector(
+        DailyV1ActiveRuntimeSession session,
+        OwnerSectionCensusSnapshot[] existing)
+    {
+        List<OwnerSectionCensusSnapshot> sections = new List<OwnerSectionCensusSnapshot>();
+        foreach (OwnerSectionCensusSnapshot section in existing ?? Array.Empty<OwnerSectionCensusSnapshot>())
+        {
+            bool remove = false;
+            foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
+                if (section.SectionId.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    remove = true;
+                    break;
+                }
+            remove |= section.SectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix, StringComparison.Ordinal)
+                || section.SectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.PersonLifeResidencePrefix, StringComparison.Ordinal);
+            if (!remove) sections.Add(section);
+        }
+
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        foreach (DailyV1NpcRuntimeOwners owner in graph.Npcs)
+        {
+            Assert.That(owner, Is.Not.Null);
+            Assert.That(owner.Inventory.TryGetCensusCardinality(out int inventoryCardinality), Is.True);
+            Assert.That(owner.CommercialKnowledge.TryReadCensus(
+                out int markets, out int liquidity, out int receipts, out long commercialRevision), Is.True);
+            object actorLifecycleAndResidenceIdentity = owner;
+            Add(0, owner.ExplorableSiteKnowledge, owner.ExplorableSiteKnowledge.Observations.Count,
+                owner.ExplorableSiteKnowledge.Revision);
+            Add(1, owner.LocalTopologyKnowledgeEmptyOwner,
+                owner.LocalTopologyKnowledgeEmptyOwner.PlaceObservationCount,
+                owner.LocalTopologyKnowledgeEmptyOwner.Revision);
+            Add(2, owner.LocalTopologyKnowledgeEmptyOwner,
+                owner.LocalTopologyKnowledgeEmptyOwner.ConnectionObservationCount,
+                owner.LocalTopologyKnowledgeEmptyOwner.Revision);
+            Add(3, owner.AdventureSiteIntelKnowledge,
+                owner.AdventureSiteIntelKnowledge.OppositionObservations.Count,
+                owner.AdventureSiteIntelKnowledge.Revision);
+            Add(4, owner.AdventureSiteIntelKnowledge,
+                owner.AdventureSiteIntelKnowledge.NotableItemObservations.Count,
+                owner.AdventureSiteIntelKnowledge.Revision);
+            Add(5, owner.AdventureSiteIntelKnowledge,
+                owner.AdventureSiteIntelKnowledge.CommonResourceObservations.Count,
+                owner.AdventureSiteIntelKnowledge.Revision);
+            Add(6, owner.AdventureSiteIntelKnowledge,
+                owner.AdventureSiteIntelKnowledge.AccessObservations.Count,
+                owner.AdventureSiteIntelKnowledge.Revision);
+            Add(7, owner.CommercialKnowledge, markets, commercialRevision);
+            Add(8, owner.CommercialKnowledge, liquidity, commercialRevision);
+            Add(9, owner.CommercialKnowledge, receipts, commercialRevision);
+            Add(10, owner.SpatialKnowledge,
+                owner.SpatialKnowledge.KnownLocationCount, owner.SpatialKnowledge.Revision);
+            Add(11, owner.SpatialKnowledge,
+                owner.SpatialKnowledge.KnownRouteCount, owner.SpatialKnowledge.Revision);
+            Add(12, actorLifecycleAndResidenceIdentity, 1, owner.Travel.Revision);
+            Add(13, owner.Inventory, inventoryCardinality, owner.Inventory.Revision);
+            Add(14, owner.MoneyAccount, 1, owner.MoneyAccount.Revision);
+            Add(15, owner.MerchantTradePlan, 1, owner.MerchantTradePlan.Revision);
+            Add(16, owner.TravelPlan, 1, owner.TravelPlan.Revision);
+            Add(17, new object(), 0, 0L);
+            Add(18, new object(), 0, 0L);
+            Add(19, actorLifecycleAndResidenceIdentity, 1, owner.CrimeJusticeRevision);
+            Add(20, actorLifecycleAndResidenceIdentity,
+                owner.ActionSlot.CurrentAction == null ? 0 : 1, owner.ActionSlot.Revision);
+            Add(21, actorLifecycleAndResidenceIdentity, 1, owner.Lifecycle.LifeStateRevision);
+
+            if (graph.PersonStore.TryGetByMaterializedNpcRuntimeId(owner.RuntimeId,
+                    out PersonRuntime person))
+                sections.Add(new OwnerSectionCensusSnapshot(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(person.PersonId),
+                    DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                    OwnerSectionRole.Required, person, 1,
+                    PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person)));
+            else
+                sections.Add(new OwnerSectionCensusSnapshot(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(owner.RuntimeId),
+                    DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                    OwnerSectionRole.Required, actorLifecycleAndResidenceIdentity, 1,
+                    owner.Residence.Revision));
+
+            void Add(int family, object identity, int cardinality, long revision) =>
+                sections.Add(new OwnerSectionCensusSnapshot(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(family, owner.RuntimeId),
+                    DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                    OwnerSectionRole.Required, identity, cardinality, revision));
+        }
+        return sections.ToArray();
     }
 
     private static OwnerSectionCensusSnapshot[] ReplaceCityOwnerSectionVector(
@@ -857,6 +949,85 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(operation.TryRevalidate(out DailyCaptureEligibilityFailure revalidationFailure), Is.True);
         Assert.That(revalidationFailure, Is.EqualTo(DailyCaptureEligibilityFailure.None));
         operation.Dispose();
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void CoreBoundNpcRowsAreBoundInGraphOrderAndRejectAStaleCensus()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCompleteOwnerSectionVector(session);
+        InstallCompletedBoundaryToken(session, boundary, sections);
+
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation,
+            out DailyCaptureEligibilityFailure beginFailure), Is.True, beginFailure.ToString());
+        try
+        {
+            DailyV1P12GCoreBoundNpcOwnerSources sources = operation.CoreNpcOwnerSources;
+            Assert.That(sources, Is.Not.Null,
+                "The complete admitted roster must bind operation-owned Core D/F rows.");
+            Assert.That(sources.IsFor(operation), Is.True);
+            Assert.That(sources.Owners.Count, Is.EqualTo(session.OwnerGraph.Npcs.Count));
+            Assert.That(sources.DRows.Count, Is.EqualTo(session.OwnerGraph.Npcs.Count));
+            Assert.That(sources.FRows.Count, Is.EqualTo(session.OwnerGraph.Npcs.Count));
+            for (int index = 0; index < session.OwnerGraph.Npcs.Count; index++)
+            {
+                DailyV1NpcRuntimeOwners owner = session.OwnerGraph.Npcs[index];
+                Assert.That(sources.Owners[index], Is.SameAs(owner));
+                Assert.That(sources.DRows[index].RuntimeId, Is.EqualTo(owner.RuntimeId));
+                Assert.That(sources.FRows[index].RuntimeId, Is.EqualTo(owner.RuntimeId));
+                Assert.That(sources.DRows[index].InventoryRevision,
+                    Is.EqualTo(owner.Inventory.Revision));
+                Assert.That(sources.DRows[index].MoneyRevision,
+                    Is.EqualTo(owner.MoneyAccount.Revision));
+                Assert.That(sources.DRows[index].LifeStateRevision,
+                    Is.EqualTo(owner.Lifecycle.LifeStateRevision));
+                Assert.That(sources.DRows[index].CrimeJusticeRevision,
+                    Is.EqualTo(owner.CrimeJusticeRevision));
+                Assert.That(sources.DRows[index].CurrentActionRevision,
+                    Is.EqualTo(owner.ActionSlot.Revision));
+                Assert.That(sources.FRows[index].TravelStateRevision,
+                    Is.EqualTo(owner.Travel.Revision));
+                Assert.That(sources.FRows[index].TravelPlan.Revision,
+                    Is.EqualTo(owner.TravelPlan.Revision));
+                Assert.That(sources.FRows[index].MerchantPlan.Revision,
+                    Is.EqualTo(owner.MerchantTradePlan.Revision));
+                Assert.That(sources.FRows[index].SpatialKnowledgeRevision,
+                    Is.EqualTo(owner.SpatialKnowledge.Revision));
+                Assert.That(sources.FRows[index].CommercialKnowledgeRevision,
+                    Is.EqualTo(owner.CommercialKnowledge.Revision));
+            }
+
+            int npcInventorySection = Array.FindIndex(sections, section =>
+                string.Equals(section.SectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(
+                        13, session.OwnerGraph.Npcs[0].RuntimeId), StringComparison.Ordinal));
+            Assert.That(npcInventorySection, Is.GreaterThanOrEqualTo(0));
+            OwnerSectionCensusSnapshot original = sections[npcInventorySection];
+            sections[npcInventorySection] = new OwnerSectionCensusSnapshot(
+                original.SectionId, original.SchemaVersion, original.Role,
+                original.OwnerInstanceIdentity, original.Cardinality, original.Revision + 1L);
+            boundary.SetAdmissionEvidence(sections, 0L);
+
+            Assert.That(DailyV1P12GCoreBoundNpcOwnerSources.TryCapture(
+                operation, out DailyV1P12GCoreBoundNpcOwnerSources staleSources,
+                out DailyV1P12GCoreBoundOwnerSourceCaptureFailure staleFailure,
+                out _), Is.False);
+            Assert.That(staleSources, Is.Null);
+            Assert.That(staleFailure,
+                Is.EqualTo(DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary));
+            Assert.That(operation.CoreNpcOwnerSources, Is.SameAs(sources),
+                "A stale recapture must not replace the operation's original immutable rows.");
+            Assert.That(application.ActiveSession, Is.SameAs(session));
+            Assert.That(application.ActiveOperationCount, Is.EqualTo(1));
+        }
+        finally
+        {
+            operation.Dispose();
+        }
         Assert.That(application.ActiveOperationCount, Is.Zero);
     }
 

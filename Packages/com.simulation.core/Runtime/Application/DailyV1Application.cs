@@ -667,6 +667,33 @@ internal sealed class DailyV1Application
                         ? DailyCaptureEligibilityFailure.StaleToken
                         : DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
                 }
+
+                if (witnessCaptured)
+                {
+                    bool coreNpcSourcesCaptured =
+                        DailyV1P12GCoreBoundNpcOwnerSources.TryCapture(
+                            candidateOperation,
+                            out DailyV1P12GCoreBoundNpcOwnerSources npcOwnerSources,
+                            out DailyV1P12GCoreBoundOwnerSourceCaptureFailure npcCaptureFailure,
+                            out _);
+                    if (coreNpcSourcesCaptured
+                        && (npcOwnerSources == null
+                            || !candidateOperation.TryBindCoreNpcOwnerSources(npcOwnerSources)))
+                    {
+                        witnessCaptured = false;
+                        failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                    }
+                    else if (!coreNpcSourcesCaptured
+                        && npcCaptureFailure !=
+                            DailyV1P12GCoreBoundOwnerSourceCaptureFailure.IncompleteSelectedNpcRoster)
+                    {
+                        witnessCaptured = false;
+                        failure = npcCaptureFailure ==
+                            DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary
+                            ? DailyCaptureEligibilityFailure.StaleToken
+                            : DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                    }
+                }
             }
         }
         catch (Exception captureException)
