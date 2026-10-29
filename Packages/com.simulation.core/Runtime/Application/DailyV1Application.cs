@@ -1128,6 +1128,55 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
+    /// Keeps the restored image-to-target owner-vector decision inside the
+    /// application that owns the exact initial or replacement staging
+    /// reservation. The Unity runtime supplies only its captured census.
+    /// </summary>
+    internal bool TryValidateRestoredImageOwnerVector(
+        P12ADailyV1Census imageCensus,
+        IReadOnlyList<OwnerSectionCensusSnapshot> targetOwnerSections,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out P12GDailyV1OwnerVectorFailure failure,
+        out string diagnostic)
+    {
+        if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+        {
+            failure = P12GDailyV1OwnerVectorFailure.OwnerVectorChanged;
+            diagnostic = "The application no longer holds the exact restored-continuation staging authority.";
+            return false;
+        }
+
+        return DailyV1RestoredOwnerVectorContract.TryValidateRestoredImageCandidate(
+            imageCensus, targetOwnerSections, out failure, out diagnostic);
+    }
+
+    /// <summary>
+    /// Confirms that owner identities, census values, and the shared mutation
+    /// epoch did not change after detached-graph validation and guard binding.
+    /// </summary>
+    internal bool TryValidateRestoredTargetOwnerVectorUnchanged(
+        IReadOnlyList<OwnerSectionCensusSnapshot> validatedTargetSections,
+        long validatedMutationEpoch,
+        IReadOnlyList<OwnerSectionCensusSnapshot> currentTargetSections,
+        long currentMutationEpoch,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out P12GDailyV1OwnerVectorFailure failure,
+        out string diagnostic)
+    {
+        if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+        {
+            failure = P12GDailyV1OwnerVectorFailure.OwnerVectorChanged;
+            diagnostic = "The application no longer holds the exact restored-continuation staging authority.";
+            return false;
+        }
+
+        return DailyV1RestoredOwnerVectorContract.TryMatchCurrentTargetSnapshot(
+            validatedTargetSections, validatedMutationEpoch,
+            currentTargetSections, currentMutationEpoch, out failure, out diagnostic);
+    }
+    /// <summary>
     /// Stages the detached P12-C roots for an image through this application.
     /// Replacement staging is bound to the exact published session and its
     /// owner-thread reservation; initial restoration is accepted only by an

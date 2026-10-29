@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using NUnit.Framework;
 
@@ -251,5 +252,102 @@ public sealed class DailyV1ApplicationHostTests
             if (matches) return true;
         }
         return false;
+    }
+}
+
+public sealed class DailyV1RestoredImageOwnerVectorCoreTests
+{
+    [Test]
+    public void ImageTargetVectorAcceptsTheExactDailyProfileWithNewProcessLocalOwners()
+    {
+        OwnerSectionCensusSnapshot[] imageSource = CreateProfileRows(false);
+        OwnerSectionCensusSnapshot[] restoredTarget = CreateProfileRows(false);
+        Assert.That(P12ADailyV1Census.TryCreate(imageSource,
+            out P12ADailyV1Census imageCensus, out P12AResult imageResult),
+            Is.True, imageResult?.SectionCode ?? imageResult?.Code.ToString());
+
+        Assert.That(DailyV1RestoredOwnerVectorContract.TryValidateRestoredImageCandidate(
+            imageCensus, restoredTarget, out P12GDailyV1OwnerVectorFailure failure,
+            out string diagnostic), Is.True, diagnostic ?? failure.ToString());
+        Assert.That(failure, Is.EqualTo(P12GDailyV1OwnerVectorFailure.None));
+    }
+
+    [Test]
+    public void ImageTargetVectorRejectsChangedOwnerRevisionAndAliasStructure()
+    {
+        OwnerSectionCensusSnapshot[] imageSource = CreateProfileRows(false);
+        Assert.That(P12ADailyV1Census.TryCreate(imageSource,
+            out P12ADailyV1Census imageCensus, out P12AResult imageResult),
+            Is.True, imageResult?.SectionCode ?? imageResult?.Code.ToString());
+
+        OwnerSectionCensusSnapshot[] changedRevision = CreateProfileRows(false);
+        int inventoryIndex = Find(changedRevision,
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "npc-one");
+        OwnerSectionCensusSnapshot inventory = changedRevision[inventoryIndex];
+        changedRevision[inventoryIndex] = new OwnerSectionCensusSnapshot(
+            inventory.SectionId, inventory.SchemaVersion, inventory.Role,
+            inventory.OwnerInstanceIdentity, inventory.Cardinality, inventory.Revision + 1L);
+        Assert.That(DailyV1RestoredOwnerVectorContract.TryValidateRestoredImageCandidate(
+            imageCensus, changedRevision, out P12GDailyV1OwnerVectorFailure revisionFailure,
+            out _), Is.False);
+        Assert.That(revisionFailure, Is.EqualTo(P12GDailyV1OwnerVectorFailure.OwnerAliasMismatch));
+
+        OwnerSectionCensusSnapshot[] changedCardinality = CreateProfileRows(false);
+        inventoryIndex = Find(changedCardinality,
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "npc-one");
+        inventory = changedCardinality[inventoryIndex];
+        changedCardinality[inventoryIndex] = new OwnerSectionCensusSnapshot(
+            inventory.SectionId, inventory.SchemaVersion, inventory.Role,
+            inventory.OwnerInstanceIdentity, inventory.Cardinality + 1, inventory.Revision);
+        Assert.That(DailyV1RestoredOwnerVectorContract.TryValidateRestoredImageCandidate(
+            imageCensus, changedCardinality, out P12GDailyV1OwnerVectorFailure cardinalityFailure,
+            out _), Is.False);
+        Assert.That(cardinalityFailure, Is.EqualTo(P12GDailyV1OwnerVectorFailure.OwnerAliasMismatch));
+
+        OwnerSectionCensusSnapshot[] splitAliases = CreateProfileRows(true);
+        Assert.That(DailyV1RestoredOwnerVectorContract.TryValidateRestoredImageCandidate(
+            imageCensus, splitAliases, out P12GDailyV1OwnerVectorFailure aliasFailure,
+            out _), Is.False);
+        Assert.That(aliasFailure, Is.EqualTo(P12GDailyV1OwnerVectorFailure.ContractMismatch));
+    }
+
+    private static OwnerSectionCensusSnapshot[] CreateProfileRows(bool splitFixedAlias)
+    {
+        List<OwnerSectionCensusSnapshot> rows = new List<OwnerSectionCensusSnapshot>();
+        Dictionary<string, object> ownersByAlias = new Dictionary<string, object>(StringComparer.Ordinal);
+        foreach (string id in P12ADailyV1Census.FixedRequiredSectionIds)
+            Add(id, OwnerSectionRole.Required);
+        foreach (string id in P12ADailyV1Census.FixedEmptySectionIds)
+            Add(id, OwnerSectionRole.ExplicitlyEmpty);
+        foreach (string prefix in P12ADailyV1Census.NpcSectionPrefixes)
+            Add(prefix + "npc-one", OwnerSectionRole.Required);
+        const string cityKey = "city-one";
+        for (int index = 0; index < P12ADailyV1Census.CitySectionPrefixes.Count; index++)
+        {
+            string prefix = P12ADailyV1Census.CitySectionPrefixes[index];
+            string key = index == 0 ? cityKey : cityKey.Length.ToString(
+                System.Globalization.CultureInfo.InvariantCulture) + ":" + cityKey;
+            Add(prefix + key, OwnerSectionRole.Required);
+        }
+        return rows.ToArray();
+
+        void Add(string id, OwnerSectionRole role)
+        {
+            string alias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(id);
+            if (alias != null && !ownersByAlias.TryGetValue(alias, out _))
+                ownersByAlias.Add(alias, new object());
+            object owner = alias == null ? new object() : ownersByAlias[alias];
+            if (splitFixedAlias && id == "p12c.runtime-id-allocator.decisions")
+                owner = new object();
+            rows.Add(new OwnerSectionCensusSnapshot(id, 1, role, owner, 0, 0L));
+        }
+    }
+
+    private static int Find(IReadOnlyList<OwnerSectionCensusSnapshot> rows, string id)
+    {
+        for (int index = 0; index < rows.Count; index++)
+            if (string.Equals(rows[index].SectionId, id, StringComparison.Ordinal)) return index;
+        Assert.Fail("Section was not in the canonical Daily-v1 profile: " + id);
+        return -1;
     }
 }

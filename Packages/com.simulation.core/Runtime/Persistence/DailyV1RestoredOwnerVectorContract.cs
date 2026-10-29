@@ -133,6 +133,51 @@ internal static class DailyV1RestoredOwnerVectorContract
         return true;
     }
 
+    /// <summary>
+    /// Compares a detached image's logical census with a newly staged target.
+    /// Image alias labels are compared as logical facts; process-local owner
+    /// references are validated only on the target graph.
+    /// </summary>
+    internal static bool TryValidateRestoredImageCandidate(
+        P12ADailyV1Census imageCensus,
+        IReadOnlyList<OwnerSectionCensusSnapshot> targetOwnerSections,
+        out P12GDailyV1OwnerVectorFailure failure,
+        out string diagnostic)
+    {
+        failure = P12GDailyV1OwnerVectorFailure.None;
+        diagnostic = null;
+        if (imageCensus == null)
+            return Fail(P12GDailyV1OwnerVectorFailure.MissingSourceVector,
+                "The detached image census is required.", out failure, out diagnostic);
+        if (targetOwnerSections == null)
+            return Fail(P12GDailyV1OwnerVectorFailure.MissingTargetVector,
+                "The private target owner vector is required.", out failure, out diagnostic);
+
+        if (!P12ADailyV1Census.TryCreate(targetOwnerSections,
+                out P12ADailyV1Census targetCensus, out P12AResult censusResult)
+            || targetCensus == null)
+            return Fail(P12GDailyV1OwnerVectorFailure.ContractMismatch,
+                "The target candidate did not produce a valid Daily-v1 census: "
+                    + (censusResult?.SectionCode ?? censusResult?.Code.ToString() ?? "OwnerGraphRejected") + ".",
+                out failure, out diagnostic);
+
+        if (!imageCensus.LogicallyEquals(targetCensus))
+            return Fail(P12GDailyV1OwnerVectorFailure.OwnerAliasMismatch,
+                "The target candidate does not preserve the detached image's exact section, role, cardinality, revision, and logical alias facts.",
+                out failure, out diagnostic);
+
+        foreach (OwnerSectionCensusSnapshot target in targetOwnerSections)
+        {
+            if (target?.OwnerInstanceIdentity == null
+                || ((target.Role == OwnerSectionRole.ExplicitlyEmpty || target.Role == OwnerSectionRole.Excluded)
+                    && target.Cardinality != 0))
+                return Fail(P12GDailyV1OwnerVectorFailure.InvalidEmptyDisposition,
+                    "The private target has a missing owner identity or populated empty/excluded section.",
+                    out failure, out diagnostic);
+        }
+
+        return true;
+    }
     internal static bool TryMatchCurrentTargetSnapshot(
         IReadOnlyList<OwnerSectionCensusSnapshot> validatedTargetSections,
         long validatedMutationEpoch,

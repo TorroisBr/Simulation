@@ -264,11 +264,23 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorCaptured);
 
+            bool imageOwnerVectorValidated;
+            if (application != null)
+            {
+                imageOwnerVectorValidated = application.TryValidateRestoredImageOwnerVector(
+                    imageCensus, targetSections, replacementOperation?.ExpectedSession,
+                    replacementOperation, out _, out diagnostic);
+            }
+            else
+            {
+                imageOwnerVectorValidated = P12GDailyV1OwnerVector.TryValidateRestoredImageCandidate(
+                    imageCensus, targetSections, out _, out diagnostic);
+            }
+
             if (!TryValidateDailyV1ExpeditionExactZero(candidate.Composition, targetSections,
                     out diagnostic)
                 || !TryValidateAllocatorHighWater(candidate, out diagnostic)
-                || !P12GDailyV1OwnerVector.TryValidateRestoredImageCandidate(
-                    imageCensus, targetSections, out _, out diagnostic)
+                || !imageOwnerVectorValidated
                 || !TryValidateTargetSentinels(candidate.Composition, targetSections, out diagnostic)
                 || !TryValidatePoliticalKnowledgeBindings(
                     stagedE.UnresolvedPoliticalKnowledgeBindings, targetRuntime, out diagnostic))
@@ -307,12 +319,18 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.CandidateGuardBound);
 
-            if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedSections,
-                    out long recapturedEpoch, out censusFailure)
-                || !P12GDailyV1OwnerVector.TryMatchCurrentTargetSnapshot(
-                    targetSections, targetEpoch, recapturedSections, recapturedEpoch,
-                    out _, out diagnostic))
+            bool targetOwnerVectorRecaptured = targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedSections,
+                out long recapturedEpoch, out censusFailure);
+            bool targetOwnerVectorStillCurrent = targetOwnerVectorRecaptured
+                && (application != null
+                    ? application.TryValidateRestoredTargetOwnerVectorUnchanged(
+                        targetSections, targetEpoch, recapturedSections, recapturedEpoch,
+                        replacementOperation?.ExpectedSession, replacementOperation, out _, out diagnostic)
+                    : P12GDailyV1OwnerVector.TryMatchCurrentTargetSnapshot(
+                        targetSections, targetEpoch, recapturedSections, recapturedEpoch,
+                        out _, out diagnostic));
+            if (!targetOwnerVectorStillCurrent)
             {
                 failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
                 if (string.IsNullOrWhiteSpace(diagnostic))
