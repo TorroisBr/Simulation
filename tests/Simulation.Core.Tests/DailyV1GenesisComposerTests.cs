@@ -274,6 +274,40 @@ public sealed class DailyV1GenesisComposerTests
 
         Assert.That(application.TryCreateRestoredActiveRuntimeSession(
             definitions,
+            source.P9ManifestSnapshot,
+            source.EffectiveConfiguration,
+            calendarDefinition,
+            restoredTime,
+            restoredAdmission,
+            source.WorldId,
+            source.OwnerGraph.Cities,
+            source.OwnerGraph.Npcs,
+            source.OwnerGraph.SpatialNetwork,
+            source.OwnerGraph.JusticeRecordsOwner,
+            source.TravelPartyStore,
+            source.OwnerGraph.RuntimeIdentityIndex,
+            source.PersonStore,
+            directives,
+            source.Expeditions,
+            source.SpatialAuthority,
+            source.RuntimeIdAllocator,
+            source.RandomSource,
+            source.RecordSequence,
+            null,
+            source.ActorChoiceStore,
+            0L,
+            null,
+            out DailyV1ActiveRuntimeSession missingDecisionStoreCandidate,
+            out SimulationCalendar missingDecisionStoreCalendar,
+            out string missingDecisionStoreDiagnostic), Is.False);
+        Assert.That(missingDecisionStoreCandidate, Is.Null);
+        Assert.That(missingDecisionStoreCalendar, Is.Null);
+        Assert.That(missingDecisionStoreDiagnostic, Does.Contain("decision-store roots"));
+        Assert.That(application.ActiveSession, Is.Null,
+            "A restored composition with no decision-store owner must not publish a session.");
+
+        Assert.That(application.TryCreateRestoredActiveRuntimeSession(
+            definitions,
             null,
             calendarDefinition,
             restoredTime,

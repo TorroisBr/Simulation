@@ -1010,6 +1010,20 @@ public sealed class DailyV1ApplicationSessionGateTests
             23L,
             ownerSections,
             out _), Is.True);
+
+        FieldInfo decisionStoreField = typeof(DailyV1ExecutionBoundaryState).GetField(
+            "selectedDecisionStore", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(decisionStoreField, Is.Not.Null);
+        NpcDecisionStore exactDecisionStore = restoredState.SelectedDecisionStore;
+        decisionStoreField.SetValue(restoredState, null);
+        Assert.That(application.TryCreateRestoredActiveRuntimeSession(
+            restoredState, definitions, 0L, null,
+            out DailyV1ActiveRuntimeSession missingDecisionStoreCandidate,
+            out diagnostic), Is.False);
+        Assert.That(missingDecisionStoreCandidate, Is.Null);
+        Assert.That(diagnostic, Does.Contain("decision-store roots"));
+        decisionStoreField.SetValue(restoredState, exactDecisionStore);
+
         Assert.That(application.TryCreateRestoredActiveRuntimeSession(
             restoredState, definitions, 0L, null,
             out DailyV1ActiveRuntimeSession candidate, out diagnostic), Is.True, diagnostic);

@@ -245,9 +245,10 @@ internal sealed class DailyV1Application
         if (executionBoundaryState == null
             || executionBoundaryState.SelectedRuntimeIdAllocator == null
             || executionBoundaryState.SimulationTime == null
-            || executionBoundaryState.SelectedRecordSequence == null)
+            || executionBoundaryState.SelectedRecordSequence == null
+            || executionBoundaryState.SelectedDecisionStore == null)
         {
-            diagnostic = "The restored Core session requires its exact execution identity roots.";
+            diagnostic = "The restored Core session requires its exact execution identity and decision-store roots.";
             return false;
         }
 
@@ -427,9 +428,10 @@ internal sealed class DailyV1Application
         candidate = null;
         calendar = null;
         diagnostic = null;
-        if (runtimeIdAllocator == null || simulationTime == null || recordSequence == null)
+        if (runtimeIdAllocator == null || simulationTime == null
+            || recordSequence == null || decisionStore == null)
         {
-            diagnostic = "Restored Core session composition requires its exact runtime identity roots.";
+            diagnostic = "Restored Core session composition requires its exact runtime identity and decision-store roots.";
             return false;
         }
 

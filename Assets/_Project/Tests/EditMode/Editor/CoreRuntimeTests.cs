@@ -79,6 +79,40 @@ public sealed class CoreRuntimeTests
     }
 
     [Test]
+    public void DecisionOccurrenceReceiptFailureUsesDefaultRecorderLoggerWhenOmitted()
+    {
+        RuntimeIdAllocator runtimeIds = new RuntimeIdAllocator();
+        SimulationTime simulationTime = new SimulationTime();
+        SimulationRecordSequence sequence = new SimulationRecordSequence();
+        FieldInfo nextSequenceField = typeof(SimulationRecordSequence).GetField(
+            "nextSequence", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(nextSequenceField, Is.Not.Null);
+        nextSequenceField.SetValue(sequence, long.MaxValue);
+        NpcDecisionStore decisions = new NpcDecisionStore();
+        NpcDecisionRecorder recorder = new NpcDecisionRecorder(
+            runtimeIds, simulationTime, sequence, decisions);
+
+        LogAssert.Expect(LogType.Error,
+            "Cannot allocate NPC decision record identity: Simulation record sequence is exhausted.");
+        Assert.That(recorder.TryRecordOccurrenceOnce(
+            "default-logger-operation",
+            "default-logger-fingerprint",
+            "npc-default-logger",
+            NpcDecisionType.Action,
+            NpcDecisionOrigin.Autonomous,
+            "action-default-logger",
+            null,
+            null,
+            out NpcDecisionRecord decision), Is.False);
+
+        Assert.That(decision, Is.Null);
+        OwnerSectionCensusWitness receipts = recorder.GetOccurrenceReceiptCensus();
+        Assert.That(receipts.Cardinality, Is.Zero);
+        Assert.That(receipts.Revision, Is.Zero);
+        Assert.That(sequence.CaptureSnapshot().NextSequence, Is.EqualTo(long.MaxValue));
+    }
+
+    [Test]
     public void FailedRecordConstructionStillAdvancesTheConsumedSequenceRevision()
     {
         RecordFixture fixture = SimulationTestFactory.CreateRecordFixture();

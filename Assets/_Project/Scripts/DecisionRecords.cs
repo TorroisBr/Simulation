@@ -89,18 +89,19 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
         SimulationRecordSequence recordSequence,
         NpcDecisionStore decisionStore,
         SimulationLogger logger = null)
-        : this(DailyV1DecisionOccurrenceReceiptAuthority.Create(
-            idAllocator, simulationTime, recordSequence, decisionStore, logger), logger)
     {
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
+        receiptAuthority = DailyV1DecisionOccurrenceReceiptAuthority.Create(
+            idAllocator, simulationTime, recordSequence, decisionStore, this.logger);
     }
 
     internal NpcDecisionRecorder(
         DailyV1DecisionOccurrenceReceiptAuthority receiptAuthority,
-        SimulationLogger logger = null)
+        SimulationLogger logger)
     {
         this.receiptAuthority = receiptAuthority
             ?? throw new ArgumentNullException(nameof(receiptAuthority));
-        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
     /// <summary>
     /// Reports the exact live cardinality and revision of the recorder-owned
