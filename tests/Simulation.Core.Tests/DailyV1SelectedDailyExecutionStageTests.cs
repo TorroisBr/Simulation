@@ -1165,7 +1165,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 DailyV1SelectedTravelTransitionPlan plan, bool arriving, object projectionReceipt) =>
                 throw new AssertionException("No travel transition is expected in this fixture.");
             public bool PublishTravelPartyArrival(TravelPartyRuntime party) => false;
-            public void PublishSoloTravelResult(DailyV1SelectedSoloTravelDayResult result) =>
+            public void PublishSoloTravelResult(
+                DailyV1SelectedSoloTravelDayResult result,
+                bool arrivalEventHandledByCore) =>
                 throw new AssertionException("No solo travel result is expected in this fixture.");
         }
 

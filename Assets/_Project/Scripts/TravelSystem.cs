@@ -14,6 +14,7 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
 
     internal TravelPartyStore SelectedTravelPartyStore => travelPartyStore;
+    internal DomainEventRecorder SelectedDomainEventRecorder => domainEventRecorder;
 
     public TravelSystem(
         SpatialNetworkRuntime spatialNetwork,
@@ -433,18 +434,22 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
 
     internal bool PublishSelectedSoloTravelResult(
         NpcRuntime runtime,
-        DailyV1SelectedSoloTravelDayResult result)
+        DailyV1SelectedSoloTravelDayResult result,
+        bool arrivalEventHandledByCore = false)
     {
         if (runtime == null || result == null || !result.ShouldReport) return false;
         if (result.Arrived)
         {
-            domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcArrivedEvent(
-                eventId,
-                absoluteDay,
-                recordSequence,
-                runtime.RuntimeId,
-                runtime.CurrentLocation?.RuntimeId,
-                result.OriginDecisionId));
+            if (!arrivalEventHandledByCore)
+            {
+                domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcArrivedEvent(
+                    eventId,
+                    absoluteDay,
+                    recordSequence,
+                    runtime.RuntimeId,
+                    runtime.CurrentLocation?.RuntimeId,
+                    result.OriginDecisionId));
+            }
             string destinationName = runtime.CurrentCity != null
                 ? runtime.CurrentCity.CityName
                 : runtime.CurrentLocation?.RuntimeId ?? "destino desconhecido";

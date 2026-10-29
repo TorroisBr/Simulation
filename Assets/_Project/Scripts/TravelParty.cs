@@ -26,12 +26,14 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
     public TravelPartyStore Store => partyStore;
     internal RuntimeIdAllocator IdAllocator => idAllocator;
     internal bool HasDomainEventRecorder => domainEventRecorder != null;
+    internal DomainEventRecorder SelectedDomainEventRecorder => domainEventRecorder;
 
     internal bool UsesP12IdentityOwners(RuntimeIdAllocator allocator, SimulationRecordSequence sequence)
     {
         return ReferenceEquals(idAllocator, allocator)
             && ReferenceEquals(recordSequence, sequence)
-            && (domainEventRecorder == null || domainEventRecorder.UsesIdentityOwners(allocator, sequence));
+            && (domainEventRecorder == null
+                || domainEventRecorder.UsesIdentityOwners(allocator, simulationTime, sequence));
     }
 
     internal bool BindP12StartOperationAdmission(Func<TravelPartyStartPreparation, bool> admission)

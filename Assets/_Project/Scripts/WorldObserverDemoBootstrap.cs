@@ -163,8 +163,9 @@ public sealed class WorldObserverDemoBootstrap : MonoBehaviour
         contentStore = content;
         content.GetOrCreate(ruin);
         SimulationTime time = new SimulationTime(12L);
+        SimulationLogger eventLogger = UnitySimulationLoggerAdapter.Create(null);
         HistoryStore history = new HistoryStore();
-        DomainEventStore events = new DomainEventStore(history, new HistoryPolicy());
+        DomainEventStore events = new DomainEventStore(history, new HistoryPolicy(), eventLogger);
         WorldCommandDefinitionCatalog definitions = new WorldCommandDefinitionCatalog();
         definitions.RegisterItem(demoResource);
         worldCommandService = new WorldCommandService(
@@ -175,7 +176,8 @@ public sealed class WorldObserverDemoBootstrap : MonoBehaviour
         ConflictResolutionService conflictService = new ConflictResolutionService(
             new ConflictResolver(new WorldObserverDemoCapabilityModel(), new SeededConflictRandomSource(12)),
             null,
-            new DomainEventRecorder(commandRuntimeIds, time, new SimulationRecordSequence(), events));
+            new DomainEventRecorder(commandRuntimeIds, time, new SimulationRecordSequence(), events, eventLogger));
+
         SimulationRuntime runtime = new SimulationRuntime(time, new[] { north, south }, new NpcRuntime[0], economyEnabled: false);
         WorldCommandHandlerRegistration.RegisterCoreHandlers(
             worldCommandService,

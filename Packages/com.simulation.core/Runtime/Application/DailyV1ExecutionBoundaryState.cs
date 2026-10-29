@@ -72,6 +72,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private SimulationRecordSequence selectedRecordSequence;
     private NpcDecisionStore selectedDecisionStore;
     private ActorChoiceStore selectedActorChoiceStore;
+    private DomainEventRecorder selectedTravelPartyEventRecorder;
+    private DomainEventRecorder selectedSoloTravelEventRecorder;
+    private bool selectedTravelEventRecordersBound;
     private DailyV1ActorTurnCoreRoots selectedRuntimeActorTurnCoreRoots;
     private DailyV1P12CrimeJusticeMutationCoordinator selectedP12CrimeJusticeMutationCoordinator;
     private IDailyV1P12CrimeJusticeMutationProtocol selectedP12CrimeJusticeMutationProtocol;
@@ -1512,6 +1515,108 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return false;
         }
         selectedRuntimeExecutionRootsBound = true;
+        return true;
+    }
+
+    internal bool TryBindSelectedTravelEventRecorders(
+        DomainEventRecorder partyRecorder,
+        DomainEventRecorder soloRecorder)
+    {
+        if (!runtimeIdentityBound || !selectedRuntimeExecutionRootsBound
+            || selectedRuntimeOwnerGraph == null
+            || selectedRuntimeIdAllocator == null
+            || SimulationTime == null
+            || selectedRecordSequence == null)
+            return false;
+
+        if ((partyRecorder != null
+                && !partyRecorder.UsesIdentityOwners(
+                    selectedRuntimeIdAllocator, SimulationTime, selectedRecordSequence))
+            || (soloRecorder != null
+                && !soloRecorder.UsesIdentityOwners(
+                    selectedRuntimeIdAllocator, SimulationTime, selectedRecordSequence)))
+            return false;
+
+        if (selectedTravelEventRecordersBound)
+            return ReferenceEquals(selectedTravelPartyEventRecorder, partyRecorder)
+                && ReferenceEquals(selectedSoloTravelEventRecorder, soloRecorder);
+
+        selectedTravelPartyEventRecorder = partyRecorder;
+        selectedSoloTravelEventRecorder = soloRecorder;
+        selectedTravelEventRecordersBound = true;
+        return true;
+    }
+
+    internal bool TryRecordSelectedTravelPartyArrival(
+        TravelPartyRuntime party,
+        out bool eventRecorded)
+    {
+        eventRecorded = false;
+        DailyV1SelectedRuntimeOwnerGraph graph = selectedRuntimeOwnerGraph;
+        if (!HasAdmittedSelectedDailyExecution
+            || !selectedTravelEventRecordersBound
+            || !AdvanceLeaseHeld
+            || !HasSelectedP12TravelPartyAdvanceInProgress
+            || party == null
+            || graph?.TravelParties == null)
+            return false;
+
+        if (selectedTravelPartyEventRecorder == null)
+        {
+            eventRecorded = true;
+            return true;
+        }
+
+        eventRecorded = selectedTravelPartyEventRecorder.Record(
+            (eventId, absoluteDay, recordSequence) => new TravelPartyArrivedEvent(
+                eventId,
+                absoluteDay,
+                recordSequence,
+                party.TravelPartyId,
+                party.OriginLocationRuntimeId,
+                party.DestinationLocationRuntimeId,
+                party.RouteRuntimeId,
+                party.TravelDaysTotal,
+                party.TravelerRuntimeIds,
+                party.EscortRuntimeIds,
+                party.OriginDecisionId));
+        return true;
+    }
+
+    internal bool TryRecordSelectedSoloTravelArrival(
+        DailyV1SelectedSoloTravelDayResult result,
+        out bool eventRecorded)
+    {
+        eventRecorded = false;
+        DailyV1SelectedRuntimeOwnerGraph graph = selectedRuntimeOwnerGraph;
+        DailyV1NpcRuntimeOwners npc = result?.Npc;
+        if (!HasAdmittedSelectedDailyExecution
+            || !selectedTravelEventRecordersBound
+            || !AdvanceLeaseHeld
+            || result == null
+            || !result.ShouldReport
+            || !result.WasCommitted
+            || !result.Arrived
+            || npc == null
+            || graph == null
+            || !graph.ContainsExactNpcOwner(npc)
+            || string.IsNullOrWhiteSpace(npc.Travel.CurrentLocationRuntimeId))
+            return false;
+
+        if (selectedSoloTravelEventRecorder == null)
+        {
+            eventRecorded = true;
+            return true;
+        }
+
+        eventRecorded = selectedSoloTravelEventRecorder.Record(
+            (eventId, absoluteDay, recordSequence) => new NpcArrivedEvent(
+                eventId,
+                absoluteDay,
+                recordSequence,
+                npc.RuntimeId,
+                npc.Travel.CurrentLocationRuntimeId,
+                result.OriginDecisionId));
         return true;
     }
 

@@ -125,6 +125,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1RuntimeAdvanceStage.cs" Link="Application/DailyV1RuntimeAdvanceStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/SimulationRuntimeAdvanceFailure.cs" Link="Application/SimulationRuntimeAdvanceFailure.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyCaptureEligibilityToken.cs" Link="Application/DailyCaptureEligibilityToken.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DomainEventAuthority.cs" Link="Application/DomainEventAuthority.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ExecutionBoundaryState.cs" Link="Application/DailyV1ExecutionBoundaryState.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1MutationEpochState.cs" Link="Application/DailyV1MutationEpochState.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/SimulationRuntimeAdmissionContext.cs" Link="Application/SimulationRuntimeAdmissionContext.cs" />

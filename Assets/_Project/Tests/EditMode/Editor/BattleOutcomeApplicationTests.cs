@@ -758,7 +758,8 @@ public sealed class BattleOutcomeApplicationTests
     private static TestRecorder CreateSuccessfulRecorder()
     {
         HistoryStore history = new HistoryStore();
-        DomainEventStore eventStore = new DomainEventStore(history, new HistoryPolicy());
+        DomainEventStore eventStore = new DomainEventStore(
+            history, new HistoryPolicy(), UnitySimulationLoggerAdapter.Create(null));
         return new TestRecorder(eventStore, history);
     }
 

@@ -2188,7 +2188,9 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             return true;
         }
 
-        public void PublishSoloTravelResult(DailyV1SelectedSoloTravelDayResult result)
+        public void PublishSoloTravelResult(
+            DailyV1SelectedSoloTravelDayResult result,
+            bool arrivalEventHandledByCore)
         {
             order.Add("solo-result");
         }

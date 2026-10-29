@@ -337,12 +337,14 @@ public static class SimulationTestFactory
             decisions,
             logger);
         HistoryStore history = new HistoryStore();
-        DomainEventStore events = new DomainEventStore(history, new HistoryPolicy());
+        SimulationLogger eventLogger = logger ?? UnitySimulationLoggerAdapter.Create(null);
+        DomainEventStore events = new DomainEventStore(history, new HistoryPolicy(), eventLogger);
         DomainEventRecorder eventRecorder = new DomainEventRecorder(
             allocator,
             time,
             sequence,
-            events);
+            events,
+            eventLogger);
 
         return new RecordFixture(
             allocator,

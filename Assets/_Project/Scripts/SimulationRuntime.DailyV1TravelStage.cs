@@ -240,12 +240,15 @@ public sealed partial class SimulationRuntime
                 || runtime.travelPartySystem.PublishSelectedTravelPartyArrivalEvent(party);
         }
 
-        public void PublishSoloTravelResult(DailyV1SelectedSoloTravelDayResult result)
+        public void PublishSoloTravelResult(
+            DailyV1SelectedSoloTravelDayResult result,
+            bool arrivalEventHandledByCore)
         {
             if (result == null || !adapters.TryGetValue(result.Npc, out NpcRuntime adapter))
                 throw new InvalidOperationException(
                     "A selected Core travel result did not resolve to its exact Unity adapter.");
-            runtime.travelSystem?.PublishSelectedSoloTravelResult(adapter, result);
+            runtime.travelSystem?.PublishSelectedSoloTravelResult(
+                adapter, result, arrivalEventHandledByCore);
         }
 
         internal void AddPartyArrival(DailyV1NpcRuntimeOwners owner)

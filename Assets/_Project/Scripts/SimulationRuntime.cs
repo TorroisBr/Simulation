@@ -2962,6 +2962,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 this.actorChoiceStore))
             throw new InvalidOperationException(
                 "The selected runtime execution roots could not be bound to the exact Core owner graph.");
+        if (runtimeAdmissionContext?.Profile
+                == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            && selectedOwnerGraph != null
+            && dailyExecutionBoundary.SelectedRuntimeExecutionRootsBound
+            && !dailyExecutionBoundary.TryBindSelectedTravelEventRecorders(
+                this.travelPartySystem?.SelectedDomainEventRecorder,
+                this.travelSystem?.SelectedDomainEventRecorder))
+            throw new InvalidOperationException(
+                "The selected travel event recorders could not bind the exact Core allocator, clock, and record sequence.");
+
         selectedRuntimeOwnerGraphProvider = () => dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
         foreach (NpcRuntime npcRuntime in this.npcRuntimes)
             if (npcRuntime != null && npcRuntime.UsesSelectedDailyV1Definitions

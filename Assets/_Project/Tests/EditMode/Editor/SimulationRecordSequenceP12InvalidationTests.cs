@@ -693,8 +693,9 @@ public sealed class SimulationRecordSequenceP12InvalidationTests
         NpcDecisionStore decisions = new NpcDecisionStore();
         NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(allocator, time, sequence, decisions);
         HistoryStore history = new HistoryStore();
-        DomainEventStore events = new DomainEventStore(history, new HistoryPolicy());
-        DomainEventRecorder eventRecorder = new DomainEventRecorder(allocator, time, sequence, events);
+        SimulationLogger eventLogger = UnitySimulationLoggerAdapter.Create(null);
+        DomainEventStore events = new DomainEventStore(history, new HistoryPolicy(), eventLogger);
+        DomainEventRecorder eventRecorder = new DomainEventRecorder(allocator, time, sequence, events, eventLogger);
         return new RecordFixture(
             allocator,
             time,

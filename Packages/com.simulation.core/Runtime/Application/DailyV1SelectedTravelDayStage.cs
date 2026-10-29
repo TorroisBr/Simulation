@@ -22,7 +22,9 @@ internal interface IDailyV1SelectedTravelDayBoundary
 
     bool PublishTravelPartyArrival(TravelPartyRuntime party);
 
-    void PublishSoloTravelResult(DailyV1SelectedSoloTravelDayResult result);
+    void PublishSoloTravelResult(
+        DailyV1SelectedSoloTravelDayResult result,
+        bool arrivalEventHandledByCore);
 }
 
 /// <summary>
@@ -140,6 +142,27 @@ internal static class DailyV1SelectedTravelDayStage
                     "P12 rejected a committed selected travel owner mutation.");
         }
 
+        bool PublishTravelPartyArrival(TravelPartyRuntime party)
+        {
+            if (executionState?.HasAdmittedSelectedDailyExecution != true)
+                return boundary.PublishTravelPartyArrival(party);
+            return executionState.TryRecordSelectedTravelPartyArrival(
+                party, out bool eventRecorded) && eventRecorded;
+        }
+
+        void PublishSoloTravelResult(DailyV1SelectedSoloTravelDayResult result)
+        {
+            bool arrivalEventHandledByCore =
+                executionState?.HasAdmittedSelectedDailyExecution == true;
+            if (arrivalEventHandledByCore
+                && result?.Arrived == true
+                && !executionState.TryRecordSelectedSoloTravelArrival(result, out _))
+                throw new InvalidOperationException(
+                    "The Core session rejected a committed selected solo-travel arrival event.");
+
+            boundary.PublishSoloTravelResult(result, arrivalEventHandledByCore);
+        }
+
         if (partyStore != null)
         {
             IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> completed = null;
@@ -147,7 +170,7 @@ internal static class DailyV1SelectedTravelDayStage
                     partyStore,
                     TryPrepareTransition,
                     PublishCommittedTransition,
-                    boundary.PublishTravelPartyArrival,
+                    PublishTravelPartyArrival,
                     out completed);
             bool executed = executionState != null
                 ? executionState.ExecuteSelectedP12TravelPartyAdvance(
@@ -171,7 +194,7 @@ internal static class DailyV1SelectedTravelDayStage
             managedTravelPartyNpcRuntimeIds,
             TryPrepareTransition,
             PublishCommittedTransition,
-            boundary.PublishSoloTravelResult,
+            PublishSoloTravelResult,
             out soloResults);
     }
 

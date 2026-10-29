@@ -66,6 +66,7 @@
     <Compile Include="SpatialNetworkOwnerTests.cs" Link="Geography/SpatialNetworkOwnerTests.cs" />
     <Compile Include="LegacySpatialAnchorBindingStoreCoreTests.cs" Link="Geography/LegacySpatialAnchorBindingStoreCoreTests.cs" />
     <Compile Include="DailyV1SelectedRuntimeOwnerGraphTests.cs" />
+    <Compile Include="DomainEventAuthorityCoreTests.cs" />
     <Compile Include="DailyV1DecisionRecordsTests.cs" />
     <Compile Include="DailyV1ActorChoiceStoreTests.cs" />
     <Compile Include="ScheduledDirectiveStoreTests.cs" />
