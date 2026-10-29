@@ -26,7 +26,7 @@ The repository-supported evidence wrapper ran against the exact candidate commit
 | Run | Selection | Result | Protected manifest SHA-256 | Original XML SHA-256 | Original log SHA-256 |
 |---|---|---:|---|---|---|
 | `eb0e66758f9f42338f10ef4d06abcdb5` | Full EditMode | 3277/3277 passed; 0 failed, skipped, or inconclusive | `ce83cb4c17b066d9c4b590e592db613c25a401c7b3fddf49e557b8a7208a5126` | `cfc99a6bb5c107b45ed84b4737e623f6967f2d254ca4d4434d07990397630dfc` | `ff6f557e394b6303b15e0eb7688b4e5b4eea97773ff06f1f66da498aa440fc03` |
-| `94fbe0c6db8f4f2da4646f7d40ac6025` | Official `Smoke` filter | 5/5 passed; 0 failed, skipped, or inconclusive | `086b81d85fa8bcee714ee077c934ea3f7688d751831fd200f699a3d9f9bb8758` | `d8fd7917ab1a4c5b5407caf7f6d709ad5b32d3c50941b0b69a7c01525367a0bb` | `eb99b2b4fe6b37dbb1e38e0eb7688b4e5b4eea97773ff06f1f66da498aa440fc03` |
+| `94fbe0c6db8f4f2da4646f7d40ac6025` | Official `Smoke` filter | 5/5 passed; 0 failed, skipped, or inconclusive | `086b81d85fa8bcee714ee077c934ea3f7688d751831fd200f699a3d9f9bb8758` | `d8fd7917ab1a4c5b5407caf7f6d709ad5b32d3c50941b0b69a7c01525367a0bb` | `eb99b2b4fe6b37dbb1e38a94a2d64feefe2ecd7f623820a2378dd2ecd54dfd4d` |
 
 The full EditMode XML is distributed only as the normalized package below. The Smoke XML and both runs’ original reports/logs remain private and unchanged.
 
