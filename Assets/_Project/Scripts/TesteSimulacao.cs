@@ -865,6 +865,7 @@ public class TesteSimulacao : MonoBehaviour
                             explorableSiteKnowledgeSystem: explorableSiteKnowledgeSystem, expeditionSystem: expeditionSystem,
                             configuration: effectiveConfiguration, randomSource: authoritativeRandomSource,
                             personStore: selectedCoreGenesis?.PersonStore,
+                            genealogyStore: selectedCoreGenesis?.OwnerGraph?.GenealogyStore,
                             actorChoiceStore: selectedCoreGenesis?.ActorChoiceStore,
                             calendarDefinition: calendarDefinition,
                             spatialAuthorityStore: genesisSpatialAuthority,

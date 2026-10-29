@@ -24,6 +24,12 @@ public sealed class DailyV1GenesisComposerTests
 
         Assert.That(allocations, Is.EqualTo(1));
         Assert.That(composition.WorldId, Is.SameAs(expectedWorldId));
+        Assert.That(composition.OwnerGraph.GenealogyStore, Is.Not.Null,
+            "Selected genesis must create its Genealogy authority in Core.");
+        Assert.That(composition.OwnerGraph.GenealogyStore.Count, Is.Zero);
+        Assert.That(composition.OwnerGraph.GenealogyStore.Revision, Is.Zero);
+        Assert.That(composition.OwnerGraph.TryBindGenealogyStore(new GenealogyStore()), Is.False,
+            "The selected Core genesis graph cannot replace its exact empty GenealogyStore.");
         Assert.That(composition.OwnerGraph.Expeditions, Is.SameAs(composition.Expeditions),
             "The Core graph must retain the exact ExpeditionStore created by genesis.");
         Assert.That(composition.OwnerGraph.TryBindExpeditionStore(new ExpeditionStore()), Is.False,

@@ -2563,7 +2563,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 nameof(politicalWorldRevision));
         }
 
-        GenealogyStore resolvedGenealogyStore = genealogyStore ?? new GenealogyStore();
+        GenealogyStore coreBoundaryGenealogyStore = selectedExecutionBoundaryState?
+            .SelectedRuntimeOwnerGraph?.GenealogyStore;
+        GenealogyStore resolvedGenealogyStore = genealogyStore
+            ?? coreBoundaryGenealogyStore
+            ?? new GenealogyStore();
         ValidateGenealogyStore(resolvedPersonStore, resolvedGenealogyStore);
         // The admitted Core Daily-v1 session already owns this exact P8
         // authority as a causal root. Retaining it is required for one

@@ -2072,6 +2072,14 @@ public sealed class SimulationBootstrapCompositionTests
             Is.EqualTo(simulation.Bootstrap.ProfileFingerprint),
             "Core-owned identity allocation preserves the selected graph's canonical P9 fingerprint.");
 
+        DailyV1SelectedRuntimeOwnerGraph runtimeOwnerGraph = simulation.Runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(runtimeOwnerGraph.GenealogyStore, Is.Not.Null,
+            "Selected genesis keeps an empty genealogy owner in Core before Unity composition.");
+        Assert.That(simulation.Runtime.GenealogyStoreForWorldBoundary,
+            Is.SameAs(runtimeOwnerGraph.GenealogyStore),
+            "The Unity runtime must retain the exact Core-created genealogy authority.");
+        Assert.That(simulation.Runtime.GenealogyStoreForWorldBoundary.Count, Is.Zero);
+        Assert.That(simulation.Runtime.GenealogyStoreForWorldBoundary.Revision, Is.Zero);
         foreach (CityRuntime city in simulation.Runtime.Cities)
         {
             Assert.That(graph.Cities.TryGetValue(city.DefinitionId, out DailyV1CityDefinition cityNode), Is.True);

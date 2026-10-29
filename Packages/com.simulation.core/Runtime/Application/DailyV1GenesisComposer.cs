@@ -167,6 +167,7 @@ internal static class DailyV1GenesisComposer
         SimulationRecordSequence recordSequence = new SimulationRecordSequence();
         NpcDecisionStore decisionStore = new NpcDecisionStore();
         PersonStore personStore = new PersonStore();
+        GenealogyStore genealogyStore = new GenealogyStore();
         ActorChoiceStore actorChoiceStore = new ActorChoiceStore(personStore);
         RuntimeIdAllocator runtimeIds = new RuntimeIdAllocator();
         DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
@@ -266,6 +267,7 @@ internal static class DailyV1GenesisComposer
                             out DailyV1SelectedRuntimeOwnerGraph graph))
                         return Fail("Core selected owner graph failed exact genesis admission.", out diagnostic);
                     if (!graph.TryBindPersonStore(personStore)
+                        || !graph.TryBindGenealogyStore(genealogyStore)
                         || !ReferenceEquals(actorChoiceStore.PersonStore, personStore)
                         || !executionBoundaryState.TryBindSelectedRuntimeOwnerGraph(graph)
                         || !executionBoundaryState.TryBindInitialSelectedRuntimeActorRosterFromOwnerGraph()
