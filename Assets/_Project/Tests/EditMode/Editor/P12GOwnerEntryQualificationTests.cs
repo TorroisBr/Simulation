@@ -117,6 +117,34 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     out _, out P12AResult aliasResult), Is.False,
                 "A changed shared ArmedForce alias must fail the authoritative image census before encoding.");
             Assert.That(aliasResult?.Code, Is.EqualTo(P12AResultCode.OwnerGraphRejected));
+            DailyV1Application coreAdmissionApplication = new DailyV1Application();
+            Assert.That(coreAdmissionApplication.TryCaptureBootstrapAdmissionContext(
+                out SimulationRuntimeAdmissionContext coreBootstrapContext), Is.True);
+            P12ACompatibilityDescriptor imageIdentity = validImage.Header.Compatibility;
+            P12ACompatibilityDescriptor incompatibleIdentity = new P12ACompatibilityDescriptor(
+                imageIdentity.ProfileId, imageIdentity.ProfileVersion,
+                imageIdentity.ConfigurationFingerprint, imageIdentity.UnityVersion,
+                imageIdentity.RuntimePlatform, imageIdentity.ScriptingBackend, imageIdentity.BuildGuid,
+                imageIdentity.AssemblyMvids, imageIdentity.NumericProfileId,
+                imageIdentity.NumericProfileVersion, "different-content",
+                imageIdentity.ProviderFingerprint, imageIdentity.CalendarId,
+                imageIdentity.CalendarVersion, imageIdentity.CalendarFingerprint,
+                imageIdentity.P9Fingerprint, imageIdentity.P8Fingerprint);
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+                    validImage,
+                    incompatibleIdentity,
+                    anchor.Configuration,
+                    anchor.Runtime.Configuration,
+                    anchor.Composition.Calendar,
+                    anchor.Composition.SelectedDefinitions,
+                    coreBootstrapContext,
+                    out SimulationActiveSession identityRejected,
+                    out P12GDailyV1RestoreFailure identityFailure,
+                    out _,
+                    application: coreAdmissionApplication),
+                Is.False, "Core must reject a valid image with the wrong admitted content identity.");
+            Assert.That(identityRejected, Is.Null);
+            Assert.That(identityFailure, Is.EqualTo(P12GDailyV1RestoreFailure.InvalidSourceSession));
             Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
                     rejectedImage,
                     rejectedImage.Header.Compatibility,
@@ -124,10 +152,11 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     anchor.Runtime.Configuration,
                     anchor.Composition.Calendar,
                     anchor.Composition.SelectedDefinitions,
-                    anchor.NormalContext,
+                    coreBootstrapContext,
                     out SimulationActiveSession aliasRejected,
                     out P12GDailyV1RestoreFailure aliasFailure,
-                    out string aliasDiagnostic),
+                    out string aliasDiagnostic,
+                    application: coreAdmissionApplication),
                 Is.False, "The integrated G restore boundary must reject a split shared ArmedForce alias.");
             Assert.That(aliasRejected, Is.Null);
             Assert.That(aliasFailure, Is.EqualTo(P12GDailyV1RestoreFailure.SourceCaptureFailed));
@@ -141,10 +170,11 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     anchor.Runtime.Configuration,
                     anchor.Composition.Calendar,
                     anchor.Composition.SelectedDefinitions,
-                    anchor.NormalContext,
+                    coreBootstrapContext,
                     out SimulationActiveSession aliasRetry,
                     out P12GDailyV1RestoreFailure aliasRetryFailure,
-                    out string aliasRetryDiagnostic),
+                    out string aliasRetryDiagnostic,
+                    application: coreAdmissionApplication),
                 Is.True, aliasRetryFailure + ": " + aliasRetryDiagnostic);
             Assert.That(EncodeCompletedImage(aliasRetry, anchor.NormalContext), Is.EqualTo(validBytes));
             return;

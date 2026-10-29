@@ -66,42 +66,75 @@ internal static partial class P12GDailyV1RestoreCoordinator
         restoredSession = null;
         failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
         diagnostic = "A validated persisted Daily-v1 image and current host profile are required.";
-        bool descriptorMatches = image?.Header != null && image.Header.IsValid
-            && (expectedCompatibilityV1 != null
-                ? image.Header.Compatibility != null
-                    && expectedCompatibilityV1.Matches(image.Header.Compatibility.CanonicalBytes)
-                : expectedCompatibilityV2 != null && image.Header.CompatibilityV2 != null
-                    && P12ACompatibilityAdmission.AdmitDotNetV2(
-                        image.Header.CompatibilityV2.CanonicalBytes,
-                        expectedCompatibilityV2, out _) == P12AResultCode.Decoded);
         if (image == null || (expectedCompatibilityV1 == null) == (expectedCompatibilityV2 == null)
             || configuration == null
             || effective == null || calendar == null || selectedDefinitions == null || bootstrapAdmissionContext == null
             || bootstrapAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || bootstrapAdmissionContext.IsRestoredContinuation
-            || !bootstrapAdmissionContext.IsOwnedByCurrentThread()
-            || !descriptorMatches)
+            || !bootstrapAdmissionContext.IsOwnedByCurrentThread())
             return false;
 
         try
         {
-            if (!P12ADailyV1Census.TryCreateForImage(image,
-                    out P12ADailyV1Census imageCensus, out P12AResult imageResult))
+            P12ADailyV1Census imageCensus;
+            P12ADailyV1ImageOwnerSnapshots decoded;
+            P12AResult imageResult;
+            if (application != null)
             {
-                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
-                diagnostic = "The persisted image does not satisfy the current Daily-v1 owner manifest: "
-                    + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "InvalidOwnerValue") + ".";
-                return false;
+                bool admitted = application.TryAdmitRestoredContinuationImage(
+                    image, expectedCompatibilityV1, expectedCompatibilityV2,
+                    bootstrapAdmissionContext, out imageCensus, out imageResult);
+                if (!admitted)
+                {
+                    bool hostIdentityRejected = imageResult?.Code == P12AResultCode.WrongThread
+                        || imageResult?.Code == P12AResultCode.IncompatibleContentOrConfiguration
+                        || imageResult?.Code == P12AResultCode.IncompatibleBuildOrRuntime;
+                    failure = hostIdentityRejected
+                        ? P12GDailyV1RestoreFailure.InvalidSourceSession
+                        : P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = imageResult?.Code == P12AResultCode.OwnerGraphRejected
+                        ? "The persisted image does not satisfy the current Daily-v1 owner manifest: "
+                            + (imageResult.SectionCode ?? imageResult.Code.ToString()) + "."
+                        : "The persisted Daily-v1 image could not pass Core host and census admission: "
+                            + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "InvalidOwnerValue") + ".";
+                    return false;
+                }
+                if (!P12ADailyV1ImageOwnerDecoder.TryDecode(
+                    image, out decoded, out imageResult)
+                    || decoded == null)
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "The persisted Daily-v1 typed owner image could not be decoded: "
+                        + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
+                    return false;
+                }
             }
-
-            if (!P12ADailyV1ImageOwnerDecoder.TryDecode(image,
-                    out P12ADailyV1ImageOwnerSnapshots decoded, out imageResult)
-                || decoded == null)
+            else
             {
-                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
-                diagnostic = "The persisted Daily-v1 typed owner image could not be decoded: "
-                    + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
-                return false;
+                bool descriptorMatches = image.Header != null && image.Header.IsValid
+                    && (expectedCompatibilityV1 != null
+                        ? image.Header.Compatibility != null
+                            && expectedCompatibilityV1.Matches(image.Header.Compatibility.CanonicalBytes)
+                        : image.Header.CompatibilityV2 != null
+                            && P12ACompatibilityAdmission.AdmitDotNetV2(
+                                image.Header.CompatibilityV2.CanonicalBytes,
+                                expectedCompatibilityV2, out _) == P12AResultCode.Decoded);
+                if (!descriptorMatches) return false;
+                if (!P12ADailyV1Census.TryCreateForImage(image, out imageCensus, out imageResult))
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "The persisted image does not satisfy the current Daily-v1 owner manifest: "
+                        + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "InvalidOwnerValue") + ".";
+                    return false;
+                }
+                if (!P12ADailyV1ImageOwnerDecoder.TryDecode(image, out decoded, out imageResult)
+                    || decoded == null)
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "The persisted Daily-v1 typed owner image could not be decoded: "
+                        + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
+                    return false;
+                }
             }
 
             stageObserver?.Invoke(P12GDailyV1RestoreStage.SourceCaptured);

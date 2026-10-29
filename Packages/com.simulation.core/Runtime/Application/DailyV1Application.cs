@@ -1026,6 +1026,72 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
+    /// Admits a persisted owner image's host identity and complete Daily-v1
+    /// census under the exact bootstrap context owned by this application.
+    /// Unity may decode and stage the resulting owners through its compatibility
+    /// adapter, but it cannot independently decide which image is admissible.
+    /// </summary>
+    internal bool TryAdmitRestoredContinuationImage(
+        P12AContinuationImage image,
+        P12ACompatibilityDescriptor unityV1Identity,
+        P12ACompatibilityDescriptorV2 dotNetV2Identity,
+        SimulationRuntimeAdmissionContext admissionContext,
+        out P12ADailyV1Census census,
+        out P12AResult result)
+    {
+        census = null;
+        result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        if (image == null || ((unityV1Identity == null) == (dotNetV2Identity == null))
+            || admissionContext == null)
+            return false;
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (!ReferenceEquals(bootstrapAdmissionContext, admissionContext)
+                || admissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || admissionContext.IsRestoredContinuation
+                || !admissionContext.IsOwnedByCurrentThread())
+            {
+                result = new P12AResult(P12AResultCode.WrongThread);
+                return false;
+            }
+
+            if (image.Header == null || !image.Header.IsValid)
+            {
+                result = new P12AResult(P12AResultCode.CorruptOrTruncated);
+                return false;
+            }
+
+            if (unityV1Identity != null)
+            {
+                if (image.Header.Compatibility == null
+                    || !unityV1Identity.Matches(image.Header.Compatibility.CanonicalBytes))
+                {
+                    result = new P12AResult(P12AResultCode.IncompatibleContentOrConfiguration);
+                    return false;
+                }
+            }
+            else if (image.Header.CompatibilityV2 == null
+                || P12ACompatibilityAdmission.AdmitDotNetV2(
+                    image.Header.CompatibilityV2.CanonicalBytes,
+                    dotNetV2Identity, out _) != P12AResultCode.Decoded)
+            {
+                result = new P12AResult(P12AResultCode.IncompatibleBuildOrRuntime);
+                return false;
+            }
+
+            if (!P12ADailyV1Census.TryCreateForImage(image, out census, out result))
+            {
+                census = null;
+                return false;
+            }
+        }
+
+        result = new P12AResult(P12AResultCode.Decoded);
+        return true;
+    }
+
+    /// <summary>
     /// Stages the detached P12-C roots for an image through this application.
     /// Replacement staging is bound to the exact published session and its
     /// owner-thread reservation; initial restoration is accepted only by an
