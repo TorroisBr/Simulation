@@ -71,7 +71,7 @@ The scoped record is docs/validation/CORE_F_CoreOwnedRuntimeApplication/SpatialN
 - Official CoreValidation cold and warm results: 935/935 passed each; failed/timeout/inconclusive counters were zero.
 - Tested source commit/tree: 24b629c6fcdd6918d1dd1ca402a665b17e363559 / e0f1222014ede8c6e7594ef614c1170c976e7c2e, with a stable Core input digest of 788b79a79692460aeeaa1cbdba225147f6650b36d6afb7b264918cbfbf832f62.
 - Protected native runner-manifest SHA-256: e99c1108190f1230494a3a41d6b99719e9ce93cb41081a051d50dc11ff7efb11.
-- Independently inspected the private native manifest, both original TRX hashes and counts, the input inventory/digest, and the source hashes. The Core source inputs include the exact seven source/test checkout hashes above.
+- Independently inspected the private native manifest, both original TRX hashes and counts, the Core input inventory/digest, and the source hashes. CoreValidation covers the Core package and .NET test inputs in its inventory; the Unity input snapshots separately cover Unity production and EditMode sources. Across both inventories, all seven implementation/test checkout hashes above match the tested source inputs and candidate blobs.
 - The DotNetTrx adapter rejected the native simulation-core-validation/v1 manifest as an unsupported context schema; no synthetic context was invented. The complete native run evidence remains protected and accessible for this review. A normalized, permanently retained .NET result bundle remains a separate promotion-evidence requirement under the current evidence policy; this review does not claim that package exists.
 
 ### Unity
