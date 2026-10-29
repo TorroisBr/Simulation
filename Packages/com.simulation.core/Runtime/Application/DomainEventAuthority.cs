@@ -252,6 +252,8 @@ public sealed class DomainEventStore
         return true;
     }
 
+    internal bool UsesHistoryStore(HistoryStore owner) => ReferenceEquals(historyStore, owner);
+
     public bool TryGetEvent(string eventId, out DomainEvent domainEvent)
     {
         return eventsById.TryGetValue(eventId ?? string.Empty, out domainEvent);
@@ -351,6 +353,8 @@ public sealed class DomainEventRecorder : IDomainEventRecorder
         this.eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
         this.logger = logger;
     }
+
+    internal bool UsesEventStore(DomainEventStore store) => ReferenceEquals(eventStore, store);
 
     internal bool UsesIdentityOwners(RuntimeIdAllocator allocator, SimulationRecordSequence sequence)
     {

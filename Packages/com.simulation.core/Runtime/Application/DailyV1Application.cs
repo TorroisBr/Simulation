@@ -93,8 +93,19 @@ internal sealed class DailyV1Application
         out DailyV1GenesisComposition composition,
         out DailyV1ActiveRuntimeSession candidate,
         out string diagnostic) =>
-        TryPrepareInitialGenesis(
-            definitions, allocateWorldId: null, stageCompleted,
+        TryPrepareInitialGenesisCore(
+            definitions, null, null, stageCompleted, out composition, out candidate, out diagnostic);
+
+    /// <summary>Selected Unity host supplies its existing diagnostic sink; Core still creates all runtime roots.</summary>
+    internal bool TryPrepareInitialGenesisWithHostLogger(
+        DailyV1EffectiveDefinitions definitions,
+        SimulationLogger diagnosticLogger,
+        Action<string> stageCompleted,
+        out DailyV1GenesisComposition composition,
+        out DailyV1ActiveRuntimeSession candidate,
+        out string diagnostic) =>
+        TryPrepareInitialGenesisCore(
+            definitions, null, diagnosticLogger, stageCompleted,
             out composition, out candidate, out diagnostic);
 
     /// <summary>
@@ -105,6 +116,18 @@ internal sealed class DailyV1Application
     internal bool TryPrepareInitialGenesis(
         DailyV1EffectiveDefinitions definitions,
         Func<WorldId> allocateWorldId,
+        Action<string> stageCompleted,
+        out DailyV1GenesisComposition composition,
+        out DailyV1ActiveRuntimeSession candidate,
+        out string diagnostic) =>
+        TryPrepareInitialGenesisCore(
+            definitions, allocateWorldId, null, stageCompleted,
+            out composition, out candidate, out diagnostic);
+
+    private bool TryPrepareInitialGenesisCore(
+        DailyV1EffectiveDefinitions definitions,
+        Func<WorldId> allocateWorldId,
+        SimulationLogger diagnosticLogger,
         Action<string> stageCompleted,
         out DailyV1GenesisComposition composition,
         out DailyV1ActiveRuntimeSession candidate,
@@ -146,11 +169,12 @@ internal sealed class DailyV1Application
             initialGenesisPreparationAttempted = true;
         }
 
-        if (!DailyV1GenesisComposer.TryComposeSelectedOwners(
+        if (!DailyV1GenesisComposer.TryComposeSelectedOwnersWithHostLogger(
                 definitions,
                 admissionContext,
                 allocateWorldId,
                 stageCompleted,
+                diagnosticLogger,
                 out composition,
                 out diagnostic))
         {
@@ -218,6 +242,38 @@ internal sealed class DailyV1Application
     {
         candidate = null;
         diagnostic = null;
+        if (executionBoundaryState == null
+            || executionBoundaryState.SelectedRuntimeIdAllocator == null
+            || executionBoundaryState.SimulationTime == null
+            || executionBoundaryState.SelectedRecordSequence == null)
+        {
+            diagnostic = "The restored Core session requires its exact execution identity roots.";
+            return false;
+        }
+
+        DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
+            executionBoundaryState.SelectedRuntimeIdAllocator,
+            executionBoundaryState.SimulationTime,
+            executionBoundaryState.SelectedRecordSequence);
+        return TryCreateRestoredActiveRuntimeSession(
+            executionBoundaryState, expectedDefinitions, lastEconomySnapshotDay,
+            p9Manifest, spatialAuthority, eventAuthority, replacementOperation,
+            out candidate, out diagnostic);
+    }
+
+    internal bool TryCreateRestoredActiveRuntimeSession(
+        DailyV1ExecutionBoundaryState executionBoundaryState,
+        DailyV1EffectiveDefinitions expectedDefinitions,
+        long lastEconomySnapshotDay,
+        P12CP9GenesisManifestCoreSnapshot p9Manifest,
+        SpatialAuthorityStore spatialAuthority,
+        DailyV1DomainEventAuthority eventAuthority,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out DailyV1ActiveRuntimeSession candidate,
+        out string diagnostic)
+    {
+        candidate = null;
+        diagnostic = null;
         if (executionBoundaryState == null || expectedDefinitions == null)
         {
             diagnostic = "The restored Core session requires its exact execution boundary and effective definitions.";
@@ -227,7 +283,12 @@ internal sealed class DailyV1Application
         DailyV1SelectedRuntimeOwnerGraph ownerGraph = executionBoundaryState.SelectedRuntimeOwnerGraph;
         if (!executionBoundaryState.HasAdmittedSelectedDailyExecution
             || ownerGraph == null
-            || !ReferenceEquals(ownerGraph.Definitions, expectedDefinitions))
+            || !ReferenceEquals(ownerGraph.Definitions, expectedDefinitions)
+            || eventAuthority == null
+            || !eventAuthority.IsFor(
+                executionBoundaryState.SelectedRuntimeIdAllocator,
+                executionBoundaryState.SimulationTime,
+                executionBoundaryState.SelectedRecordSequence))
         {
             diagnostic = "The restored Core execution boundary is not admitted for the exact selected definitions.";
             return false;
@@ -271,10 +332,11 @@ internal sealed class DailyV1Application
             bool sessionCreated = p9Manifest == null && spatialAuthority == null
                 ? DailyV1ActiveRuntimeSession.TryCreate(
                     executionBoundaryState, expectedDefinitions, lastEconomySnapshotDay,
-                    out candidate, out diagnostic)
+                    eventAuthority, out candidate, out diagnostic)
                 : DailyV1ActiveRuntimeSession.TryCreateRestored(
                     executionBoundaryState, expectedDefinitions, lastEconomySnapshotDay,
-                    p9Manifest, spatialAuthority, out candidate, out diagnostic);
+                    p9Manifest, spatialAuthority, eventAuthority,
+                    out candidate, out diagnostic);
             if (!sessionCreated)
             {
                 candidate = null;
@@ -365,8 +427,60 @@ internal sealed class DailyV1Application
         candidate = null;
         calendar = null;
         diagnostic = null;
+        if (runtimeIdAllocator == null || simulationTime == null || recordSequence == null)
+        {
+            diagnostic = "Restored Core session composition requires its exact runtime identity roots.";
+            return false;
+        }
+
+        DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
+            runtimeIdAllocator, simulationTime, recordSequence);
+        return TryCreateRestoredActiveRuntimeSession(
+            definitions, p9Manifest, effectiveConfiguration, calendarDefinition,
+            simulationTime, admissionContext, worldId, cityOwners, npcOwners, spatialNetwork,
+            justiceRecords, travelParties, runtimeIdentityIndex, personStore, directives,
+            expeditions, spatialAuthority, eventAuthority, runtimeIdAllocator, randomSource,
+            recordSequence, decisionStore, actorChoiceStore, lastEconomySnapshotDay,
+            replacementOperation, out candidate, out calendar, out diagnostic);
+    }
+
+    internal bool TryCreateRestoredActiveRuntimeSession(
+        DailyV1EffectiveDefinitions definitions,
+        P12CP9GenesisManifestCoreSnapshot p9Manifest,
+        EffectiveSimulationConfiguration effectiveConfiguration,
+        CalendarDefinition calendarDefinition,
+        SimulationTime simulationTime,
+        SimulationRuntimeAdmissionContext admissionContext,
+        WorldId worldId,
+        IReadOnlyList<DailyV1CityRuntimeOwners> cityOwners,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecords,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        PersonStore personStore,
+        ScheduledDirectiveStore directives,
+        ExpeditionStore expeditions,
+        SpatialAuthorityStore spatialAuthority,
+        DailyV1DomainEventAuthority eventAuthority,
+        RuntimeIdAllocator runtimeIdAllocator,
+        IAuthoritativeRandomSource randomSource,
+        SimulationRecordSequence recordSequence,
+        NpcDecisionStore decisionStore,
+        ActorChoiceStore actorChoiceStore,
+        long lastEconomySnapshotDay,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out DailyV1ActiveRuntimeSession candidate,
+        out SimulationCalendar calendar,
+        out string diagnostic)
+    {
+        candidate = null;
+        calendar = null;
+        diagnostic = null;
         if (definitions == null
-            || !ReferenceEquals(definitions.EffectiveConfiguration, effectiveConfiguration))
+            || !ReferenceEquals(definitions.EffectiveConfiguration, effectiveConfiguration)
+            || eventAuthority == null
+            || !eventAuthority.IsFor(runtimeIdAllocator, simulationTime, recordSequence))
         {
             diagnostic = "Restored Core session composition requires the exact selected definitions and configuration.";
             return false;
@@ -404,6 +518,7 @@ internal sealed class DailyV1Application
                 lastEconomySnapshotDay,
                 p9Manifest,
                 spatialAuthority,
+                eventAuthority,
                 replacementOperation,
                 out DailyV1ActiveRuntimeSession candidateSession,
                 out diagnostic))

@@ -79,6 +79,13 @@ internal sealed class SimulationActiveSession
 
         AdmissionContext = CoreRuntimeSession?.AdmissionContext ?? admissionContext;
 
+        if (CoreRuntimeSession != null
+            && (!ReferenceEquals(CoreRuntimeSession.EventAuthority.EventStore, Composition.DomainEventStore)
+                || !ReferenceEquals(CoreRuntimeSession.EventAuthority.History, Composition.History)))
+            throw new System.ArgumentException(
+                "The Unity projection must retain the exact Core-owned event/history read model.",
+                nameof(coreRuntimeSession));
+
         if (!ReferenceEquals(Composition.SpatialNetwork, SpatialNetwork)
             || !ReferenceEquals(Composition.ExplorableSites, ExplorableSites)
             || !Runtime.HasSameP12RuntimeIdentitySpatialOwners(IdentityRegistry, SpatialNetwork, ExplorableSites)
@@ -686,8 +693,9 @@ public class TesteSimulacao : MonoBehaviour
                                 stagedSelectedDefinitions.Configuration.enabledModules);
                             AppendScenarioDiagnostics(effectiveConfiguration);
 
-                            if (!dailyV1Application.TryPrepareInitialGenesis(
+                            if (!dailyV1Application.TryPrepareInitialGenesisWithHostLogger(
                                     stagedSelectedDefinitions,
+                                    logger,
                                     completedStage =>
                                     {
                                         if (!coreGenesisCompletedStages.Add(completedStage))
@@ -2818,10 +2826,14 @@ public class TesteSimulacao : MonoBehaviour
         selectedInitialRuntimeOwnerGraph = graph;
         selectedRuntimeOwnerGraphBuilder = null;
 
-        historyStore = new HistoryStore();
-        domainEventStore = new DomainEventStore(historyStore, new HistoryPolicy(), logger);
-        domainEventRecorder = new DomainEventRecorder(
-            runtimeIdAllocator, simulationTime, recordSequence, domainEventStore, logger);
+        DailyV1DomainEventAuthority eventAuthority = composition.EventAuthority;
+        if (eventAuthority == null
+            || !eventAuthority.IsFor(runtimeIdAllocator, simulationTime, recordSequence))
+            throw new System.InvalidOperationException(
+                "Core Daily-v1 genesis did not retain the exact event/history runtime authority.");
+        historyStore = eventAuthority.History;
+        domainEventStore = eventAuthority.EventStore;
+        domainEventRecorder = eventAuthority.Recorder;
         decisionRecorder = new NpcDecisionRecorder(
             runtimeIdAllocator, simulationTime, recordSequence, decisionStore, logger);
         npcChronicleService = new NpcChronicleService(decisionStore, domainEventStore);

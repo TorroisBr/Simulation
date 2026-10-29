@@ -246,6 +246,16 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     imageRestoreStages.Add),
                 Is.True, imageRestoreFailure + ": " + imageRestoreDiagnostic);
             Assert.That(imageRestored, Is.Not.Null);
+            DailyV1DomainEventAuthority restoredEventAuthority =
+                imageRestored.CoreRuntimeSession.EventAuthority;
+            Assert.That(restoredEventAuthority, Is.Not.Null);
+            Assert.That(restoredEventAuthority.EventStore,
+                Is.SameAs(imageRestored.Composition.DomainEventStore));
+            Assert.That(restoredEventAuthority.History, Is.SameAs(imageRestored.Composition.History));
+            Assert.That(restoredEventAuthority.EventStore.Events, Is.Empty,
+                "P12 restores a fresh event read model; event rows are not part of the persistence profile.");
+            Assert.That(restoredEventAuthority.History.HistoricalEvents, Is.Empty,
+                "P12 restores a fresh history read model; history rows are not part of the persistence profile.");
             Assert.That(imageRestoreStages, Does.Contain(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured));
             Assert.That(imageRestoreStages, Does.Contain(P12GDailyV1RestoreStage.BoundaryAdmitted));
             DailyCaptureEligibilityToken imageRestoredToken = GetCompletedToken(imageRestored.Runtime);
@@ -627,11 +637,12 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         // PoliticalWorldRevision is a constructor seed for this unpublished
         // runtime root; no registered-owner write is needed after census.
         SimulationLogger logger = UnitySimulationLoggerAdapter.Create(config.LogSettings);
-        HistoryStore history = new HistoryStore();
-        DomainEventStore eventStore = new DomainEventStore(history, new HistoryPolicy(), logger);
+        DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
+            stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, logger);
+        HistoryStore history = eventAuthority.History;
+        DomainEventStore eventStore = eventAuthority.EventStore;
         NpcDecisionStore decisions = new NpcDecisionStore();
-        DomainEventRecorder eventRecorder = new DomainEventRecorder(
-            stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, eventStore, logger);
+        DomainEventRecorder eventRecorder = eventAuthority.Recorder;
         NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(
             stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, decisions, logger);
         EconomyTransactionService economyTransactions = new EconomyTransactionService();
@@ -729,11 +740,9 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             stagedE,
             stagedF,
             stagedTime,
-            eventStore,
-            history,
+            eventAuthority,
             decisions,
             decisionRecorder,
-            eventRecorder,
             economyTransactions,
             logger,
             sessionContext,
@@ -762,11 +771,9 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         P12EDailyV1OwnerPackage stagedE,
         P12FDailyV1OwnerPackage stagedF,
         SimulationTime stagedTime,
-        DomainEventStore eventStore,
-        HistoryStore history,
+        DailyV1DomainEventAuthority eventAuthority,
         NpcDecisionStore decisions,
         NpcDecisionRecorder decisionRecorder,
-        DomainEventRecorder eventRecorder,
         EconomyTransactionService economyTransactions,
         SimulationLogger logger,
         SimulationRuntimeAdmissionContext admissionContext,
@@ -774,6 +781,9 @@ public sealed partial class P12GPoliticalBindingRestoreTests
     {
         SimulationConfigData config = anchor.Configuration;
         EffectiveSimulationConfiguration effective = anchor.Runtime.Configuration;
+        HistoryStore history = eventAuthority.History;
+        DomainEventStore eventStore = eventAuthority.EventStore;
+        DomainEventRecorder eventRecorder = eventAuthority.Recorder;
         Dictionary<SpatialLocationRuntime, CityRuntime> cityByLocation =
             new Dictionary<SpatialLocationRuntime, CityRuntime>();
         foreach (CityRuntime city in stagedD.Cities)
@@ -966,6 +976,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             runtime.ExecutionBoundaryState,
             composition.SelectedDefinitions,
             anchor.Token.AbsoluteDay,
+            eventAuthority,
             out DailyV1ActiveRuntimeSession coreRuntimeSession,
             out string activeSessionDiagnostic), Is.True, activeSessionDiagnostic);
         return new SimulationActiveSession(

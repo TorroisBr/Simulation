@@ -136,7 +136,8 @@ internal sealed class DailyV1ActiveRuntimeSession
         string profileFingerprint,
         long lastEconomySnapshotDay,
         DailyV1GenesisComposition genesisComposition,
-        DailyV1P12CRuntimeRoots p12CRoots)
+        DailyV1P12CRuntimeRoots p12CRoots,
+        DailyV1DomainEventAuthority eventAuthority)
     {
         ExecutionBoundaryState = executionBoundaryState;
         Definitions = definitions;
@@ -144,12 +145,14 @@ internal sealed class DailyV1ActiveRuntimeSession
         ReportState = new DailyV1SessionReportState(lastEconomySnapshotDay);
         GenesisComposition = genesisComposition;
         P12CRoots = p12CRoots;
+        EventAuthority = eventAuthority ?? throw new ArgumentNullException(nameof(eventAuthority));
     }
 
     internal DailyV1ExecutionBoundaryState ExecutionBoundaryState { get; }
     internal DailyV1SessionReportState ReportState { get; }
     internal DailyV1GenesisComposition GenesisComposition { get; }
     internal DailyV1P12CRuntimeRoots P12CRoots { get; }
+    internal DailyV1DomainEventAuthority EventAuthority { get; }
     internal DailyV1SelectedRuntimeOwnerGraph OwnerGraph =>
         ExecutionBoundaryState.SelectedRuntimeOwnerGraph;
     internal DailyV1EffectiveDefinitions Definitions { get; }
@@ -194,9 +197,44 @@ internal sealed class DailyV1ActiveRuntimeSession
         DailyV1EffectiveDefinitions expectedDefinitions,
         long lastEconomySnapshotDay,
         out DailyV1ActiveRuntimeSession session,
+        out string diagnostic)
+    {
+        session = null;
+        diagnostic = null;
+        if (executionBoundaryState == null)
+        {
+            diagnostic = "The active Core session requires its exact execution boundary.";
+            return false;
+        }
+
+        DailyV1DomainEventAuthority eventAuthority;
+        try
+        {
+            eventAuthority = DailyV1DomainEventAuthority.Create(
+                executionBoundaryState.SelectedRuntimeIdAllocator,
+                executionBoundaryState.SimulationTime,
+                executionBoundaryState.SelectedRecordSequence);
+        }
+        catch (ArgumentException exception)
+        {
+            diagnostic = "The Core session could not create its exact event/history authority: "
+                + exception.Message;
+            return false;
+        }
+
+        return TryCreate(executionBoundaryState, expectedDefinitions,
+            lastEconomySnapshotDay, eventAuthority, out session, out diagnostic);
+    }
+
+    internal static bool TryCreate(
+        DailyV1ExecutionBoundaryState executionBoundaryState,
+        DailyV1EffectiveDefinitions expectedDefinitions,
+        long lastEconomySnapshotDay,
+        DailyV1DomainEventAuthority eventAuthority,
+        out DailyV1ActiveRuntimeSession session,
         out string diagnostic) =>
         TryCreateCore(executionBoundaryState, expectedDefinitions, lastEconomySnapshotDay,
-            null, null, out session, out diagnostic);
+            null, null, eventAuthority, out session, out diagnostic);
 
     internal static bool TryCreate(
         DailyV1GenesisComposition genesisComposition,
@@ -225,7 +263,8 @@ internal sealed class DailyV1ActiveRuntimeSession
 
         return TryCreateCore(genesisComposition.ExecutionBoundaryState,
             genesisComposition.Definitions, lastEconomySnapshotDay,
-            genesisComposition, p12CRoots, out session, out diagnostic);
+            genesisComposition, p12CRoots, genesisComposition.EventAuthority,
+            out session, out diagnostic);
     }
 
     internal static bool TryCreateRestored(
@@ -234,6 +273,7 @@ internal sealed class DailyV1ActiveRuntimeSession
         long lastEconomySnapshotDay,
         P12CP9GenesisManifestCoreSnapshot p9Manifest,
         SpatialAuthorityStore spatialAuthority,
+        DailyV1DomainEventAuthority eventAuthority,
         out DailyV1ActiveRuntimeSession session,
         out string diagnostic)
     {
@@ -244,7 +284,8 @@ internal sealed class DailyV1ActiveRuntimeSession
             return false;
 
         return TryCreateCore(executionBoundaryState, expectedDefinitions,
-            lastEconomySnapshotDay, null, p12CRoots, out session, out diagnostic);
+            lastEconomySnapshotDay, null, p12CRoots, eventAuthority,
+            out session, out diagnostic);
     }
 
     private static bool TryCreateCore(
@@ -253,6 +294,7 @@ internal sealed class DailyV1ActiveRuntimeSession
         long lastEconomySnapshotDay,
         DailyV1GenesisComposition genesisComposition,
         DailyV1P12CRuntimeRoots p12CRoots,
+        DailyV1DomainEventAuthority eventAuthority,
         out DailyV1ActiveRuntimeSession session,
         out string diagnostic)
     {
@@ -274,7 +316,12 @@ internal sealed class DailyV1ActiveRuntimeSession
             || executionBoundaryState.WorldId == null
             || executionBoundaryState.SimulationTime == null
             || executionBoundaryState.ConfigurationIdentity == null
-            || executionBoundaryState.CalendarIdentity == null)
+            || executionBoundaryState.CalendarIdentity == null
+            || eventAuthority == null
+            || !eventAuthority.IsFor(
+                executionBoundaryState.SelectedRuntimeIdAllocator,
+                executionBoundaryState.SimulationTime,
+                executionBoundaryState.SelectedRecordSequence))
         {
             diagnostic = "The Core execution boundary is not the exact admitted selected Daily-v1 runtime for these definitions.";
             return false;
@@ -299,7 +346,7 @@ internal sealed class DailyV1ActiveRuntimeSession
 
         session = new DailyV1ActiveRuntimeSession(
             executionBoundaryState, expectedDefinitions, profileFingerprint,
-            lastEconomySnapshotDay, genesisComposition, p12CRoots);
+            lastEconomySnapshotDay, genesisComposition, p12CRoots, eventAuthority);
         if (p12CRoots != null && !p12CRoots.IsFor(session))
         {
             session = null;

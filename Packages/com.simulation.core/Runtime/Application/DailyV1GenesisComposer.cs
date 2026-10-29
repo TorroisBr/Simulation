@@ -27,6 +27,7 @@ internal sealed class DailyV1GenesisComposition
     internal SimulationCalendar Calendar { get; }
     internal DailyV1ExecutionBoundaryState ExecutionBoundaryState { get; }
     internal SpatialAuthorityStore SpatialAuthority { get; }
+    internal DailyV1DomainEventAuthority EventAuthority { get; }
     internal LegacySpatialAnchorBindingStore LegacySpatialAnchorBindings { get; }
     internal DailyV1SelectedRuntimeOwnerGraph OwnerGraph { get; }
 
@@ -50,6 +51,7 @@ internal sealed class DailyV1GenesisComposition
         SimulationCalendar calendar,
         DailyV1ExecutionBoundaryState executionBoundaryState,
         SpatialAuthorityStore spatialAuthority,
+        DailyV1DomainEventAuthority eventAuthority,
         LegacySpatialAnchorBindingStore legacySpatialAnchorBindings,
         DailyV1SelectedRuntimeOwnerGraph ownerGraph)
     {
@@ -77,6 +79,11 @@ internal sealed class DailyV1GenesisComposition
         ExecutionBoundaryState = executionBoundaryState
             ?? throw new ArgumentNullException(nameof(executionBoundaryState));
         SpatialAuthority = spatialAuthority ?? throw new ArgumentNullException(nameof(spatialAuthority));
+        EventAuthority = eventAuthority ?? throw new ArgumentNullException(nameof(eventAuthority));
+        if (!EventAuthority.IsFor(RuntimeIdAllocator, SimulationTime, RecordSequence))
+            throw new ArgumentException(
+                "The genesis event authority must retain the exact Core runtime identity roots.",
+                nameof(eventAuthority));
         LegacySpatialAnchorBindings = legacySpatialAnchorBindings
             ?? throw new ArgumentNullException(nameof(legacySpatialAnchorBindings));
         OwnerGraph = ownerGraph ?? throw new ArgumentNullException(nameof(ownerGraph));
@@ -116,6 +123,18 @@ internal static class DailyV1GenesisComposer
         Func<WorldId> allocateWorldId,
         Action<string> stageCompleted,
         out DailyV1GenesisComposition composition,
+        out string diagnostic) =>
+        TryComposeSelectedOwnersWithHostLogger(
+            definitions, admissionContext, allocateWorldId, stageCompleted, null,
+            out composition, out diagnostic);
+
+    internal static bool TryComposeSelectedOwnersWithHostLogger(
+        DailyV1EffectiveDefinitions definitions,
+        SimulationRuntimeAdmissionContext admissionContext,
+        Func<WorldId> allocateWorldId,
+        Action<string> stageCompleted,
+        SimulationLogger diagnosticLogger,
+        out DailyV1GenesisComposition composition,
         out string diagnostic)
     {
         composition = null;
@@ -150,6 +169,8 @@ internal static class DailyV1GenesisComposer
         PersonStore personStore = new PersonStore();
         ActorChoiceStore actorChoiceStore = new ActorChoiceStore(personStore);
         RuntimeIdAllocator runtimeIds = new RuntimeIdAllocator();
+        DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
+            runtimeIds, time, recordSequence, diagnosticLogger);
         CalendarDefinition calendarDefinition = definitions.Calendar.monthLengths != null
             && definitions.Calendar.monthLengths.Count > 0
             ? new CalendarDefinition(
@@ -260,7 +281,8 @@ internal static class DailyV1GenesisComposer
                         worldId, runtimeIds, time, randomSource, recordSequence,
                         decisionStore, personStore, actorChoiceStore, travelParties, expeditions,
                         admissionContext, definitions.EffectiveConfiguration,
-                        calendar, executionBoundaryState, spatialAuthority, anchorBindings, graph);
+                        calendar, executionBoundaryState, spatialAuthority, eventAuthority,
+                        anchorBindings, graph);
                     continue;
                 }
 

@@ -552,11 +552,12 @@ internal static partial class P12GDailyV1RestoreCoordinator
 
             SimulationTime stagedTime = new SimulationTime(sourceToken.AbsoluteDay);
             SimulationLogger logger = UnitySimulationLoggerAdapter.Create(sourceSession.Configuration.LogSettings);
-            HistoryStore history = new HistoryStore();
-            DomainEventStore eventStore = new DomainEventStore(history, new HistoryPolicy(), logger);
+            DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
+                stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, logger);
+            HistoryStore history = eventAuthority.History;
+            DomainEventStore eventStore = eventAuthority.EventStore;
             NpcDecisionStore decisions = new NpcDecisionStore();
-            DomainEventRecorder eventRecorder = new DomainEventRecorder(
-                stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, eventStore, logger);
+            DomainEventRecorder eventRecorder = eventAuthority.Recorder;
             NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(
                 stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, decisions, logger);
             EconomyTransactionService economyTransactions = new EconomyTransactionService();
@@ -633,11 +634,9 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     stagedE,
                     stagedF,
                     stagedTime,
-                    eventStore,
-                    history,
+                    eventAuthority,
                     decisions,
                     decisionRecorder,
-                    eventRecorder,
                     economyTransactions,
                     logger,
                     restoredAdmissionContextFactoryForTest,
@@ -1255,11 +1254,9 @@ internal static partial class P12GDailyV1RestoreCoordinator
         P12EDailyV1OwnerPackage stagedE,
         P12FDailyV1OwnerPackage stagedF,
         SimulationTime time,
-        DomainEventStore eventStore,
-        HistoryStore history,
+        DailyV1DomainEventAuthority eventAuthority,
         NpcDecisionStore decisions,
         NpcDecisionRecorder decisionRecorder,
-        DomainEventRecorder eventRecorder,
         EconomyTransactionService economyTransactions,
         SimulationLogger logger,
         Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest,
@@ -1270,6 +1267,18 @@ internal static partial class P12GDailyV1RestoreCoordinator
     {
         candidate = null;
         diagnostic = null;
+        if (eventAuthority == null
+            || stagedC == null
+            || time == null
+            || !eventAuthority.IsFor(stagedC.RuntimeIdAllocator, time, stagedC.RecordSequence))
+        {
+            diagnostic = "The detached Core event/history roots do not match their staged runtime identities.";
+            return false;
+        }
+
+        DomainEventStore eventStore = eventAuthority.EventStore;
+        HistoryStore history = eventAuthority.History;
+        DomainEventRecorder eventRecorder = eventAuthority.Recorder;
         if (config == null || effective == null || calendar == null || selectedDefinitions == null || sourceAdmissionContext == null)
         {
             diagnostic = "The selected Daily-v1 host configuration and admission roots are required.";
@@ -1422,6 +1431,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     lastEconomySnapshotDay,
                     stagedC.CoreRoot.GenesisManifest,
                     stagedC.SpatialAuthority,
+                    eventAuthority,
                     out coreRuntimeSession,
                     out diagnostic))
                 return false;
@@ -1446,6 +1456,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     stagedF.ScheduledDirectives,
                     stagedF.Expeditions,
                     stagedC.SpatialAuthority,
+                    eventAuthority,
                     stagedC.RuntimeIdAllocator,
                     stagedC.DeterministicRandom,
                     stagedC.RecordSequence,

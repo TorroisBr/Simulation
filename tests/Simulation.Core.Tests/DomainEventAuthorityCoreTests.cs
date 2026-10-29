@@ -4,6 +4,30 @@ using NUnit.Framework;
 public sealed class DomainEventAuthorityCoreTests
 {
     [Test]
+    public void SelectedGenesisAndPreparedSessionRetainOneCoreEventHistoryAuthority()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, null, out DailyV1GenesisComposition composition,
+            out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);
+
+        DailyV1DomainEventAuthority authority = composition.EventAuthority;
+        Assert.That(authority, Is.Not.Null);
+        Assert.That(authority.IsFor(
+            composition.RuntimeIdAllocator, composition.SimulationTime,
+            composition.RecordSequence), Is.True);
+        Assert.That(authority.EventStore.UsesHistoryStore(authority.History), Is.True);
+        Assert.That(authority.Recorder.UsesEventStore(authority.EventStore), Is.True);
+        Assert.That(authority.EventStore.Events, Is.Empty);
+        Assert.That(authority.History.HistoricalEvents, Is.Empty);
+        Assert.That(session.EventAuthority, Is.SameAs(authority));
+        Assert.That(session.EventAuthority.EventStore, Is.SameAs(authority.EventStore));
+        Assert.That(session.EventAuthority.History, Is.SameAs(authority.History));
+    }
+
+    [Test]
     public void RecorderUsesExactAllocatorClockAndSequenceOwnersAndRecordsArrivalIdentity()
     {
         RuntimeIdAllocator allocator = new RuntimeIdAllocator();
@@ -119,13 +143,10 @@ public sealed class DomainEventAuthorityCoreTests
             new[] { new TravelPartyMemberCost(member.RuntimeId, 1f) });
         Assert.That(graph.TravelParties.Add(party), Is.True);
 
-        HistoryStore history = new HistoryStore();
-        DomainEventStore store = new DomainEventStore(history, new HistoryPolicy());
-        DomainEventRecorder recorder = new DomainEventRecorder(
-            composition.RuntimeIdAllocator,
-            composition.SimulationTime,
-            composition.RecordSequence,
-            store);
+        DailyV1DomainEventAuthority authority = composition.EventAuthority;
+        HistoryStore history = authority.History;
+        DomainEventStore store = authority.EventStore;
+        DomainEventRecorder recorder = authority.Recorder;
         DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
         Assert.That(state.TryBindSelectedTravelEventRecorders(recorder, null), Is.True);
         Assert.That(state.TryRecordSelectedTravelPartyArrival(
@@ -218,14 +239,13 @@ public sealed class DomainEventAuthorityCoreTests
             new DailyV1SelectedSoloTravelDayResult(
                 npc, arrivalPlan, shouldReport: true, wasCommitted: true,
                 arrived: true, decisionId);
-        HistoryStore history = new HistoryStore();
-        DomainEventStore store = new DomainEventStore(history, new HistoryPolicy());
+        DailyV1DomainEventAuthority authority = composition.EventAuthority;
+        HistoryStore history = authority.History;
+        DomainEventStore store = authority.EventStore;
         DomainEventRecorder wrongClockRecorder = new DomainEventRecorder(
             composition.RuntimeIdAllocator, new SimulationTime(0L),
             composition.RecordSequence, store);
-        DomainEventRecorder exactRecorder = new DomainEventRecorder(
-            composition.RuntimeIdAllocator, composition.SimulationTime,
-            composition.RecordSequence, store);
+        DomainEventRecorder exactRecorder = authority.Recorder;
 
         Assert.That(composition.ExecutionBoundaryState.TryBindSelectedTravelEventRecorders(
             wrongClockRecorder, null), Is.False,

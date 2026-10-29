@@ -160,11 +160,12 @@ internal static partial class P12GDailyV1RestoreCoordinator
             SimulationLogger logger = UnitySimulationLoggerAdapter.Create(configuration.LogSettings);
             logger.BeginSimulation(configuration.simulationName, configuration.EnabledModules,
                 configuration.Cities.Count, configuration.Npcs.Count);
-            HistoryStore history = new HistoryStore();
-            DomainEventStore eventStore = new DomainEventStore(history, new HistoryPolicy(), logger);
+            DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
+                stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, logger);
+            HistoryStore history = eventAuthority.History;
+            DomainEventStore eventStore = eventAuthority.EventStore;
             NpcDecisionStore decisions = new NpcDecisionStore(logger);
-            DomainEventRecorder eventRecorder = new DomainEventRecorder(
-                stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, eventStore, logger);
+            DomainEventRecorder eventRecorder = eventAuthority.Recorder;
             NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(
                 stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, decisions, logger);
             EconomyTransactionService economyTransactions = new EconomyTransactionService();
@@ -201,8 +202,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             if (!TryBuildRestoredSession(configuration, effective, calendar, selectedDefinitions,
                     bootstrapAdmissionContext, image.Header.PoliticalWorldRevision,
                     image.Header.LastEconomySnapshotDay, stagedC, stagedD, stagedE, stagedF,
-                    stagedTime, eventStore, history, decisions, decisionRecorder,
-                    eventRecorder, economyTransactions, logger, null,
+                    stagedTime, eventAuthority, decisions, decisionRecorder,
+                    economyTransactions, logger, null,
                     application, replacementOperation,
                     out SimulationActiveSession candidate, out diagnostic)
                 || candidate == null)
