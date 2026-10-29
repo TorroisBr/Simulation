@@ -30,7 +30,7 @@ public sealed class P12EMilitaryOwnerSnapshotTests
 
         PersonStore stagedPersons = new PersonStore();
         SpatialAuthorityStore stagedSpatial = CreateSpatial();
-        Assert.That(first.TryStage(stagedPersons, stagedSpatial, null,
+        Assert.That(first.TryStage(stagedPersons, stagedSpatial, false,
             out ArmedForceStore stagedForce,
             out ContingentManpowerStateStore stagedManpower,
             out ArmedForceSpatialStateStore stagedPositions,
@@ -41,7 +41,7 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         Assert.That(stagedManpower.ArmedForceStore, Is.SameAs(stagedForce));
         Assert.That(stagedPositions.ArmedForceStore, Is.SameAs(stagedForce));
         Assert.That(stagedPositions.SpatialAuthorityStore, Is.SameAs(stagedSpatial));
-        Assert.That(stagedPositions.LocalTopologyStore, Is.Null);
+        Assert.That(stagedPositions.HasSubLocationResolver, Is.False);
         Assert.That(stagedManpower.SourceProvider, Is.Null);
         Assert.That(stagedForce.Revision, Is.Zero);
         Assert.That(stagedManpower.Revision, Is.Zero);
@@ -155,7 +155,7 @@ public sealed class P12EMilitaryOwnerSnapshotTests
 
         PersonStore stagedPersons = CreatePersons();
         SpatialAuthorityStore stagedSpatial = CreateSpatial();
-        Assert.That(snapshot.TryStage(stagedPersons, stagedSpatial, null,
+        Assert.That(snapshot.TryStage(stagedPersons, stagedSpatial, false,
             out ArmedForceStore stagedForce,
             out ContingentManpowerStateStore stagedManpower,
             out ArmedForceSpatialStateStore stagedPositions,
@@ -253,7 +253,7 @@ public sealed class P12EMilitaryOwnerSnapshotTests
 
         PersonStore stagedPersons = CreatePersons();
         SpatialAuthorityStore stagedSpatial = CreateSpatial();
-        Assert.That(snapshot.TryStage(stagedPersons, stagedSpatial, null,
+        Assert.That(snapshot.TryStage(stagedPersons, stagedSpatial, false,
             out ArmedForceStore stagedForce,
             out ContingentManpowerStateStore stagedManpower,
             out ArmedForceSpatialStateStore stagedPositions,
@@ -294,7 +294,8 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         Assert.That(providerFailure.Code, Is.EqualTo(P12EMilitaryOwnerSnapshotFailureCode.UnsupportedSourceBinding));
 
         ArmedForceSpatialStateStore injectedTopology = new ArmedForceSpatialStateStore(
-            live.Forces, live.Spatial, CreateEmptyTopology());
+            live.Forces, live.Spatial,
+            new LocalTopologyArmedForceSubLocationResolver(CreateEmptyTopology()));
         MilitaryWorld topologyWorld = new MilitaryWorld(
             live.Persons, live.Forces, live.Manpower, injectedTopology, live.Spatial);
         IReadOnlyList<OwnerSectionCensusSnapshot> topologySections = CreateSections(topologyWorld);
@@ -351,7 +352,7 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         SpatialAuthorityStore spatial = CreateSpatial();
 
         P12EMilitaryOwnerSnapshot badSchema = Copy(valid, schemaVersion: valid.SchemaVersion + 1);
-        Assert.That(badSchema.TryStage(persons, spatial, null, out ArmedForceStore schemaForce,
+        Assert.That(badSchema.TryStage(persons, spatial, false, out ArmedForceStore schemaForce,
             out ContingentManpowerStateStore schemaManpower, out ArmedForceSpatialStateStore schemaPositions,
             out P12EMilitaryOwnerSnapshotFailure schemaFailure), Is.False);
         Assert.That(schemaForce, Is.Null);
@@ -360,11 +361,11 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         Assert.That(schemaFailure.Code, Is.EqualTo(P12EMilitaryOwnerSnapshotFailureCode.UnsupportedSchema));
 
         P12EMilitaryOwnerSnapshot badCount = Copy(valid, positionCount: valid.PositionCount + 1);
-        Assert.That(badCount.TryStage(persons, spatial, null, out _, out _, out _,
+        Assert.That(badCount.TryStage(persons, spatial, false, out _, out _, out _,
             out P12EMilitaryOwnerSnapshotFailure countFailure), Is.False);
         Assert.That(countFailure.Code, Is.EqualTo(P12EMilitaryOwnerSnapshotFailureCode.InvalidCardinality));
 
-        Assert.That(valid.TryStage(persons, spatial, CreateEmptyTopology(), out _, out _, out _,
+        Assert.That(valid.TryStage(persons, spatial, true, out _, out _, out _,
             out P12EMilitaryOwnerSnapshotFailure topologyFailure), Is.False);
         Assert.That(topologyFailure.Code, Is.EqualTo(P12EMilitaryOwnerSnapshotFailureCode.LocalTopologyComposed));
 
@@ -374,7 +375,7 @@ public sealed class P12EMilitaryOwnerSnapshotTests
             valid.ManpowerStates[0].Revision,
             valid.ManpowerStates[0].Cohorts);
         P12EMilitaryOwnerSnapshot sourceBound = Copy(valid, manpowerStates: new[] { sourceBoundRow });
-        Assert.That(sourceBound.TryStage(persons, spatial, null, out _, out _, out _,
+        Assert.That(sourceBound.TryStage(persons, spatial, false, out _, out _, out _,
             out P12EMilitaryOwnerSnapshotFailure sourceFailure), Is.False);
         Assert.That(sourceFailure.Code, Is.EqualTo(P12EMilitaryOwnerSnapshotFailureCode.UnsupportedSourceBinding));
 
@@ -389,7 +390,7 @@ public sealed class P12EMilitaryOwnerSnapshotTests
                 "site-runtime",
                 "entrance"));
         P12EMilitaryOwnerSnapshot topologyBound = Copy(valid, positions: new[] { topologyPosition });
-        Assert.That(topologyBound.TryStage(persons, spatial, null, out _, out _, out _,
+        Assert.That(topologyBound.TryStage(persons, spatial, false, out _, out _, out _,
             out P12EMilitaryOwnerSnapshotFailure topologyReferenceFailure), Is.False);
         Assert.That(topologyReferenceFailure.Code, Is.EqualTo(P12EMilitaryOwnerSnapshotFailureCode.InvalidSpatialReference));
 
@@ -700,7 +701,7 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         Assert.That(ArmedForceSpatialStateStore.TryCreateFromP12EOwnerSnapshot(
             stagedForce,
             live.Spatial,
-            null,
+            false,
             new[] { unresolvedPosition },
             snapshot.PositionRevision,
             out ArmedForceSpatialStateStore failedPositions,
@@ -715,7 +716,7 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         Assert.That(ArmedForceSpatialStateStore.TryCreateFromP12EOwnerSnapshot(
             stagedForce,
             live.Spatial,
-            null,
+            false,
             live.Positions.Positions,
             -1L,
             out ArmedForceSpatialStateStore failedNegativePositionRevision,
@@ -841,7 +842,7 @@ public sealed class P12EMilitaryOwnerSnapshotTests
         bool success = snapshot.TryStage(
             CreatePersons(),
             CreateSpatial(),
-            null,
+            false,
             out ArmedForceStore stagedForce,
             out ContingentManpowerStateStore stagedManpower,
             out ArmedForceSpatialStateStore stagedPositions,

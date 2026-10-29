@@ -356,7 +356,7 @@ internal sealed class P12EDailyV1OwnerPackage
             PoliticalDecisionStore stagedDecisions = coreOwnerStage.PoliticalDecisions;
 
             if (!militarySnapshot.TryStage(
-                    stagedD.Persons, stagedC.SpatialAuthority, null,
+                    stagedD.Persons, stagedC.SpatialAuthority, false,
                     out ArmedForceStore stagedArmedForces,
                     out ContingentManpowerStateStore stagedManpower,
                     out ArmedForceSpatialStateStore stagedPositions, out _))
@@ -555,7 +555,8 @@ internal sealed class P12EDailyV1OwnerPackage
             PoliticalSupportStore stagedSupport = coreOwnerStage.PoliticalSupport;
             PoliticalDecisionStore stagedDecisions = coreOwnerStage.PoliticalDecisions;
 
-            if (!militarySnapshot.TryStage(stagedD.Persons, stagedC.SpatialAuthority, null,
+            if (!militarySnapshot.TryStage(stagedD.Persons, stagedC.SpatialAuthority,
+                    false,
                     out ArmedForceStore stagedArmedForces,
                     out ContingentManpowerStateStore stagedManpower,
                     out ArmedForceSpatialStateStore stagedPositions, out _))

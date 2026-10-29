@@ -219,6 +219,19 @@ public sealed class ArmedForceSpatialInvariantReport
 }
 
 /// <summary>
+/// Host projection used only for P10 SubLocation references. Core continues to
+/// resolve canonical P8 Hex, Location, and Crossing identities itself.
+/// </summary>
+internal interface IArmedForceSubLocationResolver
+{
+    bool TryResolve(
+        SpatialAuthorityStore authority,
+        SpatialReference reference,
+        out SpatialAuthorityResolution resolution,
+        out SpatialAuthorityFailure failure);
+}
+
+/// <summary>
 /// Authoritative optional current physical position for ArmedForce identities.
 /// It is deliberately separate from force identity, hierarchy, detachment,
 /// composition, lifecycle, and the legacy OperationalLocationReference shim.
@@ -230,7 +243,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
     private readonly ArmedForceStore armedForceStore;
     private readonly SpatialAuthorityStore spatialAuthorityStore;
-    private readonly LocalTopologyStore localTopologyStore;
+    private readonly IArmedForceSubLocationResolver subLocationResolver;
     private readonly Dictionary<string, OperationalRecord> recordsByForceId =
         new Dictionary<string, OperationalRecord>(StringComparer.Ordinal);
     private P16AMilitaryMovementProfile p16Profile;
@@ -240,12 +253,19 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
 
     public ArmedForceSpatialStateStore(
         ArmedForceStore armedForceStore,
+        SpatialAuthorityStore spatialAuthorityStore)
+        : this(armedForceStore, spatialAuthorityStore, null)
+    {
+    }
+
+    internal ArmedForceSpatialStateStore(
+        ArmedForceStore armedForceStore,
         SpatialAuthorityStore spatialAuthorityStore,
-        LocalTopologyStore localTopologyStore = null)
+        IArmedForceSubLocationResolver subLocationResolver)
     {
         this.armedForceStore = armedForceStore ?? throw new ArgumentNullException(nameof(armedForceStore));
         this.spatialAuthorityStore = spatialAuthorityStore ?? throw new ArgumentNullException(nameof(spatialAuthorityStore));
-        this.localTopologyStore = localTopologyStore;
+        this.subLocationResolver = subLocationResolver;
     }
 
     /// <summary>
@@ -528,7 +548,8 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
 
     public ArmedForceStore ArmedForceStore => armedForceStore;
     public SpatialAuthorityStore SpatialAuthorityStore => spatialAuthorityStore;
-    public LocalTopologyStore LocalTopologyStore => localTopologyStore;
+    internal IArmedForceSubLocationResolver SubLocationResolver => subLocationResolver;
+    internal bool HasSubLocationResolver => subLocationResolver != null;
     public long Revision => revision;
     public int Count
     {
@@ -590,7 +611,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
     internal static bool TryCreateFromP12EOwnerSnapshot(
         ArmedForceStore stagedArmedForceStore,
         SpatialAuthorityStore stagedSpatialAuthorityStore,
-        LocalTopologyStore stagedLocalTopologyStore,
+        bool stagedLocalTopologyComposed,
         IReadOnlyList<ArmedForceSpatialPosition> stagedPositions,
         long ownerRevision,
         out ArmedForceSpatialStateStore staged,
@@ -603,7 +624,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
             || stagedPositions == null
             || ownerRevision < 0L)
             return false;
-        if (stagedLocalTopologyStore != null)
+        if (stagedLocalTopologyComposed)
         {
             diagnostic = "Daily-v1 LocalTopology remains NOT_COMPOSED.";
             return false;
@@ -784,18 +805,20 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
             return false;
         }
 
-        SpatialResolution requiredResolution;
+        SpatialAuthorityResolution requiredResolution;
         SpatialAuthorityFailure requiredFailure;
-        spatialAuthorityStore.TryResolve(
+        TryResolveSpatialReference(
+            spatialAuthorityStore,
+            subLocationResolver,
             requiredArea,
-            localTopologyStore,
             out requiredResolution,
             out requiredFailure);
-        SpatialResolution currentResolution;
+        SpatialAuthorityResolution currentResolution;
         SpatialAuthorityFailure currentFailure;
-        spatialAuthorityStore.TryResolve(
+        TryResolveSpatialReference(
+            spatialAuthorityStore,
+            subLocationResolver,
             currentPosition,
-            localTopologyStore,
             out currentResolution,
             out currentFailure);
 
@@ -872,7 +895,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
     internal ArmedForceSpatialStateStore Clone(
         ArmedForceStore targetArmedForceStore,
         SpatialAuthorityStore targetSpatialAuthorityStore,
-        LocalTopologyStore targetLocalTopologyStore)
+        IArmedForceSubLocationResolver targetSubLocationResolver)
     {
         if (targetArmedForceStore == null) throw new ArgumentNullException(nameof(targetArmedForceStore));
         if (targetSpatialAuthorityStore == null) throw new ArgumentNullException(nameof(targetSpatialAuthorityStore));
@@ -880,7 +903,7 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
         ArmedForceSpatialStateStore copy = new ArmedForceSpatialStateStore(
             targetArmedForceStore,
             targetSpatialAuthorityStore,
-            targetLocalTopologyStore);
+            targetSubLocationResolver);
         copy.revision = revision;
         copy.requiresP17AProvenance = requiresP17AProvenance;
         copy.trustedP17AAuthorityId = trustedP17AAuthorityId;
@@ -893,8 +916,12 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
                     nameof(targetArmedForceStore));
             }
 
-            if (entry.Value.Position != null && targetSpatialAuthorityStore.TryResolve(
-                    entry.Value.Position, targetLocalTopologyStore, out _, out SpatialAuthorityFailure failure) == false)
+            if (entry.Value.Position != null && !TryResolveSpatialReference(
+                    targetSpatialAuthorityStore,
+                    targetSubLocationResolver,
+                    entry.Value.Position,
+                    out _,
+                    out SpatialAuthorityFailure failure))
             {
                 throw new ArgumentException(
                     "The ArmedForce spatial state references an area absent from the target spatial authority: " + failure,
@@ -997,11 +1024,12 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
                 out failure);
         }
 
-        if (spatialAuthorityStore.TryResolve(
+        if (!TryResolveSpatialReference(
+                spatialAuthorityStore,
+                subLocationResolver,
                 position,
-                localTopologyStore,
                 out _,
-                out SpatialAuthorityFailure authorityFailure) == false)
+                out SpatialAuthorityFailure authorityFailure))
         {
             return Fail(
                 ArmedForceSpatialFailureCode.SpatialReferenceNotRegistered,
@@ -1012,6 +1040,18 @@ public sealed class ArmedForceSpatialStateStore : IAuthoritativeMutationGuardBin
 
         failure = ArmedForceSpatialFailure.None;
         return true;
+    }
+
+    private static bool TryResolveSpatialReference(
+        SpatialAuthorityStore authority,
+        IArmedForceSubLocationResolver resolver,
+        SpatialReference reference,
+        out SpatialAuthorityResolution resolution,
+        out SpatialAuthorityFailure failure)
+    {
+        if (reference != null && reference.Kind == SpatialReferenceKind.SubLocation && resolver != null)
+            return resolver.TryResolve(authority, reference, out resolution, out failure);
+        return authority.TryResolveReference(reference, out resolution, out failure);
     }
 
     private bool CanAdvanceRevision(out ArmedForceSpatialFailure failure)

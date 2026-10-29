@@ -193,3 +193,37 @@ public static class SpatialAuthorityTopologyAdapter
         return false;
     }
 }
+
+/// <summary>
+/// Supplies only the P10 SubLocation projection needed by Core military
+/// spatial owners. P8 authority and all mutation/revision ownership remain in
+/// SpatialAuthorityStore.
+/// </summary>
+internal sealed class LocalTopologyArmedForceSubLocationResolver : IArmedForceSubLocationResolver
+{
+    internal LocalTopologyStore LocalTopologyStore { get; }
+
+    internal LocalTopologyArmedForceSubLocationResolver(LocalTopologyStore localTopologyStore)
+    {
+        LocalTopologyStore = localTopologyStore ?? throw new ArgumentNullException(nameof(localTopologyStore));
+    }
+
+    public bool TryResolve(
+        SpatialAuthorityStore authority,
+        SpatialReference reference,
+        out SpatialAuthorityResolution resolution,
+        out SpatialAuthorityFailure failure)
+    {
+        resolution = null;
+        if (!authority.TryResolve(reference, LocalTopologyStore,
+                out SpatialResolution projection, out failure))
+            return false;
+
+        resolution = new SpatialAuthorityResolution(
+            projection.Reference,
+            projection.Hex,
+            projection.Location,
+            projection.Crossing);
+        return true;
+    }
+}

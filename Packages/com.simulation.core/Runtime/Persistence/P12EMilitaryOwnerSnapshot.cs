@@ -134,7 +134,7 @@ internal sealed class P12EMilitaryOwnerSnapshot
             || !ReferenceEquals(positionOwner.ArmedForceStore, armedForceOwner))
             return Fail(P12EMilitaryOwnerSnapshotFailureCode.InvalidOwnerComposition,
                 "The three owners must be installed against the exact same ArmedForceStore.", out failure);
-        if (positionOwner.LocalTopologyStore != null)
+        if (positionOwner.HasSubLocationResolver)
             return Fail(P12EMilitaryOwnerSnapshotFailureCode.LocalTopologyComposed,
                 "Daily-v1 LocalTopology is NOT_COMPOSED; an injected topology owner rejects capture.", out failure);
         if (positionOwner.HasP17AProvenanceState)
@@ -296,7 +296,7 @@ internal sealed class P12EMilitaryOwnerSnapshot
             || manpowerOwner.SourceProvider != null
             || positionOwner.Revision != positionRevision
             || positionOwner.Count != positionCount
-            || positionOwner.LocalTopologyStore != null
+            || positionOwner.HasSubLocationResolver
             || positionOwner.HasP16ExtensionState
             || positionOwner.HasP17AProvenanceState
             || !MatchesOwnerSection(sharedOwnerSectionVector, ArmedForceStoreCensusProvider.ForcesSectionId,
@@ -334,7 +334,7 @@ internal sealed class P12EMilitaryOwnerSnapshot
     internal bool TryStage(
         PersonStore stagedPersons,
         SpatialAuthorityStore stagedSpatialAuthority,
-        LocalTopologyStore stagedLocalTopology,
+        bool stagedLocalTopologyComposed,
         out ArmedForceStore stagedArmedForce,
         out ContingentManpowerStateStore stagedManpower,
         out ArmedForceSpatialStateStore stagedPositions,
@@ -349,7 +349,7 @@ internal sealed class P12EMilitaryOwnerSnapshot
         if (stagedPersons == null || stagedSpatialAuthority == null)
             return Fail(P12EMilitaryOwnerSnapshotFailureCode.InvalidOwnerComposition,
                 "Staging requires the exact staged PersonStore and P8 spatial authority.", out failure);
-        if (stagedLocalTopology != null)
+        if (stagedLocalTopologyComposed)
             return Fail(P12EMilitaryOwnerSnapshotFailureCode.LocalTopologyComposed,
                 "Daily-v1 LocalTopology remains NOT_COMPOSED.", out failure);
         if (!TryValidateDocument(out failure)) return false;
@@ -453,7 +453,7 @@ internal sealed class P12EMilitaryOwnerSnapshot
             if (!ArmedForceSpatialStateStore.TryCreateFromP12EOwnerSnapshot(
                     forceCandidate,
                     stagedSpatialAuthority,
-                    null,
+                    stagedLocalTopologyComposed,
                     positions,
                     PositionRevision,
                     out ArmedForceSpatialStateStore positionCandidate,
@@ -716,9 +716,8 @@ internal sealed class P12EMilitaryOwnerSnapshot
         foreach (P12EForcePositionSnapshotRecord row in Positions)
         {
             if (!TryBuildSpatialReference(row.Reference, out SpatialReference position)
-                || !stagedSpatialAuthority.TryResolve(
+                || !stagedSpatialAuthority.TryResolveReference(
                     position,
-                    null,
                     out _,
                     out _))
                 return Fail(P12EMilitaryOwnerSnapshotFailureCode.InvalidSpatialReference,

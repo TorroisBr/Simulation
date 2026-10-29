@@ -24,6 +24,9 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionOfficeOwnerBridge.cs" Link="Institution/InstitutionOfficeOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionOfficeCensusProviders.cs" Link="Institution/InstitutionOfficeCensusProviders.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EInstitutionOfficeOwnerSnapshot.cs" Link="Persistence/P12EInstitutionOfficeOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EMilitaryOwnerSnapshot.cs" Link="Persistence/P12EMilitaryOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EMilitaryOwnerCodec.cs" Link="Persistence/P12EMilitaryOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EMilitaryOwnerCensusProviders.cs" Link="Persistence/P12EMilitaryOwnerCensusProviders.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EFactionCaptureSource.cs" Link="Persistence/IP12EFactionCaptureSource.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EPoliticalClaimCaptureSource.cs" Link="Persistence/IP12EPoliticalClaimCaptureSource.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EPoliticalSupportCaptureSource.cs" Link="Persistence/IP12EPoliticalSupportCaptureSource.cs" />
@@ -153,6 +156,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Military/ArmedForceContracts.cs" Link="Military/ArmedForceContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Military/ArmedForceStore.cs" Link="Military/ArmedForceStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Military/ArmedForceStoreCensusProviders.cs" Link="Military/ArmedForceStoreCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Military/ArmedForceSpatialPosition.cs" Link="Military/ArmedForceSpatialPosition.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Military/MilitaryManpowerFoundation.cs" Link="Military/MilitaryManpowerFoundation.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/DailyV1NpcLocalTopologyKnowledgeEmptyOwner.cs" Link="Knowledge/DailyV1NpcLocalTopologyKnowledgeEmptyOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1JusticeRecordsOwner.cs" Link="Person/DailyV1JusticeRecordsOwner.cs" />

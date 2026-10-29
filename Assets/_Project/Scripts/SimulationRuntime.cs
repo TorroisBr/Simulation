@@ -2649,7 +2649,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 resolvedManpowerSourceProvider);
         resolvedManpowerStateStore.AttachToArmedForceStore();
         LocalTopologyStore resolvedLocalTopologyStore = localTopologyStore
-            ?? armedForceSpatialStateStore?.LocalTopologyStore;
+            ?? (armedForceSpatialStateStore?.SubLocationResolver as LocalTopologyArmedForceSubLocationResolver)?.LocalTopologyStore;
         ArmedForceSpatialStateStore resolvedArmedForceSpatialStateStore =
             CloneArmedForceSpatialStateStore(
                 armedForceSpatialStateStore,
@@ -13339,7 +13339,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return new ArmedForceSpatialStateStore(
                 armedForceStore,
                 spatialAuthorityStore,
-                localTopologyStore);
+                localTopologyStore == null
+                    ? null
+                    : new LocalTopologyArmedForceSubLocationResolver(localTopologyStore));
         }
 
         ArmedForceSpatialInvariantReport report = source.ValidateInvariants();
@@ -13354,7 +13356,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         return source.Clone(
             armedForceStore,
             spatialAuthorityStore,
-            localTopologyStore);
+            localTopologyStore == null
+                ? null
+                : new LocalTopologyArmedForceSubLocationResolver(localTopologyStore));
     }
 
     private static PersistentConflictStore CloneConflictStore(
