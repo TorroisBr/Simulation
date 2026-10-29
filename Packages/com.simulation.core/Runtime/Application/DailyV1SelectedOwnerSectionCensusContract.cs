@@ -45,6 +45,7 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
     internal const string PersonLifeResidencePrefix = "p12b.person-life-residence/";
     internal const string PersonMembershipSectionId = "p12d.person.membership";
     internal const string PersonMaterializationBindingSectionId = "p12d.person.materialization-binding";
+    internal const string ExplorableSiteSectionId = "p12d.explorable-sites";
     internal const string JusticeRecordsSectionId = "p12b.justice-records";
     internal const string CrimeP18ReceiptsSectionId = "p12b.crime-p18-receipts";
     internal const string JusticeP18ReceiptsSectionId = "p12b.justice-p18-receipts";
@@ -73,7 +74,7 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
     {
         "p12c.runtime-identities.explorable-sites", "p12c.runtime-identities.local-places",
         "p12c.runtime-identities.local-connections", "p12c.runtime-identities.notable-items",
-        "p12d.explorable-sites", "p8b.passage-option-barrier-state", "p8b.crossings",
+        ExplorableSiteSectionId, "p8b.passage-option-barrier-state", "p8b.crossings",
         "p8c.city-site-location-bindings", "p8c.person-positions", "p8d.spatial-route-observations",
         "p8d.person-route-plan-history", "p12f.npc-decision-occurrence-receipts",
         "p12e.economy-keyed-sale-receipts"

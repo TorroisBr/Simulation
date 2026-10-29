@@ -18,7 +18,7 @@ internal static class P12ECrimeSocialAppraisalOwnerCodec
         out P12AOwnerSection section, out P12AResult result)
     {
         section = null;
-        string id = P12CrimeSocialAppraisalCensusProvider.OutcomesSectionId;
+        string id = P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId;
         result = Invalid(id);
         P12ECrimeOwnerSnapshotSection<P12ECrimeOutcomeSnapshotRow> values = snapshot?.Outcomes;
         if (!ValidSection(values, id, snapshot?.CapturedAbsoluteDay ?? -1L, out result)) return false;
@@ -50,7 +50,7 @@ internal static class P12ECrimeSocialAppraisalOwnerCodec
         out P12ECrimeOwnerSnapshotSection<P12ECrimeOutcomeSnapshotRow> values, out P12AResult result)
     {
         values = null;
-        string id = P12CrimeSocialAppraisalCensusProvider.OutcomesSectionId;
+        string id = P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId;
         result = Invalid(id);
         if (!ValidWireSection(section, id, capturedAbsoluteDay, out result)) return false;
         try
@@ -66,7 +66,7 @@ internal static class P12ECrimeSocialAppraisalOwnerCodec
                 records.Add(record);
             }
             values = new P12ECrimeOwnerSnapshotSection<P12ECrimeOutcomeSnapshotRow>(id,
-                P12CrimeSocialAppraisalCensusProvider.SchemaVersion, records.Count, section.Revision, records);
+                P12CrimeSocialAppraisalOwnerContract.SchemaVersion, records.Count, section.Revision, records);
             result = null;
             return true;
         }
@@ -82,7 +82,7 @@ internal static class P12ECrimeSocialAppraisalOwnerCodec
         out P12AOwnerSection section, out P12AResult result)
     {
         section = null;
-        string id = P12CrimeSocialAppraisalCensusProvider.KnowledgeSectionId;
+        string id = P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId;
         result = Invalid(id);
         P12ECrimeOwnerSnapshotSection<P12ECrimeKnowledgeSnapshotRow> values = snapshot?.Knowledge;
         if (!ValidSection(values, id, snapshot?.CapturedAbsoluteDay ?? -1L, out result)) return false;
@@ -114,7 +114,7 @@ internal static class P12ECrimeSocialAppraisalOwnerCodec
         out P12ECrimeOwnerSnapshotSection<P12ECrimeKnowledgeSnapshotRow> values, out P12AResult result)
     {
         values = null;
-        string id = P12CrimeSocialAppraisalCensusProvider.KnowledgeSectionId;
+        string id = P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId;
         result = Invalid(id);
         if (!ValidWireSection(section, id, capturedAbsoluteDay, out result)) return false;
         try
@@ -131,7 +131,7 @@ internal static class P12ECrimeSocialAppraisalOwnerCodec
                 records.Add(record);
             }
             values = new P12ECrimeOwnerSnapshotSection<P12ECrimeKnowledgeSnapshotRow>(id,
-                P12CrimeSocialAppraisalCensusProvider.SchemaVersion, records.Count, section.Revision, records);
+                P12CrimeSocialAppraisalOwnerContract.SchemaVersion, records.Count, section.Revision, records);
             result = null;
             return true;
         }
@@ -147,7 +147,7 @@ internal static class P12ECrimeSocialAppraisalOwnerCodec
         out P12AOwnerSection section, out P12AResult result)
     {
         section = null;
-        string id = P12CrimeSocialAppraisalCensusProvider.ReactionsSectionId;
+        string id = P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId;
         result = Invalid(id);
         P12ECrimeOwnerSnapshotSection<P12ESocialReactionSnapshotRow> values = snapshot?.Reactions;
         if (!ValidSection(values, id, snapshot?.CapturedAbsoluteDay ?? -1L, out result)) return false;
@@ -178,7 +178,7 @@ internal static class P12ECrimeSocialAppraisalOwnerCodec
         out P12ECrimeOwnerSnapshotSection<P12ESocialReactionSnapshotRow> values, out P12AResult result)
     {
         values = null;
-        string id = P12CrimeSocialAppraisalCensusProvider.ReactionsSectionId;
+        string id = P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId;
         result = Invalid(id);
         if (!ValidWireSection(section, id, capturedAbsoluteDay, out result)) return false;
         try
@@ -194,7 +194,7 @@ internal static class P12ECrimeSocialAppraisalOwnerCodec
                 records.Add(record);
             }
             values = new P12ECrimeOwnerSnapshotSection<P12ESocialReactionSnapshotRow>(id,
-                P12CrimeSocialAppraisalCensusProvider.SchemaVersion, records.Count, section.Revision, records);
+                P12CrimeSocialAppraisalOwnerContract.SchemaVersion, records.Count, section.Revision, records);
             result = null;
             return true;
         }
@@ -480,7 +480,7 @@ internal static class P12ECrimeSocialAppraisalOwnerCodec
                 result = new P12AResult(P12AResultCode.LimitExceeded, id);
             return false;
         }
-        if (values.SchemaVersion != P12CrimeSocialAppraisalCensusProvider.SchemaVersion)
+        if (values.SchemaVersion != P12CrimeSocialAppraisalOwnerContract.SchemaVersion)
         {
             result = new P12AResult(P12AResultCode.UnsupportedSchema, id);
             return false;
@@ -502,7 +502,7 @@ internal static class P12ECrimeSocialAppraisalOwnerCodec
             || section.Role != OwnerSectionRole.Required
             || section.AliasGroup != P12ADailyV1Census.ExpectedAliasGroupForSection(id)
             || section.Revision < 0L) return false;
-        if (section.Major != P12CrimeSocialAppraisalCensusProvider.SchemaVersion || section.Minor != 0)
+        if (section.Major != P12CrimeSocialAppraisalOwnerContract.SchemaVersion || section.Minor != 0)
         {
             result = new P12AResult(P12AResultCode.UnsupportedSchema, id);
             return false;
@@ -521,7 +521,7 @@ internal static class P12ECrimeSocialAppraisalOwnerCodec
         List<P12AOwnerRow> materialized = new List<P12AOwnerRow>(rows);
         if (!SectionLengthWithinLimit(materialized, out bool exceeded) && exceeded)
             throw new P12ALimitException();
-        return new P12AOwnerSection(id, P12CrimeSocialAppraisalCensusProvider.SchemaVersion, 0,
+        return new P12AOwnerSection(id, P12CrimeSocialAppraisalOwnerContract.SchemaVersion, 0,
             OwnerSectionRole.Required, P12ADailyV1Census.ExpectedAliasGroupForSection(id), revision, materialized);
     }
 

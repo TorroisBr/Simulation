@@ -6,7 +6,7 @@ using System;
 /// </summary>
 public sealed class ExplorableSiteCensusProvider : IOwnerSectionCensusProvider
 {
-    public const string SectionId = "p12d.explorable-sites";
+    public const string SectionId = DailyV1SelectedOwnerSectionCensusContract.ExplorableSiteSectionId;
     public const int SchemaVersion = 1;
 
     private readonly ExplorableSiteStore owner;

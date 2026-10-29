@@ -17,7 +17,7 @@ internal static class P12EJusticeRecordsOwnerCodec
     {
         section = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            P12CrimeJusticeCensusProvider.JusticeRecordsSectionId);
+            DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
         if (snapshot?.Records == null) return false;
 
         int count;
@@ -26,13 +26,13 @@ internal static class P12EJusticeRecordsOwnerCodec
         catch (OverflowException)
         {
             result = new P12AResult(P12AResultCode.LimitExceeded,
-                P12CrimeJusticeCensusProvider.JusticeRecordsSectionId);
+                DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
             return false;
         }
         if (count > P12AContinuationCodec.MaxRows)
         {
             result = new P12AResult(P12AResultCode.LimitExceeded,
-                P12CrimeJusticeCensusProvider.JusticeRecordsSectionId);
+                DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
             return false;
         }
         if (!snapshot.TryValidate(out _)) return false;
@@ -47,7 +47,7 @@ internal static class P12EJusticeRecordsOwnerCodec
                 if (!AccumulateEncodedLength(row, ref encodedLength))
                 {
                     result = new P12AResult(P12AResultCode.LimitExceeded,
-                        P12CrimeJusticeCensusProvider.JusticeRecordsSectionId, row.OwnerKey);
+                        DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId, row.OwnerKey);
                     return false;
                 }
                 rows.Add(row);
@@ -58,15 +58,15 @@ internal static class P12EJusticeRecordsOwnerCodec
                 if (!AccumulateEncodedLength(row, ref encodedLength))
                 {
                     result = new P12AResult(P12AResultCode.LimitExceeded,
-                        P12CrimeJusticeCensusProvider.JusticeRecordsSectionId, row.OwnerKey);
+                        DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId, row.OwnerKey);
                     return false;
                 }
                 rows.Add(row);
             }
 
-            string sectionId = P12CrimeJusticeCensusProvider.JusticeRecordsSectionId;
+            string sectionId = DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId;
             section = new P12AOwnerSection(sectionId,
-                P12CrimeJusticeCensusProvider.SchemaVersion, 0, OwnerSectionRole.Required,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, 0, OwnerSectionRole.Required,
                 P12ADailyV1Census.ExpectedAliasGroupForSection(sectionId), snapshot.Records.Revision, rows);
             result = null;
             return true;
@@ -76,7 +76,7 @@ internal static class P12EJusticeRecordsOwnerCodec
             section = null;
             result = new P12AResult(exception is P12ALimitException || exception is OverflowException
                 ? P12AResultCode.LimitExceeded : P12AResultCode.InvalidOwnerValue,
-                P12CrimeJusticeCensusProvider.JusticeRecordsSectionId);
+                DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
             return false;
         }
     }
@@ -86,17 +86,17 @@ internal static class P12EJusticeRecordsOwnerCodec
     {
         snapshot = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-            P12CrimeJusticeCensusProvider.JusticeRecordsSectionId);
+            DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
         if (section?.Rows.Count > P12AContinuationCodec.MaxRows)
         {
             result = new P12AResult(P12AResultCode.LimitExceeded,
-                P12CrimeJusticeCensusProvider.JusticeRecordsSectionId);
+                DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
             return false;
         }
-        string sectionId = P12CrimeJusticeCensusProvider.JusticeRecordsSectionId;
+        string sectionId = DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId;
         if (capturedAbsoluteDay < 0L || section == null || section.Revision < 0L
             || !string.Equals(section.Id, sectionId, StringComparison.Ordinal)
-            || section.Major != P12CrimeJusticeCensusProvider.SchemaVersion || section.Minor != 0
+            || section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0
             || section.Role != OwnerSectionRole.Required
             || !string.Equals(section.AliasGroup,
                 P12ADailyV1Census.ExpectedAliasGroupForSection(sectionId), StringComparison.Ordinal))

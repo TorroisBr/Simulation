@@ -100,18 +100,18 @@ internal static class P12ADailyV1ImageOwnerDecoder
         {
             if (!P12ARuntimeIdentityOwnerCodec.TryDecode(new[]
                 {
-                    Section(RuntimeIdentityRegistryCensusProvider.NpcsSectionId),
-                    Section(RuntimeIdentityRegistryCensusProvider.CitiesSectionId),
-                    Section(RuntimeIdentityRegistryCensusProvider.LocationsSectionId),
-                    Section(RuntimeIdentityRegistryCensusProvider.RoutesSectionId)
+                    Section(P12CRuntimeIdentitySectionContract.NpcsSectionId),
+                    Section(P12CRuntimeIdentitySectionContract.CitiesSectionId),
+                    Section(P12CRuntimeIdentitySectionContract.LocationsSectionId),
+                    Section(P12CRuntimeIdentitySectionContract.RoutesSectionId)
                 }, out P12CRuntimeIdentityOwnerSnapshot identities, out result)
                 || !P12ASpatialNetworkOwnerCodec.TryDecode(
-                    Section(SpatialNetworkCensusProvider.LocationsSectionId),
-                    Section(SpatialNetworkCensusProvider.RoutesSectionId),
+                    Section(P12ASpatialNetworkOwnerCodec.LocationsSectionId),
+                    Section(P12ASpatialNetworkOwnerCodec.RoutesSectionId),
                     out SpatialNetworkOwnerSnapshot spatial, out result)
                 || !P12APersonStoreOwnerCodec.TryDecode(
-                    Section(PersonMembershipCensusProvider.SectionId),
-                    Section(PersonMaterializationBindingCensusProvider.SectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId),
+                    Section(DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId),
                     out PersonStoreOwnerSnapshot persons, out result)
                 || !P12AGenealogyOwnerCodec.TryDecode(Section(GenealogyCensusProvider.SectionId),
                     out GenealogyOwnerSnapshot genealogy, out result)) return false;
@@ -126,7 +126,7 @@ internal static class P12ADailyV1ImageOwnerDecoder
                 .Select(Section).ToArray();
             if (!TryValidateExactEmptySections(emptySections, out result)) return false;
             P12AOwnerSection siteSection = emptySections.Single(section =>
-                section.Id == ExplorableSiteCensusProvider.SectionId);
+                section.Id == DailyV1SelectedOwnerSectionCensusContract.ExplorableSiteSectionId);
             ExplorableSiteOwnerSnapshot sites = new ExplorableSiteOwnerSnapshot(
                 ExplorableSiteOwnerSnapshot.CurrentSchemaVersion, siteSection.Revision,
                 Array.Empty<ExplorableSiteOwnerSnapshotRecord>());
@@ -174,14 +174,14 @@ internal static class P12ADailyV1ImageOwnerDecoder
                     out PersistentWarOwnerSnapshot wars,
                     out PersistentBattleOwnerSnapshot battles, out result)
                 || !P12EJusticeRecordsOwnerCodec.TryDecode(
-                    Section(P12CrimeJusticeCensusProvider.JusticeRecordsSectionId), day,
+                    Section(DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId), day,
                     out P12EJusticeRecordsOwnerSnapshot justice, out result)
                 || !TryDecodeCrimeSocial(image, day,
                     out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocial, out result)
                 || !P12AReceiptOwnerCodec.TryDecode(new[]
                     {
-                        Section(P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId),
-                        Section(P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId)
+                        Section(DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId),
+                        Section(DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId)
                     }, out P12ACrimeReceiptOwnerSnapshot crimeReceipts,
                     out P12AJusticeReceiptOwnerSnapshot justiceReceipts, out result)
                 || !P12AFPoliticalKnowledgeCodec.TryDecode(
@@ -228,13 +228,13 @@ internal static class P12ADailyV1ImageOwnerDecoder
     {
         snapshot = null;
         if (!P12ECrimeSocialAppraisalOwnerCodec.TryDecodeOutcomes(
-                Find(image, P12CrimeSocialAppraisalCensusProvider.OutcomesSectionId), day,
+                Find(image, P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId), day,
                 out P12ECrimeOwnerSnapshotSection<P12ECrimeOutcomeSnapshotRow> outcomes, out result)
             || !P12ECrimeSocialAppraisalOwnerCodec.TryDecodeKnowledge(
-                Find(image, P12CrimeSocialAppraisalCensusProvider.KnowledgeSectionId), day,
+                Find(image, P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId), day,
                 out P12ECrimeOwnerSnapshotSection<P12ECrimeKnowledgeSnapshotRow> knowledge, out result)
             || !P12ECrimeSocialAppraisalOwnerCodec.TryDecodeReactions(
-                Find(image, P12CrimeSocialAppraisalCensusProvider.ReactionsSectionId), day,
+                Find(image, P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId), day,
                 out P12ECrimeOwnerSnapshotSection<P12ESocialReactionSnapshotRow> reactions, out result))
             return false;
         snapshot = new P12ECrimeSocialAppraisalOwnerSnapshot(day, outcomes, knowledge, reactions);

@@ -154,15 +154,15 @@ internal static class P12AReceiptOwnerCodec
         foreach (P12AOwnerSection section in sections)
         {
             if (section == null) return false;
-            if (section.Id == P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId)
+            if (section.Id == DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId)
             { if (crimeSection != null) return false; crimeSection = section; }
-            else if (section.Id == P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId)
+            else if (section.Id == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId)
             { if (justiceSection != null) return false; justiceSection = section; }
             else return false;
         }
-        if (!TryValidateSection(crimeSection, P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId,
+        if (!TryValidateSection(crimeSection, DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
                 out result)
-            || !TryValidateSection(justiceSection, P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId,
+            || !TryValidateSection(justiceSection, DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
                 out result)) return false;
         try
         {
@@ -191,27 +191,27 @@ internal static class P12AReceiptOwnerCodec
         out P12AOwnerSection section, out P12AResult result)
     {
         section = null;
-        result = Invalid(id: P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId);
+        result = Invalid(id: DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId);
         if (snapshot.Receipts.Count > P12AContinuationCodec.MaxRows)
-            return Limit(P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId, out result);
+            return Limit(DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId, out result);
         P12AOwnerRow row = EncodeRow(CrimeOwnerKey, snapshot.CensusRevision, writer =>
         {
             writer.Write(snapshot.StepRevision);
             WriteReceipts(writer, snapshot.Receipts);
         });
-        return BuildSection(P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId,
-            P12CrimeJusticeCensusProvider.SchemaVersion, snapshot.CensusRevision, row, out section, out result);
+        return BuildSection(DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, snapshot.CensusRevision, row, out section, out result);
     }
 
     private static bool TryEncodeJustice(P12AJusticeReceiptOwnerSnapshot snapshot,
         out P12AOwnerSection section, out P12AResult result)
     {
         section = null;
-        result = Invalid(id: P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId);
+        result = Invalid(id: DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
         long count = (long)snapshot.BeginDayReceipts.Count + snapshot.AdvanceSentencesReceipts.Count
             + snapshot.SyncWantedStatusesReceipts.Count;
         if (count > P12AContinuationCodec.MaxRows)
-            return Limit(P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId, out result);
+            return Limit(DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId, out result);
         P12AOwnerRow row = EncodeRow(JusticeOwnerKey, snapshot.CensusRevision, writer =>
         {
             writer.Write(snapshot.BeginDayRevision);
@@ -221,8 +221,8 @@ internal static class P12AReceiptOwnerCodec
             writer.Write(snapshot.SyncWantedStatusesRevision);
             WriteReceipts(writer, snapshot.SyncWantedStatusesReceipts);
         });
-        return BuildSection(P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId,
-            P12CrimeJusticeCensusProvider.SchemaVersion, snapshot.CensusRevision, row, out section, out result);
+        return BuildSection(DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, snapshot.CensusRevision, row, out section, out result);
     }
 
     private static bool TryReadCrime(P12AOwnerSection section, out P12ACrimeReceiptOwnerSnapshot snapshot)
@@ -328,7 +328,7 @@ internal static class P12AReceiptOwnerCodec
     {
         result = new P12AResult(P12AResultCode.MissingOrDuplicateSection, id);
         if (section == null || section.Id != id) return false;
-        if (section.Major != P12CrimeJusticeCensusProvider.SchemaVersion || section.Minor != 0)
+        if (section.Major != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion || section.Minor != 0)
         { result = new P12AResult(P12AResultCode.UnsupportedSchema, id); return false; }
         if (section.Role != OwnerSectionRole.Required || section.Revision < 0L
             || section.AliasGroup != P12ADailyV1Census.ExpectedAliasGroupForSection(id)
