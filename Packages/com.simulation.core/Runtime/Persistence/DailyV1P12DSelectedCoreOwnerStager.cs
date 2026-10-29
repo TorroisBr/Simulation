@@ -12,7 +12,8 @@ internal enum DailyV1P12DSelectedCoreOwnerStageFailure
     MissingSpatialIdentity,
     CityHydrationRejected,
     NpcHydrationRejected,
-    InvalidCityMembership
+    InvalidCityMembership,
+    InvalidSpatialOwnerSnapshot
 }
 
 /// <summary>
@@ -51,6 +52,29 @@ internal sealed class DailyV1P12DSelectedCoreOwnerStage
 }
 
 /// <summary>
+/// Core-owned unpublished P12-D restore state: the exact spatial owner, its
+/// restored global identity index, and the selected City/NPC owners staged
+/// against those same spatial identities.
+/// </summary>
+internal sealed class DailyV1P12DCoreRestoreOwnerStage
+{
+    internal SpatialNetworkOwner SpatialNetwork { get; }
+    internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex { get; }
+    internal DailyV1P12DSelectedCoreOwnerStage SelectedOwners { get; }
+    internal IReadOnlyList<DailyV1CityRuntimeOwners> Cities => SelectedOwners?.Cities;
+    internal IReadOnlyList<DailyV1NpcRuntimeOwners> Npcs => SelectedOwners?.Npcs;
+
+    internal DailyV1P12DCoreRestoreOwnerStage(
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        DailyV1P12DSelectedCoreOwnerStage selectedOwners)
+    {
+        SpatialNetwork = spatialNetwork ?? throw new ArgumentNullException(nameof(spatialNetwork));
+        RuntimeIdentityIndex = runtimeIdentityIndex ?? throw new ArgumentNullException(nameof(runtimeIdentityIndex));
+        SelectedOwners = selectedOwners ?? throw new ArgumentNullException(nameof(selectedOwners));
+    }
+}
+/// <summary>
 /// Hydrates the selected P12-D City/NPC owner vectors as one Core staging
 /// operation. Unity supplies detached row values and stable host IDs; Core
 /// resolves canonical definitions, creates the only authoritative owners and
@@ -58,6 +82,106 @@ internal sealed class DailyV1P12DSelectedCoreOwnerStage
 /// </summary>
 internal static class DailyV1P12DSelectedCoreOwnerStager
 {
+    /// <summary>
+    /// Stages the selected P12-D spatial owner, Core identity index, and
+    /// selected City/NPC owner graph directly from values decoded from one
+    /// admitted image. No Unity owner or runtime projection is accepted.
+    /// </summary>
+    internal static bool TryCreateFromImageValues(
+        DailyV1EffectiveDefinitions definitions,
+        SpatialNetworkOwnerSnapshot spatialSnapshot,
+        P12CRuntimeIdentityOwnerSnapshot runtimeIdentitySnapshot,
+        IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cityInputs,
+        IReadOnlyList<P12DNpcDRow> npcDRows,
+        IReadOnlyList<P12DNpcFRow> npcFRows,
+        P12FTravelPartyOwnerSnapshot travelPartySnapshot,
+        out DailyV1P12DCoreRestoreOwnerStage stage,
+        out DailyV1P12DSelectedCoreOwnerStageFailure failure)
+    {
+        stage = null;
+        failure = DailyV1P12DSelectedCoreOwnerStageFailure.InvalidInput;
+        if (definitions == null || spatialSnapshot == null || runtimeIdentitySnapshot == null
+            || cityInputs == null || npcDRows == null || npcFRows == null
+            || travelPartySnapshot?.Parties == null)
+            return false;
+
+        if (!P12DSpatialNetworkOwnerHydrator.TryCreateOwner(
+                spatialSnapshot, out SpatialNetworkOwner spatialNetwork, out _)
+            || spatialNetwork == null)
+        {
+            failure = DailyV1P12DSelectedCoreOwnerStageFailure.InvalidSpatialOwnerSnapshot;
+            return false;
+        }
+
+        if (!DailyV1RuntimeIdentityIndex.TryCreateFromOwnerSnapshot(
+                runtimeIdentitySnapshot, out DailyV1RuntimeIdentityIndex runtimeIdentityIndex)
+            || runtimeIdentityIndex == null)
+            return false;
+
+        List<string> travelPartyIds = new List<string>(travelPartySnapshot.Parties.Count);
+        foreach (P12FTravelPartyOwnerSnapshotRecord party in travelPartySnapshot.Parties)
+            travelPartyIds.Add(party?.TravelPartyId);
+
+        if (!TryCreateFromRows(
+                definitions, cityInputs, npcDRows, npcFRows, spatialNetwork, travelPartyIds,
+                out DailyV1P12DSelectedCoreOwnerStage selectedOwners, out failure)
+            || selectedOwners == null
+            || !MatchesRestoredIdentityGraph(
+                runtimeIdentitySnapshot, runtimeIdentityIndex, spatialNetwork,
+                selectedOwners, cityInputs, npcDRows))
+        {
+            stage = null;
+            if (failure == DailyV1P12DSelectedCoreOwnerStageFailure.None)
+                failure = DailyV1P12DSelectedCoreOwnerStageFailure.MissingSpatialIdentity;
+            return false;
+        }
+
+        stage = new DailyV1P12DCoreRestoreOwnerStage(
+            spatialNetwork, runtimeIdentityIndex, selectedOwners);
+        failure = DailyV1P12DSelectedCoreOwnerStageFailure.None;
+        return true;
+    }
+
+    private static bool MatchesRestoredIdentityGraph(
+        P12CRuntimeIdentityOwnerSnapshot snapshot,
+        DailyV1RuntimeIdentityIndex identityIndex,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1P12DSelectedCoreOwnerStage owners,
+        IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cityInputs,
+        IReadOnlyList<P12DNpcDRow> npcRows)
+    {
+        if (snapshot == null || identityIndex == null || spatialNetwork == null || owners == null
+            || cityInputs == null || npcRows == null
+            || identityIndex.CensusRevision != snapshot.Revision
+            || owners.Cities.Count != cityInputs.Count || owners.Npcs.Count != npcRows.Count
+            || identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Location) != spatialNetwork.LocationCount
+            || identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Route) != spatialNetwork.RouteCount
+            || identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.City) != owners.Cities.Count
+            || identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Npc) != owners.Npcs.Count)
+            return false;
+
+        foreach (SpatialLocationRuntime location in spatialNetwork.Locations)
+            if (location == null
+                || !identityIndex.HasIdentity(location.RuntimeId, DailyV1RuntimeIdentityKind.Location))
+                return false;
+        foreach (SpatialRouteRuntime route in spatialNetwork.Routes)
+            if (route == null
+                || !identityIndex.HasIdentity(route.RuntimeId, DailyV1RuntimeIdentityKind.Route))
+                return false;
+        for (int i = 0; i < cityInputs.Count; i++)
+            if (cityInputs[i] == null || owners.Cities[i] == null
+                || !string.Equals(cityInputs[i].CityRuntimeId, owners.Cities[i].RuntimeId,
+                    StringComparison.Ordinal)
+                || !identityIndex.HasIdentity(owners.Cities[i].RuntimeId, DailyV1RuntimeIdentityKind.City))
+                return false;
+        for (int i = 0; i < npcRows.Count; i++)
+            if (npcRows[i] == null || owners.Npcs[i] == null
+                || !string.Equals(npcRows[i].RuntimeId, owners.Npcs[i].RuntimeId,
+                    StringComparison.Ordinal)
+                || !identityIndex.HasIdentity(owners.Npcs[i].RuntimeId, DailyV1RuntimeIdentityKind.Npc))
+                return false;
+        return true;
+    }
     internal static bool TryCreateFromRows(
         DailyV1EffectiveDefinitions definitions,
         IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cityInputs,

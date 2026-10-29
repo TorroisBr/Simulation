@@ -150,6 +150,55 @@ public sealed class SpatialNetworkRuntime
         return true;
     }
 
+    /// <summary>
+    /// Creates a Unity runtime projection over an already staged Core spatial
+    /// owner. This binds only host lookup projections; it does not register
+    /// identities again or rebuild the authoritative owner.
+    /// </summary>
+    internal static bool TryCreateProjectionFromCoreOwner(
+        SpatialNetworkOwner selectedOwner,
+        RuntimeIdentityRegistry identityRegistry,
+        out SpatialNetworkRuntime stagedNetwork,
+        out SpatialNetworkSnapshotFailure failure)
+    {
+        stagedNetwork = null;
+        if (selectedOwner == null || identityRegistry == null
+            || !identityRegistry.HasNoBoundRuntimeProjections
+            || identityRegistry.CoreIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Location)
+                != selectedOwner.LocationCount
+            || identityRegistry.CoreIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Route)
+                != selectedOwner.RouteCount)
+        {
+            failure = SpatialNetworkSnapshotFailure.Create(
+                SpatialNetworkSnapshotFailureCode.RuntimeIdentityCollision,
+                "The selected Core spatial owner and its restored identity index must be exact and unpublished.");
+            return false;
+        }
+
+        foreach (SpatialLocationRuntime location in selectedOwner.Locations)
+            if (location == null
+                || !identityRegistry.BindSelectedLocationProjection(location))
+            {
+                failure = SpatialNetworkSnapshotFailure.Create(
+                    SpatialNetworkSnapshotFailureCode.RuntimeIdentityCollision,
+                    "The Core identity index rejected a selected Location projection.");
+                return false;
+            }
+
+        foreach (SpatialRouteRuntime route in selectedOwner.Routes)
+            if (route == null
+                || !identityRegistry.BindSelectedRouteProjection(route))
+            {
+                failure = SpatialNetworkSnapshotFailure.Create(
+                    SpatialNetworkSnapshotFailureCode.RuntimeIdentityCollision,
+                    "The Core identity index rejected a selected Route projection.");
+                return false;
+            }
+
+        stagedNetwork = new SpatialNetworkRuntime(identityRegistry, null, selectedOwner);
+        failure = SpatialNetworkSnapshotFailure.None;
+        return true;
+    }
     public bool RegisterLocation(SpatialLocationRuntime location)
     {
         return RegisterLocationCore(location, null);

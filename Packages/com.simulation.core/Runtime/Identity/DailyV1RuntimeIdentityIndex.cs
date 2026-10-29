@@ -28,6 +28,53 @@ internal sealed class DailyV1RuntimeIdentityIndex
     internal object CensusOwnerIdentity => this;
     internal long CensusRevision => censusRevision;
 
+    /// <summary>
+    /// Recreates the selected Daily-v1 identity index from its admitted
+    /// detached census value while preserving the exact local revision.
+    /// Registration values are staged without publishing mutations; the
+    /// persisted revision may exceed active cardinality after prior removals.
+    /// </summary>
+    internal static bool TryCreateFromOwnerSnapshot(
+        P12CRuntimeIdentityOwnerSnapshot snapshot,
+        out DailyV1RuntimeIdentityIndex staged)
+    {
+        staged = null;
+        if (snapshot == null
+            || snapshot.SchemaVersion != P12CRuntimeIdentityOwnerSnapshot.CurrentSchemaVersion
+            || snapshot.Revision < 0
+            || snapshot.IdentityValues == null)
+            return false;
+
+        DailyV1RuntimeIdentityIndex candidate = new DailyV1RuntimeIdentityIndex();
+        Dictionary<string, DailyV1RuntimeIdentityKind> kinds =
+            new Dictionary<string, DailyV1RuntimeIdentityKind>(StringComparer.Ordinal)
+            {
+                ["npc"] = DailyV1RuntimeIdentityKind.Npc,
+                ["city"] = DailyV1RuntimeIdentityKind.City,
+                ["location"] = DailyV1RuntimeIdentityKind.Location,
+                ["route"] = DailyV1RuntimeIdentityKind.Route
+            };
+        Dictionary<string, string> priorIdsByFamily =
+            new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (KeyValuePair<string, string> value in snapshot.IdentityValues)
+        {
+            if (!kinds.TryGetValue(value.Key, out DailyV1RuntimeIdentityKind kind)
+                || string.IsNullOrWhiteSpace(value.Value)
+                || (priorIdsByFamily.TryGetValue(value.Key, out string priorId)
+                    && StringComparer.Ordinal.Compare(priorId, value.Value) >= 0)
+                || !candidate.TryStageRegister(value.Value, kind))
+                return false;
+            priorIdsByFamily[value.Key] = value.Value;
+        }
+
+        if (snapshot.Revision < candidate.kindsByRuntimeId.Count)
+            return false;
+
+        candidate.censusRevision = snapshot.Revision;
+        staged = candidate;
+        return true;
+    }
     internal bool CanRegister(string runtimeId)
     {
         return !string.IsNullOrWhiteSpace(runtimeId)

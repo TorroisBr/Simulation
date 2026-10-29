@@ -38,6 +38,23 @@ internal static class P12ACausalRootImageAdapter
             || coreRoots == null)
             return false;
 
+        return TryProject(coreRoots, out staged, out result);
+    }
+
+    /// <summary>
+    /// Projects an already staged Core P12-C root into the legacy Unity
+    /// manifest view. It performs no image decoding or authoritative staging.
+    /// </summary>
+    internal static bool TryProject(
+        P12CStagedCoreContinuationRoot coreRoots,
+        out P12CStagedContinuationRoot staged,
+        out P12AResult result)
+    {
+        staged = null;
+        result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        if (coreRoots == null || !coreRoots.IsDetached)
+            return false;
+
         P12CP9GenesisManifestSnapshot manifestSnapshot =
             P12CP9GenesisManifestSnapshot.FromCore(coreRoots.GenesisManifest);
         if (manifestSnapshot == null

@@ -79,12 +79,32 @@ internal static partial class P12GDailyV1RestoreCoordinator
             P12ADailyV1Census imageCensus;
             P12ADailyV1ImageOwnerSnapshots decoded;
             P12AResult imageResult;
+            P12CStagedContinuationRoot stagedC;
             if (application != null)
             {
-                bool decodedAndAdmitted = application.TryAdmitAndDecodeRestoredContinuationImage(
-                    image, expectedCompatibilityV1, expectedCompatibilityV2,
-                    bootstrapAdmissionContext, out bool admissionPassed,
-                    out imageCensus, out decoded, out imageResult);
+                Action<string> coreStageObserver = stageName =>
+                {
+                    if (!P12CContinuationRootStager.TryMapRestoreStageName(
+                            stageName, out P12GDailyV1RestoreStage stage))
+                        throw new InvalidOperationException(
+                            "Core P12-C staging emitted an unknown restore stage: " + stageName);
+                    stageObserver?.Invoke(stage);
+                };
+
+                bool restoredRootsPrepared = application.TryAdmitDecodeAndStageRestoredContinuationImage(
+                    image,
+                    expectedCompatibilityV1,
+                    expectedCompatibilityV2,
+                    bootstrapAdmissionContext,
+                    replacementOperation?.ExpectedSession,
+                    replacementOperation,
+                    out bool admissionPassed,
+                    out imageCensus,
+                    out decoded,
+                    out P12CStagedCoreContinuationRoot stagedCoreRoots,
+                    out imageResult,
+                    () => stageObserver?.Invoke(P12GDailyV1RestoreStage.SourceCaptured),
+                    coreStageObserver);
                 if (!admissionPassed)
                 {
                     bool hostIdentityRejected = imageResult?.Code == P12AResultCode.WrongThread
@@ -92,21 +112,42 @@ internal static partial class P12GDailyV1RestoreCoordinator
                         || imageResult?.Code == P12AResultCode.IncompatibleBuildOrRuntime;
                     failure = hostIdentityRejected
                         ? P12GDailyV1RestoreFailure.InvalidSourceSession
-                        : P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                        : imageResult?.Code == P12AResultCode.Busy
+                            ? P12GDailyV1RestoreFailure.RootStageFailed
+                            : P12GDailyV1RestoreFailure.SourceCaptureFailed;
                     diagnostic = imageResult?.Code == P12AResultCode.OwnerGraphRejected
                         ? "The persisted image does not satisfy the current Daily-v1 owner manifest: "
                             + (imageResult.SectionCode ?? imageResult.Code.ToString()) + "."
-                        : "The persisted Daily-v1 image could not pass Core host and census admission: "
-                            + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "InvalidOwnerValue") + ".";
+                        : imageResult?.Code == P12AResultCode.Busy
+                            ? "The Core application no longer holds the exact restore staging authority."
+                            : "The persisted Daily-v1 image could not pass Core host and census admission: "
+                                + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "InvalidOwnerValue") + ".";
                     return false;
                 }
-                if (!decodedAndAdmitted || decoded == null)
+                if (decoded == null)
                 {
                     failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
                     diagnostic = "The persisted Daily-v1 typed owner image could not be decoded: "
                         + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
                     return false;
                 }
+                if (!restoredRootsPrepared || stagedCoreRoots == null)
+                {
+                    failure = P12GDailyV1RestoreFailure.RootStageFailed;
+                    diagnostic = "P12-C could not privately stage the persisted roots: "
+                        + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
+                    return false;
+                }
+                if (!P12ACausalRootImageAdapter.TryProject(
+                        stagedCoreRoots, out stagedC, out imageResult)
+                    || stagedC == null || !stagedC.IsDetached)
+                {
+                    failure = P12GDailyV1RestoreFailure.RootStageFailed;
+                    diagnostic = "P12-C could not create the Unity compatibility projection for the already staged Core roots: "
+                        + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.RootsStaged);
             }
             else
             {
@@ -134,22 +175,21 @@ internal static partial class P12GDailyV1RestoreCoordinator
                         + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
                     return false;
                 }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.SourceCaptured);
+                if (!P12ACausalRootImageAdapter.TryStage(null,
+                        null,
+                        null,
+                        image,
+                        out stagedC, out imageResult, stageObserver)
+                    || stagedC == null || !stagedC.IsDetached)
+                {
+                    failure = P12GDailyV1RestoreFailure.RootStageFailed;
+                    diagnostic = "P12-C could not privately stage the persisted roots: "
+                        + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.RootsStaged);
             }
-
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.SourceCaptured);
-            if (!P12ACausalRootImageAdapter.TryStage(application,
-                    replacementOperation?.ExpectedSession,
-                    replacementOperation,
-                    image,
-                    out P12CStagedContinuationRoot stagedC, out imageResult, stageObserver)
-                || stagedC == null || !stagedC.IsDetached)
-            {
-                failure = P12GDailyV1RestoreFailure.RootStageFailed;
-                diagnostic = "P12-C could not privately stage the persisted roots: "
-                    + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.RootsStaged);
 
             if (!TryBuildDailyV1Definitions(configuration,
                     out List<CityData> cityDefinitions,
@@ -164,7 +204,33 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 return false;
             }
 
-            RuntimeIdentityRegistry stagedIdentities = new RuntimeIdentityRegistry();
+            DailyV1P12DCoreRestoreOwnerStage stagedCoreDOwners = null;
+            RuntimeIdentityRegistry stagedIdentities;
+            if (application != null)
+            {
+                if (!application.TryStageRestoredP12DCoreOwnerGraphFromImageSnapshots(
+                        stagedC.CoreRoot,
+                        decoded,
+                        selectedDefinitions,
+                        replacementOperation?.ExpectedSession,
+                        replacementOperation,
+                        out stagedCoreDOwners,
+                        out imageResult)
+                    || stagedCoreDOwners == null)
+                {
+                    failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
+                    diagnostic = "The Core application could not stage the exact P12-D spatial and selected owner graph: "
+                        + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
+                    return false;
+                }
+                stagedIdentities = new RuntimeIdentityRegistry(null,
+                    stagedCoreDOwners.RuntimeIdentityIndex);
+            }
+            else
+            {
+                stagedIdentities = new RuntimeIdentityRegistry();
+            }
+
             List<string> stagedPartyIds = decoded.TravelParties.Parties
                 .Select(party => party?.TravelPartyId).ToList();
             if (!P12DDailyV1OwnerPackage.TryStageFromImage(
@@ -179,7 +245,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     application,
                     stagedC.CoreRoot,
                     replacementOperation?.ExpectedSession,
-                    replacementOperation)
+                    replacementOperation,
+                    stagedCoreDOwners)
                 || stagedD == null || stagedD.StagingAttempt != null)
             {
                 failure = P12GDailyV1RestoreFailure.OwnerStageFailed;

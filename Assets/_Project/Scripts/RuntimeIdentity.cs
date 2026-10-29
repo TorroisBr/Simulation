@@ -33,6 +33,15 @@ public sealed class RuntimeIdentityRegistry
         identityIndex = sharedIdentityIndex ?? new DailyV1RuntimeIdentityIndex();
     }
 
+    internal bool HasNoBoundRuntimeProjections =>
+        npcsByRuntimeId.Count == 0
+        && citiesByRuntimeId.Count == 0
+        && locationsByRuntimeId.Count == 0
+        && routesByRuntimeId.Count == 0
+        && explorableSitesByRuntimeId.Count == 0
+        && localPlacesByRuntimeId.Count == 0
+        && localConnectionsByRuntimeId.Count == 0
+        && notableItemsByRuntimeId.Count == 0;
     internal bool BindSelectedNpcProjection(NpcRuntime npcRuntime) =>
         npcRuntime != null && TryBindProjection(npcRuntime.RuntimeId,
             DailyV1RuntimeIdentityKind.Npc, npcsByRuntimeId, npcRuntime);

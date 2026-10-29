@@ -2384,6 +2384,102 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void CoreImageRestoreTransactionRequiresReservationAndPreservesPublishedSessionOnFailure()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        InstallCompletedBoundaryToken(session, boundary);
+        P12ACompatibilityDescriptor identity = new P12ACompatibilityDescriptor(
+            "UnityBootstrap-Daily-v1", 1, "config", "6000.3.9f1", "WindowsEditor", "Mono",
+            "build", new[] { "00000000-0000-0000-0000-000000000001" }, "numeric", 1,
+            "content", "providers", "daily", 1, "calendar", "p9", "p8");
+        int observedStages = 0;
+
+        Assert.That(application.TryAdmitDecodeAndStageRestoredContinuationImage(
+                null, identity, null, session.AdmissionContext,
+                session, null,
+                out bool unreservedAdmissionPassed,
+                out P12ADailyV1Census unreservedCensus,
+                out P12ADailyV1ImageOwnerSnapshots unreservedSnapshots,
+                out P12CStagedCoreContinuationRoot unreservedRoots,
+                out P12AResult unreservedResult,
+                () => observedStages++,
+                _ => observedStages++), Is.False);
+        Assert.That(unreservedAdmissionPassed, Is.False);
+        Assert.That(unreservedCensus, Is.Null);
+        Assert.That(unreservedSnapshots, Is.Null);
+        Assert.That(unreservedRoots, Is.Null);
+        Assert.That(unreservedResult.Code, Is.EqualTo(P12AResultCode.Busy),
+            "The Core application must reject before inspecting an image without the exact replacement reservation.");
+        Assert.That(observedStages, Is.Zero);
+
+        Assert.That(application.TryBeginExclusiveOperation(session, out var replacement), Is.True);
+        using (replacement)
+        {
+            Assert.That(application.TryAdmitDecodeAndStageRestoredContinuationImage(
+                    null, identity, null, session.AdmissionContext,
+                    session, replacement,
+                    out bool reservedAdmissionPassed,
+                    out P12ADailyV1Census reservedCensus,
+                    out P12ADailyV1ImageOwnerSnapshots reservedSnapshots,
+                    out P12CStagedCoreContinuationRoot reservedRoots,
+                    out P12AResult reservedResult,
+                    () => observedStages++,
+                    _ => observedStages++), Is.False);
+            Assert.That(reservedAdmissionPassed, Is.False);
+            Assert.That(reservedCensus, Is.Null);
+            Assert.That(reservedSnapshots, Is.Null);
+            Assert.That(reservedRoots, Is.Null);
+            Assert.That(reservedResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue),
+                "With the exact reservation, Core may inspect the malformed image but must fail before detached staging.");
+            Assert.That(observedStages, Is.Zero);
+        }
+
+        Assert.That(application.ActiveSession, Is.SameAs(session),
+            "A rejected restore transaction must leave the exact published Core session intact.");
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+        Assert.That(application.TryBeginExclusiveOperation(session, out var retry), Is.True,
+            "A failed private restore must release no authority beyond its own reservation.");
+        retry.Dispose();
+    }
+
+    [Test]
+    public void CoreP12DRestoreGraphRequiresExactReservationAndRetainsPublishedSessionOnFailure()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        InstallCompletedBoundaryToken(session, boundary);
+
+        Assert.That(application.TryStageRestoredP12DCoreOwnerGraphFromImageSnapshots(
+                null, null, null, session, null,
+                out DailyV1P12DCoreRestoreOwnerStage unreservedOwners,
+                out P12AResult unreservedResult), Is.False);
+        Assert.That(unreservedOwners, Is.Null);
+        Assert.That(unreservedResult.Code, Is.EqualTo(P12AResultCode.Busy));
+        Assert.That(application.ActiveSession, Is.SameAs(session));
+
+        Assert.That(application.TryBeginExclusiveOperation(session, out var replacement), Is.True);
+        using (replacement)
+        {
+            Assert.That(application.TryStageRestoredP12DCoreOwnerGraphFromImageSnapshots(
+                    null, null, null, session, replacement,
+                    out DailyV1P12DCoreRestoreOwnerStage failedOwners,
+                    out P12AResult failedResult), Is.False);
+            Assert.That(failedOwners, Is.Null);
+            Assert.That(failedResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+            Assert.That(application.ActiveSession, Is.SameAs(session),
+                "A failed private P12-D stage must not replace the exact published session.");
+        }
+
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+        Assert.That(application.ActiveSession, Is.SameAs(session));
+        Assert.That(application.TryBeginExclusiveOperation(session, out var retry), Is.True,
+            "A failed D graph stage must not retain its exact-session reservation.");
+        retry.Dispose();
+    }
+    [Test]
     public void SelectedP12DOwnerStageRequiresTheSameRestoreAuthorityAsItsRoots()
     {
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(

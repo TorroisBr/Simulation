@@ -1128,6 +1128,66 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
+    /// Owns the first detached restore transaction boundary: the application
+    /// verifies its exact initial/replacement staging authority, admits the
+    /// persisted image against its captured bootstrap identity, decodes the
+    /// typed owner values, and privately stages the Core P12-C roots before
+    /// returning any restore result to a host adapter. The returned roots are
+    /// unpublished and do not replace or mutate the current session.
+    /// </summary>
+    internal bool TryAdmitDecodeAndStageRestoredContinuationImage(
+        P12AContinuationImage image,
+        P12ACompatibilityDescriptor unityV1Identity,
+        P12ACompatibilityDescriptorV2 dotNetV2Identity,
+        SimulationRuntimeAdmissionContext admissionContext,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out bool admissionPassed,
+        out P12ADailyV1Census census,
+        out P12ADailyV1ImageOwnerSnapshots snapshots,
+        out P12CStagedCoreContinuationRoot stagedRoots,
+        out P12AResult result,
+        Action imageDecoded = null,
+        Action<string> stageCompleted = null)
+    {
+        admissionPassed = false;
+        census = null;
+        snapshots = null;
+        stagedRoots = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+            return false;
+
+        if (!TryAdmitAndDecodeRestoredContinuationImage(
+                image,
+                unityV1Identity,
+                dotNetV2Identity,
+                admissionContext,
+                out admissionPassed,
+                out census,
+                out snapshots,
+                out result))
+            return false;
+
+        imageDecoded?.Invoke();
+
+        if (!TryStageRestoredContinuationRootsFromSnapshots(
+                snapshots.C,
+                expectedSession,
+                replacementOperation,
+                out stagedRoots,
+                out result,
+                stageCompleted)
+            || stagedRoots == null)
+        {
+            stagedRoots = null;
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Keeps the restored image-to-target owner-vector decision inside the
     /// application that owns the exact initial or replacement staging
     /// reservation. The Unity runtime supplies only its captured census.
@@ -1251,6 +1311,43 @@ internal sealed class DailyV1Application
             || snapshots == null)
             return false;
 
+        return TryStageRestoredContinuationRootsFromSnapshots(
+            snapshots,
+            expectedSession,
+            replacementOperation,
+            out stagedRoots,
+            out result,
+            stageCompleted);
+    }
+
+    /// <summary>
+    /// Stages the Core P12-C roots from the immutable C values already
+    /// decoded as part of the complete typed image. This avoids re-decoding
+    /// image sections and keeps staging under the exact application
+    /// reservation.
+    /// </summary>
+    internal bool TryStageRestoredContinuationRootsFromSnapshots(
+        P12ACausalRootImageSnapshots snapshots,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out P12CStagedCoreContinuationRoot stagedRoots,
+        out P12AResult result,
+        Action<string> stageCompleted = null)
+    {
+        stagedRoots = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+            return false;
+
+        if (snapshots == null || snapshots.WorldIdentity == null
+            || snapshots.Allocator == null || snapshots.RecordSequence == null
+            || snapshots.SpatialAuthority == null || snapshots.P9Manifest == null
+            || snapshots.RandomRoot == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
         if (!P12CSelectedCoreRootStager.TryStage(
                 snapshots.WorldIdentity,
                 snapshots.Allocator,
@@ -1359,6 +1456,58 @@ internal sealed class DailyV1Application
         if (!DailyV1P12DSelectedCoreOwnerStager.TryCreateFromRows(
                 definitions, cityInputs, npcDRows, npcFRows, spatialNetwork, travelPartyIds,
                 out stagedOwners, out _)
+            || stagedOwners == null)
+        {
+            stagedOwners = null;
+            result = new P12AResult(
+                P12AResultCode.OwnerGraphRejected,
+                "p12d.selected-core-owners");
+            return false;
+        }
+
+        result = null;
+        return true;
+    }
+    /// <summary>
+    /// Stages the selected P12-D spatial and City/NPC Core owner graph from
+    /// values already decoded from one image. The application validates its
+    /// exact initial or replacement reservation before creating any owners;
+    /// Unity receives only the unpublished Core owners for projection.
+    /// </summary>
+    internal bool TryStageRestoredP12DCoreOwnerGraphFromImageSnapshots(
+        P12CStagedCoreContinuationRoot stagedRoots,
+        P12ADailyV1ImageOwnerSnapshots snapshots,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out DailyV1P12DCoreRestoreOwnerStage stagedOwners,
+        out P12AResult result)
+    {
+        stagedOwners = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+            return false;
+
+        if (stagedRoots == null || !stagedRoots.IsDetached || snapshots == null
+            || definitions == null || snapshots.SpatialNetwork == null
+            || snapshots.RuntimeIdentities == null || snapshots.Cities == null
+            || snapshots.NpcDRows == null || snapshots.NpcFRows == null
+            || snapshots.TravelParties == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        if (!DailyV1P12DSelectedCoreOwnerStager.TryCreateFromImageValues(
+                definitions,
+                snapshots.SpatialNetwork,
+                snapshots.RuntimeIdentities,
+                snapshots.Cities,
+                snapshots.NpcDRows,
+                snapshots.NpcFRows,
+                snapshots.TravelParties,
+                out stagedOwners,
+                out _)
             || stagedOwners == null)
         {
             stagedOwners = null;

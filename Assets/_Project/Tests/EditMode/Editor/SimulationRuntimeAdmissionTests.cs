@@ -12345,6 +12345,48 @@ public sealed class SimulationRuntimeAdmissionTests
                 Is.EqualTo(expectedP9ManifestFingerprint));
             Assert.That(restored.Runtime, Is.Not.SameAs(controlSession.Runtime));
             Assert.That(restored.IdentityRegistry, Is.Not.SameAs(controlSession.IdentityRegistry));
+            DailyV1SelectedRuntimeOwnerGraph restoredOwnerGraph = restored.CoreRuntimeSession.OwnerGraph;
+            Assert.That(restored.SpatialNetwork.SelectedOwner, Is.SameAs(restoredOwnerGraph.SpatialNetwork),
+                "The Unity spatial runtime must project the exact Core-staged SpatialNetworkOwner.");
+            Assert.That(restored.IdentityRegistry.CoreIdentityIndex,
+                Is.SameAs(restoredOwnerGraph.RuntimeIdentityIndex));
+            Assert.That(restored.IdentityRegistry.CensusRevision,
+                Is.EqualTo(controlSession.IdentityRegistry.CensusRevision),
+                "Detached restore must preserve the shared runtime-identity census revision.");
+            Assert.That(restoredOwnerGraph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.City),
+                Is.EqualTo(restored.Runtime.Cities.Count));
+            Assert.That(restoredOwnerGraph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Npc),
+                Is.EqualTo(restored.Runtime.NpcRuntimes.Count));
+            Assert.That(restoredOwnerGraph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Location),
+                Is.EqualTo(restored.SpatialNetwork.LocationCount));
+            Assert.That(restoredOwnerGraph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Route),
+                Is.EqualTo(restored.SpatialNetwork.RouteCount));
+            Assert.That(restored.Runtime.Cities.Select(city => city.RuntimeId),
+                Is.EqualTo(restoredOwnerGraph.Cities.Select(owner => owner.RuntimeId)),
+                "City projection order must follow the Core staged owner order.");
+            Assert.That(restored.Runtime.NpcRuntimes.Select(npc => npc.RuntimeId),
+                Is.EqualTo(restoredOwnerGraph.Npcs.Select(owner => owner.RuntimeId)),
+                "NPC projection order must follow the Core staged owner order.");
+            Assert.That(restored.SpatialNetwork.Routes.Select(route => route.RuntimeId),
+                Is.EqualTo(restoredOwnerGraph.SpatialNetwork.Routes.Select(route => route.RuntimeId)),
+                "Route order must follow the exact Core spatial owner.");
+            for (int i = 0; i < restored.Runtime.Cities.Count; i++)
+            {
+                CityRuntime cityProjection = restored.Runtime.Cities[i];
+                DailyV1CityRuntimeOwners cityOwner = restoredOwnerGraph.Cities[i];
+                Assert.That(cityProjection.SelectedRuntimeOwners, Is.SameAs(cityOwner));
+                Assert.That(cityProjection.ImportantNpcRevision, Is.EqualTo(cityOwner.NpcPresence.Revision));
+            }
+            for (int i = 0; i < restored.Runtime.NpcRuntimes.Count; i++)
+            {
+                NpcRuntime npcProjection = restored.Runtime.NpcRuntimes[i];
+                DailyV1NpcRuntimeOwners npcOwner = restoredOwnerGraph.Npcs[i];
+                Assert.That(npcProjection.SelectedRuntimeOwners, Is.SameAs(npcOwner));
+                Assert.That(npcProjection.TravelStateRevision, Is.EqualTo(npcOwner.Travel.Revision));
+                Assert.That(npcProjection.LifeStateRevision, Is.EqualTo(npcOwner.Lifecycle.LifeStateRevision));
+                Assert.That(npcProjection.ResidenceRevision, Is.EqualTo(npcOwner.Residence.Revision));
+                Assert.That(npcProjection.P12CrimeJusticeRevision, Is.EqualTo(npcOwner.CrimeJusticeRevision));
+            }
             Assert.That(restored.Runtime.CurrentDay, Is.EqualTo(controlSession.Runtime.CurrentDay));
             Assert.That(restored.Runtime.PoliticalWorldRevision,
                 Is.EqualTo(controlSession.Runtime.PoliticalWorldRevision));

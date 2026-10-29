@@ -79,6 +79,102 @@ public sealed class DailyV1P12DSelectedCoreOwnerStagerTests
     }
 
     [Test]
+    public void StagesImageSpatialAndSelectedOwnersInDecodedOrderWithExactRevisions()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1P12DCityCoreOwnerHydrationInput city = CreateCityInput(
+            definitions, "npc/two", "npc/one");
+        DailyV1P12DNpcCoreOwnerHydrationInput npcTwo = CreateNpcInput(
+            definitions, "npc/two", city.CityRuntimeId, city.ResolvedLocationRuntimeId,
+            inventoryRevision: 3L, moneyRevision: 4L, lifeStateRevision: 5L);
+        DailyV1P12DNpcCoreOwnerHydrationInput npcOne = CreateNpcInput(
+            definitions, "npc/one", city.CityRuntimeId, city.ResolvedLocationRuntimeId,
+            inventoryRevision: 7L, moneyRevision: 8L, lifeStateRevision: 9L);
+        P12DNpcFRow npcTwoF = CreateNpcFRow("npc/two", travelRevision: 13L);
+        P12DNpcFRow npcOneF = CreateNpcFRow("npc/one", travelRevision: 17L);
+        SpatialNetworkOwnerSnapshot spatial = new SpatialNetworkOwnerSnapshot(
+            SpatialNetworkOwnerSnapshot.CurrentSchemaVersion,
+            7L,
+            new[] { "location/other", city.ResolvedLocationRuntimeId },
+            new[]
+            {
+                new SpatialRouteOwnerSnapshotRecord(
+                    "route/staged", "location/other", city.ResolvedLocationRuntimeId, 3)
+            });
+        P12CRuntimeIdentityOwnerSnapshot identities = new P12CRuntimeIdentityOwnerSnapshot(
+            P12CRuntimeIdentityOwnerSnapshot.CurrentSchemaVersion,
+            9L,
+            new[]
+            {
+                new System.Collections.Generic.KeyValuePair<string, string>("npc", "npc/one"),
+                new System.Collections.Generic.KeyValuePair<string, string>("npc", "npc/two"),
+                new System.Collections.Generic.KeyValuePair<string, string>("city", city.CityRuntimeId),
+                new System.Collections.Generic.KeyValuePair<string, string>("location", "location/other"),
+                new System.Collections.Generic.KeyValuePair<string, string>("location", city.ResolvedLocationRuntimeId),
+                new System.Collections.Generic.KeyValuePair<string, string>("route", "route/staged")
+            });
+        P12FTravelPartyOwnerSnapshot parties = new P12FTravelPartyOwnerSnapshot(
+            P12FTravelPartyOwnerSnapshot.CurrentSchemaVersion, 0L,
+            Array.Empty<P12FTravelPartyOwnerSnapshotRecord>());
+
+        Assert.That(DailyV1P12DSelectedCoreOwnerStager.TryCreateFromImageValues(
+            definitions, spatial, identities, new[] { city },
+            new[] { npcTwo.DRow, npcOne.DRow }, new[] { npcTwoF, npcOneF }, parties,
+            out DailyV1P12DCoreRestoreOwnerStage staged,
+            out DailyV1P12DSelectedCoreOwnerStageFailure failure), Is.True, failure.ToString());
+
+        Assert.That(staged.SpatialNetwork.Revision, Is.EqualTo(spatial.Revision));
+        Assert.That(staged.SpatialNetwork.RouteCount, Is.EqualTo(1));
+        Assert.That(staged.SpatialNetwork.Routes[0].RuntimeId, Is.EqualTo("route/staged"));
+        Assert.That(staged.RuntimeIdentityIndex.CensusRevision, Is.EqualTo(identities.Revision));
+        Assert.That(staged.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Npc), Is.EqualTo(2));
+        Assert.That(staged.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.City), Is.EqualTo(1));
+        Assert.That(staged.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Location), Is.EqualTo(2));
+        Assert.That(staged.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Route), Is.EqualTo(1));
+        Assert.That(staged.Cities.Select(owner => owner.RuntimeId), Is.EqualTo(new[] { city.CityRuntimeId }));
+        Assert.That(staged.Npcs.Select(owner => owner.RuntimeId), Is.EqualTo(new[] { "npc/two", "npc/one" }));
+        Assert.That(staged.Cities[0].NpcPresence.OrderedNpcRuntimeIds,
+            Is.EqualTo(new[] { "npc/two", "npc/one" }));
+        Assert.That(staged.Npcs[0].Inventory.Revision, Is.EqualTo(3L));
+        Assert.That(staged.Npcs[1].Inventory.Revision, Is.EqualTo(7L));
+        Assert.That(staged.Npcs[0].Travel.Revision, Is.EqualTo(13L));
+        Assert.That(staged.Npcs[1].Travel.Revision, Is.EqualTo(17L));
+        Assert.That(staged.Cities.All(owner => ReferenceEquals(owner.Definitions, definitions)), Is.True);
+        Assert.That(staged.Npcs.All(owner => ReferenceEquals(owner.Definitions, definitions)), Is.True);
+    }
+
+    [Test]
+    public void RejectsImageIdentityIndexCollisionWithoutReturningPartialOwnerGraph()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1P12DCityCoreOwnerHydrationInput city = CreateCityInput(definitions, "npc/one");
+        DailyV1P12DNpcCoreOwnerHydrationInput npc = CreateNpcInput(
+            definitions, "npc/one", city.CityRuntimeId, city.ResolvedLocationRuntimeId);
+        SpatialNetworkOwnerSnapshot spatial = new SpatialNetworkOwnerSnapshot(
+            SpatialNetworkOwnerSnapshot.CurrentSchemaVersion, 1L,
+            new[] { city.ResolvedLocationRuntimeId }, Array.Empty<SpatialRouteOwnerSnapshotRecord>());
+        P12CRuntimeIdentityOwnerSnapshot identities = new P12CRuntimeIdentityOwnerSnapshot(
+            P12CRuntimeIdentityOwnerSnapshot.CurrentSchemaVersion, 4L,
+            new[]
+            {
+                new System.Collections.Generic.KeyValuePair<string, string>("npc", "npc/one"),
+                new System.Collections.Generic.KeyValuePair<string, string>("city", city.CityRuntimeId),
+                new System.Collections.Generic.KeyValuePair<string, string>("location", city.ResolvedLocationRuntimeId),
+                new System.Collections.Generic.KeyValuePair<string, string>("route", "npc/one")
+            });
+        P12FTravelPartyOwnerSnapshot parties = new P12FTravelPartyOwnerSnapshot(
+            P12FTravelPartyOwnerSnapshot.CurrentSchemaVersion, 0L,
+            Array.Empty<P12FTravelPartyOwnerSnapshotRecord>());
+
+        Assert.That(DailyV1P12DSelectedCoreOwnerStager.TryCreateFromImageValues(
+            definitions, spatial, identities, new[] { city }, new[] { npc.DRow },
+            new[] { CreateNpcFRow("npc/one") }, parties,
+            out DailyV1P12DCoreRestoreOwnerStage staged,
+            out DailyV1P12DSelectedCoreOwnerStageFailure failure), Is.False);
+        Assert.That(staged, Is.Null);
+        Assert.That(failure, Is.EqualTo(DailyV1P12DSelectedCoreOwnerStageFailure.InvalidInput));
+    }
+    [Test]
     public void RejectsMismatchedPersistedNpcRowsWithoutReturningPartialOwners()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
