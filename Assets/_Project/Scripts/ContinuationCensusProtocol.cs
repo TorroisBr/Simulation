@@ -1091,7 +1091,7 @@ public sealed class ContinuationCensusProtocol
     private sealed class InventoryCandidate
     {
         public string SectionId; public OwnerSectionContract Contract; public IOwnerSectionCensusProvider Provider;
-        public NpcRuntime NpcOwner; public InventoryRuntime InventoryOwner; public OwnerSectionCensusWitness Witness;
+        public NpcRuntime NpcOwner; public object InventoryOwnerIdentity; public OwnerSectionCensusWitness Witness;
     }
 
     private static bool TryBuildInventoryFamily(IReadOnlyList<NpcRuntime> roster, out List<InventoryCandidate> candidates, out ContinuationCensusFailure failure)
@@ -1105,10 +1105,26 @@ public sealed class ContinuationCensusProtocol
                 OwnerSectionCensusWitness w = provider.GetCurrentCensus();
                 string id = NpcInventoryCensusProvider.SectionPrefix + p.RuntimeId;
                 var contract = new OwnerSectionContract(id, NpcInventoryCensusProvider.SchemaVersion, OwnerSectionRole.Required);
+                DailyV1NpcRuntimeOwners selectedOwners = p.NpcOwner?.SelectedRuntimeOwners;
+                object inventoryOwnerIdentity = p.UsesSelectedCoreOwner
+                    ? (object)selectedOwners?.Inventory
+                    : p.InventoryOwner;
                 if (string.IsNullOrWhiteSpace(p.RuntimeId) || p.NpcOwner == null || p.InventoryOwner == null
                     || !ReferenceEquals(p.NpcOwner.ExistingInventory, p.InventoryOwner)
-                    || !ReferenceEquals(w.OwnerInstanceIdentity, p.InventoryOwner) || !IsWitnessValidForContract(contract, w)) return false;
-                candidates.Add(new InventoryCandidate { SectionId=id, Contract=contract, Provider=provider, NpcOwner=p.NpcOwner, InventoryOwner=p.InventoryOwner, Witness=w });
+                    || (selectedOwners != null
+                        && !ReferenceEquals(p.InventoryOwner.SelectedDailyV1Owner, selectedOwners.Inventory))
+                    || (p.UsesSelectedCoreOwner && selectedOwners == null)
+                    || !ReferenceEquals(w.OwnerInstanceIdentity, inventoryOwnerIdentity)
+                    || !IsWitnessValidForContract(contract, w)) return false;
+                candidates.Add(new InventoryCandidate
+                {
+                    SectionId = id,
+                    Contract = contract,
+                    Provider = provider,
+                    NpcOwner = p.NpcOwner,
+                    InventoryOwnerIdentity = inventoryOwnerIdentity,
+                    Witness = w
+                });
             }
         }
         catch { return false; }
@@ -1835,20 +1851,23 @@ public sealed class ContinuationCensusProtocol
             { Fault(); failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
             bool existed = registeredSections.TryGetValue(c.SectionId, out RegisteredSection prior);
             bool sameNpc = existed && inventoryNpcOwnersBySection.TryGetValue(c.SectionId, out NpcRuntime oldNpc) && ReferenceEquals(oldNpc, c.NpcOwner);
-            bool sameOwner = existed && ReferenceEquals(prior.OwnerInstanceIdentity, c.InventoryOwner);
-            if (existed && (!sameNpc || !sameOwner))
+            bool sameOwnerIdentity = existed && ReferenceEquals(prior.OwnerInstanceIdentity, c.InventoryOwnerIdentity);
+            bool sameOwnerState = existed && HasSameInventoryOwnerState(prior.OwnerInstanceIdentity, c);
+            if (existed && (!sameNpc || !sameOwnerState))
             {
                 Fault();
                 failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
                 return false;
             }
-            if (sameNpc && sameOwner)
+            if (sameNpc && sameOwnerIdentity)
             {
                 if (!TryReadAndValidate(prior, false, out _, out failure)) { Fault(); return false; }
                 stagedRegistered.Add(c.SectionId, prior); stagedExpected.Add(c.SectionId, prior.Contract); stagedInventoryProviders[i] = prior.Provider;
             }
             else
             {
+                if (existed && !TryReadAndValidate(prior, false, out _, out failure))
+                { Fault(); return false; }
                 inventoryChanged = true;
                 RegisteredSection replacement = new RegisteredSection(c.Contract, c.Provider); SetBaseline(replacement, c.Witness);
                 stagedRegistered.Add(c.SectionId, replacement); stagedExpected.Add(c.SectionId, c.Contract); stagedInventoryProviders[i] = c.Provider;
@@ -2942,10 +2961,25 @@ public sealed class ContinuationCensusProtocol
                 || !registeredSections.TryGetValue(c.SectionId, out RegisteredSection section)
                 || !inventoryNpcOwnersBySection.TryGetValue(c.SectionId, out NpcRuntime npc)
                 || !ReferenceEquals(npc, c.NpcOwner)
-                || (section.HasBaseline && !ReferenceEquals(section.OwnerInstanceIdentity, c.InventoryOwner)))
+                || (section.HasBaseline && !ReferenceEquals(section.OwnerInstanceIdentity, c.InventoryOwnerIdentity)))
             { failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
         }
         failure = ContinuationCensusFailure.None; return true;
+    }
+
+    private static bool HasSameInventoryOwnerState(object priorIdentity, InventoryCandidate candidate)
+    {
+        if (ReferenceEquals(priorIdentity, candidate.InventoryOwnerIdentity)) return true;
+        DailyV1InventoryOwner selectedOwner = candidate.NpcOwner?.SelectedRuntimeOwners?.Inventory;
+        InventoryRuntime projection = candidate.NpcOwner?.ExistingInventory;
+        if (selectedOwner == null || projection == null
+            || !ReferenceEquals(projection.SelectedDailyV1Owner, selectedOwner))
+            return false;
+
+        return (ReferenceEquals(priorIdentity, selectedOwner)
+                && ReferenceEquals(candidate.InventoryOwnerIdentity, projection))
+            || (ReferenceEquals(priorIdentity, projection)
+                && ReferenceEquals(candidate.InventoryOwnerIdentity, selectedOwner));
     }
 
     private static bool TryBuildMoneyAccountFamily(
@@ -2972,6 +3006,9 @@ public sealed class ContinuationCensusProtocol
                 if (string.IsNullOrWhiteSpace(accountProvider.RuntimeId)
                     || accountProvider.NpcOwner == null
                     || accountProvider.MoneyAccountOwner == null
+                    || (accountProvider.NpcOwner.SelectedRuntimeOwners != null
+                        && !ReferenceEquals(accountProvider.NpcOwner.SelectedRuntimeOwners.MoneyAccount,
+                            accountProvider.MoneyAccountOwner))
                     || !ReferenceEquals(accountProvider.NpcOwner.MoneyAccount, accountProvider.MoneyAccountOwner)
                     || !ReferenceEquals(witness.OwnerInstanceIdentity, accountProvider.MoneyAccountOwner)
                     || !IsWitnessValidForContract(contract, witness))

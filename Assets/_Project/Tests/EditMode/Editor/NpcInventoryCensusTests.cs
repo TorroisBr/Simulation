@@ -33,6 +33,38 @@ public sealed class NpcInventoryCensusTests
     }
 
     [Test]
+    public void SelectedDailyV1InventoryWitnessReadsCoreOwnerAndMixedRosterRetainsLegacyProjection()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        NpcRuntime selected = NpcRuntime.CreateSelectedDailyV1(
+            "a-selected-inventory", definitions.Npcs.Values.First(), definitions, (CityRuntime)null, 0f);
+        DailyV1InventoryOwner coreOwner = selected.SelectedRuntimeOwners.Inventory;
+        InventoryRuntime projection = selected.ExistingInventory;
+
+        IOwnerSectionCensusProvider selectedProvider = NpcInventoryCensusProvider.CreateProviders(new[] { selected })[0];
+        OwnerSectionCensusWitness initial = selectedProvider.GetCurrentCensus();
+        Assert.That(initial.SectionId, Is.EqualTo(NpcInventoryCensusProvider.SectionPrefix + selected.RuntimeId));
+        Assert.That(initial.OwnerInstanceIdentity, Is.SameAs(coreOwner));
+        Assert.That(initial.OwnerInstanceIdentity, Is.Not.SameAs(projection));
+        Assert.That(initial.Cardinality, Is.Zero);
+        Assert.That(initial.Revision, Is.Zero);
+
+        Assert.That(coreOwner.TryAddItem(definitions.Items.Values.First(), 1), Is.True);
+        OwnerSectionCensusWitness afterMutation = selectedProvider.GetCurrentCensus();
+        Assert.That(afterMutation.OwnerInstanceIdentity, Is.SameAs(coreOwner));
+        Assert.That(afterMutation.Cardinality, Is.EqualTo(1));
+        Assert.That(afterMutation.Revision, Is.EqualTo(initial.Revision + 1));
+
+        NpcRuntime legacy = new NpcRuntime("z-legacy-inventory", null);
+        var mixedProviders = NpcInventoryCensusProvider.CreateProviders(new[] { legacy, selected });
+        OwnerSectionCensusWitness mixedWitness = mixedProviders[0].GetCurrentCensus();
+        Assert.That(mixedWitness.OwnerInstanceIdentity, Is.SameAs(projection));
+        Assert.That(mixedWitness.OwnerInstanceIdentity, Is.Not.SameAs(coreOwner));
+        Assert.That(mixedWitness.Cardinality, Is.EqualTo(1));
+        Assert.That(mixedWitness.Revision, Is.EqualTo(afterMutation.Revision));
+    }
+
+    [Test]
     public void RosterMembershipReconcilesInventoryWithOneEpochAndUnnotifiedWritesFailClosed()
     {
         SimulationRuntime runtime = new SimulationRuntime(new SimulationTime(), null, null, economyEnabled: false);

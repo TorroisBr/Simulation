@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 
@@ -22,6 +23,30 @@ public sealed class NpcMoneyAccountCensusTests
         Assert.That(second.Cardinality, Is.EqualTo(1));
         Assert.That(first.Revision, Is.Zero);
         Assert.That(second.Revision, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedDailyV1AccountWitnessReadsCoreOwnerAndSuccessfulWriteRevisions()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        NpcRuntime selected = NpcRuntime.CreateSelectedDailyV1(
+            "npc-selected-account", definitions.Npcs.Values.First(), definitions, (CityRuntime)null, 4f);
+        MoneyAccountRuntime coreOwner = selected.SelectedRuntimeOwners.MoneyAccount;
+        IOwnerSectionCensusProvider provider = NpcMoneyAccountCensusProvider.CreateProviders(new[] { selected })[0];
+
+        OwnerSectionCensusWitness initial = provider.GetCurrentCensus();
+        Assert.That(initial.SectionId, Is.EqualTo(NpcMoneyAccountCensusProvider.SectionPrefix + selected.RuntimeId));
+        Assert.That(initial.OwnerInstanceIdentity, Is.SameAs(coreOwner));
+        Assert.That(initial.OwnerInstanceIdentity, Is.SameAs(selected.MoneyAccount));
+        Assert.That(initial.Cardinality, Is.EqualTo(1));
+        Assert.That(initial.Revision, Is.Zero);
+
+        Assert.That(coreOwner.TryDebit(1f), Is.True);
+        Assert.That(coreOwner.TryCredit(2f), Is.True);
+        OwnerSectionCensusWitness afterWrites = provider.GetCurrentCensus();
+        Assert.That(afterWrites.OwnerInstanceIdentity, Is.SameAs(coreOwner));
+        Assert.That(afterWrites.Cardinality, Is.EqualTo(1));
+        Assert.That(afterWrites.Revision, Is.EqualTo(initial.Revision + 2));
     }
 
     [Test]

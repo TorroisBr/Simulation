@@ -169,6 +169,14 @@ internal static class P12DNpcRootOwnerSnapshot
             return false;
         }
 
+        bool useSelectedCoreInventoryCensus = true;
+        foreach (NpcRuntime candidate in roster)
+        {
+            if (candidate?.SelectedRuntimeOwners != null) continue;
+            useSelectedCoreInventoryCensus = false;
+            break;
+        }
+
         if (!P12DCityNpcProjectionCaptureEvidence.TryCreate(
                 token, captureStamp, ownerSectionVector, roster,
                 out P12DCityNpcProjectionCaptureEvidence evidence, out _))
@@ -204,7 +212,8 @@ internal static class P12DNpcRootOwnerSnapshot
                 return false;
             }
 
-            if (!TryCaptureNpc(npc, runtime.SelectedRuntimeOwnerGraph, token, evidence,
+            if (!TryCaptureNpc(npc, runtime.SelectedRuntimeOwnerGraph, token,
+                    useSelectedCoreInventoryCensus, evidence,
                     inventoryOwners, accountOwners, merchantPlanOwners, travelPlanOwners,
                     commercialOwners, spatialOwners, siteKnowledgeOwners, adventureOwners,
                     actionOwners, selectedActionPayloadOwners, cityOwners,
@@ -232,6 +241,7 @@ internal static class P12DNpcRootOwnerSnapshot
         NpcRuntime npc,
         DailyV1SelectedRuntimeOwnerGraph selectedGraph,
         DailyCaptureEligibilityToken token,
+        bool useSelectedCoreInventoryCensus,
         P12DCityNpcProjectionCaptureEvidence evidence,
         HashSet<object> inventoryOwners,
         HashSet<object> accountOwners,
@@ -322,7 +332,13 @@ internal static class P12DNpcRootOwnerSnapshot
         int currentActionCardinality = npc.UsesSelectedDailyV1Definitions
             ? (npc.SelectedRuntimeOwners?.ActionSlot?.CurrentAction == null ? 0 : 1)
             : npc.CurrentActionRuntime == null ? 0 : 1;
-        if (!TryRequireNpcSections(npc, token, inventory, account, merchantPlanAuthority,
+        object inventoryCensusOwnerIdentity = useSelectedCoreInventoryCensus
+            ? (object)npc.SelectedRuntimeOwners?.Inventory
+            : inventory;
+        if (inventoryCensusOwnerIdentity == null
+            || (useSelectedCoreInventoryCensus
+                && !ReferenceEquals(inventory.SelectedDailyV1Owner, inventoryCensusOwnerIdentity))
+            || !TryRequireNpcSections(npc, token, inventory, inventoryCensusOwnerIdentity, account, merchantPlanAuthority,
                 merchantPlan.Revision,
                 travelPlan, commercial, spatial, siteKnowledge, localTopology, adventure,
                 currentActionCardinality,
@@ -1535,7 +1551,7 @@ internal static class P12DNpcRootOwnerSnapshot
 
     private static bool TryRequireNpcSections(
         NpcRuntime npc, DailyCaptureEligibilityToken token,
-        InventoryRuntime inventory, MoneyAccountRuntime account,
+        InventoryRuntime inventory, object inventoryCensusOwnerIdentity, MoneyAccountRuntime account,
         object merchantPlanAuthority, long merchantPlanRevision,
         NpcTravelPlanRuntime travelPlan,
         CommercialKnowledgeRuntime commercial, SpatialKnowledgeRuntime spatial,
@@ -1559,7 +1575,7 @@ internal static class P12DNpcRootOwnerSnapshot
                 npc, 1, npc.TravelStateRevision)
             || !TryRequireSection(token, NpcInventoryCensusProvider.SectionPrefix + npc.RuntimeId,
                 NpcInventoryCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                inventory, inventory.Items.Count, inventory.Revision)
+                inventoryCensusOwnerIdentity, inventory.Items.Count, inventory.Revision)
             || !TryRequireSection(token, NpcMoneyAccountCensusProvider.SectionPrefix + npc.RuntimeId,
                 NpcMoneyAccountCensusProvider.SchemaVersion, OwnerSectionRole.Required,
                 account, 1, account.Revision)

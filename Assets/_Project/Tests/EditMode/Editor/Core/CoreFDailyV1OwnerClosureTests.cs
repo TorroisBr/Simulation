@@ -113,6 +113,15 @@ public sealed class CoreFDailyV1OwnerClosureTests
         NpcRuntime added = new NpcRuntime("core-f-owner-closure-added-npc", null);
         Assert.That(runtime.TryRegisterNpc(added, out WorldNpcRegistryFailure registerFailure), Is.True,
             registerFailure.ToString());
+        foreach (IOwnerSectionCensusProvider provider in runtime.InventoryCensusProviders)
+        {
+            Assert.That(provider, Is.InstanceOf<NpcInventoryCensusProvider.INpcInventorySectionCensusProvider>());
+            var inventoryProvider = (NpcInventoryCensusProvider.INpcInventorySectionCensusProvider)provider;
+            Assert.That(inventoryProvider.UsesSelectedCoreOwner, Is.False,
+                "A mixed NPC roster retains the whole-family Unity projection fallback.");
+            Assert.That(provider.GetCurrentCensus().OwnerInstanceIdentity,
+                Is.SameAs(inventoryProvider.InventoryOwner));
+        }
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long afterRegistrationEpoch, out _), Is.True);
         Assert.That(afterRegistrationEpoch, Is.EqualTo(beforeRegistrationEpoch + 1L),
             "The reserved NPC lifecycle mutation publishes one shared mutation epoch for its registered owner batch.");

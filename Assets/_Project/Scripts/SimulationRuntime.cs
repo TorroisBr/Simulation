@@ -4801,13 +4801,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
                 OwnerSectionCensusWitness witness = censusProvider.GetCurrentCensus();
                 string sectionId = NpcInventoryCensusProvider.SectionPrefix + provider.RuntimeId;
+                if (!TryGetExpectedNpcInventoryCensusState(
+                        registeredNpc,
+                        provider.UsesSelectedCoreOwner,
+                        out object expectedOwnerIdentity,
+                        out int cardinality,
+                        out long revision))
+                    throw new InvalidOperationException("Selected NPC Inventory census has no exact authoritative owner state.");
                 if (!inventorySectionIds.Add(sectionId)
-                    || !ReferenceEquals(witness.OwnerInstanceIdentity, provider.InventoryOwner)
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, expectedOwnerIdentity)
                     || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
                     || witness.SchemaVersion != NpcInventoryCensusProvider.SchemaVersion
-                    || !provider.InventoryOwner.TryGetCensusCardinality(out int cardinality)
                     || witness.Cardinality != cardinality
-                    || witness.Revision != provider.InventoryOwner.Revision)
+                    || witness.Revision != revision)
                     throw new InvalidOperationException("NPC Inventory census witness is not an exact current owner witness.");
 
                 P12NpcOwnerMutationBinding existing = null;
@@ -6905,12 +6911,20 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 }
 
                 OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+                if (!TryGetExpectedNpcInventoryCensusState(
+                        npc,
+                        inventoryProvider.UsesSelectedCoreOwner,
+                        out object expectedOwnerIdentity,
+                        out int cardinality,
+                        out long revision))
+                    return false;
                 if (!ReferenceEquals(inventoryProvider.NpcOwner, npc)
                     || !ReferenceEquals(inventoryProvider.InventoryOwner, npc.ExistingInventory)
-                    || !ReferenceEquals(witness.OwnerInstanceIdentity, npc.ExistingInventory)
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, expectedOwnerIdentity)
                     || !string.Equals(witness.SectionId, expectedInventorySectionId, StringComparison.Ordinal)
                     || witness.SchemaVersion != NpcInventoryCensusProvider.SchemaVersion
-                    || witness.Revision != npc.ExistingInventory.Revision)
+                    || witness.Cardinality != cardinality
+                    || witness.Revision != revision)
                 {
                     return false;
                 }
@@ -6930,6 +6944,45 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
         inventorySectionId = expectedInventorySectionId;
+        return true;
+    }
+
+    private static bool TryGetExpectedNpcInventoryCensusState(
+        NpcRuntime npc,
+        bool useSelectedCoreOwner,
+        out object ownerIdentity,
+        out int cardinality,
+        out long revision)
+    {
+        ownerIdentity = null;
+        cardinality = 0;
+        revision = 0;
+        if (npc == null) return false;
+
+        DailyV1NpcRuntimeOwners selectedOwners = npc.SelectedRuntimeOwners;
+        InventoryRuntime projection = npc.ExistingInventory;
+        if (projection == null
+            || (selectedOwners == null
+                ? projection.SelectedDailyV1Owner != null
+                : !ReferenceEquals(projection.SelectedDailyV1Owner, selectedOwners.Inventory)))
+            return false;
+
+        if (useSelectedCoreOwner)
+        {
+            DailyV1InventoryOwner selectedOwner = selectedOwners.Inventory;
+            if (selectedOwner == null
+                || !selectedOwner.TryGetCensusCardinality(out cardinality))
+                return false;
+
+            ownerIdentity = selectedOwner;
+            revision = selectedOwner.Revision;
+            return true;
+        }
+
+        if (!projection.TryGetCensusCardinality(out cardinality))
+            return false;
+        ownerIdentity = projection;
+        revision = projection.Revision;
         return true;
     }
 

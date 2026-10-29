@@ -326,6 +326,51 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     }
 
     [Test]
+    public void SelectedNpcOwnerCensusProvidersReadCoreIdentityCardinalityAndRevision()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition definition = definitions.Npcs.Values.First();
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-zulu", definitions, definition, 8f, out DailyV1NpcRuntimeOwners zulu), Is.True);
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-alpha", definitions, definition, 4f, out DailyV1NpcRuntimeOwners alpha), Is.True);
+
+        IReadOnlyList<IOwnerSectionCensusProvider> inventoryProviders =
+            DailyV1NpcOwnerCensusProviders.CreateInventoryProviders(new[] { zulu, alpha });
+        Assert.That(inventoryProviders.Select(provider => provider.GetCurrentCensus().SectionId), Is.EqualTo(new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "npc-alpha",
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "npc-zulu"
+        }));
+        OwnerSectionCensusWitness inventoryBefore = inventoryProviders[0].GetCurrentCensus();
+        Assert.That(inventoryBefore.OwnerInstanceIdentity, Is.SameAs(alpha.Inventory));
+        Assert.That(inventoryBefore.Cardinality, Is.Zero);
+        Assert.That(inventoryBefore.Revision, Is.Zero);
+
+        DailyV1ItemDefinition item = definitions.Items.Values.First();
+        Assert.That(alpha.Inventory.TryAddItem(item, 2, 3f), Is.True);
+        OwnerSectionCensusWitness inventoryAfter = inventoryProviders[0].GetCurrentCensus();
+        Assert.That(inventoryAfter.OwnerInstanceIdentity, Is.SameAs(alpha.Inventory));
+        Assert.That(inventoryAfter.Cardinality, Is.EqualTo(1));
+        Assert.That(inventoryAfter.Revision, Is.EqualTo(inventoryBefore.Revision + 1));
+
+        IReadOnlyList<IOwnerSectionCensusProvider> accountProviders =
+            DailyV1NpcOwnerCensusProviders.CreateMoneyAccountProviders(new[] { zulu, alpha });
+        OwnerSectionCensusWitness accountBefore = accountProviders[0].GetCurrentCensus();
+        Assert.That(accountBefore.SectionId,
+            Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + "npc-alpha"));
+        Assert.That(accountBefore.OwnerInstanceIdentity, Is.SameAs(alpha.MoneyAccount));
+        Assert.That(accountBefore.Cardinality, Is.EqualTo(1));
+        Assert.That(accountBefore.Revision, Is.Zero);
+        Assert.That(alpha.MoneyAccount.TryDebit(1f), Is.True);
+        Assert.That(alpha.MoneyAccount.TryCredit(2f), Is.True);
+        OwnerSectionCensusWitness accountAfter = accountProviders[0].GetCurrentCensus();
+        Assert.That(accountAfter.OwnerInstanceIdentity, Is.SameAs(alpha.MoneyAccount));
+        Assert.That(accountAfter.Cardinality, Is.EqualTo(1));
+        Assert.That(accountAfter.Revision, Is.EqualTo(accountBefore.Revision + 2));
+    }
+
+    [Test]
     public void SelectedCityP18StepsUseCoreOwnersAndRetainReplayableReceipts()
     {
         DailyV1CityRuntimeOwners owners = CreateMixedCityOwner();
