@@ -4976,6 +4976,29 @@ public sealed class SimulationRuntimeAdmissionTests
                     captureFailure + ": " + captureDiagnostic);
                 Assert.That(capturedImage, Is.Not.Null);
                 Assert.That(capturedRestore, Is.Not.Null);
+                Assert.That(capturedImage.Header.WorldId,
+                    Is.EqualTo(operation.SourceWitness.Token.WorldId.Value));
+                Assert.That(capturedImage.Header.Day,
+                    Is.EqualTo(operation.SourceWitness.Token.AbsoluteDay));
+                Assert.That(capturedImage.Header.Sequence,
+                    Is.EqualTo(operation.SourceWitness.Token.CompletedCoreSequence));
+                Assert.That(capturedImage.Sections.Select(section => section.Id),
+                    Is.EqualTo(capturedImage.Sections.Select(section => section.Id)
+                        .OrderBy(id => id, StringComparer.Ordinal)),
+                    "Core application sealing must preserve the established ordinal P12-v1 section order.");
+                Assert.That(P12ADailyV1Census.TryCreateForImage(
+                        capturedImage, out P12ADailyV1Census capturedCensus,
+                        out P12AResult capturedCensusResult), Is.True,
+                    capturedCensusResult?.SectionCode ?? capturedCensusResult?.Code.ToString());
+                Assert.That(P12ADailyV1Census.TryCreate(
+                        operation.SourceWitness.Token.OwnerSections,
+                        out P12ADailyV1Census tokenCensus,
+                        out P12AResult tokenCensusResult), Is.True,
+                    tokenCensusResult?.SectionCode ?? tokenCensusResult?.Code.ToString());
+                Assert.That(tokenCensus.MatchesImage(capturedImage), Is.True,
+                    "The sealed image must retain the exact owner vector authorized by the save operation.");
+                Assert.That(capturedCensus.Manifest.Matches(capturedImage.Sections, out P12AResult manifestResult), Is.True,
+                    manifestResult?.SectionCode ?? manifestResult?.Code.ToString());
                 P12AOwnerSection personMembershipSection = capturedImage.Sections.Single(section =>
                     section.Id == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);
                 P12AOwnerSection genealogySection = capturedImage.Sections.Single(section =>
@@ -12382,6 +12405,18 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(application.ActiveSession, Is.SameAs(coreSession));
             Assert.That(application.ActiveOperationCount, Is.Zero);
             Assert.That(sourceSession.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+
+            Assert.That(operation.TryComposeImage(
+                    null,
+                    null,
+                    null,
+                    out P12AContinuationImage rejectedImage,
+                    out P12ADailyV1SectionManifest rejectedManifest,
+                    out P12AResult rejectedResult), Is.False,
+                "The application image-seal boundary must reject a closed save reservation before inspecting host inputs.");
+            Assert.That(rejectedImage, Is.Null);
+            Assert.That(rejectedManifest, Is.Null);
+            Assert.That(rejectedResult?.Code, Is.EqualTo(P12AResultCode.CaptureRejected));
 
             var legacyBoundary = new AlwaysCurrentP12ECoreOwnerCaptureBoundary();
             Assert.That(DailyV1P12ECoreOwnerSourceSnapshots.TryCapture(

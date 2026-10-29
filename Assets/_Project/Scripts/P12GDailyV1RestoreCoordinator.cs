@@ -958,8 +958,23 @@ internal static partial class P12GDailyV1RestoreCoordinator
             causalSections.Count + ownerSectionsEncoded.Count);
         encodedRequired.AddRange(causalSections);
         encodedRequired.AddRange(ownerSectionsEncoded);
-        if (!P12ADailyV1ImageComposer.TryCompose(header, causalRoots, ownerSections,
-                encodedRequired, out image, out _, out result))
+        bool composed = continuationSaveOperation != null
+            ? continuationSaveOperation.TryComposeImage(
+                header,
+                causalRoots,
+                encodedRequired,
+                out image,
+                out _,
+                out result)
+            : P12ADailyV1ImageComposer.TryCompose(
+                header,
+                causalRoots,
+                ownerSections,
+                encodedRequired,
+                out image,
+                out _,
+                out result);
+        if (!composed)
         {
             image = null;
             return false;

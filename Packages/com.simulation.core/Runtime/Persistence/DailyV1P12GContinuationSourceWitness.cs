@@ -176,6 +176,28 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
             this, image, persistentDataRoot, fileOperations, out result);
     }
 
+    internal bool TryComposeImage(
+        P12AContinuationHeader header,
+        P12ACausalRootPayload causalRoots,
+        IReadOnlyList<P12AOwnerSection> encodedRequiredOwnerSections,
+        out P12AContinuationImage image,
+        out P12ADailyV1SectionManifest manifest,
+        out P12AResult result)
+    {
+        DailyV1Application owner = Volatile.Read(ref application);
+        if (owner == null)
+        {
+            image = null;
+            manifest = null;
+            result = new P12AResult(P12AResultCode.CaptureRejected);
+            return false;
+        }
+
+        return owner.TryComposeContinuationImage(
+            this, header, causalRoots, encodedRequiredOwnerSections,
+            out image, out manifest, out result);
+    }
+
     internal bool IsOwnedBy(DailyV1Application candidate) =>
         ReferenceEquals(Volatile.Read(ref application), candidate);
 

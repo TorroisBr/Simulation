@@ -761,6 +761,119 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
+    /// Seals the typed owner sections into one immutable Daily-v1 image under
+    /// the exact Core continuation-save operation. The owner vector comes
+    /// from that operation's completed-boundary witness; a host cannot
+    /// substitute a token, census vector, or owner authority.
+    /// </summary>
+    internal bool TryComposeContinuationImage(
+        DailyV1P12GContinuationSaveOperation operation,
+        P12AContinuationHeader header,
+        P12ACausalRootPayload causalRoots,
+        IReadOnlyList<P12AOwnerSection> encodedRequiredOwnerSections,
+        out P12AContinuationImage image,
+        out P12ADailyV1SectionManifest manifest,
+        out P12AResult result)
+    {
+        image = null;
+        manifest = null;
+        result = new P12AResult(P12AResultCode.CaptureRejected);
+        if (operation == null || !operation.IsActive || !operation.IsOwnedBy(this)
+            || !ReferenceEquals(activeSessionGate.Current, operation.Session))
+            return false;
+
+        DailyV1ActiveRuntimeSession session = operation.Session;
+        DailyCaptureEligibilityToken token = operation.SourceWitness?.Token;
+        DailyV1P12CRuntimeRoots roots = session.P12CRoots;
+        if (session.AdmissionContext == null
+            || !session.AdmissionContext.IsOwnedByCurrentThread())
+        {
+            result = new P12AResult(P12AResultCode.WrongThread);
+            return false;
+        }
+
+        if (token == null || roots == null || !roots.IsFor(session))
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue,
+                "p12g.application-image-session-roots");
+            return false;
+        }
+
+        if (header == null || !header.IsValid || causalRoots == null
+            || encodedRequiredOwnerSections == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue,
+                "p12a.application-image-input");
+            return false;
+        }
+
+        if (!string.Equals(header.WorldId, session.WorldId.Value, StringComparison.Ordinal)
+            || !string.Equals(header.WorldId, token.WorldId.Value, StringComparison.Ordinal)
+            || header.Day != token.AbsoluteDay
+            || header.Sequence != token.CompletedCoreSequence
+            || header.LastEconomySnapshotDay != session.ReportState.LastEconomySnapshotDay)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue,
+                "p12a.application-image-boundary");
+            return false;
+        }
+
+        if (!string.Equals(header.P9ProfileStage,
+                roots.Manifest.SelectedP9ContractIdentity, StringComparison.Ordinal)
+            || !string.Equals(header.P9ManifestFingerprint,
+                roots.Manifest.Fingerprint, StringComparison.Ordinal))
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue,
+                "p12a.application-image-p9-binding");
+            return false;
+        }
+
+        if (!ReferenceEquals(causalRoots.P9Manifest, roots.Manifest))
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue,
+                "p12a.application-image-p9-identity");
+            return false;
+        }
+
+        if (!causalRoots.IsValidFor(header))
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue,
+                "p12a.application-image-causal-roots");
+            return false;
+        }
+
+        if (!operation.TryRevalidate(out _))
+            return false;
+
+        if (!P12ADailyV1ImageComposer.TryCompose(
+                header,
+                causalRoots,
+                operation.SourceWitness.TokenOwnerSections,
+                encodedRequiredOwnerSections,
+                out image,
+                out manifest,
+                out result))
+        {
+            image = null;
+            manifest = null;
+            return false;
+        }
+
+        // Composition traverses every typed section. Do not return a sealed
+        // image if the exact completed boundary changed during that work.
+        if (!operation.TryRevalidate(out _))
+        {
+            image = null;
+            manifest = null;
+            result = new P12AResult(P12AResultCode.CaptureRejected);
+            return false;
+        }
+
+        result = null;
+        return true;
+    }
+
+    /// <summary>
     /// Persists a P12-G image only while the exact Core continuation-save
     /// operation that authorized its capture remains active. This is the
     /// Core-owned census/encode/atomic-store half of the Unity migration
