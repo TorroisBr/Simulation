@@ -1,6 +1,6 @@
 # Independent Exact-Tip Review — CORE-F Application Image Seal
 
-**Verdict: `VALIDATED_CANDIDATE`**  
+**Verdict: `VALIDATED_CANDIDATE`**
 **Reviewed:** 2026-10-29
 
 ## Exact identities
