@@ -44,4 +44,3 @@ The CoreValidation raw TRX/logs and Unity original reports remain private and un
 ## Integration constraints
 
 This is a validated intermediate candidate only. It does not complete or promote CORE-F, change P12 profile scope, claim P12-B completion, or establish `DailyV1Application.TryStart`, detached .NET hosting, or T/T+1/T+2 continuation. Canonical promotion remains a separate workflow with a refreshed preflight.
-
