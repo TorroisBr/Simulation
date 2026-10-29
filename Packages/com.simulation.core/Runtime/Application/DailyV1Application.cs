@@ -768,9 +768,10 @@ internal sealed class DailyV1Application
     /// </summary>
     internal bool TryComposeContinuationImage(
         DailyV1P12GContinuationSaveOperation operation,
-        P12AContinuationHeader header,
-        P12ACausalRootPayload causalRoots,
-        IReadOnlyList<P12AOwnerSection> encodedRequiredOwnerSections,
+        P12ACompatibilityDescriptor unityCompatibility,
+        P12ACompatibilityDescriptorV2 dotNetCompatibility,
+        long politicalWorldRevision,
+        IReadOnlyList<P12AOwnerSection> encodedOwnerSections,
         out P12AContinuationImage image,
         out P12ADailyV1SectionManifest manifest,
         out P12AResult result)
@@ -799,52 +800,128 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        if (header == null || !header.IsValid || causalRoots == null
-            || encodedRequiredOwnerSections == null)
+        if ((unityCompatibility == null) == (dotNetCompatibility == null)
+            || encodedOwnerSections == null)
         {
             result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                "p12a.application-image-input");
-            return false;
-        }
-
-        if (!string.Equals(header.WorldId, session.WorldId.Value, StringComparison.Ordinal)
-            || !string.Equals(header.WorldId, token.WorldId.Value, StringComparison.Ordinal)
-            || header.Day != token.AbsoluteDay
-            || header.Sequence != token.CompletedCoreSequence
-            || header.LastEconomySnapshotDay != session.ReportState.LastEconomySnapshotDay)
-        {
-            result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                "p12a.application-image-boundary");
-            return false;
-        }
-
-        if (!string.Equals(header.P9ProfileStage,
-                roots.Manifest.SelectedP9ContractIdentity, StringComparison.Ordinal)
-            || !string.Equals(header.P9ManifestFingerprint,
-                roots.Manifest.Fingerprint, StringComparison.Ordinal))
-        {
-            result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                "p12a.application-image-p9-binding");
-            return false;
-        }
-
-        if (!ReferenceEquals(causalRoots.P9Manifest, roots.Manifest))
-        {
-            result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                "p12a.application-image-p9-identity");
-            return false;
-        }
-
-        if (!causalRoots.IsValidFor(header))
-        {
-            result = new P12AResult(P12AResultCode.InvalidOwnerValue,
-                "p12a.application-image-causal-roots");
+                "p12a.application-image-compatibility");
             return false;
         }
 
         if (!operation.TryRevalidate(out _))
             return false;
 
+        if (!operation.TryCaptureCoreCausalRootSources(
+                out DailyV1P12GCoreBoundCausalRootSources causalSources,
+                out DailyV1P12GCoreBoundCausalRootCaptureFailure causalFailure,
+                out _)
+            || causalSources == null || !causalSources.IsFor(operation))
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12c.continuation-roots." + causalFailure);
+            return false;
+        }
+
+        P12ACausalRootImageSnapshots rootSnapshots = causalSources.Snapshots;
+        if (rootSnapshots == null
+            || !ReferenceEquals(rootSnapshots.P9Manifest, roots.Manifest)
+            || !string.Equals(rootSnapshots.P9Manifest.SelectedP9ContractIdentity,
+                roots.Manifest.SelectedP9ContractIdentity, StringComparison.Ordinal)
+            || !P12ACSpatialAuthorityCodec.TryComputeFingerprint(
+                rootSnapshots.SpatialAuthority, out string p8Fingerprint))
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue,
+                "p12c.application-image-root-binding");
+            return false;
+        }
+
+        string descriptorP9Fingerprint = unityCompatibility != null
+            ? unityCompatibility.P9Fingerprint
+            : dotNetCompatibility.P9Fingerprint;
+        string descriptorP8Fingerprint = unityCompatibility != null
+            ? unityCompatibility.P8Fingerprint
+            : dotNetCompatibility.P8Fingerprint;
+        string descriptorProfileId = unityCompatibility != null
+            ? unityCompatibility.ProfileId
+            : dotNetCompatibility.ProfileId;
+        int descriptorProfileVersion = unityCompatibility != null
+            ? unityCompatibility.ProfileVersion
+            : dotNetCompatibility.ProfileVersion;
+        if (!string.Equals(descriptorP9Fingerprint, roots.Manifest.Fingerprint,
+                StringComparison.Ordinal)
+            || !string.Equals(descriptorP8Fingerprint, p8Fingerprint,
+                StringComparison.Ordinal)
+            || !string.Equals(descriptorProfileId, P12AContinuationHeader.Profile,
+                StringComparison.Ordinal)
+            || descriptorProfileVersion != P12AContinuationHeader.ProfileVersion)
+        {
+            result = new P12AResult(P12AResultCode.IncompatibleContentOrConfiguration,
+                "p12a.application-image-descriptor-roots");
+            return false;
+        }
+
+        if (dotNetCompatibility != null && dotNetCompatibility.HostKind != 1)
+        {
+            result = new P12AResult(P12AResultCode.IncompatibleBuildOrRuntime,
+                "p12a.application-image-host-kind");
+            return false;
+        }
+
+        P12AContinuationHeader header = unityCompatibility != null
+            ? new P12AContinuationHeader(
+                token.WorldId.Value,
+                token.AbsoluteDay,
+                token.CompletedCoreSequence,
+                session.ReportState.LastEconomySnapshotDay,
+                roots.Manifest.SelectedP9ContractIdentity,
+                roots.Manifest.Fingerprint,
+                "P8-A",
+                p8Fingerprint,
+                politicalWorldRevision,
+                unityCompatibility)
+            : P12AContinuationHeader.ForDotNetV2(
+                token.WorldId.Value,
+                token.AbsoluteDay,
+                token.CompletedCoreSequence,
+                session.ReportState.LastEconomySnapshotDay,
+                roots.Manifest.SelectedP9ContractIdentity,
+                roots.Manifest.Fingerprint,
+                "P8-A",
+                p8Fingerprint,
+                politicalWorldRevision,
+                dotNetCompatibility);
+        if (!header.IsValid
+            || !string.Equals(header.WorldId, session.WorldId.Value, StringComparison.Ordinal)
+            || !string.Equals(header.WorldId, token.WorldId.Value, StringComparison.Ordinal)
+            || header.Day != token.AbsoluteDay
+            || header.Sequence != token.CompletedCoreSequence
+            || header.LastEconomySnapshotDay != session.ReportState.LastEconomySnapshotDay)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue,
+                "p12a.application-image-header");
+            return false;
+        }
+
+        if (!P12ACausalRootImageCodec.TryEncode(
+                header,
+                rootSnapshots.WorldIdentity,
+                rootSnapshots.Allocator,
+                rootSnapshots.RecordSequence,
+                rootSnapshots.SpatialAuthority,
+                rootSnapshots.P9Manifest,
+                rootSnapshots.RandomRoot,
+                out P12ACausalRootPayload causalRoots,
+                out IReadOnlyList<P12AOwnerSection> causalSections,
+                out result))
+            return false;
+
+        if (!operation.TryRevalidate(out _))
+            return false;
+
+        List<P12AOwnerSection> encodedRequiredOwnerSections = new List<P12AOwnerSection>(
+            causalSections.Count + encodedOwnerSections.Count);
+        encodedRequiredOwnerSections.AddRange(causalSections);
+        encodedRequiredOwnerSections.AddRange(encodedOwnerSections);
         if (!P12ADailyV1ImageComposer.TryCompose(
                 header,
                 causalRoots,

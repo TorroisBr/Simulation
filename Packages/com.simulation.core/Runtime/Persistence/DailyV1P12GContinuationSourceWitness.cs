@@ -97,6 +97,7 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
     private DailyV1P12GCoreBoundDemographicOwnerSources coreDemographicOwnerSources;
     private DailyV1P12GCoreBoundSpatialOwnerSources coreSpatialOwnerSources;
     private DailyV1P12GCoreBoundNpcOwnerSources coreNpcOwnerSources;
+    private DailyV1P12GCoreBoundCausalRootSources coreCausalRootSources;
 
     internal DailyV1P12GContinuationSaveOperation(
         DailyV1Application application,
@@ -118,6 +119,8 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
         Volatile.Read(ref coreSpatialOwnerSources);
     internal DailyV1P12GCoreBoundNpcOwnerSources CoreNpcOwnerSources =>
         Volatile.Read(ref coreNpcOwnerSources);
+    internal DailyV1P12GCoreBoundCausalRootSources CoreCausalRootSources =>
+        Volatile.Read(ref coreCausalRootSources);
     internal bool IsActive => Volatile.Read(ref application) != null;
 
     internal bool TryBindCoreCityOwnerSources(
@@ -146,6 +149,69 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
     {
         if (!IsActive || sources == null || !sources.IsFor(this)) return false;
         return Interlocked.CompareExchange(ref coreNpcOwnerSources, sources, null) == null;
+    }
+
+    internal bool TryBindCoreCausalRootSources(
+        DailyV1P12GCoreBoundCausalRootSources sources)
+    {
+        if (!IsActive || sources == null || !sources.IsFor(this)) return false;
+        return Interlocked.CompareExchange(ref coreCausalRootSources, sources, null) == null;
+    }
+
+    internal bool TryCaptureCoreCausalRootSources(
+        out DailyV1P12GCoreBoundCausalRootSources sources,
+        out DailyV1P12GCoreBoundCausalRootCaptureFailure failure,
+        out string diagnostic)
+    {
+        sources = Volatile.Read(ref coreCausalRootSources);
+        failure = DailyV1P12GCoreBoundCausalRootCaptureFailure.InvalidSaveOperation;
+        diagnostic = null;
+        if (!IsActive || !TryRevalidate(out _))
+        {
+            sources = null;
+            failure = DailyV1P12GCoreBoundCausalRootCaptureFailure.StaleSourceBoundary;
+            diagnostic = "A current active Core continuation-save witness is required.";
+            return false;
+        }
+
+        if (sources != null)
+        {
+            if (!sources.IsFor(this))
+            {
+                sources = null;
+                failure = DailyV1P12GCoreBoundCausalRootCaptureFailure.RootBindingMismatch;
+                diagnostic = "The bound P12-C roots belong to another save operation.";
+                return false;
+            }
+            failure = DailyV1P12GCoreBoundCausalRootCaptureFailure.None;
+            return true;
+        }
+
+        if (!DailyV1P12GCoreBoundCausalRootSources.TryCapture(
+                this, out DailyV1P12GCoreBoundCausalRootSources candidate,
+                out failure, out diagnostic)
+            || candidate == null)
+            return false;
+
+        if (!TryBindCoreCausalRootSources(candidate))
+        {
+            sources = Volatile.Read(ref coreCausalRootSources);
+            if (sources == null || !sources.IsFor(this))
+            {
+                sources = null;
+                failure = DailyV1P12GCoreBoundCausalRootCaptureFailure.RootBindingMismatch;
+                diagnostic = "The P12-C roots could not bind to the active save operation.";
+                return false;
+            }
+        }
+        else
+        {
+            sources = candidate;
+        }
+
+        failure = DailyV1P12GCoreBoundCausalRootCaptureFailure.None;
+        diagnostic = null;
+        return true;
     }
 
     internal bool TryRevalidate(out DailyCaptureEligibilityFailure failure)
@@ -177,9 +243,10 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
     }
 
     internal bool TryComposeImage(
-        P12AContinuationHeader header,
-        P12ACausalRootPayload causalRoots,
-        IReadOnlyList<P12AOwnerSection> encodedRequiredOwnerSections,
+        P12ACompatibilityDescriptor unityCompatibility,
+        P12ACompatibilityDescriptorV2 dotNetCompatibility,
+        long politicalWorldRevision,
+        IReadOnlyList<P12AOwnerSection> encodedOwnerSections,
         out P12AContinuationImage image,
         out P12ADailyV1SectionManifest manifest,
         out P12AResult result)
@@ -194,7 +261,8 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
         }
 
         return owner.TryComposeContinuationImage(
-            this, header, causalRoots, encodedRequiredOwnerSections,
+            this, unityCompatibility, dotNetCompatibility, politicalWorldRevision,
+            encodedOwnerSections,
             out image, out manifest, out result);
     }
 

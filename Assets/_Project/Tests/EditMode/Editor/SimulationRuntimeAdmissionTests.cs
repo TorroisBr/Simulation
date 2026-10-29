@@ -4982,6 +4982,17 @@ public sealed class SimulationRuntimeAdmissionTests
                     Is.EqualTo(operation.SourceWitness.Token.AbsoluteDay));
                 Assert.That(capturedImage.Header.Sequence,
                     Is.EqualTo(operation.SourceWitness.Token.CompletedCoreSequence));
+                Assert.That(capturedImage.Header.PoliticalWorldRevision,
+                    Is.EqualTo(restoredSession.Runtime.PoliticalWorldRevision),
+                    "P12 preserves the existing adapter-provided political revision scalar exactly.");
+                Assert.That(capturedImage.Header.Compatibility, Is.Not.Null,
+                    "The Unity adapter keeps creating the current-host v1 descriptor.");
+                Assert.That(capturedImage.Header.CompatibilityV2, Is.Null);
+                Assert.That(capturedImage.CausalRoots.P9Manifest,
+                    Is.SameAs(coreSession.P12CRoots.Manifest),
+                    "P12-C payloads must retain the exact manifest object from the active Core session.");
+                Assert.That(capturedImage.CausalRoots.RandomRoot.Seed,
+                    Is.EqualTo(coreSession.P12CRoots.Manifest.Seed));
                 Assert.That(capturedImage.Sections.Select(section => section.Id),
                     Is.EqualTo(capturedImage.Sections.Select(section => section.Id)
                         .OrderBy(id => id, StringComparer.Ordinal)),
@@ -5023,6 +5034,67 @@ public sealed class SimulationRuntimeAdmissionTests
                     Is.EqualTo(spatial.Snapshot.Routes.Count));
                 Assert.That(spatialRoutesSection.Revision,
                     Is.EqualTo(spatial.Snapshot.Revision));
+
+                P12ACompatibilityDescriptor validCompatibility =
+                    capturedImage.Header.Compatibility;
+                Assert.That(validCompatibility, Is.Not.Null);
+                string changedP8Fingerprint = string.Equals(validCompatibility.P8Fingerprint,
+                    new string('0', 64), StringComparison.Ordinal)
+                    ? new string('1', 64)
+                    : new string('0', 64);
+                string changedP9Fingerprint = string.Equals(validCompatibility.P9Fingerprint,
+                    new string('0', 64), StringComparison.Ordinal)
+                    ? new string('1', 64)
+                    : new string('0', 64);
+                Func<string, string, P12ACompatibilityDescriptor> cloneWithRootFingerprints =
+                    (p9, p8) => new P12ACompatibilityDescriptor(
+                        validCompatibility.ProfileId,
+                        validCompatibility.ProfileVersion,
+                        validCompatibility.ConfigurationFingerprint,
+                        validCompatibility.UnityVersion,
+                        validCompatibility.RuntimePlatform,
+                        validCompatibility.ScriptingBackend,
+                        validCompatibility.BuildGuid,
+                        validCompatibility.AssemblyMvids,
+                        validCompatibility.NumericProfileId,
+                        validCompatibility.NumericProfileVersion,
+                        validCompatibility.ContentFingerprint,
+                        validCompatibility.ProviderFingerprint,
+                        validCompatibility.CalendarId,
+                        validCompatibility.CalendarVersion,
+                        validCompatibility.CalendarFingerprint,
+                        p9,
+                        p8);
+
+                Assert.That(operation.TryComposeImage(
+                        cloneWithRootFingerprints(validCompatibility.P9Fingerprint,
+                            changedP8Fingerprint),
+                        null,
+                        capturedImage.Header.PoliticalWorldRevision,
+                        Array.Empty<P12AOwnerSection>(),
+                        out P12AContinuationImage p8MismatchImage,
+                        out P12ADailyV1SectionManifest p8MismatchManifest,
+                        out P12AResult p8MismatchResult), Is.False,
+                    "The active Core save operation must reject a host v1 descriptor whose P8 root differs from its exact Core snapshot before section composition.");
+                Assert.That(p8MismatchImage, Is.Null);
+                Assert.That(p8MismatchManifest, Is.Null);
+                Assert.That(p8MismatchResult?.Code,
+                    Is.EqualTo(P12AResultCode.IncompatibleContentOrConfiguration));
+
+                Assert.That(operation.TryComposeImage(
+                        cloneWithRootFingerprints(changedP9Fingerprint,
+                            validCompatibility.P8Fingerprint),
+                        null,
+                        capturedImage.Header.PoliticalWorldRevision,
+                        Array.Empty<P12AOwnerSection>(),
+                        out P12AContinuationImage p9MismatchImage,
+                        out P12ADailyV1SectionManifest p9MismatchManifest,
+                        out P12AResult p9MismatchResult), Is.False,
+                    "The active Core save operation must reject a host v1 descriptor whose P9 root differs from the exact Core session before section composition.");
+                Assert.That(p9MismatchImage, Is.Null);
+                Assert.That(p9MismatchManifest, Is.Null);
+                Assert.That(p9MismatchResult?.Code,
+                    Is.EqualTo(P12AResultCode.IncompatibleContentOrConfiguration));
             }
 
             for (int boundary = 0; boundary < 2; boundary++)
@@ -12407,9 +12479,7 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(sourceSession.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
 
             Assert.That(operation.TryComposeImage(
-                    null,
-                    null,
-                    null,
+                    null, null, 0L, null,
                     out P12AContinuationImage rejectedImage,
                     out P12ADailyV1SectionManifest rejectedManifest,
                     out P12AResult rejectedResult), Is.False,

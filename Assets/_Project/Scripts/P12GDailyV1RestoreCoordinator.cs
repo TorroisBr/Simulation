@@ -399,12 +399,11 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     return false;
                 }
 
-                if (!DailyV1P12GCoreBoundCausalRootSources.TryCapture(
-                        continuationSaveOperation,
+                if (!continuationSaveOperation.TryCaptureCoreCausalRootSources(
                         out DailyV1P12GCoreBoundCausalRootSources coreRoots,
                         out DailyV1P12GCoreBoundCausalRootCaptureFailure coreRootFailure,
                         out string coreRootDiagnostic)
-                    || !coreRoots.IsFor(continuationSaveOperation))
+                    || coreRoots == null || !coreRoots.IsFor(continuationSaveOperation))
                 {
                     failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
                     diagnostic = "P12-C Core-bound root capture rejected the completed boundary: "
@@ -899,16 +898,49 @@ internal static partial class P12GDailyV1RestoreCoordinator
         result = new P12AResult(P12AResultCode.CaptureRejected);
         P12ACompatibilityDescriptor compatibility = null;
         P12ACompatibilityDescriptorV2 compatibilityV2 = null;
+        P12CP9GenesisManifestSnapshot descriptorP9Manifest = p9Manifest;
+        P12CSpatialAuthoritySnapshot descriptorSpatialAuthority = spatialAuthority;
+        string p8Fingerprint = null;
+        if (continuationSaveOperation != null)
+        {
+            DailyV1P12GCoreBoundCausalRootSources boundRoots =
+                continuationSaveOperation.CoreCausalRootSources;
+            if (boundRoots == null || !boundRoots.IsFor(continuationSaveOperation)
+                || boundRoots.Snapshots == null)
+            {
+                result = new P12AResult(P12AResultCode.CaptureRejected,
+                    "p12c.continuation-roots");
+                return false;
+            }
+            descriptorP9Manifest = P12CP9GenesisManifestSnapshot.FromCore(
+                boundRoots.Snapshots.P9Manifest);
+            descriptorSpatialAuthority = boundRoots.Snapshots.SpatialAuthority;
+            if (!P12ACSpatialAuthorityCodec.TryComputeFingerprint(
+                    descriptorSpatialAuthority, out p8Fingerprint))
+            {
+                result = new P12AResult(P12AResultCode.InvalidOwnerValue,
+                    P12P8AImageSectionContract.HexSectionId);
+                return false;
+            }
+        }
+
         if (sourceSession == null || token == null || ownerSections == null
             || !ReferenceEquals(token.OwnerSections, ownerSections)
             || (continuationSaveOperation != null
                 ? !IsSourceTokenCurrent(sourceSession.Runtime, token, true, null, continuationSaveOperation)
                 : !sourceSession.Runtime.TryValidateCompletedDailyCaptureTokenForContinuationSave(token, out _))
-            || !P12ADailyV1Census.TryCreate(ownerSections, out P12ADailyV1Census census, out result)
-            || !P12ACSpatialAuthorityCodec.TryComputeFingerprint(spatialAuthority,
-                out string p8Fingerprint))
+            || !P12ADailyV1Census.TryCreate(ownerSections, out P12ADailyV1Census census, out result))
         {
             if (result == null) result = new P12AResult(P12AResultCode.IncompatibleContentOrConfiguration);
+            return false;
+        }
+
+        if (continuationSaveOperation == null
+            && !P12ACSpatialAuthorityCodec.TryComputeFingerprint(
+                spatialAuthority, out p8Fingerprint))
+        {
+            if (result == null)
+                result = new P12AResult(P12AResultCode.IncompatibleContentOrConfiguration);
             return false;
         }
 
@@ -917,10 +949,10 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 sourceSession.Runtime.Configuration, sourceSession.Composition.Calendar,
                 sourceSession.Composition.SelectedDefinitions,
                 sourceSession.Composition.ProfileFingerprint,
-                p9Manifest, p8Fingerprint, out compatibility)
+                descriptorP9Manifest, p8Fingerprint, out compatibility)
             : P12ACompatibilityDescriptorFactory.TryCreateDotNetV2(sourceSession.Configuration,
                 sourceSession.Composition.Calendar, sourceSession.Composition.SelectedDefinitions,
-                sourceSession.Composition.ProfileFingerprint, p9Manifest, p8Fingerprint,
+                sourceSession.Composition.ProfileFingerprint, descriptorP9Manifest, p8Fingerprint,
                 dotNetIdentity, out compatibilityV2);
         if (!compatibilityCreated)
         {
@@ -928,45 +960,70 @@ internal static partial class P12GDailyV1RestoreCoordinator
             return false;
         }
 
-        P12AContinuationHeader header = dotNetIdentity == null
-            ? new P12AContinuationHeader(token.WorldId.Value, token.AbsoluteDay,
-                token.CompletedCoreSequence, sourceSession.ReportState.LastEconomySnapshotDay,
-                p9Manifest.SelectedP9ContractIdentity, p9Manifest.Fingerprint,
-                "P8-A", p8Fingerprint, sourceSession.Runtime.PoliticalWorldRevision,
-                compatibility)
-            : P12AContinuationHeader.ForDotNetV2(token.WorldId.Value, token.AbsoluteDay,
-                token.CompletedCoreSequence, sourceSession.ReportState.LastEconomySnapshotDay,
-                p9Manifest.SelectedP9ContractIdentity, p9Manifest.Fingerprint,
-                "P8-A", p8Fingerprint, sourceSession.Runtime.PoliticalWorldRevision,
-                compatibilityV2);
-        if (!header.IsValid
-            || !P12ACausalRootImageCodec.TryEncode(header, worldIdentity, allocator,
-                recordSequence, spatialAuthority, p9Manifest.CoreValue, randomRoot,
-                out P12ACausalRootPayload causalRoots,
-                out IReadOnlyList<P12AOwnerSection> causalSections, out result)
-            || !P12CRuntimeIdentityOwnerCaptureAdapter.TryCapture(sourceSession.IdentityRegistry,
-                out P12CRuntimeIdentityOwnerSnapshot identitySnapshot)
-            || !P12ADailyV1OwnerSectionEncoder.TryEncode(ownerSections, identitySnapshot,
-                d, e, f, token.AbsoluteDay,
-                out IReadOnlyList<P12AOwnerSection> ownerSectionsEncoded, out result))
+        bool composed;
+        if (continuationSaveOperation != null)
         {
-            if (result == null) result = new P12AResult(P12AResultCode.InvalidOwnerValue);
-            return false;
-        }
+            if (!P12CRuntimeIdentityOwnerCaptureAdapter.TryCapture(sourceSession.IdentityRegistry,
+                    out P12CRuntimeIdentityOwnerSnapshot identitySnapshot)
+                || !P12ADailyV1OwnerSectionEncoder.TryEncode(ownerSections, identitySnapshot,
+                    d, e, f, token.AbsoluteDay,
+                    out IReadOnlyList<P12AOwnerSection> ownerSectionsEncoded, out result))
+            {
+                if (result == null) result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+                return false;
+            }
 
-        List<P12AOwnerSection> encodedRequired = new List<P12AOwnerSection>(
-            causalSections.Count + ownerSectionsEncoded.Count);
-        encodedRequired.AddRange(causalSections);
-        encodedRequired.AddRange(ownerSectionsEncoded);
-        bool composed = continuationSaveOperation != null
-            ? continuationSaveOperation.TryComposeImage(
-                header,
-                causalRoots,
-                encodedRequired,
+            composed = continuationSaveOperation.TryComposeImage(
+                compatibility,
+                compatibilityV2,
+                sourceSession.Runtime.PoliticalWorldRevision,
+                ownerSectionsEncoded,
                 out image,
                 out _,
-                out result)
-            : P12ADailyV1ImageComposer.TryCompose(
+                out result);
+        }
+        else
+        {
+            P12AContinuationHeader header = dotNetIdentity == null
+                ? new P12AContinuationHeader(token.WorldId.Value, token.AbsoluteDay,
+                    token.CompletedCoreSequence, sourceSession.ReportState.LastEconomySnapshotDay,
+                    p9Manifest.SelectedP9ContractIdentity, p9Manifest.Fingerprint,
+                    "P8-A", p8Fingerprint, sourceSession.Runtime.PoliticalWorldRevision,
+                    compatibility)
+                : P12AContinuationHeader.ForDotNetV2(token.WorldId.Value, token.AbsoluteDay,
+                    token.CompletedCoreSequence, sourceSession.ReportState.LastEconomySnapshotDay,
+                    p9Manifest.SelectedP9ContractIdentity, p9Manifest.Fingerprint,
+                    "P8-A", p8Fingerprint, sourceSession.Runtime.PoliticalWorldRevision,
+                    compatibilityV2);
+            if (!header.IsValid
+                || !P12ACausalRootImageCodec.TryEncode(header, worldIdentity, allocator,
+                    recordSequence, spatialAuthority, p9Manifest.CoreValue, randomRoot,
+                    out P12ACausalRootPayload causalRoots,
+                    out IReadOnlyList<P12AOwnerSection> causalSections, out result))
+            {
+                image = null;
+                if (result == null) result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+                return false;
+            }
+
+            // Preserve the legacy capture ordering: causal roots are encoded
+            // before identity and owner sections are sampled from the Unity
+            // compatibility runtime.
+            if (!P12CRuntimeIdentityOwnerCaptureAdapter.TryCapture(sourceSession.IdentityRegistry,
+                    out P12CRuntimeIdentityOwnerSnapshot identitySnapshot)
+                || !P12ADailyV1OwnerSectionEncoder.TryEncode(ownerSections, identitySnapshot,
+                    d, e, f, token.AbsoluteDay,
+                    out IReadOnlyList<P12AOwnerSection> ownerSectionsEncoded, out result))
+            {
+                if (result == null) result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+                return false;
+            }
+
+            List<P12AOwnerSection> encodedRequired = new List<P12AOwnerSection>(
+                causalSections.Count + ownerSectionsEncoded.Count);
+            encodedRequired.AddRange(causalSections);
+            encodedRequired.AddRange(ownerSectionsEncoded);
+            composed = P12ADailyV1ImageComposer.TryCompose(
                 header,
                 causalRoots,
                 ownerSections,
@@ -974,6 +1031,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 out image,
                 out _,
                 out result);
+        }
         if (!composed)
         {
             image = null;
