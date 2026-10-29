@@ -380,6 +380,14 @@ public sealed class DailyV1ApplicationSessionGateTests
         ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
         OwnerSectionCensusSnapshot[] sections =
             DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        Assert.That(graph.PersonStore, Is.Not.Null);
+        Assert.That(graph.GenealogyStore, Is.Not.Null);
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            graph.PersonStore.GetMembershipCensusWitness());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            graph.PersonStore.GetMaterializationBindingCensusWitness());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            new GenealogyCensusProvider(graph.GenealogyStore).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new PoliticalKnowledgeStoreCensusProvider(politicalKnowledge).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
@@ -419,8 +427,20 @@ public sealed class DailyV1ApplicationSessionGateTests
 
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundCompleteOwnerSectionVector(
         DailyV1ActiveRuntimeSession session)
-        => ReplaceCityOwnerSectionVector(
-            session, DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot());
+    {
+        OwnerSectionCensusSnapshot[] sections =
+            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        Assert.That(graph.PersonStore, Is.Not.Null);
+        Assert.That(graph.GenealogyStore, Is.Not.Null);
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            graph.PersonStore.GetMembershipCensusWitness());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            graph.PersonStore.GetMaterializationBindingCensusWitness());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            new GenealogyCensusProvider(graph.GenealogyStore).GetCurrentCensus());
+        return ReplaceCityOwnerSectionVector(session, sections);
+    }
 
     private static OwnerSectionCensusSnapshot[] ReplaceCityOwnerSectionVector(
         DailyV1ActiveRuntimeSession session,
@@ -699,9 +719,10 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryBeginContinuationSaveOperation(
             session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
 
+        int invalidateAt = boundary.ContinuationSaveEvidenceCaptureCount + 1;
         boundary.SetContinuationSaveEvidenceCaptureCallback(captureCount =>
         {
-            if (captureCount != 5) return;
+            if (captureCount != invalidateAt) return;
             OwnerSectionCensusSnapshot current = sections[0];
             sections[0] = new OwnerSectionCensusSnapshot(
                 current.SectionId, current.SchemaVersion, current.Role,
@@ -741,6 +762,27 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(sources.IsFor(operation), Is.True);
         Assert.That(operation.CoreCityOwnerSources, Is.SameAs(sources),
             "The save operation must retain the Core City sources captured at admission.");
+        DailyV1P12GCoreBoundDemographicOwnerSources demographic =
+            operation.CoreDemographicOwnerSources;
+        Assert.That(demographic, Is.Not.Null);
+        Assert.That(demographic.IsFor(operation), Is.True);
+        Assert.That(demographic.Persons, Is.SameAs(session.OwnerGraph.PersonStore));
+        Assert.That(demographic.Genealogy, Is.SameAs(session.OwnerGraph.GenealogyStore));
+        OwnerSectionCensusSnapshot membership = operation.SourceWitness.TokenOwnerSections.Single(
+            section => section.SectionId == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);
+        OwnerSectionCensusSnapshot bindings = operation.SourceWitness.TokenOwnerSections.Single(
+            section => section.SectionId == DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId);
+        OwnerSectionCensusSnapshot genealogy = operation.SourceWitness.TokenOwnerSections.Single(
+            section => section.SectionId == "p12d.genealogy.parentage");
+        Assert.That(membership.OwnerInstanceIdentity, Is.SameAs(demographic.Persons));
+        Assert.That(membership.Cardinality, Is.EqualTo(demographic.PersonSnapshot.MembershipCount));
+        Assert.That(bindings.OwnerInstanceIdentity, Is.SameAs(demographic.Persons));
+        Assert.That(bindings.Cardinality, Is.EqualTo(demographic.PersonSnapshot.BindingCount));
+        Assert.That(genealogy.OwnerInstanceIdentity, Is.SameAs(demographic.Genealogy));
+        Assert.That(genealogy.Cardinality, Is.EqualTo(demographic.GenealogySnapshot.Records.Count));
+        Assert.That(demographic.PersonSnapshot.Revision, Is.EqualTo(membership.Revision));
+        Assert.That(demographic.PersonSnapshot.Revision, Is.EqualTo(bindings.Revision));
+        Assert.That(demographic.GenealogySnapshot.Revision, Is.EqualTo(genealogy.Revision));
         Assert.That(sources.Cities.Count, Is.EqualTo(session.OwnerGraph.Cities.Count));
         for (int index = 0; index < sources.Cities.Count; index++)
         {
@@ -780,6 +822,33 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(operation.TryRevalidate(out DailyCaptureEligibilityFailure revalidationFailure), Is.True);
         Assert.That(revalidationFailure, Is.EqualTo(DailyCaptureEligibilityFailure.None));
         operation.Dispose();
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void ContinuationSaveRejectsMismatchedDemographicOwnerIdentityBeforeOperationPublication()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary boundary);
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCityAndP12FSectionVector(session);
+        InstallCompletedBoundaryToken(session, boundary, sections);
+
+        int membershipIndex = Array.FindIndex(sections,
+            section => section.SectionId == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);
+        Assert.That(membershipIndex, Is.GreaterThanOrEqualTo(0));
+        OwnerSectionCensusSnapshot membership = sections[membershipIndex];
+        sections[membershipIndex] = new OwnerSectionCensusSnapshot(
+            membership.SectionId, membership.SchemaVersion, membership.Role,
+            new object(), membership.Cardinality, membership.Revision);
+
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation,
+            out DailyCaptureEligibilityFailure failure), Is.False);
+        Assert.That(operation, Is.Null,
+            "A token vector bound to another PersonStore must not publish a Core save operation.");
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+        Assert.That(application.ActiveSession, Is.SameAs(session));
         Assert.That(application.ActiveOperationCount, Is.Zero);
     }
 
@@ -916,6 +985,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             current.SchemaVersion, current.Role, new object(),
             current.Cardinality, current.Revision);
         InstallCompletedBoundaryToken(session, boundary, sections);
+
         Assert.That(application.TryBeginContinuationSaveOperation(
             session, out DailyV1P12GContinuationSaveOperation operation,
             out DailyCaptureEligibilityFailure failure), Is.False);
@@ -934,9 +1004,10 @@ public sealed class DailyV1ApplicationSessionGateTests
         InstallCompletedBoundaryToken(session, boundary, sections);
         Assert.That(application.TryBeginContinuationSaveOperation(
             session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
+        int invalidateAt = boundary.ContinuationSaveEvidenceCaptureCount + 1;
         boundary.SetContinuationSaveEvidenceCaptureCallback(captureCount =>
         {
-            if (captureCount != 4) return;
+            if (captureCount != invalidateAt) return;
             OwnerSectionCensusSnapshot current = sections[0];
             sections[0] = new OwnerSectionCensusSnapshot(current.SectionId,
                 current.SchemaVersion, current.Role, current.OwnerInstanceIdentity,

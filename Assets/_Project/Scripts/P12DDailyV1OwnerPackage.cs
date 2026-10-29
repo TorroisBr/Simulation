@@ -137,14 +137,31 @@ internal sealed class P12DDailyV1OwnerPackage
                 && (!coreBoundCityOwnerSources.IsFor(continuationSaveOperation)
                     || !ReferenceEquals(continuationSaveOperation.CoreCityOwnerSources,
                         coreBoundCityOwnerSources)))
+            || (continuationSaveOperation != null
+                && (continuationSaveOperation.CoreDemographicOwnerSources == null
+                    || !continuationSaveOperation.CoreDemographicOwnerSources.IsFor(
+                        continuationSaveOperation)))
             || !sourceRuntime.HasSameP12RuntimeIdentitySpatialOwners(
                 sourceRuntimeIdentities, sourceSpatialNetwork, sourceExplorableSites))
         {
             return false;
         }
 
-        PersonStore sourcePersons = sourceRuntime.PersonStore;
-        GenealogyStore sourceGenealogy = sourceRuntime.GenealogyStoreForWorldBoundary;
+        DailyV1P12GCoreBoundDemographicOwnerSources coreDemographicOwnerSources =
+            continuationSaveOperation?.CoreDemographicOwnerSources;
+        PersonStore sourcePersons = coreDemographicOwnerSources?.Persons ?? sourceRuntime.PersonStore;
+        GenealogyStore sourceGenealogy = coreDemographicOwnerSources?.Genealogy
+            ?? sourceRuntime.GenealogyStoreForWorldBoundary;
+        if (continuationSaveOperation != null
+            && (coreDemographicOwnerSources == null
+                || !coreDemographicOwnerSources.IsFor(continuationSaveOperation)
+                || !ReferenceEquals(sourceRuntime.PersonStore, coreDemographicOwnerSources.Persons)
+                || !ReferenceEquals(sourceRuntime.GenealogyStoreForWorldBoundary,
+                    coreDemographicOwnerSources.Genealogy)))
+        {
+            failure = P12DDailyV1OwnerPackageFailure.InvalidOwnerEvidence;
+            return false;
+        }
         if (sourcePersons == null || sourceGenealogy == null
             || !TryValidateStagedIdentityRegistryIsEmpty(stagedRuntimeIdentities)
             || !TryValidateSourceOwnerSections(
@@ -235,9 +252,10 @@ internal sealed class P12DDailyV1OwnerPackage
             return false;
         }
 
-        PersonStoreOwnerSnapshot personSnapshot = sourcePersons.CaptureOwnerSnapshot();
-        GenealogyOwnerSnapshot genealogySnapshot = new GenealogyOwnerSnapshot(
-            GenealogyOwnerBridge.CaptureOwnerSnapshot(sourceGenealogy));
+        PersonStoreOwnerSnapshot personSnapshot = coreDemographicOwnerSources?.PersonSnapshot
+            ?? sourcePersons.CaptureOwnerSnapshot();
+        GenealogyOwnerSnapshot genealogySnapshot = coreDemographicOwnerSources?.GenealogySnapshot
+            ?? new GenealogyOwnerSnapshot(GenealogyOwnerBridge.CaptureOwnerSnapshot(sourceGenealogy));
         SpatialNetworkOwnerSnapshot spatialSnapshot = sourceSpatialNetwork.CaptureOwnerSnapshot();
         if (!sourceExplorableSites.TryCaptureOwnerSnapshot(
                 out ExplorableSiteOwnerSnapshot siteSnapshot, out _)

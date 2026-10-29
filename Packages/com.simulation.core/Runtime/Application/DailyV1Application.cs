@@ -637,6 +637,21 @@ internal sealed class DailyV1Application
                         ? DailyCaptureEligibilityFailure.StaleToken
                         : DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
                 }
+
+                if (witnessCaptured
+                    && (!DailyV1P12GCoreBoundDemographicOwnerSources.TryCapture(
+                            candidateOperation,
+                            out DailyV1P12GCoreBoundDemographicOwnerSources demographicOwnerSources,
+                            out DailyV1P12GCoreBoundOwnerSourceCaptureFailure demographicCaptureFailure,
+                            out _)
+                        || !candidateOperation.TryBindCoreDemographicOwnerSources(demographicOwnerSources)))
+                {
+                    witnessCaptured = false;
+                    failure = demographicCaptureFailure ==
+                        DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary
+                        ? DailyCaptureEligibilityFailure.StaleToken
+                        : DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                }
             }
         }
         catch (Exception captureException)

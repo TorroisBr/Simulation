@@ -94,6 +94,7 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
     private readonly object disposalSyncRoot = new object();
     private DailyV1Application application;
     private DailyV1P12GCoreBoundCityOwnerSources coreCityOwnerSources;
+    private DailyV1P12GCoreBoundDemographicOwnerSources coreDemographicOwnerSources;
 
     internal DailyV1P12GContinuationSaveOperation(
         DailyV1Application application,
@@ -109,6 +110,8 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
     internal DailyV1P12GSourceBoundaryWitness SourceWitness { get; }
     internal DailyV1P12GCoreBoundCityOwnerSources CoreCityOwnerSources =>
         Volatile.Read(ref coreCityOwnerSources);
+    internal DailyV1P12GCoreBoundDemographicOwnerSources CoreDemographicOwnerSources =>
+        Volatile.Read(ref coreDemographicOwnerSources);
     internal bool IsActive => Volatile.Read(ref application) != null;
 
     internal bool TryBindCoreCityOwnerSources(
@@ -116,6 +119,13 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
     {
         if (!IsActive || sources == null || !sources.IsFor(this)) return false;
         return Interlocked.CompareExchange(ref coreCityOwnerSources, sources, null) == null;
+    }
+
+    internal bool TryBindCoreDemographicOwnerSources(
+        DailyV1P12GCoreBoundDemographicOwnerSources sources)
+    {
+        if (!IsActive || sources == null || !sources.IsFor(this)) return false;
+        return Interlocked.CompareExchange(ref coreDemographicOwnerSources, sources, null) == null;
     }
 
     internal bool TryRevalidate(out DailyCaptureEligibilityFailure failure)

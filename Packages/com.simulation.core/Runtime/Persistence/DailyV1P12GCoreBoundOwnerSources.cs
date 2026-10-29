@@ -6,10 +6,10 @@ internal enum DailyV1P12GCoreBoundOwnerSourceCaptureFailure
     None,
     InvalidSaveOperation,
     MissingCoreOwnerBinding,
+    OwnerCensusMismatch,
     OwnerCaptureFailed,
     StaleSourceBoundary
 }
-
 internal enum DailyV1P12GCoreBoundCausalRootCaptureFailure
 {
     None,
@@ -318,5 +318,153 @@ internal sealed class DailyV1P12GCoreBoundOwnerSources
                 + exception.GetType().Name + ".";
             return false;
         }
+    }
+}
+
+/// <summary>
+/// Immutable P12-D demographic snapshots captured from the exact Person and
+/// Genealogy owners retained by the active Core session. The Unity adapter
+/// consumes these values for image staging; it does not choose or recapture
+/// their source authorities on the app-backed path.
+/// </summary>
+internal sealed class DailyV1P12GCoreBoundDemographicOwnerSources
+{
+    private readonly DailyV1P12GContinuationSaveOperation operation;
+    private readonly DailyV1P12GSourceBoundaryWitness witness;
+
+    private DailyV1P12GCoreBoundDemographicOwnerSources(
+        DailyV1P12GContinuationSaveOperation operation,
+        PersonStore persons,
+        GenealogyStore genealogy,
+        PersonStoreOwnerSnapshot personSnapshot,
+        GenealogyOwnerSnapshot genealogySnapshot)
+    {
+        this.operation = operation;
+        witness = operation.SourceWitness;
+        Persons = persons;
+        Genealogy = genealogy;
+        PersonSnapshot = personSnapshot;
+        GenealogySnapshot = genealogySnapshot;
+    }
+
+    internal PersonStore Persons { get; }
+    internal GenealogyStore Genealogy { get; }
+    internal PersonStoreOwnerSnapshot PersonSnapshot { get; }
+    internal GenealogyOwnerSnapshot GenealogySnapshot { get; }
+
+    internal bool IsFor(DailyV1P12GContinuationSaveOperation candidate) =>
+        candidate != null
+        && ReferenceEquals(operation, candidate)
+        && candidate.IsActive
+        && ReferenceEquals(witness, candidate.SourceWitness)
+        && ReferenceEquals(witness.Token, candidate.SourceWitness.Token)
+        && ReferenceEquals(witness.TokenOwnerSections, candidate.SourceWitness.TokenOwnerSections);
+
+    internal static bool TryCapture(
+        DailyV1P12GContinuationSaveOperation operation,
+        out DailyV1P12GCoreBoundDemographicOwnerSources sources,
+        out DailyV1P12GCoreBoundOwnerSourceCaptureFailure failure,
+        out string diagnostic)
+    {
+        sources = null;
+        failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.InvalidSaveOperation;
+        diagnostic = null;
+        if (operation == null || !operation.IsActive)
+        {
+            diagnostic = "A current active Core continuation-save operation is required.";
+            return false;
+        }
+        if (!operation.TryRevalidate(out DailyCaptureEligibilityFailure initialFailure))
+        {
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary;
+            diagnostic = "The Core continuation-save witness is stale: " + initialFailure + ".";
+            return false;
+        }
+
+        DailyV1ActiveRuntimeSession session = operation.Session;
+        DailyV1SelectedRuntimeOwnerGraph graph = session?.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = session?.ExecutionBoundaryState;
+        PersonStore persons = graph?.PersonStore;
+        GenealogyStore genealogy = graph?.GenealogyStore;
+        if (graph == null || state == null || persons == null || genealogy == null
+            || !ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph))
+        {
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.MissingCoreOwnerBinding;
+            diagnostic = "The active Core session does not retain the exact selected Person and Genealogy owners.";
+            return false;
+        }
+
+        try
+        {
+            PersonStoreOwnerSnapshot personSnapshot = persons.CaptureOwnerSnapshot();
+            GenealogyOwnerSnapshot genealogySnapshot = new GenealogyOwnerSnapshot(
+                GenealogyOwnerBridge.CaptureOwnerSnapshot(genealogy));
+            if (!MatchesOwnerSection(operation.SourceWitness.TokenOwnerSections,
+                    DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                    persons, personSnapshot.MembershipCount, personSnapshot.Revision)
+                || !MatchesOwnerSection(operation.SourceWitness.TokenOwnerSections,
+                    DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                    persons, personSnapshot.BindingCount, personSnapshot.Revision)
+                || !MatchesOwnerSection(operation.SourceWitness.TokenOwnerSections,
+                    "p12d.genealogy.parentage",
+                    DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                    genealogy, genealogySnapshot.Records?.Count ?? -1, genealogySnapshot.Revision))
+            {
+                failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.OwnerCensusMismatch;
+                diagnostic = "The exact Core Person/Genealogy snapshots do not match the operation's admitted census vector.";
+                return false;
+            }
+
+            if (!operation.TryRevalidate(out DailyCaptureEligibilityFailure staleFailure))
+            {
+                failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary;
+                diagnostic = "The Core save witness changed during demographic owner capture: "
+                    + staleFailure + ".";
+                return false;
+            }
+
+            sources = new DailyV1P12GCoreBoundDemographicOwnerSources(
+                operation, persons, genealogy, personSnapshot, genealogySnapshot);
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.None;
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.OwnerCaptureFailed;
+            diagnostic = "A Core demographic owner failed while making its detached snapshot: "
+                + exception.GetType().Name + ".";
+            return false;
+        }
+    }
+
+    private static bool MatchesOwnerSection(
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+        string sectionId,
+        int schemaVersion,
+        object owner,
+        int cardinality,
+        long revision)
+    {
+        if (sections == null || owner == null || cardinality < 0 || revision < 0L) return false;
+        OwnerSectionCensusSnapshot match = null;
+        for (int index = 0; index < sections.Count; index++)
+        {
+            OwnerSectionCensusSnapshot section = sections[index];
+            if (section == null || !string.Equals(section.SectionId, sectionId, StringComparison.Ordinal))
+                continue;
+            if (match != null) return false;
+            match = section;
+        }
+        return match != null
+            && match.SchemaVersion == schemaVersion
+            && match.Role == OwnerSectionRole.Required
+            && ReferenceEquals(match.OwnerInstanceIdentity, owner)
+            && match.Cardinality == cardinality
+            && match.Revision == revision;
     }
 }

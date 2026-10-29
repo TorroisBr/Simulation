@@ -4864,6 +4864,14 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(restoredSession.Runtime.GetGenealogyChildren(parentId).Single(), Is.EqualTo(childId));
             Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken), Is.EqualTo(sourceGraph),
                 "The restored D owner package must preserve exact Person identities, bindings and genealogy relations.");
+            Assert.That(restoredToken.OwnerSections.Single(section => section.SectionId ==
+                    DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId).Revision,
+                Is.EqualTo(sourceToken.OwnerSections.Single(section => section.SectionId ==
+                    DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId).Revision));
+            Assert.That(restoredToken.OwnerSections.Single(section => section.SectionId ==
+                    "p12d.genealogy.parentage").Revision,
+                Is.EqualTo(sourceToken.OwnerSections.Single(section => section.SectionId ==
+                    "p12d.genealogy.parentage").Revision));
             OwnerSectionCensusSnapshot[] restoredPersonSections = restoredToken.OwnerSections
                 .Where(section => section.SectionId.StartsWith(
                     PersonLifeResidenceCensusProvider.SectionPrefix, StringComparison.Ordinal))
@@ -4876,6 +4884,59 @@ public sealed class SimulationRuntimeAdmissionTests
                 Is.SameAs(restoredParent));
             Assert.That(restoredPersonSections.Single(section => section.SectionId == PersonLifeResidenceCensusProvider.SectionIdFor(childId)).OwnerInstanceIdentity,
                 Is.SameAs(restoredChild));
+
+            DailyV1Application application =
+                ReadPrivateField<DailyV1Application>(source, "dailyV1Application");
+            DailyV1ActiveRuntimeSession coreSession = restoredSession.CoreRuntimeSession;
+            Assert.That(application, Is.Not.Null);
+            Assert.That(coreSession?.OwnerGraph, Is.Not.Null);
+            Assert.That(application.TryBeginContinuationSaveOperation(
+                coreSession,
+                out DailyV1P12GContinuationSaveOperation operation,
+                out DailyCaptureEligibilityFailure beginFailure), Is.True, beginFailure.ToString());
+            using (operation)
+            {
+                DailyV1P12GCoreBoundDemographicOwnerSources demographic =
+                    operation.CoreDemographicOwnerSources;
+                Assert.That(demographic, Is.Not.Null);
+                Assert.That(demographic.Persons, Is.SameAs(coreSession.OwnerGraph.PersonStore));
+                Assert.That(demographic.Genealogy, Is.SameAs(coreSession.OwnerGraph.GenealogyStore));
+                Assert.That(demographic.Persons, Is.SameAs(restoredSession.Runtime.PersonStore));
+                Assert.That(demographic.Genealogy,
+                    Is.SameAs(restoredSession.Runtime.GenealogyStoreForWorldBoundary));
+                Assert.That(demographic.PersonSnapshot.MembershipCount, Is.EqualTo(2));
+                Assert.That(demographic.PersonSnapshot.Revision,
+                    Is.EqualTo(restoredToken.OwnerSections.Single(section =>
+                        section.SectionId == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId).Revision));
+                Assert.That(demographic.GenealogySnapshot.Records.Count, Is.EqualTo(1));
+                Assert.That(demographic.GenealogySnapshot.Revision,
+                    Is.EqualTo(operation.SourceWitness.TokenOwnerSections.Single(section =>
+                        section.SectionId == "p12d.genealogy.parentage").Revision));
+
+                Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                    restoredSession,
+                    sourceSession.AdmissionContext,
+                    operation,
+                    out P12AContinuationImage capturedImage,
+                    out SimulationActiveSession capturedRestore,
+                    out P12GDailyV1RestoreFailure captureFailure,
+                    out string captureDiagnostic), Is.True,
+                    captureFailure + ": " + captureDiagnostic);
+                Assert.That(capturedImage, Is.Not.Null);
+                Assert.That(capturedRestore, Is.Not.Null);
+                P12AOwnerSection personMembershipSection = capturedImage.Sections.Single(section =>
+                    section.Id == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);
+                P12AOwnerSection genealogySection = capturedImage.Sections.Single(section =>
+                    section.Id == "p12d.genealogy.parentage");
+                Assert.That(personMembershipSection.Rows.Count,
+                    Is.EqualTo(demographic.PersonSnapshot.MembershipCount));
+                Assert.That(personMembershipSection.Revision,
+                    Is.EqualTo(demographic.PersonSnapshot.Revision));
+                Assert.That(genealogySection.Rows.Count,
+                    Is.EqualTo(demographic.GenealogySnapshot.Records.Count));
+                Assert.That(genealogySection.Revision,
+                    Is.EqualTo(demographic.GenealogySnapshot.Revision));
+            }
 
             for (int boundary = 0; boundary < 2; boundary++)
             {
@@ -12213,6 +12274,17 @@ public sealed class SimulationRuntimeAdmissionTests
             DailyCaptureEligibilityToken exactToken = operation.SourceWitness.Token;
             IReadOnlyList<OwnerSectionCensusSnapshot> exactOwnerSections =
                 operation.SourceWitness.TokenOwnerSections;
+            DailyV1P12GCoreBoundDemographicOwnerSources demographic =
+                operation.CoreDemographicOwnerSources;
+            Assert.That(demographic, Is.Not.Null);
+            Assert.That(demographic.Persons, Is.SameAs(coreSession.OwnerGraph.PersonStore));
+            Assert.That(demographic.Genealogy, Is.SameAs(coreSession.OwnerGraph.GenealogyStore));
+            Assert.That(demographic.PersonSnapshot.Revision,
+                Is.EqualTo(exactOwnerSections.Single(section =>
+                    section.SectionId == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId).Revision));
+            Assert.That(demographic.GenealogySnapshot.Revision,
+                Is.EqualTo(exactOwnerSections.Single(section =>
+                    section.SectionId == "p12d.genealogy.parentage").Revision));
 
             bool callbackInvoked = false;
             P12AContinuationImage image;
