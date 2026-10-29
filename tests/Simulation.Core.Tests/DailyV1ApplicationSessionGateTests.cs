@@ -1609,6 +1609,42 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void CoreRejectsOffThreadCaptureWithoutFaultingRuntimeAdmission()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary hostPorts);
+        Assert.That(application, Is.Not.Null);
+        DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
+            session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
+        Assert.That(coreBoundary, Is.Not.Null);
+
+        bool captured = true;
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections =
+            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        long mutationEpoch = 41L;
+        DailyCaptureEligibilityFailure failure = DailyCaptureEligibilityFailure.None;
+        Thread caller = new Thread(() =>
+        {
+            captured = coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+                sessionReplacement: false,
+                out ownerSections,
+                out mutationEpoch,
+                out failure);
+        });
+        caller.Start();
+        caller.Join();
+
+        Assert.That(captured, Is.False);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.WrongOwnerThread));
+        Assert.That(ownerSections, Is.Null);
+        Assert.That(mutationEpoch, Is.Zero);
+        Assert.That(hostPorts.Faulted, Is.False,
+            "A wrong-thread capture is rejected without faulting the admitted runtime.");
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero);
+    }
+
+    [Test]
     public void CoreOwnsSelectedCapturePreconditionsAndMapsCensusFailures()
     {
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(

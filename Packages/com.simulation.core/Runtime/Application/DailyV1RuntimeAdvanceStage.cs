@@ -283,7 +283,6 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
 
         if (!admissionContext.IsOwnedByCurrentThread())
         {
-            hostPorts.FaultRuntimeAdmission();
             failure = DailyCaptureEligibilityFailure.WrongOwnerThread;
             return false;
         }
