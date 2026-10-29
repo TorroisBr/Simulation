@@ -25,9 +25,18 @@ public sealed class DomainEventAuthorityCoreTests
         Assert.That(session.EventAuthority, Is.SameAs(authority));
         Assert.That(session.EventAuthority.EventStore, Is.SameAs(authority.EventStore));
         Assert.That(session.EventAuthority.History, Is.SameAs(authority.History));
+        HistoryStore conflictingHistory = new HistoryStore();
+        DomainEventStore conflictingStore = new DomainEventStore(
+            conflictingHistory, new HistoryPolicy());
+        DomainEventRecorder conflictingRecorder = new DomainEventRecorder(
+            composition.RuntimeIdAllocator, composition.SimulationTime,
+            composition.RecordSequence, conflictingStore);
+        Assert.That(composition.ExecutionBoundaryState.TryBindSelectedTravelEventRecorders(
+            conflictingRecorder, conflictingRecorder), Is.False,
+            "Core session creation must bind its exact recorder before another same-identity store can claim travel recording.");
         Assert.That(authority.TryBindSelectedTravelEventRecorders(
             composition.ExecutionBoundaryState), Is.True,
-            "The Core session must bind the same recorder the Unity host later validates.");
+            "The Unity host must validate Core's exact recorder idempotently.");
     }
 
     [Test]
