@@ -40,7 +40,7 @@ The official CoreValidation manifest and original TRX/logs remain in protected E
 
 ### Focused Unity restore regression and full EditMode
 
-The focused nonempty Person/Genealogy detached-restore continuation regression passed 1/1. Full EditMode passed 3279/3279; all failures, skips, and inconclusives were zero.
+The focused nonempty Person/Genealogy detached-restore continuation regression passed 1/1. It also opens a Core continuation-save operation, verifies its exact SpatialNetwork owner reference and Location/Route census pair against the Unity projection, then confirms that the captured image uses the same snapshot cardinalities and revision. Full EditMode passed 3279/3279; all failures, skips, and inconclusives were zero.
 
 - Focused run ID: `8d613c1560bf40b7b699678f79dd201d`
 - Focused protected manifest SHA-256: `bc1df725fad1d1e3e2f6b595f3cb683d1eee027c6fe6f5926af742bd46386bce`
