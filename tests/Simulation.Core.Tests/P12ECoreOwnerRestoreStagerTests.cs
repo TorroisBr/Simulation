@@ -9,11 +9,13 @@ public sealed class P12ECoreOwnerRestoreStagerTests
     public void StagesCoreOwnerRootsInDependencyOrderAndPreservesExactReferences()
     {
         PersonStore persons = new PersonStore();
+        SpatialAuthorityStore spatialAuthority = new SpatialAuthorityStore();
         RootFixture roots = CreateRoots("p12e-core-city", "p12e-core-person-backed", "p12e-core-legacy");
         List<P12ECoreOwnerRestoreStep> order = new List<P12ECoreOwnerRestoreStep>();
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
-            EmptyPoliticalSupport(), EmptyPoliticalDecisions(), EmptyJustice(4L), persons,
+            EmptyPoliticalSupport(), EmptyPoliticalDecisions(), EmptyJustice(4L), EmptyMilitary(),
+            persons, spatialAuthority,
             roots.Cities, roots.Npcs, 4L, order.Add,
             out P12ECoreOwnerRestoreStage staged,
             out P12ECoreOwnerRestoreFailure failure), Is.True, failure.ToString());
@@ -34,6 +36,13 @@ public sealed class P12ECoreOwnerRestoreStagerTests
         Assert.That(staged.JusticeRecords.WantedRecords, Is.Empty);
         Assert.That(staged.JusticeRecords.Sentences, Is.Empty);
         Assert.That(staged.JusticeRecords.Revision, Is.Zero);
+        Assert.That(staged.ArmedForces, Is.Not.Null);
+        Assert.That(staged.Manpower.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Positions.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Positions.SpatialAuthorityStore, Is.SameAs(spatialAuthority));
+        Assert.That(staged.ArmedForces.Revision, Is.Zero);
+        Assert.That(staged.Manpower.Revision, Is.Zero);
+        Assert.That(staged.Positions.Revision, Is.Zero);
         Assert.That(order, Is.EqualTo(new[]
         {
             P12ECoreOwnerRestoreStep.InstitutionOffice,
@@ -42,7 +51,8 @@ public sealed class P12ECoreOwnerRestoreStagerTests
             P12ECoreOwnerRestoreStep.PoliticalClaim,
             P12ECoreOwnerRestoreStep.PoliticalSupport,
             P12ECoreOwnerRestoreStep.PoliticalDecision,
-            P12ECoreOwnerRestoreStep.JusticeRecords
+            P12ECoreOwnerRestoreStep.JusticeRecords,
+            P12ECoreOwnerRestoreStep.Military
         }));
     }
 
@@ -166,7 +176,8 @@ public sealed class P12ECoreOwnerRestoreStagerTests
 
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), invalidClaims,
-            EmptyPoliticalSupport(), EmptyPoliticalDecisions(), EmptyJustice(4L), persons,
+            EmptyPoliticalSupport(), EmptyPoliticalDecisions(), EmptyJustice(4L), EmptyMilitary(),
+            persons, new SpatialAuthorityStore(),
             Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(), 4L, null,
             out P12ECoreOwnerRestoreStage staged,
             out P12ECoreOwnerRestoreFailure failure), Is.False);
@@ -183,7 +194,8 @@ public sealed class P12ECoreOwnerRestoreStagerTests
 
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
-            invalidSupport, EmptyPoliticalDecisions(), EmptyJustice(4L), persons,
+            invalidSupport, EmptyPoliticalDecisions(), EmptyJustice(4L), EmptyMilitary(), persons,
+            new SpatialAuthorityStore(),
             Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(), 4L, null,
             out P12ECoreOwnerRestoreStage staged,
             out P12ECoreOwnerRestoreFailure failure), Is.False);
@@ -200,9 +212,34 @@ public sealed class P12ECoreOwnerRestoreStagerTests
 
         Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
             EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
-            EmptyPoliticalSupport(), invalidDecisions, EmptyJustice(4L), persons,
+            EmptyPoliticalSupport(), invalidDecisions, EmptyJustice(4L), EmptyMilitary(), persons,
+            new SpatialAuthorityStore(),
             Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(), 4L, null,
             out P12ECoreOwnerRestoreStage staged,
+            out P12ECoreOwnerRestoreFailure failure), Is.False);
+        Assert.That(staged, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12ECoreOwnerRestoreFailure.StageFailed));
+    }
+
+    [Test]
+    public void InvalidMilitarySnapshotRejectsWholePrivateCoreStage()
+    {
+        P12EMilitaryOwnerSnapshot invalidMilitary = new P12EMilitaryOwnerSnapshot(
+            P12EMilitaryOwnerSnapshot.CurrentSchemaVersion + 1,
+            0L, 0L, 0L,
+            0, 0, 0, 0, 0,
+            Array.Empty<P12EMilitaryForceSnapshotRecord>(),
+            Array.Empty<P12EMilitaryContingentSnapshotRecord>(),
+            Array.Empty<P12EMilitaryRelevantPersonSnapshotRecord>(),
+            Array.Empty<P12EManpowerStateSnapshotRecord>(),
+            Array.Empty<P12EForcePositionSnapshotRecord>());
+
+        Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
+            EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
+            EmptyPoliticalSupport(), EmptyPoliticalDecisions(), EmptyJustice(4L), invalidMilitary,
+            new PersonStore(), new SpatialAuthorityStore(),
+            Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(),
+            4L, null, out P12ECoreOwnerRestoreStage staged,
             out P12ECoreOwnerRestoreFailure failure), Is.False);
         Assert.That(staged, Is.Null);
         Assert.That(failure, Is.EqualTo(P12ECoreOwnerRestoreFailure.StageFailed));
@@ -256,6 +293,17 @@ public sealed class P12ECoreOwnerRestoreStagerTests
     private static P12EJusticeRecordsOwnerSnapshot EmptyJustice(long day) =>
         JusticeSnapshot(day, Array.Empty<P12EJusticeWantedSnapshotRow>(),
             Array.Empty<P12EJusticeSentenceSnapshotRow>());
+
+    private static P12EMilitaryOwnerSnapshot EmptyMilitary() =>
+        new P12EMilitaryOwnerSnapshot(
+            P12EMilitaryOwnerSnapshot.CurrentSchemaVersion,
+            0L, 0L, 0L,
+            0, 0, 0, 0, 0,
+            Array.Empty<P12EMilitaryForceSnapshotRecord>(),
+            Array.Empty<P12EMilitaryContingentSnapshotRecord>(),
+            Array.Empty<P12EMilitaryRelevantPersonSnapshotRecord>(),
+            Array.Empty<P12EManpowerStateSnapshotRecord>(),
+            Array.Empty<P12EForcePositionSnapshotRecord>());
 
     private static P12EJusticeRecordsOwnerSnapshot JusticeSnapshot(
         long day,

@@ -1245,7 +1245,7 @@ internal sealed class DailyV1Application
     }
     /// <summary>
     /// Stages the selected Core-owned P12-E institution, property, political,
-    /// and justice owners under the same bootstrap or exact-session
+    /// justice, and military owners under the same bootstrap or exact-session
     /// replacement authority as the P12-C/D roots. Unity supplies only the
     /// already decoded immutable owner snapshots and staged P12-C/D roots;
     /// Core creates the authoritative P12-E owners.
@@ -1259,6 +1259,7 @@ internal sealed class DailyV1Application
         P12EPoliticalSupportOwnerSnapshot politicalSupport,
         P12EPoliticalDecisionOwnerSnapshot politicalDecisions,
         P12EJusticeRecordsOwnerSnapshot justiceRecords,
+        P12EMilitaryOwnerSnapshot military,
         PersonStore persons,
         IReadOnlyList<DailyV1CityRuntimeOwners> stagedCities,
         IReadOnlyList<DailyV1NpcRuntimeOwners> stagedNpcs,
@@ -1283,8 +1284,9 @@ internal sealed class DailyV1Application
 
         if (!DailyV1P12ECoreOwnerRestoreStager.TryStage(
                 institutionOffice, propertyEstate, faction, politicalClaims,
-                politicalSupport, politicalDecisions, justiceRecords,
-                persons, stagedCities, stagedNpcs, capturedDay, stageObserver,
+                politicalSupport, politicalDecisions, justiceRecords, military,
+                persons, stagedRoots.SpatialAuthority, stagedCities, stagedNpcs,
+                capturedDay, stageObserver,
                 out stagedOwners, out _)
             || stagedOwners == null)
         {

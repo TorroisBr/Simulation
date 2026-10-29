@@ -9,7 +9,8 @@ internal enum P12ECoreOwnerRestoreStep
     PoliticalClaim = 3,
     PoliticalSupport = 4,
     PoliticalDecision = 5,
-    JusticeRecords = 6
+    JusticeRecords = 6,
+    Military = 7
 }
 
 internal enum P12ECoreOwnerRestoreFailure
@@ -32,6 +33,9 @@ internal sealed class P12ECoreOwnerRestoreStage
     internal PoliticalSupportStore PoliticalSupport { get; }
     internal PoliticalDecisionStore PoliticalDecisions { get; }
     internal DailyV1JusticeRecordsOwner JusticeRecords { get; }
+    internal ArmedForceStore ArmedForces { get; }
+    internal ContingentManpowerStateStore Manpower { get; }
+    internal ArmedForceSpatialStateStore Positions { get; }
 
     internal P12ECoreOwnerRestoreStage(
         PersonStore persons,
@@ -43,7 +47,10 @@ internal sealed class P12ECoreOwnerRestoreStage
         PoliticalClaimStore politicalClaims,
         PoliticalSupportStore politicalSupport,
         PoliticalDecisionStore politicalDecisions,
-        DailyV1JusticeRecordsOwner justiceRecords)
+        DailyV1JusticeRecordsOwner justiceRecords,
+        ArmedForceStore armedForces,
+        ContingentManpowerStateStore manpower,
+        ArmedForceSpatialStateStore positions)
     {
         Persons = persons;
         Institutions = institutions;
@@ -55,6 +62,9 @@ internal sealed class P12ECoreOwnerRestoreStage
         PoliticalSupport = politicalSupport;
         PoliticalDecisions = politicalDecisions;
         JusticeRecords = justiceRecords;
+        ArmedForces = armedForces;
+        Manpower = manpower;
+        Positions = positions;
     }
 }
 
@@ -65,6 +75,7 @@ internal sealed class P12ECoreOwnerRestoreStage
 internal sealed class DailyV1P12ECoreOwnerRestoreBuilder
 {
     private readonly PersonStore persons;
+    private readonly SpatialAuthorityStore spatialAuthority;
     private readonly long capturedDay;
     private int nextStep;
     private bool failed;
@@ -77,26 +88,34 @@ internal sealed class DailyV1P12ECoreOwnerRestoreBuilder
     private PoliticalSupportStore politicalSupport;
     private PoliticalDecisionStore politicalDecisions;
     private DailyV1JusticeRecordsOwner justiceRecords;
+    private ArmedForceStore armedForces;
+    private ContingentManpowerStateStore manpower;
+    private ArmedForceSpatialStateStore positions;
 
-    private DailyV1P12ECoreOwnerRestoreBuilder(PersonStore persons, long capturedDay)
+    private DailyV1P12ECoreOwnerRestoreBuilder(
+        PersonStore persons,
+        SpatialAuthorityStore spatialAuthority,
+        long capturedDay)
     {
         this.persons = persons;
+        this.spatialAuthority = spatialAuthority;
         this.capturedDay = capturedDay;
     }
 
     internal static bool TryCreate(
         PersonStore persons,
+        SpatialAuthorityStore spatialAuthority,
         long capturedDay,
         out DailyV1P12ECoreOwnerRestoreBuilder builder,
         out P12ECoreOwnerRestoreFailure failure)
     {
         builder = null;
-        if (persons == null || capturedDay < 0L)
+        if (persons == null || spatialAuthority == null || capturedDay < 0L)
         {
             failure = P12ECoreOwnerRestoreFailure.InvalidInput;
             return false;
         }
-        builder = new DailyV1P12ECoreOwnerRestoreBuilder(persons, capturedDay);
+        builder = new DailyV1P12ECoreOwnerRestoreBuilder(persons, spatialAuthority, capturedDay);
         failure = P12ECoreOwnerRestoreFailure.None;
         return true;
     }
@@ -266,21 +285,48 @@ internal sealed class DailyV1P12ECoreOwnerRestoreBuilder
         }
     }
 
+    internal bool TryStageMilitary(
+        P12EMilitaryOwnerSnapshot snapshot,
+        out P12ECoreOwnerRestoreFailure failure)
+    {
+        if (!CanStage(P12ECoreOwnerRestoreStep.Military, out failure)) return false;
+        try
+        {
+            if (snapshot == null
+                || !snapshot.TryStage(persons, spatialAuthority, false,
+                    out ArmedForceStore stagedArmedForces,
+                    out ContingentManpowerStateStore stagedManpower,
+                    out ArmedForceSpatialStateStore stagedPositions, out _))
+                return MarkFailed(out failure);
+            armedForces = stagedArmedForces;
+            manpower = stagedManpower;
+            positions = stagedPositions;
+            nextStep++;
+            failure = P12ECoreOwnerRestoreFailure.None;
+            return true;
+        }
+        catch (Exception exception) when (IsStageException(exception))
+        {
+            return MarkFailed(out failure);
+        }
+    }
+
     internal bool TryBuild(
         out P12ECoreOwnerRestoreStage staged,
         out P12ECoreOwnerRestoreFailure failure)
     {
         staged = null;
-        if (failed || nextStep != 7 || persons == null || institutions == null || offices == null
+        if (failed || nextStep != 8 || persons == null || institutions == null || offices == null
             || propertyOwnership == null || estates == null || factions == null || politicalClaims == null
-            || politicalSupport == null || politicalDecisions == null || justiceRecords == null)
+            || politicalSupport == null || politicalDecisions == null || justiceRecords == null
+            || armedForces == null || manpower == null || positions == null)
         {
             failure = P12ECoreOwnerRestoreFailure.StageFailed;
             return false;
         }
         staged = new P12ECoreOwnerRestoreStage(persons, institutions, offices,
             propertyOwnership, estates, factions, politicalClaims, politicalSupport,
-            politicalDecisions, justiceRecords);
+            politicalDecisions, justiceRecords, armedForces, manpower, positions);
         failure = P12ECoreOwnerRestoreFailure.None;
         return true;
     }
@@ -322,7 +368,9 @@ internal static class DailyV1P12ECoreOwnerRestoreStager
         P12EPoliticalSupportOwnerSnapshot politicalSupport,
         P12EPoliticalDecisionOwnerSnapshot politicalDecisions,
         P12EJusticeRecordsOwnerSnapshot justiceRecords,
+        P12EMilitaryOwnerSnapshot military,
         PersonStore persons,
+        SpatialAuthorityStore stagedSpatialAuthority,
         IReadOnlyList<DailyV1CityRuntimeOwners> stagedCities,
         IReadOnlyList<DailyV1NpcRuntimeOwners> stagedNpcs,
         long capturedDay,
@@ -331,7 +379,7 @@ internal static class DailyV1P12ECoreOwnerRestoreStager
         out P12ECoreOwnerRestoreFailure failure)
     {
         staged = null;
-        if (!DailyV1P12ECoreOwnerRestoreBuilder.TryCreate(persons, capturedDay,
+        if (!DailyV1P12ECoreOwnerRestoreBuilder.TryCreate(persons, stagedSpatialAuthority, capturedDay,
                 out DailyV1P12ECoreOwnerRestoreBuilder builder, out failure))
             return false;
 
@@ -349,6 +397,8 @@ internal static class DailyV1P12ECoreOwnerRestoreStager
         stageObserver?.Invoke(P12ECoreOwnerRestoreStep.PoliticalDecision);
         if (!builder.TryStageJusticeRecords(justiceRecords, stagedCities, stagedNpcs, out failure)) return false;
         stageObserver?.Invoke(P12ECoreOwnerRestoreStep.JusticeRecords);
+        if (!builder.TryStageMilitary(military, out failure)) return false;
+        stageObserver?.Invoke(P12ECoreOwnerRestoreStep.Military);
 
         return builder.TryBuild(out staged, out failure);
     }
