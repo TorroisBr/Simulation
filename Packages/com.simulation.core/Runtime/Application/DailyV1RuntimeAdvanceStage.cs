@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 internal static class DailyV1RuntimeProtocolOperationContracts
 {
@@ -155,14 +156,12 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
+    bool CanBeginDailyAdvanceOperation { get; }
     bool IsFactualReadWorldPublished { get; }
     bool HasActiveDailyOperationContext { get; }
     bool TryBindApplicationAdvanceAuthority(
         DailyV1Application application,
         DailyV1ActiveRuntimeSession session);
-    bool TryEnterRuntimeProtocolOperation(
-        string operationContractId,
-        out IDisposable operationScope);
     bool TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary);
     bool TryCaptureOwnerSectionCensus(
@@ -223,10 +222,52 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
 
     public DailyV1ExecutionBoundaryState ExecutionState => executionState;
 
-    public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope) =>
-        hostPorts.TryEnterRuntimeProtocolOperation(
-            DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
-            out operationScope);
+    public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
+    {
+        operationScope = null;
+        if (!hostPorts.CanBeginDailyAdvanceOperation)
+        {
+            hostPorts.FaultRuntimeAdmission();
+            return false;
+        }
+
+        if (!executionState.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance))
+        {
+            hostPorts.FaultRuntimeAdmission();
+            return false;
+        }
+
+        operationScope = new RuntimeProtocolOperationScope(
+            executionState, hostPorts.FaultRuntimeAdmission);
+        return true;
+    }
+
+    private sealed class RuntimeProtocolOperationScope : IDisposable
+    {
+        private readonly DailyV1ExecutionBoundaryState executionState;
+        private readonly Action faultRuntimeAdmission;
+        private int disposed;
+
+        internal RuntimeProtocolOperationScope(
+            DailyV1ExecutionBoundaryState executionState,
+            Action faultRuntimeAdmission)
+        {
+            this.executionState = executionState
+                ?? throw new ArgumentNullException(nameof(executionState));
+            this.faultRuntimeAdmission = faultRuntimeAdmission
+                ?? throw new ArgumentNullException(nameof(faultRuntimeAdmission));
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+            if (executionState.TryEndRuntimeProtocolOperation()) return;
+
+            executionState.InvalidateCurrentCaptureToken();
+            faultRuntimeAdmission();
+        }
+    }
 
     public bool TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary) =>

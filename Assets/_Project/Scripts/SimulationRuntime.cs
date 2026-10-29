@@ -11137,6 +11137,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     DailyV1ExecutionBoundaryState IDailyV1SelectedRuntimeAdvanceHostPorts.ExecutionState =>
         dailyExecutionBoundary;
 
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.CanBeginDailyAdvanceOperation
+    {
+        get
+        {
+            ContinuationCensusProtocol census = npcRosterCensusProtocol;
+            return census != null
+                && IsRuntimeAdmissionOwnerThreadCurrent()
+                && census.TryReadActiveOperationCount(
+                    out int activeOperationCount, out _)
+                && activeOperationCount == 0;
+        }
+    }
+
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.IsFactualReadWorldPublished =>
         factualReadWorldPublished;
 
@@ -11167,18 +11180,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return ReferenceEquals(dailyV1ApplicationAdvanceAuthority, application)
                 && ReferenceEquals(dailyV1ApplicationAdvanceSession, session);
         }
-    }
-
-    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryEnterRuntimeProtocolOperation(
-        string operationContractId,
-        out IDisposable operationScope)
-    {
-        operationScope = null;
-        if (!TryEnterRuntimeAdmissionOperation(
-                operationContractId, out SimulationOperationScope hostScope))
-            return false;
-        operationScope = hostScope;
-        return true;
     }
 
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCreateSelectedDailyExecutionBoundary(

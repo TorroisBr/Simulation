@@ -11,6 +11,7 @@ public sealed class SimulationRuntimeOrchestrationTests
             ExecutionState = state;
 
         public DailyV1ExecutionBoundaryState ExecutionState { get; }
+        public bool CanBeginDailyAdvanceOperation => true;
         public bool IsFactualReadWorldPublished => true;
         public bool HasActiveDailyOperationContext => false;
         public bool HasIntradayTimeline => false;
@@ -23,14 +24,6 @@ public sealed class SimulationRuntimeOrchestrationTests
             && ReferenceEquals(session.ExecutionBoundaryState, ExecutionState);
 
         public bool TryEnterDailyAdvanceOperation(out System.IDisposable operationScope)
-        {
-            operationScope = null;
-            return false;
-        }
-
-        public bool TryEnterRuntimeProtocolOperation(
-            string operationContractId,
-            out System.IDisposable operationScope)
         {
             operationScope = null;
             return false;

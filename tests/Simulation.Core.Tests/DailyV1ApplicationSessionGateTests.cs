@@ -59,6 +59,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
 
         internal bool OperationEntered { get; private set; }
+        internal int ActiveOperationCountAtStageCreation { get; private set; }
         internal bool SelectedBoundaryRequested { get; private set; }
         internal int LegacyAdvanceInvocationCount { get; private set; }
         internal bool Faulted { get; private set; }
@@ -83,6 +84,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             admissionMutationEpoch = mutationEpoch;
         }
         public DailyV1ExecutionBoundaryState ExecutionState => state;
+        public bool CanBeginDailyAdvanceOperation { get; set; } = true;
         public bool IsFactualReadWorldPublished { get; set; } = true;
         public bool HasActiveDailyOperationContext { get; set; }
         public DailyCaptureEligibilityFailure CensusFailure { get; set; }
@@ -100,7 +102,7 @@ public sealed class DailyV1ApplicationSessionGateTests
                 DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
                 out operationScope);
 
-        public bool TryEnterRuntimeProtocolOperation(
+        private bool TryEnterRuntimeProtocolOperation(
             string operationContractId,
             out IDisposable operationScope)
         {
@@ -120,6 +122,11 @@ public sealed class DailyV1ApplicationSessionGateTests
         public bool TryCreateSelectedDailyExecutionBoundary(
             out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
         {
+            ActiveOperationCountAtStageCreation = state.ActiveOperationCount;
+            OperationEntered = ActiveOperationCountAtStageCreation == 2;
+            RequestedRuntimeProtocolOperationId =
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance;
+            onOperationEntry?.Invoke();
             SelectedBoundaryRequested = true;
             executionBoundary = null;
             return false;
@@ -1368,9 +1375,11 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(boundary.OperationEntered, Is.True);
+        Assert.That(boundary.ActiveOperationCountAtStageCreation, Is.EqualTo(2),
+            "Core owns both the outer DailyAdvance scope and its registered runtime operation while constructing the selected execution stage.");
         Assert.That(boundary.RequestedRuntimeProtocolOperationId,
             Is.EqualTo(DailyV1RuntimeProtocolOperationContracts.DailyAdvance),
-            "The selected Core runtime names the P12 operation that the host protocol admits.");
+            "The selected Core runtime names the registered P12 operation it owns.");
         Assert.That(boundary.SelectedBoundaryRequested, Is.True);
         Assert.That(boundary.LegacyAdvanceInvocationCount, Is.Zero,
             "The selected Core session cannot delegate a failed stage to the host day or intraday advance.");
@@ -1429,6 +1438,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             "A failed first Core stage cannot claim any completed days.");
         Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(boundary.OperationEntered, Is.True);
+        Assert.That(boundary.ActiveOperationCountAtStageCreation, Is.EqualTo(2));
         Assert.That(boundary.SelectedBoundaryRequested, Is.True);
         Assert.That(boundary.LegacyAdvanceInvocationCount, Is.Zero,
             "A selected multi-day Core session cannot delegate to the host day or intraday advance.");
@@ -1506,6 +1516,67 @@ public sealed class DailyV1ApplicationSessionGateTests
             "The session publishes its Core-owned boundary rather than the Unity host runtime.");
         Assert.That(coreBoundary.ExecutionState, Is.SameAs(session.ExecutionBoundaryState));
         Assert.That(coreBoundary.IsBoundTo(session.ExecutionBoundaryState, exact), Is.True);
+    }
+
+    [Test]
+    public void CoreOwnedDailyAdvanceProtocolScopeClosesIdempotently()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary hostPorts);
+        DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
+            session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
+
+        Assert.That(coreBoundary.TryEnterDailyAdvanceOperation(
+            out IDisposable operationScope), Is.True);
+        Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.EqualTo(1));
+
+        operationScope.Dispose();
+        operationScope.Dispose();
+
+        Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
+        Assert.That(hostPorts.Faulted, Is.False);
+    }
+
+    [Test]
+    public void CoreOwnedDailyAdvanceProtocolScopeFaultsAndRemainsActiveWhenDisposedOffOwnerThread()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary hostPorts);
+        DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
+            session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
+
+        Assert.That(coreBoundary.TryEnterDailyAdvanceOperation(
+            out IDisposable operationScope), Is.True);
+        System.Threading.Thread disposer = new System.Threading.Thread(operationScope.Dispose);
+        disposer.Start();
+        disposer.Join();
+
+        Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.EqualTo(1),
+            "A scope disposed by another thread cannot make the owner-thread operation registry appear idle.");
+        Assert.That(session.ExecutionBoundaryState.CurrentCaptureToken, Is.Null);
+        Assert.That(hostPorts.Faulted, Is.True);
+    }
+
+    [Test]
+    public void CoreAdvanceRequiresHealthyIdleP12OperationAdmissionBeforeOpeningItsScope()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary hostPorts);
+        hostPorts.CanBeginDailyAdvanceOperation = false;
+
+        Assert.That(application.TryAdvanceDay(
+            out SimulationRuntimeAdvanceFailure failure), Is.False);
+
+        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
+        Assert.That(session.SimulationTime.AbsoluteDay, Is.Zero,
+            "An unhealthy P12 protocol is rejected before Core advances the admitted clock.");
+        Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
+        Assert.That(session.ExecutionBoundaryState.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
+        Assert.That(hostPorts.Faulted, Is.True);
     }
 
     [Test]
