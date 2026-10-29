@@ -1676,12 +1676,13 @@ public sealed class SimulationRuntimeAdmissionTests
         RecordFixture records = SimulationTestFactory.CreateRecordFixture();
         EconomyTransactionService economyTransactionService = new EconomyTransactionService();
         object owner = receiptOwner == "decision"
-            ? (object)records.DecisionRecorder
+            ? GetDecisionOccurrenceReceiptAuthority(records.DecisionRecorder)
             : economyTransactionService;
-        string stateField = receiptOwner == "decision" ? "occurrenceReceipts" : "keyedSaleReceipts";
-        object collection = owner.GetType()
-            .GetField(stateField, BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(owner);
+        string stateField = receiptOwner == "decision" ? "receipts" : "keyedSaleReceipts";
+        FieldInfo state = owner.GetType().GetField(
+            stateField, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(state, Is.Not.Null);
+        object collection = state.GetValue(owner);
         if (collection is System.Collections.IDictionary dictionary)
             dictionary.Add("p12-exact-zero-receipt-test", null);
         else
@@ -1724,13 +1725,13 @@ public sealed class SimulationRuntimeAdmissionTests
             initialFailure.ToString());
 
         object owner = receiptOwner == "decision"
-            ? (object)records.DecisionRecorder
+            ? GetDecisionOccurrenceReceiptAuthority(records.DecisionRecorder)
             : economyTransactionService;
         string stateField = receiptOwner == "decision"
-            ? "occurrenceReceipts"
+            ? "receipts"
             : "keyedSaleReceipts";
         string revisionField = receiptOwner == "decision"
-            ? "occurrenceReceiptsRevision"
+            ? "revision"
             : "keyedSaleReceiptsRevision";
         if (driftKind == "revision")
         {
@@ -1755,6 +1756,16 @@ public sealed class SimulationRuntimeAdmissionTests
 
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure driftFailure), Is.False);
         Assert.That(driftFailure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+    }
+
+    private static object GetDecisionOccurrenceReceiptAuthority(NpcDecisionRecorder recorder)
+    {
+        FieldInfo ownerField = typeof(NpcDecisionRecorder).GetField(
+            "receiptAuthority", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(ownerField, Is.Not.Null);
+        object authority = ownerField.GetValue(recorder);
+        Assert.That(authority, Is.Not.Null);
+        return authority;
     }
 
     [TestCase("wrong-section")]
