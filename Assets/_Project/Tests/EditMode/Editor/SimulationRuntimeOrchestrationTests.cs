@@ -16,13 +16,6 @@ public sealed class SimulationRuntimeOrchestrationTests
         public bool HasActiveDailyOperationContext => false;
         public bool HasIntradayTimeline => false;
 
-        public bool TryBindApplicationAdvanceAuthority(
-            DailyV1Application application,
-            DailyV1ActiveRuntimeSession session) =>
-            application != null
-            && session != null
-            && ReferenceEquals(session.ExecutionBoundaryState, ExecutionState);
-
         public bool TryEnterDailyAdvanceOperation(out System.IDisposable operationScope)
         {
             operationScope = null;

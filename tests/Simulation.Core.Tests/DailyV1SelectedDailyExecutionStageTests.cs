@@ -787,6 +787,89 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
+    public void AdmittedDemographyContextUsesCoreCalendarAndExactOwnerGraph()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        FakeBoundary boundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore);
+
+        Assert.That(boundary.TryCreateSelectedDemographyHostPorts(
+            graph, out IDailyV1SelectedDemographyHostPorts hostPorts), Is.True);
+        Assert.That(DailyV1CoreSelectedDemographyExecutionContext.TryCreate(
+            state, graph, hostPorts,
+            out IDailyV1SelectedDemographyExecutionContext context), Is.True);
+        Assert.That(context.Calendar, Is.SameAs(state.CalendarIdentity),
+            "An admitted demographic stage uses the calendar bound to its Core execution state.");
+        Assert.That(context.Boundary, Is.SameAs(hostPorts.Boundary));
+        Assert.That(context.MortalitySamples, Is.SameAs(hostPorts.MortalitySamples));
+        Assert.That(context.AggregateProvider, Is.SameAs(hostPorts.AggregateProvider));
+
+        DailyV1SelectedRuntimeOwnerGraph otherGraph = CreateGraph(composition.Definitions);
+        Assert.That(DailyV1CoreSelectedDemographyExecutionContext.TryCreate(
+            state, otherGraph, hostPorts,
+            out IDailyV1SelectedDemographyExecutionContext rejected), Is.False);
+        Assert.That(rejected, Is.Null,
+            "The admitted context cannot be rebound to a separately reconstructed owner graph.");
+
+        DailyV1ExecutionBoundaryState unboundState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(),
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(Guid.NewGuid()));
+        Assert.That(DailyV1CoreSelectedDemographyExecutionContext.TryCreate(
+            unboundState, graph, hostPorts,
+            out rejected), Is.False,
+            "A matching profile label without admitted execution roots is not a Core session.");
+        Assert.That(rejected, Is.Null);
+    }
+
+    [Test]
+    public void AdmittedTravelAvailabilityComesFromSealedCoreOperationInventory()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
+            hasSoloTravelOperation: true);
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        FakeBoundary boundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore);
+        Assert.That(state.HasRuntimeProtocolOperationInventory, Is.True);
+        Assert.That(state.HasRuntimeProtocolOperationContract(
+            DailyV1RuntimeProtocolOperationContracts.SoloTravelStart), Is.True);
+        Assert.That(boundary.TryCreateSelectedTravelDayHostPorts(
+            composition.OwnerGraph, out IDailyV1SelectedTravelDayHostPorts hostPorts), Is.True);
+        Assert.That(typeof(IDailyV1SelectedTravelDayHostPorts).GetProperty("AdvanceSoloTravel"), Is.Null,
+            "The admitted host-port contract no longer exposes travel-stage availability.");
+
+        Assert.That(DailyV1CoreSelectedTravelDayExecutionContext.TryCreate(
+            state, composition.OwnerGraph, hostPorts,
+            out IDailyV1SelectedTravelDayExecutionContext context), Is.True);
+        Assert.That(context.AdvanceSoloTravel, Is.True,
+            "The admitted Core session selects solo travel from its sealed operation inventory.");
+
+        DailyV1GenesisComposition incomplete = CreateSelectedGenesis(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
+            hasSoloTravelOperation: false,
+            sealRuntimeProtocolInventory: false);
+        FakeBoundary incompleteBoundary = new FakeBoundary(
+            incomplete.RuntimeIdAllocator, incomplete.RandomSource,
+            incomplete.RecordSequence, incomplete.DecisionStore,
+            incomplete.ActorChoiceStore);
+        Assert.That(incompleteBoundary.TryCreateSelectedTravelDayHostPorts(
+            incomplete.OwnerGraph, out IDailyV1SelectedTravelDayHostPorts incompletePorts), Is.True);
+        Assert.That(DailyV1CoreSelectedTravelDayExecutionContext.TryCreate(
+            incomplete.ExecutionBoundaryState, incomplete.OwnerGraph, incompletePorts,
+            out IDailyV1SelectedTravelDayExecutionContext rejected), Is.False,
+            "An admitted session without a sealed operation inventory cannot take availability from Unity.");
+        Assert.That(rejected, Is.Null);
+    }
+
+    [Test]
     public void AdmittedTravelContextIsConstructedByCoreAndRejectsAnotherOwnerGraph()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
@@ -806,7 +889,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             out IDailyV1SelectedTravelDayExecutionContext context), Is.True);
         Assert.That(context.Boundary, Is.SameAs(hostPorts.Boundary));
         Assert.That(context.P12Protocol, Is.SameAs(hostPorts.P12Protocol));
-        Assert.That(context.AdvanceSoloTravel, Is.EqualTo(hostPorts.AdvanceSoloTravel));
+        Assert.That(context.AdvanceSoloTravel, Is.False,
+            "The sealed Core operation inventory omits the optional solo-travel operation in this fixture.");
 
         DailyV1SelectedRuntimeOwnerGraph otherGraph = CreateGraph(composition.Definitions);
         Assert.That(DailyV1CoreSelectedTravelDayExecutionContext.TryCreate(
@@ -858,7 +942,13 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         CreateSelectedGenesis(DailyV1CapturedSelectedContentFixture.CreateDefinitions());
 
     private static DailyV1GenesisComposition CreateSelectedGenesis(
-        DailyV1EffectiveDefinitions definitions)
+        DailyV1EffectiveDefinitions definitions) =>
+        CreateSelectedGenesis(definitions, hasSoloTravelOperation: false);
+
+    private static DailyV1GenesisComposition CreateSelectedGenesis(
+        DailyV1EffectiveDefinitions definitions,
+        bool hasSoloTravelOperation,
+        bool sealRuntimeProtocolInventory = true)
     {
         Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
             definitions,
@@ -867,6 +957,18 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(composition.ExecutionBoundaryState.TryBindOrValidateSelectedRuntimeActorRoster(
             composition.OwnerGraph.Npcs.Select(owner =>
                 new DailyV1ActorTurnRosterProjection(owner.RuntimeId, null))), Is.True);
+        if (sealRuntimeProtocolInventory)
+        {
+            IReadOnlyList<string> operationContractIds =
+                DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                    hasRuntimeAdmission: true,
+                    hasTravelPartySystem: false,
+                    hasTravelSystem: hasSoloTravelOperation);
+            foreach (string operationContractId in operationContractIds)
+                Assert.That(composition.ExecutionBoundaryState.TryRegisterRuntimeProtocolOperationContract(
+                    operationContractId), Is.True, operationContractId);
+            Assert.That(composition.ExecutionBoundaryState.TrySealRuntimeProtocolOperationInventory(), Is.True);
+        }
         return composition;
     }
 
@@ -1133,6 +1235,19 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             context = new FakeDemographyContext(graph);
             return true;
         }
+        public bool TryCreateSelectedDemographyHostPorts(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedDemographyHostPorts hostPorts)
+        {
+            Calls.Add("demography-host-ports");
+            if (ThrowOnDemography)
+            {
+                hostPorts = null;
+                throw new InvalidOperationException("demography failed");
+            }
+            hostPorts = new FakeDemographyContext(graph);
+            return true;
+        }
         public void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result)
         {
             PublishedDemographyResult = result ?? throw new ArgumentNullException(nameof(result));
@@ -1223,15 +1338,15 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             out IDailyV1SelectedTravelDayHostPorts hostPorts)
         {
             hostPorts = null;
-            if (!TryCreateSelectedTravelDayContext(graph,
-                    out IDailyV1SelectedTravelDayExecutionContext context)
-                || !(context is IDailyV1SelectedTravelDayHostPorts candidate))
-                return false;
-            hostPorts = candidate;
+            CurrentGraph = graph;
+            Calls.Add("travel-context");
+            if (RejectTravelContext) return false;
+            hostPorts = new FakeTravelHostPorts(this);
             return true;
         }
 
-        private sealed class FakeDemographyContext : IDailyV1SelectedDemographyExecutionContext
+        private sealed class FakeDemographyContext : IDailyV1SelectedDemographyExecutionContext,
+            IDailyV1SelectedDemographyHostPorts
         {
             internal FakeDemographyContext(DailyV1SelectedRuntimeOwnerGraph graph)
             {
@@ -1290,6 +1405,23 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 owner.Calls.Add("travel-results");
             }
             public void ObserveCompletedTravelResults() => owner.Calls.Add("travel-observation");
+        }
+
+        private sealed class FakeTravelHostPorts : IDailyV1SelectedTravelDayHostPorts
+        {
+            private readonly FakeTravelContext context;
+
+            internal FakeTravelHostPorts(FakeBoundary owner) => context = new FakeTravelContext(owner);
+
+            public IDailyV1SelectedTravelDayBoundary Boundary => context.Boundary;
+            public IDailyV1SelectedP12TravelPartyAdvanceProtocol P12Protocol => context.P12Protocol;
+            public bool ExecuteWithinPartyOwnerOperation(Func<bool> operation) =>
+                context.ExecuteWithinPartyOwnerOperation(operation);
+            public void PublishCompletedTravelResults(
+                IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
+                IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults) =>
+                context.PublishCompletedTravelResults(partyArrivals, soloResults);
+            public void ObserveCompletedTravelResults() => context.ObserveCompletedTravelResults();
         }
 
         private sealed class EmptyTravelBoundary : IDailyV1SelectedTravelDayBoundary

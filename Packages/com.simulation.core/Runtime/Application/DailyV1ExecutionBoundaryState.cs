@@ -58,6 +58,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 {
     private readonly object runtimeInstanceIdentity = new object();
     private readonly object operationSyncRoot = new object();
+    private readonly object applicationAdvanceAuthorityGate = new object();
     private readonly List<DailyV1OperationScopeKind> activeOperationScopes =
         new List<DailyV1OperationScopeKind>();
     private Dictionary<string, DailyV1OwnerSectionContractIdentity> expectedOwnerSectionContracts =
@@ -98,6 +99,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private DailyV1P12CrimeJusticeMutationCoordinator selectedP12CrimeJusticeMutationCoordinator;
     private IDailyV1P12CrimeJusticeMutationProtocol selectedP12CrimeJusticeMutationProtocol;
     private SelectedP12TravelPartyAdvanceContext selectedP12TravelPartyAdvanceContext;
+    private DailyV1Application applicationAdvanceAuthority;
+    private DailyV1ActiveRuntimeSession applicationAdvanceSession;
 
     private sealed class SelectedP12TravelPartyAdvanceContext
     {
@@ -193,6 +196,57 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         CalendarIdentity = calendarIdentity;
         runtimeConfigurationBound = true;
         return true;
+    }
+
+    /// <summary>
+    /// Binds the admitted Core execution state to its one application/session
+    /// advance authority. This routing identity lives with the runtime state;
+    /// Unity may request the bound application, but does not own a duplicate.
+    /// </summary>
+    internal bool TryBindApplicationAdvanceAuthority(
+        DailyV1Application application,
+        DailyV1ActiveRuntimeSession session)
+    {
+        if (application == null || session == null
+            || !ReferenceEquals(session.ExecutionBoundaryState, this)
+            || !HasAdmittedSelectedDailyExecution
+            || AdmissionContext?.Profile
+                != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !SelectedRuntimeExecutionRootsBound
+            || SelectedRuntimeOwnerGraph == null)
+            return false;
+
+        lock (applicationAdvanceAuthorityGate)
+        {
+            if (applicationAdvanceAuthority == null && applicationAdvanceSession == null)
+            {
+                applicationAdvanceAuthority = application;
+                applicationAdvanceSession = session;
+                return true;
+            }
+
+            return ReferenceEquals(applicationAdvanceAuthority, application)
+                && ReferenceEquals(applicationAdvanceSession, session);
+        }
+    }
+
+    /// <summary>
+    /// Copies the exact bound application/session pair while holding only the
+    /// state binding lock. Callers must release this lock before entering the
+    /// application's session gate.
+    /// </summary>
+    internal bool TryGetApplicationAdvanceAuthority(
+        out DailyV1Application application,
+        out DailyV1ActiveRuntimeSession session)
+    {
+        lock (applicationAdvanceAuthorityGate)
+        {
+            application = applicationAdvanceAuthority;
+            session = applicationAdvanceSession;
+            return application != null
+                && session != null
+                && ReferenceEquals(session.ExecutionBoundaryState, this);
+        }
     }
 
     private bool MatchesBoundRuntimeIdentity(

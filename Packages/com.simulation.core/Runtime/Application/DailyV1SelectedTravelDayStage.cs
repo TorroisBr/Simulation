@@ -47,15 +47,14 @@ internal interface IDailyV1SelectedP12TravelPartyAdvanceProtocol
 
 /// <summary>
 /// Host-only projection, P12 admission, and notification ports for Core's
-/// selected travel execution context. The host supplies these capabilities;
-/// Core binds them to the exact admitted runtime graph and owns the context
-/// consumed by the daily stage.
+/// selected travel execution context. Core derives stage availability from
+/// its sealed runtime operation inventory and binds these ports to the exact
+/// admitted runtime graph.
 /// </summary>
 internal interface IDailyV1SelectedTravelDayHostPorts
 {
     IDailyV1SelectedTravelDayBoundary Boundary { get; }
     IDailyV1SelectedP12TravelPartyAdvanceProtocol P12Protocol { get; }
-    bool AdvanceSoloTravel { get; }
     bool ExecuteWithinPartyOwnerOperation(Func<bool> operation);
     void PublishCompletedTravelResults(
         IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
@@ -74,20 +73,23 @@ internal sealed class DailyV1CoreSelectedTravelDayExecutionContext
     private readonly DailyV1ExecutionBoundaryState executionState;
     private readonly DailyV1SelectedRuntimeOwnerGraph ownerGraph;
     private readonly IDailyV1SelectedTravelDayHostPorts hostPorts;
+    private readonly bool advanceSoloTravel;
 
     private DailyV1CoreSelectedTravelDayExecutionContext(
         DailyV1ExecutionBoundaryState executionState,
         DailyV1SelectedRuntimeOwnerGraph ownerGraph,
-        IDailyV1SelectedTravelDayHostPorts hostPorts)
+        IDailyV1SelectedTravelDayHostPorts hostPorts,
+        bool advanceSoloTravel)
     {
         this.executionState = executionState;
         this.ownerGraph = ownerGraph;
         this.hostPorts = hostPorts;
+        this.advanceSoloTravel = advanceSoloTravel;
     }
 
     public IDailyV1SelectedTravelDayBoundary Boundary => hostPorts.Boundary;
     public IDailyV1SelectedP12TravelPartyAdvanceProtocol P12Protocol => hostPorts.P12Protocol;
-    public bool AdvanceSoloTravel => hostPorts.AdvanceSoloTravel;
+    public bool AdvanceSoloTravel => advanceSoloTravel;
 
     public bool ExecuteWithinPartyOwnerOperation(Func<bool> operation)
     {
@@ -124,12 +126,15 @@ internal sealed class DailyV1CoreSelectedTravelDayExecutionContext
             || !executionState.HasAdmittedSelectedDailyExecution
             || !executionState.SelectedRuntimeExecutionRootsBound
             || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, ownerGraph)
+            || !executionState.HasRuntimeProtocolOperationInventory
             || hostPorts.Boundary == null
             || hostPorts.P12Protocol == null)
             return false;
 
+        bool advanceSoloTravel = executionState.HasRuntimeProtocolOperationContract(
+            DailyV1RuntimeProtocolOperationContracts.SoloTravelStart);
         context = new DailyV1CoreSelectedTravelDayExecutionContext(
-            executionState, ownerGraph, hostPorts);
+            executionState, ownerGraph, hostPorts, advanceSoloTravel);
         return true;
     }
 
@@ -137,6 +142,7 @@ internal sealed class DailyV1CoreSelectedTravelDayExecutionContext
         executionState.HasAdmittedSelectedDailyExecution
         && executionState.SelectedRuntimeExecutionRootsBound
         && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, ownerGraph)
+        && executionState.HasRuntimeProtocolOperationInventory
         && hostPorts.Boundary != null
         && hostPorts.P12Protocol != null;
 }

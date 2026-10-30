@@ -18,6 +18,9 @@ internal interface IDailyV1SelectedDailyExecutionBoundary
     bool TryCreateSelectedDemographyContext(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedDemographyExecutionContext context);
+    bool TryCreateSelectedDemographyHostPorts(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedDemographyHostPorts hostPorts);
     void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result);
     /// <summary>
     /// Legacy context port for direct/unadmitted execution only. An admitted
@@ -82,6 +85,111 @@ internal interface IDailyV1SelectedDemographyExecutionContext
     IPersonNaturalMortalitySampleProvider MortalitySamples { get; }
     IAggregateDemographyProvider AggregateProvider { get; }
     IDailyV1SelectedDemographyBoundary Boundary { get; }
+}
+
+/// <summary>
+/// Host inputs required by the selected demographic stage. The admitted Core
+/// session supplies calendar and graph identity; the host supplies only the
+/// existing sample providers and writer boundary.
+/// </summary>
+internal interface IDailyV1SelectedDemographyHostPorts
+{
+    IPersonNaturalMortalitySampleProvider MortalitySamples { get; }
+    IAggregateDemographyProvider AggregateProvider { get; }
+    IDailyV1SelectedDemographyBoundary Boundary { get; }
+}
+
+/// <summary>
+/// Core-owned context for the admitted demographic stage. It binds host
+/// writers and sample providers to the exact Core calendar and owner graph.
+/// </summary>
+internal sealed class DailyV1CoreSelectedDemographyExecutionContext
+    : IDailyV1SelectedDemographyExecutionContext
+{
+    private readonly DailyV1ExecutionBoundaryState executionState;
+    private readonly DailyV1SelectedRuntimeOwnerGraph ownerGraph;
+    private readonly IDailyV1SelectedDemographyHostPorts hostPorts;
+
+    private DailyV1CoreSelectedDemographyExecutionContext(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+        IDailyV1SelectedDemographyHostPorts hostPorts)
+    {
+        this.executionState = executionState;
+        this.ownerGraph = ownerGraph;
+        this.hostPorts = hostPorts;
+    }
+
+    public SimulationCalendar Calendar
+    {
+        get
+        {
+            EnsureStillBoundToSession();
+            return executionState.CalendarIdentity;
+        }
+    }
+
+    public IPersonNaturalMortalitySampleProvider MortalitySamples
+    {
+        get
+        {
+            EnsureStillBoundToSession();
+            return hostPorts.MortalitySamples;
+        }
+    }
+
+    public IAggregateDemographyProvider AggregateProvider
+    {
+        get
+        {
+            EnsureStillBoundToSession();
+            return hostPorts.AggregateProvider;
+        }
+    }
+
+    public IDailyV1SelectedDemographyBoundary Boundary
+    {
+        get
+        {
+            EnsureStillBoundToSession();
+            return hostPorts.Boundary;
+        }
+    }
+
+    internal static bool TryCreate(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+        IDailyV1SelectedDemographyHostPorts hostPorts,
+        out IDailyV1SelectedDemographyExecutionContext context)
+    {
+        context = null;
+        if (executionState == null || ownerGraph == null || hostPorts == null
+            || !executionState.HasAdmittedSelectedDailyExecution
+            || executionState.AdmissionContext?.Profile
+                != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !executionState.SelectedRuntimeExecutionRootsBound
+            || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, ownerGraph)
+            || executionState.CalendarIdentity == null
+            || ownerGraph.PersonStore == null
+            || hostPorts.Boundary == null)
+            return false;
+
+        context = new DailyV1CoreSelectedDemographyExecutionContext(
+            executionState, ownerGraph, hostPorts);
+        return true;
+    }
+
+    private void EnsureStillBoundToSession()
+    {
+        if (!executionState.HasAdmittedSelectedDailyExecution
+            || !executionState.SelectedRuntimeExecutionRootsBound
+            || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, ownerGraph)
+            || executionState.CalendarIdentity == null
+            || ownerGraph.PersonStore == null
+            || hostPorts.Boundary == null)
+            throw new InvalidOperationException(
+                "The selected demography context is no longer bound to its admitted Core session.");
+    }
 }
 
 /// <summary>
@@ -572,8 +680,19 @@ internal static class DailyV1SelectedDailyExecutionStage
             && (selectedConfiguration.NaturalMortality.Enabled
                 || selectedConfiguration.AggregateDemography.Enabled))
         {
-            bool hasDemographyContext = boundary.TryCreateSelectedDemographyContext(
-                graph, out demographyContext);
+            bool hasDemographyContext;
+            if (executionState?.HasAdmittedSelectedDailyExecution == true)
+            {
+                hasDemographyContext = boundary.TryCreateSelectedDemographyHostPorts(
+                        graph, out IDailyV1SelectedDemographyHostPorts hostPorts)
+                    && DailyV1CoreSelectedDemographyExecutionContext.TryCreate(
+                        executionState, graph, hostPorts, out demographyContext);
+            }
+            else
+            {
+                hasDemographyContext = boundary.TryCreateSelectedDemographyContext(
+                    graph, out demographyContext);
+            }
             if (!hasDemographyContext
                 || demographyContext == null
                 || graph.PersonStore == null
@@ -1001,14 +1120,23 @@ internal static class DailyV1SelectedDailyExecutionStage
 
     /// <summary>
     /// A sealed Core session owns selected travel-stage availability. The host
-    /// value is retained only for the pre-inventory compatibility path.
+    /// value is retained only for non-admitted compatibility execution; an
+    /// admitted session without its required sealed inventory is invalid.
     /// </summary>
     internal static bool ShouldAdvanceSelectedSoloTravel(
         DailyV1ExecutionBoundaryState executionState,
         bool hostReportedTravelAvailability)
     {
-        if (executionState == null || !executionState.HasRuntimeProtocolOperationInventory)
+        if (executionState == null)
             return hostReportedTravelAvailability;
+
+        if (!executionState.HasRuntimeProtocolOperationInventory)
+        {
+            if (executionState.HasAdmittedSelectedDailyExecution)
+                throw new InvalidOperationException(
+                    "The admitted selected Core session has no sealed runtime operation inventory.");
+            return hostReportedTravelAvailability;
+        }
 
         return executionState.HasRuntimeProtocolOperationContract(
             DailyV1RuntimeProtocolOperationContracts.SoloTravelStart);

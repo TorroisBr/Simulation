@@ -2236,6 +2236,13 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             context = null;
             return false;
         }
+        public bool TryCreateSelectedDemographyHostPorts(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedDemographyHostPorts hostPorts)
+        {
+            hostPorts = null;
+            return false;
+        }
         public void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result) { }
         public bool TryCreateSelectedDayStartContext(
             DailyV1SelectedRuntimeOwnerGraph graph,

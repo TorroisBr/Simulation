@@ -2219,14 +2219,16 @@ internal sealed class DailyV1Application
             if (ReferenceEquals(current, candidateSession))
             {
                 return candidateSession.TryBindSelectedRuntimeAdvanceHostPorts(hostPorts)
-                    && hostPorts.TryBindApplicationAdvanceAuthority(this, candidateSession);
+                    && candidateSession.ExecutionBoundaryState.TryBindApplicationAdvanceAuthority(
+                        this, candidateSession);
             }
             if (!IsBootstrapOrRestoredDescendant(candidateSession.AdmissionContext)
                 || activeSessionGate.ActiveOperationCount != 0
                 || (current != null && !current.IsProfileCompatibleWith(candidateSession)))
                 return false;
             return candidateSession.TryBindSelectedRuntimeAdvanceHostPorts(hostPorts)
-                && hostPorts.TryBindApplicationAdvanceAuthority(this, candidateSession);
+                && candidateSession.ExecutionBoundaryState.TryBindApplicationAdvanceAuthority(
+                    this, candidateSession);
         }
     }
 

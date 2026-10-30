@@ -159,9 +159,6 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
     bool CanBeginDailyAdvanceOperation { get; }
     bool IsFactualReadWorldPublished { get; }
     bool HasActiveDailyOperationContext { get; }
-    bool TryBindApplicationAdvanceAuthority(
-        DailyV1Application application,
-        DailyV1ActiveRuntimeSession session);
     bool TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary);
     bool TryCaptureOwnerSectionCensus(

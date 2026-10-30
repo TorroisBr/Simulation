@@ -90,13 +90,6 @@ public sealed class DailyV1ApplicationSessionGateTests
         public DailyCaptureEligibilityFailure CensusFailure { get; set; }
         public bool HasIntradayTimeline => false;
 
-        public bool TryBindApplicationAdvanceAuthority(
-            DailyV1Application application,
-            DailyV1ActiveRuntimeSession session) =>
-            application != null
-            && session != null
-            && ReferenceEquals(session.ExecutionBoundaryState, state);
-
         public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
             => TryEnterRuntimeProtocolOperation(
                 DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
@@ -1876,6 +1869,12 @@ public sealed class DailyV1ApplicationSessionGateTests
             "The session publishes its Core-owned boundary rather than the Unity host runtime.");
         Assert.That(coreBoundary.ExecutionState, Is.SameAs(session.ExecutionBoundaryState));
         Assert.That(coreBoundary.IsBoundTo(session.ExecutionBoundaryState, exact), Is.True);
+        Assert.That(session.ExecutionBoundaryState.TryGetApplicationAdvanceAuthority(
+            out DailyV1Application boundApplication,
+            out DailyV1ActiveRuntimeSession boundSession), Is.True);
+        Assert.That(boundApplication, Is.SameAs(application),
+            "Application routing identity is owned by the Core execution state.");
+        Assert.That(boundSession, Is.SameAs(session));
     }
 
     [Test]
