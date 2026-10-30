@@ -2134,6 +2134,72 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
+    /// Creates the private admission identity for a restored Core candidate.
+    /// The application derives it from its own captured bootstrap lineage and
+    /// only while it owns the initial or exact replacement staging authority;
+    /// a Unity host cannot choose a competing continuation context.
+    /// </summary>
+    internal bool TryCreateRestoredContinuationAdmissionContext(
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out SimulationRuntimeAdmissionContext restoredContext,
+        out string diagnostic)
+    {
+        restoredContext = null;
+        diagnostic = null;
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+            {
+                diagnostic = "The Core application no longer holds the exact restored-continuation staging authority.";
+                return false;
+            }
+
+            SimulationRuntimeAdmissionContext bootstrap = bootstrapAdmissionContext;
+            if (bootstrap == null
+                || bootstrap.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || bootstrap.IsRestoredContinuation
+                || !bootstrap.IsOwnedByCurrentThread())
+            {
+                diagnostic = "The Core application has no current-thread Daily-v1 bootstrap identity for restoration.";
+                return false;
+            }
+
+            if (expectedSession != null
+                && !IsBootstrapOrRestoredDescendant(expectedSession.AdmissionContext))
+            {
+                diagnostic = "The exact replacement session is outside this application's bootstrap lineage.";
+                return false;
+            }
+
+            try
+            {
+                restoredContext = bootstrap.CreateRestoredContinuationContext();
+            }
+            catch (InvalidOperationException exception)
+            {
+                diagnostic = "The Core application could not derive the restored admission identity: "
+                    + exception.Message;
+                return false;
+            }
+
+            if (restoredContext == null
+                || ReferenceEquals(restoredContext, bootstrap)
+                || !restoredContext.IsRestoredContinuation
+                || !restoredContext.IsOwnedByCurrentThread()
+                || restoredContext.ExpectedOwnerThreadId != bootstrap.ExpectedOwnerThreadId
+                || !restoredContext.IsRestoredContinuationOf(bootstrap))
+            {
+                restoredContext = null;
+                diagnostic = "The Core application could not establish a fresh restored identity in its bootstrap lineage.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Associates an unpublished or replacement Core session with the exact
     /// host boundary built for its execution state. Once published, the
     /// session's boundary is immutable; advances resolve it from the session

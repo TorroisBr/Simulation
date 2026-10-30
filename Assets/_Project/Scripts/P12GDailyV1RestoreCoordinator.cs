@@ -1451,11 +1451,20 @@ internal static partial class P12GDailyV1RestoreCoordinator
         if (effective.GuardCrime.Enabled == true)
             actionProviders.Add(new GuardSystem(stagedE.Justice, config.hiddenStatus, effective.GuardCrime));
         NpcDecisionSystem decisionsSystem = new NpcDecisionSystem(actionProviders, stagedC.DeterministicRandom);
-        if (!TryCreateRestoredAdmissionContext(
+        SimulationRuntimeAdmissionContext restoredAdmissionContext;
+        bool restoredAdmissionContextCreated = application != null
+            && restoredAdmissionContextFactoryForTest == null
+            ? application.TryCreateRestoredContinuationAdmissionContext(
+                replacementOperation?.ExpectedSession,
+                replacementOperation,
+                out restoredAdmissionContext,
+                out diagnostic)
+            : TryCreateRestoredAdmissionContext(
                 sourceAdmissionContext,
                 restoredAdmissionContextFactoryForTest,
-                out SimulationRuntimeAdmissionContext restoredAdmissionContext,
-                out diagnostic))
+                out restoredAdmissionContext,
+                out diagnostic);
+        if (!restoredAdmissionContextCreated)
             return false;
 
         if (!DailyV1DefinitionAdapter.TryCreateBindings(

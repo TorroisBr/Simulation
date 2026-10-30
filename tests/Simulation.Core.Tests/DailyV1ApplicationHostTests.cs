@@ -131,6 +131,44 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
+    public void RestoredAdmissionIdentityIsDerivedByTheApplicationFromItsBootstrapLineage()
+    {
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext bootstrap), Is.True);
+
+        Assert.That(application.TryCreateRestoredContinuationAdmissionContext(
+            null, null, out SimulationRuntimeAdmissionContext restored, out string diagnostic),
+            Is.True, diagnostic);
+
+        Assert.That(restored, Is.Not.Null);
+        Assert.That(restored, Is.Not.SameAs(bootstrap));
+        Assert.That(restored.IsRestoredContinuation, Is.True);
+        Assert.That(restored.ExpectedOwnerThread, Is.SameAs(bootstrap.ExpectedOwnerThread));
+        Assert.That(restored.ExpectedOwnerThreadId, Is.EqualTo(bootstrap.ExpectedOwnerThreadId));
+        Assert.That(restored.IsRestoredContinuationOf(bootstrap), Is.True);
+        Assert.That(restored.IsOwnedByCurrentThread(), Is.True);
+    }
+
+    [Test]
+    public void RestoredAdmissionIdentityCannotBeCreatedAfterGenesisPreparation()
+    {
+        DailyV1Application application = new DailyV1Application();
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession candidate, out string genesisDiagnostic),
+            Is.True, genesisDiagnostic);
+        Assert.That(candidate, Is.Not.Null);
+
+        Assert.That(application.TryCreateRestoredContinuationAdmissionContext(
+            null, null, out SimulationRuntimeAdmissionContext restored, out string diagnostic),
+            Is.False);
+        Assert.That(restored, Is.Null);
+        Assert.That(diagnostic, Does.Contain("staging authority"));
+    }
+
+    [Test]
     public void InvalidInitialHostBlocksGenesisOnTheSameApplication()
     {
         DailyV1Application application = new DailyV1Application();
