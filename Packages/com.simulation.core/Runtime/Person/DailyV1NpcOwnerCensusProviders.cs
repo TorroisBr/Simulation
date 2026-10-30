@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// Creates the selected-profile Inventory and MoneyAccount census witnesses
-/// directly from the exact Core NPC owners. Unity runtime projections may
-/// alias these objects, but they do not select or read the persisted owner.
+/// Creates selected-profile Inventory, MoneyAccount, and SpatialKnowledge
+/// census witnesses directly from the exact Core NPC owners. Unity projections
+/// may alias these objects, but they do not select or read persisted owners.
 /// </summary>
 internal static class DailyV1NpcOwnerCensusProviders
 {
@@ -20,6 +20,54 @@ internal static class DailyV1NpcOwnerCensusProviders
         string RuntimeId { get; }
         DailyV1NpcRuntimeOwners NpcOwner { get; }
         MoneyAccountRuntime MoneyAccountOwner { get; }
+    }
+
+    internal interface ISpatialKnowledgeProvider : IOwnerSectionCensusProvider
+    {
+        string RuntimeId { get; }
+        DailyV1NpcRuntimeOwners NpcOwner { get; }
+        SpatialKnowledgeRuntime SpatialKnowledgeOwner { get; }
+    }
+
+    private enum SpatialKnowledgeSection
+    {
+        Locations,
+        Routes
+    }
+
+    private sealed class SpatialKnowledgeSectionProvider : ISpatialKnowledgeProvider
+    {
+        private readonly SpatialKnowledgeSection section;
+        private readonly string sectionId;
+
+        internal SpatialKnowledgeSectionProvider(
+            DailyV1NpcRuntimeOwners npcOwner,
+            SpatialKnowledgeRuntime owner,
+            SpatialKnowledgeSection section,
+            string sectionId)
+        {
+            NpcOwner = npcOwner;
+            SpatialKnowledgeOwner = owner;
+            this.section = section;
+            this.sectionId = sectionId;
+        }
+
+        public string RuntimeId => NpcOwner.RuntimeId;
+        public DailyV1NpcRuntimeOwners NpcOwner { get; }
+        public SpatialKnowledgeRuntime SpatialKnowledgeOwner { get; }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            int cardinality = section == SpatialKnowledgeSection.Locations
+                ? SpatialKnowledgeOwner.KnownLocationCount
+                : SpatialKnowledgeOwner.KnownRouteCount;
+            return new OwnerSectionCensusWitness(
+                sectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                SpatialKnowledgeOwner,
+                cardinality,
+                SpatialKnowledgeOwner.Revision);
+        }
     }
 
     private sealed class InventorySectionProvider : IInventoryProvider
@@ -102,6 +150,37 @@ internal static class DailyV1NpcOwnerCensusProviders
             if (npc.MoneyAccount == null || !owners.Add(npc.MoneyAccount))
                 throw new InvalidOperationException("Selected MoneyAccount census requires one distinct Core owner per NPC.");
             providers[i] = new MoneyAccountSectionProvider(npc);
+        }
+        return Array.AsReadOnly(providers);
+    }
+
+    internal static IReadOnlyList<IOwnerSectionCensusProvider> CreateSpatialKnowledgeProviders(
+        IReadOnlyList<DailyV1NpcRuntimeOwners> roster)
+    {
+        ValidateRoster(roster);
+        List<DailyV1NpcRuntimeOwners> ordered = OrderByRuntimeId(roster);
+        HashSet<SpatialKnowledgeRuntime> owners = new HashSet<SpatialKnowledgeRuntime>();
+        IOwnerSectionCensusProvider[] providers = new IOwnerSectionCensusProvider[ordered.Count * 2];
+        int providerIndex = 0;
+        foreach (DailyV1NpcRuntimeOwners npc in ordered)
+        {
+            SpatialKnowledgeRuntime owner = npc.SpatialKnowledge;
+            if (owner == null
+                || !string.Equals(owner.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
+                || !owners.Add(owner))
+                throw new InvalidOperationException(
+                    "Selected SpatialKnowledge census requires one distinct owner bound to each NPC RuntimeId.");
+
+            providers[providerIndex++] = new SpatialKnowledgeSectionProvider(
+                npc,
+                owner,
+                SpatialKnowledgeSection.Locations,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + npc.RuntimeId);
+            providers[providerIndex++] = new SpatialKnowledgeSectionProvider(
+                npc,
+                owner,
+                SpatialKnowledgeSection.Routes,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + npc.RuntimeId);
         }
         return Array.AsReadOnly(providers);
     }

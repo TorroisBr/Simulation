@@ -414,6 +414,19 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             ownerSections = coreOwnedPersonSections;
         }
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreSpatialKnowledgeSections(
+                executionState.SelectedRuntimeOwnerGraph,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedSpatialKnowledgeSections,
+                out _))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        ownerSections = coreOwnedSpatialKnowledgeSections;
+
         failure = DailyCaptureEligibilityFailure.None;
         return true;
     }
@@ -636,6 +649,164 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         }
 
         for (int i = 0; i < witnesses.Length; i++)
+        {
+            OwnerSectionCensusWitness witness = witnesses[i];
+            copied[indexesByWitness[i]] = new OwnerSectionCensusSnapshot(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision);
+        }
+
+        ownerSections = Array.AsReadOnly(copied);
+        diagnostic = null;
+        return true;
+    }
+
+    internal static bool TryRebindCoreSpatialKnowledgeSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        diagnostic = null;
+        if (graph == null || hostSections == null)
+        {
+            diagnostic = "The Core SpatialKnowledge census requires its bound owner graph and host census rows.";
+            return false;
+        }
+
+        OwnerSectionCensusSnapshot[] copied = new OwnerSectionCensusSnapshot[hostSections.Count];
+        Dictionary<string, int> indexes = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < hostSections.Count; i++)
+        {
+            OwnerSectionCensusSnapshot section = hostSections[i];
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !indexes.TryAdd(section.SectionId, i))
+            {
+                diagnostic = "The host census contains a missing or duplicate owner-section identity.";
+                return false;
+            }
+            copied[i] = section;
+        }
+
+        int inventoryRows = CountFamilyRows(
+            copied, DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix);
+        int moneyAccountRows = CountFamilyRows(
+            copied, DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix);
+        if (inventoryRows != moneyAccountRows)
+        {
+            diagnostic = "The complete host census has inconsistent NPC Inventory and MoneyAccount family cardinality.";
+            return false;
+        }
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers;
+        try
+        {
+            providers = DailyV1NpcOwnerCensusProviders.CreateSpatialKnowledgeProviders(graph.Npcs);
+        }
+        catch (ArgumentException)
+        {
+            diagnostic = "The selected Core SpatialKnowledge census providers could not bind to the owner graph.";
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            diagnostic = "The selected Core SpatialKnowledge census providers could not bind to the owner graph.";
+            return false;
+        }
+
+        if (inventoryRows > graph.Npcs.Count)
+        {
+            HashSet<string> selectedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (IOwnerSectionCensusProvider provider in providers)
+            {
+                OwnerSectionCensusWitness witness;
+                try
+                {
+                    witness = provider?.GetCurrentCensus();
+                }
+                catch (InvalidOperationException)
+                {
+                    diagnostic = "A selected Core SpatialKnowledge census provider failed to read its owner.";
+                    return false;
+                }
+
+                if (witness == null || !selectedSectionIds.Add(witness.SectionId)
+                    || !indexes.ContainsKey(witness.SectionId))
+                {
+                    diagnostic = witness == null
+                        ? "A selected Core SpatialKnowledge census provider returned no witness."
+                        : "The mixed-roster host census is missing selected Core section " + witness.SectionId + ".";
+                    return false;
+                }
+            }
+
+            // Preserve the complete host vector when it includes compatibility
+            // NPCs outside the selected Core graph. P12 retains authority to
+            // validate every row and its cross-family cardinality.
+            ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+
+        if (CountFamilyRows(copied,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix) != graph.Npcs.Count
+            || CountFamilyRows(copied,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix) != graph.Npcs.Count)
+        {
+            diagnostic = "The host census does not contain one selected SpatialKnowledge locations/routes pair per Core NPC.";
+            return false;
+        }
+
+        HashSet<string> selectedSectionIdsForCore = new HashSet<string>(StringComparer.Ordinal);
+        List<OwnerSectionCensusWitness> witnesses =
+            new List<OwnerSectionCensusWitness>(providers.Count);
+        int[] indexesByWitness = new int[providers.Count];
+        bool matchesCoreOwners = true;
+        for (int i = 0; i < providers.Count; i++)
+        {
+            OwnerSectionCensusWitness witness;
+            try
+            {
+                witness = providers[i]?.GetCurrentCensus();
+            }
+            catch (InvalidOperationException)
+            {
+                diagnostic = "A selected Core SpatialKnowledge census provider failed to read its owner.";
+                return false;
+            }
+
+            if (witness == null || !selectedSectionIdsForCore.Add(witness.SectionId)
+                || !indexes.TryGetValue(witness.SectionId, out int index))
+            {
+                diagnostic = witness == null
+                    ? "A selected Core SpatialKnowledge census provider returned no witness."
+                    : "The host census is missing or duplicates selected Core section " + witness.SectionId + ".";
+                return false;
+            }
+
+            indexesByWitness[i] = index;
+            witnesses.Add(witness);
+            OwnerSectionCensusSnapshot hostSection = copied[index];
+            matchesCoreOwners &= hostSection.Role == OwnerSectionRole.Required
+                && hostSection.SchemaVersion == witness.SchemaVersion
+                && ReferenceEquals(hostSection.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+                && hostSection.Cardinality == witness.Cardinality
+                && hostSection.Revision == witness.Revision;
+        }
+
+        if (!matchesCoreOwners)
+        {
+            // Retain the original facts so P12 classifies a changed captured
+            // vector through its established stale-token check.
+            ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+
+        for (int i = 0; i < witnesses.Count; i++)
         {
             OwnerSectionCensusWitness witness = witnesses[i];
             copied[indexesByWitness[i]] = new OwnerSectionCensusSnapshot(

@@ -557,6 +557,136 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
             "A mixed roster with inconsistent Inventory and MoneyAccount cardinality fails closed.");
     }
 
+    [Test]
+    public void SelectedRuntimeCensusRebindsSpatialKnowledgePairsFromItsExactCoreGraph()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(
+            out DailyV1NpcRuntimeOwners npc);
+        Assert.That(npc.SpatialKnowledge.DiscoverLocation("location-known"), Is.True);
+        Assert.That(npc.SpatialKnowledge.DiscoverRoute("route-known"), Is.True);
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers =
+            DailyV1NpcOwnerCensusProviders.CreateSpatialKnowledgeProviders(graph.Npcs);
+        OwnerSectionCensusSnapshot[] spatialRows = CreateRequiredSnapshots(providers);
+        object unrelatedOwner = new object();
+        OwnerSectionCensusSnapshot unrelated = new OwnerSectionCensusSnapshot(
+            "p12d.test.unrelated", 1, OwnerSectionRole.Required, unrelatedOwner, 4, 7L);
+        OwnerSectionCensusSnapshot[] hostRows = spatialRows.Concat(new[] { unrelated }).ToArray();
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreSpatialKnowledgeSections(
+            graph, hostRows, out IReadOnlyList<OwnerSectionCensusSnapshot> rebound,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(rebound, Has.Count.EqualTo(3));
+        Assert.That(rebound[0], Is.Not.SameAs(hostRows[0]));
+        Assert.That(rebound[1], Is.Not.SameAs(hostRows[1]));
+        Assert.That(rebound[2], Is.SameAs(unrelated));
+        Assert.That(rebound[0].SectionId,
+            Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix
+                + npc.RuntimeId));
+        Assert.That(rebound[1].SectionId,
+            Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix
+                + npc.RuntimeId));
+        Assert.That(rebound[0].OwnerInstanceIdentity, Is.SameAs(npc.SpatialKnowledge));
+        Assert.That(rebound[1].OwnerInstanceIdentity, Is.SameAs(npc.SpatialKnowledge));
+        Assert.That(rebound[0].Cardinality, Is.EqualTo(1));
+        Assert.That(rebound[1].Cardinality, Is.EqualTo(1));
+        Assert.That(rebound[0].Revision, Is.EqualTo(2L));
+        Assert.That(rebound[1].Revision, Is.EqualTo(2L));
+        Assert.That(rebound[0].Role, Is.EqualTo(OwnerSectionRole.Required));
+        Assert.That(rebound[1].Role, Is.EqualTo(OwnerSectionRole.Required));
+
+        string locationsAlias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(
+            rebound[0].SectionId);
+        string routesAlias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(
+            rebound[1].SectionId);
+        Assert.That(locationsAlias, Is.Not.Null.And.Not.Empty);
+        Assert.That(routesAlias, Is.EqualTo(locationsAlias),
+            "SpatialKnowledge locations and routes retain their canonical shared-owner alias.");
+
+        OwnerSectionCensusSnapshot substitutedOwner = new OwnerSectionCensusSnapshot(
+            hostRows[0].SectionId, hostRows[0].SchemaVersion, hostRows[0].Role,
+            new object(), hostRows[0].Cardinality, hostRows[0].Revision);
+        OwnerSectionCensusSnapshot[] staleRows =
+        {
+            substitutedOwner, hostRows[1], unrelated
+        };
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreSpatialKnowledgeSections(
+            graph, staleRows, out IReadOnlyList<OwnerSectionCensusSnapshot> preserved,
+            out string staleDiagnostic), Is.True, staleDiagnostic);
+        Assert.That(preserved[0], Is.SameAs(substitutedOwner));
+        Assert.That(preserved[1], Is.SameAs(hostRows[1]),
+            "A stale pair remains intact for the existing P12 stale-token classification.");
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreSpatialKnowledgeSections(
+            graph, new[] { hostRows[0] }, out _, out _), Is.False,
+            "The selected graph requires both spatial census sections.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreSpatialKnowledgeSections(
+            graph, new[] { hostRows[0], hostRows[0], hostRows[1] }, out _, out _), Is.False,
+            "The host census cannot duplicate an owner-section identity.");
+    }
+
+    [Test]
+    public void SelectedRuntimeCensusPreservesSpatialKnowledgeHostRowsForMixedRoster()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out _);
+        OwnerSectionCensusSnapshot selectedInventory = CreateRequiredSnapshots(
+            DailyV1NpcOwnerCensusProviders.CreateInventoryProviders(graph.Npcs))[0];
+        OwnerSectionCensusSnapshot selectedMoneyAccount = CreateRequiredSnapshots(
+            DailyV1NpcOwnerCensusProviders.CreateMoneyAccountProviders(graph.Npcs))[0];
+        OwnerSectionCensusSnapshot[] selectedSpatial = CreateRequiredSnapshots(
+            DailyV1NpcOwnerCensusProviders.CreateSpatialKnowledgeProviders(graph.Npcs));
+
+        OwnerSectionCensusSnapshot compatibilityInventory = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "compatibility-npc",
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required, new object(), 0, 4L);
+        OwnerSectionCensusSnapshot compatibilityMoneyAccount = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + "compatibility-npc",
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required, new object(), 1, 5L);
+        SpatialKnowledgeRuntime compatibilitySpatialOwner =
+            new SpatialKnowledgeRuntime("compatibility-npc");
+        OwnerSectionCensusSnapshot compatibilityLocations = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix
+                + "compatibility-npc",
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required, compatibilitySpatialOwner, 0, 0L);
+        OwnerSectionCensusSnapshot compatibilityRoutes = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix
+                + "compatibility-npc",
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required, compatibilitySpatialOwner, 0, 0L);
+        OwnerSectionCensusSnapshot[] hostRows =
+        {
+            selectedInventory,
+            compatibilityInventory,
+            selectedMoneyAccount,
+            compatibilityMoneyAccount,
+            selectedSpatial[0],
+            compatibilityLocations,
+            selectedSpatial[1],
+            compatibilityRoutes
+        };
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreSpatialKnowledgeSections(
+            graph, hostRows, out IReadOnlyList<OwnerSectionCensusSnapshot> preserved,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(preserved, Has.Count.EqualTo(hostRows.Length));
+        for (int i = 0; i < hostRows.Length; i++)
+            Assert.That(preserved[i], Is.SameAs(hostRows[i]),
+                "A mixed roster retains the whole host SpatialKnowledge vector.");
+
+        string selectedRoutesId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix
+            + graph.Npcs[0].RuntimeId;
+        OwnerSectionCensusSnapshot[] incompleteSelectedPair =
+            hostRows.Where(row => !string.Equals(row.SectionId, selectedRoutesId,
+                StringComparison.Ordinal)).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreSpatialKnowledgeSections(
+            graph, incompleteSelectedPair, out _, out _), Is.False,
+            "The mixed host census must still contain both selected Core sections.");
+    }
+
     private static OwnerSectionCensusSnapshot ToRequiredSnapshot(OwnerSectionCensusWitness witness)
     {
         return new OwnerSectionCensusSnapshot(
