@@ -2,7 +2,7 @@
 
 **Verdict: `VALIDATED_CANDIDATE` for this bounded restoration change.**
 
-Review date: 2026-10-30  
+Review date: 2026-10-30
 Reviewer: independent read-only review
 
 ## Exact identities
