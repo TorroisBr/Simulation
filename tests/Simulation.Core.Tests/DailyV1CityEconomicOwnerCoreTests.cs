@@ -811,7 +811,7 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         Assert.That(rebound, Has.Count.EqualTo(hostRows.Length));
         Assert.That(rebound.Select(row => row.SectionId),
             Is.EqualTo(hostRows.Select(row => row.SectionId)),
-            "Core owner rebinding preserves the host's complete 89-family vector order.");
+            "Core owner rebinding preserves the order of every row supplied in the host vector.");
         Assert.That(rebound[0], Is.Not.SameAs(laterRow));
         Assert.That(rebound[0].SectionId,
             Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(
