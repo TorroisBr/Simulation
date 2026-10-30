@@ -4818,7 +4818,13 @@ public sealed class SimulationRuntimeAdmissionTests
             beginFailure.ToString());
         using (saveOperation)
         {
-            DailyV1P12ECoreOwnerSourceSnapshots coreSources = saveOperation.CoreP12EOwnerSources;
+            Assert.That(saveOperation.TryCaptureCoreP12EOwnerSources(
+                    saveOperation.SourceWitness.Token,
+                    saveOperation.SourceWitness.TokenOwnerSections,
+                    out DailyV1P12ECoreOwnerSourceSnapshots coreSources,
+                    out DailyV1P12ECoreOwnerSourceCaptureFailure captureFailure,
+                    out string captureDiagnostic), Is.True,
+                captureFailure + ": " + captureDiagnostic);
             Assert.That(coreSources?.JusticeRecords, Is.Not.Null);
             DailyV1JusticeRecordsOwner coreJustice = coreSession.OwnerGraph.JusticeRecordsOwner;
             P12EJusticeRecordsSnapshotSection records = coreSources.JusticeRecords.Records;
