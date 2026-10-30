@@ -559,7 +559,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 stagedD.SelectedCityOwners, stagedD.SelectedNpcOwners,
                 stagedD.SpatialNetwork.SelectedOwner, stagedE.Justice.CoreOwner,
                 stagedF.TravelParties, stagedD.RuntimeIdentities.CoreIdentityIndex,
-                stagedD.Persons, null,
+                stagedD.Persons, stagedD.Genealogy,
                 stagedF.ScheduledDirectives, stagedF.Expeditions,
                 stagedC.RuntimeIdAllocator, stagedC.DeterministicRandom,
                 stagedC.RecordSequence, decisionStore, stagedF.ActorChoices,

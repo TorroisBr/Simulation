@@ -382,6 +382,19 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedGenealogySection(
+                executionState.SelectedRuntimeOwnerGraph,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedGenealogySections,
+                out _))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        ownerSections = coreOwnedGenealogySections;
+
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
                 executionState.SelectedRuntimeOwnerGraph,
                 ownerSections,
@@ -500,6 +513,67 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
 /// </summary>
 internal static class DailyV1SelectedRuntimeOwnerCensusSource
 {
+    internal static bool TryRebindCoreOwnedGenealogySection(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        diagnostic = null;
+        if (graph?.GenealogyStore == null || hostSections == null)
+        {
+            diagnostic = "The selected Core census requires its exact Genealogy owner and host census rows.";
+            return false;
+        }
+
+        OwnerSectionCensusSnapshot[] copied = new OwnerSectionCensusSnapshot[hostSections.Count];
+        Dictionary<string, int> indexes = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < hostSections.Count; i++)
+        {
+            OwnerSectionCensusSnapshot section = hostSections[i];
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !indexes.TryAdd(section.SectionId, i))
+            {
+                diagnostic = "The host census contains a missing or duplicate owner-section identity.";
+                return false;
+            }
+            copied[i] = section;
+        }
+
+        if (!indexes.TryGetValue(GenealogyCensusProvider.SectionId, out int index))
+        {
+            diagnostic = "The host census is missing the fixed required Genealogy owner section.";
+            return false;
+        }
+
+        OwnerSectionCensusWitness witness =
+            new GenealogyCensusProvider(graph.GenealogyStore).GetCurrentCensus();
+        OwnerSectionCensusSnapshot hostSection = copied[index];
+        if (witness == null
+            || !string.Equals(witness.SectionId, GenealogyCensusProvider.SectionId, StringComparison.Ordinal)
+            || hostSection.Role != OwnerSectionRole.Required
+            || hostSection.SchemaVersion != witness.SchemaVersion
+            || !ReferenceEquals(hostSection.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+            || hostSection.Cardinality != witness.Cardinality
+            || hostSection.Revision != witness.Revision)
+        {
+            diagnostic = "The host census differs from the exact selected Core Genealogy owner.";
+            return false;
+        }
+
+        copied[index] = new OwnerSectionCensusSnapshot(
+            witness.SectionId,
+            witness.SchemaVersion,
+            OwnerSectionRole.Required,
+            witness.OwnerInstanceIdentity,
+            witness.Cardinality,
+            witness.Revision);
+        ownerSections = Array.AsReadOnly(copied);
+        diagnostic = null;
+        return true;
+    }
+
     internal static bool TryRebindCoreOwnedNpcSections(
         DailyV1SelectedRuntimeOwnerGraph graph,
         IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,

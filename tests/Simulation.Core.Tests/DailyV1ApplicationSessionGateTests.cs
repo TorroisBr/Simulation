@@ -1958,7 +1958,14 @@ public sealed class DailyV1ApplicationSessionGateTests
             "A rejected Core scope cannot ask the host to read or reserve the P12 census.");
 
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
-            sessionReplacement: false, out _, out _, out failure), Is.True);
+            sessionReplacement: false,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> admittedSections,
+            out _, out failure), Is.True);
+        OwnerSectionCensusSnapshot genealogySection =
+            admittedSections.Single(section => section.SectionId == GenealogyCensusProvider.SectionId);
+        Assert.That(genealogySection.OwnerInstanceIdentity,
+            Is.SameAs(session.OwnerGraph.GenealogyStore),
+            "The integrated Core recapture retains the exact Genealogy owner bound to the session graph.");
         Assert.That(hostPorts.RequestedCaptureScopeAllowance,
             Is.EqualTo(DailyV1CaptureScopeAllowance.None));
 

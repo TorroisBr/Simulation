@@ -1030,7 +1030,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 pendingNpcIdentityId, pendingNpcMembershipDelta, out graph))
             return false;
 
-        if ((ScheduledDirectives != null && !graph.TryBindScheduledDirectives(ScheduledDirectives))
+        if ((GenealogyStore != null && !graph.TryBindGenealogyStore(GenealogyStore))
+            || (ScheduledDirectives != null && !graph.TryBindScheduledDirectives(ScheduledDirectives))
             || (Expeditions != null && !graph.TryBindExpeditionStore(Expeditions)))
         {
             graph = null;

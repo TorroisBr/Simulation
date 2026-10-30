@@ -372,6 +372,93 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     }
 
     [Test]
+    public void SelectedRuntimeCensusRebindsExactGenealogyOwnerIncludingRequiredEmptyWitness()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out _);
+        GenealogyStore genealogy = new GenealogyStore();
+        Assert.That(graph.TryBindGenealogyStore(genealogy), Is.True);
+        OwnerSectionCensusSnapshot hostRow = CreateRequiredSnapshot(
+            new GenealogyCensusProvider(genealogy).GetCurrentCensus());
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedGenealogySection(
+            graph,
+            new[] { hostRow },
+            out IReadOnlyList<OwnerSectionCensusSnapshot> rebound,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(rebound, Has.Count.EqualTo(1));
+        Assert.That(rebound[0], Is.Not.SameAs(hostRow));
+        Assert.That(rebound[0].SectionId, Is.EqualTo(GenealogyCensusProvider.SectionId));
+        Assert.That(rebound[0].SchemaVersion, Is.EqualTo(GenealogyCensusProvider.SchemaVersion));
+        Assert.That(rebound[0].Role, Is.EqualTo(OwnerSectionRole.Required));
+        Assert.That(rebound[0].OwnerInstanceIdentity, Is.SameAs(genealogy));
+        Assert.That(rebound[0].Cardinality, Is.Zero,
+            "The required empty Genealogy owner is represented by an exact Core witness.");
+        Assert.That(rebound[0].Revision, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedRuntimeGenealogyCensusRejectsMissingDuplicateForeignAndStaleRows()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out _);
+        GenealogyStore genealogy = new GenealogyStore();
+        Assert.That(graph.TryBindGenealogyStore(genealogy), Is.True);
+        OwnerSectionCensusSnapshot current = CreateRequiredSnapshot(
+            new GenealogyCensusProvider(genealogy).GetCurrentCensus());
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedGenealogySection(
+            graph, Array.Empty<OwnerSectionCensusSnapshot>(), out _, out _), Is.False,
+            "The fixed required Genealogy row cannot be omitted.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedGenealogySection(
+            graph, new[] { current, current }, out _, out _), Is.False,
+            "The fixed Genealogy identity cannot occur more than once.");
+
+        GenealogyStore foreign = new GenealogyStore();
+        OwnerSectionCensusSnapshot foreignRow = CreateRequiredSnapshot(
+            new GenealogyCensusProvider(foreign).GetCurrentCensus());
+        Assert.That(foreignRow.Cardinality, Is.EqualTo(current.Cardinality));
+        Assert.That(foreignRow.Revision, Is.EqualTo(current.Revision));
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedGenealogySection(
+            graph, new[] { foreignRow }, out _, out _), Is.False,
+            "Matching empty values cannot substitute a parallel owner instance.");
+
+        PersonId parent = new PersonId("person/genealogy-parent");
+        PersonId child = new PersonId("person/genealogy-child");
+        Assert.That(genealogy.TryAddParentage(parent, child, out GenealogyFailure addFailure),
+            Is.True, addFailure.ToString());
+        Assert.That(genealogy.TryRemoveParentage(parent, child, out GenealogyFailure removeFailure),
+            Is.True, removeFailure.ToString());
+        Assert.That(genealogy.Count, Is.EqualTo(current.Cardinality));
+        Assert.That(genealogy.Revision, Is.EqualTo(current.Revision + 2));
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedGenealogySection(
+            graph, new[] { current }, out _, out _), Is.False,
+            "A stale revision is rejected even when cardinality returned to its prior value.");
+    }
+
+    [Test]
+    public void SelectedRuntimeMembershipGraphRetainsExactGenealogyOwner()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out _);
+        GenealogyStore genealogy = new GenealogyStore();
+        Assert.That(graph.TryBindGenealogyStore(genealogy), Is.True);
+
+        DailyV1NpcDefinition definition = graph.Definitions.Npcs.Values.First();
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-runtime-late", graph.Definitions, definition, 0f,
+            out DailyV1NpcRuntimeOwners addedNpc), Is.True);
+        Assert.That(graph.TryCreateWithAddedNpc(
+            addedNpc, out DailyV1SelectedRuntimeOwnerGraph addedGraph), Is.True);
+        Assert.That(addedGraph.GenealogyStore, Is.SameAs(genealogy));
+        Assert.That(new GenealogyCensusProvider(addedGraph.GenealogyStore)
+            .GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(genealogy));
+
+        Assert.That(addedGraph.TryCreateWithoutNpc(
+            addedNpc, out DailyV1SelectedRuntimeOwnerGraph restoredGraph), Is.True);
+        Assert.That(restoredGraph.GenealogyStore, Is.SameAs(genealogy),
+            "Roster removal must retain the session's exact Genealogy authority too.");
+    }
+
+    [Test]
     public void SelectedRuntimeCensusRebindsInventoryAndMoneyRowsFromItsExactCoreGraph()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(
