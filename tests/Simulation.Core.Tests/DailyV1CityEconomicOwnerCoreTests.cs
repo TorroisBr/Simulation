@@ -901,6 +901,219 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
             graph, new[] { firstRow, secondRow }, out _, out _), Is.True,
             "The full selected Person life/residence family is accepted.");
     }
+    [Test]
+    public void SelectedRuntimeCensusRebindsAllFourCityFamiliesFromTheExactCoreOwners()
+    {
+        DailyV1CityRuntimeOwners city = CreateMixedCityOwner();
+        city.Population.RestoreSnapshot(0, city.Population.Revision);
+        Assert.That(city.Population.CurrentPopulation, Is.Zero);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            city.Definitions, new[] { city }, Array.Empty<DailyV1NpcRuntimeOwners>(),
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        OwnerSectionCensusSnapshot[] hostRows = CreateCoreCityOwnerRows(graph);
+        System.Array.Reverse(hostRows);
+        string[] hostOrder = hostRows.Select(row => row.SectionId).ToArray();
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCitySections(
+            graph, hostRows, out IReadOnlyList<OwnerSectionCensusSnapshot> rebound,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(rebound, Has.Count.EqualTo(DailyV1SelectedOwnerSectionCensusContract.CityPrefixes.Count));
+        Assert.That(rebound.Select(row => row.SectionId), Is.EqualTo(hostOrder),
+            "Core rebinding preserves the complete host vector order.");
+        Assert.That(rebound[0], Is.Not.SameAs(hostRows[0]));
+
+        string cityKey = P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(city.RuntimeId);
+        OwnerSectionCensusSnapshot presence = rebound.Single(row => string.Equals(
+            row.SectionId, DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId),
+            StringComparison.Ordinal));
+        OwnerSectionCensusSnapshot market = rebound.Single(row => string.Equals(
+            row.SectionId, DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix + cityKey,
+            StringComparison.Ordinal));
+        OwnerSectionCensusSnapshot population = rebound.Single(row => string.Equals(
+            row.SectionId, DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix + cityKey,
+            StringComparison.Ordinal));
+        OwnerSectionCensusSnapshot receipts = rebound.Single(row => string.Equals(
+            row.SectionId, DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix + cityKey,
+            StringComparison.Ordinal));
+
+        Assert.That(presence.SchemaVersion, Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion));
+        Assert.That(presence.Role, Is.EqualTo(OwnerSectionRole.Required));
+        Assert.That(presence.OwnerInstanceIdentity, Is.SameAs(city.NpcPresence));
+        Assert.That(presence.Cardinality, Is.EqualTo(city.NpcPresence.OrderedNpcRuntimeIds.Count));
+        Assert.That(presence.Revision, Is.EqualTo(city.NpcPresence.Revision));
+
+        Assert.That(market.SchemaVersion, Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion));
+        Assert.That(market.Role, Is.EqualTo(OwnerSectionRole.Required));
+        Assert.That(market.OwnerInstanceIdentity, Is.SameAs(city.Market));
+        Assert.That(market.Cardinality, Is.EqualTo(city.Market.Items.Count));
+        Assert.That(market.Revision, Is.EqualTo(city.Market.Revision));
+
+        city.Population.GetOperationReceiptCensus(out int receiptCardinality, out long receiptRevision);
+        Assert.That(population.SchemaVersion, Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion));
+        Assert.That(population.Role, Is.EqualTo(OwnerSectionRole.Required));
+        Assert.That(population.OwnerInstanceIdentity, Is.SameAs(city.Population));
+        Assert.That(population.Cardinality, Is.EqualTo(1),
+            "A Required aggregate section has one owner row even when current population is zero.");
+        Assert.That(population.Revision, Is.EqualTo(city.Population.Revision));
+
+        Assert.That(receipts.SchemaVersion, Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion));
+        Assert.That(receipts.Role, Is.EqualTo(OwnerSectionRole.Required));
+        Assert.That(receipts.OwnerInstanceIdentity, Is.SameAs(city.Population));
+        Assert.That(receipts.Cardinality, Is.EqualTo(receiptCardinality));
+        Assert.That(receipts.Revision, Is.EqualTo(receiptRevision));
+        Assert.That(population.OwnerInstanceIdentity, Is.SameAs(receipts.OwnerInstanceIdentity),
+            "The aggregate and operation-receipt rows preserve the required Population owner alias.");
+    }
+
+    [Test]
+    public void SelectedRuntimeCensusPreservesTheWholeCityRosterForMixedHostComposition()
+    {
+        DailyV1CityRuntimeOwners city = CreateMixedCityOwner();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            city.Definitions, new[] { city }, Array.Empty<DailyV1NpcRuntimeOwners>(),
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        OwnerSectionCensusSnapshot[] selectedRows = CreateCoreCityOwnerRows(graph);
+        OwnerSectionCensusSnapshot[] compatibilityRows = CreateCompatibilityCityRows("compatibility/city");
+        OwnerSectionCensusSnapshot[] hostRows = selectedRows.Concat(compatibilityRows).Reverse().ToArray();
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCitySections(
+            graph, hostRows, out IReadOnlyList<OwnerSectionCensusSnapshot> preserved,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(preserved, Has.Count.EqualTo(hostRows.Length));
+        for (int i = 0; i < hostRows.Length; i++)
+            Assert.That(preserved[i], Is.SameAs(hostRows[i]),
+                "A mixed City roster retains every complete host row in its original order.");
+
+        string selectedPresenceId =
+            DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId);
+        OwnerSectionCensusSnapshot[] missingSelectedRow = hostRows
+            .Where(row => !string.Equals(row.SectionId, selectedPresenceId, StringComparison.Ordinal))
+            .ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCitySections(
+            graph, missingSelectedRow, out _, out _), Is.False,
+            "A mixed host vector must still include every selected Core City family.");
+
+        string compatibilityMarketId =
+            DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix
+            + P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection("compatibility/city");
+        OwnerSectionCensusSnapshot[] unevenFamily = hostRows
+            .Where(row => !string.Equals(row.SectionId, compatibilityMarketId, StringComparison.Ordinal))
+            .ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCitySections(
+            graph, unevenFamily, out _, out _), Is.False,
+            "A mixed City fallback cannot stitch together incomplete family key sets.");
+    }
+
+    [Test]
+    public void SelectedRuntimeCensusRejectsMalformedCityShapeAndPreservesStaleRows()
+    {
+        DailyV1CityRuntimeOwners city = CreateMixedCityOwner();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            city.Definitions, new[] { city }, Array.Empty<DailyV1NpcRuntimeOwners>(),
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        OwnerSectionCensusSnapshot[] hostRows = CreateCoreCityOwnerRows(graph);
+
+        for (int missingIndex = 0; missingIndex < hostRows.Length; missingIndex++)
+        {
+            OwnerSectionCensusSnapshot[] missing = hostRows
+                .Where((_, index) => index != missingIndex).ToArray();
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCitySections(
+                graph, missing, out _, out _), Is.False,
+                "Every selected City must retain all four canonical owner families.");
+        }
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCitySections(
+            graph, hostRows.Concat(new[] { hostRows[0] }).ToArray(), out _, out _), Is.False,
+            "A City owner-section identity cannot be duplicated.");
+
+        for (int rowIndex = 0; rowIndex < hostRows.Length; rowIndex++)
+        {
+            for (int mismatch = 0; mismatch < 5; mismatch++)
+            {
+                OwnerSectionCensusSnapshot original = hostRows[rowIndex];
+                OwnerSectionRole role = original.Role;
+                int schema = original.SchemaVersion;
+                object owner = original.OwnerInstanceIdentity;
+                int cardinality = original.Cardinality;
+                long revision = original.Revision;
+                switch (mismatch)
+                {
+                    case 0: role = OwnerSectionRole.Excluded; break;
+                    case 1: schema++; break;
+                    case 2: owner = new object(); break;
+                    case 3: cardinality++; break;
+                    case 4: revision++; break;
+                }
+
+                OwnerSectionCensusSnapshot[] stale = (OwnerSectionCensusSnapshot[])hostRows.Clone();
+                stale[rowIndex] = new OwnerSectionCensusSnapshot(
+                    original.SectionId, schema, role, owner, cardinality, revision);
+                Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCitySections(
+                    graph, stale, out IReadOnlyList<OwnerSectionCensusSnapshot> preserved,
+                    out string diagnostic), Is.True, diagnostic);
+                for (int i = 0; i < stale.Length; i++)
+                    Assert.That(preserved[i], Is.SameAs(stale[i]),
+                        "Stale role/schema/identity/cardinality/revision evidence remains unchanged for P12 classification.");
+            }
+        }
+    }
+
+    private static OwnerSectionCensusSnapshot[] CreateCoreCityOwnerRows(
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        List<OwnerSectionCensusSnapshot> rows = new List<OwnerSectionCensusSnapshot>();
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            string cityKey = P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(city.RuntimeId);
+            city.Population.GetOperationReceiptCensus(out int receiptCardinality, out long receiptRevision);
+            rows.Add(CreateRequiredSnapshot(new OwnerSectionCensusWitness(
+                DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId),
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                city.NpcPresence, city.NpcPresence.OrderedNpcRuntimeIds.Count, city.NpcPresence.Revision)));
+            rows.Add(CreateRequiredSnapshot(new OwnerSectionCensusWitness(
+                DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix + cityKey,
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                city.Market, city.Market.Items.Count, city.Market.Revision)));
+            rows.Add(CreateRequiredSnapshot(new OwnerSectionCensusWitness(
+                DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix + cityKey,
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                city.Population, 1, city.Population.Revision)));
+            rows.Add(CreateRequiredSnapshot(new OwnerSectionCensusWitness(
+                DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix + cityKey,
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                city.Population, receiptCardinality, receiptRevision)));
+        }
+        return rows.ToArray();
+    }
+
+    private static OwnerSectionCensusSnapshot[] CreateCompatibilityCityRows(string runtimeId)
+    {
+        object populationOwner = new object();
+        return new[]
+        {
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(runtimeId),
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                OwnerSectionRole.Required, new object(), 0, 1L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix
+                    + P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(runtimeId),
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                OwnerSectionRole.Required, new object(), 0, 2L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix
+                    + P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(runtimeId),
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                OwnerSectionRole.Required, populationOwner, 1, 3L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix
+                    + P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(runtimeId),
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                OwnerSectionRole.Required, populationOwner, 0, 4L)
+        };
+    }
     private static DailyV1SelectedRuntimeOwnerGraph CreateSingleNpcGraph(
         out DailyV1NpcRuntimeOwners npc)
     {
