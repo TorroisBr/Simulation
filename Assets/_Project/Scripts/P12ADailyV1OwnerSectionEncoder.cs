@@ -13,8 +13,8 @@ internal static class P12ADailyV1OwnerSectionEncoder
         out IReadOnlyList<P12AOwnerSection> sections,
         out P12AResult result)
     {
-        return TryEncode(census, runtimeIdentity, d, e, f, null, false, null, capturedDay,
-            out sections, out result);
+        return TryEncode(census, runtimeIdentity, d, e, f,
+            null, false, null, null, capturedDay, out sections, out result);
     }
 
     internal static bool TryEncodeWithCoreP12FSections(
@@ -27,8 +27,8 @@ internal static class P12ADailyV1OwnerSectionEncoder
         out IReadOnlyList<P12AOwnerSection> sections,
         out P12AResult result)
     {
-        return TryEncode(census, runtimeIdentity, d, e, null, null, false, coreP12FSections,
-            capturedDay, out sections, out result);
+        return TryEncode(census, runtimeIdentity, d, e, null,
+            null, false, null, coreP12FSections, capturedDay, out sections, out result);
     }
 
     internal static bool TryEncodeWithCoreP12DOwnerSections(
@@ -44,8 +44,26 @@ internal static class P12ADailyV1OwnerSectionEncoder
         out P12AResult result)
     {
         return TryEncode(census, runtimeIdentity, d, e, null,
-            coreP12DSections, coreP12DIncludesNpcRows, coreP12FSections,
+            coreP12DSections, coreP12DIncludesNpcRows, null, coreP12FSections,
             capturedDay, out sections, out result);
+    }
+
+    internal static bool TryEncodeWithCoreP12DAndEOwnerSections(
+        IReadOnlyList<OwnerSectionCensusSnapshot> census,
+        P12CRuntimeIdentityOwnerSnapshot runtimeIdentity,
+        P12DDailyV1OwnerPackage d,
+        P12EDailyV1OwnerPackage e,
+        IReadOnlyList<P12AOwnerSection> coreP12DSections,
+        bool coreP12DIncludesNpcRows,
+        IReadOnlyList<P12AOwnerSection> coreP12ESections,
+        IReadOnlyList<P12AOwnerSection> coreP12FSections,
+        long capturedDay,
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
+        return TryEncode(census, runtimeIdentity, d, e, null,
+            coreP12DSections, coreP12DIncludesNpcRows, coreP12ESections,
+            coreP12FSections, capturedDay, out sections, out result);
     }
 
     private static bool TryEncode(
@@ -56,6 +74,7 @@ internal static class P12ADailyV1OwnerSectionEncoder
         P12FDailyV1OwnerCapture f,
         IReadOnlyList<P12AOwnerSection> coreP12DSections,
         bool coreP12DIncludesNpcRows,
+        IReadOnlyList<P12AOwnerSection> coreP12ESections,
         IReadOnlyList<P12AOwnerSection> coreP12FSections,
         long capturedDay,
         out IReadOnlyList<P12AOwnerSection> sections,
@@ -151,6 +170,10 @@ internal static class P12ADailyV1OwnerSectionEncoder
         encoded.Add(outcomes); encoded.Add(crimeKnowledge); encoded.Add(reactions);
         encoded.AddRange(receipts);
 
+        if (coreP12ESections != null
+            && !ReplaceEquivalentOwnerSections(encoded, coreP12ESections, out result))
+            return false;
+
         if (coreP12FSections != null)
         {
             encoded.AddRange(coreP12FSections);
@@ -183,6 +206,75 @@ internal static class P12ADailyV1OwnerSectionEncoder
         }
         sections = encoded.AsReadOnly();
         result = null;
+        return true;
+    }
+
+    private static bool ReplaceEquivalentOwnerSections(
+        List<P12AOwnerSection> encoded,
+        IReadOnlyList<P12AOwnerSection> coreSections,
+        out P12AResult result)
+    {
+        result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        if (encoded == null || coreSections == null) return false;
+        foreach (P12AOwnerSection coreSection in coreSections)
+        {
+            if (coreSection == null) return false;
+            int matchIndex = -1;
+            for (int index = 0; index < encoded.Count; index++)
+            {
+                if (!string.Equals(encoded[index]?.Id, coreSection.Id, StringComparison.Ordinal)) continue;
+                if (matchIndex >= 0)
+                {
+                    result = new P12AResult(P12AResultCode.MissingOrDuplicateSection,
+                        coreSection.Id);
+                    return false;
+                }
+                matchIndex = index;
+            }
+
+            if (matchIndex < 0 || !OwnerSectionsEqual(encoded[matchIndex], coreSection))
+            {
+                result = new P12AResult(P12AResultCode.InvalidOwnerValue, coreSection.Id);
+                return false;
+            }
+            encoded[matchIndex] = coreSection;
+        }
+
+        result = null;
+        return true;
+    }
+
+    private static bool OwnerSectionsEqual(P12AOwnerSection left, P12AOwnerSection right)
+    {
+        if (left == null || right == null
+            || !string.Equals(left.Id, right.Id, StringComparison.Ordinal)
+            || left.Major != right.Major || left.Minor != right.Minor
+            || left.Role != right.Role
+            || !string.Equals(left.AliasGroup, right.AliasGroup, StringComparison.Ordinal)
+            || left.Revision != right.Revision
+            || left.Rows == null || right.Rows == null
+            || left.Rows.Count != right.Rows.Count)
+            return false;
+
+        for (int index = 0; index < left.Rows.Count; index++)
+        {
+            P12AOwnerRow leftRow = left.Rows[index];
+            P12AOwnerRow rightRow = right.Rows[index];
+            if (leftRow == null || rightRow == null
+                || !string.Equals(leftRow.OwnerKey, rightRow.OwnerKey, StringComparison.Ordinal)
+                || leftRow.Revision != rightRow.Revision
+                || !ByteArraysEqual(leftRow.Payload, rightRow.Payload))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool ByteArraysEqual(byte[] left, byte[] right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left == null || right == null || left.Length != right.Length) return false;
+        for (int index = 0; index < left.Length; index++)
+            if (left[index] != right[index]) return false;
         return true;
     }
 }

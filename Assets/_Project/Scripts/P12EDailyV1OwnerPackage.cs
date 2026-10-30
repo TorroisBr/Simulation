@@ -237,20 +237,29 @@ internal sealed class P12EDailyV1OwnerPackage
                 return false;
             }
 
-            if (!DailyV1P12ECoreOwnerSourceSnapshots.TryCapture(
+            DailyV1P12ECoreOwnerSourceSnapshots coreOwnerSnapshots;
+            DailyV1P12ECoreOwnerSourceCaptureFailure coreCaptureFailure;
+            bool capturedCoreOwners = context.ContinuationSaveOperation != null
+                ? context.ContinuationSaveOperation.TryCaptureCoreP12EOwnerSources(
+                    exactCompletedToken, exactTokenOwnerSections,
+                    out coreOwnerSnapshots, out coreCaptureFailure, out _)
+                : DailyV1P12ECoreOwnerSourceSnapshots.TryCapture(
                     exactCompletedToken,
                     exactTokenOwnerSections,
-                    context.ContinuationSaveOperation,
+                    null,
                     new LegacyCoreOwnerCaptureBoundary(sourceRuntime, context.StagingAttempt),
-                    out DailyV1P12ECoreOwnerSourceSnapshots coreOwnerSnapshots,
-                    out DailyV1P12ECoreOwnerSourceCaptureFailure coreCaptureFailure,
-                    out _))
+                    out coreOwnerSnapshots,
+                    out coreCaptureFailure,
+                    out _);
+            if (!capturedCoreOwners)
             {
                 failure = coreCaptureFailure == DailyV1P12ECoreOwnerSourceCaptureFailure.InvalidOwnerEvidence
                     ? P12EDailyV1OwnerPackageFailure.InvalidOwnerEvidence
                     : coreCaptureFailure == DailyV1P12ECoreOwnerSourceCaptureFailure.StaleBoundary
                         ? P12EDailyV1OwnerPackageFailure.StaleBoundary
-                        : P12EDailyV1OwnerPackageFailure.CaptureFailed;
+                        : coreCaptureFailure == DailyV1P12ECoreOwnerSourceCaptureFailure.InvalidCaptureContext
+                            ? P12EDailyV1OwnerPackageFailure.InvalidCaptureContext
+                            : P12EDailyV1OwnerPackageFailure.CaptureFailed;
                 return false;
             }
 

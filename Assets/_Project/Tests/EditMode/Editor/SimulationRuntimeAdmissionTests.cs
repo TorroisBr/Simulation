@@ -5015,6 +5015,45 @@ public sealed class SimulationRuntimeAdmissionTests
                 }
                 Assert.That(coreP12DIncludesNpcRows,
                     Is.EqualTo(operation.CoreNpcOwnerSources != null));
+                DailyV1P12ECoreOwnerSourceSnapshots firstP12ESources =
+                    operation.CoreP12EOwnerSources;
+                Assert.That(firstP12ESources, Is.Not.Null,
+                    "P12-E Core sources must be captured and cached by the active save operation.");
+                Assert.That(operation.TryCaptureCoreP12EOwnerSources(
+                        operation.SourceWitness.Token,
+                        operation.SourceWitness.TokenOwnerSections,
+                        out DailyV1P12ECoreOwnerSourceSnapshots reusedP12ESources,
+                        out DailyV1P12ECoreOwnerSourceCaptureFailure p12ECaptureFailure,
+                        out string p12ECaptureDiagnostic), Is.True,
+                    p12ECaptureFailure + ": " + p12ECaptureDiagnostic);
+                Assert.That(reusedP12ESources, Is.SameAs(firstP12ESources),
+                    "Repeated package staging must reuse the exact operation-bound owner snapshots.");
+                Assert.That(operation.TryEncodeCoreP12EOwnerSections(
+                        operation.SourceWitness.Token.AbsoluteDay,
+                        out IReadOnlyList<P12AOwnerSection> coreP12ESections,
+                        out P12AResult coreP12EResult), Is.True,
+                    coreP12EResult?.SectionCode ?? coreP12EResult?.Code.ToString());
+                Assert.That(coreP12ESections, Is.Not.Empty);
+                foreach (P12AOwnerSection coreP12ESection in coreP12ESections)
+                {
+                    P12AOwnerSection imageSection = capturedImage.Sections.Single(
+                        section => section.Id == coreP12ESection.Id);
+                    Assert.That(imageSection.Major, Is.EqualTo(coreP12ESection.Major));
+                    Assert.That(imageSection.Minor, Is.EqualTo(coreP12ESection.Minor));
+                    Assert.That(imageSection.Role, Is.EqualTo(coreP12ESection.Role));
+                    Assert.That(imageSection.AliasGroup, Is.EqualTo(coreP12ESection.AliasGroup));
+                    Assert.That(imageSection.Revision, Is.EqualTo(coreP12ESection.Revision));
+                    Assert.That(imageSection.Rows.Count, Is.EqualTo(coreP12ESection.Rows.Count));
+                    for (int rowIndex = 0; rowIndex < coreP12ESection.Rows.Count; rowIndex++)
+                    {
+                        Assert.That(imageSection.Rows[rowIndex].OwnerKey,
+                            Is.EqualTo(coreP12ESection.Rows[rowIndex].OwnerKey));
+                        Assert.That(imageSection.Rows[rowIndex].Revision,
+                            Is.EqualTo(coreP12ESection.Rows[rowIndex].Revision));
+                        Assert.That(imageSection.Rows[rowIndex].Payload,
+                            Is.EqualTo(coreP12ESection.Rows[rowIndex].Payload));
+                    }
+                }
                 Assert.That(operation.TryEncodeCoreP12FOwnerSections(
                         out IReadOnlyList<P12AOwnerSection> coreP12FSections,
                         out P12AResult coreP12FResult), Is.True,

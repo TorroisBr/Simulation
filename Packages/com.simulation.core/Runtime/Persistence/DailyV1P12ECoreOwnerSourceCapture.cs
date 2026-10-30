@@ -30,7 +30,11 @@ internal interface IDailyV1P12ECoreOwnerCaptureBoundary
 /// </summary>
 internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
 {
+    private readonly DailyV1P12GContinuationSaveOperation operation;
+    private readonly DailyV1P12GSourceBoundaryWitness witness;
+
     private DailyV1P12ECoreOwnerSourceSnapshots(
+        DailyV1P12GContinuationSaveOperation operation,
         P12EInstitutionOfficeOwnerSnapshot institutionOffice,
         PropertyEstateOwnerSnapshot propertyEstate,
         P12EFactionOwnerSnapshot faction,
@@ -42,6 +46,8 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
         PersistentWarOwnerSnapshot wars,
         PersistentBattleOwnerSnapshot battles)
     {
+        this.operation = operation;
+        witness = operation?.SourceWitness;
         InstitutionOffice = institutionOffice;
         PropertyEstate = propertyEstate;
         Faction = faction;
@@ -64,6 +70,14 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
     internal PersistentConflictOwnerSnapshot Conflicts { get; }
     internal PersistentWarOwnerSnapshot Wars { get; }
     internal PersistentBattleOwnerSnapshot Battles { get; }
+
+    internal bool IsFor(DailyV1P12GContinuationSaveOperation candidate) =>
+        candidate != null
+        && ReferenceEquals(operation, candidate)
+        && candidate.IsActive
+        && ReferenceEquals(witness, candidate.SourceWitness)
+        && ReferenceEquals(witness.Token, candidate.SourceWitness.Token)
+        && ReferenceEquals(witness.TokenOwnerSections, candidate.SourceWitness.TokenOwnerSections);
 
     internal static bool TryCapture(
         DailyCaptureEligibilityToken token,
@@ -168,6 +182,7 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
             }
 
             snapshots = new DailyV1P12ECoreOwnerSourceSnapshots(
+                continuationSaveOperation,
                 institutionOffice, propertyEstate, faction, claims, support, decisions,
                 military, conflictSnapshot, warSnapshot, battleSnapshot);
             failure = DailyV1P12ECoreOwnerSourceCaptureFailure.None;
@@ -272,5 +287,77 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
             && ReferenceEquals(ownerSectionVector, candidateOwnerSectionVector)
             && IsCurrent(token, ownerSectionVector,
                 continuationSaveOperation, legacyCaptureBoundary);
+    }
+}
+
+/// <summary>
+/// Encodes sections for the P12-E owners captured from the exact Core owners
+/// retained by the active continuation-save operation.
+/// </summary>
+internal static class DailyV1P12ECoreOwnerSectionEncoder
+{
+    internal static bool TryEncode(
+        DailyV1P12ECoreOwnerSourceSnapshots snapshots,
+        long capturedAbsoluteDay,
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
+        sections = null;
+        result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        if (snapshots == null || capturedAbsoluteDay < 0L)
+            return false;
+
+        if (!P12EInstitutionOfficeOwnerCodec.TryEncode(snapshots.InstitutionOffice,
+                out P12AOwnerSection institutions, out P12AOwnerSection offices,
+                out P12AOwnerSection incumbencies, out P12AOwnerSection tenures, out result)
+            || !P12EPropertyEstateOwnerCodec.TryEncode(snapshots.PropertyEstate,
+                capturedAbsoluteDay, out P12AOwnerSection ownership,
+                out P12AOwnerSection transfers, out P12AOwnerSection estates, out result)
+            || !P12EFactionOwnerCodec.TryEncode(snapshots.Faction, capturedAbsoluteDay,
+                out P12AOwnerSection factions, out P12AOwnerSection affiliations, out result)
+            || !P12EPoliticalClaimOwnerCodec.TryEncode(snapshots.PoliticalClaims,
+                capturedAbsoluteDay, out P12AOwnerSection claims,
+                out P12AOwnerSection recognitions, out result)
+            || !P12EPoliticalSupportOwnerCodec.TryEncode(snapshots.PoliticalSupport,
+                out P12AOwnerSection politicalSupport, out result)
+            || !P12EPoliticalDecisionOwnerCodec.TryEncode(snapshots.PoliticalDecisions,
+                out P12AOwnerSection politicalDecisions, out result)
+            || !P12EMilitaryOwnerCodec.TryEncode(snapshots.Military,
+                out IReadOnlyList<P12AOwnerSection> military, out result)
+            || !P12EPersistentConflictWarBattleOwnerCodec.TryEncode(
+                snapshots.Conflicts, snapshots.Wars, snapshots.Battles,
+                out IReadOnlyList<P12AOwnerSection> conflicts, out result))
+            return false;
+
+        List<P12AOwnerSection> encoded = new List<P12AOwnerSection>
+        {
+            institutions, offices, incumbencies, tenures,
+            ownership, transfers, estates,
+            factions, affiliations,
+            claims, recognitions,
+            politicalSupport, politicalDecisions
+        };
+        encoded.AddRange(military);
+        encoded.AddRange(conflicts);
+        encoded.Sort((left, right) =>
+            StringComparer.Ordinal.Compare(left?.Id, right?.Id));
+
+        for (int index = 0; index < encoded.Count; index++)
+        {
+            P12AOwnerSection section = encoded[index];
+            if (section == null || string.IsNullOrWhiteSpace(section.Id)
+                || section.Role != OwnerSectionRole.Required
+                || (index > 0 && string.Equals(encoded[index - 1].Id,
+                    section.Id, StringComparison.Ordinal)))
+            {
+                result = new P12AResult(P12AResultCode.MissingOrDuplicateSection,
+                    section?.Id);
+                return false;
+            }
+        }
+
+        sections = encoded.AsReadOnly();
+        result = null;
+        return true;
     }
 }
