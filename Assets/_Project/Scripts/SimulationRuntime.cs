@@ -11424,6 +11424,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedTravelDayExecutionContext context) =>
             runtime.TryCreateSelectedTravelDayExecutionContext(graph, out context);
+
+        public bool TryCreateSelectedTravelDayHostPorts(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedTravelDayHostPorts hostPorts)
+        {
+            hostPorts = null;
+            if (!runtime.TryCreateSelectedTravelDayExecutionContext(
+                    graph, out IDailyV1SelectedTravelDayExecutionContext context)
+                || !(context is IDailyV1SelectedTravelDayHostPorts candidate))
+                return false;
+            hostPorts = candidate;
+            return true;
+        }
     }
 
     private sealed class SelectedDemographyExecutionContext

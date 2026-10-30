@@ -2286,6 +2286,16 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             return true;
         }
 
+        public bool TryCreateSelectedTravelDayHostPorts(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedTravelDayHostPorts hostPorts)
+        {
+            Assert.That(graph, Is.SameAs(this.graph));
+            order.Add("travel-context");
+            hostPorts = travelContext;
+            return hostPorts != null;
+        }
+
         private sealed class NoOpActorTurnContext : IDailyV1SelectedActorTurnExecutionContext
         {
             internal NoOpActorTurnContext(DailyV1SelectedRuntimeOwnerGraph graph)
@@ -2315,7 +2325,8 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
     }
 
     private sealed class RecordingTravelExecutionContext
-        : IDailyV1SelectedTravelDayExecutionContext
+        : IDailyV1SelectedTravelDayExecutionContext,
+            IDailyV1SelectedTravelDayHostPorts
     {
         private readonly List<string> order;
         private readonly RecordingTravelStageBoundary boundary;

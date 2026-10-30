@@ -46,6 +46,102 @@ internal interface IDailyV1SelectedP12TravelPartyAdvanceProtocol
 }
 
 /// <summary>
+/// Host-only projection, P12 admission, and notification ports for Core's
+/// selected travel execution context. The host supplies these capabilities;
+/// Core binds them to the exact admitted runtime graph and owns the context
+/// consumed by the daily stage.
+/// </summary>
+internal interface IDailyV1SelectedTravelDayHostPorts
+{
+    IDailyV1SelectedTravelDayBoundary Boundary { get; }
+    IDailyV1SelectedP12TravelPartyAdvanceProtocol P12Protocol { get; }
+    bool AdvanceSoloTravel { get; }
+    bool ExecuteWithinPartyOwnerOperation(Func<bool> operation);
+    void PublishCompletedTravelResults(
+        IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
+        IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults);
+    void ObserveCompletedTravelResults();
+}
+
+/// <summary>
+/// Core-owned travel execution context bound to one exact active session and
+/// owner graph. Host ports can project committed results, but cannot replace
+/// the graph, travel operation protocol, or Core-selected travel ordering.
+/// </summary>
+internal sealed class DailyV1CoreSelectedTravelDayExecutionContext
+    : IDailyV1SelectedTravelDayExecutionContext
+{
+    private readonly DailyV1ExecutionBoundaryState executionState;
+    private readonly DailyV1SelectedRuntimeOwnerGraph ownerGraph;
+    private readonly IDailyV1SelectedTravelDayHostPorts hostPorts;
+
+    private DailyV1CoreSelectedTravelDayExecutionContext(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+        IDailyV1SelectedTravelDayHostPorts hostPorts)
+    {
+        this.executionState = executionState;
+        this.ownerGraph = ownerGraph;
+        this.hostPorts = hostPorts;
+    }
+
+    public IDailyV1SelectedTravelDayBoundary Boundary => hostPorts.Boundary;
+    public IDailyV1SelectedP12TravelPartyAdvanceProtocol P12Protocol => hostPorts.P12Protocol;
+    public bool AdvanceSoloTravel => hostPorts.AdvanceSoloTravel;
+
+    public bool ExecuteWithinPartyOwnerOperation(Func<bool> operation)
+    {
+        if (!IsStillBoundToSession()) return false;
+        return hostPorts.ExecuteWithinPartyOwnerOperation(operation);
+    }
+
+    public void PublishCompletedTravelResults(
+        IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> partyArrivals,
+        IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults)
+    {
+        if (!IsStillBoundToSession())
+            throw new InvalidOperationException(
+                "The selected travel result cannot be projected from a different Core session graph.");
+        hostPorts.PublishCompletedTravelResults(partyArrivals, soloResults);
+    }
+
+    public void ObserveCompletedTravelResults()
+    {
+        if (!IsStillBoundToSession())
+            throw new InvalidOperationException(
+                "The selected travel results cannot be observed from a different Core session graph.");
+        hostPorts.ObserveCompletedTravelResults();
+    }
+
+    internal static bool TryCreate(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+        IDailyV1SelectedTravelDayHostPorts hostPorts,
+        out IDailyV1SelectedTravelDayExecutionContext context)
+    {
+        context = null;
+        if (executionState == null || ownerGraph == null || hostPorts == null
+            || !executionState.HasAdmittedSelectedDailyExecution
+            || !executionState.SelectedRuntimeExecutionRootsBound
+            || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, ownerGraph)
+            || hostPorts.Boundary == null
+            || hostPorts.P12Protocol == null)
+            return false;
+
+        context = new DailyV1CoreSelectedTravelDayExecutionContext(
+            executionState, ownerGraph, hostPorts);
+        return true;
+    }
+
+    private bool IsStillBoundToSession() =>
+        executionState.HasAdmittedSelectedDailyExecution
+        && executionState.SelectedRuntimeExecutionRootsBound
+        && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, ownerGraph)
+        && hostPorts.Boundary != null
+        && hostPorts.P12Protocol != null;
+}
+
+/// <summary>
 /// Executes the selected Daily-v1 post-actor travel group in its established
 /// order: P8 TravelParty owner, then ungrouped solo travel. Core selects and
 /// commits all travel transitions against the exact admitted graph. The narrow

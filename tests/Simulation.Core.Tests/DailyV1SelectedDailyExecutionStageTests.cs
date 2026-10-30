@@ -787,6 +787,35 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
+    public void AdmittedTravelContextIsConstructedByCoreAndRejectsAnotherOwnerGraph()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        FakeBoundary boundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore);
+        Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreate(
+            state, graph, boundary, out _), Is.True);
+        Assert.That(boundary.TryCreateSelectedTravelDayHostPorts(
+            graph, out IDailyV1SelectedTravelDayHostPorts hostPorts), Is.True);
+
+        Assert.That(DailyV1CoreSelectedTravelDayExecutionContext.TryCreate(
+            state, graph, hostPorts,
+            out IDailyV1SelectedTravelDayExecutionContext context), Is.True);
+        Assert.That(context.Boundary, Is.SameAs(hostPorts.Boundary));
+        Assert.That(context.P12Protocol, Is.SameAs(hostPorts.P12Protocol));
+        Assert.That(context.AdvanceSoloTravel, Is.EqualTo(hostPorts.AdvanceSoloTravel));
+
+        DailyV1SelectedRuntimeOwnerGraph otherGraph = CreateGraph(composition.Definitions);
+        Assert.That(DailyV1CoreSelectedTravelDayExecutionContext.TryCreate(
+            state, otherGraph, hostPorts,
+            out IDailyV1SelectedTravelDayExecutionContext rejected), Is.False);
+        Assert.That(rejected, Is.Null);
+    }
+
+    [Test]
     public void ActorTurnContextFactoryRejectsUnboundStateBeforeHostBoundary()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -1189,6 +1218,19 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             return true;
         }
 
+        public bool TryCreateSelectedTravelDayHostPorts(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedTravelDayHostPorts hostPorts)
+        {
+            hostPorts = null;
+            if (!TryCreateSelectedTravelDayContext(graph,
+                    out IDailyV1SelectedTravelDayExecutionContext context)
+                || !(context is IDailyV1SelectedTravelDayHostPorts candidate))
+                return false;
+            hostPorts = candidate;
+            return true;
+        }
+
         private sealed class FakeDemographyContext : IDailyV1SelectedDemographyExecutionContext
         {
             internal FakeDemographyContext(DailyV1SelectedRuntimeOwnerGraph graph)
@@ -1229,7 +1271,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public IReadOnlyDictionary<string, int> BuildResidentFloorSupplement() => representedFloors;
         }
 
-        private sealed class FakeTravelContext : IDailyV1SelectedTravelDayExecutionContext
+        private sealed class FakeTravelContext : IDailyV1SelectedTravelDayExecutionContext,
+            IDailyV1SelectedTravelDayHostPorts
         {
             private readonly FakeBoundary owner;
             internal FakeTravelContext(FakeBoundary owner) => this.owner = owner;

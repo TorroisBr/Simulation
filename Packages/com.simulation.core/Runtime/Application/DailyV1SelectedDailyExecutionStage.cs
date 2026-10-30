@@ -45,6 +45,13 @@ internal interface IDailyV1SelectedDailyExecutionBoundary
     bool TryCreateSelectedTravelDayContext(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedTravelDayExecutionContext context);
+    /// <summary>
+    /// Supplies only projection and P12 ports for an admitted Core session.
+    /// Core binds those ports to its own selected travel context and graph.
+    /// </summary>
+    bool TryCreateSelectedTravelDayHostPorts(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedTravelDayHostPorts hostPorts);
 }
 
 /// <summary>
@@ -551,7 +558,8 @@ internal static class DailyV1SelectedDailyExecutionStage
         IDailyV1SelectedTravelDayExecutionContext travelContext = null;
         bool travelContextPreflighted = admittedSelectedBoundariesPreflighted;
         if (travelContextPreflighted
-            && (!boundary.TryCreateSelectedTravelDayContext(graph, out travelContext)
+            && (!TryCreateSelectedTravelDayContext(
+                    executionState, graph, boundary, out travelContext)
                 || travelContext == null
                 || travelContext.Boundary == null))
             throw new InvalidOperationException(
@@ -822,7 +830,8 @@ internal static class DailyV1SelectedDailyExecutionStage
             throw new InvalidOperationException(
                 "The selected Core actor-turn stage could not run with the exact admitted graph and runtime roster.");
         if (!travelContextPreflighted
-            && !boundary.TryCreateSelectedTravelDayContext(graph, out travelContext))
+            && !TryCreateSelectedTravelDayContext(
+                executionState, graph, boundary, out travelContext))
             throw new InvalidOperationException(
                 "The selected Daily-v1 host could not provide its exact travel projection and P12 context.");
         if (travelContext == null || travelContext.Boundary == null)
@@ -946,6 +955,24 @@ internal static class DailyV1SelectedDailyExecutionStage
         }
 
         return true;
+    }
+
+    private static bool TryCreateSelectedTravelDayContext(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IDailyV1SelectedDailyExecutionBoundary boundary,
+        out IDailyV1SelectedTravelDayExecutionContext context)
+    {
+        context = null;
+        if (executionState == null || !executionState.HasAdmittedSelectedDailyExecution)
+            return boundary.TryCreateSelectedTravelDayContext(graph, out context);
+
+        if (!boundary.TryCreateSelectedTravelDayHostPorts(
+                graph, out IDailyV1SelectedTravelDayHostPorts hostPorts))
+            return false;
+
+        return DailyV1CoreSelectedTravelDayExecutionContext.TryCreate(
+            executionState, graph, hostPorts, out context);
     }
 
     internal static bool TryAdvanceTravelDay(

@@ -62,7 +62,8 @@ public sealed partial class SimulationRuntime
     }
 
     private sealed class SelectedDailyV1TravelDayExecutionContext
-        : IDailyV1SelectedTravelDayExecutionContext
+        : IDailyV1SelectedTravelDayExecutionContext,
+            IDailyV1SelectedTravelDayHostPorts
     {
         private readonly SimulationRuntime runtime;
         private readonly SelectedTravelDayBoundary boundary;
