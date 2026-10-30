@@ -112,7 +112,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             composition.ActorChoiceStore)
         {
             UseSelectedActionExecution = true,
-            UseSelectedDayStartContext = true,
+            UseSelectedDayStartContext = false,
             HasUnselectedLiveRuntimeMember = true,
             CrimeSystemPresent = false,
             JusticeSystemPresent = false,
@@ -130,6 +130,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             DailyV1SelectedCrimeJusticeDailyPhase.SyncWantedStatuses
         }), "The admitted state-backed day-start stages use the roster and selected system-presence facts already bound to Core state, not host flags.");
         Assert.That(boundary.Calls, Does.Not.Contain("begin-day"));
+        Assert.That(boundary.Calls, Does.Not.Contain("day-start-context"),
+            "The admitted selected stage derives its day-start inputs from the same Core-bound actor context.");
     }
 
     [Test]
@@ -172,7 +174,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
-    public void AdmittedStageRejectsMissingSelectedDayStartContextInsteadOfDelegatingToUnityWholeDay()
+    public void AdmittedStageRejectsSubstitutedDayStartOwnerBeforeLoggerOrMutation()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
         FakeBoundary boundary = new FakeBoundary(
@@ -181,15 +183,15 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             composition.ActorChoiceStore)
         {
             UseSelectedActionExecution = true,
-            UseSelectedDayStartContext = false
+            UseSelectedDayStartContext = false,
+            SubstituteJusticeRecordsOwner = new DailyV1JusticeRecordsOwner()
         };
 
         InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
             DailyV1SelectedDailyExecutionStage.Advance(
                 composition.ExecutionBoundaryState, composition.OwnerGraph, boundary));
 
-        Assert.That(failure.Message, Does.Contain(
-            "The admitted Daily-v1 host could not provide its selected day-start boundary."));
+        Assert.That(failure.Message, Does.Contain("exact Core day-start owner"));
         Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }),
             "A selected execution proves its exact day-start boundary before logger or gameplay callbacks.");
         Assert.That(boundary.Calls, Does.Not.Contain("begin-day"));
@@ -211,6 +213,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             UseSelectedActionExecution = true,
             UseSelectedDayStartContext = false,
+            SubstituteJusticeRecordsOwner = new DailyV1JusticeRecordsOwner(),
             ThrowOnDemography = true
         };
 
@@ -218,8 +221,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             DailyV1SelectedDailyExecutionStage.Advance(
                 composition.ExecutionBoundaryState, composition.OwnerGraph, boundary));
 
-        Assert.That(failure.Message, Does.Contain(
-            "The admitted Daily-v1 host could not provide its selected day-start boundary."));
+        Assert.That(failure.Message, Does.Contain("exact Core day-start owner"));
         Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }),
             "The missing required operation boundary is rejected before logger or enabled demographic writer callbacks.");
         Assert.That(boundary.PublishedDemographyResult, Is.Null,
@@ -238,7 +240,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             composition.ActorChoiceStore)
         {
             UseSelectedActionExecution = true,
-            UseSelectedDayStartContext = true,
+            UseSelectedDayStartContext = false,
             RejectTravelContext = true,
             ThrowOnDemography = true
         };
@@ -250,7 +252,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(failure.Message, Does.Contain(
             "The selected Daily-v1 host could not provide its exact travel projection and P12 context."));
         Assert.That(boundary.Calls,
-            Is.EqualTo(new[] { "actor-context", "day-start-context", "travel-context" }),
+            Is.EqualTo(new[] { "actor-context", "travel-context" }),
             "The admitted selected stage proves its exact travel/P12 boundary before logger or enabled demographic writer callbacks.");
         Assert.That(boundary.PublishedDemographyResult, Is.Null,
             "No daily result is published after travel/P12 boundary preflight rejection.");
@@ -1338,7 +1340,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             IDailyV1SelectedActorChoiceExecutionContext,
             IDailyV1CoreActorChoiceExecutionBoundary,
             IDailyV1SelectedMerchantTradeStateBoundary,
-            IDailyV1SelectedMerchantTradeStateAdmissionBoundary
+            IDailyV1SelectedMerchantTradeStateAdmissionBoundary,
+            IDailyV1SelectedCrimeJusticeDailyBoundary
         {
             private readonly FakeBoundary owner;
             private readonly bool? selectedActionExecution;
@@ -1413,6 +1416,43 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public bool ExecuteWithinSelectedMerchantDailyOperation(
                 DailyV1NpcRuntimeOwners actor,
                 Func<bool> operation) => operation != null && operation();
+
+            private FakeDayStartOperationBoundary DayStartBoundary =>
+                new FakeDayStartOperationBoundary(owner, owner.CurrentGraph);
+
+            public DailyV1JusticeRecordsOwner JusticeRecordsOwner =>
+                DayStartBoundary.JusticeRecordsOwner;
+
+            public void ExecuteWithinDailyMutation(
+                DailyV1SelectedCrimeJusticeDailyPhase phase,
+                Action mutation) => DayStartBoundary.ExecuteWithinDailyMutation(phase, mutation);
+
+            public bool CanProjectStatusChanges(
+                DailyV1NpcRuntimeOwners actor,
+                IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
+                DayStartBoundary.CanProjectStatusChanges(actor, statusToAdd);
+
+            public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners actor) =>
+                DayStartBoundary.EnsureMutationAllowed(actor);
+
+            public void NotifyStatusMutationCommitted(
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1StatusDefinition status,
+                bool added) => DayStartBoundary.NotifyStatusMutationCommitted(actor, status, added);
+
+            public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners actor) =>
+                DayStartBoundary.NotifyHiddenMutationCommitted(actor);
+
+            public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence) =>
+                DayStartBoundary.CanRemoveSentenceProjection(sentence);
+
+            public void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence) =>
+                DayStartBoundary.CommitSentenceProjectionRemoval(sentence);
+
+            public void Log(SimulationLogCategory category, string message) =>
+                DayStartBoundary.Log(category, message);
+
+            public void LogWarning(string message) => DayStartBoundary.LogWarning(message);
 
             public IAuthoritativeRandomSource RandomSource => owner.randomSource;
             public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) =>

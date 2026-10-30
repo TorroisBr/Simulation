@@ -17,6 +17,12 @@ internal interface IDailyV1SelectedDailyExecutionBoundary
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedDemographyExecutionContext context);
     void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result);
+    /// <summary>
+    /// Legacy context port for direct/unadmitted execution only. An admitted
+    /// Core session derives its selected day-start roster and owner boundaries
+    /// from the exact Core roster and actor-turn boundary already acquired for
+    /// that day.
+    /// </summary>
     bool TryCreateSelectedDayStartContext(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedDayStartExecutionContext context);
@@ -246,6 +252,30 @@ internal interface IDailyV1SelectedTravelDayExecutionContext
 /// </summary>
 internal static class DailyV1SelectedDailyExecutionStage
 {
+    private sealed class CoreSelectedDayStartExecutionContext
+        : IDailyV1SelectedDayStartExecutionContext
+    {
+        internal CoreSelectedDayStartExecutionContext(
+            IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRoster,
+            IDailyV1SelectedCrimeJusticeDailyBoundary crimeJusticeBoundary,
+            IDailyV1SelectedMerchantTradeStateBoundary merchantTradeBoundary)
+        {
+            RuntimeRoster = runtimeRoster
+                ?? throw new ArgumentNullException(nameof(runtimeRoster));
+            CrimeJusticeBoundary = crimeJusticeBoundary
+                ?? throw new ArgumentNullException(nameof(crimeJusticeBoundary));
+            MerchantTradeBoundary = merchantTradeBoundary
+                ?? throw new ArgumentNullException(nameof(merchantTradeBoundary));
+        }
+
+        public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
+        public bool HasUnselectedLiveRuntimeMember => false;
+        public bool CrimeSystemPresent => true;
+        public bool JusticeSystemPresent => true;
+        public IDailyV1SelectedCrimeJusticeDailyBoundary CrimeJusticeBoundary { get; }
+        public IDailyV1SelectedMerchantTradeStateBoundary MerchantTradeBoundary { get; }
+    }
+
     internal static void Advance(
         DailyV1ExecutionBoundaryState executionState,
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -340,17 +370,28 @@ internal static class DailyV1SelectedDailyExecutionStage
         bool admittedSelectedBoundariesPreflighted =
             executionState?.HasAdmittedSelectedDailyExecution == true
             && !coreSelectedCompatibility;
-        bool dayStartContextPreflighted = admittedSelectedBoundariesPreflighted;
-        if (dayStartContextPreflighted)
+        bool dayStartContextPreflighted = false;
+        if (admittedSelectedBoundariesPreflighted)
         {
-            hasSelectedDayStartContext = boundary.TryCreateSelectedDayStartContext(
-                graph, out dayStartContext);
-            if (!hasSelectedDayStartContext)
+            if (!(actorTurnContext.Boundary
+                    is IDailyV1SelectedCrimeJusticeDailyBoundary crimeJusticeBoundary)
+                || !(actorTurnContext.Boundary
+                    is IDailyV1SelectedMerchantTradeStateBoundary merchantTradeBoundary)
+                || !ReferenceEquals(graph.JusticeRecordsOwner,
+                    crimeJusticeBoundary.JusticeRecordsOwner)
+                || graph.Definitions.EffectiveConfiguration?.MerchantTrade == null)
                 throw new InvalidOperationException(
-                    "The admitted Daily-v1 host could not provide its selected day-start boundary.");
-            if (dayStartContext == null)
-                throw new InvalidOperationException(
-                    "The selected Daily-v1 host returned a null day-start context.");
+                    "The admitted Daily-v1 actor-turn boundary could not provide the exact Core day-start owner and operation contracts.");
+
+            // Reuse the one exact adapter object already bound to this Core
+            // actor roster. Unity no longer supplies a parallel selected
+            // roster, system-presence booleans, or a second daily boundary.
+            dayStartContext = new CoreSelectedDayStartExecutionContext(
+                executionState.SelectedRuntimeActorRoster,
+                crimeJusticeBoundary,
+                merchantTradeBoundary);
+            hasSelectedDayStartContext = true;
+            dayStartContextPreflighted = true;
         }
 
         // The travel projection and P12 protocol are also required by an
