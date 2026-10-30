@@ -1342,9 +1342,9 @@ public sealed class SimulationBootstrapCompositionTests
                 coreNpc.AdventureSiteIntelKnowledge,
                 coreNpc.AdventureSiteIntelKnowledge,
                 coreNpc.AdventureSiteIntelKnowledge,
-                commercial,
-                commercial,
-                commercial
+                coreNpc.CommercialKnowledge,
+                coreNpc.CommercialKnowledge,
+                coreNpc.CommercialKnowledge
             };
             int[] expectedCardinalities =
             {
@@ -3671,9 +3671,9 @@ public sealed class SimulationBootstrapCompositionTests
                 (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
                 (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
                 (object)selected?.AdventureSiteIntelKnowledge ?? adventure,
-                commercial,
-                commercial,
-                commercial
+                (object)selected?.CommercialKnowledge ?? commercial,
+                (object)selected?.CommercialKnowledge ?? commercial,
+                (object)selected?.CommercialKnowledge ?? commercial
             };
             int[] cardinalities =
             {
@@ -3825,7 +3825,8 @@ public sealed class SimulationBootstrapCompositionTests
                 (LocalTopologyKnowledgeRuntime)ReadNonPublicProperty(npc, "ExistingLocalTopologyKnowledge");
             AdventureSiteIntelKnowledgeRuntime adventureProjection =
                 (AdventureSiteIntelKnowledgeRuntime)ReadNonPublicProperty(npc, "ExistingAdventureSiteIntelKnowledge");
-            object commercialKnowledge = ReadNonPublicProperty(npc, "ExistingCommercialKnowledge");
+            CommercialKnowledgeRuntime commercialProjection =
+                (CommercialKnowledgeRuntime)ReadNonPublicProperty(npc, "ExistingCommercialKnowledge");
             DailyV1NpcRuntimeOwners selectedOwners = npc.SelectedRuntimeOwners;
             if (selectedOwners != null)
             {
@@ -3833,7 +3834,11 @@ public sealed class SimulationBootstrapCompositionTests
                     "The Unity serialization projection must bind to the selected Core ExplorableSiteKnowledge owner.");
                 Assert.That(adventureProjection.SelectedOwner, Is.SameAs(selectedOwners.AdventureSiteIntelKnowledge),
                     "The Unity serialization projection must bind to the selected Core AdventureSiteIntelKnowledge owner.");
+                Assert.That(commercialProjection.SelectedOwner, Is.SameAs(selectedOwners.CommercialKnowledge),
+                    "The Unity serialization projection must bind to the selected Core CommercialKnowledge owner.");
             }
+            object commercialKnowledge =
+                (object)selectedOwners?.CommercialKnowledge ?? commercialProjection;
             object explorableKnowledge = (object)selectedOwners?.ExplorableSiteKnowledge ?? explorableProjection;
             object localTopologyKnowledge = (object)selectedOwners?.LocalTopologyKnowledgeEmptyOwner ?? localKnowledge;
             object adventureKnowledge = (object)selectedOwners?.AdventureSiteIntelKnowledge ?? adventureProjection;

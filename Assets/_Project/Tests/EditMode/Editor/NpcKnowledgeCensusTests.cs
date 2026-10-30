@@ -63,6 +63,36 @@ public sealed class NpcKnowledgeCensusTests
     }
 
     [Test]
+    public void SelectedDailyV1CommercialKnowledgeSectionsUseExactCoreOwnerIdentity()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition definition = definitions.Npcs.Values.First();
+        NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+            "selected-commercial-knowledge-census", definition, definitions, (CityRuntime)null, 0f);
+        DailyV1CommercialKnowledgeOwner owner = npc.SelectedRuntimeOwners.CommercialKnowledge;
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers =
+            NpcKnowledgeCensusProvider.CreateProviders(new[] { npc });
+        OwnerSectionCensusWitness[] witnesses = providers.Skip(7)
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+
+        Assert.That(witnesses.Select(witness => witness.SectionId), Is.EqualTo(new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix + npc.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix + npc.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix + npc.RuntimeId
+        }));
+        Assert.That(witnesses.All(witness =>
+            ReferenceEquals(witness.OwnerInstanceIdentity, owner)), Is.True,
+            "The selected census binds to the same Core CommercialKnowledge owner used by P12 and P18-D.");
+        Assert.That(witnesses.Select(witness => witness.Cardinality), Is.EqualTo(new[] { 0, 0, 0 }));
+        Assert.That(witnesses.Select(witness => witness.Revision), Is.EqualTo(new[] { 0L, 0L, 0L }));
+        Assert.That(witnesses.Select(witness => witness.SchemaVersion),
+            Is.All.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion));
+    }
+
+    [Test]
     public void SimulationRuntimeReconcilesKnowledgeFamilyThroughNpcMembershipOperations()
     {
         SimulationRuntime runtime = new SimulationRuntime(

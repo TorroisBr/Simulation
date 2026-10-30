@@ -392,6 +392,130 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     }
 
     [Test]
+    public void SelectedRuntimeCensusRebindsCommercialKnowledgeAliasTripleFromItsExactCoreGraph()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(
+            out DailyV1NpcRuntimeOwners npc);
+        DailyV1CommercialKnowledgeOwner owner = npc.CommercialKnowledge;
+        DailyV1ItemDefinition item = npc.Definitions.Items.Values.First();
+        Assert.That(owner.RecordObservation(new DailyV1CommercialMarketObservation(
+            "market/location", item, 10f, 2, 1L, 1L,
+            DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+        Assert.That(owner.RecordLiquidityObservation(new DailyV1CommercialLiquidityObservation(
+            "market/location", MarketLiquidityMode.AccountBacked, 25f, 1L, 1L,
+            DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+
+        OwnerSectionCensusSnapshot[] hostRows = CreateCoreNpcCensusRows(graph);
+        string[] hostOrder = hostRows.Select(row => row.SectionId).ToArray();
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCommercialKnowledgeSections(
+            graph, hostRows, out IReadOnlyList<OwnerSectionCensusSnapshot> rebound,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(rebound, Has.Count.EqualTo(5));
+        Assert.That(rebound.Select(row => row.SectionId), Is.EqualTo(hostOrder));
+        string[] commercialIds =
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix + npc.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix + npc.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix + npc.RuntimeId
+        };
+        OwnerSectionCensusSnapshot[] commercialRows = commercialIds
+            .Select(id => rebound.Single(row => string.Equals(row.SectionId, id, StringComparison.Ordinal)))
+            .ToArray();
+        Assert.That(commercialRows.All(row => row.Role == OwnerSectionRole.Required), Is.True);
+        Assert.That(commercialRows.All(row =>
+            row.SchemaVersion == DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion), Is.True);
+        Assert.That(commercialRows.All(row => ReferenceEquals(row.OwnerInstanceIdentity, owner)), Is.True);
+        Assert.That(commercialRows.Select(row => row.Cardinality), Is.EqualTo(new[] { 1, 1, 0 }));
+        Assert.That(commercialRows.Select(row => row.Revision), Is.EqualTo(new[] { 2L, 2L, 2L }));
+        Assert.That(ReferenceEquals(
+            commercialRows[0].OwnerInstanceIdentity,
+            commercialRows[1].OwnerInstanceIdentity), Is.True);
+        Assert.That(ReferenceEquals(
+            commercialRows[1].OwnerInstanceIdentity,
+            commercialRows[2].OwnerInstanceIdentity), Is.True);
+        Assert.That(commercialRows[0].Revision, Is.EqualTo(commercialRows[1].Revision));
+        Assert.That(commercialRows[1].Revision, Is.EqualTo(commercialRows[2].Revision));
+    }
+
+    [Test]
+    public void SelectedRuntimeCensusPreservesMixedCommercialRosterAndStaleFacts()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(
+            out DailyV1NpcRuntimeOwners npc);
+        OwnerSectionCensusSnapshot[] selectedRows = CreateCoreNpcCensusRows(graph);
+        object compatibilityCommercialOwner = new object();
+        OwnerSectionCensusSnapshot[] compatibilityRows =
+        {
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "compatibility-npc",
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, new object(), 0, 1L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + "compatibility-npc",
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, new object(), 1, 2L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix + "compatibility-npc",
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, compatibilityCommercialOwner, 2, 3L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix + "compatibility-npc",
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, compatibilityCommercialOwner, 0, 3L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix + "compatibility-npc",
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, compatibilityCommercialOwner, 0, 3L)
+        };
+        OwnerSectionCensusSnapshot[] mixedHostRows =
+            selectedRows.Concat(compatibilityRows).Reverse().ToArray();
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCommercialKnowledgeSections(
+            graph, mixedHostRows, out IReadOnlyList<OwnerSectionCensusSnapshot> mixedPreserved,
+            out string mixedDiagnostic), Is.True, mixedDiagnostic);
+        Assert.That(mixedPreserved, Has.Count.EqualTo(mixedHostRows.Length));
+        for (int i = 0; i < mixedHostRows.Length; i++)
+            Assert.That(mixedPreserved[i], Is.SameAs(mixedHostRows[i]),
+                "Mixed host composition preserves the entire vector and original order.");
+
+        string selectedMarketId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix + npc.RuntimeId;
+        OwnerSectionCensusSnapshot[] missingSelectedRow = mixedHostRows
+            .Where(row => !string.Equals(row.SectionId, selectedMarketId, StringComparison.Ordinal))
+            .ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCommercialKnowledgeSections(
+            graph, missingSelectedRow, out _, out _), Is.False,
+            "A mixed host vector must contain every selected Core CommercialKnowledge section.");
+
+        OwnerSectionCensusSnapshot[] selectedOnly = (OwnerSectionCensusSnapshot[])selectedRows.Clone();
+        int selectedMarketIndex = Array.FindIndex(selectedOnly,
+            row => string.Equals(row.SectionId, selectedMarketId, StringComparison.Ordinal));
+        OwnerSectionCensusSnapshot market = selectedOnly[selectedMarketIndex];
+        selectedOnly[selectedMarketIndex] = new OwnerSectionCensusSnapshot(
+            market.SectionId, market.SchemaVersion, market.Role, new object(),
+            market.Cardinality, market.Revision);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCommercialKnowledgeSections(
+            graph, selectedOnly, out IReadOnlyList<OwnerSectionCensusSnapshot> stalePreserved,
+            out string staleDiagnostic), Is.True, staleDiagnostic);
+        for (int i = 0; i < selectedOnly.Length; i++)
+            Assert.That(stalePreserved[i], Is.SameAs(selectedOnly[i]),
+                "Stale captured owner identity is preserved for the existing P12 source classification.");
+
+        OwnerSectionCensusSnapshot[] unevenFamily = mixedHostRows
+            .Where(row => !string.Equals(
+                row.SectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix
+                    + "compatibility-npc",
+                StringComparison.Ordinal))
+            .ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCommercialKnowledgeSections(
+            graph, unevenFamily, out _, out _), Is.False,
+            "Mixed fallback cannot accept incomplete CommercialKnowledge alias-family keys.");
+    }
+
+    [Test]
     public void SelectedRuntimeCensusRebindsPersonStoreAliasRowsFromItsExactCoreGraph()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -1134,6 +1258,17 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateInventoryProviders(graph.Npcs));
         providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateMoneyAccountProviders(graph.Npcs));
         return providers;
+    }
+
+    private static OwnerSectionCensusSnapshot[] CreateCoreNpcCensusRows(
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        List<IOwnerSectionCensusProvider> providers =
+            new List<IOwnerSectionCensusProvider>();
+        providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateInventoryProviders(graph.Npcs));
+        providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateMoneyAccountProviders(graph.Npcs));
+        providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateCommercialKnowledgeProviders(graph.Npcs));
+        return CreateRequiredSnapshots(providers);
     }
 
     private static OwnerSectionCensusSnapshot CreateRequiredSnapshot(OwnerSectionCensusWitness witness)

@@ -2,9 +2,10 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// Creates selected-profile Inventory, MoneyAccount, and SpatialKnowledge
-/// census witnesses directly from the exact Core NPC owners. Unity projections
-/// may alias these objects, but they do not select or read persisted owners.
+/// Creates selected-profile Inventory, MoneyAccount, CommercialKnowledge, and
+/// SpatialKnowledge census witnesses directly from the exact Core NPC owners.
+/// Unity projections may alias these objects, but they do not select or read
+/// persisted owners.
 /// </summary>
 internal static class DailyV1NpcOwnerCensusProviders
 {
@@ -119,6 +120,70 @@ internal static class DailyV1NpcOwnerCensusProviders
             MoneyAccountOwner.Revision);
     }
 
+    private enum CommercialKnowledgeSection
+    {
+        Markets,
+        Liquidity,
+        ShareReceipts
+    }
+
+    private sealed class CommercialKnowledgeSectionProvider : IOwnerSectionCensusProvider
+    {
+        private readonly DailyV1CommercialKnowledgeOwner owner;
+        private readonly CommercialKnowledgeSection section;
+        private readonly string sectionId;
+
+        internal CommercialKnowledgeSectionProvider(
+            DailyV1NpcRuntimeOwners npcOwner,
+            DailyV1CommercialKnowledgeOwner owner,
+            CommercialKnowledgeSection section)
+        {
+            NpcOwner = npcOwner;
+            this.owner = owner;
+            this.section = section;
+            sectionId = SectionPrefix(section) + npcOwner.RuntimeId;
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            if (!owner.TryReadCensus(
+                    out int markets,
+                    out int liquidity,
+                    out int receipts,
+                    out long revision))
+                throw new InvalidOperationException(
+                    "The Core CommercialKnowledge owner cannot provide its census.");
+
+            int cardinality = section switch
+            {
+                CommercialKnowledgeSection.Markets => markets,
+                CommercialKnowledgeSection.Liquidity => liquidity,
+                CommercialKnowledgeSection.ShareReceipts => receipts,
+                _ => throw new InvalidOperationException(
+                    "The CommercialKnowledge census section is invalid.")
+            };
+            return new OwnerSectionCensusWitness(
+                sectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                owner,
+                cardinality,
+                revision);
+        }
+
+        private static string SectionPrefix(CommercialKnowledgeSection section) => section switch
+        {
+            CommercialKnowledgeSection.Markets =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix,
+            CommercialKnowledgeSection.Liquidity =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix,
+            CommercialKnowledgeSection.ShareReceipts =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix,
+            _ => throw new ArgumentOutOfRangeException(nameof(section))
+        };
+
+        internal DailyV1NpcRuntimeOwners NpcOwner { get; }
+    }
+
     internal static IReadOnlyList<IOwnerSectionCensusProvider> CreateInventoryProviders(
         IReadOnlyList<DailyV1NpcRuntimeOwners> roster)
     {
@@ -150,6 +215,35 @@ internal static class DailyV1NpcOwnerCensusProviders
             if (npc.MoneyAccount == null || !owners.Add(npc.MoneyAccount))
                 throw new InvalidOperationException("Selected MoneyAccount census requires one distinct Core owner per NPC.");
             providers[i] = new MoneyAccountSectionProvider(npc);
+        }
+        return Array.AsReadOnly(providers);
+    }
+
+    internal static IReadOnlyList<IOwnerSectionCensusProvider> CreateCommercialKnowledgeProviders(
+        IReadOnlyList<DailyV1NpcRuntimeOwners> roster)
+    {
+        ValidateRoster(roster);
+        List<DailyV1NpcRuntimeOwners> ordered = OrderByRuntimeId(roster);
+        HashSet<DailyV1CommercialKnowledgeOwner> owners =
+            new HashSet<DailyV1CommercialKnowledgeOwner>();
+        IOwnerSectionCensusProvider[] providers =
+            new IOwnerSectionCensusProvider[ordered.Count * 3];
+        int providerIndex = 0;
+        foreach (DailyV1NpcRuntimeOwners npc in ordered)
+        {
+            DailyV1CommercialKnowledgeOwner owner = npc.CommercialKnowledge;
+            if (owner == null
+                || !ReferenceEquals(owner.Definitions, npc.Definitions)
+                || !owners.Add(owner))
+                throw new InvalidOperationException(
+                    "Selected CommercialKnowledge census requires one distinct admitted Core owner per NPC.");
+
+            providers[providerIndex++] = new CommercialKnowledgeSectionProvider(
+                npc, owner, CommercialKnowledgeSection.Markets);
+            providers[providerIndex++] = new CommercialKnowledgeSectionProvider(
+                npc, owner, CommercialKnowledgeSection.Liquidity);
+            providers[providerIndex++] = new CommercialKnowledgeSectionProvider(
+                npc, owner, CommercialKnowledgeSection.ShareReceipts);
         }
         return Array.AsReadOnly(providers);
     }

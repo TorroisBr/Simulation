@@ -1731,17 +1731,41 @@ internal static class P12DNpcRootOwnerSnapshot
 
         bool commercialOwners(CommercialKnowledgeRuntime owner)
         {
-            if (!owner.TryReadCensus(out int markets, out int liquidity, out int receipts, out long revision))
+            if (owner == null
+                || !owner.TryReadCensus(
+                    out int projectedMarkets,
+                    out int projectedLiquidity,
+                    out int projectedReceipts,
+                    out long projectedRevision))
                 return false;
+            DailyV1CommercialKnowledgeOwner selected =
+                npc.SelectedRuntimeOwners?.CommercialKnowledge;
+            object censusOwner = owner;
+            int markets = projectedMarkets;
+            int liquidity = projectedLiquidity;
+            int receipts = projectedReceipts;
+            long revision = projectedRevision;
+            if (selected != null)
+            {
+                if (!ReferenceEquals(owner.SelectedOwner, selected)
+                    || !selected.TryReadCensus(
+                        out markets, out liquidity, out receipts, out revision)
+                    || markets != projectedMarkets
+                    || liquidity != projectedLiquidity
+                    || receipts != projectedReceipts
+                    || revision != projectedRevision)
+                    return false;
+                censusOwner = selected;
+            }
             return TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(7, npc.RuntimeId),
                     NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                    owner, markets, revision)
+                    censusOwner, markets, revision)
                 && TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(8, npc.RuntimeId),
                     NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                    owner, liquidity, revision)
+                    censusOwner, liquidity, revision)
                 && TryRequireSection(token, NpcKnowledgeCensusProvider.SectionIdFor(9, npc.RuntimeId),
                     NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                    owner, receipts, revision);
+                    censusOwner, receipts, revision);
         }
 
         bool localOwners(LocalTopologyKnowledgeRuntime projection)

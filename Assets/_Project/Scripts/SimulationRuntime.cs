@@ -4917,23 +4917,52 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 if (!(censusProvider is NpcKnowledgeCensusProvider.INpcKnowledgeSectionCensusProvider provider)
                     || provider.SectionKind < 7 || provider.SectionKind > 9)
                     continue;
+                CommercialKnowledgeRuntime commercialProjection =
+                    provider.NpcOwner?.ExistingCommercialKnowledge;
+                DailyV1NpcRuntimeOwners selectedNpcOwners =
+                    provider.NpcOwner?.SelectedRuntimeOwners;
+                object censusOwner;
+                long censusRevision;
+                if (selectedNpcOwners != null)
+                {
+                    DailyV1CommercialKnowledgeOwner selectedCommercialOwner =
+                        selectedNpcOwners.CommercialKnowledge;
+                    if (selectedCommercialOwner == null
+                        || !ReferenceEquals(provider.TypedOwner, selectedCommercialOwner)
+                        || !ReferenceEquals(commercialProjection?.SelectedOwner, selectedCommercialOwner))
+                        throw new InvalidOperationException(
+                            "Selected Commercial Knowledge census identity does not match the exact Core owner and Unity projection.");
+                    censusOwner = selectedCommercialOwner;
+                    censusRevision = selectedCommercialOwner.Revision;
+                }
+                else
+                {
+                    if (!ReferenceEquals(provider.TypedOwner, commercialProjection))
+                        throw new InvalidOperationException(
+                            "Legacy Commercial Knowledge census identity does not match its Unity owner.");
+                    censusOwner = commercialProjection;
+                    censusRevision = commercialProjection?.Revision ?? -1L;
+                }
                 if (string.IsNullOrWhiteSpace(provider.RuntimeId)
                     || !npcRegistryById.TryGetValue(provider.RuntimeId, out NpcRuntime registeredNpc)
                     || !ReferenceEquals(registeredNpc, provider.NpcOwner)
-                    || !(provider.TypedOwner is CommercialKnowledgeRuntime commercialOwner)
-                    || !ReferenceEquals(registeredNpc.ExistingCommercialKnowledge, commercialOwner))
+                    || commercialProjection == null
+                    || !ReferenceEquals(registeredNpc.ExistingCommercialKnowledge, commercialProjection))
                     throw new InvalidOperationException("Commercial Knowledge census identity does not match the installed roster.");
 
                 OwnerSectionCensusWitness witness = censusProvider.GetCurrentCensus();
-                if (!ReferenceEquals(witness.OwnerInstanceIdentity, commercialOwner)
+                if (!ReferenceEquals(witness.OwnerInstanceIdentity, censusOwner)
                     || witness.SchemaVersion != NpcKnowledgeCensusProvider.SchemaVersion
-                    || witness.Revision != commercialOwner.Revision
+                    || witness.Revision != censusRevision
                     || !string.Equals(witness.SectionId,
                         NpcKnowledgeCensusProvider.SectionIdFor(provider.SectionKind, provider.RuntimeId),
                         StringComparison.Ordinal))
                     throw new InvalidOperationException("Commercial Knowledge census witness is not an exact current owner witness.");
 
-                AddP12NpcOwnerMutationSection(commercialBindings, commercialOwner, witness.SectionId);
+                // The census names the authoritative selected Core owner. The Unity
+                // projection remains the P12 mutation-boundary endpoint because its
+                // selected-owner adapter forwards that boundary to the same Core owner.
+                AddP12NpcOwnerMutationSection(commercialBindings, commercialProjection, witness.SectionId);
             }
             foreach (P12NpcOwnerMutationBinding binding in commercialBindings)
                 if (binding.SectionIds.Length != 3)

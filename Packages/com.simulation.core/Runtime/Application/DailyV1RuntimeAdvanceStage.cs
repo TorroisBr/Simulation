@@ -397,6 +397,20 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
         ownerSections = coreOwnedNpcSections;
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCommercialKnowledgeSections(
+                executionState.SelectedRuntimeOwnerGraph,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedCommercialKnowledgeSections,
+                out _))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        ownerSections = coreOwnedCommercialKnowledgeSections;
+
         if (executionState.SelectedRuntimeOwnerGraph.PersonStore != null)
         {
             if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedPersonStoreSections(
@@ -579,6 +593,161 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
 
         ownerSections = Array.AsReadOnly(copied);
         diagnostic = null;
+        return true;
+    }
+
+    internal static bool TryRebindCoreOwnedCommercialKnowledgeSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        diagnostic = null;
+        if (graph == null || hostSections == null)
+        {
+            diagnostic = "The selected Core CommercialKnowledge census requires an owner graph and host census rows.";
+            return false;
+        }
+
+        OwnerSectionCensusSnapshot[] copied = new OwnerSectionCensusSnapshot[hostSections.Count];
+        Dictionary<string, int> indexes = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < hostSections.Count; i++)
+        {
+            OwnerSectionCensusSnapshot section = hostSections[i];
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !indexes.TryAdd(section.SectionId, i))
+            {
+                diagnostic = "The host census contains a missing or duplicate owner-section identity.";
+                return false;
+            }
+            copied[i] = section;
+        }
+
+        int inventoryRows = CountFamilyRows(
+            copied, DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix);
+        int moneyAccountRows = CountFamilyRows(
+            copied, DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix);
+        int marketRows = CountFamilyRows(
+            copied, DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix);
+        int liquidityRows = CountFamilyRows(
+            copied, DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix);
+        int receiptRows = CountFamilyRows(
+            copied, DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix);
+        if (inventoryRows != moneyAccountRows
+            || inventoryRows != marketRows
+            || inventoryRows != liquidityRows
+            || inventoryRows != receiptRows)
+        {
+            diagnostic = "The complete host census has inconsistent NPC owner-family cardinality.";
+            return false;
+        }
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers;
+        try
+        {
+            providers = DailyV1NpcOwnerCensusProviders.CreateCommercialKnowledgeProviders(graph.Npcs);
+        }
+        catch (ArgumentException)
+        {
+            diagnostic = "The selected Core CommercialKnowledge providers could not bind to the owner graph.";
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            diagnostic = "The selected Core CommercialKnowledge providers could not bind to the owner graph.";
+            return false;
+        }
+
+        OwnerSectionCensusWitness[] witnesses = new OwnerSectionCensusWitness[providers.Count];
+        HashSet<string> selectedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < providers.Count; i++)
+        {
+            try
+            {
+                witnesses[i] = providers[i]?.GetCurrentCensus();
+            }
+            catch (InvalidOperationException)
+            {
+                diagnostic = "A selected Core CommercialKnowledge provider failed to read its owner.";
+                return false;
+            }
+
+            if (witnesses[i] == null
+                || string.IsNullOrWhiteSpace(witnesses[i].SectionId)
+                || witnesses[i].OwnerInstanceIdentity == null
+                || witnesses[i].SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+                || witnesses[i].Cardinality < 0
+                || witnesses[i].Revision < 0L
+                || !selectedSectionIds.Add(witnesses[i].SectionId))
+            {
+                diagnostic = "A selected Core CommercialKnowledge provider returned an invalid census witness.";
+                return false;
+            }
+        }
+
+        if (inventoryRows > graph.Npcs.Count)
+        {
+            for (int i = 0; i < witnesses.Length; i++)
+            {
+                if (!indexes.ContainsKey(witnesses[i].SectionId))
+                {
+                    diagnostic = "The mixed-roster host census is missing selected Core CommercialKnowledge section "
+                        + witnesses[i].SectionId + ".";
+                    return false;
+                }
+            }
+
+            ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+
+        if (inventoryRows != graph.Npcs.Count)
+        {
+            diagnostic = "The host census does not contain all three CommercialKnowledge sections for each Core NPC.";
+            return false;
+        }
+
+        int[] indexesByWitness = new int[witnesses.Length];
+        bool matchesCoreOwners = true;
+        for (int i = 0; i < witnesses.Length; i++)
+        {
+            OwnerSectionCensusWitness witness = witnesses[i];
+            if (!indexes.TryGetValue(witness.SectionId, out int index))
+            {
+                diagnostic = "The host census is missing selected Core CommercialKnowledge section "
+                    + witness.SectionId + ".";
+                return false;
+            }
+
+            indexesByWitness[i] = index;
+            OwnerSectionCensusSnapshot hostSection = copied[index];
+            matchesCoreOwners &= hostSection.Role == OwnerSectionRole.Required
+                && hostSection.SchemaVersion == witness.SchemaVersion
+                && ReferenceEquals(hostSection.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+                && hostSection.Cardinality == witness.Cardinality
+                && hostSection.Revision == witness.Revision;
+        }
+
+        if (!matchesCoreOwners)
+        {
+            ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+
+        for (int i = 0; i < witnesses.Length; i++)
+        {
+            OwnerSectionCensusWitness witness = witnesses[i];
+            copied[indexesByWitness[i]] = new OwnerSectionCensusSnapshot(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision);
+        }
+
+        ownerSections = Array.AsReadOnly(copied);
         return true;
     }
 

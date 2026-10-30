@@ -61,7 +61,7 @@ public static class NpcKnowledgeCensusProvider
                 return kind == 0 ? (object)selected.ExplorableSiteKnowledge
                     : kind <= 2 ? selected.LocalTopologyKnowledgeEmptyOwner
                     : kind <= 6 ? selected.AdventureSiteIntelKnowledge
-                    : commercial;
+                    : selected.CommercialKnowledge;
             }
         }
 
@@ -144,6 +144,7 @@ public static class NpcKnowledgeCensusProvider
                 || (selected != null
                     && (!ReferenceEquals(explorable.SelectedOwner, selected.ExplorableSiteKnowledge)
                         || !ReferenceEquals(adventure.SelectedOwner, selected.AdventureSiteIntelKnowledge)
+                        || !ReferenceEquals(commercial.SelectedOwner, selected.CommercialKnowledge)
                         || selected.LocalTopologyKnowledgeEmptyOwner == null
                         || !selected.LocalTopologyKnowledgeEmptyOwner.MatchesProjection(
                             npc.RuntimeId, local.OwnerRuntimeId,
