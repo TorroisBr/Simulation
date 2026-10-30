@@ -4736,6 +4736,14 @@ public sealed class SimulationRuntimeAdmissionTests
         NpcRuntime target = runtime.NpcRuntimes.First(npc =>
             npc != null && npc != guard && npc.UsesSelectedDailyV1Definitions
             && ReferenceEquals(npc.CurrentCity, guard.CurrentCity));
+        PersonId targetPersonId = new PersonId("p12e-core-justice-target-person");
+        Assert.That(runtime.TryRegisterPerson(
+                new PersonRuntime(targetPersonId, runtime.CurrentDay),
+                out PersonStoreFailure personFailure), Is.True, personFailure.ToString());
+        Assert.That(runtime.TryBindExistingNpcToPerson(
+                targetPersonId, target.RuntimeId, out PersonMaterializationFailure bindingFailure),
+            Is.True, bindingFailure.ToString());
+        Assert.That(target.PersonId, Is.EqualTo(targetPersonId));
         NpcRuntime hiddenActor = runtime.NpcRuntimes.First(npc =>
             npc != null && npc != guard && npc != target && npc.UsesSelectedDailyV1Definitions);
 
@@ -4834,10 +4842,12 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(records.RecordCount, Is.EqualTo(2));
             Assert.That(records.WantedRows[0].Ordinal, Is.Zero);
             Assert.That(records.WantedRows[0].TargetRuntimeId, Is.EqualTo(target.RuntimeId));
+            Assert.That(records.WantedRows[0].TargetPersonIdValue, Is.EqualTo(targetPersonId.Value));
             Assert.That(records.WantedRows[0].CityRuntimeId, Is.EqualTo(target.CurrentCity.RuntimeId));
             Assert.That(records.SentenceRows[0].Ordinal, Is.Zero);
             Assert.That(records.SentenceRows[0].WarrantOrdinal, Is.Zero);
             Assert.That(records.SentenceRows[0].TargetRuntimeId, Is.EqualTo(target.RuntimeId));
+            Assert.That(records.SentenceRows[0].TargetPersonIdValue, Is.EqualTo(targetPersonId.Value));
             Assert.That(records.SentenceRows[0].CityRuntimeId, Is.EqualTo(target.CurrentCity.RuntimeId));
             Assert.That(records.SentenceRows[0].RemainingDays, Is.EqualTo(sentence.RemainingDays));
             Assert.That(records.SentenceRows[0].FailedEscapeAttempts, Is.EqualTo(sentence.FailedEscapeAttempts));
