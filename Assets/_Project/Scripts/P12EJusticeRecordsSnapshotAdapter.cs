@@ -46,7 +46,9 @@ internal static class P12EJusticeRecordsSnapshotAdapter
         OwnerSectionCensusSnapshot justiceWitness = Find(sharedOwnerSectionVector,
             P12CrimeJusticeCensusProvider.JusticeRecordsSectionId);
         JusticeSystem owner = justiceWitness?.OwnerInstanceIdentity as JusticeSystem;
-        if (owner == null || justiceWitness.SchemaVersion != P12CrimeJusticeCensusProvider.SchemaVersion
+        if (owner == null || !runtime.HasSameJusticeSystemOwner(owner)
+            || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph?.JusticeRecordsOwner, owner.CoreOwner)
+            || justiceWitness.SchemaVersion != P12CrimeJusticeCensusProvider.SchemaVersion
             || justiceWitness.Role != OwnerSectionRole.Required)
             return Fail(P12EJusticeSnapshotFailureCode.InvalidOwnerSectionVector,
                 "The Required Justice records witness must identify the exact registered owner.", out failure);
@@ -132,6 +134,57 @@ internal static class P12EJusticeRecordsSnapshotAdapter
 
         snapshot = candidate;
         failure = P12EJusticeSnapshotFailure.None;
+        return true;
+    }
+
+    internal static bool AreEquivalent(
+        P12EJusticeRecordsOwnerSnapshot left,
+        P12EJusticeRecordsOwnerSnapshot right)
+    {
+        if (left == null || right == null
+            || !left.TryValidate(out _) || !right.TryValidate(out _)
+            || left.CapturedAbsoluteDay != right.CapturedAbsoluteDay)
+            return false;
+
+        P12EJusticeRecordsSnapshotSection leftRecords = left.Records;
+        P12EJusticeRecordsSnapshotSection rightRecords = right.Records;
+        if (leftRecords == null || rightRecords == null
+            || !string.Equals(leftRecords.SectionId, rightRecords.SectionId, StringComparison.Ordinal)
+            || leftRecords.SchemaVersion != rightRecords.SchemaVersion
+            || leftRecords.RecordCount != rightRecords.RecordCount
+            || leftRecords.Revision != rightRecords.Revision
+            || leftRecords.WantedRows.Count != rightRecords.WantedRows.Count
+            || leftRecords.SentenceRows.Count != rightRecords.SentenceRows.Count)
+            return false;
+
+        for (int index = 0; index < leftRecords.WantedRows.Count; index++)
+        {
+            P12EJusticeWantedSnapshotRow a = leftRecords.WantedRows[index];
+            P12EJusticeWantedSnapshotRow b = rightRecords.WantedRows[index];
+            if (a.Ordinal != b.Ordinal
+                || !string.Equals(a.TargetRuntimeId, b.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(a.TargetPersonIdValue, b.TargetPersonIdValue, StringComparison.Ordinal)
+                || !string.Equals(a.CityRuntimeId, b.CityRuntimeId, StringComparison.Ordinal)
+                || a.Bounty != b.Bounty || a.SentenceDays != b.SentenceDays
+                || a.IsResolved != b.IsResolved)
+                return false;
+        }
+
+        for (int index = 0; index < leftRecords.SentenceRows.Count; index++)
+        {
+            P12EJusticeSentenceSnapshotRow a = leftRecords.SentenceRows[index];
+            P12EJusticeSentenceSnapshotRow b = rightRecords.SentenceRows[index];
+            if (a.Ordinal != b.Ordinal
+                || !string.Equals(a.TargetRuntimeId, b.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(a.TargetPersonIdValue, b.TargetPersonIdValue, StringComparison.Ordinal)
+                || !string.Equals(a.CityRuntimeId, b.CityRuntimeId, StringComparison.Ordinal)
+                || a.WarrantOrdinal != b.WarrantOrdinal
+                || a.RemainingDays != b.RemainingDays
+                || a.FailedEscapeAttempts != b.FailedEscapeAttempts
+                || a.WasArrestedToday != b.WasArrestedToday)
+                return false;
+        }
+
         return true;
     }
 

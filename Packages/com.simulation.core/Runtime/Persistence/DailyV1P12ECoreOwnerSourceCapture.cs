@@ -25,8 +25,8 @@ internal interface IDailyV1P12ECoreOwnerCaptureBoundary
 /// <summary>
 /// Detached snapshots for the P12-E owners whose authorities already live in
 /// Core. Exact owners are selected from the token's census vector and captured
-/// here; Unity remains responsible for its Justice projections and
-/// CrimeSocial appraisal adapter.
+/// here; Unity remains responsible for the installed Justice projection
+/// check and the CrimeSocial appraisal adapter.
 /// </summary>
 internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
 {
@@ -41,6 +41,7 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
         P12EPoliticalClaimOwnerSnapshot politicalClaims,
         P12EPoliticalSupportOwnerSnapshot politicalSupport,
         P12EPoliticalDecisionOwnerSnapshot politicalDecisions,
+        P12EJusticeRecordsOwnerSnapshot justiceRecords,
         P12EMilitaryOwnerSnapshot military,
         PersistentConflictOwnerSnapshot conflicts,
         PersistentWarOwnerSnapshot wars,
@@ -54,6 +55,7 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
         PoliticalClaims = politicalClaims;
         PoliticalSupport = politicalSupport;
         PoliticalDecisions = politicalDecisions;
+        JusticeRecords = justiceRecords;
         Military = military;
         Conflicts = conflicts;
         Wars = wars;
@@ -66,6 +68,7 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
     internal P12EPoliticalClaimOwnerSnapshot PoliticalClaims { get; }
     internal P12EPoliticalSupportOwnerSnapshot PoliticalSupport { get; }
     internal P12EPoliticalDecisionOwnerSnapshot PoliticalDecisions { get; }
+    internal P12EJusticeRecordsOwnerSnapshot JusticeRecords { get; }
     internal P12EMilitaryOwnerSnapshot Military { get; }
     internal PersistentConflictOwnerSnapshot Conflicts { get; }
     internal PersistentWarOwnerSnapshot Wars { get; }
@@ -147,6 +150,22 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
             token, ownerSectionVector, continuationSaveOperation, legacyCaptureBoundary);
         try
         {
+            P12EJusticeRecordsOwnerSnapshot justiceRecords = null;
+            if (continuationSaveOperation != null
+                && !TryCaptureCoreJusticeRecords(
+                    continuationSaveOperation.Session?.OwnerGraph,
+                    persons,
+                    token,
+                    ownerSectionVector,
+                    out justiceRecords,
+                    out P12EJusticeSnapshotFailure justiceFailure))
+            {
+                failure = DailyV1P12ECoreOwnerSourceCaptureFailure.CaptureFailed;
+                diagnostic = "The selected Core Justice owner did not match its exact P12-E census snapshot contract: "
+                    + (justiceFailure?.Code.ToString() ?? P12EJusticeSnapshotFailureCode.InvalidOwnerValues.ToString()) + ".";
+                return false;
+            }
+
             if (!P12EInstitutionOfficeOwnerSnapshot.TryCapture(captureSource, token, ownerSectionVector,
                     out P12EInstitutionOfficeOwnerSnapshot institutionOffice, out _)
                 || !PropertyEstateOwnerSnapshot.TryCapture(properties, estates, token, ownerSectionVector,
@@ -183,7 +202,7 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
 
             snapshots = new DailyV1P12ECoreOwnerSourceSnapshots(
                 continuationSaveOperation,
-                institutionOffice, propertyEstate, faction, claims, support, decisions,
+                institutionOffice, propertyEstate, faction, claims, support, decisions, justiceRecords,
                 military, conflictSnapshot, warSnapshot, battleSnapshot);
             failure = DailyV1P12ECoreOwnerSourceCaptureFailure.None;
             return true;
@@ -245,6 +264,257 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
         }
         return true;
     }
+
+    private static bool TryCaptureCoreJusticeRecords(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore persons,
+        DailyCaptureEligibilityToken token,
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionVector,
+        out P12EJusticeRecordsOwnerSnapshot snapshot,
+        out P12EJusticeSnapshotFailure failure)
+    {
+        snapshot = null;
+        failure = P12EJusticeSnapshotFailure.Create(
+            P12EJusticeSnapshotFailureCode.InvalidCaptureContext,
+            "An exact Core Justice owner graph and completed capture token are required.");
+        DailyV1JusticeRecordsOwner owner = graph?.JusticeRecordsOwner;
+        if (owner == null || persons == null || token == null || ownerSectionVector == null
+            || !ReferenceEquals(graph.PersonStore, persons)
+            || !ReferenceEquals(token.OwnerSections, ownerSectionVector)
+            || token.AbsoluteDay < 0L || token.CompletedCoreSequence <= 0L
+            || token.MutationEpoch < 0L)
+            return false;
+
+        if (!TryFindUniqueSection(ownerSectionVector,
+                DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+                out OwnerSectionCensusSnapshot justiceWitness)
+            || !TryFindUniqueSection(ownerSectionVector,
+                DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+                out OwnerSectionCensusSnapshot receiptWitness)
+            || justiceWitness.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+            || justiceWitness.Role != OwnerSectionRole.Required
+            || justiceWitness.Cardinality < 0 || justiceWitness.Revision < 0L
+            || receiptWitness.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+            || receiptWitness.Role != OwnerSectionRole.Required
+            || receiptWitness.Cardinality != 1 || receiptWitness.Revision != 0L
+            || !ReferenceEquals(receiptWitness.OwnerInstanceIdentity, justiceWitness.OwnerInstanceIdentity))
+        {
+            failure = P12EJusticeSnapshotFailure.Create(
+                P12EJusticeSnapshotFailureCode.InvalidOwnerSectionVector,
+                "The exact Justice owner and its required exact-zero receipt witness are required.");
+            return false;
+        }
+
+        IReadOnlyList<DailyV1JusticeWantedRecordOwner> wanted = owner.WantedRecords;
+        IReadOnlyList<DailyV1JusticeSentenceOwner> sentences = owner.Sentences;
+        long capturedRevision = owner.Revision;
+        if (wanted == null || sentences == null || capturedRevision < 0L)
+        {
+            failure = P12EJusticeSnapshotFailure.Create(
+                P12EJusticeSnapshotFailureCode.InvalidOwnerValues,
+                "The exact Core Justice rows and nonnegative local revision are required.");
+            return false;
+        }
+
+        int recordCount;
+        try { recordCount = checked(wanted.Count + sentences.Count); }
+        catch (OverflowException)
+        {
+            failure = P12EJusticeSnapshotFailure.Create(
+                P12EJusticeSnapshotFailureCode.InvalidCardinality,
+                "Combined Justice row cardinality overflowed.");
+            return false;
+        }
+        if (justiceWitness.Cardinality != recordCount || justiceWitness.Revision != capturedRevision)
+        {
+            failure = P12EJusticeSnapshotFailure.Create(
+                P12EJusticeSnapshotFailureCode.InvalidOwnerSectionVector,
+                "The P12-B Justice witness does not match the exact Core owner cardinality and revision.");
+            return false;
+        }
+
+        try
+        {
+            List<P12EJusticeWantedSnapshotRow> wantedRows =
+                new List<P12EJusticeWantedSnapshotRow>(wanted.Count);
+            HashSet<DailyV1JusticeWantedRecordOwner> distinctWanted =
+                new HashSet<DailyV1JusticeWantedRecordOwner>();
+            for (int index = 0; index < wanted.Count; index++)
+            {
+                DailyV1JusticeWantedRecordOwner row = wanted[index];
+                if (row == null || !distinctWanted.Add(row)
+                    || !TryResolveCoreJusticeRoots(graph, persons, row.TargetRuntimeId,
+                        row.CityRuntimeId, out string personIdValue))
+                {
+                    failure = P12EJusticeSnapshotFailure.Create(
+                        P12EJusticeSnapshotFailureCode.InvalidReference,
+                        "A Core Justice wanted row has a duplicate owner or unresolved exact NPC, Person, or City binding.");
+                    return false;
+                }
+
+                wantedRows.Add(new P12EJusticeWantedSnapshotRow(
+                    index, row.TargetRuntimeId, personIdValue, row.CityRuntimeId,
+                    row.Bounty, row.SentenceDays, row.IsResolved));
+            }
+
+            List<P12EJusticeSentenceSnapshotRow> sentenceRows =
+                new List<P12EJusticeSentenceSnapshotRow>(sentences.Count);
+            HashSet<DailyV1JusticeSentenceOwner> distinctSentences =
+                new HashSet<DailyV1JusticeSentenceOwner>();
+            for (int index = 0; index < sentences.Count; index++)
+            {
+                DailyV1JusticeSentenceOwner row = sentences[index];
+                int warrantOrdinal = -1;
+                for (int wantedIndex = 0; wantedIndex < wanted.Count; wantedIndex++)
+                    if (ReferenceEquals(wanted[wantedIndex], row?.Warrant))
+                    {
+                        warrantOrdinal = wantedIndex;
+                        break;
+                    }
+
+                if (row == null || !distinctSentences.Add(row) || warrantOrdinal < 0
+                    || !TryResolveCoreJusticeRoots(graph, persons, row.TargetRuntimeId,
+                        row.CityRuntimeId, out string personIdValue))
+                {
+                    failure = P12EJusticeSnapshotFailure.Create(
+                        P12EJusticeSnapshotFailureCode.InvalidRelation,
+                        "A Core Justice sentence row has a duplicate owner, unresolved root binding, or non-exact warrant owner.");
+                    return false;
+                }
+
+                sentenceRows.Add(new P12EJusticeSentenceSnapshotRow(
+                    index, row.TargetRuntimeId, personIdValue, row.CityRuntimeId,
+                    warrantOrdinal, row.RemainingDays, row.FailedEscapeAttempts, row.WasArrestedToday));
+            }
+
+            P12EJusticeRecordsOwnerSnapshot candidate = new P12EJusticeRecordsOwnerSnapshot(
+                token.AbsoluteDay,
+                new P12EJusticeRecordsSnapshotSection(
+                    P12EJusticeRecordsSnapshotSection.CurrentSectionId,
+                    P12EJusticeRecordsOwnerSnapshot.CurrentSchemaVersion,
+                    recordCount,
+                    capturedRevision,
+                    wantedRows,
+                    sentenceRows));
+            if (!candidate.TryValidate(out failure)
+                || owner.Revision != capturedRevision
+                || !TryFindUniqueSection(ownerSectionVector,
+                    DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+                    out OwnerSectionCensusSnapshot finalJusticeWitness)
+                || !MatchesJusticeWitness(finalJusticeWitness, justiceWitness.OwnerInstanceIdentity,
+                    recordCount, capturedRevision)
+                || !TryFindUniqueSection(ownerSectionVector,
+                    DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+                    out OwnerSectionCensusSnapshot finalReceiptWitness)
+                || !MatchesExactZeroReceiptWitness(finalReceiptWitness, justiceWitness.OwnerInstanceIdentity))
+            {
+                snapshot = null;
+                if (failure?.Code == P12EJusticeSnapshotFailureCode.None)
+                    failure = P12EJusticeSnapshotFailure.Create(
+                        P12EJusticeSnapshotFailureCode.InvalidOwnerSectionVector,
+                        "Justice owner values or the exact-zero receipt witness changed during capture.");
+                return false;
+            }
+
+            snapshot = candidate;
+            failure = P12EJusticeSnapshotFailure.None;
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            snapshot = null;
+            failure = P12EJusticeSnapshotFailure.Create(
+                P12EJusticeSnapshotFailureCode.InvalidOwnerValues,
+                "Core Justice snapshot capture failed: " + exception.GetType().Name + ".");
+            return false;
+        }
+    }
+
+    private static bool TryResolveCoreJusticeRoots(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore persons,
+        string npcRuntimeId,
+        string cityRuntimeId,
+        out string personIdValue)
+    {
+        personIdValue = null;
+        if (graph == null || persons == null
+            || string.IsNullOrWhiteSpace(npcRuntimeId)
+            || string.IsNullOrWhiteSpace(cityRuntimeId))
+            return false;
+
+        DailyV1NpcRuntimeOwners matchedNpc = null;
+        int npcMatches = 0;
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+            if (npc != null && string.Equals(npc.RuntimeId, npcRuntimeId, StringComparison.Ordinal))
+            {
+                matchedNpc = npc;
+                npcMatches++;
+            }
+        if (npcMatches != 1 || !graph.ContainsExactNpcOwner(matchedNpc)) return false;
+
+        int cityMatches = 0;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            if (city != null && string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal)
+                && graph.ContainsExactCityOwner(city))
+                cityMatches++;
+        if (cityMatches != 1) return false;
+
+        if (!persons.TryGetByMaterializedNpcRuntimeId(npcRuntimeId, out PersonRuntime person))
+            return true;
+        if (person?.PersonId == null || !person.IsMaterialized
+            || !string.Equals(person.MaterializedNpcRuntimeId, npcRuntimeId, StringComparison.Ordinal)
+            || !persons.TryGet(person.PersonId, out PersonRuntime registeredPerson)
+            || !ReferenceEquals(registeredPerson, person))
+            return false;
+
+        personIdValue = person.PersonId.Value;
+        return !string.IsNullOrWhiteSpace(personIdValue);
+    }
+
+    private static bool TryFindUniqueSection(
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+        string sectionId,
+        out OwnerSectionCensusSnapshot match)
+    {
+        match = null;
+        if (sections == null || string.IsNullOrWhiteSpace(sectionId)) return false;
+        int matches = 0;
+        foreach (OwnerSectionCensusSnapshot section in sections)
+            if (string.Equals(section?.SectionId, sectionId, StringComparison.Ordinal))
+            {
+                match = section;
+                matches++;
+            }
+        return matches == 1;
+    }
+
+    private static bool MatchesJusticeWitness(
+        OwnerSectionCensusSnapshot witness,
+        object exactOwnerIdentity,
+        int cardinality,
+        long revision) => witness != null
+        && string.Equals(witness.SectionId,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId, StringComparison.Ordinal)
+        && witness.SchemaVersion == DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+        && witness.Role == OwnerSectionRole.Required
+        && ReferenceEquals(witness.OwnerInstanceIdentity, exactOwnerIdentity)
+        && witness.Cardinality == cardinality
+        && witness.Revision == revision;
+
+    private static bool MatchesExactZeroReceiptWitness(
+        OwnerSectionCensusSnapshot witness,
+        object exactOwnerIdentity) => witness != null
+        && string.Equals(witness.SectionId,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId, StringComparison.Ordinal)
+        && witness.SchemaVersion == DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+        && witness.Role == OwnerSectionRole.Required
+        && ReferenceEquals(witness.OwnerInstanceIdentity, exactOwnerIdentity)
+        && witness.Cardinality == 1
+        && witness.Revision == 0L;
 
     private sealed class CoreCaptureSource :
         IP12EInstitutionOfficeCaptureSource,
@@ -329,6 +599,12 @@ internal static class DailyV1P12ECoreOwnerSectionEncoder
                 out IReadOnlyList<P12AOwnerSection> conflicts, out result))
             return false;
 
+        P12AOwnerSection justice = null;
+        if (snapshots.JusticeRecords != null
+            && !P12EJusticeRecordsOwnerCodec.TryEncode(
+                snapshots.JusticeRecords, out justice, out result))
+            return false;
+
         List<P12AOwnerSection> encoded = new List<P12AOwnerSection>
         {
             institutions, offices, incumbencies, tenures,
@@ -339,6 +615,7 @@ internal static class DailyV1P12ECoreOwnerSectionEncoder
         };
         encoded.AddRange(military);
         encoded.AddRange(conflicts);
+        if (justice != null) encoded.Add(justice);
         encoded.Sort((left, right) =>
             StringComparer.Ordinal.Compare(left?.Id, right?.Id));
 

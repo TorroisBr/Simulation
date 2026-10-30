@@ -4807,6 +4807,83 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(epochAfterSecond, Is.GreaterThan(epochAfterFirst));
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure secondCensusFailure), Is.True,
             secondCensusFailure.ToString());
+
+        DailyV1Application application = ReadPrivateField<DailyV1Application>(host, "dailyV1Application");
+        DailyV1ActiveRuntimeSession coreSession = session.CoreRuntimeSession;
+        Assert.That(application, Is.Not.Null);
+        Assert.That(coreSession?.OwnerGraph, Is.Not.Null);
+        Assert.That(application.TryBeginContinuationSaveOperation(
+                coreSession, out DailyV1P12GContinuationSaveOperation saveOperation,
+                out DailyCaptureEligibilityFailure beginFailure), Is.True,
+            beginFailure.ToString());
+        using (saveOperation)
+        {
+            DailyV1P12ECoreOwnerSourceSnapshots coreSources = saveOperation.CoreP12EOwnerSources;
+            Assert.That(coreSources?.JusticeRecords, Is.Not.Null);
+            DailyV1JusticeRecordsOwner coreJustice = coreSession.OwnerGraph.JusticeRecordsOwner;
+            P12EJusticeRecordsSnapshotSection records = coreSources.JusticeRecords.Records;
+            Assert.That(records.Revision, Is.EqualTo(coreJustice.Revision));
+            Assert.That(records.WantedRows, Has.Count.EqualTo(1));
+            Assert.That(records.SentenceRows, Has.Count.EqualTo(1));
+            Assert.That(records.RecordCount, Is.EqualTo(2));
+            Assert.That(records.WantedRows[0].Ordinal, Is.Zero);
+            Assert.That(records.WantedRows[0].TargetRuntimeId, Is.EqualTo(target.RuntimeId));
+            Assert.That(records.WantedRows[0].CityRuntimeId, Is.EqualTo(target.CurrentCity.RuntimeId));
+            Assert.That(records.SentenceRows[0].Ordinal, Is.Zero);
+            Assert.That(records.SentenceRows[0].WarrantOrdinal, Is.Zero);
+            Assert.That(records.SentenceRows[0].TargetRuntimeId, Is.EqualTo(target.RuntimeId));
+            Assert.That(records.SentenceRows[0].CityRuntimeId, Is.EqualTo(target.CurrentCity.RuntimeId));
+            Assert.That(records.SentenceRows[0].RemainingDays, Is.EqualTo(sentence.RemainingDays));
+            Assert.That(records.SentenceRows[0].FailedEscapeAttempts, Is.EqualTo(sentence.FailedEscapeAttempts));
+            Assert.That(records.SentenceRows[0].WasArrestedToday, Is.EqualTo(sentence.WasArrestedToday));
+
+            OwnerSectionCensusSnapshot justiceWitness = saveOperation.SourceWitness.TokenOwnerSections.Single(
+                section => section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+            OwnerSectionCensusSnapshot receiptWitness = saveOperation.SourceWitness.TokenOwnerSections.Single(
+                section => section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+            Assert.That(justiceWitness.OwnerInstanceIdentity,
+                Is.SameAs(runtime.JusticeSystemForWorldBoundary));
+            Assert.That(justiceWitness.Cardinality, Is.EqualTo(records.RecordCount));
+            Assert.That(justiceWitness.Revision, Is.EqualTo(records.Revision));
+            Assert.That(receiptWitness.OwnerInstanceIdentity, Is.SameAs(justiceWitness.OwnerInstanceIdentity));
+            Assert.That(receiptWitness.Cardinality, Is.EqualTo(1));
+            Assert.That(receiptWitness.Revision, Is.Zero);
+            Assert.That(runtime.JusticeSystemForWorldBoundary.CoreOwner, Is.SameAs(coreJustice));
+
+            Assert.That(saveOperation.TryEncodeCoreP12EOwnerSections(
+                    saveOperation.SourceWitness.Token.AbsoluteDay,
+                    out IReadOnlyList<P12AOwnerSection> coreSections,
+                    out P12AResult encodeResult), Is.True,
+                encodeResult?.SectionCode ?? encodeResult?.Code.ToString());
+            P12AOwnerSection coreJusticeSection = coreSections.Single(section =>
+                section.Id == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+            Assert.That(coreJusticeSection.Revision, Is.EqualTo(records.Revision));
+            Assert.That(coreJusticeSection.Rows, Has.Count.EqualTo(records.RecordCount));
+
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                    session, session.AdmissionContext, saveOperation,
+                    out P12AContinuationImage image,
+                    out SimulationActiveSession restored,
+                    out P12GDailyV1RestoreFailure captureFailure,
+                    out string captureDiagnostic), Is.True,
+                captureFailure + ": " + captureDiagnostic);
+            Assert.That(restored, Is.Not.Null);
+            P12AOwnerSection imageJusticeSection = image.Sections.Single(section =>
+                section.Id == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+            Assert.That(imageJusticeSection.Major, Is.EqualTo(coreJusticeSection.Major));
+            Assert.That(imageJusticeSection.Role, Is.EqualTo(coreJusticeSection.Role));
+            Assert.That(imageJusticeSection.Revision, Is.EqualTo(coreJusticeSection.Revision));
+            Assert.That(imageJusticeSection.Rows.Count, Is.EqualTo(coreJusticeSection.Rows.Count));
+            for (int index = 0; index < coreJusticeSection.Rows.Count; index++)
+            {
+                Assert.That(imageJusticeSection.Rows[index].OwnerKey,
+                    Is.EqualTo(coreJusticeSection.Rows[index].OwnerKey));
+                Assert.That(imageJusticeSection.Rows[index].Revision,
+                    Is.EqualTo(coreJusticeSection.Rows[index].Revision));
+                Assert.That(imageJusticeSection.Rows[index].Payload,
+                    Is.EqualTo(coreJusticeSection.Rows[index].Payload));
+            }
+        }
     }
 
     [Test]
@@ -5019,6 +5096,27 @@ public sealed class SimulationRuntimeAdmissionTests
                     operation.CoreP12EOwnerSources;
                 Assert.That(firstP12ESources, Is.Not.Null,
                     "P12-E Core sources must be captured and cached by the active save operation.");
+                P12EJusticeRecordsOwnerSnapshot coreJusticeSnapshot = firstP12ESources.JusticeRecords;
+                Assert.That(coreJusticeSnapshot, Is.Not.Null,
+                    "The active Core save operation must capture Justice from its selected owner graph.");
+                Assert.That(coreJusticeSnapshot.Records.Revision,
+                    Is.EqualTo(sourceCoreSession.OwnerGraph.JusticeRecordsOwner.Revision));
+                Assert.That(coreJusticeSnapshot.Records.RecordCount,
+                    Is.EqualTo(coreJusticeSnapshot.Records.WantedRows.Count
+                        + coreJusticeSnapshot.Records.SentenceRows.Count));
+                OwnerSectionCensusSnapshot justiceRecordsWitness =
+                    operation.SourceWitness.TokenOwnerSections.Single(section =>
+                        section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+                OwnerSectionCensusSnapshot justiceReceiptWitness =
+                    operation.SourceWitness.TokenOwnerSections.Single(section =>
+                        section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+                JusticeSystem exactJusticeProjection = restoredSession.Runtime.JusticeSystemForWorldBoundary;
+                Assert.That(justiceRecordsWitness.OwnerInstanceIdentity, Is.SameAs(exactJusticeProjection));
+                Assert.That(justiceReceiptWitness.OwnerInstanceIdentity, Is.SameAs(exactJusticeProjection));
+                Assert.That(justiceReceiptWitness.Cardinality, Is.EqualTo(1));
+                Assert.That(justiceReceiptWitness.Revision, Is.Zero);
+                Assert.That(exactJusticeProjection.CoreOwner,
+                    Is.SameAs(sourceCoreSession.OwnerGraph.JusticeRecordsOwner));
                 Assert.That(operation.TryCaptureCoreP12EOwnerSources(
                         operation.SourceWitness.Token,
                         operation.SourceWitness.TokenOwnerSections,
