@@ -320,34 +320,55 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetPersonNpcGenealogyBindingsValidated);
 
-            if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> targetSections,
-                    out long targetEpoch, out ContinuationCensusFailure censusFailure))
-            {
-                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
-                diagnostic = "The private target did not produce a complete quiescent owner vector: "
-                    + censusFailure + ".";
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorCaptured);
-
-            bool imageOwnerVectorValidated;
+            IReadOnlyList<OwnerSectionCensusSnapshot> targetSections;
+            long targetEpoch;
             if (application != null)
             {
-                imageOwnerVectorValidated = application.TryValidateRestoredImageOwnerVector(
-                    imageCensus, targetSections, replacementOperation?.ExpectedSession,
-                    replacementOperation, out _, out diagnostic);
+                if (candidate.CoreRuntimeSession == null
+                    || !application.TryCaptureAndValidateRestoredImageOwnerVector(
+                        candidate.CoreRuntimeSession,
+                        targetRuntime,
+                        imageCensus,
+                        replacementOperation?.ExpectedSession,
+                        replacementOperation,
+                        stage => stageObserver?.Invoke(
+                            stage == DailyV1RestoredImageOwnerVectorStage.Captured
+                                ? P12GDailyV1RestoreStage.TargetOwnerVectorCaptured
+                                : P12GDailyV1RestoreStage.TargetOwnerVectorValidated),
+                        out targetSections,
+                        out targetEpoch,
+                        out _,
+                        out diagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                    return false;
+                }
             }
             else
             {
-                imageOwnerVectorValidated = P12GDailyV1OwnerVector.TryValidateRestoredImageCandidate(
-                    imageCensus, targetSections, out _, out diagnostic);
+                if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                        out targetSections, out targetEpoch,
+                        out ContinuationCensusFailure initialCensusFailure))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                    diagnostic = "The private target did not produce a complete quiescent owner vector: "
+                        + initialCensusFailure + ".";
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorCaptured);
+
+                if (!P12GDailyV1OwnerVector.TryValidateRestoredImageCandidate(
+                        imageCensus, targetSections, out _, out diagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorValidated);
             }
 
             if (!TryValidateDailyV1ExpeditionExactZero(candidate.Composition, targetSections,
                     out diagnostic)
                 || !TryValidateAllocatorHighWater(candidate, out diagnostic)
-                || !imageOwnerVectorValidated
                 || !TryValidateTargetSentinels(candidate.Composition, targetSections, out diagnostic)
                 || !TryValidatePoliticalKnowledgeBindings(
                     stagedE.UnresolvedPoliticalKnowledgeBindings, targetRuntime, out diagnostic))
@@ -368,7 +389,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetSpatialInvariantsValidated);
 
-            if (!targetRuntime.TryAssessNpcRosterCensus(out censusFailure)
+            if (!targetRuntime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure)
                 || !TryValidateTravelPartyBindings(candidate, out diagnostic))
             {
                 failure = P12GDailyV1RestoreFailure.BindingValidationFailed;

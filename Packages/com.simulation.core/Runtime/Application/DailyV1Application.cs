@@ -12,6 +12,12 @@ internal enum DailyV1P12FCoreOwnerRestoreStep
     Expeditions = 4
 }
 
+internal enum DailyV1RestoredImageOwnerVectorStage : byte
+{
+    Captured = 1,
+    Validated = 2
+}
+
 /// <summary>Private selected Core owner candidates staged together for P12-F.</summary>
 internal sealed class DailyV1P12FCoreOwnerRestoreStage
 {
@@ -1522,6 +1528,68 @@ internal sealed class DailyV1Application
 
         return DailyV1RestoredOwnerVectorContract.TryValidateRestoredImageCandidate(
             imageCensus, targetOwnerSections, out failure, out diagnostic);
+    }
+
+    /// <summary>
+    /// Runs the restored image-to-target owner-vector gate as one application
+    /// operation. The host contributes only its live census port; this
+    /// application verifies the exact staging reservation and owns the
+    /// comparison against the persisted image before target composition can
+    /// proceed to restored-boundary finalization.
+    /// </summary>
+    internal bool TryCaptureAndValidateRestoredImageOwnerVector(
+        DailyV1ActiveRuntimeSession candidateSession,
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts,
+        P12ADailyV1Census imageCensus,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        Action<DailyV1RestoredImageOwnerVectorStage> stageObserver,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> targetOwnerSections,
+        out long targetMutationEpoch,
+        out P12GDailyV1OwnerVectorFailure failure,
+        out string diagnostic)
+    {
+        targetOwnerSections = null;
+        targetMutationEpoch = 0L;
+        failure = P12GDailyV1OwnerVectorFailure.None;
+        diagnostic = null;
+
+        if (!HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+        {
+            failure = P12GDailyV1OwnerVectorFailure.OwnerVectorChanged;
+            diagnostic = "The application no longer holds the exact restored-continuation staging authority.";
+            return false;
+        }
+
+        if (candidateSession == null || hostPorts == null
+            || candidateSession.ExecutionBoundaryState == null
+            || !ReferenceEquals(candidateSession.ExecutionBoundaryState, hostPorts.ExecutionState))
+        {
+            failure = P12GDailyV1OwnerVectorFailure.OwnerVectorChanged;
+            diagnostic = "The private restored candidate does not share its exact Core execution state with the host census port.";
+            return false;
+        }
+
+        if (!hostPorts.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                out targetOwnerSections, out targetMutationEpoch, out diagnostic)
+            || targetOwnerSections == null)
+        {
+            targetOwnerSections = null;
+            targetMutationEpoch = 0L;
+            failure = P12GDailyV1OwnerVectorFailure.MissingTargetVector;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The private target did not produce a complete quiescent owner vector.";
+            return false;
+        }
+
+        stageObserver?.Invoke(DailyV1RestoredImageOwnerVectorStage.Captured);
+        if (!TryValidateRestoredImageOwnerVector(
+                imageCensus, targetOwnerSections, expectedSession, replacementOperation,
+                out failure, out diagnostic))
+            return false;
+
+        stageObserver?.Invoke(DailyV1RestoredImageOwnerVectorStage.Validated);
+        return true;
     }
 
     /// <summary>
