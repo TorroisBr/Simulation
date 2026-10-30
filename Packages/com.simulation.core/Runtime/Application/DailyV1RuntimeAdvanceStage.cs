@@ -385,12 +385,156 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
+                executionState.SelectedRuntimeOwnerGraph,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedOwnerSections,
+                out _))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        ownerSections = coreOwnedOwnerSections;
+
         failure = DailyCaptureEligibilityFailure.None;
         return true;
     }
 
 
     public void FaultRuntimeAdmission() => hostPorts.FaultRuntimeAdmission();
+}
+
+/// <summary>
+/// Rebinds the selected NPC Inventory and MoneyAccount rows from the exact
+/// Core owner graph after the host has captured and reconciled its complete
+/// profile census. When the complete census includes NPC rows beyond the Core
+/// graph, it preserves both whole-roster host families as the mixed-roster
+/// compatibility path instead of combining different family authorities.
+/// </summary>
+internal static class DailyV1SelectedRuntimeOwnerCensusSource
+{
+    internal static bool TryRebindCoreOwnedNpcSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        diagnostic = null;
+        if (graph == null || hostSections == null)
+        {
+            diagnostic = "The selected Core census requires an owner graph and host census rows.";
+            return false;
+        }
+
+        OwnerSectionCensusSnapshot[] copied = new OwnerSectionCensusSnapshot[hostSections.Count];
+        Dictionary<string, int> indexes = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < hostSections.Count; i++)
+        {
+            OwnerSectionCensusSnapshot section = hostSections[i];
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !indexes.TryAdd(section.SectionId, i))
+            {
+                diagnostic = "The host census contains a missing or duplicate owner-section identity.";
+                return false;
+            }
+            copied[i] = section;
+        }
+
+        int inventoryRows = CountFamilyRows(
+            copied, DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix);
+        int moneyAccountRows = CountFamilyRows(
+            copied, DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix);
+        if (inventoryRows != moneyAccountRows)
+        {
+            diagnostic = "The complete host census has inconsistent NPC Inventory and MoneyAccount family cardinality.";
+            return false;
+        }
+        if (inventoryRows > graph.Npcs.Count)
+        {
+            ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers;
+        try
+        {
+            List<IOwnerSectionCensusProvider> selected = new List<IOwnerSectionCensusProvider>();
+            selected.AddRange(DailyV1NpcOwnerCensusProviders.CreateInventoryProviders(graph.Npcs));
+            selected.AddRange(DailyV1NpcOwnerCensusProviders.CreateMoneyAccountProviders(graph.Npcs));
+            providers = selected.AsReadOnly();
+        }
+        catch (ArgumentException)
+        {
+            diagnostic = "The selected Core NPC census providers could not bind to the owner graph.";
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            diagnostic = "The selected Core NPC census providers could not bind to the owner graph.";
+            return false;
+        }
+
+        HashSet<string> selectedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (IOwnerSectionCensusProvider provider in providers)
+        {
+            OwnerSectionCensusWitness witness;
+            try
+            {
+                witness = provider?.GetCurrentCensus();
+            }
+            catch (InvalidOperationException)
+            {
+                diagnostic = "A selected Core NPC census provider failed to read its owner.";
+                return false;
+            }
+
+            if (witness == null || !selectedSectionIds.Add(witness.SectionId)
+                || !indexes.TryGetValue(witness.SectionId, out int index))
+            {
+                diagnostic = witness == null
+                    ? "A selected Core NPC census provider returned no witness."
+                    : "The host census is missing or duplicates selected Core section " + witness.SectionId + ".";
+                return false;
+            }
+
+            OwnerSectionCensusSnapshot hostSection = copied[index];
+            if (hostSection.Role != OwnerSectionRole.Required
+                || hostSection.SchemaVersion != witness.SchemaVersion
+                || !ReferenceEquals(hostSection.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+                || hostSection.Cardinality != witness.Cardinality
+                || hostSection.Revision != witness.Revision)
+            {
+                diagnostic = "The host census differs from the exact selected Core owner at " + witness.SectionId + ".";
+                return false;
+            }
+
+            copied[index] = new OwnerSectionCensusSnapshot(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision);
+        }
+
+        ownerSections = Array.AsReadOnly(copied);
+        diagnostic = null;
+        return true;
+    }
+
+    private static int CountFamilyRows(
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+        string sectionPrefix)
+    {
+        int count = 0;
+        for (int i = 0; i < sections.Count; i++)
+            if (sections[i].SectionId.StartsWith(sectionPrefix, StringComparison.Ordinal))
+                count++;
+        return count;
+    }
 }
 
 /// <summary>

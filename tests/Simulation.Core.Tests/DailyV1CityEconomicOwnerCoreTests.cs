@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using System.Collections.Generic;
 using System.Linq;
@@ -368,6 +369,143 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         Assert.That(accountAfter.OwnerInstanceIdentity, Is.SameAs(alpha.MoneyAccount));
         Assert.That(accountAfter.Cardinality, Is.EqualTo(1));
         Assert.That(accountAfter.Revision, Is.EqualTo(accountBefore.Revision + 2));
+    }
+
+    [Test]
+    public void SelectedRuntimeCensusRebindsInventoryAndMoneyRowsFromItsExactCoreGraph()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(
+            out DailyV1NpcRuntimeOwners npc);
+        IReadOnlyList<IOwnerSectionCensusProvider> providers = CreateCoreInventoryAndAccountProviders(graph);
+        OwnerSectionCensusSnapshot[] hostRows = CreateRequiredSnapshots(providers);
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
+            graph, hostRows, out IReadOnlyList<OwnerSectionCensusSnapshot> rebound,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(rebound, Has.Count.EqualTo(2));
+        Assert.That(rebound[0], Is.Not.SameAs(hostRows[0]));
+        Assert.That(rebound[0].OwnerInstanceIdentity, Is.SameAs(npc.Inventory));
+        Assert.That(rebound[1], Is.Not.SameAs(hostRows[1]));
+        Assert.That(rebound[1].OwnerInstanceIdentity, Is.SameAs(npc.MoneyAccount));
+        Assert.That(rebound[0].Role, Is.EqualTo(OwnerSectionRole.Required));
+        Assert.That(rebound[1].Role, Is.EqualTo(OwnerSectionRole.Required));
+    }
+
+    [Test]
+    public void SelectedRuntimeCensusKeepsWholeRosterRowsForMixedHostComposition()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out _);
+        IReadOnlyList<IOwnerSectionCensusProvider> providers = CreateCoreInventoryAndAccountProviders(graph);
+        OwnerSectionCensusSnapshot[] selectedRows = CreateRequiredSnapshots(providers);
+        object compatibilityInventoryOwner = new object();
+        object compatibilityMoneyAccountOwner = new object();
+        OwnerSectionCensusSnapshot[] hostRows = selectedRows.Concat(new[]
+        {
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "compatibility-npc",
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, compatibilityInventoryOwner, 0, 3L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + "compatibility-npc",
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, compatibilityMoneyAccountOwner, 1, 4L)
+        }).ToArray();
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
+            graph, hostRows, out IReadOnlyList<OwnerSectionCensusSnapshot> preserved,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(preserved, Has.Count.EqualTo(hostRows.Length));
+        for (int i = 0; i < hostRows.Length; i++)
+            Assert.That(preserved[i], Is.SameAs(hostRows[i]),
+                "A mixed roster must retain one complete host-owned census for each NPC family.");
+
+        OwnerSectionCensusSnapshot[] incompleteHostRows = selectedRows.Concat(new[]
+        {
+            hostRows[2]
+        }).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
+            graph, incompleteHostRows, out _, out _), Is.False,
+            "Inventory and MoneyAccount must cover the same mixed whole roster.");
+    }
+
+    [Test]
+    public void SelectedRuntimeCensusRejectsMissingDuplicateOrSubstitutedCoreOwnerRows()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out _);
+        IReadOnlyList<IOwnerSectionCensusProvider> providers = CreateCoreInventoryAndAccountProviders(graph);
+        OwnerSectionCensusSnapshot[] hostRows = CreateRequiredSnapshots(providers);
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
+            graph, new[] { hostRows[0] }, out _, out _), Is.False);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
+            graph, new[] { hostRows[0], hostRows[0], hostRows[1] }, out _, out _), Is.False);
+
+        OwnerSectionCensusSnapshot substituted = new OwnerSectionCensusSnapshot(
+            hostRows[0].SectionId, hostRows[0].SchemaVersion, hostRows[0].Role,
+            new object(), hostRows[0].Cardinality, hostRows[0].Revision);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
+            graph, new[] { substituted, hostRows[1] }, out _, out _), Is.False);
+    }
+
+    [Test]
+    public void SelectedRuntimeCensusRejectsStaleInventoryCardinalityAndRevision()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition definition = definitions.Npcs.Values.First();
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-runtime", definitions, definition, 8f, out DailyV1NpcRuntimeOwners npc), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { npc },
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        IReadOnlyList<IOwnerSectionCensusProvider> providers = CreateCoreInventoryAndAccountProviders(graph);
+        OwnerSectionCensusSnapshot[] staleRows = CreateRequiredSnapshots(providers);
+
+        Assert.That(npc.Inventory.TryAddItem(definitions.Items.Values.First(), 1, 1f), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
+            graph, staleRows, out _, out _), Is.False,
+            "The Core capture boundary must reject a host row captured before the selected owner revision changed.");
+
+        OwnerSectionCensusSnapshot[] staleAccountRows = CreateRequiredSnapshots(providers);
+        Assert.That(npc.MoneyAccount.TryCredit(1f), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
+            graph, staleAccountRows, out _, out _), Is.False,
+            "The Core capture boundary must reject a host row captured before the selected MoneyAccount revision changed.");
+    }
+
+    private static DailyV1SelectedRuntimeOwnerGraph CreateSingleNpcGraph(
+        out DailyV1NpcRuntimeOwners npc)
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition definition = definitions.Npcs.Values.First();
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "npc-runtime", definitions, definition, 8f, out npc), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, Array.Empty<DailyV1CityRuntimeOwners>(), new[] { npc },
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        return graph;
+    }
+
+    private static IReadOnlyList<IOwnerSectionCensusProvider> CreateCoreInventoryAndAccountProviders(
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        List<IOwnerSectionCensusProvider> providers = new List<IOwnerSectionCensusProvider>();
+        providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateInventoryProviders(graph.Npcs));
+        providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateMoneyAccountProviders(graph.Npcs));
+        return providers;
+    }
+
+    private static OwnerSectionCensusSnapshot[] CreateRequiredSnapshots(
+        IReadOnlyList<IOwnerSectionCensusProvider> providers)
+    {
+        OwnerSectionCensusSnapshot[] rows = new OwnerSectionCensusSnapshot[providers.Count];
+        for (int i = 0; i < providers.Count; i++)
+        {
+            OwnerSectionCensusWitness witness = providers[i].GetCurrentCensus();
+            rows[i] = new OwnerSectionCensusSnapshot(
+                witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision);
+        }
+        return rows;
     }
 
     [Test]
