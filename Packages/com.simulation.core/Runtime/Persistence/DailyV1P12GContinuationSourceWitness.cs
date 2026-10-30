@@ -259,6 +259,46 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
         return true;
     }
 
+    internal bool TryEncodeCoreP12DOwnerSections(
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out bool includesNpcOwnerSections,
+        out P12AResult result)
+    {
+        sections = null;
+        includesNpcOwnerSections = false;
+        result = new P12AResult(P12AResultCode.CaptureRejected);
+        if (!IsActive || !TryRevalidate(out _)) return false;
+
+        DailyV1P12GCoreBoundCityOwnerSources cities = CoreCityOwnerSources;
+        DailyV1P12GCoreBoundDemographicOwnerSources demographics = CoreDemographicOwnerSources;
+        DailyV1P12GCoreBoundSpatialOwnerSources spatial = CoreSpatialOwnerSources;
+        DailyV1P12GCoreBoundNpcOwnerSources npcs = CoreNpcOwnerSources;
+        if (cities == null || !cities.IsFor(this)
+            || demographics == null || !demographics.IsFor(this)
+            || spatial == null || !spatial.IsFor(this)
+            || (npcs != null && !npcs.IsFor(this)))
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12d.core-owner-sources");
+            return false;
+        }
+
+        if (!DailyV1P12DCoreOwnerSectionEncoder.TryEncode(
+                cities, demographics, spatial, npcs,
+                SourceWitness.TokenOwnerSections, out sections, out result))
+            return false;
+
+        if (!TryRevalidate(out _))
+        {
+            sections = null;
+            result = new P12AResult(P12AResultCode.CaptureRejected);
+            return false;
+        }
+
+        includesNpcOwnerSections = npcs != null;
+        return true;
+    }
+
     internal bool TryCaptureCoreCausalRootSources(
         out DailyV1P12GCoreBoundCausalRootSources sources,
         out DailyV1P12GCoreBoundCausalRootCaptureFailure failure,

@@ -963,12 +963,16 @@ internal static partial class P12GDailyV1RestoreCoordinator
         bool composed;
         if (continuationSaveOperation != null)
         {
-            if (!continuationSaveOperation.TryEncodeCoreP12FOwnerSections(
+            if (!continuationSaveOperation.TryEncodeCoreP12DOwnerSections(
+                    out IReadOnlyList<P12AOwnerSection> coreP12DSections,
+                    out bool coreP12DIncludesNpcRows, out result)
+                || !continuationSaveOperation.TryEncodeCoreP12FOwnerSections(
                     out IReadOnlyList<P12AOwnerSection> coreP12FSections, out result)
                 || !P12CRuntimeIdentityOwnerCaptureAdapter.TryCapture(sourceSession.IdentityRegistry,
                     out P12CRuntimeIdentityOwnerSnapshot identitySnapshot)
-                || !P12ADailyV1OwnerSectionEncoder.TryEncodeWithCoreP12FSections(
-                    ownerSections, identitySnapshot, d, e, coreP12FSections,
+                || !P12ADailyV1OwnerSectionEncoder.TryEncodeWithCoreP12DOwnerSections(
+                    ownerSections, identitySnapshot, d, e, coreP12DSections,
+                    coreP12DIncludesNpcRows, coreP12FSections,
                     token.AbsoluteDay,
                     out IReadOnlyList<P12AOwnerSection> ownerSectionsEncoded, out result))
             {

@@ -870,6 +870,100 @@ internal sealed class DailyV1P12GCoreBoundNpcOwnerSources
 }
 
 /// <summary>
+/// Encodes P12-D owner sections from the immutable sources bound to the
+/// active Core continuation-save operation. NPC rows are included only when
+/// the selected Core graph covers the complete admitted roster; mixed-roster
+/// hosts retain the existing Unity projection fallback for those rows.
+/// </summary>
+internal static class DailyV1P12DCoreOwnerSectionEncoder
+{
+    internal static bool TryEncode(
+        DailyV1P12GCoreBoundCityOwnerSources cities,
+        DailyV1P12GCoreBoundDemographicOwnerSources demographics,
+        DailyV1P12GCoreBoundSpatialOwnerSources spatial,
+        DailyV1P12GCoreBoundNpcOwnerSources npcs,
+        IReadOnlyList<OwnerSectionCensusSnapshot> census,
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
+        sections = null;
+        result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        if (cities?.Cities == null || cities.Cities.Count == 0
+            || demographics?.PersonSnapshot?.Rows == null
+            || demographics.GenealogySnapshot?.Records == null
+            || spatial?.Snapshot == null || census == null
+            || (npcs != null && (npcs.DRows == null || npcs.FRows == null
+                || npcs.DRows.Count != npcs.FRows.Count)))
+            return false;
+
+        List<P12AOwnerSection> encoded = new List<P12AOwnerSection>();
+        foreach (DailyV1P12GCoreCityOwnerSource city in cities.Cities)
+        {
+            if (city?.Sections == null || city.Sections.Count != 4)
+                return Fail(P12AResultCode.InvalidOwnerValue, null, out result);
+            encoded.AddRange(city.Sections);
+        }
+
+        if (!P12ASpatialNetworkOwnerCodec.TryEncode(spatial.Snapshot,
+                out P12AOwnerSection locations, out P12AOwnerSection routes, out result)
+            || !P12APersonStoreOwnerCodec.TryEncode(demographics.PersonSnapshot,
+                out P12AOwnerSection membership, out P12AOwnerSection bindings, out result)
+            || !P12AGenealogyOwnerCodec.TryEncode(demographics.GenealogySnapshot,
+                out P12AOwnerSection genealogy, out result))
+            return false;
+
+        encoded.Add(locations);
+        encoded.Add(routes);
+        encoded.Add(membership);
+        encoded.Add(bindings);
+        encoded.Add(genealogy);
+        foreach (PersonStoreOwnerSnapshotRow person in demographics.PersonSnapshot.Rows)
+        {
+            if (!P12APersonLifeResidenceOwnerCodec.TryEncode(person,
+                    out P12AOwnerSection lifeResidence, out result))
+                return false;
+            encoded.Add(lifeResidence);
+        }
+
+        if (npcs != null)
+        {
+            for (int index = 0; index < npcs.DRows.Count; index++)
+            {
+                if (!P12ANpcOwnerCodec.TryEncode(npcs.DRows[index], npcs.FRows[index], census,
+                        out IReadOnlyList<P12AOwnerSection> npcSections, out result)
+                    || npcSections == null)
+                    return false;
+                encoded.AddRange(npcSections);
+            }
+        }
+
+        encoded.Sort((left, right) =>
+            StringComparer.Ordinal.Compare(left?.Id, right?.Id));
+        for (int index = 0; index < encoded.Count; index++)
+        {
+            P12AOwnerSection section = encoded[index];
+            if (section == null || string.IsNullOrWhiteSpace(section.Id)
+                || section.Role != OwnerSectionRole.Required
+                || (index > 0 && string.Equals(encoded[index - 1].Id,
+                    section.Id, StringComparison.Ordinal)))
+                return Fail(P12AResultCode.MissingOrDuplicateSection,
+                    section?.Id, out result);
+        }
+
+        sections = encoded.AsReadOnly();
+        result = null;
+        return true;
+    }
+
+    private static bool Fail(P12AResultCode code, string sectionCode,
+        out P12AResult result)
+    {
+        result = new P12AResult(code, sectionCode);
+        return false;
+    }
+}
+
+/// <summary>
 /// Encodes P12-F sections from the exact immutable Core owner snapshots bound
 /// to one active continuation-save operation.
 /// </summary>

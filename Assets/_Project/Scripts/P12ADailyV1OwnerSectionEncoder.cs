@@ -13,7 +13,7 @@ internal static class P12ADailyV1OwnerSectionEncoder
         out IReadOnlyList<P12AOwnerSection> sections,
         out P12AResult result)
     {
-        return TryEncode(census, runtimeIdentity, d, e, f, null, capturedDay,
+        return TryEncode(census, runtimeIdentity, d, e, f, null, false, null, capturedDay,
             out sections, out result);
     }
 
@@ -27,7 +27,24 @@ internal static class P12ADailyV1OwnerSectionEncoder
         out IReadOnlyList<P12AOwnerSection> sections,
         out P12AResult result)
     {
-        return TryEncode(census, runtimeIdentity, d, e, null, coreP12FSections,
+        return TryEncode(census, runtimeIdentity, d, e, null, null, false, coreP12FSections,
+            capturedDay, out sections, out result);
+    }
+
+    internal static bool TryEncodeWithCoreP12DOwnerSections(
+        IReadOnlyList<OwnerSectionCensusSnapshot> census,
+        P12CRuntimeIdentityOwnerSnapshot runtimeIdentity,
+        P12DDailyV1OwnerPackage d,
+        P12EDailyV1OwnerPackage e,
+        IReadOnlyList<P12AOwnerSection> coreP12DSections,
+        bool coreP12DIncludesNpcRows,
+        IReadOnlyList<P12AOwnerSection> coreP12FSections,
+        long capturedDay,
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
+        return TryEncode(census, runtimeIdentity, d, e, null,
+            coreP12DSections, coreP12DIncludesNpcRows, coreP12FSections,
             capturedDay, out sections, out result);
     }
 
@@ -37,6 +54,8 @@ internal static class P12ADailyV1OwnerSectionEncoder
         P12DDailyV1OwnerPackage d,
         P12EDailyV1OwnerPackage e,
         P12FDailyV1OwnerCapture f,
+        IReadOnlyList<P12AOwnerSection> coreP12DSections,
+        bool coreP12DIncludesNpcRows,
         IReadOnlyList<P12AOwnerSection> coreP12FSections,
         long capturedDay,
         out IReadOnlyList<P12AOwnerSection> sections,
@@ -46,6 +65,7 @@ internal static class P12ADailyV1OwnerSectionEncoder
         result = new P12AResult(P12AResultCode.InvalidOwnerValue);
         if (census == null || runtimeIdentity == null || d == null || e == null
             || ((f == null) == (coreP12FSections == null))
+            || (coreP12DIncludesNpcRows && coreP12DSections == null)
             || capturedDay < 0L || d.CitySnapshots == null || d.NpcDRows == null
             || d.NpcFRows == null || d.NpcDRows.Count != d.NpcFRows.Count
             || d.PersonSnapshot == null || d.GenealogySnapshot == null
@@ -53,37 +73,45 @@ internal static class P12ADailyV1OwnerSectionEncoder
 
         List<P12AOwnerSection> encoded = new List<P12AOwnerSection>();
         if (!P12ARuntimeIdentityOwnerCodec.TryEncode(runtimeIdentity,
-                out IReadOnlyList<P12AOwnerSection> identitySections, out result)
-            || !P12ASpatialNetworkOwnerCodec.TryEncode(d.SpatialNetworkSnapshot,
-                out P12AOwnerSection locations, out P12AOwnerSection routes, out result)
-            || !P12APersonStoreOwnerCodec.TryEncode(d.PersonSnapshot,
-                out P12AOwnerSection membership, out P12AOwnerSection bindings, out result)
-            || !P12AGenealogyOwnerCodec.TryEncode(d.GenealogySnapshot,
-                out P12AOwnerSection genealogy, out result)) return false;
+                out IReadOnlyList<P12AOwnerSection> identitySections, out result)) return false;
         encoded.AddRange(identitySections);
-        encoded.Add(locations);
-        encoded.Add(routes);
-        encoded.Add(membership);
-        encoded.Add(bindings);
-        encoded.Add(genealogy);
-
-        foreach (PersonStoreOwnerSnapshotRow person in d.PersonSnapshot.Rows)
+        if (coreP12DSections != null)
         {
-            if (!P12APersonLifeResidenceOwnerCodec.TryEncode(person,
-                    out P12AOwnerSection lifeResidence, out result)) return false;
-            encoded.Add(lifeResidence);
+            encoded.AddRange(coreP12DSections);
+        }
+        else
+        {
+            if (!P12ASpatialNetworkOwnerCodec.TryEncode(d.SpatialNetworkSnapshot,
+                    out P12AOwnerSection locations, out P12AOwnerSection routes, out result)
+                || !P12APersonStoreOwnerCodec.TryEncode(d.PersonSnapshot,
+                    out P12AOwnerSection membership, out P12AOwnerSection bindings, out result)
+                || !P12AGenealogyOwnerCodec.TryEncode(d.GenealogySnapshot,
+                    out P12AOwnerSection genealogy, out result)) return false;
+            encoded.Add(locations);
+            encoded.Add(routes);
+            encoded.Add(membership);
+            encoded.Add(bindings);
+            encoded.Add(genealogy);
+
+            foreach (PersonStoreOwnerSnapshotRow person in d.PersonSnapshot.Rows)
+            {
+                if (!P12APersonLifeResidenceOwnerCodec.TryEncode(person,
+                        out P12AOwnerSection lifeResidence, out result)) return false;
+                encoded.Add(lifeResidence);
+            }
+
+            if (!P12ACityOwnerSetCodec.TryEncode(d.CitySnapshots, census,
+                    out IReadOnlyList<P12AOwnerSection> cities, out result)) return false;
+            encoded.AddRange(cities);
         }
 
-        if (!P12ACityOwnerSetCodec.TryEncode(d.CitySnapshots, census,
-                out IReadOnlyList<P12AOwnerSection> cities, out result)) return false;
-        encoded.AddRange(cities);
-
-        for (int i = 0; i < d.NpcDRows.Count; i++)
-        {
-            if (!P12ANpcOwnerCodec.TryEncode(d.NpcDRows[i], d.NpcFRows[i], census,
-                    out IReadOnlyList<P12AOwnerSection> npcSections, out result)) return false;
-            encoded.AddRange(npcSections);
-        }
+        if (coreP12DSections == null || !coreP12DIncludesNpcRows)
+            for (int i = 0; i < d.NpcDRows.Count; i++)
+            {
+                if (!P12ANpcOwnerCodec.TryEncode(d.NpcDRows[i], d.NpcFRows[i], census,
+                        out IReadOnlyList<P12AOwnerSection> npcSections, out result)) return false;
+                encoded.AddRange(npcSections);
+            }
 
         if (!P12EInstitutionOfficeOwnerCodec.TryEncode(e.InstitutionOfficeSnapshot,
                 out P12AOwnerSection institutions, out P12AOwnerSection offices,

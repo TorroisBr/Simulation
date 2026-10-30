@@ -4520,6 +4520,19 @@ public sealed class SimulationRuntimeAdmissionTests
         {
             Assert.That(operation.CoreNpcOwnerSources, Is.Null,
                 "A partial Core graph must not bind a partial D/F vector for a mixed roster.");
+            Assert.That(operation.TryEncodeCoreP12DOwnerSections(
+                    out IReadOnlyList<P12AOwnerSection> coreBoundSections,
+                    out bool includesNpcOwnerSections,
+                    out P12AResult coreOwnerEncodingResult), Is.True,
+                coreOwnerEncodingResult?.SectionCode ?? coreOwnerEncodingResult?.Code.ToString());
+            Assert.That(includesNpcOwnerSections, Is.False,
+                "Mixed rosters must keep every NPC section on the whole-roster Unity compatibility path.");
+            Assert.That(coreBoundSections.Any(section =>
+                    DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes.Any(prefix =>
+                        section.Id.StartsWith(prefix, StringComparison.Ordinal))
+                    || section.Id.StartsWith(
+                        DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix,
+                        StringComparison.Ordinal)), Is.False);
             DailyCaptureEligibilityToken token = operation.SourceWitness.Token;
             Assert.That(P12DNpcRootOwnerSnapshot.TryCapture(
                 runtime, token, new object(), operation.SourceWitness.TokenOwnerSections,
@@ -4975,6 +4988,33 @@ public sealed class SimulationRuntimeAdmissionTests
                     out string captureDiagnostic), Is.True,
                     captureFailure + ": " + captureDiagnostic);
                 Assert.That(capturedImage, Is.Not.Null);
+                Assert.That(operation.TryEncodeCoreP12DOwnerSections(
+                        out IReadOnlyList<P12AOwnerSection> coreP12DSections,
+                        out bool coreP12DIncludesNpcRows,
+                        out P12AResult coreP12DResult), Is.True,
+                    coreP12DResult?.SectionCode ?? coreP12DResult?.Code.ToString());
+                Assert.That(coreP12DSections, Is.Not.Empty);
+                foreach (P12AOwnerSection coreP12DSection in coreP12DSections)
+                {
+                    P12AOwnerSection imageSection = capturedImage.Sections.Single(
+                        section => section.Id == coreP12DSection.Id);
+                    Assert.That(imageSection.Major, Is.EqualTo(coreP12DSection.Major));
+                    Assert.That(imageSection.Minor, Is.EqualTo(coreP12DSection.Minor));
+                    Assert.That(imageSection.Role, Is.EqualTo(coreP12DSection.Role));
+                    Assert.That(imageSection.Revision, Is.EqualTo(coreP12DSection.Revision));
+                    Assert.That(imageSection.Rows.Count, Is.EqualTo(coreP12DSection.Rows.Count));
+                    for (int rowIndex = 0; rowIndex < coreP12DSection.Rows.Count; rowIndex++)
+                    {
+                        Assert.That(imageSection.Rows[rowIndex].OwnerKey,
+                            Is.EqualTo(coreP12DSection.Rows[rowIndex].OwnerKey));
+                        Assert.That(imageSection.Rows[rowIndex].Revision,
+                            Is.EqualTo(coreP12DSection.Rows[rowIndex].Revision));
+                        Assert.That(imageSection.Rows[rowIndex].Payload,
+                            Is.EqualTo(coreP12DSection.Rows[rowIndex].Payload));
+                    }
+                }
+                Assert.That(coreP12DIncludesNpcRows,
+                    Is.EqualTo(operation.CoreNpcOwnerSources != null));
                 Assert.That(operation.TryEncodeCoreP12FOwnerSections(
                         out IReadOnlyList<P12AOwnerSection> coreP12FSections,
                         out P12AResult coreP12FResult), Is.True,
