@@ -1413,8 +1413,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             definitions, bootstrapAdmission, out DailyV1GenesisComposition candidateComposition,
             out diagnostic), Is.True, diagnostic);
 
-        SimulationRuntimeAdmissionContext sourceAdmission =
-            bootstrapAdmission.CreateRestoredContinuationContext();
+        Assert.That(application.TryCreateRestoredContinuationAdmissionContext(
+            null, null, out SimulationRuntimeAdmissionContext sourceAdmission,
+            out diagnostic), Is.True, diagnostic);
         DailyV1ExecutionBoundaryState sourceState =
             CreateBoundaryWithAdmission(sourceComposition, sourceAdmission);
         OwnerSectionCensusSnapshot[] sourceOwners =
@@ -1444,28 +1445,37 @@ public sealed class DailyV1ApplicationSessionGateTests
             null, sourceSession, null, out diagnostic), Is.True, diagnostic);
         Assert.That(application.ActiveSession, Is.SameAs(sourceSession));
 
-        SimulationRuntimeAdmissionContext candidateAdmission =
-            bootstrapAdmission.CreateRestoredContinuationContext();
-        DailyV1ExecutionBoundaryState candidateState =
-            CreateBoundaryWithAdmission(candidateComposition, candidateAdmission);
-        OwnerSectionCensusSnapshot[] candidateOwners =
-            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
-        const long candidateEpoch = 31L;
-        Assert.That(candidateState.TryCreateRestoredContinuationToken(
-            candidateAdmission,
-            candidateState.ConfigurationIdentity,
-            candidateState.CalendarIdentity,
-            candidateState.CompositionProfile,
-            candidateState.WorldId,
-            candidateState.SimulationTime.AbsoluteDay,
-            2L,
-            candidateEpoch,
-            candidateOwners,
-            out _), Is.True);
+        Assert.That(application.TryCreateRestoredContinuationAdmissionContext(
+            null, null, out SimulationRuntimeAdmissionContext unreservedReplacementAdmission,
+            out diagnostic), Is.False);
+        Assert.That(unreservedReplacementAdmission, Is.Null);
 
         Assert.That(application.TryBeginExclusiveOperation(sourceSession, out var replacementOperation), Is.True);
         using (replacementOperation)
         {
+            Assert.That(application.TryCreateRestoredContinuationAdmissionContext(
+                sourceSession, replacementOperation,
+                out SimulationRuntimeAdmissionContext candidateAdmission,
+                out diagnostic), Is.True, diagnostic);
+            Assert.That(candidateAdmission.IsRestoredContinuationOf(bootstrapAdmission), Is.True);
+
+            DailyV1ExecutionBoundaryState candidateState =
+                CreateBoundaryWithAdmission(candidateComposition, candidateAdmission);
+            OwnerSectionCensusSnapshot[] candidateOwners =
+                DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+            const long candidateEpoch = 31L;
+            Assert.That(candidateState.TryCreateRestoredContinuationToken(
+                candidateAdmission,
+                candidateState.ConfigurationIdentity,
+                candidateState.CalendarIdentity,
+                candidateState.CompositionProfile,
+                candidateState.WorldId,
+                candidateState.SimulationTime.AbsoluteDay,
+                2L,
+                candidateEpoch,
+                candidateOwners,
+                out _), Is.True);
+
             Assert.That(application.TryCreateRestoredActiveRuntimeSession(
                 candidateState, definitions, 0L, replacementOperation,
                 out DailyV1ActiveRuntimeSession candidate, out diagnostic), Is.True, diagnostic);
