@@ -55,7 +55,7 @@ public static class P12CrimeJusticeCensusProvider
             new OwnerSectionCensusWitness(
                 SectionId,
                 SchemaVersion,
-                owner,
+                owner.SelectedCensusOwnerIdentity,
                 1,
                 owner.P12CrimeJusticeRevision);
     }

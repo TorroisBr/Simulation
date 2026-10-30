@@ -38,7 +38,7 @@ public sealed class NpcCurrentActionCensusProvider : IOwnerSectionCensusProvider
         return new OwnerSectionCensusWitness(
             SectionId,
             SchemaVersion,
-            owner,
+            owner.SelectedCensusOwnerIdentity,
             actionRuntime == null ? 0 : 1,
             owner.CurrentActionRevision);
     }

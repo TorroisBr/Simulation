@@ -372,7 +372,7 @@ public sealed class P12PopulationLifecycleInvalidationTests
         OwnerSectionCensusWitness initial = initialProvider.GetCurrentCensus();
         Assert.That(initial.SectionId, Is.EqualTo(NpcCurrentActionCensusProvider.SectionIdFor(actor.RuntimeId)));
         Assert.That(initial.SchemaVersion, Is.EqualTo(NpcCurrentActionCensusProvider.SchemaVersion));
-        Assert.That(initial.OwnerInstanceIdentity, Is.SameAs(actor));
+        Assert.That(initial.OwnerInstanceIdentity, Is.SameAs(actor.SelectedCensusOwnerIdentity));
         Assert.That(initial.Cardinality, Is.Zero);
         Assert.That(initial.Revision, Is.Zero);
 
@@ -505,7 +505,7 @@ public sealed class P12PopulationLifecycleInvalidationTests
         string sectionId = NpcCurrentActionCensusProvider.SectionIdFor(originalNpc.RuntimeId);
         OwnerSectionCensusWitness originalWitness = FindWitness(
             NpcCurrentActionCensusProvider.CreateProviders(runtime.NpcRuntimes), sectionId);
-        Assert.That(originalWitness.OwnerInstanceIdentity, Is.SameAs(originalNpc));
+        Assert.That(originalWitness.OwnerInstanceIdentity, Is.SameAs(originalNpc.SelectedCensusOwnerIdentity));
         Assert.That(originalWitness.Cardinality, Is.EqualTo(1));
         Assert.That(originalWitness.Revision, Is.EqualTo(1L));
         AssertEpoch(runtime, 1L);
@@ -525,9 +525,9 @@ public sealed class P12PopulationLifecycleInvalidationTests
 
         OwnerSectionCensusWitness replacementWitness = FindWitness(
             NpcCurrentActionCensusProvider.CreateProviders(runtime.NpcRuntimes), sectionId);
-        Assert.That(replacementWitness.OwnerInstanceIdentity, Is.SameAs(replacementNpc),
+        Assert.That(replacementWitness.OwnerInstanceIdentity, Is.SameAs(replacementNpc.SelectedCensusOwnerIdentity),
             "a reused RuntimeId receives a witness for the new exact NPC instance");
-        Assert.That(replacementWitness.OwnerInstanceIdentity, Is.Not.SameAs(originalNpc));
+        Assert.That(replacementWitness.OwnerInstanceIdentity, Is.Not.SameAs(originalNpc.SelectedCensusOwnerIdentity));
         Assert.That(replacementWitness.Cardinality, Is.Zero);
         Assert.That(replacementWitness.Revision, Is.Zero);
         Assert.That(replacementNpc.CurrentActionRuntime, Is.Null,
@@ -830,7 +830,7 @@ public sealed class P12PopulationLifecycleInvalidationTests
             out PersonMaterializationFailure materializeFailure), Is.True, materializeFailure.ToString());
         NpcCurrentActionCensusProvider materializedActionProvider =
             new NpcCurrentActionCensusProvider(materializedActor);
-        Assert.That(materializedActionProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(materializedActor));
+        Assert.That(materializedActionProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(materializedActor.SelectedCensusOwnerIdentity));
         InstallPriorAction(materialized.Runtime, materializedActor, "p12-actor-choice-materialized-prior");
         CaptureP12ActorChoice(materialized.Runtime, materialized.Person.PersonId,
             materialized.SellAction.DefinitionId, "p12-actor-choice-materialized-input");

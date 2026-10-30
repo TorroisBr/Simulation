@@ -82,7 +82,7 @@ public sealed class NpcLifecycleCensusProvider : IOwnerSectionCensusProvider
         return new OwnerSectionCensusWitness(
             SectionId,
             SchemaVersion,
-            owner,
+            owner.SelectedCensusOwnerIdentity,
             1,
             residence ? owner.ResidenceRevision : owner.LifeStateRevision);
     }

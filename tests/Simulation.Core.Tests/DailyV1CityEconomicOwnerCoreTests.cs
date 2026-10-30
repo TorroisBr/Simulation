@@ -392,6 +392,132 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     }
 
     [Test]
+    public void SelectedRuntimeCensusRebindsNpcRuntimeStateToExactCoreAliasOwner()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(
+            out DailyV1NpcRuntimeOwners npc);
+        PersonStore personStore = new PersonStore();
+        Assert.That(graph.TryBindPersonStore(personStore), Is.True);
+
+        Assert.That(npc.ActionSlot.TryInstallRevision(3L), Is.True);
+        Assert.That(npc.Lifecycle.TryInstallState(
+            NpcLifeState.Alive, NpcInjurySeverity.None, 4L), Is.True);
+        Assert.That(npc.TryInstallCrimeJusticeRevision(5L), Is.True);
+        Assert.That(npc.Travel.TryInstallState(
+            null, null, null, null, 0, 0, null, false, null, null, 6L), Is.True);
+        Assert.That(npc.Residence.TryInstallExact(null, 7L), Is.True);
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers =
+            DailyV1NpcOwnerCensusProviders.CreateRuntimeAuthorityProviders(graph);
+        Assert.That(providers, Has.Count.EqualTo(5));
+        OwnerSectionCensusSnapshot[] hostRows = CreateCoreNpcCensusRows(graph)
+            .Concat(CreateRequiredSnapshots(providers))
+            .ToArray();
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcRuntimeStateSections(
+            graph, hostRows, out IReadOnlyList<OwnerSectionCensusSnapshot> rebound,
+            out string diagnostic), Is.True, diagnostic);
+
+        string[] aliasIds =
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix + npc.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcLifeStatePrefix + npc.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix + npc.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix + npc.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix + npc.RuntimeId
+        };
+        OwnerSectionCensusSnapshot[] aliases = rebound
+            .Where(row => aliasIds.Contains(row.SectionId, StringComparer.Ordinal))
+            .ToArray();
+        Assert.That(aliases, Has.Length.EqualTo(aliasIds.Length));
+        Assert.That(aliases.All(row => ReferenceEquals(row.OwnerInstanceIdentity, npc)), Is.True);
+        Assert.That(aliases.Single(row => row.SectionId == aliasIds[0]).Cardinality, Is.Zero);
+        Assert.That(aliases.Single(row => row.SectionId == aliasIds[0]).Revision, Is.EqualTo(3L));
+        Assert.That(aliases.Single(row => row.SectionId == aliasIds[1]).Revision, Is.EqualTo(4L));
+        Assert.That(aliases.Single(row => row.SectionId == aliasIds[2]).Revision, Is.EqualTo(7L));
+        Assert.That(aliases.Single(row => row.SectionId == aliasIds[3]).Revision, Is.EqualTo(5L));
+        Assert.That(aliases.Single(row => row.SectionId == aliasIds[4]).Revision, Is.EqualTo(6L));
+
+        OwnerSectionCensusSnapshot[] staleRows = hostRows.ToArray();
+        int travelIndex = Array.FindIndex(staleRows, row => row.SectionId == aliasIds[4]);
+        OwnerSectionCensusSnapshot travel = staleRows[travelIndex];
+        staleRows[travelIndex] = new OwnerSectionCensusSnapshot(
+            travel.SectionId, travel.SchemaVersion, travel.Role,
+            travel.OwnerInstanceIdentity, travel.Cardinality, travel.Revision - 1L);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcRuntimeStateSections(
+            graph, staleRows, out _, out _), Is.False,
+            "A selected Core travel revision mismatch must reject the complete census rather than publish a partial owner vector.");
+        OwnerSectionCensusSnapshot[] foreignIdentityRows = hostRows.ToArray();
+        int actionIndex = Array.FindIndex(foreignIdentityRows, row => row.SectionId == aliasIds[0]);
+        OwnerSectionCensusSnapshot action = foreignIdentityRows[actionIndex];
+        foreignIdentityRows[actionIndex] = new OwnerSectionCensusSnapshot(
+            action.SectionId, action.SchemaVersion, action.Role,
+            new object(), action.Cardinality, action.Revision);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcRuntimeStateSections(
+            graph, foreignIdentityRows, out _, out _), Is.False,
+            "A selected Core alias row must identify the exact owner instance, even when its revision matches.");
+
+        object legacyNpcOwner = new object();
+        OwnerSectionCensusSnapshot[] mixedRows = hostRows.Concat(new[]
+        {
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "npc-legacy",
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, legacyNpcOwner, 0, 2L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + "npc-legacy",
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, legacyNpcOwner, 1, 3L),
+            new OwnerSectionCensusSnapshot(aliasIds[0].Replace(npc.RuntimeId, "npc-legacy"),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, legacyNpcOwner, 0, 2L),
+            new OwnerSectionCensusSnapshot(aliasIds[1].Replace(npc.RuntimeId, "npc-legacy"),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, legacyNpcOwner, 1, 3L),
+            new OwnerSectionCensusSnapshot(aliasIds[2].Replace(npc.RuntimeId, "npc-legacy"),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, legacyNpcOwner, 1, 4L),
+            new OwnerSectionCensusSnapshot(aliasIds[3].Replace(npc.RuntimeId, "npc-legacy"),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, legacyNpcOwner, 1, 5L),
+            new OwnerSectionCensusSnapshot(aliasIds[4].Replace(npc.RuntimeId, "npc-legacy"),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, legacyNpcOwner, 1, 6L)
+        }).ToArray();
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcRuntimeStateSections(
+            graph, mixedRows, out IReadOnlyList<OwnerSectionCensusSnapshot> mixedRebound,
+            out diagnostic), Is.True, diagnostic);
+        Assert.That(mixedRebound, Has.Count.EqualTo(mixedRows.Length));
+        for (int i = 0; i < mixedRows.Length; i++)
+            Assert.That(mixedRebound[i], Is.SameAs(mixedRows[i]),
+                "A mixed roster retains every host row as a whole vector without splicing selected Core rows.");
+    }
+
+    [Test]
+    public void SelectedNpcResidenceCensusRemainsOwnedByMaterializedPerson()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(
+            out DailyV1NpcRuntimeOwners npc);
+        PersonStore personStore = new PersonStore();
+        PersonRuntime person = new PersonRuntime(new PersonId("person/materialized-npc"));
+        Assert.That(personStore.TryRegister(person, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(personStore.TryBindMaterializedNpc(
+            person.PersonId, npc.RuntimeId, out PersonStoreFailure bindFailure),
+            Is.True, bindFailure.ToString());
+        Assert.That(graph.TryBindPersonStore(personStore), Is.True);
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers =
+            DailyV1NpcOwnerCensusProviders.CreateRuntimeAuthorityProviders(graph);
+        Assert.That(providers, Has.Count.EqualTo(4));
+        Assert.That(providers.Any(provider => string.Equals(
+            provider.GetCurrentCensus().SectionId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(npc.RuntimeId),
+            StringComparison.Ordinal)), Is.False);
+        Assert.That(person.GetLifeResidenceCensusWitness().OwnerInstanceIdentity, Is.SameAs(person));
+    }
+    [Test]
     public void SelectedRuntimeCensusRebindsCommercialKnowledgeAliasTripleFromItsExactCoreGraph()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(

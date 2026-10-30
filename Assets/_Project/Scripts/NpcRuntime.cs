@@ -102,6 +102,7 @@ public class NpcRuntime : ICapabilityConditionSource
     internal DailyV1NpcDefinition SelectedDailyV1Definition => selectedDailyV1Definition;
     internal DailyV1EffectiveDefinitions SelectedDailyV1DefinitionGraph => selectedDefinitionGraph;
     internal DailyV1NpcRuntimeOwners SelectedRuntimeOwners => selectedRuntimeOwners;
+    internal object SelectedCensusOwnerIdentity => (object)selectedRuntimeOwners ?? this;
     internal DailyV1SelectedRuntimeOwnerGraph SelectedRuntimeOwnerGraph => selectedRuntimeOwnerGraphProvider?.Invoke();
 
     internal bool CanBindSelectedRuntimeOwnerGraphProvider(

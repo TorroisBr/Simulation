@@ -3523,7 +3523,7 @@ public sealed class SimulationBootstrapCompositionTests
                 .Select(provider => provider.GetCurrentCensus())
                 .Single(candidate => candidate.SectionId == NpcTravelStateCensusProvider.SectionIdFor(npc.RuntimeId));
             Assert.That(witness.SchemaVersion, Is.EqualTo(NpcTravelStateCensusProvider.SchemaVersion));
-            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(npc));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(npc.SelectedCensusOwnerIdentity));
             Assert.That(witness.Cardinality, Is.EqualTo(1));
             Assert.That(witness.Revision, Is.EqualTo(npc.TravelStateRevision));
         }
@@ -3725,21 +3725,21 @@ public sealed class SimulationBootstrapCompositionTests
             OwnerSectionCensusWitness life = lifecycleWitnesses.Single(candidate =>
                 candidate.SectionId == NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, residence: false));
             Assert.That(life.SchemaVersion, Is.EqualTo(NpcLifecycleCensusProvider.SchemaVersion));
-            Assert.That(life.OwnerInstanceIdentity, Is.SameAs(npc));
+            Assert.That(life.OwnerInstanceIdentity, Is.SameAs(npc.SelectedCensusOwnerIdentity));
             Assert.That(life.Cardinality, Is.EqualTo(1));
             Assert.That(life.Revision, Is.EqualTo(ReadNonPublicLongProperty(npc, "LifeStateRevision")));
 
             OwnerSectionCensusWitness status = lifecycleWitnesses.Single(candidate =>
                 candidate.SectionId == P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(npc.RuntimeId));
             Assert.That(status.SchemaVersion, Is.EqualTo(P12CrimeJusticeCensusProvider.SchemaVersion));
-            Assert.That(status.OwnerInstanceIdentity, Is.SameAs(npc));
+            Assert.That(status.OwnerInstanceIdentity, Is.SameAs(npc.SelectedCensusOwnerIdentity));
             Assert.That(status.Cardinality, Is.EqualTo(1));
             Assert.That(status.Revision, Is.EqualTo(ReadNonPublicLongProperty(npc, "P12CrimeJusticeRevision")));
 
             OwnerSectionCensusWitness action = lifecycleWitnesses.Single(candidate =>
                 candidate.SectionId == NpcCurrentActionCensusProvider.SectionIdFor(npc.RuntimeId));
             Assert.That(action.SchemaVersion, Is.EqualTo(NpcCurrentActionCensusProvider.SchemaVersion));
-            Assert.That(action.OwnerInstanceIdentity, Is.SameAs(npc));
+            Assert.That(action.OwnerInstanceIdentity, Is.SameAs(npc.SelectedCensusOwnerIdentity));
             Assert.That(action.Cardinality, Is.EqualTo(npc.CurrentActionRuntime == null ? 0 : 1));
             Assert.That(action.Revision, Is.EqualTo(ReadNonPublicLongProperty(npc, "CurrentActionRevision")));
 
@@ -3749,7 +3749,7 @@ public sealed class SimulationBootstrapCompositionTests
                 OwnerSectionCensusWitness residence = lifecycleWitnesses.Single(candidate =>
                     candidate.SectionId == NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, residence: true));
                 Assert.That(residence.SchemaVersion, Is.EqualTo(NpcLifecycleCensusProvider.SchemaVersion));
-                Assert.That(residence.OwnerInstanceIdentity, Is.SameAs(npc));
+                Assert.That(residence.OwnerInstanceIdentity, Is.SameAs(npc.SelectedCensusOwnerIdentity));
                 Assert.That(residence.Cardinality, Is.EqualTo(1));
                 Assert.That(residence.Revision, Is.EqualTo(ReadNonPublicLongProperty(npc, "ResidenceRevision")));
             }
@@ -3865,7 +3865,7 @@ public sealed class SimulationBootstrapCompositionTests
                 expected, SpatialKnowledgeCensusProvider.RoutesSectionPrefix + runtimeId,
                 npc.SpatialKnowledge);
             AddExpectedDailyV1OwnerIdentity(
-                expected, NpcTravelStateCensusProvider.SectionIdFor(runtimeId), npc);
+                expected, NpcTravelStateCensusProvider.SectionIdFor(runtimeId), npc.SelectedCensusOwnerIdentity);
             AddExpectedDailyV1OwnerIdentity(
                 expected, NpcInventoryCensusProvider.SectionPrefix + runtimeId,
                 runtime.NpcRuntimes.All(candidate => candidate.SelectedRuntimeOwners != null)
@@ -3888,16 +3888,16 @@ public sealed class SimulationBootstrapCompositionTests
                 expected, P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(runtimeId),
                 ReadNonPublicProperty(npc, "ExistingMerchantTradeStateRuntime"));
             AddExpectedDailyV1OwnerIdentity(
-                expected, P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(runtimeId), npc);
+                expected, P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(runtimeId), npc.SelectedCensusOwnerIdentity);
             AddExpectedDailyV1OwnerIdentity(
-                expected, NpcCurrentActionCensusProvider.SectionIdFor(runtimeId), npc);
+                expected, NpcCurrentActionCensusProvider.SectionIdFor(runtimeId), npc.SelectedCensusOwnerIdentity);
             AddExpectedDailyV1OwnerIdentity(
-                expected, NpcLifecycleCensusProvider.SectionIdFor(runtimeId, residence: false), npc);
+                expected, NpcLifecycleCensusProvider.SectionIdFor(runtimeId, residence: false), npc.SelectedCensusOwnerIdentity);
 
             if (!IsNpcBoundToRegisteredPerson(runtime, npc))
             {
                 AddExpectedDailyV1OwnerIdentity(
-                    expected, NpcLifecycleCensusProvider.SectionIdFor(runtimeId, residence: true), npc);
+                    expected, NpcLifecycleCensusProvider.SectionIdFor(runtimeId, residence: true), npc.SelectedCensusOwnerIdentity);
             }
         }
 

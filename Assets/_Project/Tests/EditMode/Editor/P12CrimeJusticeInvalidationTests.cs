@@ -25,7 +25,7 @@ public sealed class P12CrimeJusticeInvalidationTests
         OwnerSectionCensusWitness initial = provider.GetCurrentCensus();
         Assert.That(initial.SectionId, Is.EqualTo("p12b.npc-status-crime-state/p12-cj-status-npc"));
         Assert.That(initial.SchemaVersion, Is.EqualTo(1));
-        Assert.That(initial.OwnerInstanceIdentity, Is.SameAs(npc));
+        Assert.That(initial.OwnerInstanceIdentity, Is.SameAs(npc.SelectedCensusOwnerIdentity));
         Assert.That(initial.Cardinality, Is.EqualTo(1));
         Assert.That(initial.Revision, Is.Zero);
         Assert.That(npc.CurrentStatus, Is.EqualTo(new[] { first, second }));
@@ -61,7 +61,7 @@ public sealed class P12CrimeJusticeInvalidationTests
         SimulationRuntime runtime = CreateP12Runtime(null, new[] { original });
         string sectionId = P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(original.RuntimeId);
         IOwnerSectionCensusProvider originalProvider = FindLifecycleProvider(runtime, sectionId);
-        Assert.That(originalProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(original));
+        Assert.That(originalProvider.GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(original.SelectedCensusOwnerIdentity));
         AssertCensus(runtime);
 
         Assert.That(runtime.TryUnregisterNpc(original.RuntimeId, out WorldNpcRegistryFailure unregisterFailure),

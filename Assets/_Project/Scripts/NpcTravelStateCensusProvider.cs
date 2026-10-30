@@ -25,7 +25,7 @@ public sealed class NpcTravelStateCensusProvider : IOwnerSectionCensusProvider
         return new OwnerSectionCensusWitness(
             SectionId,
             SchemaVersion,
-            owner,
+            owner.SelectedCensusOwnerIdentity,
             1,
             owner.TravelStateRevision);
     }

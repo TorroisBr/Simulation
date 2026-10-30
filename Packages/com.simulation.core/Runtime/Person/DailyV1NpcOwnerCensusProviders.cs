@@ -184,6 +184,166 @@ internal static class DailyV1NpcOwnerCensusProviders
         internal DailyV1NpcRuntimeOwners NpcOwner { get; }
     }
 
+    private enum RuntimeAuthoritySection
+    {
+        CurrentAction,
+        LifeState,
+        Residence,
+        StatusCrime,
+        TravelState
+    }
+
+    private sealed class RuntimeAuthoritySectionProvider : IOwnerSectionCensusProvider
+    {
+        private readonly DailyV1NpcRuntimeOwners owner;
+        private readonly RuntimeAuthoritySection section;
+        private readonly string sectionId;
+
+        internal RuntimeAuthoritySectionProvider(
+            DailyV1NpcRuntimeOwners owner,
+            RuntimeAuthoritySection section)
+        {
+            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            this.section = section;
+            sectionId = SectionIdFor(section, owner.RuntimeId);
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            int cardinality;
+            long revision;
+            switch (section)
+            {
+                case RuntimeAuthoritySection.CurrentAction:
+                    if (owner.ActionSlot == null
+                        || owner.ActionSlot.Revision < 0L
+                        || !owner.ActionSlot.TryCapturePayload(out _))
+                        throw new InvalidOperationException(
+                            "The Core current-action owner cannot provide a valid census witness.");
+                    cardinality = owner.ActionSlot.CurrentAction == null ? 0 : 1;
+                    revision = owner.ActionSlot.Revision;
+                    break;
+
+                case RuntimeAuthoritySection.LifeState:
+                    if (owner.Lifecycle == null
+                        || !NpcInjuryRules.IsValid(owner.Lifecycle.LifeState)
+                        || !NpcInjuryRules.IsValid(owner.Lifecycle.InjurySeverity)
+                        || owner.Lifecycle.LifeStateRevision < 0L)
+                        throw new InvalidOperationException(
+                            "The Core lifecycle owner cannot provide a valid census witness.");
+                    cardinality = 1;
+                    revision = owner.Lifecycle.LifeStateRevision;
+                    break;
+
+                case RuntimeAuthoritySection.Residence:
+                    if (owner.Residence == null
+                        || !string.Equals(owner.Residence.OwnerRuntimeId, owner.RuntimeId, StringComparison.Ordinal)
+                        || owner.Residence.Revision < 0L)
+                        throw new InvalidOperationException(
+                            "The Core residence owner cannot provide a valid census witness.");
+                    cardinality = 1;
+                    revision = owner.Residence.Revision;
+                    break;
+
+                case RuntimeAuthoritySection.StatusCrime:
+                    if (owner.Status == null || owner.CrimeJusticeRevision < 0L)
+                        throw new InvalidOperationException(
+                            "The Core status owner cannot provide a valid census witness.");
+                    cardinality = 1;
+                    revision = owner.CrimeJusticeRevision;
+                    break;
+
+                case RuntimeAuthoritySection.TravelState:
+                    if (owner.Travel == null
+                        || !string.Equals(owner.Travel.NpcRuntimeId, owner.RuntimeId, StringComparison.Ordinal)
+                        || owner.Travel.Revision < 0L)
+                        throw new InvalidOperationException(
+                            "The Core travel owner cannot provide a valid census witness.");
+                    cardinality = 1;
+                    revision = owner.Travel.Revision;
+                    break;
+
+                default:
+                    throw new InvalidOperationException("The Core NPC census section is unsupported.");
+            }
+
+            return new OwnerSectionCensusWitness(
+                sectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                owner,
+                cardinality,
+                revision);
+        }
+
+        private static string SectionIdFor(RuntimeAuthoritySection section, string runtimeId) => section switch
+        {
+            RuntimeAuthoritySection.CurrentAction =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(20, runtimeId),
+            RuntimeAuthoritySection.LifeState =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(21, runtimeId),
+            RuntimeAuthoritySection.Residence =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(runtimeId),
+            RuntimeAuthoritySection.StatusCrime =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(runtimeId),
+            RuntimeAuthoritySection.TravelState =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(12, runtimeId),
+            _ => throw new ArgumentOutOfRangeException(nameof(section))
+        };
+    }
+
+    /// <summary>
+    /// Creates the selected runtime-state witnesses from the exact Core owner
+    /// graph. The five P12 alias-family sections share the aggregate identity;
+    /// Person-backed NPC residence remains solely in PersonStore.
+    /// </summary>
+    internal static IReadOnlyList<IOwnerSectionCensusProvider> CreateRuntimeAuthorityProviders(
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph == null) throw new ArgumentNullException(nameof(graph));
+        if (graph.PersonStore == null)
+            throw new InvalidOperationException(
+                "Selected NPC runtime-state census requires the bound Core PersonStore.");
+
+        ValidateRoster(graph.Npcs);
+        List<DailyV1NpcRuntimeOwners> ordered = OrderByRuntimeId(graph.Npcs);
+        HashSet<DailyV1NpcRuntimeOwners> ownerIdentities =
+            new HashSet<DailyV1NpcRuntimeOwners>();
+        List<IOwnerSectionCensusProvider> providers =
+            new List<IOwnerSectionCensusProvider>(ordered.Count * 5);
+        foreach (DailyV1NpcRuntimeOwners npc in ordered)
+        {
+            if (!ReferenceEquals(npc.Definitions, graph.Definitions)
+                || !ownerIdentities.Add(npc))
+                throw new InvalidOperationException(
+                    "Selected NPC runtime-state census requires exact, distinct owners from the admitted definition graph.");
+
+            providers.Add(new RuntimeAuthoritySectionProvider(
+                npc, RuntimeAuthoritySection.CurrentAction));
+            providers.Add(new RuntimeAuthoritySectionProvider(
+                npc, RuntimeAuthoritySection.LifeState));
+            providers.Add(new RuntimeAuthoritySectionProvider(
+                npc, RuntimeAuthoritySection.StatusCrime));
+            providers.Add(new RuntimeAuthoritySectionProvider(
+                npc, RuntimeAuthoritySection.TravelState));
+
+            if (graph.PersonStore.TryGetByMaterializedNpcRuntimeId(
+                    npc.RuntimeId, out PersonRuntime person))
+            {
+                if (person == null
+                    || !string.Equals(person.MaterializedNpcRuntimeId, npc.RuntimeId, StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "The Core PersonStore returned an inconsistent NPC materialization binding.");
+            }
+            else
+            {
+                providers.Add(new RuntimeAuthoritySectionProvider(
+                    npc, RuntimeAuthoritySection.Residence));
+            }
+        }
+
+        return providers.AsReadOnly();
+    }
+
     internal static IReadOnlyList<IOwnerSectionCensusProvider> CreateInventoryProviders(
         IReadOnlyList<DailyV1NpcRuntimeOwners> roster)
     {

@@ -31,7 +31,7 @@ public sealed class P12TravelPartyAdvanceTests
         {
             OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
             Assert.That(witness.SchemaVersion, Is.EqualTo(NpcTravelStateCensusProvider.SchemaVersion));
-            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(provider.NpcOwner));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(provider.NpcOwner.SelectedCensusOwnerIdentity));
             Assert.That(witness.Cardinality, Is.EqualTo(1));
             Assert.That(witness.Revision, Is.EqualTo(provider.NpcOwner.TravelStateRevision));
         }
