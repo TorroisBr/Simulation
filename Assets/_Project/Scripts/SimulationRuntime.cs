@@ -11877,6 +11877,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             IDailyV1SelectedMerchantTradeStateBoundary,
             IDailyV1SelectedMerchantTradeStateAdmissionBoundary,
             IDailyV1SelectedActorActionExecutionBoundary,
+            IDailyV1SelectedActionSlotP12MutationBoundary,
             IDailyV1SelectedCrimeJusticeDailyBoundary
     {
         private readonly SimulationRuntime runtime;
@@ -11888,6 +11889,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         private NpcActionRuntime preparedClearActionRuntime;
         private DailyV1NpcActionPayloadOwner preparedClearActionPayload;
         private DailyV1NpcRuntimeOwners preparedClearActionActor;
+        private readonly SelectedActionSlotP12MutationProtocol selectedActionSlotP12MutationProtocol;
 
         internal SelectedDailyV1ActorTurnExecutionBoundary(
             SimulationRuntime runtime,
@@ -11897,6 +11899,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
             this.graph = graph ?? throw new ArgumentNullException(nameof(graph));
             this.runtimeByOwner = runtimeByOwner ?? throw new ArgumentNullException(nameof(runtimeByOwner));
+            selectedActionSlotP12MutationProtocol =
+                new SelectedActionSlotP12MutationProtocol(this);
         }
 
         public bool IsReservedToday(DailyV1NpcRuntimeOwners actor)
@@ -12287,9 +12291,35 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             NpcRuntime exactRuntime = RequireExactActor(actor);
             return ReferenceEquals(preparedActionPayload, payload)
                 && preparedActionRuntime != null
-                && exactRuntime.CanCommitP12LifecycleMutation(
-                    false, false, true, preparedActionRuntime);
+                && (OwnsSelectedActionSlotP12Mutation
+                    ? exactRuntime.CanAdvanceP12LifecycleRevisions(0, 0, 1)
+                    : exactRuntime.CanCommitP12LifecycleMutation(
+                        false, false, true, preparedActionRuntime));
         }
+
+        public bool OwnsSelectedActionSlotP12Mutation =>
+            runtime.ExecutionBoundaryState.AdmissionContext != null;
+
+        public bool CanCommitSelectedActionSlotP12Mutation(
+            DailyV1SelectedRuntimeOwnerGraph candidateGraph,
+            DailyV1NpcRuntimeOwners actor) =>
+            ReferenceEquals(candidateGraph, graph)
+            && (ReferenceEquals(preparedActionActor, actor)
+                && preparedActionPayload != null
+                || ReferenceEquals(preparedClearActionActor, actor)
+                    && preparedClearActionPayload != null)
+            && runtime.ExecutionBoundaryState.TryCanCommitSelectedNpcActionSlotMutation(
+                graph, actor, selectedActionSlotP12MutationProtocol);
+
+        public bool NotifySelectedActionSlotP12MutationCommitted(
+            DailyV1SelectedRuntimeOwnerGraph candidateGraph,
+            DailyV1NpcRuntimeOwners actor,
+            string sectionId,
+            long revision) =>
+            ReferenceEquals(candidateGraph, graph)
+            && runtime.ExecutionBoundaryState.TryRecordSelectedNpcActionSlotMutation(
+                graph, actor, sectionId, revision,
+                selectedActionSlotP12MutationProtocol);
 
         public bool TryPublishSelectedActionProjection(
             DailyV1NpcRuntimeOwners actor,
@@ -12306,7 +12336,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
             try
             {
-                if (!exactRuntime.TryInstallPrecommittedCurrentActionRuntime(preparedActionRuntime))
+                if (!exactRuntime.TryInstallPrecommittedCurrentActionRuntime(
+                        preparedActionRuntime,
+                        notifyP12MutationBoundary: !OwnsSelectedActionSlotP12Mutation))
                     throw new InvalidOperationException(
                         "A committed selected action slot could not publish its Unity action projection.");
                 return true;
@@ -12374,7 +12406,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     preparedClearActionPayload?.Action)
                 && ReferenceEquals(actor.ActionSlot?.CurrentPayload,
                     preparedClearActionPayload)
-                && exactRuntime.CanCommitP12LifecycleMutation(false, false, true);
+                && (OwnsSelectedActionSlotP12Mutation
+                    ? exactRuntime.CanAdvanceP12LifecycleRevisions(0, 0, 1)
+                    : exactRuntime.CanCommitP12LifecycleMutation(false, false, true));
         }
 
         public bool TryPublishCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor)
@@ -12390,7 +12424,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             try
             {
                 return exactRuntime.TryInstallPrecommittedCurrentActionClear(
-                    preparedClearActionRuntime, preparedClearActionPayload);
+                    preparedClearActionRuntime, preparedClearActionPayload,
+                    notifyP12MutationBoundary: !OwnsSelectedActionSlotP12Mutation);
             }
             finally
             {
@@ -12652,6 +12687,72 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 || !graph.ContainsExactNpcOwner(actor)) return false;
             exactRuntime = candidate;
             return true;
+        }
+
+        private sealed class SelectedActionSlotP12MutationProtocol
+            : IDailyV1SelectedP12NpcActionOwnerMutationProtocol
+        {
+            private readonly SelectedDailyV1ActorTurnExecutionBoundary boundary;
+
+            internal SelectedActionSlotP12MutationProtocol(
+                SelectedDailyV1ActorTurnExecutionBoundary boundary)
+            {
+                this.boundary = boundary
+                    ?? throw new ArgumentNullException(nameof(boundary));
+            }
+
+            public bool TryValidateOwnerSection(
+                DailyV1SelectedRuntimeOwnerGraph candidateGraph,
+                DailyV1NpcRuntimeOwners owner,
+                string sectionId)
+            {
+                SimulationRuntime runtime = boundary.runtime;
+                if (!ReferenceEquals(candidateGraph, boundary.graph)
+                    || owner == null
+                    || !string.Equals(sectionId,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+                            + owner.RuntimeId,
+                        StringComparison.Ordinal)
+                    || !boundary.TryGetExactActor(owner, out NpcRuntime exactRuntime)
+                    || !ReferenceEquals(exactRuntime.SelectedRuntimeOwnerGraph, candidateGraph)
+                    || !ReferenceEquals(exactRuntime.SelectedRuntimeOwners, owner)
+                    || exactRuntime.CurrentActionRevision != owner.ActionSlot?.Revision
+                    || !exactRuntime.HasConsistentCurrentActionSlot)
+                    return false;
+
+                if (runtime.runtimeAdmissionContext == null) return true;
+                if (!runtime.IsRuntimeAdmissionOwnerThreadCurrent()
+                    || !runtime.npcRegistryById.TryGetValue(owner.RuntimeId, out NpcRuntime registered)
+                    || !ReferenceEquals(registered, exactRuntime)
+                    || !exactRuntime.IsP12LifecycleBound)
+                    return false;
+
+                P12PopulationOperationContext populationContext =
+                    runtime.activeP12PopulationOperationContext;
+                NpcMembershipCensusContext membershipContext =
+                    runtime.activeNpcMembershipCensusContext;
+                HashSet<string> allowedSectionIds =
+                    populationContext != null && populationContext.IsOwnedByCurrentThread()
+                        ? populationContext.ExpectedSectionIds
+                        : membershipContext != null && membershipContext.IsOwnedByCurrentThread()
+                            ? membershipContext.AllowedLifecycleSectionIds
+                            : null;
+                if (populationContext != null || membershipContext != null)
+                    return allowedSectionIds != null && allowedSectionIds.Contains(sectionId);
+
+                return runtime.npcRosterCensusProtocol != null
+                    && runtime.npcRosterCensusProtocol.TryReadActiveOperationCount(
+                        out int activeOperationCount, out _)
+                    && activeOperationCount > 0;
+            }
+
+            public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
+                boundary.runtime.CanCommitP12MutationSections(sectionIds);
+
+            public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) =>
+                boundary.runtime.NotifyP12MutationSections(sectionIds);
+
+            public void FaultClosed() => boundary.runtime.FaultRuntimeAdmission();
         }
     }
 

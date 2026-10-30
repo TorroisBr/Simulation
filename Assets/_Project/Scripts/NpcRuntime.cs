@@ -1235,7 +1235,8 @@ public class NpcRuntime : ICapabilityConditionSource
         bool residenceChanged,
         bool currentActionChanged = false,
         bool currentActionRevisionAlreadyCommitted = false,
-        bool lifeStateRevisionAlreadyCommitted = false)
+        bool lifeStateRevisionAlreadyCommitted = false,
+        bool notifyP12MutationBoundary = true)
     {
         if (lifeStateChanged && !lifeStateRevisionAlreadyCommitted)
         {
@@ -1258,7 +1259,7 @@ public class NpcRuntime : ICapabilityConditionSource
             else if (currentActionRevision < long.MaxValue)
                 currentActionRevision++;
         }
-        if (p12LifecycleMutationCommitted == null) return;
+        if (!notifyP12MutationBoundary || p12LifecycleMutationCommitted == null) return;
         try { p12LifecycleMutationCommitted(this, lifeStateChanged, residenceChanged, currentActionChanged); }
         catch { }
     }
@@ -2075,7 +2076,20 @@ public class NpcRuntime : ICapabilityConditionSource
     }
 
     internal bool TryInstallPrecommittedCurrentActionRuntime(NpcActionRuntime actionRuntime) =>
-        actionRuntime != null && TryInstallCurrentActionRuntime(actionRuntime);
+        TryInstallPrecommittedCurrentActionRuntime(
+            actionRuntime, notifyP12MutationBoundary: true);
+
+    /// <summary>
+    /// Installs the Unity projection for an action slot already committed by
+    /// the Core selected-action stage. That stage may own the corresponding
+    /// P12 section notification and pass false so the owner callback is not
+    /// published twice.
+    /// </summary>
+    internal bool TryInstallPrecommittedCurrentActionRuntime(
+        NpcActionRuntime actionRuntime,
+        bool notifyP12MutationBoundary) =>
+        actionRuntime != null
+        && TryInstallCurrentActionRuntime(actionRuntime, notifyP12MutationBoundary);
 
     /// <summary>
     /// Publishes a Core-committed selected action clear into this Unity object.
@@ -2084,7 +2098,8 @@ public class NpcRuntime : ICapabilityConditionSource
     /// </summary>
     internal bool TryInstallPrecommittedCurrentActionClear(
         NpcActionRuntime expectedActionRuntime,
-        DailyV1NpcActionPayloadOwner expectedPayload)
+        DailyV1NpcActionPayloadOwner expectedPayload,
+        bool notifyP12MutationBoundary = true)
     {
         if (expectedActionRuntime == null || expectedPayload == null
             || selectedRuntimeOwners == null
@@ -2102,11 +2117,14 @@ public class NpcRuntime : ICapabilityConditionSource
             expectedActionRuntime.UnbindP12Owner(this);
         expectedActionRuntime.UnbindSelectedOwner();
         NotifyP12LifecycleMutationCommitted(
-            false, false, true, currentActionRevisionAlreadyCommitted: true);
+            false, false, true, currentActionRevisionAlreadyCommitted: true,
+            notifyP12MutationBoundary: notifyP12MutationBoundary);
         return true;
     }
 
-    private bool TryInstallCurrentActionRuntime(NpcActionRuntime actionRuntime)
+    private bool TryInstallCurrentActionRuntime(
+        NpcActionRuntime actionRuntime,
+        bool notifyP12MutationBoundary = true)
     {
         if (actionRuntime == currentActionRuntime
             && ReferenceEquals(currentAction, actionRuntime?.Action))
@@ -2196,7 +2214,8 @@ public class NpcRuntime : ICapabilityConditionSource
         if (p12Bound && previous != null && !ReferenceEquals(previous, actionRuntime))
             previous.UnbindP12Owner(this);
         NotifyP12LifecycleMutationCommitted(
-            false, false, true, currentActionRevisionAlreadyCommitted: graphCommittedActionSlot);
+            false, false, true, currentActionRevisionAlreadyCommitted: graphCommittedActionSlot,
+            notifyP12MutationBoundary: notifyP12MutationBoundary);
         return true;
     }
 

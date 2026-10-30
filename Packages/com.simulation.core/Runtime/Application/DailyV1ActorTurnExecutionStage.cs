@@ -139,6 +139,37 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
 }
 
 /// <summary>
+/// The Core action-slot stage owns the P12 current-action section transition.
+/// The host adapter supplies the registered census protocol, while Core
+/// decides when the exact section is admitted and when its committed write is
+/// published after the Unity projection succeeds.
+/// </summary>
+internal interface IDailyV1SelectedP12NpcActionOwnerMutationProtocol
+{
+    bool TryValidateOwnerSection(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners owner,
+        string sectionId);
+    bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
+    bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds);
+    void FaultClosed();
+}
+
+/// <summary>Host protocol bridge for the Core-owned selected action-slot P12 transition.</summary>
+internal interface IDailyV1SelectedActionSlotP12MutationBoundary
+{
+    bool OwnsSelectedActionSlotP12Mutation { get; }
+    bool CanCommitSelectedActionSlotP12Mutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor);
+    bool NotifySelectedActionSlotP12MutationCommitted(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        string sectionId,
+        long revision);
+}
+
+/// <summary>
 /// Core-owned ordered selected Daily-v1 actor loop. The selected owner graph
 /// supplies actor and current-location truth; the host forwards only remaining
 /// compatibility, projection and admission operations.

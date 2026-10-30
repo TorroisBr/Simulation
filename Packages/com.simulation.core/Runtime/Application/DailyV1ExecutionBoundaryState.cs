@@ -805,6 +805,104 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    /// <summary>
+    /// Admits one Core-owned NPC current-action slot write against the exact
+    /// Required P12 section registered for that owner. Unity supplies the
+    /// existing live census adapter; the action stage calls this before the
+    /// Core slot revision changes.
+    /// </summary>
+    internal bool TryCanCommitSelectedNpcActionSlotMutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners owner,
+        IDailyV1SelectedP12NpcActionOwnerMutationProtocol protocol)
+    {
+        if (AdmissionContext == null) return true;
+        if (protocol == null
+            || !TryGetSelectedNpcActionSlotMutationSection(
+                graph, owner, out string sectionId))
+            return false;
+
+        string[] sectionIds = { sectionId };
+        try
+        {
+            return protocol.TryValidateOwnerSection(graph, owner, sectionId)
+                && protocol.TryValidateUnchangedSections(sectionIds);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Publishes the exact current-action owner invalidation after the Core
+    /// slot commit and successful host projection. A post-commit failure
+    /// faults admission and revokes the current capture token.
+    /// </summary>
+    internal bool TryRecordSelectedNpcActionSlotMutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners owner,
+        string sectionId,
+        long committedRevision,
+        IDailyV1SelectedP12NpcActionOwnerMutationProtocol protocol)
+    {
+        if (AdmissionContext == null) return true;
+        if (protocol != null
+            && TryGetSelectedNpcActionSlotMutationSection(
+                graph, owner, out string expectedSectionId)
+            && string.Equals(sectionId, expectedSectionId, StringComparison.Ordinal)
+            && owner.ActionSlot?.Revision == committedRevision)
+        {
+            string[] sectionIds = { expectedSectionId };
+            try
+            {
+                if (protocol.TryValidateOwnerSection(graph, owner, expectedSectionId)
+                    && protocol.NotifyCommittedMutations(sectionIds))
+                    return true;
+            }
+            catch { }
+        }
+
+        try { protocol?.FaultClosed(); }
+        catch { }
+        InvalidateCurrentCaptureToken();
+        return false;
+    }
+
+    private bool TryGetSelectedNpcActionSlotMutationSection(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners owner,
+        out string sectionId)
+    {
+        sectionId = null;
+        if (graph == null || owner == null
+            || string.IsNullOrWhiteSpace(owner.RuntimeId)
+            || !graph.ContainsExactNpcOwner(owner)
+            || owner.ActionSlot == null)
+            return false;
+
+        string candidateSectionId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+            + owner.RuntimeId;
+        lock (operationSyncRoot)
+        {
+            if (!HasAdmittedSelectedDailyExecution
+                || AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || activeOperationCount <= 0
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+                || !expectedOwnerSectionContractInventorySealed
+                || !expectedOwnerSectionContracts.TryGetValue(
+                    candidateSectionId,
+                    out DailyV1OwnerSectionContractIdentity contract)
+                || contract.Role != OwnerSectionRole.Required)
+                return false;
+        }
+
+        sectionId = candidateSectionId;
+        return true;
+    }
+
     private bool IsCurrentSelectedTravelPartyAdvanceContext(
         SelectedP12TravelPartyAdvanceContext context) =>
         context != null

@@ -275,7 +275,8 @@ internal static class DailyV1SelectedActorActionExecutionStage
             ReferenceEquals(candidate, payload)
             && boundary.TryPrepareSelectedActionProjection(
                 actor, selected, projectionBoundary, candidate);
-        Func<bool> slotAdmission = () => boundary.CanCommitSelectedActionSlot(actor, payload);
+        Func<bool> slotAdmission = () => boundary.CanCommitSelectedActionSlot(actor, payload)
+            && CanCommitSelectedActionSlotP12Mutation(graph, actor, boundary);
         RuntimeIdAllocator idAllocator;
         SimulationRecordSequence recordSequence;
         NpcDecisionStore decisionStore;
@@ -349,6 +350,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
             throw new InvalidOperationException(
                 "The selected action owner slot committed but its exact host projection could not be published.");
         }
+        NotifySelectedActionSlotP12MutationCommitted(graph, actor, boundary);
         return true;
     }
 
@@ -375,7 +377,8 @@ internal static class DailyV1SelectedActorActionExecutionStage
             return false;
 
         if (!graph.TryCommitCurrentActionSlot(actor, null, null,
-                () => boundary.CanCommitCurrentActionClear(actor)))
+                () => boundary.CanCommitCurrentActionClear(actor)
+                    && CanCommitSelectedActionSlotP12Mutation(graph, actor, boundary)))
         {
             boundary.CancelPreparedCurrentActionClearProjection(actor);
             return false;
@@ -384,7 +387,36 @@ internal static class DailyV1SelectedActorActionExecutionStage
         if (!boundary.TryPublishCurrentActionClearProjection(actor))
             throw new InvalidOperationException(
                 "A committed selected Core action clear could not publish its Unity projection.");
+        NotifySelectedActionSlotP12MutationCommitted(graph, actor, boundary);
         return true;
+    }
+
+    private static bool CanCommitSelectedActionSlotP12Mutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        IDailyV1SelectedActorActionExecutionBoundary boundary)
+    {
+        return !(boundary is IDailyV1SelectedActionSlotP12MutationBoundary p12Boundary)
+            || !p12Boundary.OwnsSelectedActionSlotP12Mutation
+            || p12Boundary.CanCommitSelectedActionSlotP12Mutation(graph, actor);
+    }
+
+    private static void NotifySelectedActionSlotP12MutationCommitted(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        IDailyV1SelectedActorActionExecutionBoundary boundary)
+    {
+        if (!(boundary is IDailyV1SelectedActionSlotP12MutationBoundary p12Boundary)
+            || !p12Boundary.OwnsSelectedActionSlotP12Mutation)
+            return;
+
+        string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+            + actor.RuntimeId;
+        long revision = actor.ActionSlot?.Revision ?? -1L;
+        if (!p12Boundary.NotifySelectedActionSlotP12MutationCommitted(
+                graph, actor, sectionId, revision))
+            throw new InvalidOperationException(
+                "A committed selected Core action-slot mutation could not publish its exact P12 owner-section invalidation.");
     }
 
     internal static void ProcessScheduledRequestAction(
@@ -540,7 +572,8 @@ internal static class DailyV1SelectedActorActionExecutionStage
         }
 
         if (!graph.TryCommitCurrentActionSlot(actor, action, forcedPayload,
-                () => boundary.CanCommitSelectedActionSlot(actor, forcedPayload)))
+                () => boundary.CanCommitSelectedActionSlot(actor, forcedPayload)
+                    && CanCommitSelectedActionSlotP12Mutation(graph, actor, boundary)))
         {
             boundary.CancelPreparedSelectedActionProjection(actor, forcedPayload);
             MarkForcedEscapeSkipped(boundary, directive, absoluteDay,
@@ -550,6 +583,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
         if (!boundary.TryPublishSelectedActionProjection(actor, forcedPayload))
             throw new InvalidOperationException(
                 "A committed forced Escape action could not publish its Unity projection.");
+        NotifySelectedActionSlotP12MutationCommitted(graph, actor, boundary);
 
         if (!boundary.TryGetForcedEscapeBoundary(actor, action,
                 out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary crimeBoundary)

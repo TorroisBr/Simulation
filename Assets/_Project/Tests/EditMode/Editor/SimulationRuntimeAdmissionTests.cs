@@ -3443,12 +3443,37 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(bootstrap.Bootstrap, Is.SameAs(activeSession.Composition),
                 "Rejected admission must keep the original active-session reference authoritative.");
 
+            DailyV1SelectedRuntimeOwnerGraph selectedOwnerGraph = bootstrap.Runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(selectedOwnerGraph, Is.Not.Null);
+            Dictionary<string, long> actionRevisionsBefore = selectedOwnerGraph.Npcs.ToDictionary(
+                owner => owner.RuntimeId,
+                owner => owner.ActionSlot.Revision,
+                StringComparer.Ordinal);
+
             bootstrap.Runtime.AdvanceDay();
             Assert.That(bootstrap.TryPublishRestoredSession(activeSession, activeSession), Is.False,
                 "A normal completed advance cannot be relabeled as restored-continuation admission.");
             Assert.That(bootstrap.Runtime.TryGetCompletedDailyCaptureToken(
                 out DailyCaptureEligibilityToken completedToken,
                 out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
+            DailyV1NpcRuntimeOwners changedActionOwner = selectedOwnerGraph.Npcs.FirstOrDefault(owner =>
+                actionRevisionsBefore.TryGetValue(owner.RuntimeId, out long previousRevision)
+                && owner.ActionSlot.Revision > previousRevision);
+            Assert.That(changedActionOwner, Is.Not.Null,
+                "The authored Daily-v1 day changes at least one Core current-action owner.");
+            OwnerSectionCensusSnapshot actionOwnerSection = completedToken.OwnerSections.Single(section =>
+                section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+                    + changedActionOwner.RuntimeId);
+            Assert.That(actionOwnerSection.Role, Is.EqualTo(OwnerSectionRole.Required));
+            Assert.That(actionOwnerSection.OwnerInstanceIdentity, Is.SameAs(changedActionOwner),
+                "The captured current-action row must identify the same selected Core NPC owner instance.");
+            Assert.That(actionOwnerSection.Cardinality,
+                Is.EqualTo(changedActionOwner.ActionSlot.CurrentAction == null ? 0 : 1));
+            Assert.That(actionOwnerSection.Revision, Is.EqualTo(changedActionOwner.ActionSlot.Revision),
+                "The completed P12 row must carry the committed Core action-slot revision.");
+            Assert.That(bootstrap.Runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure postActionCensusFailure), Is.True,
+                postActionCensusFailure.ToString());
             Assert.That(completedToken.BoundaryProvenance, Is.EqualTo(DailyCaptureBoundaryProvenance.CompletedAdvance),
                 "A rejected exchange must leave the source completed-boundary behavior intact.");
             Assert.That(bootstrap.Bootstrap, Is.SameAs(activeSession.Composition));
