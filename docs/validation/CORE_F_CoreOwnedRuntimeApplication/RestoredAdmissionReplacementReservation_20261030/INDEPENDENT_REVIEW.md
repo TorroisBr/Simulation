@@ -25,6 +25,9 @@ Independent exact-tip review by `/root/restore_core_cut_audit` returned PASS for
 - The official manifest reports stable inputs and binds the updated test source SHA-256 `dd1d867046250bd677b43c61cf3e02fc4fd7b497d7a33a3f8a1d815ad33c1118`.
 - `git diff --check` passed for the candidate source change.
 - Private runner evidence remains in its protected E: evidence root.
-- Unity app-backed restoration remains unvalidated. The prior official Unity runner attempts exited before test execution and produced no test XML; they are not counted as a pass or a source failure.
+- Focused official Unity EditMode case `P12GPoliticalBindingRestoreTests.IntegratedMilitaryAndSiteKnowledgeOwnersPersistRestoreAndContinueWithExactParity`: 1/1 passed, 0 failed or skipped.
+- Unity run: `5654693c6e404f02a361834924b01cf4`; manifest reports `inputStable=true`, Unity executable stable, and current candidate tree `c10fdbcfe766ace0a1a68d55f40732524e965791`.
+- Retained private XML SHA-256: `e037fc52e7f692dee7a427abaaf5b0a699ecdb2606ca0dd76a329cb832b71ec6`; log SHA-256: `326b2e9b9fa0042827fa82ea57e1250261db0006b907e056187b3465d5e879c0`.
+- The earlier no-result Unity runs remain failed-to-start attempts and are not counted as test failures. This focused pass covers the app-backed initial image restore path; the exact replacement-reservation negative/positive cases are covered by CoreValidation. Full EditMode, official Smoke, and full CORE-F acceptance remain outstanding.
 
 The CoreValidation run used a checkout containing a Unity `Library` directory; it makes no Library-independence claim. No canonical branch was changed.
