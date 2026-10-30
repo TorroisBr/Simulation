@@ -4894,7 +4894,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
                 OwnerSectionCensusWitness witness = censusProvider.GetCurrentCensus();
                 string sectionId = NpcTravelStateCensusProvider.SectionIdFor(provider.RuntimeId);
-                if (!ReferenceEquals(witness.OwnerInstanceIdentity, provider.NpcOwner)
+                if (!ReferenceEquals(witness.OwnerInstanceIdentity, provider.NpcOwner.SelectedCensusOwnerIdentity)
                     || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
                     || witness.SchemaVersion != NpcTravelStateCensusProvider.SchemaVersion
                     || witness.Cardinality != 1

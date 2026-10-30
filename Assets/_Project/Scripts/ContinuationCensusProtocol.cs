@@ -908,7 +908,7 @@ public sealed class ContinuationCensusProtocol
                 }
                 else if (provider is NpcLifecycleCensusProvider npcProvider)
                 {
-                    ownerIdentity = npcProvider.NpcOwner;
+                    ownerIdentity = npcProvider.NpcOwner.SelectedCensusOwnerIdentity;
                     sectionId = NpcLifecycleCensusProvider.SectionIdFor(
                         npcProvider.NpcOwner.RuntimeId,
                         npcProvider.IsResidence);
@@ -916,14 +916,14 @@ public sealed class ContinuationCensusProtocol
                 }
                 else if (provider is P12CrimeJusticeCensusProvider.NpcStatusSectionProvider crimeJusticeProvider)
                 {
-                    ownerIdentity = crimeJusticeProvider.NpcOwner;
+                    ownerIdentity = crimeJusticeProvider.NpcOwner.SelectedCensusOwnerIdentity;
                     sectionId = P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(
                         crimeJusticeProvider.RuntimeId);
                     schemaVersion = P12CrimeJusticeCensusProvider.SchemaVersion;
                 }
                 else if (provider is NpcCurrentActionCensusProvider currentActionProvider)
                 {
-                    ownerIdentity = currentActionProvider.NpcOwner;
+                    ownerIdentity = currentActionProvider.NpcOwner.SelectedCensusOwnerIdentity;
                     sectionId = NpcCurrentActionCensusProvider.SectionIdFor(
                         currentActionProvider.NpcOwner.RuntimeId);
                     schemaVersion = NpcCurrentActionCensusProvider.SchemaVersion;
@@ -1816,7 +1816,7 @@ public sealed class ContinuationCensusProtocol
             bool sameNpc = existed
                 && npcTravelStateNpcOwnersBySection.TryGetValue(candidate.SectionId, out NpcRuntime oldNpc)
                 && ReferenceEquals(oldNpc, candidate.NpcOwner);
-            bool sameOwner = existed && ReferenceEquals(prior.OwnerInstanceIdentity, candidate.NpcOwner);
+            bool sameOwner = existed && ReferenceEquals(prior.OwnerInstanceIdentity, candidate.Witness.OwnerInstanceIdentity);
             if (sameNpc && sameOwner)
             {
                 if (!TryReadAndValidate(prior, allowRevisionAdvance: false, out _, out failure))
@@ -2792,7 +2792,7 @@ public sealed class ContinuationCensusProtocol
 
             if (string.IsNullOrWhiteSpace(provider.RuntimeId)
                 || provider.NpcOwner == null
-                || !ReferenceEquals(provider.NpcOwner, witness.OwnerInstanceIdentity)
+                || !ReferenceEquals(provider.NpcOwner.SelectedCensusOwnerIdentity, witness.OwnerInstanceIdentity)
                 || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
                 || witness.Cardinality != 1
                 || witness.Revision != provider.NpcOwner.TravelStateRevision
@@ -2944,7 +2944,7 @@ public sealed class ContinuationCensusProtocol
                 || !registeredSections.TryGetValue(candidate.SectionId, out RegisteredSection section)
                 || !npcTravelStateNpcOwnersBySection.TryGetValue(candidate.SectionId, out NpcRuntime npc)
                 || !ReferenceEquals(npc, candidate.NpcOwner)
-                || (section.HasBaseline && !ReferenceEquals(section.OwnerInstanceIdentity, candidate.NpcOwner)))
+                || (section.HasBaseline && !ReferenceEquals(section.OwnerInstanceIdentity, candidate.Witness.OwnerInstanceIdentity)))
             { failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
         }
         failure = ContinuationCensusFailure.None;
