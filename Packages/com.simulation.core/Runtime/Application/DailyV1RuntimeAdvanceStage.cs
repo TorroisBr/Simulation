@@ -395,6 +395,20 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         }
         ownerSections = coreOwnedGenealogySections;
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12FSections(
+                executionState.SelectedRuntimeOwnerGraph,
+                executionState.SelectedActorChoiceStore,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedP12FSections,
+                out _))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        ownerSections = coreOwnedP12FSections;
+
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
                 executionState.SelectedRuntimeOwnerGraph,
                 ownerSections,
@@ -513,6 +527,103 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
 /// </summary>
 internal static class DailyV1SelectedRuntimeOwnerCensusSource
 {
+    internal static bool TryRebindCoreOwnedP12FSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        ActorChoiceStore actorChoiceStore,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        diagnostic = null;
+        if (graph?.ScheduledDirectives == null
+            || graph.TravelParties == null
+            || graph.Expeditions == null
+            || graph.PersonStore == null
+            || actorChoiceStore == null
+            || !ReferenceEquals(actorChoiceStore.PersonStore, graph.PersonStore)
+            || hostSections == null)
+        {
+            diagnostic = "The Core P12-F census requires the exact actor-choice, directive, travel-party, expedition, and PersonStore owners.";
+            return false;
+        }
+
+        OwnerSectionCensusSnapshot[] copied = new OwnerSectionCensusSnapshot[hostSections.Count];
+        Dictionary<string, int> indexes = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < hostSections.Count; i++)
+        {
+            OwnerSectionCensusSnapshot section = hostSections[i];
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !indexes.TryAdd(section.SectionId, i))
+            {
+                diagnostic = "The host census contains a missing or duplicate owner-section identity.";
+                return false;
+            }
+            copied[i] = section;
+        }
+
+        OwnerSectionCensusWitness[] witnesses;
+        try
+        {
+            witnesses = new OwnerSectionCensusWitness[]
+            {
+                new ActorChoiceP11CensusProvider(actorChoiceStore).GetCurrentCensus(),
+                new ScheduledDirectiveCensusProvider(graph.ScheduledDirectives).GetCurrentCensus(),
+                new TravelPartyCensusProvider(graph.TravelParties).GetCurrentCensus(),
+                new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus()
+            };
+        }
+        catch (InvalidOperationException)
+        {
+            diagnostic = "A Core P12-F census provider could not read its exact owner.";
+            return false;
+        }
+
+        HashSet<string> witnessSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < witnesses.Length; i++)
+        {
+            OwnerSectionCensusWitness witness = witnesses[i];
+            if (witness == null
+                || string.IsNullOrWhiteSpace(witness.SectionId)
+                || witness.OwnerInstanceIdentity == null
+                || witness.SchemaVersion <= 0
+                || witness.Cardinality < 0
+                || witness.Revision < 0L
+                || !witnessSectionIds.Add(witness.SectionId)
+                || !indexes.TryGetValue(witness.SectionId, out int index))
+            {
+                diagnostic = witness == null
+                    ? "A Core P12-F census provider returned no witness."
+                    : "The host census is missing, duplicates, or cannot bind Core P12-F section "
+                        + witness.SectionId + ".";
+                return false;
+            }
+
+            OwnerSectionCensusSnapshot hostSection = copied[index];
+            if (hostSection.Role != OwnerSectionRole.Required
+                || hostSection.SchemaVersion != witness.SchemaVersion
+                || !ReferenceEquals(hostSection.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+                || hostSection.Cardinality != witness.Cardinality
+                || hostSection.Revision != witness.Revision)
+            {
+                diagnostic = "The host census differs from the exact Core P12-F owner at "
+                    + witness.SectionId + ".";
+                return false;
+            }
+
+            copied[index] = new OwnerSectionCensusSnapshot(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision);
+        }
+
+        ownerSections = Array.AsReadOnly(copied);
+        return true;
+    }
+
     internal static bool TryRebindCoreOwnedGenealogySection(
         DailyV1SelectedRuntimeOwnerGraph graph,
         IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
