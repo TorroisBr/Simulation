@@ -422,7 +422,7 @@ public sealed partial class SimulationRuntime
             if (witness == null
                 || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
                 || witness.SchemaVersion != NpcTravelStateCensusProvider.SchemaVersion
-                || !ReferenceEquals(witness.OwnerInstanceIdentity, installed)
+                || !ReferenceEquals(witness.OwnerInstanceIdentity, installed.SelectedCensusOwnerIdentity)
                 || witness.Cardinality != 1
                 || witness.Revision != installed.TravelStateRevision
                 || !actual.Add(witness.SectionId))
