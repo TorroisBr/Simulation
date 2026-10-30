@@ -13,9 +13,39 @@ internal static class P12ADailyV1OwnerSectionEncoder
         out IReadOnlyList<P12AOwnerSection> sections,
         out P12AResult result)
     {
+        return TryEncode(census, runtimeIdentity, d, e, f, null, capturedDay,
+            out sections, out result);
+    }
+
+    internal static bool TryEncodeWithCoreP12FSections(
+        IReadOnlyList<OwnerSectionCensusSnapshot> census,
+        P12CRuntimeIdentityOwnerSnapshot runtimeIdentity,
+        P12DDailyV1OwnerPackage d,
+        P12EDailyV1OwnerPackage e,
+        IReadOnlyList<P12AOwnerSection> coreP12FSections,
+        long capturedDay,
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
+        return TryEncode(census, runtimeIdentity, d, e, null, coreP12FSections,
+            capturedDay, out sections, out result);
+    }
+
+    private static bool TryEncode(
+        IReadOnlyList<OwnerSectionCensusSnapshot> census,
+        P12CRuntimeIdentityOwnerSnapshot runtimeIdentity,
+        P12DDailyV1OwnerPackage d,
+        P12EDailyV1OwnerPackage e,
+        P12FDailyV1OwnerCapture f,
+        IReadOnlyList<P12AOwnerSection> coreP12FSections,
+        long capturedDay,
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
         sections = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue);
-        if (census == null || runtimeIdentity == null || d == null || e == null || f == null
+        if (census == null || runtimeIdentity == null || d == null || e == null
+            || ((f == null) == (coreP12FSections == null))
             || capturedDay < 0L || d.CitySnapshots == null || d.NpcDRows == null
             || d.NpcFRows == null || d.NpcDRows.Count != d.NpcFRows.Count
             || d.PersonSnapshot == null || d.GenealogySnapshot == null
@@ -93,18 +123,25 @@ internal static class P12ADailyV1OwnerSectionEncoder
         encoded.Add(outcomes); encoded.Add(crimeKnowledge); encoded.Add(reactions);
         encoded.AddRange(receipts);
 
-        if (!P12AFPoliticalKnowledgeCodec.TryEncode(f.PoliticalKnowledgeSnapshot,
-                out P12AOwnerSection politicalKnowledge, out result)
-            || !P12AFScheduledDirectiveCodec.TryEncode(f.DirectiveSnapshot,
-                out P12AOwnerSection directives, out result)
-            || !P12AActorChoiceCodec.TryEncode(f.ActorChoiceSnapshot,
-                out P12AOwnerSection actorChoices, out result)
-            || !P12AFCommitmentOwnerCodec.TryEncodeTravelParties(f.TravelPartySnapshot,
-                out P12AOwnerSection travelParties, out result)
-            || !P12AFCommitmentOwnerCodec.TryEncodeExpeditions(f.ExpeditionSnapshot,
-                out P12AOwnerSection expeditions, out result)) return false;
-        encoded.Add(politicalKnowledge); encoded.Add(directives); encoded.Add(actorChoices);
-        encoded.Add(travelParties); encoded.Add(expeditions);
+        if (coreP12FSections != null)
+        {
+            encoded.AddRange(coreP12FSections);
+        }
+        else
+        {
+            if (!P12AFPoliticalKnowledgeCodec.TryEncode(f.PoliticalKnowledgeSnapshot,
+                    out P12AOwnerSection politicalKnowledge, out result)
+                || !P12AFScheduledDirectiveCodec.TryEncode(f.DirectiveSnapshot,
+                    out P12AOwnerSection directives, out result)
+                || !P12AActorChoiceCodec.TryEncode(f.ActorChoiceSnapshot,
+                    out P12AOwnerSection actorChoices, out result)
+                || !P12AFCommitmentOwnerCodec.TryEncodeTravelParties(f.TravelPartySnapshot,
+                    out P12AOwnerSection travelParties, out result)
+                || !P12AFCommitmentOwnerCodec.TryEncodeExpeditions(f.ExpeditionSnapshot,
+                    out P12AOwnerSection expeditions, out result)) return false;
+            encoded.Add(politicalKnowledge); encoded.Add(directives); encoded.Add(actorChoices);
+            encoded.Add(travelParties); encoded.Add(expeditions);
+        }
 
         encoded.Sort((left, right) => StringComparer.Ordinal.Compare(left?.Id, right?.Id));
         for (int i = 0; i < encoded.Count; i++)

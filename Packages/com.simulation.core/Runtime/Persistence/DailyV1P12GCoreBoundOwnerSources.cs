@@ -868,3 +868,66 @@ internal sealed class DailyV1P12GCoreBoundNpcOwnerSources
         }
     }
 }
+
+/// <summary>
+/// Encodes P12-F sections from the exact immutable Core owner snapshots bound
+/// to one active continuation-save operation.
+/// </summary>
+internal static class DailyV1P12FCoreOwnerSectionEncoder
+{
+    internal static bool TryEncode(
+        DailyV1P12GCoreBoundOwnerSources sources,
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
+        sections = null;
+        result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        if (sources == null
+            || sources.PoliticalKnowledge == null
+            || sources.ActorChoices == null
+            || sources.Directives == null
+            || sources.TravelParties == null
+            || sources.Expeditions == null)
+            return false;
+
+        if (!P12AFPoliticalKnowledgeCodec.TryEncode(sources.PoliticalKnowledge,
+                out P12AOwnerSection politicalKnowledge, out result)
+            || !P12AFScheduledDirectiveCodec.TryEncode(sources.Directives,
+                out P12AOwnerSection directives, out result)
+            || !P12AActorChoiceCodec.TryEncode(sources.ActorChoices,
+                out P12AOwnerSection actorChoices, out result)
+            || !P12AFCommitmentOwnerCodec.TryEncodeTravelParties(sources.TravelParties,
+                out P12AOwnerSection travelParties, out result)
+            || !P12AFCommitmentOwnerCodec.TryEncodeExpeditions(sources.Expeditions,
+                out P12AOwnerSection expeditions, out result))
+            return false;
+
+        List<P12AOwnerSection> encoded = new List<P12AOwnerSection>
+        {
+            politicalKnowledge,
+            directives,
+            actorChoices,
+            travelParties,
+            expeditions
+        };
+        encoded.Sort((left, right) =>
+            StringComparer.Ordinal.Compare(left?.Id, right?.Id));
+        for (int index = 0; index < encoded.Count; index++)
+        {
+            P12AOwnerSection section = encoded[index];
+            if (section == null || string.IsNullOrWhiteSpace(section.Id)
+                || section.Role != OwnerSectionRole.Required
+                || (index > 0 && string.Equals(encoded[index - 1].Id,
+                    section.Id, StringComparison.Ordinal)))
+            {
+                result = new P12AResult(P12AResultCode.MissingOrDuplicateSection,
+                    section?.Id);
+                return false;
+            }
+        }
+
+        sections = encoded.AsReadOnly();
+        result = null;
+        return true;
+    }
+}

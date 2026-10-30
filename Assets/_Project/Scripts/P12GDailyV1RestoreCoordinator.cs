@@ -963,10 +963,13 @@ internal static partial class P12GDailyV1RestoreCoordinator
         bool composed;
         if (continuationSaveOperation != null)
         {
-            if (!P12CRuntimeIdentityOwnerCaptureAdapter.TryCapture(sourceSession.IdentityRegistry,
+            if (!continuationSaveOperation.TryEncodeCoreP12FOwnerSections(
+                    out IReadOnlyList<P12AOwnerSection> coreP12FSections, out result)
+                || !P12CRuntimeIdentityOwnerCaptureAdapter.TryCapture(sourceSession.IdentityRegistry,
                     out P12CRuntimeIdentityOwnerSnapshot identitySnapshot)
-                || !P12ADailyV1OwnerSectionEncoder.TryEncode(ownerSections, identitySnapshot,
-                    d, e, f, token.AbsoluteDay,
+                || !P12ADailyV1OwnerSectionEncoder.TryEncodeWithCoreP12FSections(
+                    ownerSections, identitySnapshot, d, e, coreP12FSections,
+                    token.AbsoluteDay,
                     out IReadOnlyList<P12AOwnerSection> ownerSectionsEncoded, out result))
             {
                 if (result == null) result = new P12AResult(P12AResultCode.InvalidOwnerValue);

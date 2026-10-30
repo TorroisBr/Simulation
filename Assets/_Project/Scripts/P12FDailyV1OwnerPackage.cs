@@ -160,8 +160,7 @@ internal sealed class P12FDailyV1OwnerCapture
             return false;
         }
 
-        if (!DailyV1P12GCoreBoundOwnerSources.TryCapture(
-                operation,
+        if (!operation.TryCaptureCoreBoundP12FOwnerSources(
                 out DailyV1P12GCoreBoundOwnerSources sources,
                 out DailyV1P12GCoreBoundOwnerSourceCaptureFailure sourceFailure,
                 out _))

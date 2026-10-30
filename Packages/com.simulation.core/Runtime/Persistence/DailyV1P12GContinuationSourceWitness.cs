@@ -98,6 +98,7 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
     private DailyV1P12GCoreBoundSpatialOwnerSources coreSpatialOwnerSources;
     private DailyV1P12GCoreBoundNpcOwnerSources coreNpcOwnerSources;
     private DailyV1P12GCoreBoundCausalRootSources coreCausalRootSources;
+    private DailyV1P12GCoreBoundOwnerSources coreBoundP12FOwnerSources;
 
     internal DailyV1P12GContinuationSaveOperation(
         DailyV1Application application,
@@ -156,6 +157,106 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
     {
         if (!IsActive || sources == null || !sources.IsFor(this)) return false;
         return Interlocked.CompareExchange(ref coreCausalRootSources, sources, null) == null;
+    }
+
+    internal bool TryCaptureCoreBoundP12FOwnerSources(
+        out DailyV1P12GCoreBoundOwnerSources sources,
+        out DailyV1P12GCoreBoundOwnerSourceCaptureFailure failure,
+        out string diagnostic)
+    {
+        sources = Volatile.Read(ref coreBoundP12FOwnerSources);
+        failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.InvalidSaveOperation;
+        diagnostic = null;
+        if (!IsActive || !TryRevalidate(out _))
+        {
+            sources = null;
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary;
+            diagnostic = "A current active Core continuation-save witness is required.";
+            return false;
+        }
+
+        if (sources != null)
+        {
+            if (!sources.IsFor(this))
+            {
+                sources = null;
+                failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.OwnerCensusMismatch;
+                diagnostic = "The bound P12-F source snapshots belong to another save operation.";
+                return false;
+            }
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.None;
+            return true;
+        }
+
+        if (!DailyV1P12GCoreBoundOwnerSources.TryCapture(
+                this, out DailyV1P12GCoreBoundOwnerSources candidate,
+                out failure, out diagnostic)
+            || candidate == null)
+            return false;
+
+        if (Interlocked.CompareExchange(ref coreBoundP12FOwnerSources,
+                candidate, null) == null)
+        {
+            sources = candidate;
+        }
+        else
+        {
+            sources = Volatile.Read(ref coreBoundP12FOwnerSources);
+            if (sources == null || !sources.IsFor(this))
+            {
+                sources = null;
+                failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.OwnerCensusMismatch;
+                diagnostic = "The P12-F source snapshots could not bind to the active save operation.";
+                return false;
+            }
+        }
+
+        if (!TryRevalidate(out DailyCaptureEligibilityFailure staleFailure))
+        {
+            sources = null;
+            failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary;
+            diagnostic = "The Core save witness changed while P12-F sources were bound: "
+                + staleFailure + ".";
+            return false;
+        }
+
+        failure = DailyV1P12GCoreBoundOwnerSourceCaptureFailure.None;
+        diagnostic = null;
+        return true;
+    }
+
+    internal bool TryEncodeCoreP12FOwnerSections(
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
+        sections = null;
+        result = new P12AResult(P12AResultCode.CaptureRejected);
+        if (!TryCaptureCoreBoundP12FOwnerSources(
+                out DailyV1P12GCoreBoundOwnerSources sources,
+                out DailyV1P12GCoreBoundOwnerSourceCaptureFailure captureFailure,
+                out _)
+            || sources == null || !sources.IsFor(this))
+        {
+            result = new P12AResult(captureFailure
+                == DailyV1P12GCoreBoundOwnerSourceCaptureFailure.StaleSourceBoundary
+                ? P12AResultCode.CaptureRejected
+                : P12AResultCode.OwnerGraphRejected,
+                "p12f.core-owner-sources." + captureFailure);
+            return false;
+        }
+
+        if (!DailyV1P12FCoreOwnerSectionEncoder.TryEncode(
+                sources, out sections, out result))
+            return false;
+
+        if (!TryRevalidate(out _))
+        {
+            sections = null;
+            result = new P12AResult(P12AResultCode.CaptureRejected);
+            return false;
+        }
+
+        return true;
     }
 
     internal bool TryCaptureCoreCausalRootSources(

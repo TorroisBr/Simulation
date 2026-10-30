@@ -4975,6 +4975,29 @@ public sealed class SimulationRuntimeAdmissionTests
                     out string captureDiagnostic), Is.True,
                     captureFailure + ": " + captureDiagnostic);
                 Assert.That(capturedImage, Is.Not.Null);
+                Assert.That(operation.TryEncodeCoreP12FOwnerSections(
+                        out IReadOnlyList<P12AOwnerSection> coreP12FSections,
+                        out P12AResult coreP12FResult), Is.True,
+                    coreP12FResult?.SectionCode ?? coreP12FResult?.Code.ToString());
+                foreach (P12AOwnerSection coreP12FSection in coreP12FSections)
+                {
+                    P12AOwnerSection imageSection = capturedImage.Sections.Single(
+                        section => section.Id == coreP12FSection.Id);
+                    Assert.That(imageSection.Major, Is.EqualTo(coreP12FSection.Major));
+                    Assert.That(imageSection.Minor, Is.EqualTo(coreP12FSection.Minor));
+                    Assert.That(imageSection.Role, Is.EqualTo(coreP12FSection.Role));
+                    Assert.That(imageSection.Revision, Is.EqualTo(coreP12FSection.Revision));
+                    Assert.That(imageSection.Rows.Count, Is.EqualTo(coreP12FSection.Rows.Count));
+                    for (int rowIndex = 0; rowIndex < coreP12FSection.Rows.Count; rowIndex++)
+                    {
+                        Assert.That(imageSection.Rows[rowIndex].OwnerKey,
+                            Is.EqualTo(coreP12FSection.Rows[rowIndex].OwnerKey));
+                        Assert.That(imageSection.Rows[rowIndex].Revision,
+                            Is.EqualTo(coreP12FSection.Rows[rowIndex].Revision));
+                        Assert.That(imageSection.Rows[rowIndex].Payload,
+                            Is.EqualTo(coreP12FSection.Rows[rowIndex].Payload));
+                    }
+                }
                 Assert.That(capturedRestore, Is.Not.Null);
                 Assert.That(capturedImage.Header.WorldId,
                     Is.EqualTo(operation.SourceWitness.Token.WorldId.Value));
