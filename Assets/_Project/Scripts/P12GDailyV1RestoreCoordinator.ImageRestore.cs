@@ -17,11 +17,12 @@ internal static partial class P12GDailyV1RestoreCoordinator
         out string diagnostic,
         Action<P12GDailyV1RestoreStage> stageObserver = null,
         DailyV1Application application = null,
-        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
+        Action<SimulationActiveSession> privateCandidateObserverForTest = null)
         => TryCreateRestoredSessionFromImageCore(image, expectedCompatibility, null,
             configuration, effective, calendar, selectedDefinitions, bootstrapAdmissionContext,
             out restoredSession, out failure, out diagnostic, stageObserver,
-            application, replacementOperation);
+            application, replacementOperation, privateCandidateObserverForTest);
 
     internal static bool TryCreateRestoredSessionFromDotNetV2Image(
         P12AContinuationImage image,
@@ -36,11 +37,12 @@ internal static partial class P12GDailyV1RestoreCoordinator
         out string diagnostic,
         Action<P12GDailyV1RestoreStage> stageObserver = null,
         DailyV1Application application = null,
-        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
+        Action<SimulationActiveSession> privateCandidateObserverForTest = null)
         => TryCreateRestoredSessionFromImageCore(image, null, expectedCompatibility,
             configuration, effective, calendar, selectedDefinitions, bootstrapAdmissionContext,
             out restoredSession, out failure, out diagnostic, stageObserver,
-            application, replacementOperation);
+            application, replacementOperation, privateCandidateObserverForTest);
 
     /// <summary>
     /// Builds a private Daily-v1 candidate solely from a fully decoded persisted
@@ -61,7 +63,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         out string diagnostic,
         Action<P12GDailyV1RestoreStage> stageObserver = null,
         DailyV1Application application = null,
-        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
+        Action<SimulationActiveSession> privateCandidateObserverForTest = null)
     {
         restoredSession = null;
         failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
@@ -311,6 +314,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 return false;
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.CandidateComposed);
+            privateCandidateObserverForTest?.Invoke(candidate);
 
             SimulationRuntime targetRuntime = candidate.Runtime;
             if (!TryValidatePersonNpcGenealogyBindings(targetRuntime, out diagnostic))
@@ -331,10 +335,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                         imageCensus,
                         replacementOperation?.ExpectedSession,
                         replacementOperation,
-                        stage => stageObserver?.Invoke(
-                            stage == DailyV1RestoredImageOwnerVectorStage.Captured
-                                ? P12GDailyV1RestoreStage.TargetOwnerVectorCaptured
-                                : P12GDailyV1RestoreStage.TargetOwnerVectorValidated),
+                        _ => stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorCaptured),
                         out targetSections,
                         out targetEpoch,
                         out _,
@@ -363,7 +364,6 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
                     return false;
                 }
-                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorValidated);
             }
 
             if (!TryValidateDailyV1ExpeditionExactZero(candidate.Composition, targetSections,

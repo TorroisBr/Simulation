@@ -64,6 +64,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         Assert.That(foreignDecodedOwners, Is.Null);
         Assert.That(foreignImageResult?.Code, Is.EqualTo(P12AResultCode.WrongThread));
 
+        List<P12GDailyV1RestoreStage> restoreStages = new List<P12GDailyV1RestoreStage>();
         Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
                 image,
                 image.Header.Compatibility,
@@ -75,8 +76,18 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 out SimulationActiveSession restored,
                 out P12GDailyV1RestoreFailure restoreFailure,
                 out string restoreDiagnostic,
+                stageObserver: restoreStages.Add,
                 application: restoreApplication),
             Is.True, restoreFailure + ": " + restoreDiagnostic);
+        int ownerVectorValidatedStageIndex = restoreStages.IndexOf(
+            P12GDailyV1RestoreStage.TargetOwnerVectorValidated);
+        Assert.That(restoreStages.Count(stage =>
+                stage == P12GDailyV1RestoreStage.TargetOwnerVectorValidated),
+            Is.EqualTo(1), "The target owner vector validation stage must be emitted once.");
+        Assert.That(ownerVectorValidatedStageIndex,
+            Is.GreaterThan(restoreStages.IndexOf(P12GDailyV1RestoreStage.CandidateComposed)));
+        Assert.That(ownerVectorValidatedStageIndex,
+            Is.LessThan(restoreStages.IndexOf(P12GDailyV1RestoreStage.TargetSpatialInvariantsValidated)));
         Assert.That(restored, Is.Not.Null);
         Assert.That(restored.Composition.SelectedDefinitions,
             Is.SameAs(anchor.Composition.SelectedDefinitions),
@@ -127,6 +138,80 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 Is.EqualTo(EncodeCompletedImage(control.Session, anchor.NormalContext)),
                 "Independent same-input executions must remain byte-identical at T+" + boundary + ".");
         }
+    }
+
+    [Test]
+    public void CoreImageRestoreRejectsPrivateTargetRosterMutationAfterOwnerVectorCaptureAtomically()
+    {
+        AnchorFixture anchor = CreateAnchorFixture("P12-G Core image owner-vector atomicity anchor");
+        SyntheticSession source = CreateSyntheticSession(anchor, "P12-G Core image owner-vector source");
+        Assert.That(source.Session.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+            Is.True, sourceAdvance.ToString());
+
+        byte[] sourceImageBytes = EncodeCompletedImage(source.Session, anchor.NormalContext);
+        P12AContinuationImage image = DecodeCompletedImage(
+            sourceImageBytes, source.Session, anchor.NormalContext);
+        DailyV1Application restoreApplication = new DailyV1Application();
+        Assert.That(restoreApplication.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext restoreBootstrapContext), Is.True);
+
+        SimulationActiveSession privateCandidate = null;
+        bool mutationInjected = false;
+        bool targetRosterMutationApplied = false;
+        List<P12GDailyV1RestoreStage> restoreStages = new List<P12GDailyV1RestoreStage>();
+        Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+            image,
+            image.Header.Compatibility,
+            anchor.Configuration,
+            anchor.Runtime.Configuration,
+            anchor.Composition.Calendar,
+            anchor.Composition.SelectedDefinitions,
+            restoreBootstrapContext,
+            out SimulationActiveSession restored,
+            out P12GDailyV1RestoreFailure failure,
+            out string diagnostic,
+            stageObserver: stage =>
+            {
+                restoreStages.Add(stage);
+                if (stage != P12GDailyV1RestoreStage.TargetOwnerVectorCaptured) return;
+
+                mutationInjected = true;
+                Assert.That(privateCandidate, Is.Not.Null,
+                    "The image candidate must exist before its first target owner-vector capture.");
+                Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.False,
+                    "The candidate remains private while the persisted image vector is being checked.");
+                string lateNpcId = privateCandidate.Composition.RuntimeIdAllocator.AllocateNpcId();
+                NpcRuntime lateNpc = new NpcRuntime(
+                    lateNpcId,
+                    SimulationTestFactory.CreateNpc("p12g-private-image-target-late-npc"));
+                Assert.That(privateCandidate.Runtime.TryRegisterNpc(
+                    lateNpc, out WorldNpcRegistryFailure registerFailure),
+                    Is.True, registerFailure.ToString());
+                targetRosterMutationApplied = true;
+            },
+            application: restoreApplication,
+            privateCandidateObserverForTest: candidate => privateCandidate = candidate),
+            Is.False);
+
+        Assert.That(mutationInjected, Is.True);
+        Assert.That(targetRosterMutationApplied, Is.True);
+        Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetOwnerVectorFailed), diagnostic);
+        Assert.That(restored, Is.Null);
+        Assert.That(restoreStages.Count(stage =>
+                stage == P12GDailyV1RestoreStage.TargetOwnerVectorValidated),
+            Is.EqualTo(1), "The persisted image owner vector must be validated exactly once.");
+        Assert.That(restoreStages.Count(stage => stage == P12GDailyV1RestoreStage.CandidateGuardBound),
+            Is.EqualTo(1), "The private candidate must bind its guard before the final owner-vector recapture.");
+        Assert.That(restoreStages.Contains(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured), Is.False);
+        Assert.That(restoreStages.Contains(P12GDailyV1RestoreStage.BoundaryAdmitted), Is.False);
+        Assert.That(diagnostic, Does.Contain("missing or has changed cardinality"));
+        Assert.That(privateCandidate, Is.Not.Null);
+        Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.True,
+            "The rejected candidate may have a bound private guard, but it remains unpublished and is discarded.");
+        Assert.That(restoreApplication.ActiveSession, Is.Null,
+            "A failed private image candidate must not replace or initialize the application's active session.");
+        Assert.That(EncodeCompletedImage(source.Session, anchor.NormalContext), Is.EqualTo(sourceImageBytes),
+            "Rejecting a private target mutation must preserve the source image exactly.");
     }
 
     [TestCase(QualificationImageCorruption.MissingForceReference)]

@@ -14,8 +14,7 @@ internal enum DailyV1P12FCoreOwnerRestoreStep
 
 internal enum DailyV1RestoredImageOwnerVectorStage : byte
 {
-    Captured = 1,
-    Validated = 2
+    Captured = 1
 }
 
 /// <summary>Private selected Core owner candidates staged together for P12-F.</summary>
@@ -1588,7 +1587,6 @@ internal sealed class DailyV1Application
                 out failure, out diagnostic))
             return false;
 
-        stageObserver?.Invoke(DailyV1RestoredImageOwnerVectorStage.Validated);
         return true;
     }
 
