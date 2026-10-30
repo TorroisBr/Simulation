@@ -808,6 +808,13 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        if (ContainsP12CRuntimeIdentitySections(encodedOwnerSections))
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12a.application-image-runtime-identities");
+            return false;
+        }
+
         if (!operation.TryRevalidate(out _))
             return false;
 
@@ -915,12 +922,18 @@ internal sealed class DailyV1Application
                 out result))
             return false;
 
+        if (!operation.TryEncodeCoreP12CRuntimeIdentitySections(
+                out IReadOnlyList<P12AOwnerSection> coreRuntimeIdentitySections,
+                out result))
+            return false;
+
         if (!operation.TryRevalidate(out _))
             return false;
 
         List<P12AOwnerSection> encodedRequiredOwnerSections = new List<P12AOwnerSection>(
-            causalSections.Count + encodedOwnerSections.Count);
+            causalSections.Count + coreRuntimeIdentitySections.Count + encodedOwnerSections.Count);
         encodedRequiredOwnerSections.AddRange(causalSections);
+        encodedRequiredOwnerSections.AddRange(coreRuntimeIdentitySections);
         encodedRequiredOwnerSections.AddRange(encodedOwnerSections);
         if (!P12ADailyV1ImageComposer.TryCompose(
                 header,
@@ -948,6 +961,17 @@ internal sealed class DailyV1Application
 
         result = null;
         return true;
+    }
+
+    private static bool ContainsP12CRuntimeIdentitySections(
+        IReadOnlyList<P12AOwnerSection> sections)
+    {
+        if (sections == null) return false;
+        foreach (P12AOwnerSection section in sections)
+            if (section?.Id != null
+                && section.Id.StartsWith("p12c.runtime-identities.", StringComparison.Ordinal))
+                return true;
+        return false;
     }
 
     /// <summary>

@@ -971,10 +971,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     out IReadOnlyList<P12AOwnerSection> coreP12ESections, out result)
                 || !continuationSaveOperation.TryEncodeCoreP12FOwnerSections(
                     out IReadOnlyList<P12AOwnerSection> coreP12FSections, out result)
-                || !P12CRuntimeIdentityOwnerCaptureAdapter.TryCapture(sourceSession.IdentityRegistry,
-                    out P12CRuntimeIdentityOwnerSnapshot identitySnapshot)
                 || !P12ADailyV1OwnerSectionEncoder.TryEncodeWithCoreP12DAndEOwnerSections(
-                    ownerSections, identitySnapshot, d, e, coreP12DSections,
+                    ownerSections, d, e, coreP12DSections,
                     coreP12DIncludesNpcRows, coreP12ESections, coreP12FSections,
                     token.AbsoluteDay,
                     out IReadOnlyList<P12AOwnerSection> ownerSectionsEncoded, out result))

@@ -14,7 +14,7 @@ internal static class P12ADailyV1OwnerSectionEncoder
         out P12AResult result)
     {
         return TryEncode(census, runtimeIdentity, d, e, f,
-            null, false, null, null, capturedDay, out sections, out result);
+            false, null, false, null, null, capturedDay, out sections, out result);
     }
 
     internal static bool TryEncodeWithCoreP12FSections(
@@ -28,7 +28,7 @@ internal static class P12ADailyV1OwnerSectionEncoder
         out P12AResult result)
     {
         return TryEncode(census, runtimeIdentity, d, e, null,
-            null, false, null, coreP12FSections, capturedDay, out sections, out result);
+            false, null, false, null, coreP12FSections, capturedDay, out sections, out result);
     }
 
     internal static bool TryEncodeWithCoreP12DOwnerSections(
@@ -44,13 +44,12 @@ internal static class P12ADailyV1OwnerSectionEncoder
         out P12AResult result)
     {
         return TryEncode(census, runtimeIdentity, d, e, null,
-            coreP12DSections, coreP12DIncludesNpcRows, null, coreP12FSections,
+            false, coreP12DSections, coreP12DIncludesNpcRows, null, coreP12FSections,
             capturedDay, out sections, out result);
     }
 
     internal static bool TryEncodeWithCoreP12DAndEOwnerSections(
         IReadOnlyList<OwnerSectionCensusSnapshot> census,
-        P12CRuntimeIdentityOwnerSnapshot runtimeIdentity,
         P12DDailyV1OwnerPackage d,
         P12EDailyV1OwnerPackage e,
         IReadOnlyList<P12AOwnerSection> coreP12DSections,
@@ -61,8 +60,8 @@ internal static class P12ADailyV1OwnerSectionEncoder
         out IReadOnlyList<P12AOwnerSection> sections,
         out P12AResult result)
     {
-        return TryEncode(census, runtimeIdentity, d, e, null,
-            coreP12DSections, coreP12DIncludesNpcRows, coreP12ESections,
+        return TryEncode(census, null, d, e, null,
+            true, coreP12DSections, coreP12DIncludesNpcRows, coreP12ESections,
             coreP12FSections, capturedDay, out sections, out result);
     }
 
@@ -72,6 +71,7 @@ internal static class P12ADailyV1OwnerSectionEncoder
         P12DDailyV1OwnerPackage d,
         P12EDailyV1OwnerPackage e,
         P12FDailyV1OwnerCapture f,
+        bool coreApplicationOwnsRuntimeIdentity,
         IReadOnlyList<P12AOwnerSection> coreP12DSections,
         bool coreP12DIncludesNpcRows,
         IReadOnlyList<P12AOwnerSection> coreP12ESections,
@@ -82,7 +82,9 @@ internal static class P12ADailyV1OwnerSectionEncoder
     {
         sections = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue);
-        if (census == null || runtimeIdentity == null || d == null || e == null
+        if (census == null
+            || (runtimeIdentity == null) != coreApplicationOwnsRuntimeIdentity
+            || d == null || e == null
             || ((f == null) == (coreP12FSections == null))
             || (coreP12DIncludesNpcRows && coreP12DSections == null)
             || capturedDay < 0L || d.CitySnapshots == null || d.NpcDRows == null
@@ -91,9 +93,12 @@ internal static class P12ADailyV1OwnerSectionEncoder
             || d.SpatialNetworkSnapshot == null) return false;
 
         List<P12AOwnerSection> encoded = new List<P12AOwnerSection>();
-        if (!P12ARuntimeIdentityOwnerCodec.TryEncode(runtimeIdentity,
-                out IReadOnlyList<P12AOwnerSection> identitySections, out result)) return false;
-        encoded.AddRange(identitySections);
+        if (!coreApplicationOwnsRuntimeIdentity)
+        {
+            if (!P12ARuntimeIdentityOwnerCodec.TryEncode(runtimeIdentity,
+                    out IReadOnlyList<P12AOwnerSection> identitySections, out result)) return false;
+            encoded.AddRange(identitySections);
+        }
         if (coreP12DSections != null)
         {
             encoded.AddRange(coreP12DSections);

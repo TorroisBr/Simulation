@@ -12701,6 +12701,60 @@ public sealed class SimulationRuntimeAdmissionTests
                 captureBeginFailure.ToString());
             using (captureOperation)
             {
+                Assert.That(captureOperation.TryEncodeCoreP12CRuntimeIdentitySections(
+                        out IReadOnlyList<P12AOwnerSection> coreIdentitySections,
+                        out P12AResult identityCaptureResult), Is.True,
+                    identityCaptureResult?.SectionCode ?? identityCaptureResult?.Code.ToString());
+                DailyV1RuntimeIdentityIndex identityOwner = sourceCoreSession.OwnerGraph.RuntimeIdentityIndex;
+                Assert.That(coreIdentitySections, Has.Count.EqualTo(4));
+                foreach (P12AOwnerSection identitySection in coreIdentitySections)
+                {
+                    DailyV1RuntimeIdentityKind kind;
+                    string familyId;
+                    switch (identitySection.Id)
+                    {
+                        case P12CRuntimeIdentitySectionContract.NpcsSectionId:
+                            kind = DailyV1RuntimeIdentityKind.Npc;
+                            familyId = "npc";
+                            break;
+                        case P12CRuntimeIdentitySectionContract.CitiesSectionId:
+                            kind = DailyV1RuntimeIdentityKind.City;
+                            familyId = "city";
+                            break;
+                        case P12CRuntimeIdentitySectionContract.LocationsSectionId:
+                            kind = DailyV1RuntimeIdentityKind.Location;
+                            familyId = "location";
+                            break;
+                        case P12CRuntimeIdentitySectionContract.RoutesSectionId:
+                            kind = DailyV1RuntimeIdentityKind.Route;
+                            familyId = "route";
+                            break;
+                        default:
+                            Assert.Fail("The Core identity encoder emitted an unselected identity family.");
+                            return;
+                    }
+
+                    OwnerSectionCensusWitness witness = identityOwner.GetOwnerSectionCensusWitness(kind);
+                    OwnerSectionCensusSnapshot census = captureOperation.SourceWitness.TokenOwnerSections
+                        .Single(section => section.SectionId == identitySection.Id);
+                    Assert.That(census.SchemaVersion, Is.EqualTo(witness.SchemaVersion));
+                    Assert.That(census.Role, Is.EqualTo(OwnerSectionRole.Required));
+                    Assert.That(census.OwnerInstanceIdentity, Is.SameAs(identityOwner));
+                    Assert.That(census.Cardinality, Is.EqualTo(witness.Cardinality));
+                    Assert.That(census.Revision, Is.EqualTo(witness.Revision));
+                    Assert.That(identitySection.Major, Is.EqualTo(witness.SchemaVersion));
+                    Assert.That(identitySection.Role, Is.EqualTo(OwnerSectionRole.Required));
+                    Assert.That(identitySection.Revision, Is.EqualTo(identityOwner.CensusRevision));
+                    Assert.That(identitySection.Rows.Count, Is.EqualTo(witness.Cardinality));
+                    string[] expectedRuntimeIds = identityOwner.CaptureRegisteredValues()
+                        .Where(value => value.Key == familyId)
+                        .Select(value => value.Value).ToArray();
+                    Assert.That(identitySection.Rows.Select(row => row.OwnerKey),
+                        Is.EqualTo(expectedRuntimeIds));
+                    Assert.That(identitySection.Rows.All(row => row.Revision == witness.Revision),
+                        Is.True);
+                }
+
                 DailyV1P12GCoreBoundNpcOwnerSources coreNpcSources =
                     captureOperation.CoreNpcOwnerSources;
                 Assert.That(coreNpcSources, Is.Not.Null);

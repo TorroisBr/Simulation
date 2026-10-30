@@ -99,6 +99,8 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
     private DailyV1P12GCoreBoundNpcOwnerSources coreNpcOwnerSources;
     private DailyV1P12GCoreBoundCausalRootSources coreCausalRootSources;
     private DailyV1P12GCoreBoundOwnerSources coreBoundP12FOwnerSources;
+    private DailyV1RuntimeIdentityIndex coreP12CRuntimeIdentityOwner;
+    private P12CRuntimeIdentityOwnerSnapshot coreP12CRuntimeIdentitySnapshot;
     private DailyV1P12ECoreOwnerSourceSnapshots coreP12EOwnerSources;
 
     internal DailyV1P12GContinuationSaveOperation(
@@ -265,6 +267,114 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
         }
 
         return true;
+    }
+
+    internal bool TryEncodeCoreP12CRuntimeIdentitySections(
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
+        sections = null;
+        result = new P12AResult(P12AResultCode.CaptureRejected);
+        if (!IsActive || !TryRevalidate(out _)) return false;
+
+        DailyV1SelectedRuntimeOwnerGraph graph = Session.OwnerGraph;
+        DailyV1RuntimeIdentityIndex identityOwner = graph?.RuntimeIdentityIndex;
+        if (identityOwner == null || !MatchesRuntimeIdentityCensus(
+                identityOwner, SourceWitness.TokenOwnerSections))
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12c.runtime-identity-owner-binding");
+            return false;
+        }
+
+        DailyV1RuntimeIdentityIndex boundOwner = Volatile.Read(ref coreP12CRuntimeIdentityOwner);
+        if (boundOwner == null)
+        {
+            DailyV1RuntimeIdentityIndex prior = Interlocked.CompareExchange(
+                ref coreP12CRuntimeIdentityOwner, identityOwner, null);
+            boundOwner = prior ?? identityOwner;
+        }
+        if (!ReferenceEquals(boundOwner, identityOwner))
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12c.runtime-identity-owner-binding");
+            return false;
+        }
+
+        P12CRuntimeIdentityOwnerSnapshot snapshot =
+            Volatile.Read(ref coreP12CRuntimeIdentitySnapshot);
+        if (snapshot == null)
+        {
+            P12CRuntimeIdentityOwnerSnapshot candidate = new P12CRuntimeIdentityOwnerSnapshot(
+                P12CRuntimeIdentityOwnerSnapshot.CurrentSchemaVersion,
+                identityOwner.CensusRevision,
+                identityOwner.CaptureRegisteredValues());
+            P12CRuntimeIdentityOwnerSnapshot prior = Interlocked.CompareExchange(
+                ref coreP12CRuntimeIdentitySnapshot, candidate, null);
+            snapshot = prior ?? candidate;
+        }
+
+        if (snapshot == null || snapshot.Revision != identityOwner.CensusRevision
+            || !MatchesRuntimeIdentityCensus(identityOwner, SourceWitness.TokenOwnerSections)
+            || !P12ARuntimeIdentityOwnerCodec.TryEncode(snapshot, out sections, out result))
+        {
+            sections = null;
+            if (result == null)
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12c.runtime-identity-census");
+            return false;
+        }
+
+        if (!TryRevalidate(out _)
+            || !MatchesRuntimeIdentityCensus(identityOwner, SourceWitness.TokenOwnerSections))
+        {
+            sections = null;
+            result = new P12AResult(P12AResultCode.CaptureRejected);
+            return false;
+        }
+
+        result = null;
+        return true;
+    }
+
+    private static bool MatchesRuntimeIdentityCensus(
+        DailyV1RuntimeIdentityIndex identityOwner,
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections)
+    {
+        if (identityOwner == null || ownerSections == null) return false;
+        return MatchesRuntimeIdentityFamily(identityOwner, ownerSections,
+                DailyV1RuntimeIdentityKind.Npc)
+            && MatchesRuntimeIdentityFamily(identityOwner, ownerSections,
+                DailyV1RuntimeIdentityKind.City)
+            && MatchesRuntimeIdentityFamily(identityOwner, ownerSections,
+                DailyV1RuntimeIdentityKind.Location)
+            && MatchesRuntimeIdentityFamily(identityOwner, ownerSections,
+                DailyV1RuntimeIdentityKind.Route);
+    }
+
+    private static bool MatchesRuntimeIdentityFamily(
+        DailyV1RuntimeIdentityIndex identityOwner,
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        DailyV1RuntimeIdentityKind kind)
+    {
+        OwnerSectionCensusWitness expected = identityOwner.GetOwnerSectionCensusWitness(kind);
+        OwnerSectionCensusSnapshot match = null;
+        int matches = 0;
+        foreach (OwnerSectionCensusSnapshot section in ownerSections)
+        {
+            if (!string.Equals(section?.SectionId, expected.SectionId, StringComparison.Ordinal))
+                continue;
+            match = section;
+            matches++;
+        }
+
+        return matches == 1
+            && match.SchemaVersion == expected.SchemaVersion
+            && match.Role == OwnerSectionRole.Required
+            && ReferenceEquals(match.OwnerInstanceIdentity, expected.OwnerInstanceIdentity)
+            && match.Cardinality == expected.Cardinality
+            && match.Revision == expected.Revision
+            && match.Revision == identityOwner.CensusRevision;
     }
 
     internal bool TryCaptureCoreBoundP12FOwnerSources(
