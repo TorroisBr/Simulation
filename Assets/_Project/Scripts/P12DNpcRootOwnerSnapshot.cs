@@ -1617,18 +1617,19 @@ internal static class P12DNpcRootOwnerSnapshot
         out P12DNpcRootOwnerSnapshotFailure failure)
     {
         failure = P12DNpcRootOwnerSnapshotFailure.InvalidOwnerSection;
+        object runtimeOwnerIdentity = npc.SelectedCensusOwnerIdentity;
         if (!TryRequireSection(token, NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, false),
                 NpcLifecycleCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                npc, 1, npc.LifeStateRevision)
+                runtimeOwnerIdentity, 1, npc.LifeStateRevision)
             || !TryRequireSection(token, P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(npc.RuntimeId),
                 P12CrimeJusticeCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                npc, 1, npc.P12CrimeJusticeRevision)
+                runtimeOwnerIdentity, 1, npc.P12CrimeJusticeRevision)
             || !TryRequireSection(token, NpcCurrentActionCensusProvider.SectionIdFor(npc.RuntimeId),
                 NpcCurrentActionCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                npc, currentActionCardinality, npc.CurrentActionRevision)
+                runtimeOwnerIdentity, currentActionCardinality, npc.CurrentActionRevision)
             || !TryRequireSection(token, NpcTravelStateCensusProvider.SectionIdFor(npc.RuntimeId),
                 NpcTravelStateCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                npc, 1, npc.TravelStateRevision)
+                runtimeOwnerIdentity, 1, npc.TravelStateRevision)
             || !TryRequireSection(token, NpcInventoryCensusProvider.SectionPrefix + npc.RuntimeId,
                 NpcInventoryCensusProvider.SchemaVersion, OwnerSectionRole.Required,
                 inventoryCensusOwnerIdentity, inventory.Items.Count, inventory.Revision)
@@ -1650,7 +1651,7 @@ internal static class P12DNpcRootOwnerSnapshot
             if (!TryRequireSection(token,
                     NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, true),
                     NpcLifecycleCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                    npc, 1, npc.ResidenceRevision))
+                    runtimeOwnerIdentity, 1, npc.ResidenceRevision))
                 return false;
         }
         else
