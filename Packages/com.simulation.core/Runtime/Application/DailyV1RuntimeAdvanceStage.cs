@@ -388,7 +388,7 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
                 executionState.SelectedRuntimeOwnerGraph,
                 ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedOwnerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedNpcSections,
                 out _))
         {
             ownerSections = null;
@@ -396,7 +396,23 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
             return false;
         }
-        ownerSections = coreOwnedOwnerSections;
+        ownerSections = coreOwnedNpcSections;
+        if (executionState.SelectedRuntimeOwnerGraph.PersonStore != null)
+        {
+            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedPersonStoreSections(
+                    executionState.SelectedRuntimeOwnerGraph,
+                    ownerSections,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedPersonSections,
+                    out _))
+            {
+                ownerSections = null;
+                mutationEpoch = 0L;
+                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+
+            ownerSections = coreOwnedPersonSections;
+        }
 
         failure = DailyCaptureEligibilityFailure.None;
         return true;
@@ -512,6 +528,117 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             }
 
             copied[index] = new OwnerSectionCensusSnapshot(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision);
+        }
+
+        ownerSections = Array.AsReadOnly(copied);
+        diagnostic = null;
+        return true;
+    }
+
+    internal static bool TryRebindCoreOwnedPersonStoreSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        diagnostic = null;
+        PersonStore personStore = graph?.PersonStore;
+        if (personStore == null || hostSections == null)
+        {
+            diagnostic = "The Core PersonStore census requires its bound owner graph and host census rows.";
+            return false;
+        }
+
+        OwnerSectionCensusSnapshot[] copied = new OwnerSectionCensusSnapshot[hostSections.Count];
+        Dictionary<string, int> indexes = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < hostSections.Count; i++)
+        {
+            OwnerSectionCensusSnapshot section = hostSections[i];
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !indexes.TryAdd(section.SectionId, i))
+            {
+                diagnostic = "The host census contains a missing or duplicate owner-section identity.";
+                return false;
+            }
+            copied[i] = section;
+        }
+
+        int inventoryRows = CountFamilyRows(
+            copied, DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix);
+        int moneyAccountRows = CountFamilyRows(
+            copied, DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix);
+        if (inventoryRows != moneyAccountRows)
+        {
+            diagnostic = "The complete host census has inconsistent NPC Inventory and MoneyAccount family cardinality.";
+            return false;
+        }
+        if (inventoryRows > graph.Npcs.Count)
+        {
+            if (!indexes.ContainsKey(DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId)
+                || !indexes.ContainsKey(DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId))
+            {
+                diagnostic = "The mixed-roster host census is missing a fixed PersonStore alias section.";
+                return false;
+            }
+            ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+
+        OwnerSectionCensusWitness[] witnesses =
+        {
+            personStore.GetMembershipCensusWitness(),
+            personStore.GetMaterializationBindingCensusWitness()
+        };
+        if (witnesses[0] == null || witnesses[1] == null
+            || !ReferenceEquals(witnesses[0].OwnerInstanceIdentity, personStore)
+            || !ReferenceEquals(witnesses[1].OwnerInstanceIdentity, personStore)
+            || !ReferenceEquals(witnesses[0].OwnerInstanceIdentity, witnesses[1].OwnerInstanceIdentity)
+            || witnesses[0].Revision != witnesses[1].Revision)
+        {
+            diagnostic = "The Core PersonStore witnesses do not preserve the required shared identity and revision.";
+            return false;
+        }
+
+        int[] indexesByWitness = new int[witnesses.Length];
+        bool matchesCoreOwner = true;
+        for (int i = 0; i < witnesses.Length; i++)
+        {
+            OwnerSectionCensusWitness witness = witnesses[i];
+            if (!indexes.TryGetValue(witness.SectionId, out int index))
+            {
+                diagnostic = "The host census is missing selected Core PersonStore section " + witness.SectionId + ".";
+                return false;
+            }
+
+            indexesByWitness[i] = index;
+            OwnerSectionCensusSnapshot hostSection = copied[index];
+            matchesCoreOwner &= hostSection.Role == OwnerSectionRole.Required
+                && hostSection.SchemaVersion == witness.SchemaVersion
+                && ReferenceEquals(hostSection.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+                && hostSection.Cardinality == witness.Cardinality
+                && hostSection.Revision == witness.Revision;
+        }
+
+        if (!matchesCoreOwner)
+        {
+            // Preserve the host's captured values so the established P12 source
+            // witness can report a stale token instead of changing its failure
+            // classification at this earlier integration seam.
+            ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+
+        for (int i = 0; i < witnesses.Length; i++)
+        {
+            OwnerSectionCensusWitness witness = witnesses[i];
+            copied[indexesByWitness[i]] = new OwnerSectionCensusSnapshot(
                 witness.SectionId,
                 witness.SchemaVersion,
                 OwnerSectionRole.Required,
