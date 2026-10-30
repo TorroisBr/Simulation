@@ -4653,6 +4653,54 @@ public sealed class SimulationRuntimeAdmissionTests
             censusAfterFailure.ToString());
     }
 
+    [TestCase("justiceSystem")]
+    [TestCase("crimeSystem")]
+    public void SelectedDailyAdvanceRejectsMismatchedCrimeJusticeProjectionBeforeClockOrOwnerMutation(
+        string projectionField)
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12 selected Crime Justice stale projection");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+        long initialDay = runtime.CurrentDay;
+        long initialJusticeRevision = graph.JusticeRecordsOwner.Revision;
+        DailyCaptureEligibilityToken initialToken = runtime.ExecutionBoundaryState.CurrentCaptureToken;
+        JusticeSystem staleJustice = new JusticeSystem(
+            config.freeStatus, config.wantedStatus, config.arrestedStatus, config.hiddenStatus);
+
+        if (projectionField == "justiceSystem")
+            WritePrivateField(runtime, projectionField, staleJustice);
+        else
+            WritePrivateField(runtime, projectionField,
+                new CrimeSystem(staleJustice, null, config.hiddenStatus));
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            runtime.TryAdvanceDay(out _));
+
+        Assert.That(failure.Message, Does.Contain("Unity projection bindings"));
+        Assert.That(runtime.CurrentDay, Is.EqualTo(initialDay),
+            "The stale host projection is rejected before the admitted clock increment.");
+        Assert.That(graph.JusticeRecordsOwner.Revision, Is.EqualTo(initialJusticeRevision),
+            "The selected Core Justice owner remains untouched after projection rejection.");
+        Assert.That(runtime.ExecutionBoundaryState.CompletedCoreSequence, Is.Zero);
+        Assert.That(runtime.ExecutionBoundaryState.CurrentCaptureToken, Is.Null,
+            "A failed admitted advance cannot retain or publish a capture token.");
+        if (initialToken != null)
+            Assert.That(runtime.ExecutionBoundaryState.CurrentCaptureToken, Is.Not.SameAs(initialToken));
+        Assert.That(runtime.ExecutionBoundaryState.AdvanceLeaseHeld, Is.False,
+            "The failed preflight releases the single-writer advance lease.");
+    }
+
     [Test]
     public void SelectedCrimeJusticeDailyMutationRejectsMissingExactCrimeReceiptIdentity()
     {

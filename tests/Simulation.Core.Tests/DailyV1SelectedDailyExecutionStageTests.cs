@@ -192,12 +192,44 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 composition.ExecutionBoundaryState, composition.OwnerGraph, boundary));
 
         Assert.That(failure.Message, Does.Contain("exact Core day-start owner"));
-        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }),
+        Assert.That(boundary.Calls, Is.EqualTo(new[]
+        {
+            "actor-context",
+            "crime-justice-projection-bindings"
+        }),
             "A selected execution proves its exact day-start boundary before logger or gameplay callbacks.");
         Assert.That(boundary.Calls, Does.Not.Contain("begin-day"));
         Assert.That(boundary.Calls, Does.Not.Contain("economy-preflight"));
         Assert.That(boundary.Calls, Does.Not.Contain("knowledge-preflight"));
         Assert.That(boundary.Calls, Does.Not.Contain("travel-context"));
+    }
+
+    [Test]
+    public void AdmittedStageRejectsMismatchedCrimeJusticeProjectionBeforeLoggerOrMutation()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        FakeBoundary boundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore)
+        {
+            UseSelectedActionExecution = true,
+            CrimeJusticeProjectionOwnerBindingsMatch = false
+        };
+        long justiceRevision = composition.OwnerGraph.JusticeRecordsOwner.Revision;
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            DailyV1SelectedDailyExecutionStage.Advance(
+                composition.ExecutionBoundaryState, composition.OwnerGraph, boundary));
+
+        Assert.That(failure.Message, Does.Contain("Unity projection bindings"));
+        Assert.That(boundary.Calls, Is.EqualTo(new[]
+        {
+            "actor-context",
+            "crime-justice-projection-bindings"
+        }), "A stale Unity projection must fail before logger, day-start, or gameplay callbacks.");
+        Assert.That(composition.OwnerGraph.JusticeRecordsOwner.Revision, Is.EqualTo(justiceRevision),
+            "Projection mismatch rejection does not write the authoritative Core Justice owner.");
     }
 
     [Test]
@@ -222,7 +254,11 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 composition.ExecutionBoundaryState, composition.OwnerGraph, boundary));
 
         Assert.That(failure.Message, Does.Contain("exact Core day-start owner"));
-        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }),
+        Assert.That(boundary.Calls, Is.EqualTo(new[]
+        {
+            "actor-context",
+            "crime-justice-projection-bindings"
+        }),
             "The missing required operation boundary is rejected before logger or enabled demographic writer callbacks.");
         Assert.That(boundary.PublishedDemographyResult, Is.Null,
             "No daily result is published after day-start preflight rejection.");
@@ -252,7 +288,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(failure.Message, Does.Contain(
             "The selected Daily-v1 host could not provide its exact travel projection and P12 context."));
         Assert.That(boundary.Calls,
-            Is.EqualTo(new[] { "actor-context", "travel-context" }),
+            Is.EqualTo(new[]
+            {
+                "actor-context",
+                "crime-justice-projection-bindings",
+                "travel-context"
+            }),
             "The admitted selected stage proves its exact travel/P12 boundary before logger or enabled demographic writer callbacks.");
         Assert.That(boundary.PublishedDemographyResult, Is.Null,
             "No daily result is published after travel/P12 boundary preflight rejection.");
@@ -506,7 +547,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(dailyBoundary.Calls, Does.Not.Contain("begin-day"),
             "The admitted selected path runs the Core day-start stages instead of delegating to Unity's whole-day callback.");
         Assert.That(dailyBoundary.Calls, Does.Contain("actor-context"));
+        Assert.That(dailyBoundary.Calls.Count(call => call == "actor-context"), Is.EqualTo(1),
+            "The actor-turn context prepared before the clock advance is reused for execution.");
         Assert.That(dailyBoundary.Calls, Does.Contain("travel-context"));
+        Assert.That(dailyBoundary.Calls.Count(call => call == "travel-context"), Is.EqualTo(1),
+            "The selected travel/P12 context prepared before the clock advance is reused for execution.");
+        Assert.That(dailyBoundary.Calls.Count(call => call == "crime-justice-projection-bindings"), Is.EqualTo(1));
         Assert.That(state.CompletedCoreSequence, Is.EqualTo(1L));
         Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(absoluteDay));
         Assert.That(state.CurrentCaptureToken, Is.Not.Null);
@@ -568,11 +614,49 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(dailyBoundary.SelectedActionDispatchLookupCount, Is.Zero);
         Assert.That(advanceBoundary.Calls, Does.Contain("fault"));
         Assert.That(advanceBoundary.Calls, Does.Not.Contain("capture-evidence"));
-        Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(initialDay + 1L),
-            "The failed admission is detected after the existing temporal advance, then faults before any daily owner write.");
+        Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(initialDay),
+            "The selected actor-turn context is now preflighted before the clock advances.");
         Assert.That(state.CompletedCoreSequence, Is.Zero);
         Assert.That(state.CurrentCaptureToken, Is.Null);
         Assert.That(state.AdvanceLeaseHeld, Is.False);
+    }
+
+    [Test]
+    public void RuntimeAdvanceRejectsMismatchedCrimeJusticeProjectionBeforeClockOrOwnerMutation()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        long initialDay = state.SimulationTime.AbsoluteDay;
+        long initialJusticeRevision = graph.JusticeRecordsOwner.Revision;
+        FakeBoundary dailyBoundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore)
+        {
+            UseSelectedActionExecution = true,
+            CrimeJusticeProjectionOwnerBindingsMatch = false
+        };
+        FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(state, dailyBoundary);
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            state.TryAdvanceDay(advanceBoundary, out _));
+
+        Assert.That(failure.Message, Does.Contain("Unity projection bindings"));
+        Assert.That(dailyBoundary.Calls, Is.EqualTo(new[]
+        {
+            "actor-context",
+            "crime-justice-projection-bindings"
+        }));
+        Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(initialDay),
+            "A stale projection is rejected before the single clock increment.");
+        Assert.That(graph.JusticeRecordsOwner.Revision, Is.EqualTo(initialJusticeRevision),
+            "No Crime/Justice owner mutation begins before host projection binding is proven.");
+        Assert.That(state.CompletedCoreSequence, Is.Zero);
+        Assert.That(state.CurrentCaptureToken, Is.Null);
+        Assert.That(state.AdvanceLeaseHeld, Is.False);
+        Assert.That(advanceBoundary.Calls, Does.Contain("fault"));
+        Assert.That(advanceBoundary.Calls, Does.Not.Contain("capture-evidence"));
     }
 
     [Test]
@@ -996,6 +1080,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool JusticeSystemPresent { get; set; }
         internal IReadOnlyList<DailyV1ActorTurnRosterProjection> DayStartRuntimeRosterOverride { get; set; }
         internal bool RejectTravelContext { get; set; }
+        internal bool CrimeJusticeProjectionOwnerBindingsMatch { get; set; } = true;
         internal bool UseSelectedActionExecution { get; set; }
         internal bool? ActorChoiceSelectedActionExecutionOverride { get; set; }
         internal bool FailDecisionRecordOwnerResolution { get; set; }
@@ -1003,6 +1088,13 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal int SelectedActionDispatchLookupCount { get; private set; }
         internal DailyV1JusticeRecordsOwner SubstituteJusticeRecordsOwner { get; set; }
         public void BeginLoggerDay(long absoluteDay) => Calls.Add("logger:" + absoluteDay);
+        public bool HasExactCrimeJusticeProjectionOwnerBindings(
+            DailyV1SelectedRuntimeOwnerGraph graph)
+        {
+            Assert.That(graph, Is.Not.Null);
+            Calls.Add("crime-justice-projection-bindings");
+            return CrimeJusticeProjectionOwnerBindingsMatch;
+        }
         public bool TryCreateSelectedDemographyContext(
             DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedDemographyExecutionContext context)

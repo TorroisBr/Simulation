@@ -11330,6 +11330,20 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             runtime.logger?.BeginDay(absoluteDay);
         }
 
+        public bool HasExactCrimeJusticeProjectionOwnerBindings(
+            DailyV1SelectedRuntimeOwnerGraph graph)
+        {
+            if (graph == null
+                || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, graph))
+                return false;
+
+            DailyV1JusticeRecordsOwner justiceOwner = graph.JusticeRecordsOwner;
+            return (runtime.justiceSystem == null
+                    || ReferenceEquals(runtime.justiceSystem.CoreOwner, justiceOwner))
+                && (runtime.crimeSystem == null
+                    || ReferenceEquals(runtime.crimeSystem.JusticeOwner?.CoreOwner, justiceOwner));
+        }
+
         public bool TryCreateSelectedDemographyContext(
             DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedDemographyExecutionContext context)

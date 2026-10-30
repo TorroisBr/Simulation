@@ -2227,6 +2227,8 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         }
 
         public void BeginLoggerDay(long absoluteDay) => order.Add("logger:" + absoluteDay);
+        public bool HasExactCrimeJusticeProjectionOwnerBindings(
+            DailyV1SelectedRuntimeOwnerGraph graph) => ReferenceEquals(graph, this.graph);
         public bool TryCreateSelectedDemographyContext(
             DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedDemographyExecutionContext context)

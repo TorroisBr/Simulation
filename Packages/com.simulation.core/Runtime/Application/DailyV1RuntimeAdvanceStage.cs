@@ -818,6 +818,22 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 boundary.FaultRuntimeAdmission();
                 return false;
             }
+            if (clock.AbsoluteDay == long.MaxValue)
+            {
+                if (!SimulationTimeOwnerBridge.TryAdvanceDayFromRuntime(
+                        clock, out SimulationTimeAdvanceFailure limitFailure))
+                {
+                    failure = MapClockFailure(limitFailure);
+                    return false;
+                }
+
+                failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+                boundary.FaultRuntimeAdmission();
+                return false;
+            }
+
+            DailyV1SelectedDailyExecutionStage.PreparedDay preparedDay =
+                DailyV1SelectedDailyExecutionStage.PrepareForNextDay(this, graph, executionBoundary);
             if (!SimulationTimeOwnerBridge.TryAdvanceDayFromRuntime(
                     clock, out SimulationTimeAdvanceFailure timeFailure))
             {
@@ -825,7 +841,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 return false;
             }
 
-            DailyV1SelectedDailyExecutionStage.Advance(this, graph, executionBoundary);
+            DailyV1SelectedDailyExecutionStage.Advance(preparedDay);
             failure = SimulationRuntimeAdvanceFailure.None;
             return true;
         }

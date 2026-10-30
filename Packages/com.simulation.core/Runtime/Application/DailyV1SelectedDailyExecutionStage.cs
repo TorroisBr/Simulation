@@ -13,6 +13,8 @@ using System.Collections.Generic;
 internal interface IDailyV1SelectedDailyExecutionBoundary
 {
     void BeginLoggerDay(long absoluteDay);
+    bool HasExactCrimeJusticeProjectionOwnerBindings(
+        DailyV1SelectedRuntimeOwnerGraph graph);
     bool TryCreateSelectedDemographyContext(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedDemographyExecutionContext context);
@@ -276,6 +278,78 @@ internal static class DailyV1SelectedDailyExecutionStage
         public IDailyV1SelectedMerchantTradeStateBoundary MerchantTradeBoundary { get; }
     }
 
+    internal sealed class PreparedDay
+    {
+        internal readonly DailyV1ExecutionBoundaryState executionState;
+        internal readonly DailyV1SelectedRuntimeOwnerGraph graph;
+        internal readonly ScheduledDirectiveStore scheduledDirectives;
+        internal readonly IDailyV1SelectedDailyExecutionBoundary boundary;
+        internal readonly long absoluteDay;
+        internal readonly long clockDayAtPreparation;
+        internal readonly bool clockMustAdvance;
+        internal readonly EffectiveSimulationConfiguration selectedConfiguration;
+        internal readonly IDailyV1SelectedActorTurnExecutionContext actorTurnContext;
+        internal readonly IReadOnlyList<DailyV1ActorTurnRosterEntry> actorRoster;
+        internal readonly bool coreSelectedCompatibility;
+        internal readonly IDailyV1SelectedDayStartExecutionContext dayStartContext;
+        internal readonly bool hasSelectedDayStartContext;
+        internal readonly bool dayStartContextPreflighted;
+        internal readonly bool admittedSelectedBoundariesPreflighted;
+        internal readonly IDailyV1SelectedTravelDayExecutionContext travelContext;
+        internal readonly bool travelContextPreflighted;
+        internal readonly IDailyV1SelectedDemographyExecutionContext demographyContext;
+        internal readonly bool demographyContextPreflighted;
+        internal readonly bool selectedEconomyPreflighted;
+        internal readonly bool selectedLocalKnowledgePreflighted;
+        internal bool consumed;
+
+        internal PreparedDay(
+            DailyV1ExecutionBoundaryState executionState,
+            long absoluteDay,
+            long clockDayAtPreparation,
+            bool clockMustAdvance,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            ScheduledDirectiveStore scheduledDirectives,
+            IDailyV1SelectedDailyExecutionBoundary boundary,
+            EffectiveSimulationConfiguration selectedConfiguration,
+            IDailyV1SelectedActorTurnExecutionContext actorTurnContext,
+            IReadOnlyList<DailyV1ActorTurnRosterEntry> actorRoster,
+            bool coreSelectedCompatibility,
+            IDailyV1SelectedDayStartExecutionContext dayStartContext,
+            bool hasSelectedDayStartContext,
+            bool dayStartContextPreflighted,
+            bool admittedSelectedBoundariesPreflighted,
+            IDailyV1SelectedTravelDayExecutionContext travelContext,
+            bool travelContextPreflighted,
+            IDailyV1SelectedDemographyExecutionContext demographyContext,
+            bool demographyContextPreflighted,
+            bool selectedEconomyPreflighted,
+            bool selectedLocalKnowledgePreflighted)
+        {
+            this.executionState = executionState;
+            this.absoluteDay = absoluteDay;
+            this.clockDayAtPreparation = clockDayAtPreparation;
+            this.clockMustAdvance = clockMustAdvance;
+            this.graph = graph;
+            this.scheduledDirectives = scheduledDirectives;
+            this.boundary = boundary;
+            this.selectedConfiguration = selectedConfiguration;
+            this.actorTurnContext = actorTurnContext;
+            this.actorRoster = actorRoster;
+            this.coreSelectedCompatibility = coreSelectedCompatibility;
+            this.dayStartContext = dayStartContext;
+            this.hasSelectedDayStartContext = hasSelectedDayStartContext;
+            this.dayStartContextPreflighted = dayStartContextPreflighted;
+            this.admittedSelectedBoundariesPreflighted = admittedSelectedBoundariesPreflighted;
+            this.travelContext = travelContext;
+            this.travelContextPreflighted = travelContextPreflighted;
+            this.demographyContext = demographyContext;
+            this.demographyContextPreflighted = demographyContextPreflighted;
+            this.selectedEconomyPreflighted = selectedEconomyPreflighted;
+            this.selectedLocalKnowledgePreflighted = selectedLocalKnowledgePreflighted;
+        }
+    }
+
     internal static void Advance(
         DailyV1ExecutionBoundaryState executionState,
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -292,8 +366,9 @@ internal static class DailyV1SelectedDailyExecutionStage
             throw new InvalidOperationException(
                 "The selected Daily-v1 stage requires the clock bound to its Core execution state.");
 
-        AdvanceCore(executionState, simulationTime.AbsoluteDay, graph,
-            graph.ScheduledDirectives, boundary);
+        Advance(PrepareCore(executionState, simulationTime.AbsoluteDay,
+            simulationTime.AbsoluteDay, clockMustAdvance: false,
+            graph, graph.ScheduledDirectives, boundary));
     }
 
     internal static void Advance(
@@ -302,12 +377,77 @@ internal static class DailyV1SelectedDailyExecutionStage
         ScheduledDirectiveStore scheduledDirectives,
         IDailyV1SelectedDailyExecutionBoundary boundary)
     {
-        AdvanceCore(null, absoluteDay, graph, scheduledDirectives, boundary);
+        Advance(PrepareCore(null, absoluteDay, absoluteDay, clockMustAdvance: false,
+            graph, scheduledDirectives, boundary));
     }
 
-    private static void AdvanceCore(
+    internal static PreparedDay PrepareForNextDay(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IDailyV1SelectedDailyExecutionBoundary boundary)
+    {
+        if (executionState == null) throw new ArgumentNullException(nameof(executionState));
+        if (graph == null) throw new ArgumentNullException(nameof(graph));
+        SimulationTime clock = executionState.SimulationTime;
+        if (clock == null)
+            throw new InvalidOperationException(
+                "The selected Daily-v1 stage requires the clock bound to its Core execution state.");
+        if (clock.AbsoluteDay == long.MaxValue)
+            throw new InvalidOperationException(
+                "The selected Daily-v1 stage cannot prepare a day beyond the clock limit.");
+
+        return PrepareCore(executionState, clock.AbsoluteDay + 1L,
+            clock.AbsoluteDay, clockMustAdvance: true,
+            graph, graph.ScheduledDirectives, boundary);
+    }
+
+    internal static void Advance(PreparedDay preparedDay)
+    {
+        if (preparedDay == null) throw new ArgumentNullException(nameof(preparedDay));
+        if (preparedDay.consumed)
+            throw new InvalidOperationException("A prepared Daily-v1 day can be executed only once.");
+
+        long expectedClockDay = preparedDay.clockMustAdvance
+            ? preparedDay.clockDayAtPreparation + 1L
+            : preparedDay.clockDayAtPreparation;
+        if (preparedDay.clockMustAdvance
+            && (preparedDay.clockDayAtPreparation == long.MaxValue
+                || preparedDay.absoluteDay != expectedClockDay))
+            throw new InvalidOperationException("The prepared Daily-v1 day has an invalid clock boundary.");
+
+        DailyV1ExecutionBoundaryState executionState = preparedDay.executionState;
+        if (executionState != null
+            && (executionState.SimulationTime == null
+                || executionState.SimulationTime.AbsoluteDay != expectedClockDay
+                || !executionState.SelectedRuntimeExecutionRootsBound
+                || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, preparedDay.graph)
+                || !ReferenceEquals(preparedDay.graph.ScheduledDirectives, preparedDay.scheduledDirectives)
+                || !ReferenceEquals(preparedDay.graph.Definitions?.EffectiveConfiguration,
+                    preparedDay.selectedConfiguration)))
+            throw new InvalidOperationException(
+                "The prepared Daily-v1 day no longer matches its exact clock, definitions, or owner graph.");
+
+        if (executionState != null)
+        {
+            string rootFailure = null;
+            if (preparedDay.actorTurnContext == null
+                || !HasExactSelectedExecutionRoots(
+                    executionState, preparedDay.graph, preparedDay.actorTurnContext,
+                    preparedDay.actorRoster, out rootFailure))
+                throw new InvalidOperationException(
+                    "The prepared Daily-v1 actor-turn roots changed before execution: "
+                    + (rootFailure ?? "actor-turn context is unavailable") + ".");
+        }
+
+        preparedDay.consumed = true;
+        AdvanceCore(preparedDay);
+    }
+
+    private static PreparedDay PrepareCore(
         DailyV1ExecutionBoundaryState executionState,
         long absoluteDay,
+        long clockDayAtPreparation,
+        bool clockMustAdvance,
         DailyV1SelectedRuntimeOwnerGraph graph,
         ScheduledDirectiveStore scheduledDirectives,
         IDailyV1SelectedDailyExecutionBoundary boundary)
@@ -315,6 +455,15 @@ internal static class DailyV1SelectedDailyExecutionStage
         if (graph == null) throw new ArgumentNullException(nameof(graph));
         if (boundary == null) throw new ArgumentNullException(nameof(boundary));
         if (absoluteDay < 0L) throw new ArgumentOutOfRangeException(nameof(absoluteDay));
+        if (executionState != null
+            && (executionState.SimulationTime == null
+                || executionState.SimulationTime.AbsoluteDay != clockDayAtPreparation
+                || (clockMustAdvance
+                    ? clockDayAtPreparation == long.MaxValue
+                        || absoluteDay != clockDayAtPreparation + 1L
+                    : absoluteDay != clockDayAtPreparation)))
+            throw new InvalidOperationException(
+                "The selected Daily-v1 preparation does not match the exact bound clock boundary.");
         if (!ReferenceEquals(graph.ScheduledDirectives, scheduledDirectives))
             throw new InvalidOperationException(
                 "The selected Daily-v1 stage requires the exact directive store bound to its Core owner graph.");
@@ -377,11 +526,12 @@ internal static class DailyV1SelectedDailyExecutionStage
                     is IDailyV1SelectedCrimeJusticeDailyBoundary crimeJusticeBoundary)
                 || !(actorTurnContext.Boundary
                     is IDailyV1SelectedMerchantTradeStateBoundary merchantTradeBoundary)
+                || !boundary.HasExactCrimeJusticeProjectionOwnerBindings(graph)
                 || !ReferenceEquals(graph.JusticeRecordsOwner,
                     crimeJusticeBoundary.JusticeRecordsOwner)
                 || graph.Definitions.EffectiveConfiguration?.MerchantTrade == null)
                 throw new InvalidOperationException(
-                    "The admitted Daily-v1 actor-turn boundary could not provide the exact Core day-start owner and operation contracts.");
+                    "The admitted Daily-v1 actor-turn boundary could not provide the exact Core day-start owner, Unity projection bindings, and operation contracts.");
 
             // Reuse the one exact adapter object already bound to this Core
             // actor roster. Unity no longer supplies a parallel selected
@@ -407,6 +557,85 @@ internal static class DailyV1SelectedDailyExecutionStage
             throw new InvalidOperationException(
                 "The selected Daily-v1 host could not provide its exact travel projection and P12 context.");
 
+        IDailyV1SelectedDemographyExecutionContext demographyContext = null;
+        bool demographyContextPreflighted =
+            executionState?.HasAdmittedSelectedDailyExecution == true;
+        if (demographyContextPreflighted
+            && (selectedConfiguration.NaturalMortality.Enabled
+                || selectedConfiguration.AggregateDemography.Enabled))
+        {
+            bool hasDemographyContext = boundary.TryCreateSelectedDemographyContext(
+                graph, out demographyContext);
+            if (!hasDemographyContext
+                || demographyContext == null
+                || graph.PersonStore == null
+                || executionState.CalendarIdentity == null
+                || demographyContext.Boundary == null)
+                throw new InvalidOperationException(
+                    "The selected Daily-v1 host could not provide the exact demographic owners and writer boundary.");
+        }
+
+        bool selectedEconomyPreflighted = false;
+        bool selectedLocalKnowledgePreflighted = false;
+        if (executionState?.HasAdmittedSelectedDailyExecution == true)
+        {
+            if (scheduledDirectives != null && graph.RuntimeIdentityIndex == null)
+                throw new InvalidOperationException(
+                    "Selected Daily-v1 directive preparation requires the Core runtime identity index.");
+            if (graph.Definitions.EffectiveConfiguration?.MerchantTrade == null)
+                throw new InvalidOperationException(
+                    "The selected Daily-v1 actor-turn stage has no admitted Merchant configuration.");
+            if (selectedConfiguration.Economy?.Enabled == true)
+            {
+                boundary.EnsureSelectedEconomyCanRun(graph);
+                selectedEconomyPreflighted = true;
+            }
+            boundary.EnsureSelectedLocalKnowledgeCanRun(graph);
+            selectedLocalKnowledgePreflighted = true;
+        }
+
+        return new PreparedDay(
+            executionState,
+            absoluteDay,
+            clockDayAtPreparation,
+            clockMustAdvance,
+            graph,
+            scheduledDirectives,
+            boundary,
+            selectedConfiguration,
+            actorTurnContext,
+            actorRoster,
+            coreSelectedCompatibility,
+            dayStartContext,
+            hasSelectedDayStartContext,
+            dayStartContextPreflighted,
+            admittedSelectedBoundariesPreflighted,
+            travelContext,
+            travelContextPreflighted,
+            demographyContext,
+            demographyContextPreflighted,
+            selectedEconomyPreflighted,
+            selectedLocalKnowledgePreflighted);
+    }
+
+    private static void AdvanceCore(PreparedDay preparedDay)
+    {
+        DailyV1ExecutionBoundaryState executionState = preparedDay.executionState;
+        long absoluteDay = preparedDay.absoluteDay;
+        DailyV1SelectedRuntimeOwnerGraph graph = preparedDay.graph;
+        ScheduledDirectiveStore scheduledDirectives = preparedDay.scheduledDirectives;
+        IDailyV1SelectedDailyExecutionBoundary boundary = preparedDay.boundary;
+        EffectiveSimulationConfiguration selectedConfiguration = preparedDay.selectedConfiguration;
+        IDailyV1SelectedActorTurnExecutionContext actorTurnContext = preparedDay.actorTurnContext;
+        IReadOnlyList<DailyV1ActorTurnRosterEntry> actorRoster = preparedDay.actorRoster;
+        bool coreSelectedCompatibility = preparedDay.coreSelectedCompatibility;
+        IDailyV1SelectedDayStartExecutionContext dayStartContext = preparedDay.dayStartContext;
+        bool hasSelectedDayStartContext = preparedDay.hasSelectedDayStartContext;
+        bool dayStartContextPreflighted = preparedDay.dayStartContextPreflighted;
+        bool admittedSelectedBoundariesPreflighted = preparedDay.admittedSelectedBoundariesPreflighted;
+        IDailyV1SelectedTravelDayExecutionContext travelContext = preparedDay.travelContext;
+        bool travelContextPreflighted = preparedDay.travelContextPreflighted;
+
         boundary.BeginLoggerDay(absoluteDay);
 
         // The accepted Daily-v1 proving profile disables both demographic
@@ -418,8 +647,11 @@ internal static class DailyV1SelectedDailyExecutionStage
         if (selectedConfiguration.NaturalMortality.Enabled
             || selectedConfiguration.AggregateDemography.Enabled)
         {
-            bool hasDemographyContext = boundary.TryCreateSelectedDemographyContext(
-                graph, out IDailyV1SelectedDemographyExecutionContext demographyContext);
+            IDailyV1SelectedDemographyExecutionContext demographyContext =
+                preparedDay.demographyContext;
+            bool hasDemographyContext = preparedDay.demographyContextPreflighted
+                ? demographyContext != null
+                : boundary.TryCreateSelectedDemographyContext(graph, out demographyContext);
             SimulationCalendar demographyCalendar = executionState == null
                 ? demographyContext?.Calendar
                 : executionState.CalendarIdentity;
@@ -542,7 +774,8 @@ internal static class DailyV1SelectedDailyExecutionStage
 
         if (graph.Definitions.EffectiveConfiguration?.Economy?.Enabled == true)
         {
-            boundary.EnsureSelectedEconomyCanRun(graph);
+            if (!preparedDay.selectedEconomyPreflighted)
+                boundary.EnsureSelectedEconomyCanRun(graph);
             if (!graph.TrySimulateDailyEconomyDay(
                     graph.Cities,
                     absoluteDay,
@@ -552,7 +785,8 @@ internal static class DailyV1SelectedDailyExecutionStage
                     "The selected Core economy stage could not complete against its exact runtime owner graph.");
         }
 
-        boundary.EnsureSelectedLocalKnowledgeCanRun(graph);
+        if (!preparedDay.selectedLocalKnowledgePreflighted)
+            boundary.EnsureSelectedLocalKnowledgeCanRun(graph);
         if (!DailyV1SelectedLocalKnowledgeRefreshStage.TryRun(graph, absoluteDay))
             throw new InvalidOperationException(
                 "The selected Core local-knowledge stage could not complete against its exact runtime owner graph.");
