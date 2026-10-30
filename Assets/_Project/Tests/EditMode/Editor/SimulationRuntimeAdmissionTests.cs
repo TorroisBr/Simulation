@@ -4822,9 +4822,9 @@ public sealed class SimulationRuntimeAdmissionTests
                     saveOperation.SourceWitness.Token,
                     saveOperation.SourceWitness.TokenOwnerSections,
                     out DailyV1P12ECoreOwnerSourceSnapshots coreSources,
-                    out DailyV1P12ECoreOwnerSourceCaptureFailure captureFailure,
-                    out string captureDiagnostic), Is.True,
-                captureFailure + ": " + captureDiagnostic);
+                    out DailyV1P12ECoreOwnerSourceCaptureFailure sourceCaptureFailure,
+                    out string sourceCaptureDiagnostic), Is.True,
+                sourceCaptureFailure + ": " + sourceCaptureDiagnostic);
             Assert.That(coreSources?.JusticeRecords, Is.Not.Null);
             DailyV1JusticeRecordsOwner coreJustice = coreSession.OwnerGraph.JusticeRecordsOwner;
             P12EJusticeRecordsSnapshotSection records = coreSources.JusticeRecords.Records;
