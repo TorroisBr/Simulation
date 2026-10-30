@@ -5100,7 +5100,7 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(coreJusticeSnapshot, Is.Not.Null,
                     "The active Core save operation must capture Justice from its selected owner graph.");
                 Assert.That(coreJusticeSnapshot.Records.Revision,
-                    Is.EqualTo(sourceCoreSession.OwnerGraph.JusticeRecordsOwner.Revision));
+                    Is.EqualTo(coreSession.OwnerGraph.JusticeRecordsOwner.Revision));
                 Assert.That(coreJusticeSnapshot.Records.RecordCount,
                     Is.EqualTo(coreJusticeSnapshot.Records.WantedRows.Count
                         + coreJusticeSnapshot.Records.SentenceRows.Count));
@@ -5116,7 +5116,7 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(justiceReceiptWitness.Cardinality, Is.EqualTo(1));
                 Assert.That(justiceReceiptWitness.Revision, Is.Zero);
                 Assert.That(exactJusticeProjection.CoreOwner,
-                    Is.SameAs(sourceCoreSession.OwnerGraph.JusticeRecordsOwner));
+                    Is.SameAs(coreSession.OwnerGraph.JusticeRecordsOwner));
                 Assert.That(operation.TryCaptureCoreP12EOwnerSources(
                         operation.SourceWitness.Token,
                         operation.SourceWitness.TokenOwnerSections,
