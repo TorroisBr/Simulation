@@ -1446,7 +1446,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.ActiveSession, Is.SameAs(sourceSession));
 
         Assert.That(application.TryCreateRestoredContinuationAdmissionContext(
-            null, null, out SimulationRuntimeAdmissionContext unreservedReplacementAdmission,
+            sourceSession, null, out SimulationRuntimeAdmissionContext unreservedReplacementAdmission,
             out diagnostic), Is.False);
         Assert.That(unreservedReplacementAdmission, Is.Null);
 
