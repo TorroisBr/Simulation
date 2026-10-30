@@ -418,10 +418,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             publishCommittedTravelPlanClear(actor);
     }
 
-    /// <summary>Bridges the separate selected status operation to exact Unity
-    /// owner projections and the existing P12 mutation scope.</summary>
+    /// <summary>
+    /// Unity's compatibility projection adapter for selected status changes.
+    /// The ordinary admitted operation scope and Core owner revision/epoch
+    /// publication are owned by DailyV1ExecutionBoundaryState; this adapter
+    /// retains the legacy and forced-Escape host operation path.
+    /// </summary>
     private sealed class SelectedActionStatusOperationBoundaryAdapter
-        : DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary
+        : DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary,
+            DailyV1SelectedActionExecutionStage.ISelectedActionStatusProjectionBoundary
     {
         private readonly SimulationRuntime runtime;
         private readonly NpcRuntime actorRuntime;
@@ -496,6 +501,20 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             if (!TryGetExactParticipant(owner, out NpcRuntime exactRuntime))
                 throw new InvalidOperationException("The selected hidden-state owner lost its exact runtime projection after mutation.");
             exactRuntime.NotifyCoreSelectedDailyV1HiddenMutationCommitted(owner);
+        }
+
+        public void RefreshStatusProjection(DailyV1NpcRuntimeOwners owner)
+        {
+            if (!TryGetExactParticipant(owner, out NpcRuntime exactRuntime))
+                throw new InvalidOperationException("The selected status owner lost its exact runtime projection after Core mutation.");
+            exactRuntime.RefreshCoreSelectedDailyV1StatusProjection(owner);
+        }
+
+        public void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners owner)
+        {
+            if (!TryGetExactParticipant(owner, out NpcRuntime exactRuntime))
+                throw new InvalidOperationException("The selected hidden-state owner lost its exact runtime projection after Core mutation.");
+            exactRuntime.SyncCoreSelectedDailyV1HiddenProjection(owner);
         }
 
         private bool TryGetExactParticipant(
@@ -12531,6 +12550,23 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     graph, actor, actor.ActionSlot?.CurrentAction, target);
             if (!exactProjectedAction && !projectionIndependentNormal)
                 return false;
+
+            if (!reuseExistingOperation
+                && runtime.ExecutionBoundaryState.HasAdmittedSelectedDailyExecution)
+            {
+                SelectedActionStatusOperationBoundaryAdapter projectionAdapter =
+                    new SelectedActionStatusOperationBoundaryAdapter(
+                        runtime, exactRuntime, targetRuntime,
+                        reuseForcedEscapeScope: false);
+                return DailyV1SelectedActionExecutionStage.CoreSelectedActionStatusOperationBoundary.TryCreate(
+                    runtime.ExecutionBoundaryState,
+                    graph,
+                    runtime.P12CrimeJusticeMutationProtocol,
+                    actor,
+                    target,
+                    projectionAdapter,
+                    out boundary);
+            }
 
             boundary = new SelectedActionStatusOperationBoundaryAdapter(
                 runtime, exactRuntime, targetRuntime,

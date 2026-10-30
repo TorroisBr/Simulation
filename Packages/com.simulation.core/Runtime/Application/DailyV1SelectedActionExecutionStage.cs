@@ -33,6 +33,180 @@ internal static class DailyV1SelectedActionExecutionStage
             Func<DailyV1SelectedActionStatusPlanResult> operation);
     }
 
+    /// <summary>
+    /// Unity projection work that remains after Core has selected the exact
+    /// status owners. The adapter validates and refreshes its compatibility
+    /// view; the admitted Core session owns P12 admission, revisions and epoch
+    /// publication.
+    /// </summary>
+    internal interface ISelectedActionStatusProjectionBoundary
+    {
+        bool CanProjectStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd);
+        void RefreshStatusProjection(DailyV1NpcRuntimeOwners owner);
+        void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners owner);
+    }
+
+    /// <summary>
+    /// Owns the ordinary selected actor/target action-status operation for an
+    /// admitted Daily-v1 session. Unity supplies only the existing projection
+    /// checks and mirrors. Forced Escape deliberately retains its wider
+    /// Crime/Justice receipt operation in the host adapter.
+    /// </summary>
+    internal sealed class CoreSelectedActionStatusOperationBoundary
+        : ISelectedActionStatusOperationBoundary
+    {
+        private readonly DailyV1ExecutionBoundaryState executionState;
+        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+        private readonly IDailyV1P12CrimeJusticeMutationProtocol protocol;
+        private readonly DailyV1P12CrimeJusticeMutationCoordinator coordinator;
+        private readonly DailyV1NpcRuntimeOwners actor;
+        private readonly DailyV1NpcRuntimeOwners target;
+        private readonly ISelectedActionStatusProjectionBoundary projection;
+
+        private CoreSelectedActionStatusOperationBoundary(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            IDailyV1P12CrimeJusticeMutationProtocol protocol,
+            DailyV1P12CrimeJusticeMutationCoordinator coordinator,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            ISelectedActionStatusProjectionBoundary projection)
+        {
+            this.executionState = executionState;
+            this.graph = graph;
+            this.protocol = protocol;
+            this.coordinator = coordinator;
+            this.actor = actor;
+            this.target = target;
+            this.projection = projection;
+        }
+
+        internal static bool TryCreate(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            IDailyV1P12CrimeJusticeMutationProtocol protocol,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            ISelectedActionStatusProjectionBoundary projection,
+            out ISelectedActionStatusOperationBoundary boundary)
+        {
+            boundary = null;
+            if (executionState == null || graph == null || protocol == null
+                || actor == null || projection == null
+                || !executionState.HasAdmittedSelectedDailyExecution
+                || executionState.AdmissionContext?.Profile
+                    != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || executionState.AdmissionContext == null
+                || !executionState.AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                || !IsExactOwner(graph, actor)
+                || (target != null && !IsExactOwner(graph, target))
+                || actor.Status == null
+                || (target != null && target.Status == null))
+                return false;
+
+            if (!executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    protocol, graph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+                || coordinator == null)
+                return false;
+
+            boundary = new CoreSelectedActionStatusOperationBoundary(
+                executionState, graph, protocol, coordinator,
+                actor, target, projection);
+            return true;
+        }
+
+        public DailyV1SelectedActionStatusPlanResult ExecuteWithinOperation(
+            DailyV1NpcRuntimeOwners operationActor,
+            DailyV1NpcRuntimeOwners operationTarget,
+            Func<DailyV1SelectedActionStatusPlanResult> operation)
+        {
+            if (operation == null) throw new ArgumentNullException(nameof(operation));
+            if (!ReferenceEquals(operationActor, actor))
+                return DailyV1SelectedActionStatusPlanResult.ActorRejected;
+            if (!ReferenceEquals(operationTarget, target))
+                return DailyV1SelectedActionStatusPlanResult.TargetRejected;
+            if (!IsCurrentSession())
+                throw new InvalidOperationException(
+                    "The selected action-status operation lost its exact admitted Core session.");
+
+            IReadOnlyList<DailyV1NpcRuntimeOwners> participants = target == null
+                ? new[] { actor }
+                : new[] { actor, target };
+            if (!coordinator.TryBeginSelectedNpcStatusMutation(
+                    graph, participants, out IDisposable scope)
+                || scope == null)
+                throw new InvalidOperationException(
+                    "P12 action status effects could not be admitted by the exact Core owner graph.");
+
+            using (scope)
+                return operation();
+        }
+
+        public bool CanProjectStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
+            IsParticipant(owner)
+            && projection.CanProjectStatusChanges(owner, statusToAdd);
+
+        public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner)
+        {
+            if (!IsParticipant(owner) || !IsCurrentSession())
+                throw new InvalidOperationException(
+                    "The selected status owner is outside its exact admitted Core operation.");
+            executionState.EnsureSelectedP12CrimeJusticeOwnerMutationAllowed(owner);
+        }
+
+        public void NotifyStatusMutationCommitted(
+            DailyV1NpcRuntimeOwners owner,
+            DailyV1StatusDefinition status,
+            bool added)
+        {
+            if (!IsParticipant(owner) || !IsCurrentSession())
+                throw new InvalidOperationException(
+                    "The selected status owner changed outside its exact admitted Core operation.");
+            projection.RefreshStatusProjection(owner);
+            executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
+        }
+
+        public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
+        {
+            if (!IsParticipant(owner) || !IsCurrentSession())
+                throw new InvalidOperationException(
+                    "The selected hidden-state owner changed outside its exact admitted Core operation.");
+            projection.SyncHiddenStateProjection(owner);
+            executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
+        }
+
+        private bool IsParticipant(DailyV1NpcRuntimeOwners owner) =>
+            (ReferenceEquals(owner, actor) || (target != null && ReferenceEquals(owner, target)))
+            && IsExactOwner(graph, owner);
+
+        private bool IsCurrentSession()
+        {
+            return executionState.HasAdmittedSelectedDailyExecution
+                && executionState.AdmissionContext != null
+                && executionState.AdmissionContext.IsOwnedByCurrentThread()
+                && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                && IsExactOwner(graph, actor)
+                && (target == null || IsExactOwner(graph, target))
+                && executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    protocol, graph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator currentCoordinator)
+                && ReferenceEquals(currentCoordinator, coordinator);
+        }
+
+        private static bool IsExactOwner(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners owner) =>
+            graph != null && owner != null
+            && graph.ContainsExactNpcOwner(owner)
+            && ReferenceEquals(owner.Definitions, graph.Definitions);
+    }
+
     internal static bool TryApplySelectedStatusChanges(
         DailyV1NpcRuntimeOwners owner,
         IReadOnlyList<DailyV1StatusDefinition> statusToRemove,

@@ -179,6 +179,117 @@ public sealed class DailyV1NpcStatusOwnerTests
     }
 
     [Test]
+    public void AdmittedCoreStatusOperationOwnsExactNpcScopesRevisionsAndEpochNotifications()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        Assert.That(graph.Npcs, Has.Count.GreaterThanOrEqualTo(2));
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1NpcRuntimeOwners target = graph.Npcs[1];
+        DailyV1StatusDefinition actorStatus = definitions.Statuses.Values.FirstOrDefault(
+            status => !actor.Status.Statuses.Any(current => ReferenceEquals(current, status)));
+        DailyV1StatusDefinition targetStatus = definitions.Statuses.Values.FirstOrDefault(
+            status => !target.Status.Statuses.Any(current => ReferenceEquals(current, status)));
+        Assert.That(actorStatus, Is.Not.Null);
+        Assert.That(targetStatus, Is.Not.Null);
+
+        long actorRevision = actor.CrimeJusticeRevision;
+        long targetRevision = target.CrimeJusticeRevision;
+        FakeSelectedStatusProtocol protocol = new FakeSelectedStatusProtocol();
+        RecordingSelectedStatusProjection projection = new RecordingSelectedStatusProjection();
+        Assert.That(DailyV1SelectedActionExecutionStage.CoreSelectedActionStatusOperationBoundary.TryCreate(
+            composition.ExecutionBoundaryState, graph, protocol,
+            actor, target, projection,
+            out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary boundary), Is.True);
+
+        DailyV1SelectedActionStatusPlanResult result = boundary.ExecuteWithinOperation(
+            actor, target, () =>
+            {
+                if (!DailyV1SelectedActionExecutionStage.TryApplySelectedStatusChanges(
+                        actor, Array.Empty<DailyV1StatusDefinition>(), new[] { actorStatus }, boundary))
+                    return DailyV1SelectedActionStatusPlanResult.ActorRejected;
+                if (!DailyV1SelectedActionExecutionStage.TryApplySelectedStatusChanges(
+                        target, Array.Empty<DailyV1StatusDefinition>(), new[] { targetStatus }, boundary))
+                    return DailyV1SelectedActionStatusPlanResult.TargetRejected;
+                return DailyV1SelectedActionStatusPlanResult.Applied;
+            });
+
+        Assert.That(result, Is.EqualTo(DailyV1SelectedActionStatusPlanResult.Applied));
+        Assert.That(actor.Status.Statuses, Does.Contain(actorStatus));
+        Assert.That(target.Status.Statuses, Does.Contain(targetStatus));
+        Assert.That(actor.CrimeJusticeRevision, Is.EqualTo(actorRevision + 1));
+        Assert.That(target.CrimeJusticeRevision, Is.EqualTo(targetRevision + 1));
+        Assert.That(projection.RefreshedOwners, Is.EqualTo(new[] { actor, target }));
+
+        string actorSection = DailyV1SelectedOwnerSectionCensusContract
+            .NpcStatusCrimeSectionIdFor(actor.RuntimeId);
+        string targetSection = DailyV1SelectedOwnerSectionCensusContract
+            .NpcStatusCrimeSectionIdFor(target.RuntimeId);
+        Assert.That(protocol.Calls.Where(call => call.StartsWith("notify:", StringComparison.Ordinal)),
+            Is.EqualTo(new[] { "notify:" + actorSection, "notify:" + targetSection }),
+            "The Core session commits each exact P12 owner section after its matching revision write.");
+        Assert.That(protocol.Calls, Does.Contain("validate:" + actorSection + "|" + targetSection),
+            "Core derives one operation scope from the exact actor and target owners.");
+        Assert.That(protocol.Calls, Does.Not.Contain("reserve"),
+            "An ordinary action-status operation retains immediate per-owner epoch publication.");
+    }
+
+    [Test]
+    public void AdmittedCoreStatusOperationRejectsProjectionAndP12BeforeOwnerWrites()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1StatusDefinition status = definitions.Statuses.Values.FirstOrDefault(
+            candidate => !actor.Status.Statuses.Any(current => ReferenceEquals(current, candidate)));
+        Assert.That(status, Is.Not.Null);
+        long revision = actor.CrimeJusticeRevision;
+        int statusCount = actor.Status.Statuses.Count;
+        FakeSelectedStatusProtocol protocol = new FakeSelectedStatusProtocol();
+        RecordingSelectedStatusProjection projection = new RecordingSelectedStatusProjection
+        {
+            RejectOwner = actor
+        };
+        Assert.That(DailyV1SelectedActionExecutionStage.CoreSelectedActionStatusOperationBoundary.TryCreate(
+            composition.ExecutionBoundaryState, graph, protocol,
+            actor, null, projection,
+            out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary boundary), Is.True);
+
+        DailyV1SelectedActionStatusPlanResult projectionResult = boundary.ExecuteWithinOperation(
+            actor, null, () => DailyV1SelectedActionExecutionStage.TryApplySelectedStatusChanges(
+                actor, Array.Empty<DailyV1StatusDefinition>(), new[] { status }, boundary)
+                    ? DailyV1SelectedActionStatusPlanResult.Applied
+                    : DailyV1SelectedActionStatusPlanResult.ActorRejected);
+        Assert.That(projectionResult, Is.EqualTo(DailyV1SelectedActionStatusPlanResult.ActorRejected));
+        Assert.That(actor.Status.Statuses, Has.Count.EqualTo(statusCount));
+        Assert.That(actor.CrimeJusticeRevision, Is.EqualTo(revision));
+        Assert.That(protocol.Calls.Any(call => call.StartsWith("notify:", StringComparison.Ordinal)), Is.False);
+
+        protocol.RejectSectionValidation = true;
+        Assert.Throws<InvalidOperationException>(() => boundary.ExecuteWithinOperation(
+            actor, null, () =>
+            {
+                Assert.Fail("Rejected P12 admission must not enter the owner mutation.");
+                return DailyV1SelectedActionStatusPlanResult.Applied;
+            }));
+        Assert.That(actor.Status.Statuses, Has.Count.EqualTo(statusCount));
+        Assert.That(actor.CrimeJusticeRevision, Is.EqualTo(revision));
+        Assert.That(protocol.Calls.Any(call => call.StartsWith("notify:", StringComparison.Ordinal)), Is.False);
+    }
+
+    [Test]
     public void SelectedActionStatusPlanPreservesActorFirstPartialFailureSemantics()
     {
         DailyV1EffectiveDefinitions baseline = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -283,6 +394,62 @@ public sealed class DailyV1NpcStatusOwnerTests
                 + string.Join(",", owner.Status.Statuses.Select(value => value.DefinitionId)));
 
         public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner) { }
+    }
+
+    private sealed class RecordingSelectedStatusProjection
+        : DailyV1SelectedActionExecutionStage.ISelectedActionStatusProjectionBoundary
+    {
+        internal DailyV1NpcRuntimeOwners RejectOwner;
+        internal readonly List<DailyV1NpcRuntimeOwners> RefreshedOwners =
+            new List<DailyV1NpcRuntimeOwners>();
+
+        public bool CanProjectStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
+            !ReferenceEquals(owner, RejectOwner);
+
+        public void RefreshStatusProjection(DailyV1NpcRuntimeOwners owner) =>
+            RefreshedOwners.Add(owner);
+
+        public void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners owner) { }
+    }
+
+    private sealed class FakeSelectedStatusProtocol
+        : IDailyV1P12CrimeJusticeMutationProtocol
+    {
+        internal readonly List<string> Calls = new List<string>();
+        internal bool RejectSectionValidation;
+
+        public void FaultClosed() => Calls.Add("fault");
+
+        public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds)
+        {
+            Calls.Add("validate:" + string.Join("|", sectionIds));
+            return !RejectSectionValidation;
+        }
+
+        public bool TryReserveMutationEpoch(out object reservation)
+        {
+            Calls.Add("reserve");
+            reservation = new object();
+            return true;
+        }
+
+        public bool TryNotifyReservedCommittedMutations(
+            object reservation,
+            IReadOnlyCollection<string> sectionIds)
+        {
+            Calls.Add("reserved-commit:" + string.Join("|", sectionIds));
+            return true;
+        }
+
+        public void ReleaseMutationEpoch(object reservation) => Calls.Add("release");
+        public bool TryValidateMutationEpochCapacity() { Calls.Add("capacity"); return true; }
+        public bool NotifyCommittedMutation(string sectionId)
+        {
+            Calls.Add("notify:" + sectionId);
+            return true;
+        }
     }
 
     private static DailyV1NpcRuntimeOwners CreateNpcOwner(
