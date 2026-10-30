@@ -774,6 +774,133 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
             "The Core capture boundary must reject a host row captured before the selected MoneyAccount revision changed.");
     }
 
+    [Test]
+    public void SelectedRuntimeCensusRebindsPersonLifeResidenceFromBoundCoreStore()
+    {
+        PersonStore personStore = new PersonStore();
+        PersonRuntime laterPerson = new PersonRuntime(new PersonId("person/z"), 21L);
+        PersonRuntime earlierPerson = new PersonRuntime(new PersonId("person/a"), 18L);
+        Assert.That(personStore.TryRegister(laterPerson, out PersonStoreFailure laterFailure),
+            Is.True, laterFailure.ToString());
+        Assert.That(personStore.TryRegister(earlierPerson, out PersonStoreFailure earlierFailure),
+            Is.True, earlierFailure.ToString());
+
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out _);
+        Assert.That(graph.TryBindPersonStore(personStore), Is.True);
+
+        OwnerSectionCensusSnapshot laterRow = CreateRequiredSnapshot(
+            laterPerson.GetLifeResidenceCensusWitness());
+        OwnerSectionCensusSnapshot membershipRow = CreateRequiredSnapshot(
+            personStore.GetMembershipCensusWitness());
+        OwnerSectionCensusSnapshot earlierRow = CreateRequiredSnapshot(
+            earlierPerson.GetLifeResidenceCensusWitness());
+        OwnerSectionCensusSnapshot bindingRow = CreateRequiredSnapshot(
+            personStore.GetMaterializationBindingCensusWitness());
+        OwnerSectionCensusSnapshot[] hostRows =
+        {
+            laterRow,
+            membershipRow,
+            earlierRow,
+            bindingRow
+        };
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCorePersonLifeResidenceSections(
+            graph, hostRows, out IReadOnlyList<OwnerSectionCensusSnapshot> rebound,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(rebound, Has.Count.EqualTo(hostRows.Length));
+        Assert.That(rebound.Select(row => row.SectionId),
+            Is.EqualTo(hostRows.Select(row => row.SectionId)),
+            "Core owner rebinding preserves the host's complete 89-family vector order.");
+        Assert.That(rebound[0], Is.Not.SameAs(laterRow));
+        Assert.That(rebound[0].SectionId,
+            Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(
+                laterPerson.PersonId)));
+        Assert.That(rebound[0].OwnerInstanceIdentity, Is.SameAs(laterPerson));
+        Assert.That(rebound[0].Cardinality, Is.EqualTo(1));
+        Assert.That(rebound[0].Revision, Is.EqualTo(laterPerson.LifeResidenceRevision));
+        Assert.That(rebound[2], Is.Not.SameAs(earlierRow));
+        Assert.That(rebound[2].OwnerInstanceIdentity, Is.SameAs(earlierPerson));
+        Assert.That(rebound[1], Is.SameAs(membershipRow));
+        Assert.That(rebound[3], Is.SameAs(bindingRow));
+    }
+
+    [Test]
+    public void SelectedRuntimeCensusPreservesStalePersonLifeResidenceForP12Classification()
+    {
+        PersonStore personStore = new PersonStore();
+        PersonRuntime person = new PersonRuntime(new PersonId("person.stale-residence"), 24L);
+        Assert.That(personStore.TryRegister(person, out PersonStoreFailure failure),
+            Is.True, failure.ToString());
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out _);
+        Assert.That(graph.TryBindPersonStore(personStore), Is.True);
+
+        OwnerSectionCensusSnapshot captured = CreateRequiredSnapshot(
+            person.GetLifeResidenceCensusWitness());
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            person, "city.after-capture"), Is.True);
+        Assert.That(person.LifeResidenceRevision, Is.EqualTo(captured.Revision + 1L));
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCorePersonLifeResidenceSections(
+            graph, new[] { captured }, out IReadOnlyList<OwnerSectionCensusSnapshot> preserved,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(preserved[0], Is.SameAs(captured),
+            "The source revision mismatch remains visible to the established P12 stale-token check.");
+    }
+
+    [Test]
+    public void SelectedRuntimeCensusPreservesCompletePersonLifeResidenceRowsForMixedRoster()
+    {
+        PersonStore personStore = new PersonStore();
+        PersonRuntime selectedPerson = new PersonRuntime(new PersonId("person.selected"), 22L);
+        Assert.That(personStore.TryRegister(selectedPerson, out PersonStoreFailure failure),
+            Is.True, failure.ToString());
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out _);
+        Assert.That(graph.TryBindPersonStore(personStore), Is.True);
+
+        PersonRuntime compatibilityPerson = new PersonRuntime(new PersonId("person.compatibility"), 19L);
+        OwnerSectionCensusSnapshot selected = CreateRequiredSnapshot(
+            selectedPerson.GetLifeResidenceCensusWitness());
+        OwnerSectionCensusSnapshot compatibility = CreateRequiredSnapshot(
+            compatibilityPerson.GetLifeResidenceCensusWitness());
+        OwnerSectionCensusSnapshot unrelated = new OwnerSectionCensusSnapshot(
+            "p12d.test.person-vector", 1, OwnerSectionRole.Required, new object(), 3, 9L);
+        OwnerSectionCensusSnapshot[] hostRows = { compatibility, unrelated, selected };
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCorePersonLifeResidenceSections(
+            graph, hostRows, out IReadOnlyList<OwnerSectionCensusSnapshot> preserved,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(preserved, Has.Count.EqualTo(hostRows.Length));
+        for (int i = 0; i < hostRows.Length; i++)
+            Assert.That(preserved[i], Is.SameAs(hostRows[i]),
+                "Mixed-roster capture preserves the entire host vector without stitching authorities.");
+    }
+
+    [Test]
+    public void SelectedRuntimeCensusRejectsMissingOrDuplicatePersonLifeResidenceRows()
+    {
+        PersonStore personStore = new PersonStore();
+        PersonRuntime first = new PersonRuntime(new PersonId("person.first"), 20L);
+        PersonRuntime second = new PersonRuntime(new PersonId("person.second"), 21L);
+        Assert.That(personStore.TryRegister(first, out PersonStoreFailure firstFailure),
+            Is.True, firstFailure.ToString());
+        Assert.That(personStore.TryRegister(second, out PersonStoreFailure secondFailure),
+            Is.True, secondFailure.ToString());
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out _);
+        Assert.That(graph.TryBindPersonStore(personStore), Is.True);
+        OwnerSectionCensusSnapshot firstRow = CreateRequiredSnapshot(first.GetLifeResidenceCensusWitness());
+        OwnerSectionCensusSnapshot secondRow = CreateRequiredSnapshot(second.GetLifeResidenceCensusWitness());
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCorePersonLifeResidenceSections(
+            graph, new[] { firstRow }, out _, out _), Is.False,
+            "A selected Core Person cannot be absent from the host census.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCorePersonLifeResidenceSections(
+            graph, new[] { firstRow, firstRow }, out _, out _), Is.False,
+            "The owner-section identity cannot be duplicated in a census.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCorePersonLifeResidenceSections(
+            graph, new[] { firstRow, secondRow }, out _, out _), Is.True,
+            "The full selected Person life/residence family is accepted.");
+    }
     private static DailyV1SelectedRuntimeOwnerGraph CreateSingleNpcGraph(
         out DailyV1NpcRuntimeOwners npc)
     {
@@ -796,6 +923,12 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         return providers;
     }
 
+    private static OwnerSectionCensusSnapshot CreateRequiredSnapshot(OwnerSectionCensusWitness witness)
+    {
+        return new OwnerSectionCensusSnapshot(
+            witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+            witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision);
+    }
     private static OwnerSectionCensusSnapshot[] CreateRequiredSnapshots(
         IReadOnlyList<IOwnerSectionCensusProvider> providers)
     {
