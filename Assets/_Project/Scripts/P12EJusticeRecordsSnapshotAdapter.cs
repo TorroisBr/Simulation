@@ -46,8 +46,10 @@ internal static class P12EJusticeRecordsSnapshotAdapter
         OwnerSectionCensusSnapshot justiceWitness = Find(sharedOwnerSectionVector,
             P12CrimeJusticeCensusProvider.JusticeRecordsSectionId);
         JusticeSystem owner = justiceWitness?.OwnerInstanceIdentity as JusticeSystem;
-        if (owner == null || !runtime.HasSameJusticeSystemOwner(owner)
-            || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph?.JusticeRecordsOwner, owner.CoreOwner)
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = runtime.SelectedRuntimeOwnerGraph;
+        if (owner == null || (selectedGraph != null
+                && (!runtime.HasSameJusticeSystemOwner(owner)
+                    || !ReferenceEquals(selectedGraph.JusticeRecordsOwner, owner.CoreOwner)))
             || justiceWitness.SchemaVersion != P12CrimeJusticeCensusProvider.SchemaVersion
             || justiceWitness.Role != OwnerSectionRole.Required)
             return Fail(P12EJusticeSnapshotFailureCode.InvalidOwnerSectionVector,
