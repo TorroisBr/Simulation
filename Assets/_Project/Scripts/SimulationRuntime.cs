@@ -301,14 +301,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     {
         public readonly Thread OwnerThread;
         public readonly int OwnerManagedThreadId;
+        public readonly bool IsCoreOwned;
         public readonly HashSet<string> ChangedSectionIds = new HashSet<string>(StringComparer.Ordinal);
-        public SimulationOperationScope ProtocolScope;
+        public IDisposable OperationScope;
 
-        public P12SoloTravelStartOperationContext(Thread ownerThread, SimulationOperationScope protocolScope)
+        public P12SoloTravelStartOperationContext(
+            Thread ownerThread,
+            IDisposable operationScope,
+            bool isCoreOwned)
         {
             OwnerThread = ownerThread ?? throw new ArgumentNullException(nameof(ownerThread));
             OwnerManagedThreadId = ownerThread.ManagedThreadId;
-            ProtocolScope = protocolScope ?? throw new ArgumentNullException(nameof(protocolScope));
+            OperationScope = operationScope ?? throw new ArgumentNullException(nameof(operationScope));
+            IsCoreOwned = isCoreOwned;
         }
 
         public bool IsOwnedByCurrentThread() => ReferenceEquals(OwnerThread, Thread.CurrentThread)
@@ -335,6 +340,48 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             disposed = true;
             owner?.ExitP12SoloTravelStartOperation(context);
         }
+    }
+
+    /// <summary>
+    /// Binds Core's selected solo-travel operation scope to the runtime's
+    /// registered continuation census and operation registry. Section
+    /// selection and committed-section tracking remain owned by Core.
+    /// </summary>
+    private sealed class SelectedSoloTravelStartP12ProtocolAdapter
+        : IDailyV1SelectedP12SoloTravelStartProtocol
+    {
+        private readonly SimulationRuntime runtime;
+
+        internal SelectedSoloTravelStartP12ProtocolAdapter(SimulationRuntime runtime)
+        {
+            this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        }
+
+        public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
+            runtime.npcRosterCensusProtocol != null
+            && runtime.npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _);
+
+        public bool TryValidateMutationEpochCapacity() =>
+            runtime.npcRosterCensusProtocol != null
+            && runtime.npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _);
+
+        public bool TryEnterOperation(out IDisposable operationScope)
+        {
+            operationScope = null;
+            if (!runtime.TryEnterRuntimeAdmissionOperation(
+                    DailyV1RuntimeProtocolOperationContracts.SoloTravelStart,
+                    out SimulationOperationScope scope)
+                || scope == null)
+                return false;
+            operationScope = scope;
+            return true;
+        }
+
+        public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) =>
+            runtime.npcRosterCensusProtocol != null
+            && runtime.npcRosterCensusProtocol.NotifyCommittedMutations(sectionIds, out _);
+
+        public void FaultClosed() => runtime.FaultRuntimeAdmission();
     }
 
     private sealed class SelectedSoloTravelActionBoundaryAdapter
@@ -5454,6 +5501,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return coreHandled;
         }
 
+        coreHandled = dailyExecutionBoundary.TryCanCommitSelectedP12SoloTravelStartMutation(
+            requested, out bool handledByCoreSoloTravelStart);
+        if (handledByCoreSoloTravelStart)
+        {
+            if (!coreHandled) FaultRuntimeAdmission();
+            return coreHandled;
+        }
+
         P12TravelPartyAdvanceOperationContext travelContext =
             activeP12TravelPartyAdvanceOperationContext;
         P12MerchantOperationContext merchantContext = activeP12MerchantOperationContext;
@@ -5504,6 +5559,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         else if (soloTravelContext != null)
         {
             if (!soloTravelContext.IsOwnedByCurrentThread())
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+            if (soloTravelContext.IsCoreOwned)
             {
                 FaultRuntimeAdmission();
                 return false;
@@ -5563,6 +5623,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return coreRecorded;
         }
 
+        coreRecorded = dailyExecutionBoundary.TryRecordSelectedP12SoloTravelStartMutation(
+            changed, out bool recordedByCoreSoloTravelStart);
+        if (recordedByCoreSoloTravelStart)
+        {
+            if (!coreRecorded) FaultRuntimeAdmission();
+            return coreRecorded;
+        }
+
         P12TravelPartyAdvanceOperationContext travelContext =
             activeP12TravelPartyAdvanceOperationContext;
         P12MerchantOperationContext merchantContext = activeP12MerchantOperationContext;
@@ -5602,6 +5670,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         if (soloTravelContext != null)
         {
             if (!soloTravelContext.IsOwnedByCurrentThread())
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+            if (soloTravelContext.IsCoreOwned)
             {
                 FaultRuntimeAdmission();
                 return false;
@@ -5860,19 +5933,63 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         }
 
         HashSet<string> distinctSections = new HashSet<string>(sectionIds, StringComparer.Ordinal);
-        if (distinctSections.Count != sectionIds.Count
-            || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
-            || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
-            || !TryEnterRuntimeAdmissionOperation(
-                DailyV1RuntimeProtocolOperationContracts.SoloTravelStart,
-                out SimulationOperationScope protocolScope))
+        if (distinctSections.Count != sectionIds.Count)
         {
             FaultRuntimeAdmission();
             return false;
         }
 
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
+        bool coreExecutionAdmitted = dailyExecutionBoundary.HasAdmittedSelectedDailyExecution;
+        if (coreExecutionAdmitted
+            && (selectedGraph == null
+                || (npc.SelectedRuntimeOwners != null
+                    && !selectedGraph.ContainsExactNpcOwner(npc.SelectedRuntimeOwners))))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        // An admitted mixed roster may still execute an NPC that has no exact
+        // Core owner binding through Unity's established compatibility path.
+        // A non-null but mismatched binding above is an identity fault.
+        bool coreOwnsActor = coreExecutionAdmitted
+            && npc.SelectedRuntimeOwners != null;
+        IDisposable operationScope;
+        if (coreOwnsActor)
+        {
+            if (!dailyExecutionBoundary.TryCreateSelectedP12SoloTravelStartSectionIds(
+                    selectedGraph,
+                    npc.SelectedRuntimeOwners,
+                    out IReadOnlyList<string> coreSectionIds)
+                || coreSectionIds.Count != distinctSections.Count
+                || coreSectionIds.Any(sectionId => !distinctSections.Contains(sectionId))
+                || !dailyExecutionBoundary.TryBeginSelectedP12SoloTravelStart(
+                    selectedGraph,
+                    npc.SelectedRuntimeOwners,
+                    sectionIds,
+                    new SelectedSoloTravelStartP12ProtocolAdapter(this),
+                    out operationScope)
+                || operationScope == null)
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+        }
+        else if (!npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
+            || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
+            || !TryEnterRuntimeAdmissionOperation(
+                DailyV1RuntimeProtocolOperationContracts.SoloTravelStart,
+                out SimulationOperationScope hostOperationScope)
+            || hostOperationScope == null)
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        else operationScope = hostOperationScope;
+
         P12SoloTravelStartOperationContext context =
-            new P12SoloTravelStartOperationContext(Thread.CurrentThread, protocolScope);
+            new P12SoloTravelStartOperationContext(Thread.CurrentThread, operationScope, coreOwnsActor);
         activeP12SoloTravelStartOperationContext = context;
         scope = new P12SoloTravelStartOperationScope(this, context);
         return true;
@@ -5890,8 +6007,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 return;
             }
 
-            if (context.ChangedSectionIds.Count != 0
-                && !npcRosterCensusProtocol.NotifyCommittedMutations(context.ChangedSectionIds, out _))
+            if (!context.IsCoreOwned
+                && context.ChangedSectionIds.Count != 0
+                && (npcRosterCensusProtocol == null
+                    || !npcRosterCensusProtocol.NotifyCommittedMutations(
+                        context.ChangedSectionIds, out _)))
                 FaultRuntimeAdmission();
         }
         catch
@@ -5902,9 +6022,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         {
             if (ReferenceEquals(activeP12SoloTravelStartOperationContext, context))
                 activeP12SoloTravelStartOperationContext = null;
-            SimulationOperationScope operation = context.ProtocolScope;
-            context.ProtocolScope = null;
-            operation?.Dispose();
+            IDisposable operationScope = context.OperationScope;
+            context.OperationScope = null;
+            try { operationScope?.Dispose(); }
+            catch { FaultRuntimeAdmission(); }
         }
     }
 

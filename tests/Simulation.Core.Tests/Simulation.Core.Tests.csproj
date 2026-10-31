@@ -27,6 +27,7 @@
     <Compile Include="SimulationTimeCoreTests.cs" />
     <Compile Include="SimulationRuntimeAdmissionContextTests.cs" />
     <Compile Include="DailyV1ExecutionBoundaryStateTests.cs" />
+    <Compile Include="DailyV1SelectedSoloTravelStartOperationTests.cs" Link="Application/DailyV1SelectedSoloTravelStartOperationTests.cs" />
     <Compile Include="DailyV1MutationEpochStateTests.cs" />
     <Compile Include="DailyV1RuntimeIdentityIndexTests.cs" />
     <Compile Include="P12ARuntimeIdentityOwnerCodecTests.cs" Link="Persistence/P12ARuntimeIdentityOwnerCodecTests.cs" />

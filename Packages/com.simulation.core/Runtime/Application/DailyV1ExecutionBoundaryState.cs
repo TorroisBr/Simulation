@@ -51,6 +51,21 @@ internal enum DailyV1RestoredBoundaryFinalizationFailure : byte
 }
 
 /// <summary>
+/// Existing continuation-census operations required by one selected solo
+/// travel start. The Core session owns the exact section set, serialized
+/// operation lifetime, and committed-section receipt; the host only binds
+/// those operations to its registered live census protocol.
+/// </summary>
+internal interface IDailyV1SelectedP12SoloTravelStartProtocol
+{
+    bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
+    bool TryValidateMutationEpochCapacity();
+    bool TryEnterOperation(out IDisposable operationScope);
+    bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds);
+    void FaultClosed();
+}
+
+/// <summary>
 /// Owns the per-runtime single-writer advance lease and completed Daily-v1
 /// core sequence. This is execution state, not a thread lock or persisted data.
 /// </summary>
@@ -99,6 +114,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private DailyV1P12CrimeJusticeMutationCoordinator selectedP12CrimeJusticeMutationCoordinator;
     private IDailyV1P12CrimeJusticeMutationProtocol selectedP12CrimeJusticeMutationProtocol;
     private SelectedP12TravelPartyAdvanceContext selectedP12TravelPartyAdvanceContext;
+    private SelectedP12SoloTravelStartContext selectedP12SoloTravelStartContext;
     private DailyV1Application applicationAdvanceAuthority;
     private DailyV1ActiveRuntimeSession applicationAdvanceSession;
 
@@ -130,6 +146,59 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         internal bool IsOwnedByCurrentThread() =>
             ReferenceEquals(OwnerThread, Thread.CurrentThread)
             && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
+
+    private sealed class SelectedP12SoloTravelStartContext
+    {
+        internal readonly DailyV1SelectedRuntimeOwnerGraph Graph;
+        internal readonly DailyV1NpcRuntimeOwners Actor;
+        internal readonly IDailyV1SelectedP12SoloTravelStartProtocol Protocol;
+        internal readonly Thread OwnerThread;
+        internal readonly int OwnerManagedThreadId;
+        internal readonly HashSet<string> AllowedSectionIds;
+        internal readonly HashSet<string> ChangedSectionIds =
+            new HashSet<string>(StringComparer.Ordinal);
+        internal IDisposable ProtocolScope;
+
+        internal SelectedP12SoloTravelStartContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            IDailyV1SelectedP12SoloTravelStartProtocol protocol,
+            IEnumerable<string> sectionIds,
+            IDisposable protocolScope)
+        {
+            Graph = graph;
+            Actor = actor;
+            Protocol = protocol;
+            OwnerThread = Thread.CurrentThread;
+            OwnerManagedThreadId = OwnerThread.ManagedThreadId;
+            AllowedSectionIds = new HashSet<string>(sectionIds, StringComparer.Ordinal);
+            ProtocolScope = protocolScope;
+        }
+
+        internal bool IsOwnedByCurrentThread() =>
+            ReferenceEquals(OwnerThread, Thread.CurrentThread)
+            && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
+
+    private sealed class SelectedP12SoloTravelStartScope : IDisposable
+    {
+        private DailyV1ExecutionBoundaryState owner;
+        private readonly SelectedP12SoloTravelStartContext context;
+
+        internal SelectedP12SoloTravelStartScope(
+            DailyV1ExecutionBoundaryState owner,
+            SelectedP12SoloTravelStartContext context)
+        {
+            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            this.context = context ?? throw new ArgumentNullException(nameof(context));
+        }
+
+        public void Dispose()
+        {
+            DailyV1ExecutionBoundaryState current = Interlocked.Exchange(ref owner, null);
+            current?.ExitSelectedP12SoloTravelStart(context);
+        }
     }
 
     internal SimulationTime SimulationTime { get; private set; }
@@ -752,6 +821,313 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         {
             ExitSelectedP12TravelPartyAdvance(context);
         }
+    }
+
+    /// <summary>
+    /// Begins the selected solo-travel P12 operation for one exact Core NPC.
+    /// Core derives the complete touched-section set from its active owner
+    /// graph, verifies the host's census preflight against that set, and owns
+    /// the serialized scope and committed-section notification.
+    /// </summary>
+    internal bool TryBeginSelectedP12SoloTravelStart(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        IReadOnlyList<string> hostPreflightSectionIds,
+        IDailyV1SelectedP12SoloTravelStartProtocol protocol,
+        out IDisposable operationScope)
+    {
+        operationScope = null;
+        if (graph == null || actor == null || hostPreflightSectionIds == null || protocol == null)
+            return false;
+
+        if (!TryCreateSelectedP12SoloTravelStartSectionIds(
+                graph, actor, out IReadOnlyList<string> expectedSectionIds))
+        {
+            FaultSelectedSoloTravelStart(protocol);
+            return false;
+        }
+
+        HashSet<string> supplied = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            foreach (string sectionId in hostPreflightSectionIds)
+                if (string.IsNullOrWhiteSpace(sectionId) || !supplied.Add(sectionId))
+                    throw new InvalidOperationException();
+        }
+        catch
+        {
+            FaultSelectedSoloTravelStart(protocol);
+            return false;
+        }
+
+        bool exactSet = supplied.Count == expectedSectionIds.Count;
+        foreach (string sectionId in expectedSectionIds)
+            exactSet &= supplied.Contains(sectionId);
+        if (!exactSet)
+        {
+            FaultSelectedSoloTravelStart(protocol);
+            return false;
+        }
+
+        IDisposable protocolScope = null;
+        SelectedP12SoloTravelStartContext context = null;
+        lock (operationSyncRoot)
+        {
+            if (!HasAdmittedSelectedDailyExecution
+                || AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+                || selectedP12SoloTravelStartContext != null
+                || selectedP12TravelPartyAdvanceContext != null
+                || activeOperationCount <= 0
+                || !AreRequiredSelectedP12Sections(expectedSectionIds))
+            {
+                FaultSelectedSoloTravelStart(protocol);
+                return false;
+            }
+
+            try
+            {
+                if (!protocol.TryValidateUnchangedSections(expectedSectionIds)
+                    || !protocol.TryValidateMutationEpochCapacity()
+                    || !protocol.TryEnterOperation(out protocolScope)
+                    || protocolScope == null)
+                {
+                    FaultSelectedSoloTravelStart(protocol);
+                    IDisposable rejectedScope = protocolScope;
+                    protocolScope = null;
+                    try { rejectedScope?.Dispose(); }
+                    catch { FaultSelectedSoloTravelStart(protocol); }
+                    return false;
+                }
+
+                context = new SelectedP12SoloTravelStartContext(
+                    graph, actor, protocol, expectedSectionIds, protocolScope);
+                selectedP12SoloTravelStartContext = context;
+            }
+            catch
+            {
+                FaultSelectedSoloTravelStart(protocol);
+                IDisposable failedScope = protocolScope;
+                protocolScope = null;
+                try { failedScope?.Dispose(); }
+                catch { FaultSelectedSoloTravelStart(protocol); }
+                return false;
+            }
+        }
+
+        operationScope = new SelectedP12SoloTravelStartScope(this, context);
+        return true;
+    }
+
+    /// <summary>
+    /// Core's operation-specific census cut for selected solo travel start.
+    /// It covers only the selected actor's account/travel/plan/knowledge
+    /// owners, its current important-city membership when present, and the
+    /// shared event allocator and record sequence touched by this operation.
+    /// </summary>
+    internal bool TryCreateSelectedP12SoloTravelStartSectionIds(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        out IReadOnlyList<string> sectionIds)
+    {
+        sectionIds = null;
+        if (graph == null || actor == null
+            || !HasAdmittedSelectedDailyExecution
+            || AdmissionContext == null
+            || !AdmissionContext.IsOwnedByCurrentThread()
+            || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(actor.Definitions, graph.Definitions)
+            || string.IsNullOrWhiteSpace(actor.RuntimeId)
+            || actor.MoneyAccount == null || actor.Travel == null
+            || actor.TravelPlan == null || actor.SpatialKnowledge == null
+            || selectedRuntimeIdAllocator == null || selectedRecordSequence == null
+            || selectedRuntimeActorRoster == null)
+            return false;
+
+        int matchingRosterEntries = 0;
+        foreach (DailyV1ActorTurnRosterProjection entry in selectedRuntimeActorRoster)
+            if (entry != null
+                && string.Equals(entry.RuntimeId, actor.RuntimeId, StringComparison.Ordinal))
+                matchingRosterEntries++;
+        if (matchingRosterEntries != 1) return false;
+
+        List<string> ids = new List<string>
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + actor.RuntimeId,
+            RuntimeIdAllocatorCensusProvider.EventsSectionId,
+            SimulationRecordSequenceCensusProvider.SectionId
+        };
+
+        string currentCityRuntimeId = actor.Travel.CurrentCityRuntimeId;
+        if (!string.IsNullOrWhiteSpace(currentCityRuntimeId))
+        {
+            DailyV1CityRuntimeOwners currentCity = null;
+            foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            {
+                if (city == null || !string.Equals(
+                        city.RuntimeId, currentCityRuntimeId, StringComparison.Ordinal))
+                    continue;
+                if (currentCity != null) return false;
+                currentCity = city;
+            }
+
+            if (currentCity == null || currentCity.NpcPresence == null) return false;
+            if (currentCity.NpcPresence.Contains(actor.RuntimeId))
+                ids.Add(DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(
+                    currentCity.RuntimeId));
+        }
+
+        HashSet<string> unique = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string id in ids)
+            if (string.IsNullOrWhiteSpace(id) || !unique.Add(id)) return false;
+        ids.Sort(StringComparer.Ordinal);
+        sectionIds = Array.AsReadOnly(ids.ToArray());
+        return true;
+    }
+
+    private bool AreRequiredSelectedP12Sections(IReadOnlyList<string> sectionIds)
+    {
+        if (sectionIds == null || !expectedOwnerSectionContractInventorySealed)
+            return false;
+        foreach (string sectionId in sectionIds)
+        {
+            if (string.IsNullOrWhiteSpace(sectionId)
+                || !expectedOwnerSectionContracts.TryGetValue(
+                    sectionId, out DailyV1OwnerSectionContractIdentity contract)
+                || contract.Role != OwnerSectionRole.Required
+                || contract.SchemaVersion <= 0)
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Routes a selected solo-travel owner admission through the active Core
+    /// operation. A false handled flag leaves unrelated host operations on
+    /// their established protocol path.
+    /// </summary>
+    internal bool TryCanCommitSelectedP12SoloTravelStartMutation(
+        IEnumerable<string> sectionIds,
+        out bool handled)
+    {
+        lock (operationSyncRoot)
+        {
+            SelectedP12SoloTravelStartContext context = selectedP12SoloTravelStartContext;
+            handled = context != null;
+            if (context == null) return true;
+            if (!IsCurrentSelectedSoloTravelStartContext(context)
+                || !TryGetRequestedSoloTravelStartSections(
+                    context, sectionIds, out HashSet<string> requested))
+            {
+                FaultSelectedSoloTravelStart(context.Protocol);
+                return false;
+            }
+
+            requested.RemoveWhere(context.ChangedSectionIds.Contains);
+            string[] ordered = ToOrderedSectionArray(requested);
+            if (ordered.Length == 0) return true;
+            try
+            {
+                if (context.Protocol.TryValidateUnchangedSections(ordered)) return true;
+            }
+            catch { }
+            FaultSelectedSoloTravelStart(context.Protocol);
+            return false;
+        }
+    }
+
+    /// <summary>Records a committed mutation in the active Core travel-start scope.</summary>
+    internal bool TryRecordSelectedP12SoloTravelStartMutation(
+        IEnumerable<string> sectionIds,
+        out bool handled)
+    {
+        lock (operationSyncRoot)
+        {
+            SelectedP12SoloTravelStartContext context = selectedP12SoloTravelStartContext;
+            handled = context != null;
+            if (context == null) return true;
+            if (!IsCurrentSelectedSoloTravelStartContext(context)
+                || !TryGetRequestedSoloTravelStartSections(
+                    context, sectionIds, out HashSet<string> changed))
+            {
+                FaultSelectedSoloTravelStart(context.Protocol);
+                return false;
+            }
+
+            context.ChangedSectionIds.UnionWith(changed);
+            return true;
+        }
+    }
+
+    private bool IsCurrentSelectedSoloTravelStartContext(
+        SelectedP12SoloTravelStartContext context) =>
+        context != null
+        && ReferenceEquals(selectedP12SoloTravelStartContext, context)
+        && context.IsOwnedByCurrentThread()
+        && HasAdmittedSelectedDailyExecution
+        && AdmissionContext != null
+        && AdmissionContext.IsOwnedByCurrentThread()
+        && ReferenceEquals(selectedRuntimeOwnerGraph, context.Graph)
+        && context.Graph.ContainsExactNpcOwner(context.Actor);
+
+    private static bool TryGetRequestedSoloTravelStartSections(
+        SelectedP12SoloTravelStartContext context,
+        IEnumerable<string> sectionIds,
+        out HashSet<string> requested)
+    {
+        requested = new HashSet<string>(StringComparer.Ordinal);
+        if (sectionIds == null) return false;
+        try
+        {
+            foreach (string sectionId in sectionIds)
+                if (string.IsNullOrWhiteSpace(sectionId)
+                    || !requested.Add(sectionId)
+                    || !context.AllowedSectionIds.Contains(sectionId))
+                    return false;
+        }
+        catch { return false; }
+        return requested.Count != 0;
+    }
+
+    private void ExitSelectedP12SoloTravelStart(
+        SelectedP12SoloTravelStartContext context)
+    {
+        lock (operationSyncRoot)
+        {
+            try
+            {
+                if (!IsCurrentSelectedSoloTravelStartContext(context))
+                    FaultSelectedSoloTravelStart(context?.Protocol);
+                else if (context.ChangedSectionIds.Count != 0
+                    && !context.Protocol.NotifyCommittedMutations(
+                        ToOrderedSectionArray(context.ChangedSectionIds)))
+                    FaultSelectedSoloTravelStart(context.Protocol);
+            }
+            catch { FaultSelectedSoloTravelStart(context?.Protocol); }
+            finally
+            {
+                if (ReferenceEquals(selectedP12SoloTravelStartContext, context))
+                    selectedP12SoloTravelStartContext = null;
+                IDisposable protocolScope = context?.ProtocolScope;
+                if (context != null) context.ProtocolScope = null;
+                try { protocolScope?.Dispose(); }
+                catch { FaultSelectedSoloTravelStart(context?.Protocol); }
+            }
+        }
+    }
+
+    private static void FaultSelectedSoloTravelStart(
+        IDailyV1SelectedP12SoloTravelStartProtocol protocol)
+    {
+        try { protocol?.FaultClosed(); }
+        catch { }
     }
 
     /// <summary>
