@@ -897,6 +897,43 @@ public sealed class DailyV1ActorTurnExecutionStageTests
     }
 
     [Test]
+    public void CoreExecutesSelectedActionWithoutHostProjectionAndPublishesP12Mutation()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
+        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary
+        {
+            RequireActionProjection = false,
+            RecordActionSlotP12Mutation = true
+        };
+        boundary.BindGraph(graph);
+        long revisionBefore = actor.ActionSlot.Revision;
+
+        Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteAutonomousAction(
+            graph, actor, new PersonStore(), boundary.RandomSource, 12L, boundary), Is.True);
+
+        Assert.That(actor.ActionSlot.CurrentAction, Is.Not.Null);
+        Assert.That(actor.ActionSlot.CurrentPayload, Is.Not.Null);
+        Assert.That(actor.ActionSlot.Revision, Is.EqualTo(revisionBefore + 1L));
+        Assert.That(boundary.Decisions.Decisions, Has.Count.EqualTo(1));
+        Assert.That(actor.ActionSlot.CurrentPayload.OriginDecisionId,
+            Is.EqualTo(boundary.Decisions.Decisions[0].DecisionId));
+        Assert.That(boundary.Events, Is.EqualTo(new[]
+        {
+            "p12-slot-admission", "p12-slot-notify",
+            "chosen-target", "complete-dispatch", "status-operation"
+        }));
+        Assert.That(boundary.LastActionSlotP12SectionId,
+            Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+                + actor.RuntimeId));
+        Assert.That(boundary.LastActionSlotP12Revision, Is.EqualTo(actor.ActionSlot.Revision));
+        Assert.That(boundary.ProjectionCallbackCount, Is.Zero,
+            "Core action execution must not ask a host to create or publish Unity action objects.");
+        Assert.That(boundary.Random.Calls, Is.EqualTo(1));
+        Assert.That(boundary.Random.LastStreamKey,
+            Is.EqualTo("npc-decision|" + actor.RuntimeId + "|12"));
+    }
+
+    [Test]
     public void SelectedActionClearCommitsCoreRevisionBetweenAdmissionAndProjection()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
@@ -922,6 +959,37 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             "clear-prepare", "clear-admission", "p12-slot-admission",
             "clear-projection", "p12-slot-notify"
         }));
+    }
+
+    [Test]
+    public void SelectedActionClearCommitsWithoutHostProjectionAndPublishesP12Mutation()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
+        DailyV1ActionDefinition action = graph.Definitions.Actions.Values.First();
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            graph.Definitions, action, null, null, null, 0,
+            0f, 1f, NpcTravelReason.None, 0f, null, null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, action, payload, null), Is.True);
+        long revisionBefore = actor.ActionSlot.Revision;
+
+        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary
+        {
+            RequireActionProjection = false,
+            RecordActionSlotP12Mutation = true
+        };
+        boundary.BindGraph(graph);
+
+        Assert.That(DailyV1SelectedActorActionExecutionStage.TryClearCurrentAction(
+            graph, actor, boundary), Is.True);
+
+        Assert.That(actor.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(actor.ActionSlot.CurrentPayload, Is.Null);
+        Assert.That(actor.ActionSlot.Revision, Is.EqualTo(revisionBefore + 1L));
+        Assert.That(boundary.Events,
+            Is.EqualTo(new[] { "p12-slot-admission", "p12-slot-notify" }));
+        Assert.That(boundary.ProjectionCallbackCount, Is.Zero);
+        Assert.That(boundary.LastActionSlotP12Revision, Is.EqualTo(actor.ActionSlot.Revision));
     }
 
     [Test]
@@ -1010,8 +1078,9 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(boundary.Events, Does.Not.Contain("record-install"));
     }
 
-    [Test]
-    public void RejectedScheduledActionReleasesProjectionForNextActor()
+    [TestCase(true)]
+    [TestCase(false)]
+    public void RejectedScheduledActionReleasesProjectionForNextActor(bool requiresActionProjection)
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1SelectedRuntimeOwnerGraphBuilder builder =
@@ -1056,9 +1125,16 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(directives.Add(directive), Is.True);
         directives.PrepareDay(12L, runtimeId => runtimeId == first.RuntimeId);
 
-        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary();
+        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary
+        {
+            RequireActionProjection = requiresActionProjection,
+            RecordActionSlotP12Mutation = !requiresActionProjection
+        };
         boundary.BindGraph(graph);
-        boundary.RejectNextActionSlotAdmission = true;
+        if (requiresActionProjection)
+            boundary.RejectNextActionSlotAdmission = true;
+        else
+            boundary.RejectNextActionSlotP12Mutation = true;
         DailyV1SelectedActorActionExecutionStage.ProcessScheduledRequestAction(
             graph, first, directive, boundary.RandomSource, 12L, boundary);
 
@@ -1069,11 +1145,21 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             graph, second, new PersonStore(), boundary.RandomSource, 12L, boundary), Is.True,
             "A rejected projection must not remain cached on the roster-scoped host boundary.");
         Assert.That(second.ActionSlot.CurrentAction, Is.Not.Null);
-        Assert.That(boundary.Events, Does.Contain("record-install"));
+        if (requiresActionProjection)
+        {
+            Assert.That(boundary.Events, Does.Contain("record-install"));
+        }
+        else
+        {
+            Assert.That(boundary.ProjectionCallbackCount, Is.Zero);
+            Assert.That(boundary.Events, Does.Contain("p12-slot-notify"));
+        }
     }
 
-    [Test]
-    public void OrderedActorTurnConsumesForcedEscapeInCoreWithoutDecisionOrRandomDraw()
+    [TestCase(true)]
+    [TestCase(false)]
+    public void OrderedActorTurnConsumesForcedEscapeInCoreWithoutDecisionOrRandomDraw(
+        bool requiresActionProjection)
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1SelectedRuntimeOwnerGraphBuilder builder =
@@ -1120,7 +1206,11 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         Assert.That(directives.Add(directive), Is.True);
         directives.PrepareDay(12L, runtimeId => runtimeId == actor.RuntimeId);
 
-        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary();
+        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary
+        {
+            RequireActionProjection = requiresActionProjection,
+            RecordActionSlotP12Mutation = !requiresActionProjection
+        };
         boundary.BindGraph(graph);
         boundary.WithdrawSelectedExecutionAfterPreflight = true;
         Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
@@ -1140,6 +1230,13 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             "Selected RequestAction/ForceOutcome directives execute through Core, not the Unity gameplay callback.");
         Assert.That(boundary.Events, Does.Not.Contain("reserved-query"),
             "The selected Daily-v1 exact-empty reservation fact is established by the admitted profile and Core owner graph.");
+        if (!requiresActionProjection)
+        {
+            Assert.That(boundary.ProjectionCallbackCount, Is.Zero);
+            Assert.That(boundary.Events, Does.Contain("p12-slot-admission"));
+            Assert.That(boundary.Events, Does.Contain("p12-slot-notify"));
+            Assert.That(boundary.LastActionSlotP12Revision, Is.EqualTo(actor.ActionSlot.Revision));
+        }
         Assert.That(boundary.SelectedExecutionChecks, Is.EqualTo(1),
             "After the admitted graph proves Core actor execution once, directive and reservation handling must not ask Unity whether Core execution remains selected.");
     }
@@ -1425,6 +1522,8 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         private DailyV1NpcRuntimeOwners preparedProjectionActor;
         private DailyV1NpcActionPayloadOwner preparedProjectionPayload;
         internal bool RejectNextActionSlotAdmission;
+        internal bool RequireActionProjection = true;
+        internal int ProjectionCallbackCount;
         internal bool CanProjectSelectedAction = true;
         internal bool WithdrawSelectedExecutionAfterPreflight;
         internal int SelectedExecutionChecks;
@@ -1432,6 +1531,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         internal bool RejectDispatchBoundary;
         internal bool RecordActionSlotP12Mutation;
         internal bool RejectActionSlotP12Mutation;
+        internal bool RejectNextActionSlotP12Mutation;
         internal string LastActionSlotP12SectionId;
         internal long LastActionSlotP12Revision = -1L;
         internal bool RejectActionStatusBoundary;
@@ -1448,6 +1548,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         internal long NextRecordSequence => sequence.CaptureSnapshot().NextSequence;
 
         public IAuthoritativeRandomSource RandomSource => Random;
+        public bool RequiresActionProjection => RequireActionProjection;
         public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor)
         {
             SelectedExecutionChecks++;
@@ -1460,6 +1561,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             DailyV1NpcRuntimeOwners actor,
             out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
         {
+            ProjectionCallbackCount++;
             projectionBoundary = this;
             return true;
         }
@@ -1539,6 +1641,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             IDailyV1SelectedActionProjectionBoundary decisionBoundary,
             DailyV1NpcActionPayloadOwner payload)
         {
+            ProjectionCallbackCount++;
             if (preparedProjectionPayload != null
                 || !ReferenceEquals(selected?.PreparedPayload, payload)
                 || !decisionBoundary.TryProjectSelectedCandidate(actor, selected))
@@ -1550,6 +1653,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         public bool TryPrepareCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor)
         {
+            ProjectionCallbackCount++;
             if (preparedProjectionPayload != null
                 || !CurrentGraph.ContainsExactNpcOwner(actor)
                 || actor.ActionSlot?.CurrentPayload == null)
@@ -1562,6 +1666,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         public bool CanCommitCurrentActionClear(DailyV1NpcRuntimeOwners actor)
         {
+            ProjectionCallbackCount++;
             if (!ReferenceEquals(preparedProjectionActor, actor)
                 || preparedProjectionPayload == null)
                 return false;
@@ -1574,6 +1679,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         public bool TryPublishCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor)
         {
+            ProjectionCallbackCount++;
             if (!ReferenceEquals(preparedProjectionActor, actor)
                 || preparedProjectionPayload == null
                 || actor.ActionSlot?.CurrentAction != null
@@ -1586,6 +1692,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         public void CancelPreparedCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor)
         {
+            ProjectionCallbackCount++;
             if (!ReferenceEquals(preparedProjectionActor, actor)) return;
             ClearPreparedProjection();
             Events.Add("clear-cancel");
@@ -1596,6 +1703,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             DailyV1ActionDefinition action,
             DailyV1NpcActionPayloadOwner payload)
         {
+            ProjectionCallbackCount++;
             if (preparedProjectionPayload != null
                 || !CurrentGraph.ContainsExactNpcOwner(actor)
                 || !ReferenceEquals(payload?.Action, action))
@@ -1609,6 +1717,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionPayloadOwner payload)
         {
+            ProjectionCallbackCount++;
             if (!ReferenceEquals(preparedProjectionActor, actor)
                 || !ReferenceEquals(preparedProjectionPayload, payload))
                 return false;
@@ -1627,7 +1736,9 @@ public sealed class DailyV1ActorTurnExecutionStageTests
                 return false;
             if (RecordActionSlotP12Mutation)
                 Events.Add("p12-slot-admission");
-            return !RejectActionSlotP12Mutation;
+            bool admitted = !RejectActionSlotP12Mutation && !RejectNextActionSlotP12Mutation;
+            RejectNextActionSlotP12Mutation = false;
+            return admitted;
         }
 
         public bool OwnsSelectedActionSlotP12Mutation => RecordActionSlotP12Mutation;
@@ -1657,6 +1768,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionPayloadOwner payload)
         {
+            ProjectionCallbackCount++;
             if (!ReferenceEquals(preparedProjectionActor, actor)
                 || !ReferenceEquals(preparedProjectionPayload, payload)
                 || !ReferenceEquals(actor?.ActionSlot?.CurrentPayload, payload)) return false;
@@ -1669,6 +1781,7 @@ public sealed class DailyV1ActorTurnExecutionStageTests
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcActionPayloadOwner payload)
         {
+            ProjectionCallbackCount++;
             if (ReferenceEquals(preparedProjectionActor, actor)
                 && ReferenceEquals(preparedProjectionPayload, payload))
                 ClearPreparedProjection();
@@ -1686,10 +1799,13 @@ public sealed class DailyV1ActorTurnExecutionStageTests
 
         public bool TryProjectSelectedCandidate(
             DailyV1NpcRuntimeOwners actor,
-            DailyV1NpcActionCandidate candidate) =>
-            CurrentGraph?.ContainsExactNpcOwner(actor) == true
-            && CanProjectSelectedAction
-            && candidate?.Action != null;
+            DailyV1NpcActionCandidate candidate)
+        {
+            ProjectionCallbackCount++;
+            return CurrentGraph?.ContainsExactNpcOwner(actor) == true
+                && CanProjectSelectedAction
+                && candidate?.Action != null;
+        }
 
         public bool HasRequestedActionProvider(
             DailyV1NpcRuntimeOwners actor,

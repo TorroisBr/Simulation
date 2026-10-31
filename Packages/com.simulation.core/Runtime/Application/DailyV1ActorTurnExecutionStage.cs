@@ -82,6 +82,12 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
 {
     IAuthoritativeRandomSource RandomSource { get; }
     bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor);
+    /// <summary>
+    /// True when this host requires an action-object projection to admit and
+    /// publish selected Core action slots. A detached Core host may return
+    /// false and execute directly against the authoritative owner slot.
+    /// </summary>
+    bool RequiresActionProjection { get; }
     void LogSkippedDirective(ScheduledDirective directive, string reason);
 
     bool TryCreateActionProjectionBoundary(

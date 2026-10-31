@@ -167,6 +167,18 @@ internal static class DailyV1SelectedActorActionExecutionStage
             && payload.CommercialScoutingEvidence == null;
     }
 
+    private static bool TryGetActionProjectionBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        IDailyV1SelectedActorActionExecutionBoundary boundary,
+        out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
+    {
+        projectionBoundary = null;
+        if (boundary == null) return false;
+        if (!boundary.RequiresActionProjection) return true;
+        return boundary.TryCreateActionProjectionBoundary(actor, out projectionBoundary)
+            && projectionBoundary != null;
+    }
+
     internal static bool TryExecuteAutonomousAction(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
@@ -191,10 +203,9 @@ internal static class DailyV1SelectedActorActionExecutionStage
             || actor.Status == null || actor.ActionSlot == null)
             return false;
 
-        if (!boundary.TryCreateActionProjectionBoundary(actor,
-                out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
-            || projectionBoundary == null)
-            return true; // A missing host projection adapter preserves the existing no-action turn.
+        if (!TryGetActionProjectionBoundary(actor, boundary,
+                out IDailyV1SelectedActionProjectionBoundary projectionBoundary))
+            return true; // A missing required host projection preserves the existing no-action turn.
 
         if (!DailyV1SelectedNpcActionDecisionStage.TryResolveConfiguredActions(
                 graph.Definitions, out IReadOnlyList<DailyV1ActionDefinition> availableActions)
@@ -254,8 +265,10 @@ internal static class DailyV1SelectedActorActionExecutionStage
         DailyV1ActorTurnCoreRoots coreRoots)
     {
         DailyV1NpcActionPayloadOwner payload = selected?.PreparedPayload;
+        bool requiresActionProjection = boundary?.RequiresActionProjection ?? true;
         if (graph == null || actor == null || selected?.Action == null
-            || projectionBoundary == null || boundary == null
+            || boundary == null
+            || (requiresActionProjection && projectionBoundary == null)
             || !graph.ContainsExactNpcOwner(actor)
             || !ReferenceEquals(graph.Definitions, actor.Definitions))
             return false;
@@ -271,11 +284,13 @@ internal static class DailyV1SelectedActorActionExecutionStage
             return false;
         selected.PreparedPayload = payload;
 
-        Func<DailyV1NpcActionPayloadOwner, bool> prepareProjection = candidate =>
-            ReferenceEquals(candidate, payload)
-            && boundary.TryPrepareSelectedActionProjection(
-                actor, selected, projectionBoundary, candidate);
-        Func<bool> slotAdmission = () => boundary.CanCommitSelectedActionSlot(actor, payload)
+        Func<DailyV1NpcActionPayloadOwner, bool> prepareProjection = requiresActionProjection
+            ? candidate => ReferenceEquals(candidate, payload)
+                && boundary.TryPrepareSelectedActionProjection(
+                    actor, selected, projectionBoundary, candidate)
+            : null;
+        Func<bool> slotAdmission = () => (!requiresActionProjection
+                || boundary.CanCommitSelectedActionSlot(actor, payload))
             && CanCommitSelectedActionSlotP12Mutation(graph, actor, boundary);
         RuntimeIdAllocator idAllocator;
         SimulationRecordSequence recordSequence;
@@ -340,11 +355,13 @@ internal static class DailyV1SelectedActorActionExecutionStage
 
         if (!committed)
         {
-            boundary.CancelPreparedSelectedActionProjection(actor, payload);
+            if (requiresActionProjection)
+                boundary.CancelPreparedSelectedActionProjection(actor, payload);
             return false;
         }
 
-        if (!boundary.TryPublishSelectedActionProjection(actor, payload))
+        if (requiresActionProjection
+            && !boundary.TryPublishSelectedActionProjection(actor, payload))
         {
             boundary.CancelPreparedSelectedActionProjection(actor, payload);
             throw new InvalidOperationException(
@@ -372,21 +389,26 @@ internal static class DailyV1SelectedActorActionExecutionStage
             return false;
 
         if (slot.CurrentAction == null) return slot.CurrentPayload == null;
+        bool requiresActionProjection = boundary.RequiresActionProjection;
         if (slot.CurrentPayload == null
-            || !boundary.TryPrepareCurrentActionClearProjection(actor))
+            || (requiresActionProjection
+                && !boundary.TryPrepareCurrentActionClearProjection(actor)))
             return false;
 
         if (!graph.TryCommitCurrentActionSlot(actor, null, null,
-                () => boundary.CanCommitCurrentActionClear(actor)
+                () => (!requiresActionProjection
+                        || boundary.CanCommitCurrentActionClear(actor))
                     && CanCommitSelectedActionSlotP12Mutation(graph, actor, boundary)))
         {
-            boundary.CancelPreparedCurrentActionClearProjection(actor);
+            if (requiresActionProjection)
+                boundary.CancelPreparedCurrentActionClearProjection(actor);
             return false;
         }
 
-        if (!boundary.TryPublishCurrentActionClearProjection(actor))
+        if (requiresActionProjection
+            && !boundary.TryPublishCurrentActionClearProjection(actor))
             throw new InvalidOperationException(
-                "A committed selected Core action clear could not publish its Unity projection.");
+                "A committed selected Core action clear could not publish its host projection.");
         NotifySelectedActionSlotP12MutationCommitted(graph, actor, boundary);
         return true;
     }
@@ -463,9 +485,8 @@ internal static class DailyV1SelectedActorActionExecutionStage
         }
 
         DailyV1NpcActionCandidate requested = new DailyV1NpcActionCandidate(action, 0f);
-        if (!boundary.TryCreateActionProjectionBoundary(actor,
+        if (!TryGetActionProjectionBoundary(actor, boundary,
                 out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
-            || projectionBoundary == null
             || !DailyV1CrimeActionPlanning.TryPrepareSelectedEscapePrison(
                 graph, actor, requested)
             || requested.PreparedPayload == null)
@@ -559,12 +580,14 @@ internal static class DailyV1SelectedActorActionExecutionStage
             return;
         }
 
+        bool requiresActionProjection = boundary.RequiresActionProjection;
         if (!DailyV1NpcActionPayloadOwner.TryCreate(
                 graph.Definitions, action, null, null, null, 0,
                 0f, 1f, NpcTravelReason.None, 0f, null, null, null, null,
                 out DailyV1NpcActionPayloadOwner forcedPayload)
-            || !boundary.TryPrepareForcedOutcomeActionProjection(
-                actor, action, forcedPayload))
+            || (requiresActionProjection
+                && !boundary.TryPrepareForcedOutcomeActionProjection(
+                    actor, action, forcedPayload)))
         {
             MarkForcedEscapeSkipped(boundary, directive, absoluteDay,
                 "Admitted Escape status effects are unavailable.");
@@ -572,17 +595,20 @@ internal static class DailyV1SelectedActorActionExecutionStage
         }
 
         if (!graph.TryCommitCurrentActionSlot(actor, action, forcedPayload,
-                () => boundary.CanCommitSelectedActionSlot(actor, forcedPayload)
+                () => (!requiresActionProjection
+                        || boundary.CanCommitSelectedActionSlot(actor, forcedPayload))
                     && CanCommitSelectedActionSlotP12Mutation(graph, actor, boundary)))
         {
-            boundary.CancelPreparedSelectedActionProjection(actor, forcedPayload);
+            if (requiresActionProjection)
+                boundary.CancelPreparedSelectedActionProjection(actor, forcedPayload);
             MarkForcedEscapeSkipped(boundary, directive, absoluteDay,
                 "Admitted Escape status effects are unavailable.");
             return;
         }
-        if (!boundary.TryPublishSelectedActionProjection(actor, forcedPayload))
+        if (requiresActionProjection
+            && !boundary.TryPublishSelectedActionProjection(actor, forcedPayload))
             throw new InvalidOperationException(
-                "A committed forced Escape action could not publish its Unity projection.");
+                "A committed forced Escape action could not publish its host projection.");
         NotifySelectedActionSlotP12MutationCommitted(graph, actor, boundary);
 
         if (!boundary.TryGetForcedEscapeBoundary(actor, action,

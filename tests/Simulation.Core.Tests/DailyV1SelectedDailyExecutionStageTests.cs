@@ -1722,6 +1722,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public void LogWarning(string message) => DayStartBoundary.LogWarning(message);
 
             public IAuthoritativeRandomSource RandomSource => owner.randomSource;
+            public bool RequiresActionProjection => true;
             public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) =>
                 selectedActionExecution ?? owner.UseSelectedActionExecution;
             public void LogSkippedDirective(ScheduledDirective directive, string reason) { }

@@ -12208,6 +12208,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         }
 
         public IAuthoritativeRandomSource RandomSource => runtime.randomSource;
+        public bool RequiresActionProjection => true;
 
         public bool TryCreateActionProjectionBoundary(
             DailyV1NpcRuntimeOwners actor,
