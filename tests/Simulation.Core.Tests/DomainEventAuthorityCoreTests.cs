@@ -9,6 +9,7 @@ public sealed class DomainEventAuthorityCoreTests
         DailyV1EffectiveDefinitions definitions =
             DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, null, out DailyV1GenesisComposition composition,
             out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);

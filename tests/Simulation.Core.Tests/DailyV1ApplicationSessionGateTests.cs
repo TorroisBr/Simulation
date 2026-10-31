@@ -314,6 +314,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application application = new DailyV1Application();
         definitions ??= DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out session, out string diagnostic), Is.True, diagnostic);
@@ -1576,6 +1577,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1Application application = new DailyV1Application();
         var completedStages = new System.Collections.Generic.List<string>();
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
 
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, completedStages.Add,
@@ -1598,6 +1600,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1Application application = new DailyV1Application();
         var completedStages = new System.Collections.Generic.List<string>();
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
 
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, allocateWorldId: null, stageCompleted: completedStages.Add,
@@ -1633,6 +1636,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application application = new DailyV1Application();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(
             out SimulationRuntimeAdmissionContext admission), Is.True);
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
 
         Assert.That(application.TryPrepareInitialGenesis(
             definitions,
@@ -1680,6 +1684,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application application = new DailyV1Application();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(
             out SimulationRuntimeAdmissionContext admission), Is.True);
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
         bool callbackInvoked = false;
         bool reentrantPublicationAccepted = false;
         DailyV1ActiveRuntimeSession reentrantCandidate = null;
@@ -1727,6 +1732,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1Application application = new DailyV1Application();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
 
         Assert.Throws<System.InvalidOperationException>(() => application.TryPrepareInitialGenesis(
             definitions,
@@ -1875,6 +1881,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1EffectiveDefinitions definitions =
             DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);
@@ -2454,6 +2461,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.True, diagnostic);

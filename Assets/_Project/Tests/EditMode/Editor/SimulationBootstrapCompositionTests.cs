@@ -11,6 +11,18 @@ public sealed class SimulationBootstrapCompositionTests
     private readonly List<GameObject> simulationObjects = new List<GameObject>();
     private readonly List<ScriptableObject> temporaryDefinitionObjects = new List<ScriptableObject>();
 
+    private sealed class MissingInitialSlotOperations : IAtomicFileSlotOperations
+    {
+        public void CreateDirectory(string path) => throw new System.NotSupportedException();
+        public bool Exists(string path) => false;
+        public System.IO.Stream CreateNewTemporary(string path) => throw new System.NotSupportedException();
+        public System.IO.Stream OpenRead(string path) => throw new System.IO.FileNotFoundException();
+        public void FlushToDisk(System.IO.Stream stream) => throw new System.NotSupportedException();
+        public void Replace(string source, string destination) => throw new System.NotSupportedException();
+        public void Move(string source, string destination) => throw new System.NotSupportedException();
+        public void Delete(string path) => throw new System.NotSupportedException();
+    }
+
     [SetUp]
     public void SetUp()
     {
@@ -5204,6 +5216,29 @@ public sealed class SimulationBootstrapCompositionTests
 
     private static void InvokeBootstrapInitialize(TesteSimulacao simulation, System.Action<string> stageCompleted)
     {
+        FieldInfo profileField = typeof(TesteSimulacao).GetField(
+            "runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(profileField, Is.Not.Null);
+        if ((SimulationRuntimeAdmissionProfile)profileField.GetValue(simulation)
+            == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+        {
+            DailyV1Application application = ReadPrivateField<DailyV1Application>(
+                simulation, "dailyV1Application");
+            bool inspected = application.TryInspectInitialContinuationSlotForStart(
+                "missing-slot-root", new MissingInitialSlotOperations(),
+                out bool exists, out P12AResult result);
+            if (inspected)
+            {
+                Assert.That(exists, Is.False);
+                Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+            }
+            else
+            {
+                Assert.That(result.Code, Is.EqualTo(P12AResultCode.Busy),
+                    "A prior startup admission already owns this application's initial slot attempt.");
+            }
+        }
+
         MethodInfo initialize = typeof(TesteSimulacao).GetMethod(
             "InitializeSimulation",
             BindingFlags.Instance | BindingFlags.NonPublic);

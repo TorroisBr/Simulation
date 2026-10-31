@@ -150,6 +150,12 @@ internal sealed class DailyV1Application
         SimulationRuntimeAdmissionContext admissionContext;
         lock (activeSessionGate.SyncRoot)
         {
+            if (!initialContinuationLoadAttempted)
+            {
+                diagnostic = "Initial Daily-v1 genesis requires a completed continuation-slot admission that returned NoSave.";
+                return false;
+            }
+
             if (initialGenesisPreparationAttempted
                 || initialContinuationLoadBlocksGenesis
                 || preparedInitialGenesis != null
@@ -1306,6 +1312,7 @@ internal sealed class DailyV1Application
             }
 
             initialContinuationLoadAttempted = true;
+            initialContinuationLoadBlocksGenesis = true;
         }
 
         bool loaded;

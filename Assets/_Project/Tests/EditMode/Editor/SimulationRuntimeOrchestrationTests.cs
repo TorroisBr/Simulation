@@ -4,6 +4,18 @@ using NUnit.Framework;
 
 public sealed class SimulationRuntimeOrchestrationTests
 {
+    private sealed class MissingInitialContinuationSlotOperations : IAtomicFileSlotOperations
+    {
+        public void CreateDirectory(string path) => throw new System.NotSupportedException();
+        public bool Exists(string path) => false;
+        public System.IO.Stream CreateNewTemporary(string path) => throw new System.NotSupportedException();
+        public System.IO.Stream OpenRead(string path) => throw new System.IO.FileNotFoundException();
+        public void FlushToDisk(System.IO.Stream stream) => throw new System.NotSupportedException();
+        public void Replace(string source, string destination) => throw new System.NotSupportedException();
+        public void Move(string source, string destination) => throw new System.NotSupportedException();
+        public void Delete(string path) => throw new System.NotSupportedException();
+    }
+
     private sealed class RejectedApplicationAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary,
         IDailyV1SelectedRuntimeAdvanceHostPorts
     {
@@ -664,6 +676,11 @@ public sealed class SimulationRuntimeOrchestrationTests
         DailyV1EffectiveDefinitions definitions =
             DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        Assert.That(application.TryInspectInitialContinuationSlotForStart(
+            "missing-slot-root", new MissingInitialContinuationSlotOperations(),
+            out bool exists, out P12AResult result), Is.True);
+        Assert.That(exists, Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);

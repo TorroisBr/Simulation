@@ -40,6 +40,49 @@ public sealed class DailyV1ApplicationHostTests
         public void Delete(string path) => throw new NotSupportedException();
     }
 
+    private sealed class ReentrantMissingSlotOperations : IAtomicFileSlotOperations
+    {
+        private readonly DailyV1Application application;
+        private readonly DailyV1EffectiveDefinitions definitions;
+
+        internal ReentrantMissingSlotOperations(
+            DailyV1Application application,
+            DailyV1EffectiveDefinitions definitions)
+        {
+            this.application = application;
+            this.definitions = definitions;
+        }
+
+        internal bool ReentrantGenesisAccepted { get; private set; }
+        internal string ReentrantDiagnostic { get; private set; }
+
+        public void CreateDirectory(string path) => throw new NotSupportedException();
+        public bool Exists(string path) => false;
+        public System.IO.Stream CreateNewTemporary(string path) => throw new NotSupportedException();
+        public System.IO.Stream OpenRead(string path)
+        {
+            string diagnostic;
+            ReentrantGenesisAccepted = application.TryPrepareInitialGenesis(
+                definitions, allocateWorldId: null, stageCompleted: null,
+                out _, out _, out diagnostic);
+            ReentrantDiagnostic = diagnostic;
+            throw new System.IO.FileNotFoundException();
+        }
+        public void FlushToDisk(System.IO.Stream stream) => throw new NotSupportedException();
+        public void Replace(string source, string destination) => throw new NotSupportedException();
+        public void Move(string source, string destination) => throw new NotSupportedException();
+        public void Delete(string path) => throw new NotSupportedException();
+    }
+
+    internal static void AdmitMissingSlot(DailyV1Application application)
+    {
+        Assert.That(application.TryInspectInitialContinuationSlotForStart(
+            "missing-slot-root", new MissingSlotOperations(),
+            out bool exists, out P12AResult result), Is.True);
+        Assert.That(exists, Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+    }
+
     [Test]
     public void HostPortsAndDotNetIdentityAreCapturedWithoutPersistingTheStorageRoot()
     {
@@ -75,6 +118,60 @@ public sealed class DailyV1ApplicationHostTests
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.True, diagnostic);
         Assert.That(candidate, Is.Not.Null);
+    }
+
+    [Test]
+    public void InitialGenesisRequiresCompletedNoSaveAdmission()
+    {
+        DailyV1Application application = new DailyV1Application();
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        int worldIdAllocations = 0;
+
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions,
+            allocateWorldId: () =>
+            {
+                worldIdAllocations++;
+                return new WorldId(System.Guid.Parse("bf5a2935-429c-40b6-9b22-8c2a2bc6b177"));
+            },
+            stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession rejectedCandidate,
+            out string rejectionDiagnostic), Is.False);
+        Assert.That(rejectedCandidate, Is.Null);
+        Assert.That(rejectionDiagnostic, Does.Contain("NoSave"));
+        Assert.That(worldIdAllocations, Is.Zero,
+            "Genesis rejection before slot admission cannot allocate a WorldId.");
+
+        AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.True, diagnostic);
+        Assert.That(candidate, Is.Not.Null,
+            "A completed NoSave result remains the permitted genesis path.");
+    }
+
+    [Test]
+    public void InitialSlotReadBlocksReentrantGenesisUntilNoSaveIsKnown()
+    {
+        DailyV1Application application = new DailyV1Application();
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        var operations = new ReentrantMissingSlotOperations(application, definitions);
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "reentrant-missing-slot-root", operations, null, null,
+            unityV1Identity: UnityIdentity());
+
+        Assert.That(application.TryLoadInitialContinuationImageForStart(
+            null, host, out P12AContinuationImage image, out P12AResult loadResult), Is.False);
+        Assert.That(image, Is.Null);
+        Assert.That(loadResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(operations.ReentrantGenesisAccepted, Is.False);
+        Assert.That(operations.ReentrantDiagnostic, Does.Contain("cannot capture a second bootstrap"));
+
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.True, diagnostic);
+        Assert.That(candidate, Is.Not.Null,
+            "Genesis may proceed after the in-progress slot read completes as NoSave.");
     }
 
     [Test]
@@ -155,6 +252,7 @@ public sealed class DailyV1ApplicationHostTests
     {
         DailyV1Application application = new DailyV1Application();
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        AdmitMissingSlot(application);
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out DailyV1ActiveRuntimeSession candidate, out string genesisDiagnostic),
