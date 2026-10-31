@@ -717,9 +717,9 @@ public sealed class SimulationRuntimeAdmissionTests
             ReadPrivateField<DailyV1ExecutionBoundaryState>(runtime, "dailyExecutionBoundary");
         Assert.That(executionState.SelectedRuntimeOwnerGraph, Is.Null,
             "This compatibility runtime has not yet been injected with an exact Core owner graph.");
-        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds.All(
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds.All(
             sectionId => hostRemainder.Any(section => section.SectionId == sectionId)), Is.True,
-            "The host retains these rows while Core lacks their exact owner graph.");
+            "The host retains Core-selected rows while the runtime lacks its exact owner graph.");
         Assert.That(hostRemainder.Count, Is.EqualTo(fullVector.Count),
             "The Unity host retains P12-F witnesses until the same owners are bound into Core.");
         for (int i = 0; i < fullVector.Count; i++)

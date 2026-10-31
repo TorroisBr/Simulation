@@ -399,6 +399,19 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         }
         ownerSections = coreOwnedGenealogySections;
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
+                executionState.SelectedRuntimeOwnerGraph,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedPersonStoreSections,
+                out _))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        ownerSections = coreOwnedPersonStoreSections;
+
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 executionState.SelectedRuntimeOwnerGraph,
                 executionState.SelectedActorChoiceStore,
@@ -531,6 +544,12 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
 /// </summary>
 internal static class DailyV1SelectedRuntimeOwnerCensusSource
 {
+    private static readonly string[] CoreOwnedPersonStoreSectionIdValues =
+    {
+        DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId,
+        DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId
+    };
+
     private static readonly string[] CoreOwnedP12FSectionIdValues =
     {
         ActorChoiceP11CensusProvider.SectionId,
@@ -548,8 +567,46 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     internal static IReadOnlyList<string> CoreOwnedP12FSectionIds { get; } =
         Array.AsReadOnly(CoreOwnedP12FSectionIdValues);
 
+    internal static IReadOnlyList<string> CoreOwnedPersonStoreSectionIds { get; } =
+        Array.AsReadOnly(CoreOwnedPersonStoreSectionIdValues);
+
+    private static readonly string[] CoreOwnedSelectedRuntimeSectionIdValues =
+    {
+        DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId,
+        DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId,
+        ActorChoiceP11CensusProvider.SectionId,
+        ScheduledDirectiveCensusProvider.SectionId,
+        TravelPartyCensusProvider.SectionId,
+        ExpeditionCensusProvider.SectionId
+    };
+
+    internal static IReadOnlyList<string> CoreOwnedSelectedRuntimeSectionIds { get; } =
+        Array.AsReadOnly(CoreOwnedSelectedRuntimeSectionIdValues);
+
+    internal static bool TryRemoveCoreOwnedSelectedRuntimeSections(
+        IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
+        out string diagnostic) =>
+        TryRemoveCoreOwnedSections(completeHostSections,
+            CoreOwnedSelectedRuntimeSectionIdValues,
+            "selected Core-runtime",
+            out hostOwnedSections,
+            out diagnostic);
+
     internal static bool TryRemoveCoreOwnedP12FSections(
         IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
+        out string diagnostic)
+        => TryRemoveCoreOwnedSections(completeHostSections,
+            CoreOwnedP12FSectionIdValues,
+            "fixed Core-owned P12-F",
+            out hostOwnedSections,
+            out diagnostic);
+
+    private static bool TryRemoveCoreOwnedSections(
+        IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
+        IReadOnlyList<string> coreSectionIds,
+        string scope,
         out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
         out string diagnostic)
     {
@@ -562,9 +619,9 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         }
 
         HashSet<string> remainingCoreSectionIds =
-            new HashSet<string>(CoreOwnedP12FSectionIdValues, StringComparer.Ordinal);
+            new HashSet<string>(coreSectionIds, StringComparer.Ordinal);
         List<OwnerSectionCensusSnapshot> remaining =
-            new List<OwnerSectionCensusSnapshot>(completeHostSections.Count - CoreOwnedP12FSectionIdValues.Length);
+            new List<OwnerSectionCensusSnapshot>(completeHostSections.Count - coreSectionIds.Count);
         int removed = 0;
         foreach (OwnerSectionCensusSnapshot section in completeHostSections)
         {
@@ -583,15 +640,127 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             remaining.Add(section);
         }
 
-        if (removed != CoreOwnedP12FSectionIdValues.Length || remainingCoreSectionIds.Count != 0)
+        if (removed != coreSectionIds.Count || remainingCoreSectionIds.Count != 0)
         {
-            diagnostic = "The complete host census does not contain each fixed Core-owned P12-F section exactly once.";
+            diagnostic = "The complete host census does not contain each " + scope
+                + " section exactly once.";
             return false;
         }
 
         hostOwnedSections = Array.AsReadOnly(remaining.ToArray());
         return true;
     }
+
+    internal static bool TryComposeCoreOwnedPersonStoreSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> composedSections,
+        out string diagnostic)
+    {
+        composedSections = null;
+        diagnostic = null;
+        PersonStore personStore = graph?.PersonStore;
+        if (personStore == null || hostOwnedSections == null)
+        {
+            diagnostic = "The Core PersonStore census requires its exact owner graph and host remainder.";
+            return false;
+        }
+
+        HashSet<string> hostSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        List<OwnerSectionCensusSnapshot> composed =
+            new List<OwnerSectionCensusSnapshot>(hostOwnedSections.Count + CoreOwnedPersonStoreSectionIdValues.Length);
+        foreach (OwnerSectionCensusSnapshot section in hostOwnedSections)
+        {
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !hostSectionIds.Add(section.SectionId)
+                || Array.IndexOf(CoreOwnedPersonStoreSectionIdValues, section.SectionId) >= 0)
+            {
+                diagnostic = "The host census remainder is invalid, duplicated, or contains a Core-owned PersonStore section.";
+                return false;
+            }
+            composed.Add(section);
+        }
+
+        OwnerSectionCensusWitness[] witnesses;
+        try
+        {
+            witnesses = new OwnerSectionCensusWitness[]
+            {
+                personStore.GetMembershipCensusWitness(),
+                personStore.GetMaterializationBindingCensusWitness()
+            };
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            diagnostic = "The Core PersonStore census could not read its exact owner.";
+            return false;
+        }
+
+        if (witnesses.Length != CoreOwnedPersonStoreSectionIdValues.Length
+            || !HasExactCorePersonStoreCensusAliasPair(
+                personStore, witnesses[0], witnesses[1]))
+        {
+            diagnostic = "The Core PersonStore census aliases do not share the exact owner and revision.";
+            return false;
+        }
+
+        HashSet<string> capturedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusWitness witness in witnesses)
+        {
+            if (witness == null
+                || string.IsNullOrWhiteSpace(witness.SectionId)
+                || !ReferenceEquals(witness.OwnerInstanceIdentity, personStore)
+                || witness.SchemaVersion <= 0
+                || witness.Cardinality < 0
+                || witness.Revision < 0L
+                || !capturedSectionIds.Add(witness.SectionId)
+                || !Array.Exists(CoreOwnedPersonStoreSectionIdValues,
+                    sectionId => string.Equals(sectionId, witness.SectionId, StringComparison.Ordinal)))
+            {
+                diagnostic = "The Core PersonStore provider returned a witness outside its exact alias pair.";
+                return false;
+            }
+
+            composed.Add(new OwnerSectionCensusSnapshot(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision));
+        }
+
+        if (capturedSectionIds.Count != CoreOwnedPersonStoreSectionIdValues.Length)
+        {
+            diagnostic = "The Core PersonStore provider set is incomplete.";
+            return false;
+        }
+
+        composed.Sort((left, right) =>
+            StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+        composedSections = Array.AsReadOnly(composed.ToArray());
+        return true;
+    }
+
+    internal static bool HasExactCorePersonStoreCensusAliasPair(
+        PersonStore personStore,
+        OwnerSectionCensusWitness membership,
+        OwnerSectionCensusWitness materializationBinding) =>
+        personStore != null
+        && membership != null
+        && materializationBinding != null
+        && string.Equals(membership.SectionId,
+            DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId,
+            StringComparison.Ordinal)
+        && string.Equals(materializationBinding.SectionId,
+            DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId,
+            StringComparison.Ordinal)
+        && ReferenceEquals(membership.OwnerInstanceIdentity, personStore)
+        && ReferenceEquals(materializationBinding.OwnerInstanceIdentity, personStore)
+        && membership.Revision == materializationBinding.Revision;
 
     internal static bool TryComposeCoreOwnedP12FSections(
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -2596,10 +2765,23 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return false;
         }
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
+                selectedRuntimeOwnerGraph,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> personStoreComposedSections,
+                out diagnostic))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core restored boundary could not compose its exact PersonStore alias rows.";
+            return false;
+        }
+
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 selectedRuntimeOwnerGraph,
                 selectedActorChoiceStore,
-                ownerSections,
+                personStoreComposedSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> completeOwnerSections,
                 out diagnostic))
         {

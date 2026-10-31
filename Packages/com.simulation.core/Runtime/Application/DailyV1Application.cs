@@ -1581,10 +1581,24 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
+                candidateSession.OwnerGraph,
+                targetOwnerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> personStoreSections,
+                out diagnostic))
+        {
+            targetOwnerSections = null;
+            targetMutationEpoch = 0L;
+            failure = P12GDailyV1OwnerVectorFailure.MissingTargetVector;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The private target could not compose its Core-owned PersonStore census.";
+            return false;
+        }
+
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 candidateSession.OwnerGraph,
                 candidateSession.ExecutionBoundaryState.SelectedActorChoiceStore,
-                targetOwnerSections,
+                personStoreSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> completeTargetOwnerSections,
                 out diagnostic))
         {

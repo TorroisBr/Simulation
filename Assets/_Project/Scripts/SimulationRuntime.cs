@@ -11361,9 +11361,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        if (HasExactCoreOwnedP12FCensusSources())
+        if (HasExactCoreOwnedSelectedCensusSources())
         {
-            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedP12FSections(
+            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
                     completeHostSections,
                     out ownerSections,
                     out _))
@@ -11406,9 +11406,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        if (HasExactCoreOwnedP12FCensusSources())
+        if (HasExactCoreOwnedSelectedCensusSources())
         {
-            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedP12FSections(
+            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
                     completeHostSections,
                     out ownerSections,
                     out diagnostic))
@@ -11427,7 +11427,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         return true;
     }
 
-    private bool HasExactCoreOwnedP12FCensusSources()
+    private bool HasExactCoreOwnedSelectedCensusSources()
     {
         DailyV1ExecutionBoundaryState state = dailyExecutionBoundary;
         DailyV1SelectedRuntimeOwnerGraph graph = state?.SelectedRuntimeOwnerGraph;
