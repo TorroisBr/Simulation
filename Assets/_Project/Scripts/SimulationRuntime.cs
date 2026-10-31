@@ -11363,8 +11363,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
         if (HasExactCoreOwnedSelectedCensusSources())
         {
+            DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
             if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
                     completeHostSections,
+                    graph,
                     out ownerSections,
                     out _))
             {
@@ -11408,8 +11410,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
         if (HasExactCoreOwnedSelectedCensusSources())
         {
+            DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
             if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
                     completeHostSections,
+                    graph,
                     out ownerSections,
                     out diagnostic))
             {

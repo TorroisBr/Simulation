@@ -2150,32 +2150,55 @@ public sealed class DailyV1ApplicationSessionGateTests
             out _);
         OwnerSectionCensusSnapshot[] completeHostVector =
             CreateCoreBoundCompleteOwnerSectionVector(session);
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
 
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
                 completeHostVector,
+                graph,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> hostRemainder,
                 out string diagnostic), Is.True, diagnostic);
         Assert.That(hostRemainder.Count,
-            Is.EqualTo(completeHostVector.Length - DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds.Count));
+            Is.EqualTo(completeHostVector.Length
+                - DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds.Count
+                - graph.Cities.Count * 4));
         foreach (string sectionId in DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds)
             Assert.That(hostRemainder.Any(section => section.SectionId == sectionId), Is.False, sectionId);
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        foreach (string sectionId in new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix
+                + P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(city.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix
+                + P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(city.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix
+                + P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(city.RuntimeId)
+        })
+            Assert.That(hostRemainder.Any(section => section.SectionId == sectionId), Is.False, sectionId);
 
-        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
         ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
                 graph, hostRemainder,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> personComposed,
                 out diagnostic), Is.True, diagnostic);
-        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                graph, actorChoices, personComposed,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> composed,
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
+                graph, personComposed,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> cityComposed,
                 out diagnostic), Is.True, diagnostic);
-        Assert.That(composed.Select(section => section.SectionId),
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                graph, actorChoices, cityComposed,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> p12fComposed,
+                out diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedCitySections(
+                graph, p12fComposed,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeComposed,
+                out diagnostic), Is.True, diagnostic);
+        Assert.That(completeComposed.Select(section => section.SectionId),
             Is.EqualTo(completeHostVector.Select(section => section.SectionId)
                 .OrderBy(sectionId => sectionId, StringComparer.Ordinal)));
         foreach (OwnerSectionCensusSnapshot original in completeHostVector)
         {
-            OwnerSectionCensusSnapshot rebuilt = composed.Single(section =>
+            OwnerSectionCensusSnapshot rebuilt = completeComposed.Single(section =>
                 section.SectionId == original.SectionId);
             Assert.That(rebuilt.Role, Is.EqualTo(original.Role), original.SectionId);
             Assert.That(rebuilt.OwnerInstanceIdentity, Is.SameAs(original.OwnerInstanceIdentity), original.SectionId);
@@ -2186,17 +2209,106 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
                 graph, hostRemainder.Skip(1).ToArray(), out IReadOnlyList<OwnerSectionCensusSnapshot> missingRowComposed,
                 out _), Is.True);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
+                graph, missingRowComposed,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> missingRowWithCities,
+                out _), Is.True);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                graph, actorChoices, missingRowComposed, out _, out _), Is.False,
+                graph, actorChoices, missingRowWithCities, out _, out _), Is.False,
             "Core must fail closed when the unmigrated host remainder is incomplete.");
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
                 graph, hostRemainder.Concat(hostRemainder.Take(1)).ToArray(), out _, out _), Is.False,
             "Core must fail closed when the host remainder duplicates a section.");
 
+        OwnerSectionCensusSnapshot selectedCitySection = completeHostVector.First(section =>
+            section.SectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
+                StringComparison.Ordinal));
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedCitySections(
+                graph, personComposed.Concat(new[] { selectedCitySection }).ToArray(), out _, out _), Is.False,
+            "A host that returns only part of the selected City owner rows must be rejected.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedCitySections(
+                graph, personComposed.Concat(completeHostVector.Where(section =>
+                    section.SectionId.StartsWith(
+                        DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
+                        StringComparison.Ordinal))).ToArray(), out _, out _), Is.False,
+            "A host that returns only one selected City family must be rejected.");
+
+        OwnerSectionCensusSnapshot originalCityPresence = completeHostVector.First(section =>
+            section.SectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
+                StringComparison.Ordinal));
+        OwnerSectionCensusSnapshot staleCityPresence = new OwnerSectionCensusSnapshot(
+            originalCityPresence.SectionId,
+            originalCityPresence.SchemaVersion,
+            originalCityPresence.Role,
+            originalCityPresence.OwnerInstanceIdentity,
+            originalCityPresence.Cardinality,
+            originalCityPresence.Revision + 1L);
+        OwnerSectionCensusSnapshot[] staleCityHostVector = completeHostVector.Select(section =>
+            section.SectionId == originalCityPresence.SectionId ? staleCityPresence : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                staleCityHostVector, graph,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> staleCityHostRemainder,
+                out diagnostic), Is.True, diagnostic);
+        Assert.That(staleCityHostRemainder.Any(section =>
+            section.SectionId == staleCityPresence.SectionId), Is.True,
+            "A stale captured City fact must remain available for completed-boundary rejection.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedCitySections(
+                graph, staleCityHostRemainder,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> staleCityComposed,
+                out diagnostic), Is.True, diagnostic);
+        Assert.That(staleCityComposed.Single(section =>
+            section.SectionId == staleCityPresence.SectionId), Is.SameAs(staleCityPresence),
+            "Core must not replace stale host evidence with a fresh witness.");
+
+        string compatibilityCityId = "compatibility-city";
+        string compatibilityCityKey =
+            P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(compatibilityCityId);
+        object compatibilityPopulationOwner = new object();
+        OwnerSectionCensusSnapshot[] compatibilityCityRows =
+        {
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(compatibilityCityId),
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                OwnerSectionRole.Required, new object(), 0, 0L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix + compatibilityCityKey,
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                OwnerSectionRole.Required, new object(), 0, 0L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix + compatibilityCityKey,
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                OwnerSectionRole.Required, compatibilityPopulationOwner, 0, 0L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix + compatibilityCityKey,
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                OwnerSectionRole.Required, compatibilityPopulationOwner, 0, 0L)
+        };
+        OwnerSectionCensusSnapshot[] mixedCityHostVector =
+            completeHostVector.Concat(compatibilityCityRows).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                mixedCityHostVector, graph,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> mixedCityHostRemainder,
+                out diagnostic), Is.True, diagnostic);
+        foreach (OwnerSectionCensusSnapshot cityRow in mixedCityHostVector.Where(section =>
+            DailyV1SelectedOwnerSectionCensusContract.CityPrefixes.Any(prefix =>
+                section.SectionId.StartsWith(prefix, StringComparison.Ordinal))))
+            Assert.That(mixedCityHostRemainder.Any(section =>
+                section.SectionId == cityRow.SectionId), Is.True, cityRow.SectionId);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedCitySections(
+                graph, mixedCityHostRemainder,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> mixedCityComposed,
+                out diagnostic), Is.True, diagnostic);
+        Assert.That(mixedCityComposed.Count,
+            Is.EqualTo(mixedCityHostVector.Length
+                - DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds.Count),
+            "A mixed City roster keeps the complete host vector after the unrelated Core rows are removed.");
+
         OwnerSectionCensusSnapshot actorChoice = completeHostVector.Single(section =>
             section.SectionId == ActorChoiceP11CensusProvider.SectionId);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                graph, actorChoices, personComposed.Concat(new[] { actorChoice }).ToArray(), out _, out _), Is.False,
+                graph, actorChoices, cityComposed.Concat(new[] { actorChoice }).ToArray(), out _, out _), Is.False,
             "The host cannot reintroduce a P12-F section whose authority has moved to Core.");
         OwnerSectionCensusSnapshot personMembership = completeHostVector.Single(section =>
             section.SectionId == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);

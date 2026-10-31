@@ -423,6 +423,22 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         }
         ownerSections = coreOwnedPersonStoreSections;
 
+        // P12-F requires a structurally complete vector. The host omits the
+        // selected City rows only when its captured rows exactly match the Core
+        // graph, so restore those rows here before the P12-F composition gate.
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
+                executionState.SelectedRuntimeOwnerGraph,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> cityRowsBeforeP12F,
+                out _))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        ownerSections = cityRowsBeforeP12F;
+
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 executionState.SelectedRuntimeOwnerGraph,
                 executionState.SelectedActorChoiceStore,
@@ -539,7 +555,7 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         }
         ownerSections = coreOwnedSpatialKnowledgeSections;
 
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCitySections(
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedCitySections(
                 executionState.SelectedRuntimeOwnerGraph,
                 ownerSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedCitySections,
@@ -626,6 +642,111 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             "selected Core-runtime",
             out hostOwnedSections,
             out diagnostic);
+
+    /// <summary>
+    /// Removes census rows whose live source is the exact selected Core
+    /// session graph, including the four City families. Unity still captures
+    /// the complete quiescent vector and shared epoch, but it no longer supplies
+    /// City owner identities or values to Core.
+    /// </summary>
+    internal static bool TryRemoveCoreOwnedSelectedRuntimeSections(
+        IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
+        out string diagnostic)
+    {
+        hostOwnedSections = null;
+        diagnostic = null;
+        if (graph == null || completeHostSections == null)
+        {
+            diagnostic = "The selected Core City census requires a complete host vector and owner graph.";
+            return false;
+        }
+        if (!DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(completeHostSections))
+        {
+            diagnostic = "The host census is not a complete selected Daily-v1 owner vector.";
+            return false;
+        }
+        if (!TryCreateCoreOwnedCityCensusWitnesses(
+                graph, out IReadOnlyList<OwnerSectionCensusWitness> cityWitnesses, out diagnostic))
+            return false;
+
+        List<string> coreSectionIds =
+            new List<string>(CoreOwnedSelectedRuntimeSectionIdValues);
+        HashSet<string> uniqueSectionIds =
+            new HashSet<string>(CoreOwnedSelectedRuntimeSectionIdValues, StringComparer.Ordinal);
+        foreach (OwnerSectionCensusWitness witness in cityWitnesses)
+        {
+            if (witness == null || string.IsNullOrWhiteSpace(witness.SectionId)
+                || !uniqueSectionIds.Add(witness.SectionId))
+            {
+                diagnostic = "The selected Core City census contains a duplicate section identity.";
+                return false;
+            }
+        }
+
+        OwnerSectionCensusSnapshot[] copiedHostSections =
+            new OwnerSectionCensusSnapshot[completeHostSections.Count];
+        for (int i = 0; i < copiedHostSections.Length; i++)
+            copiedHostSections[i] = completeHostSections[i];
+        Dictionary<string, OwnerSectionCensusSnapshot> hostBySectionId =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot section in copiedHostSections)
+            hostBySectionId.Add(section.SectionId, section);
+
+        int cityPresenceRows = CountFamilyRows(
+            copiedHostSections, DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix);
+        int cityMarketRows = CountFamilyRows(
+            copiedHostSections, DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix);
+        int cityPopulationRows = CountFamilyRows(
+            copiedHostSections, DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix);
+        int cityReceiptRows = CountFamilyRows(
+            copiedHostSections, DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix);
+        if (cityPresenceRows != cityMarketRows
+            || cityPresenceRows != cityPopulationRows
+            || cityPresenceRows != cityReceiptRows
+            || cityPresenceRows < graph.Cities.Count)
+        {
+            diagnostic = "The host census does not cover the exact selected Core City owner families.";
+            return false;
+        }
+
+        bool hasEverySelectedCitySection = true;
+        bool exactSelectedCityWitnesses = cityPresenceRows == graph.Cities.Count;
+        foreach (OwnerSectionCensusWitness witness in cityWitnesses)
+        {
+            if (!hostBySectionId.TryGetValue(witness.SectionId, out OwnerSectionCensusSnapshot hostSection))
+            {
+                hasEverySelectedCitySection = false;
+                break;
+            }
+
+            exactSelectedCityWitnesses &= hostSection.Role == OwnerSectionRole.Required
+                && hostSection.SchemaVersion == witness.SchemaVersion
+                && ReferenceEquals(hostSection.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+                && hostSection.Cardinality == witness.Cardinality
+                && hostSection.Revision == witness.Revision;
+        }
+
+        if (!hasEverySelectedCitySection)
+        {
+            diagnostic = "The host census is missing a selected Core City owner section.";
+            return false;
+        }
+
+        // Preserve mixed-roster rows and stale host facts. The later Core
+        // composition gate retains the established fallback and lets completed
+        // boundary admission classify stale data against its token.
+        if (exactSelectedCityWitnesses)
+            foreach (OwnerSectionCensusWitness witness in cityWitnesses)
+                coreSectionIds.Add(witness.SectionId);
+
+        return TryRemoveCoreOwnedSections(completeHostSections,
+            coreSectionIds.AsReadOnly(),
+            "selected Core-runtime and City",
+            out hostOwnedSections,
+            out diagnostic);
+    }
 
     internal static bool TryRemoveCoreOwnedP12FSections(
         IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
@@ -2188,6 +2309,105 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         return true;
     }
 
+    /// <summary>
+    /// Composes the four selected City owner families from the exact Core
+    /// owners. A legacy/full host vector may still contain every selected row;
+    /// that path retains the established identity/value rebind checks. The
+    /// current Core-backed host path omits the selected rows, while preserving
+    /// any additional compatibility Cities in the host remainder.
+    /// </summary>
+    internal static bool TryComposeCoreOwnedCitySections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+        => TryComposeCoreOwnedCitySections(
+            graph, hostSections, requireCompleteSnapshot: true, out ownerSections, out diagnostic);
+
+    internal static bool TryAddCoreOwnedCitySections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+        => TryComposeCoreOwnedCitySections(
+            graph, hostSections, requireCompleteSnapshot: false, out ownerSections, out diagnostic);
+
+    private static bool TryComposeCoreOwnedCitySections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        bool requireCompleteSnapshot,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        diagnostic = null;
+        if (graph == null || hostSections == null
+            || !TryCreateCoreOwnedCityCensusWitnesses(
+                graph, out IReadOnlyList<OwnerSectionCensusWitness> witnesses, out diagnostic))
+            return false;
+
+        HashSet<string> selectedCitySectionIds =
+            new HashSet<string>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusWitness witness in witnesses)
+            if (witness == null || string.IsNullOrWhiteSpace(witness.SectionId)
+                || !selectedCitySectionIds.Add(witness.SectionId))
+            {
+                diagnostic = "The selected Core City census contains a duplicate section identity.";
+                return false;
+            }
+
+        HashSet<string> hostSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        int selectedRowsPresent = 0;
+        foreach (OwnerSectionCensusSnapshot section in hostSections)
+        {
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !hostSectionIds.Add(section.SectionId))
+            {
+                diagnostic = "The host census remainder contains a missing or duplicate owner-section identity.";
+                return false;
+            }
+            if (selectedCitySectionIds.Contains(section.SectionId)) selectedRowsPresent++;
+        }
+
+        if (selectedRowsPresent == selectedCitySectionIds.Count)
+        {
+            // Compatibility hosts still returning the selected rows retain
+            // the original exact-instance and stale-evidence classification.
+            return TryRebindCoreOwnedCitySections(
+                graph, hostSections, out ownerSections, out diagnostic);
+        }
+        if (selectedRowsPresent != 0)
+        {
+            diagnostic = "The host census partially omitted the selected Core City owner families.";
+            return false;
+        }
+
+        List<OwnerSectionCensusSnapshot> composed =
+            new List<OwnerSectionCensusSnapshot>(hostSections.Count + witnesses.Count);
+        composed.AddRange(hostSections);
+        foreach (OwnerSectionCensusWitness witness in witnesses)
+            composed.Add(new OwnerSectionCensusSnapshot(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision));
+        composed.Sort((left, right) =>
+            StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+
+        if (requireCompleteSnapshot
+            && !DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(composed))
+        {
+            diagnostic = "The Core and host City census sections do not form the complete selected owner vector.";
+            return false;
+        }
+
+        ownerSections = Array.AsReadOnly(composed.ToArray());
+        diagnostic = null;
+        return true;
+    }
+
     internal static bool TryRebindCoreOwnedCitySections(
         DailyV1SelectedRuntimeOwnerGraph graph,
         IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
@@ -2230,7 +2450,93 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
         }
 
-        List<OwnerSectionCensusWitness> witnesses =
+        if (!TryCreateCoreOwnedCityCensusWitnesses(
+                graph, out IReadOnlyList<OwnerSectionCensusWitness> witnesses, out diagnostic))
+            return false;
+
+        if (presenceRows > graph.Cities.Count)
+        {
+            foreach (OwnerSectionCensusWitness witness in witnesses)
+            {
+                if (!indexes.ContainsKey(witness.SectionId))
+                {
+                    diagnostic = "The mixed-roster host census is missing selected Core City section "
+                        + witness.SectionId + ".";
+                    return false;
+                }
+            }
+
+            // Keep the complete host vector when it includes compatibility
+            // Cities outside the selected Core graph. P12 validates all rows.
+            ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+
+        if (presenceRows != graph.Cities.Count)
+        {
+            diagnostic = "The host census does not contain all four City owner sections for each Core City.";
+            return false;
+        }
+
+        int[] indexesByWitness = new int[witnesses.Count];
+        bool matchesCoreOwners = true;
+        for (int i = 0; i < witnesses.Count; i++)
+        {
+            OwnerSectionCensusWitness witness = witnesses[i];
+            if (!indexes.TryGetValue(witness.SectionId, out int index))
+            {
+                diagnostic = "The host census is missing selected Core City section " + witness.SectionId + ".";
+                return false;
+            }
+
+            indexesByWitness[i] = index;
+            OwnerSectionCensusSnapshot hostSection = copied[index];
+            matchesCoreOwners &= hostSection.Role == OwnerSectionRole.Required
+                && hostSection.SchemaVersion == witness.SchemaVersion
+                && ReferenceEquals(hostSection.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+                && hostSection.Cardinality == witness.Cardinality
+                && hostSection.Revision == witness.Revision;
+        }
+
+        if (!matchesCoreOwners)
+        {
+            // Preserve captured facts so the established P12 source witness
+            // classifies stale City owners without replacing them with new rows.
+            ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+
+        for (int i = 0; i < witnesses.Count; i++)
+        {
+            OwnerSectionCensusWitness witness = witnesses[i];
+            copied[indexesByWitness[i]] = new OwnerSectionCensusSnapshot(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision);
+        }
+
+        ownerSections = Array.AsReadOnly(copied);
+        diagnostic = null;
+        return true;
+    }
+
+    private static bool TryCreateCoreOwnedCityCensusWitnesses(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IReadOnlyList<OwnerSectionCensusWitness> witnesses,
+        out string diagnostic)
+    {
+        witnesses = null;
+        diagnostic = null;
+        if (graph?.Cities == null || graph.Definitions == null)
+        {
+            diagnostic = "The selected Core City census requires its exact definitions and City owners.";
+            return false;
+        }
+
+        List<OwnerSectionCensusWitness> built =
             new List<OwnerSectionCensusWitness>(graph.Cities.Count * 4);
         HashSet<string> cityRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string> witnessSectionIds = new HashSet<string>(StringComparer.Ordinal);
@@ -2299,7 +2605,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                         diagnostic = "A selected Core City census witness violates its fixed identity, schema, or cardinality contract.";
                         return false;
                     }
-                    witnesses.Add(witness);
+                    built.Add(witness);
                 }
             }
         }
@@ -2312,72 +2618,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
         }
 
-        if (presenceRows > graph.Cities.Count)
-        {
-            foreach (OwnerSectionCensusWitness witness in witnesses)
-            {
-                if (!indexes.ContainsKey(witness.SectionId))
-                {
-                    diagnostic = "The mixed-roster host census is missing selected Core City section "
-                        + witness.SectionId + ".";
-                    return false;
-                }
-            }
-
-            // Keep the complete host vector when it includes compatibility
-            // Cities outside the selected Core graph. P12 validates all rows.
-            ownerSections = Array.AsReadOnly(copied);
-            return true;
-        }
-
-        if (presenceRows != graph.Cities.Count)
-        {
-            diagnostic = "The host census does not contain all four City owner sections for each Core City.";
-            return false;
-        }
-
-        int[] indexesByWitness = new int[witnesses.Count];
-        bool matchesCoreOwners = true;
-        for (int i = 0; i < witnesses.Count; i++)
-        {
-            OwnerSectionCensusWitness witness = witnesses[i];
-            if (!indexes.TryGetValue(witness.SectionId, out int index))
-            {
-                diagnostic = "The host census is missing selected Core City section " + witness.SectionId + ".";
-                return false;
-            }
-
-            indexesByWitness[i] = index;
-            OwnerSectionCensusSnapshot hostSection = copied[index];
-            matchesCoreOwners &= hostSection.Role == OwnerSectionRole.Required
-                && hostSection.SchemaVersion == witness.SchemaVersion
-                && ReferenceEquals(hostSection.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
-                && hostSection.Cardinality == witness.Cardinality
-                && hostSection.Revision == witness.Revision;
-        }
-
-        if (!matchesCoreOwners)
-        {
-            // Preserve captured facts so the established P12 source witness
-            // classifies stale City owners without replacing them with new rows.
-            ownerSections = Array.AsReadOnly(copied);
-            return true;
-        }
-
-        for (int i = 0; i < witnesses.Count; i++)
-        {
-            OwnerSectionCensusWitness witness = witnesses[i];
-            copied[indexesByWitness[i]] = new OwnerSectionCensusSnapshot(
-                witness.SectionId,
-                witness.SchemaVersion,
-                OwnerSectionRole.Required,
-                witness.OwnerInstanceIdentity,
-                witness.Cardinality,
-                witness.Revision);
-        }
-
-        ownerSections = Array.AsReadOnly(copied);
-        diagnostic = null;
+        witnesses = built.AsReadOnly();
         return true;
     }
     private static int CountFamilyRows(
