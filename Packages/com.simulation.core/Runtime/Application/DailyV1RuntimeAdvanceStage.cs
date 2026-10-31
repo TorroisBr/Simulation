@@ -386,6 +386,17 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
+                executionState.SelectedRuntimeOwnerGraph,
+                ownerSections,
+                out _))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedGenealogySection(
                 executionState.SelectedRuntimeOwnerGraph,
                 ownerSections,
@@ -557,6 +568,16 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
 /// </summary>
 internal static class DailyV1SelectedRuntimeOwnerCensusSource
 {
+    private sealed class ReferenceIdentityComparer : IEqualityComparer<object>
+    {
+        internal static readonly ReferenceIdentityComparer Instance = new ReferenceIdentityComparer();
+
+        public new bool Equals(object left, object right) => ReferenceEquals(left, right);
+
+        public int GetHashCode(object value) =>
+            value == null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(value);
+    }
+
     private static readonly string[] CoreOwnedPersonStoreSectionIdValues =
     {
         DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId,
@@ -615,6 +636,117 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             "fixed Core-owned P12-F",
             out hostOwnedSections,
             out diagnostic);
+
+    /// <summary>
+    /// Enforces the two excluded P18 receipt-owner rows in the admitted P12-D
+    /// profile. The host census remains the source of their real owner
+    /// identities; Core requires a complete per-NPC pair and exact zero
+    /// cardinality/revision without exporting or replaying receipt data.
+    /// </summary>
+    internal static bool TryValidateExcludedNpcReceiptSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (graph == null || sections == null || graph.Npcs == null)
+        {
+            diagnostic = "The excluded NPC receipt census requires the admitted Core graph and host rows.";
+            return false;
+        }
+
+        HashSet<string> selectedRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || npc.RuntimeId.IndexOf('/') >= 0 || npc.RuntimeId.IndexOf('\0') >= 0
+                || !selectedRuntimeIds.Add(npc.RuntimeId))
+            {
+                diagnostic = "The selected Core NPC graph has an invalid or duplicate RuntimeId.";
+                return false;
+            }
+        }
+        if (selectedRuntimeIds.Count == 0)
+        {
+            diagnostic = "The selected Daily-v1 receipt census requires at least one admitted NPC.";
+            return false;
+        }
+
+        Dictionary<string, OwnerSectionCensusSnapshot> rowsById =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
+        Dictionary<string, OwnerSectionCensusSnapshot> localRows =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
+        Dictionary<string, OwnerSectionCensusSnapshot> merchantRows =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
+        HashSet<object> receiptOwnerIdentities =
+            new HashSet<object>(ReferenceIdentityComparer.Instance);
+
+        foreach (OwnerSectionCensusSnapshot row in sections)
+        {
+            if (row == null || string.IsNullOrWhiteSpace(row.SectionId)
+                || !rowsById.TryAdd(row.SectionId, row))
+            {
+                diagnostic = "The host census contains a missing or duplicate owner section.";
+                return false;
+            }
+
+            bool local = row.SectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
+                StringComparison.Ordinal);
+            bool merchant = row.SectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
+                StringComparison.Ordinal);
+            if (!local && !merchant) continue;
+
+            string prefix = local
+                ? DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix
+                : DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix;
+            string runtimeId = row.SectionId.Substring(prefix.Length);
+            if (string.IsNullOrWhiteSpace(runtimeId) || runtimeId.IndexOf('/') >= 0
+                || runtimeId.IndexOf('\0') >= 0
+                || !string.Equals(row.SectionId, local
+                    ? DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsSectionIdFor(runtimeId)
+                    : DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsSectionIdFor(runtimeId),
+                    StringComparison.Ordinal)
+                || row.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+                || row.Role != OwnerSectionRole.Required
+                || row.Cardinality != 0 || row.Revision != 0L
+                || row.OwnerInstanceIdentity == null
+                || !receiptOwnerIdentities.Add(row.OwnerInstanceIdentity)
+                || !(local ? localRows : merchantRows).TryAdd(runtimeId, row))
+            {
+                diagnostic = "A P12-D excluded NPC receipt owner is missing, aliased, populated, or malformed.";
+                return false;
+            }
+        }
+
+        if (localRows.Count < selectedRuntimeIds.Count
+            || merchantRows.Count != localRows.Count)
+        {
+            diagnostic = "The P12-D receipt census does not contain two rows for every admitted NPC.";
+            return false;
+        }
+
+        foreach (string runtimeId in selectedRuntimeIds)
+        {
+            if (!localRows.ContainsKey(runtimeId) || !merchantRows.ContainsKey(runtimeId))
+            {
+                diagnostic = "The P12-D receipt census is missing a selected Core NPC owner pair.";
+                return false;
+            }
+        }
+
+        foreach (string runtimeId in localRows.Keys)
+        {
+            if (!merchantRows.ContainsKey(runtimeId))
+            {
+                diagnostic = "The P12-D receipt census has an unmatched compatibility NPC owner.";
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     private static bool TryRemoveCoreOwnedSections(
         IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
@@ -2952,6 +3084,16 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         {
             diagnostic = "The private target did not produce a complete quiescent owner vector: "
                 + (string.IsNullOrWhiteSpace(captureDiagnostic) ? "OwnerCoverageIncomplete" : captureDiagnostic) + ".";
+            return false;
+        }
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
+                selectedRuntimeOwnerGraph, ownerSections, out diagnostic))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core restored boundary could not validate its exact-empty NPC receipt rows.";
             return false;
         }
 

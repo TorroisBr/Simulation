@@ -604,6 +604,106 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
             StringComparison.Ordinal)), Is.False);
         Assert.That(person.GetLifeResidenceCensusWitness().OwnerInstanceIdentity, Is.SameAs(person));
     }
+
+    [Test]
+    public void SelectedNpcExcludedReceiptCensusRequiresExactZeroDistinctPairsAndPreservesMixedRosterRows()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateNpcGraph("npc-a", "npc-b");
+        OwnerSectionCensusSnapshot[] selectedRows = CreateExcludedReceiptRows("npc-a", "npc-b");
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
+            graph, selectedRows, out string diagnostic), Is.True, diagnostic);
+
+        OwnerSectionCensusSnapshot[] mixedRows = CreateExcludedReceiptRows(
+            "npc-a", "npc-b", "npc-compatibility");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
+            graph, mixedRows, out diagnostic), Is.True, diagnostic,
+            "A full mixed-roster receipt vector retains both rows for every compatibility NPC.");
+        Assert.That(mixedRows, Has.Length.EqualTo(6));
+        Assert.That(mixedRows[0].SectionId,
+            Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsSectionIdFor("npc-a")));
+        Assert.That(mixedRows.All(row => row.Cardinality == 0 && row.Revision == 0L
+            && row.Role == OwnerSectionRole.Required), Is.True);
+    }
+
+    [Test]
+    public void SelectedNpcExcludedReceiptCensusRejectsMissingMalformedPopulatedOrAliasedOwners()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out _);
+        OwnerSectionCensusSnapshot[] rows = CreateExcludedReceiptRows("npc-runtime");
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
+            graph, rows.Take(1).ToArray(), out _), Is.False,
+            "A selected NPC must have both excluded receipt owner rows.");
+
+        AssertReceiptRowsRejected(graph, ReplaceReceiptRow(rows, 0, row =>
+            new OwnerSectionCensusSnapshot(row.SectionId, row.SchemaVersion, row.Role,
+                row.OwnerInstanceIdentity, 1, row.Revision)));
+        AssertReceiptRowsRejected(graph, ReplaceReceiptRow(rows, 1, row =>
+            new OwnerSectionCensusSnapshot(row.SectionId, row.SchemaVersion, row.Role,
+                row.OwnerInstanceIdentity, row.Cardinality, 1L)));
+        AssertReceiptRowsRejected(graph, ReplaceReceiptRow(rows, 0, row =>
+            new OwnerSectionCensusSnapshot(row.SectionId, row.SchemaVersion,
+                OwnerSectionRole.ExplicitlyEmpty, row.OwnerInstanceIdentity, 0, 0L)));
+        AssertReceiptRowsRejected(graph, ReplaceReceiptRow(rows, 0, row =>
+            new OwnerSectionCensusSnapshot(row.SectionId, row.SchemaVersion + 1,
+                row.Role, row.OwnerInstanceIdentity, 0, 0L)));
+
+        object aliasedIdentity = new object();
+        OwnerSectionCensusSnapshot[] aliased =
+        {
+            new OwnerSectionCensusSnapshot(rows[0].SectionId, rows[0].SchemaVersion,
+                rows[0].Role, aliasedIdentity, 0, 0L),
+            new OwnerSectionCensusSnapshot(rows[1].SectionId, rows[1].SchemaVersion,
+                rows[1].Role, aliasedIdentity, 0, 0L)
+        };
+        AssertReceiptRowsRejected(graph, aliased);
+
+        OwnerSectionCensusSnapshot[] unpairedCompatibility = rows.Concat(new[]
+        {
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsSectionIdFor("npc-compatibility"),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, new object(), 0, 0L)
+        }).ToArray();
+        AssertReceiptRowsRejected(graph, unpairedCompatibility);
+    }
+
+    private static OwnerSectionCensusSnapshot[] CreateExcludedReceiptRows(params string[] runtimeIds)
+    {
+        List<OwnerSectionCensusSnapshot> rows = new List<OwnerSectionCensusSnapshot>();
+        foreach (string runtimeId in runtimeIds.OrderBy(id => id, System.StringComparer.Ordinal))
+        {
+            rows.Add(new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsSectionIdFor(runtimeId),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, new object(), 0, 0L));
+            rows.Add(new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsSectionIdFor(runtimeId),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, new object(), 0, 0L));
+        }
+        return rows.ToArray();
+    }
+
+    private static OwnerSectionCensusSnapshot[] ReplaceReceiptRow(
+        OwnerSectionCensusSnapshot[] rows,
+        int index,
+        System.Func<OwnerSectionCensusSnapshot, OwnerSectionCensusSnapshot> replace)
+    {
+        OwnerSectionCensusSnapshot[] copy = rows.ToArray();
+        copy[index] = replace(copy[index]);
+        return copy;
+    }
+
+    private static void AssertReceiptRowsRejected(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> rows)
+    {
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
+            graph, rows, out _), Is.False);
+    }
+
     [Test]
     public void SelectedRuntimeCensusRebindsCommercialKnowledgeAliasTripleFromItsExactCoreGraph()
     {

@@ -1581,6 +1581,17 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
+                candidateSession.OwnerGraph, targetOwnerSections, out diagnostic))
+        {
+            targetOwnerSections = null;
+            targetMutationEpoch = 0L;
+            failure = P12GDailyV1OwnerVectorFailure.MissingTargetVector;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The private target could not validate the exact-empty P12-D NPC receipt owners.";
+            return false;
+        }
+
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
                 candidateSession.OwnerGraph,
                 targetOwnerSections,
