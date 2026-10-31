@@ -1606,9 +1606,27 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+        // The host census omits exact selected City rows after Core verifies
+        // their owner identity and revision. Restore those witnesses before
+        // the structural P12-F completeness gate, just as the final recapture
+        // path does below.
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
                 candidateSession.OwnerGraph,
                 personStoreSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> citySections,
+                out diagnostic))
+        {
+            targetOwnerSections = null;
+            targetMutationEpoch = 0L;
+            failure = P12GDailyV1OwnerVectorFailure.MissingTargetVector;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The private target could not compose its Core-owned City census.";
+            return false;
+        }
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+                candidateSession.OwnerGraph,
+                citySections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> npcKnowledgeAndPlanSections,
                 out diagnostic))
         {
