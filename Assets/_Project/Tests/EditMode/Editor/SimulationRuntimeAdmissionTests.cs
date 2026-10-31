@@ -698,6 +698,40 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void CompatibilityHostPortKeepsP12FRowsUntilExactCoreOwnerGraphIsBound()
+    {
+        SimulationRuntime runtime = CreateUnpublishedDailyCaptureRuntime(new SimulationTime(8L));
+        Assert.That(runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                out IReadOnlyList<OwnerSectionCensusSnapshot> fullVector,
+                out long expectedEpoch,
+                out ContinuationCensusFailure fullFailure), Is.True, fullFailure.ToString());
+
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts =
+            (IDailyV1SelectedRuntimeAdvanceHostPorts)runtime;
+        Assert.That(hostPorts.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                out IReadOnlyList<OwnerSectionCensusSnapshot> hostRemainder,
+                out long observedEpoch,
+                out string diagnostic), Is.True, diagnostic);
+        Assert.That(observedEpoch, Is.EqualTo(expectedEpoch));
+        DailyV1ExecutionBoundaryState executionState =
+            ReadPrivateField<DailyV1ExecutionBoundaryState>(runtime, "dailyExecutionBoundary");
+        Assert.That(executionState.SelectedRuntimeOwnerGraph, Is.Null,
+            "This compatibility runtime has not yet been injected with an exact Core owner graph.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds.All(
+            sectionId => hostRemainder.Any(section => section.SectionId == sectionId)), Is.True,
+            "The host retains these rows while Core lacks their exact owner graph.");
+        Assert.That(hostRemainder.Count, Is.EqualTo(fullVector.Count),
+            "The Unity host retains P12-F witnesses until the same owners are bound into Core.");
+        for (int i = 0; i < fullVector.Count; i++)
+        {
+            Assert.That(hostRemainder[i].SectionId, Is.EqualTo(fullVector[i].SectionId));
+            Assert.That(hostRemainder[i].OwnerInstanceIdentity, Is.SameAs(fullVector[i].OwnerInstanceIdentity));
+            Assert.That(hostRemainder[i].Cardinality, Is.EqualTo(fullVector[i].Cardinality));
+            Assert.That(hostRemainder[i].Revision, Is.EqualTo(fullVector[i].Revision));
+        }
+    }
+
+    [Test]
     public void UnadmittedRestoredOwnerVectorCaptureRejectsActiveAdvanceAndWrongThread()
     {
         NpcRuntime npc = new NpcRuntime("restore-vector-probe", SimulationTestFactory.CreateNpc("restore-vector-probe"));

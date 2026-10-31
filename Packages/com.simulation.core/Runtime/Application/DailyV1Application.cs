@@ -1581,6 +1581,22 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                candidateSession.OwnerGraph,
+                candidateSession.ExecutionBoundaryState.SelectedActorChoiceStore,
+                targetOwnerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeTargetOwnerSections,
+                out diagnostic))
+        {
+            targetOwnerSections = null;
+            targetMutationEpoch = 0L;
+            failure = P12GDailyV1OwnerVectorFailure.MissingTargetVector;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The private target could not compose its complete Core-owned P12-F census.";
+            return false;
+        }
+        targetOwnerSections = completeTargetOwnerSections;
+
         stageObserver?.Invoke(DailyV1RestoredImageOwnerVectorStage.Captured);
         if (!TryValidateRestoredImageOwnerVector(
                 imageCensus, targetOwnerSections, expectedSession, replacementOperation,

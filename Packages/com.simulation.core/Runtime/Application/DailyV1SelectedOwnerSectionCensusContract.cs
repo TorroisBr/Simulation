@@ -163,6 +163,22 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
         DailyV1PersonCensusIdentity.SectionIdFor(personId);
 
     internal static bool IsCompleteSnapshot(IReadOnlyList<OwnerSectionCensusSnapshot> snapshots)
+        => IsCompleteSnapshotCore(snapshots, requireExactAliasIdentity: true);
+
+    /// <summary>
+    /// Validates the complete section inventory and family cardinalities while
+    /// leaving alias-instance comparison to the later completed-boundary or
+    /// persisted-image comparison. This preserves stale-token classification
+    /// when an otherwise complete captured vector contains changed owner
+    /// identity evidence; it does not admit that vector as a completed image.
+    /// </summary>
+    internal static bool IsStructurallyCompleteSnapshot(
+        IReadOnlyList<OwnerSectionCensusSnapshot> snapshots) =>
+        IsCompleteSnapshotCore(snapshots, requireExactAliasIdentity: false);
+
+    private static bool IsCompleteSnapshotCore(
+        IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
+        bool requireExactAliasIdentity)
     {
         if (snapshots == null) return false;
         Dictionary<string, OwnerSectionCensusSnapshot> byId =
@@ -242,7 +258,7 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
             + nonPersonNpcIds.Count + personIds.Count + (long)CityPrefixes.Count * cityIds.Count;
         if (expected != snapshots.Count) return false;
 
-        return HasExactAliasIdentity(byId);
+        return !requireExactAliasIdentity || HasExactAliasIdentity(byId);
     }
 
     private static List<HashSet<string>> NewFamilies(int count)

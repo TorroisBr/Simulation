@@ -149,9 +149,13 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 }
 
 /// <summary>
-/// Host-owned ports for the selected Daily-v1 session. This intentionally
-/// excludes runtime clocks, whole-day advancement, and intraday timeline
-/// selection; Core binds those authorities to the exact execution state.
+/// Host-owned ports for the selected Daily-v1 session. Census ports return
+/// only owner rows that have not yet migrated to the Core owner graph; Core
+/// composes the exact P12-F rows itself. The host still supplies quiescence,
+/// owner-thread, and shared mutation-epoch evidence for the complete protocol.
+/// This intentionally excludes runtime clocks, whole-day advancement, and
+/// intraday timeline selection; Core binds those authorities to the exact
+/// execution state.
 /// </summary>
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
@@ -395,7 +399,7 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         }
         ownerSections = coreOwnedGenealogySections;
 
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12FSections(
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 executionState.SelectedRuntimeOwnerGraph,
                 executionState.SelectedActorChoiceStore,
                 ownerSections,
@@ -527,6 +531,172 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
 /// </summary>
 internal static class DailyV1SelectedRuntimeOwnerCensusSource
 {
+    private static readonly string[] CoreOwnedP12FSectionIdValues =
+    {
+        ActorChoiceP11CensusProvider.SectionId,
+        ScheduledDirectiveCensusProvider.SectionId,
+        TravelPartyCensusProvider.SectionId,
+        ExpeditionCensusProvider.SectionId
+    };
+
+    /// <summary>
+    /// Fixed selected-profile rows whose live source is the exact Core session
+    /// graph. The Unity census protocol still tracks quiescence and mutation
+    /// epochs, but its host port must omit these rows from the vector returned
+    /// to Core so it cannot supply their owner identity or values.
+    /// </summary>
+    internal static IReadOnlyList<string> CoreOwnedP12FSectionIds { get; } =
+        Array.AsReadOnly(CoreOwnedP12FSectionIdValues);
+
+    internal static bool TryRemoveCoreOwnedP12FSections(
+        IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
+        out string diagnostic)
+    {
+        hostOwnedSections = null;
+        diagnostic = null;
+        if (!DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(completeHostSections))
+        {
+            diagnostic = "The host census is not a complete selected Daily-v1 owner vector.";
+            return false;
+        }
+
+        HashSet<string> remainingCoreSectionIds =
+            new HashSet<string>(CoreOwnedP12FSectionIdValues, StringComparer.Ordinal);
+        List<OwnerSectionCensusSnapshot> remaining =
+            new List<OwnerSectionCensusSnapshot>(completeHostSections.Count - CoreOwnedP12FSectionIdValues.Length);
+        int removed = 0;
+        foreach (OwnerSectionCensusSnapshot section in completeHostSections)
+        {
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId))
+            {
+                diagnostic = "The complete host census contains an invalid section.";
+                return false;
+            }
+
+            if (remainingCoreSectionIds.Remove(section.SectionId))
+            {
+                removed++;
+                continue;
+            }
+
+            remaining.Add(section);
+        }
+
+        if (removed != CoreOwnedP12FSectionIdValues.Length || remainingCoreSectionIds.Count != 0)
+        {
+            diagnostic = "The complete host census does not contain each fixed Core-owned P12-F section exactly once.";
+            return false;
+        }
+
+        hostOwnedSections = Array.AsReadOnly(remaining.ToArray());
+        return true;
+    }
+
+    internal static bool TryComposeCoreOwnedP12FSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        ActorChoiceStore actorChoiceStore,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> completeOwnerSections,
+        out string diagnostic)
+    {
+        completeOwnerSections = null;
+        diagnostic = null;
+        if (graph?.ScheduledDirectives == null
+            || graph.TravelParties == null
+            || graph.Expeditions == null
+            || graph.PersonStore == null
+            || actorChoiceStore == null
+            || !ReferenceEquals(actorChoiceStore.PersonStore, graph.PersonStore)
+            || hostOwnedSections == null)
+        {
+            diagnostic = "The Core P12-F census requires the exact actor-choice, directive, travel-party, expedition, and PersonStore owners.";
+            return false;
+        }
+
+        HashSet<string> hostSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        List<OwnerSectionCensusSnapshot> composed =
+            new List<OwnerSectionCensusSnapshot>(hostOwnedSections.Count + CoreOwnedP12FSectionIdValues.Length);
+        foreach (OwnerSectionCensusSnapshot section in hostOwnedSections)
+        {
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !hostSectionIds.Add(section.SectionId)
+                || Array.IndexOf(CoreOwnedP12FSectionIdValues, section.SectionId) >= 0)
+            {
+                diagnostic = "The host census remainder is invalid, duplicated, or contains a Core-owned P12-F section.";
+                return false;
+            }
+            composed.Add(section);
+        }
+
+        OwnerSectionCensusWitness[] witnesses;
+        try
+        {
+            witnesses = new OwnerSectionCensusWitness[]
+            {
+                new ActorChoiceP11CensusProvider(actorChoiceStore).GetCurrentCensus(),
+                new ScheduledDirectiveCensusProvider(graph.ScheduledDirectives).GetCurrentCensus(),
+                new TravelPartyCensusProvider(graph.TravelParties).GetCurrentCensus(),
+                new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus()
+            };
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            diagnostic = "A Core P12-F provider could not read its exact owner.";
+            return false;
+        }
+
+        HashSet<string> capturedCoreSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusWitness witness in witnesses)
+        {
+            if (witness == null
+                || string.IsNullOrWhiteSpace(witness.SectionId)
+                || witness.OwnerInstanceIdentity == null
+                || witness.SchemaVersion <= 0
+                || witness.Cardinality < 0
+                || witness.Revision < 0L
+                || !capturedCoreSectionIds.Add(witness.SectionId)
+                || !Array.Exists(CoreOwnedP12FSectionIdValues,
+                    sectionId => string.Equals(sectionId, witness.SectionId, StringComparison.Ordinal)))
+            {
+                diagnostic = "A Core P12-F provider returned a witness outside the fixed selected owner inventory.";
+                return false;
+            }
+
+            composed.Add(new OwnerSectionCensusSnapshot(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision));
+        }
+
+        if (capturedCoreSectionIds.Count != CoreOwnedP12FSectionIdValues.Length)
+        {
+            diagnostic = "The Core P12-F provider set is incomplete.";
+            return false;
+        }
+
+        composed.Sort((left, right) =>
+            StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+        // Preserve a structurally complete but stale host alias witness for
+        // the existing exact token/image comparison. That later gate applies
+        // IsCompleteSnapshot and reports the established stale-boundary
+        // failure instead of reclassifying identity drift as missing coverage.
+        if (!DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(composed))
+        {
+            diagnostic = "The Core and host census sections do not compose the complete selected Daily-v1 owner vector.";
+            return false;
+        }
+
+        completeOwnerSections = Array.AsReadOnly(composed.ToArray());
+        return true;
+    }
+
     internal static bool TryRebindCoreOwnedP12FSections(
         DailyV1SelectedRuntimeOwnerGraph graph,
         ActorChoiceStore actorChoiceStore,
@@ -2409,7 +2579,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         return true;
     }
 
-    private static bool TryCaptureUnadmittedRestoredOwnerVector(
+    private bool TryCaptureUnadmittedRestoredOwnerVector(
         IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts,
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
@@ -2426,6 +2596,21 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return false;
         }
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                selectedRuntimeOwnerGraph,
+                selectedActorChoiceStore,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeOwnerSections,
+                out diagnostic))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core restored boundary could not compose its exact P12-F owner rows.";
+            return false;
+        }
+
+        ownerSections = completeOwnerSections;
         return true;
     }
 }

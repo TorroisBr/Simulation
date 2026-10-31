@@ -11352,12 +11352,38 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
         bool captured = census.TryCaptureQuiescentOwnerSectionSnapshot(
             allowedOuterScope,
-            out ownerSections,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
             out mutationEpoch,
             out ContinuationCensusFailure censusFailure);
-        failure = captured ? DailyCaptureEligibilityFailure.None
-            : MapDailyCaptureFailure(censusFailure);
-        return captured;
+        if (!captured)
+        {
+            failure = MapDailyCaptureFailure(censusFailure);
+            return false;
+        }
+
+        if (HasExactCoreOwnedP12FCensusSources())
+        {
+            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedP12FSections(
+                    completeHostSections,
+                    out ownerSections,
+                    out _))
+            {
+                mutationEpoch = 0L;
+                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+        }
+        else
+        {
+            // Compatibility runtimes may still own these authorities locally.
+            // Keep their full rows until the injected Core boundary is bound to
+            // the exact same selected stores; filtering earlier would create a
+            // census gap instead of an authority transfer.
+            ownerSections = completeHostSections;
+        }
+
+        failure = DailyCaptureEligibilityFailure.None;
+        return true;
     }
 
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryBindRestoredCandidateMutationGuard(
@@ -11370,9 +11396,55 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         out string diagnostic)
     {
         bool captured = TryCaptureUnadmittedRestoredDailyOwnerVector(
-            out ownerSections, out mutationEpoch, out ContinuationCensusFailure failure);
-        diagnostic = captured ? null : failure.ToString();
-        return captured;
+            out IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
+            out mutationEpoch,
+            out ContinuationCensusFailure failure);
+        if (!captured)
+        {
+            ownerSections = null;
+            diagnostic = failure.ToString();
+            return false;
+        }
+
+        if (HasExactCoreOwnedP12FCensusSources())
+        {
+            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedP12FSections(
+                    completeHostSections,
+                    out ownerSections,
+                    out diagnostic))
+            {
+                mutationEpoch = 0L;
+                return false;
+            }
+        }
+        else
+        {
+            ownerSections = completeHostSections;
+            diagnostic = null;
+        }
+
+        diagnostic = null;
+        return true;
+    }
+
+    private bool HasExactCoreOwnedP12FCensusSources()
+    {
+        DailyV1ExecutionBoundaryState state = dailyExecutionBoundary;
+        DailyV1SelectedRuntimeOwnerGraph graph = state?.SelectedRuntimeOwnerGraph;
+        return state != null
+            && state.SelectedRuntimeExecutionRootsBound
+            && graph != null
+            && graph.PersonStore != null
+            && graph.TravelParties != null
+            && graph.Expeditions != null
+            && graph.ScheduledDirectives != null
+            && state.SelectedActorChoiceStore != null
+            && ReferenceEquals(state.SelectedActorChoiceStore, actorChoiceStore)
+            && ReferenceEquals(state.SelectedActorChoiceStore.PersonStore, graph.PersonStore)
+            && ReferenceEquals(graph.TravelParties, travelPartySystem?.Store)
+            && ReferenceEquals(graph.Expeditions, expeditionSystem?.Store)
+            && ReferenceEquals(graph.ScheduledDirectives, scheduledDirectiveSystem?.Store)
+            && ReferenceEquals(graph.PersonStore, personStore);
     }
 
     void IDailyV1SelectedRuntimeAdvanceHostPorts.FaultRuntimeAdmission() =>
