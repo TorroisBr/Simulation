@@ -895,6 +895,199 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     }
 
     [Test]
+    public void SelectedNpcKnowledgeAndPlanCensusUsesExactCoreOwnersAndOrdinalRuntimeIdentityOrder()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateNpcGraph("npc-zulu", "npc-alpha");
+        IReadOnlyList<IOwnerSectionCensusProvider> providers =
+            DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph);
+        OwnerSectionCensusSnapshot[] rows = CreateRequiredSnapshots(providers);
+
+        Assert.That(rows.Length, Is.EqualTo(18));
+        string[] orderedRuntimeIds = { "npc-alpha", "npc-zulu" };
+        for (int npcIndex = 0; npcIndex < orderedRuntimeIds.Length; npcIndex++)
+        {
+            string runtimeId = orderedRuntimeIds[npcIndex];
+            DailyV1NpcRuntimeOwners npc = graph.Npcs.Single(value =>
+                string.Equals(value.RuntimeId, runtimeId, StringComparison.Ordinal));
+            int offset = npcIndex * 9;
+            for (int familyIndex = 0; familyIndex <= 6; familyIndex++)
+            {
+                OwnerSectionCensusSnapshot row = rows[offset + familyIndex];
+                Assert.That(row.SectionId,
+                    Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(
+                        familyIndex, runtimeId)));
+                Assert.That(row.SchemaVersion,
+                    Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion));
+                Assert.That(row.Role, Is.EqualTo(OwnerSectionRole.Required));
+            }
+
+            OwnerSectionCensusSnapshot explorable = rows[offset];
+            OwnerSectionCensusSnapshot topologyPlaces = rows[offset + 1];
+            OwnerSectionCensusSnapshot topologyConnections = rows[offset + 2];
+            OwnerSectionCensusSnapshot adventureOpposition = rows[offset + 3];
+            OwnerSectionCensusSnapshot adventureItems = rows[offset + 4];
+            OwnerSectionCensusSnapshot adventureResources = rows[offset + 5];
+            OwnerSectionCensusSnapshot adventureAccess = rows[offset + 6];
+            OwnerSectionCensusSnapshot merchantPlan = rows[offset + 7];
+            OwnerSectionCensusSnapshot travelPlan = rows[offset + 8];
+
+            Assert.That(explorable.OwnerInstanceIdentity, Is.SameAs(npc.ExplorableSiteKnowledge));
+            Assert.That(topologyPlaces.OwnerInstanceIdentity,
+                Is.SameAs(npc.LocalTopologyKnowledgeEmptyOwner));
+            Assert.That(topologyConnections.OwnerInstanceIdentity,
+                Is.SameAs(npc.LocalTopologyKnowledgeEmptyOwner));
+            Assert.That(topologyPlaces.Cardinality, Is.Zero);
+            Assert.That(topologyConnections.Cardinality, Is.Zero);
+            Assert.That(topologyPlaces.Revision, Is.Zero);
+            Assert.That(topologyConnections.Revision, Is.Zero);
+            Assert.That(adventureOpposition.OwnerInstanceIdentity,
+                Is.SameAs(npc.AdventureSiteIntelKnowledge));
+            Assert.That(adventureItems.OwnerInstanceIdentity,
+                Is.SameAs(npc.AdventureSiteIntelKnowledge));
+            Assert.That(adventureResources.OwnerInstanceIdentity,
+                Is.SameAs(npc.AdventureSiteIntelKnowledge));
+            Assert.That(adventureAccess.OwnerInstanceIdentity,
+                Is.SameAs(npc.AdventureSiteIntelKnowledge));
+            Assert.That(merchantPlan.SectionId,
+                Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind, runtimeId)));
+            Assert.That(merchantPlan.OwnerInstanceIdentity, Is.SameAs(npc.MerchantTradePlan));
+            Assert.That(merchantPlan.Cardinality, Is.EqualTo(1));
+            Assert.That(travelPlan.SectionId,
+                Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, runtimeId)));
+            Assert.That(travelPlan.OwnerInstanceIdentity, Is.SameAs(npc.TravelPlan));
+            Assert.That(travelPlan.Cardinality, Is.EqualTo(1));
+        }
+
+        DailyV1NpcRuntimeOwners selectedNpc = graph.Npcs.Single(value => value.RuntimeId == "npc-alpha");
+        Assert.That(selectedNpc.ExplorableSiteKnowledge.RecordObservation(
+            new ExplorableSiteKnowledgeObservation(
+                "site/knowledge", "location/knowledge", 1L, 1L,
+                ExplorableSiteKnowledgeSource.DirectObservation)), Is.True);
+        Assert.That(selectedNpc.AdventureSiteIntelKnowledge.RecordObservation(
+            new AdventureAccessObservation(
+                "site/adventure", null, PlaceAccessState.Accessible,
+                1L, 1L, AdventureIntelSource.DirectObservation)), Is.True);
+        DailyV1ItemDefinition item = graph.Definitions.Items.Values.First();
+        Assert.That(selectedNpc.MerchantTradePlan.TryInstallState(
+            item, "city/origin", "city/target", 4, 4, 2.5f, 0, 0, "decision/merchant"), Is.True);
+        Assert.That(selectedNpc.TravelPlan.TryCommit(
+            "location/target", "city/target", NpcTravelReason.Trade,
+            0.75f, 12.5f, "decision/travel"), Is.True);
+
+        OwnerSectionCensusSnapshot[] updated = CreateRequiredSnapshots(
+            DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph));
+        Dictionary<string, OwnerSectionCensusSnapshot> byId =
+            updated.ToDictionary(value => value.SectionId, StringComparer.Ordinal);
+        Assert.That(byId[DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(
+            0, selectedNpc.RuntimeId)].Cardinality, Is.EqualTo(1));
+        Assert.That(byId[DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(
+            0, selectedNpc.RuntimeId)].Revision, Is.EqualTo(1L));
+        for (int familyIndex = 3; familyIndex <= 6; familyIndex++)
+        {
+            OwnerSectionCensusSnapshot adventure = byId[
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(
+                    familyIndex, selectedNpc.RuntimeId)];
+            Assert.That(adventure.OwnerInstanceIdentity,
+                Is.SameAs(selectedNpc.AdventureSiteIntelKnowledge));
+            Assert.That(adventure.Revision, Is.EqualTo(1L));
+        }
+        Assert.That(byId[DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+            DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind,
+            selectedNpc.RuntimeId)].Revision, Is.EqualTo(1L));
+        Assert.That(byId[DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind,
+            selectedNpc.RuntimeId)].Revision, Is.EqualTo(1L));
+    }
+
+    [Test]
+    public void SelectedNpcKnowledgeAndPlanCensusRebindsExactRowsAndPreservesStaleAndMixedVectors()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out DailyV1NpcRuntimeOwners npc);
+        OwnerSectionCensusSnapshot[] knowledgeRows = CreateRequiredSnapshots(
+            DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph));
+        OwnerSectionCensusSnapshot[] hostRows =
+            CreateCoreNpcCensusRows(graph).Concat(knowledgeRows).ToArray();
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+            graph, hostRows, out IReadOnlyList<OwnerSectionCensusSnapshot> rebound,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(rebound, Has.Count.EqualTo(hostRows.Length));
+        foreach (OwnerSectionCensusSnapshot knowledge in knowledgeRows)
+        {
+            OwnerSectionCensusSnapshot reboundRow = rebound.Single(value =>
+                string.Equals(value.SectionId, knowledge.SectionId, StringComparison.Ordinal));
+            Assert.That(reboundRow, Is.Not.SameAs(knowledge));
+            Assert.That(reboundRow.OwnerInstanceIdentity, Is.SameAs(knowledge.OwnerInstanceIdentity));
+        }
+
+        int staleIndex = Array.FindIndex(hostRows, value =>
+            value.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, npc.RuntimeId));
+        OwnerSectionCensusSnapshot staleTravelPlan = hostRows[staleIndex];
+        OwnerSectionCensusSnapshot[] staleRows = hostRows.ToArray();
+        staleRows[staleIndex] = new OwnerSectionCensusSnapshot(
+            staleTravelPlan.SectionId, staleTravelPlan.SchemaVersion, staleTravelPlan.Role,
+            new object(), staleTravelPlan.Cardinality, staleTravelPlan.Revision);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+            graph, staleRows, out IReadOnlyList<OwnerSectionCensusSnapshot> stalePreserved,
+            out string staleDiagnostic), Is.True, staleDiagnostic);
+        for (int i = 0; i < staleRows.Length; i++)
+            Assert.That(stalePreserved[i], Is.SameAs(staleRows[i]),
+                "Stale source evidence remains intact for P12 token classification.");
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+            graph, hostRows.Where(value => value.SectionId != knowledgeRows[0].SectionId).ToArray(),
+            out _, out _), Is.False, "Every required Knowledge and Plan family row must be present.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+            graph, hostRows.Concat(new[] { knowledgeRows[0] }).ToArray(),
+            out _, out _), Is.False, "The host vector cannot duplicate a required family identity.");
+
+        object legacyTopology = new object();
+        object legacyAdventure = new object();
+        OwnerSectionCensusSnapshot[] legacyRows = new OwnerSectionCensusSnapshot[11];
+        legacyRows[0] = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "npc-legacy",
+            1, OwnerSectionRole.Required, new object(), 0, 0L);
+        legacyRows[1] = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + "npc-legacy",
+            1, OwnerSectionRole.Required, new object(), 1, 0L);
+        for (int familyIndex = 0; familyIndex <= 6; familyIndex++)
+        {
+            object identity = familyIndex == 1 || familyIndex == 2
+                ? legacyTopology
+                : familyIndex >= 3 && familyIndex <= 6
+                    ? legacyAdventure
+                    : new object();
+            legacyRows[familyIndex + 2] = new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(
+                    familyIndex, "npc-legacy"),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, identity, 0, 0L);
+        }
+        legacyRows[9] = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind,
+                "npc-legacy"),
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required, new object(), 1, 0L);
+        legacyRows[10] = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind,
+                "npc-legacy"),
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required, new object(), 1, 0L);
+        OwnerSectionCensusSnapshot[] mixedRows = hostRows.Concat(legacyRows).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+            graph, mixedRows, out IReadOnlyList<OwnerSectionCensusSnapshot> mixedPreserved,
+            out string mixedDiagnostic), Is.True, mixedDiagnostic);
+        Assert.That(mixedPreserved, Has.Count.EqualTo(mixedRows.Length));
+        for (int i = 0; i < mixedRows.Length; i++)
+            Assert.That(mixedPreserved[i], Is.SameAs(mixedRows[i]),
+                "Mixed rosters preserve the full host census, including compatibility NPC rows.");
+    }
+    [Test]
     public void SelectedRuntimeCensusRebindsSpatialKnowledgePairsFromItsExactCoreGraph()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(
@@ -1450,6 +1643,23 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
                 DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
                 OwnerSectionRole.Required, populationOwner, 0, 4L)
         };
+    }
+    private static DailyV1SelectedRuntimeOwnerGraph CreateNpcGraph(params string[] runtimeIds)
+    {
+        if (runtimeIds == null) throw new ArgumentNullException(nameof(runtimeIds));
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition definition = definitions.Npcs.Values.First();
+        List<DailyV1NpcRuntimeOwners> npcs = new List<DailyV1NpcRuntimeOwners>();
+        foreach (string runtimeId in runtimeIds)
+        {
+            Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+                runtimeId, definitions, definition, 8f, out DailyV1NpcRuntimeOwners npc), Is.True);
+            npcs.Add(npc);
+        }
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+            definitions, Array.Empty<DailyV1CityRuntimeOwners>(), npcs,
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        return graph;
     }
     private static DailyV1SelectedRuntimeOwnerGraph CreateSingleNpcGraph(
         out DailyV1NpcRuntimeOwners npc)

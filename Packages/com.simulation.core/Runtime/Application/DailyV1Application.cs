@@ -1595,10 +1595,23 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+                candidateSession.OwnerGraph,
+                personStoreSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> npcKnowledgeAndPlanSections,
+                out diagnostic))
+        {
+            targetOwnerSections = null;
+            targetMutationEpoch = 0L;
+            failure = P12GDailyV1OwnerVectorFailure.MissingTargetVector;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The private target could not bind its exact NPC Knowledge and Plan census owners.";
+            return false;
+        }
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 candidateSession.OwnerGraph,
                 candidateSession.ExecutionBoundaryState.SelectedActorChoiceStore,
-                personStoreSections,
+                npcKnowledgeAndPlanSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> completeTargetOwnerSections,
                 out diagnostic))
         {

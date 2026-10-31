@@ -469,6 +469,19 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         }
         ownerSections = coreOwnedCommercialKnowledgeSections;
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+                executionState.SelectedRuntimeOwnerGraph,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedNpcKnowledgeAndPlanSections,
+                out _))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        ownerSections = coreOwnedNpcKnowledgeAndPlanSections;
+
         if (executionState.SelectedRuntimeOwnerGraph.PersonStore != null)
         {
             if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedPersonStoreSections(
@@ -1134,6 +1147,183 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         return true;
     }
 
+    internal static bool TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        diagnostic = null;
+        if (graph == null || hostSections == null)
+        {
+            diagnostic = "The selected Core NPC Knowledge and Plan census requires an owner graph and host census rows.";
+            return false;
+        }
+
+        OwnerSectionCensusSnapshot[] copied = new OwnerSectionCensusSnapshot[hostSections.Count];
+        Dictionary<string, int> indexes = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < hostSections.Count; i++)
+        {
+            OwnerSectionCensusSnapshot section = hostSections[i];
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !indexes.TryAdd(section.SectionId, i))
+            {
+                diagnostic = "The host census contains a missing or duplicate owner-section identity.";
+                return false;
+            }
+            copied[i] = section;
+        }
+
+        int inventoryRows = CountFamilyRows(
+            copied, DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix);
+        int moneyAccountRows = CountFamilyRows(
+            copied, DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix);
+        if (inventoryRows != moneyAccountRows)
+        {
+            diagnostic = "The complete host census has inconsistent NPC Inventory and MoneyAccount family cardinality.";
+            return false;
+        }
+
+        string[] requiredPrefixes =
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcExplorableSiteKnowledgePrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyPlacesPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyConnectionsPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureOppositionPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureNotableItemsPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureCommonResourcesPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureAccessPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanPrefix
+        };
+        foreach (string prefix in requiredPrefixes)
+        {
+            if (CountFamilyRows(copied, prefix) != inventoryRows)
+            {
+                diagnostic = "The host census has incomplete selected NPC Knowledge and Plan family coverage for " + prefix;
+                return false;
+            }
+        }
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers;
+        try
+        {
+            providers = DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph);
+        }
+        catch (ArgumentException)
+        {
+            diagnostic = "The selected Core NPC Knowledge and Plan providers could not bind to the owner graph.";
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            diagnostic = "The selected Core NPC Knowledge and Plan providers could not bind to the owner graph.";
+            return false;
+        }
+
+        OwnerSectionCensusWitness[] witnesses = new OwnerSectionCensusWitness[providers.Count];
+        HashSet<string> selectedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < providers.Count; i++)
+        {
+            try
+            {
+                witnesses[i] = providers[i]?.GetCurrentCensus();
+            }
+            catch (InvalidOperationException)
+            {
+                diagnostic = "A selected Core NPC Knowledge or Plan provider failed to read its owner.";
+                return false;
+            }
+
+            OwnerSectionCensusWitness witness = witnesses[i];
+            if (witness == null
+                || string.IsNullOrWhiteSpace(witness.SectionId)
+                || witness.OwnerInstanceIdentity == null
+                || witness.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+                || witness.Cardinality < 0
+                || witness.Revision < 0L
+                || !selectedSectionIds.Add(witness.SectionId))
+            {
+                diagnostic = "A selected Core NPC Knowledge or Plan provider returned an invalid census witness.";
+                return false;
+            }
+        }
+
+        if (inventoryRows < graph.Npcs.Count)
+        {
+            diagnostic = "The host census does not cover every NPC in the selected Core graph.";
+            return false;
+        }
+
+        if (inventoryRows > graph.Npcs.Count)
+        {
+            for (int i = 0; i < witnesses.Length; i++)
+            {
+                if (!indexes.ContainsKey(witnesses[i].SectionId))
+                {
+                    diagnostic = "The mixed-roster host census is missing selected Core section "
+                        + witnesses[i].SectionId + ".";
+                    return false;
+                }
+            }
+
+            // A mixed roster retains the complete host vector, including all
+            // compatibility NPC rows, without replacing selected-row snapshots.
+            ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+
+        if (inventoryRows != graph.Npcs.Count || witnesses.Length != graph.Npcs.Count * 9)
+        {
+            diagnostic = "The host census does not contain all nine selected NPC Knowledge and Plan sections per Core owner.";
+            return false;
+        }
+
+        int[] indexesByWitness = new int[witnesses.Length];
+        bool matchesCoreOwners = true;
+        for (int i = 0; i < witnesses.Length; i++)
+        {
+            OwnerSectionCensusWitness witness = witnesses[i];
+            if (!indexes.TryGetValue(witness.SectionId, out int index))
+            {
+                diagnostic = "The host census is missing selected Core Knowledge or Plan section "
+                    + witness.SectionId + ".";
+                return false;
+            }
+
+            indexesByWitness[i] = index;
+            OwnerSectionCensusSnapshot hostSection = copied[index];
+            matchesCoreOwners &= hostSection.Role == OwnerSectionRole.Required
+                && hostSection.SchemaVersion == witness.SchemaVersion
+                && ReferenceEquals(hostSection.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+                && hostSection.Cardinality == witness.Cardinality
+                && hostSection.Revision == witness.Revision;
+        }
+
+        if (!matchesCoreOwners)
+        {
+            // Retain the captured source facts so existing P12 token checks
+            // classify stale owner state instead of silently replacing it.
+            ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+
+        for (int i = 0; i < witnesses.Length; i++)
+        {
+            OwnerSectionCensusWitness witness = witnesses[i];
+            copied[indexesByWitness[i]] = new OwnerSectionCensusSnapshot(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision);
+        }
+
+        ownerSections = Array.AsReadOnly(copied);
+        return true;
+    }
     internal static bool TryRebindCoreOwnedNpcRuntimeStateSections(
         DailyV1SelectedRuntimeOwnerGraph graph,
         IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
@@ -2778,10 +2968,23 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return false;
         }
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+                selectedRuntimeOwnerGraph,
+                personStoreComposedSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> npcKnowledgeAndPlanSections,
+                out diagnostic))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core restored boundary could not bind its exact NPC Knowledge and Plan owners.";
+            return false;
+        }
+
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 selectedRuntimeOwnerGraph,
                 selectedActorChoiceStore,
-                personStoreComposedSections,
+                npcKnowledgeAndPlanSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> completeOwnerSections,
                 out diagnostic))
         {

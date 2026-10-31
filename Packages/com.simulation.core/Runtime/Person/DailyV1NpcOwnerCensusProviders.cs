@@ -184,6 +184,150 @@ internal static class DailyV1NpcOwnerCensusProviders
         internal DailyV1NpcRuntimeOwners NpcOwner { get; }
     }
 
+    private enum KnowledgePlanSection
+    {
+        ExplorableSite,
+        LocalTopologyPlaces,
+        LocalTopologyConnections,
+        AdventureOpposition,
+        AdventureNotableItems,
+        AdventureCommonResources,
+        AdventureAccess,
+        MerchantTradePlan,
+        TravelPlan
+    }
+
+    private sealed class KnowledgePlanSectionProvider : IOwnerSectionCensusProvider
+    {
+        private readonly DailyV1NpcRuntimeOwners npcOwner;
+        private readonly KnowledgePlanSection section;
+        private readonly string sectionId;
+
+        internal KnowledgePlanSectionProvider(
+            DailyV1NpcRuntimeOwners npcOwner,
+            KnowledgePlanSection section)
+        {
+            this.npcOwner = npcOwner ?? throw new ArgumentNullException(nameof(npcOwner));
+            this.section = section;
+            sectionId = SectionIdFor(section, npcOwner.RuntimeId);
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            object owner;
+            int cardinality;
+            long revision;
+            switch (section)
+            {
+                case KnowledgePlanSection.ExplorableSite:
+                    DailyV1ExplorableSiteKnowledgeOwner explorable = npcOwner.ExplorableSiteKnowledge;
+                    if (explorable == null
+                        || !string.Equals(explorable.OwnerRuntimeId, npcOwner.RuntimeId, StringComparison.Ordinal)
+                        || explorable.Observations == null
+                        || explorable.Revision < 0L)
+                        throw new InvalidOperationException(
+                            "The Core ExplorableSiteKnowledge owner cannot provide a valid census witness.");
+                    owner = explorable;
+                    cardinality = explorable.Observations.Count;
+                    revision = explorable.Revision;
+                    break;
+
+                case KnowledgePlanSection.LocalTopologyPlaces:
+                case KnowledgePlanSection.LocalTopologyConnections:
+                    DailyV1NpcLocalTopologyKnowledgeEmptyOwner topology =
+                        npcOwner.LocalTopologyKnowledgeEmptyOwner;
+                    if (topology == null || !topology.MatchesRuntimeId(npcOwner.RuntimeId))
+                        throw new InvalidOperationException(
+                            "The Core exact-empty LocalTopology owner cannot provide a valid census witness.");
+                    owner = topology;
+                    cardinality = section == KnowledgePlanSection.LocalTopologyPlaces
+                        ? topology.PlaceObservationCount
+                        : topology.ConnectionObservationCount;
+                    revision = topology.Revision;
+                    break;
+
+                case KnowledgePlanSection.AdventureOpposition:
+                case KnowledgePlanSection.AdventureNotableItems:
+                case KnowledgePlanSection.AdventureCommonResources:
+                case KnowledgePlanSection.AdventureAccess:
+                    DailyV1AdventureSiteIntelKnowledgeOwner adventure =
+                        npcOwner.AdventureSiteIntelKnowledge;
+                    if (adventure == null
+                        || !string.Equals(adventure.OwnerRuntimeId, npcOwner.RuntimeId, StringComparison.Ordinal)
+                        || adventure.Revision < 0L)
+                        throw new InvalidOperationException(
+                            "The Core AdventureSiteIntel owner cannot provide a valid census witness.");
+                    owner = adventure;
+                    cardinality = section switch
+                    {
+                        KnowledgePlanSection.AdventureOpposition => adventure.OppositionObservations.Count,
+                        KnowledgePlanSection.AdventureNotableItems => adventure.NotableItemObservations.Count,
+                        KnowledgePlanSection.AdventureCommonResources => adventure.CommonResourceObservations.Count,
+                        KnowledgePlanSection.AdventureAccess => adventure.AccessObservations.Count,
+                        _ => throw new InvalidOperationException("The Core AdventureSiteIntel census section is invalid.")
+                    };
+                    revision = adventure.Revision;
+                    break;
+
+                case KnowledgePlanSection.MerchantTradePlan:
+                    DailyV1NpcMerchantTradePlanOwner merchantPlan = npcOwner.MerchantTradePlan;
+                    if (merchantPlan == null
+                        || !ReferenceEquals(merchantPlan.Definitions, npcOwner.Definitions)
+                        || merchantPlan.Revision < 0L)
+                        throw new InvalidOperationException(
+                            "The Core MerchantTradePlan owner cannot provide a valid census witness.");
+                    owner = merchantPlan;
+                    cardinality = 1;
+                    revision = merchantPlan.Revision;
+                    break;
+
+                case KnowledgePlanSection.TravelPlan:
+                    DailyV1NpcTravelPlanOwner travelPlan = npcOwner.TravelPlan;
+                    if (travelPlan == null || travelPlan.Revision < 0L)
+                        throw new InvalidOperationException(
+                            "The Core TravelPlan owner cannot provide a valid census witness.");
+                    owner = travelPlan;
+                    cardinality = 1;
+                    revision = travelPlan.Revision;
+                    break;
+
+                default:
+                    throw new InvalidOperationException("The Core Knowledge and Plan census section is unsupported.");
+            }
+
+            return new OwnerSectionCensusWitness(
+                sectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                owner,
+                cardinality,
+                revision);
+        }
+
+        private static string SectionIdFor(KnowledgePlanSection section, string runtimeId) => section switch
+        {
+            KnowledgePlanSection.ExplorableSite =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(0, runtimeId),
+            KnowledgePlanSection.LocalTopologyPlaces =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(1, runtimeId),
+            KnowledgePlanSection.LocalTopologyConnections =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(2, runtimeId),
+            KnowledgePlanSection.AdventureOpposition =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(3, runtimeId),
+            KnowledgePlanSection.AdventureNotableItems =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(4, runtimeId),
+            KnowledgePlanSection.AdventureCommonResources =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(5, runtimeId),
+            KnowledgePlanSection.AdventureAccess =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(6, runtimeId),
+            KnowledgePlanSection.MerchantTradePlan =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind, runtimeId),
+            KnowledgePlanSection.TravelPlan =>
+                DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, runtimeId),
+            _ => throw new ArgumentOutOfRangeException(nameof(section))
+        };
+    }
     private enum RuntimeAuthoritySection
     {
         CurrentAction,
@@ -291,6 +435,59 @@ internal static class DailyV1NpcOwnerCensusProviders
         };
     }
 
+    internal static IReadOnlyList<IOwnerSectionCensusProvider> CreateKnowledgeAndPlanProviders(
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph == null || graph.Definitions == null)
+            throw new ArgumentNullException(nameof(graph));
+        ValidateRoster(graph.Npcs);
+        List<DailyV1NpcRuntimeOwners> ordered = OrderByRuntimeId(graph.Npcs);
+        HashSet<DailyV1ExplorableSiteKnowledgeOwner> explorableOwners =
+            new HashSet<DailyV1ExplorableSiteKnowledgeOwner>();
+        HashSet<DailyV1NpcLocalTopologyKnowledgeEmptyOwner> topologyOwners =
+            new HashSet<DailyV1NpcLocalTopologyKnowledgeEmptyOwner>();
+        HashSet<DailyV1AdventureSiteIntelKnowledgeOwner> adventureOwners =
+            new HashSet<DailyV1AdventureSiteIntelKnowledgeOwner>();
+        HashSet<DailyV1NpcMerchantTradePlanOwner> merchantPlanOwners =
+            new HashSet<DailyV1NpcMerchantTradePlanOwner>();
+        HashSet<DailyV1NpcTravelPlanOwner> travelPlanOwners =
+            new HashSet<DailyV1NpcTravelPlanOwner>();
+        IOwnerSectionCensusProvider[] providers =
+            new IOwnerSectionCensusProvider[ordered.Count * 9];
+        int providerIndex = 0;
+        foreach (DailyV1NpcRuntimeOwners npc in ordered)
+        {
+            if (!ReferenceEquals(npc.Definitions, graph.Definitions)
+                || npc.ExplorableSiteKnowledge == null
+                || !string.Equals(npc.ExplorableSiteKnowledge.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
+                || !explorableOwners.Add(npc.ExplorableSiteKnowledge)
+                || npc.LocalTopologyKnowledgeEmptyOwner == null
+                || !npc.LocalTopologyKnowledgeEmptyOwner.MatchesRuntimeId(npc.RuntimeId)
+                || !topologyOwners.Add(npc.LocalTopologyKnowledgeEmptyOwner)
+                || npc.AdventureSiteIntelKnowledge == null
+                || !string.Equals(npc.AdventureSiteIntelKnowledge.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal)
+                || !adventureOwners.Add(npc.AdventureSiteIntelKnowledge)
+                || npc.MerchantTradePlan == null
+                || !ReferenceEquals(npc.MerchantTradePlan.Definitions, graph.Definitions)
+                || !merchantPlanOwners.Add(npc.MerchantTradePlan)
+                || npc.TravelPlan == null
+                || !travelPlanOwners.Add(npc.TravelPlan))
+                throw new InvalidOperationException(
+                    "Selected NPC Knowledge and Plan census requires distinct exact owners bound to the admitted runtime graph.");
+
+            for (int familyIndex = 0; familyIndex <= 6; familyIndex++)
+            {
+                providers[providerIndex++] = new KnowledgePlanSectionProvider(
+                    npc,
+                    (KnowledgePlanSection)familyIndex);
+            }
+            providers[providerIndex++] = new KnowledgePlanSectionProvider(
+                npc, KnowledgePlanSection.MerchantTradePlan);
+            providers[providerIndex++] = new KnowledgePlanSectionProvider(
+                npc, KnowledgePlanSection.TravelPlan);
+        }
+        return Array.AsReadOnly(providers);
+    }
     /// <summary>
     /// Creates the selected runtime-state witnesses from the exact Core owner
     /// graph. The five P12 alias-family sections share the aggregate identity;
