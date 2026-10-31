@@ -644,10 +644,10 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             out diagnostic);
 
     /// <summary>
-    /// Removes census rows whose live source is the exact selected Core
-    /// session graph, including the four City families. Unity still captures
-    /// the complete quiescent vector and shared epoch, but it no longer supplies
-    /// City owner identities or values to Core.
+    /// Removes the four selected City census rows only after Core confirms
+    /// their captured identity, schema, cardinality, and revision against the
+    /// exact session graph. Unity still captures the full quiescent vector and
+    /// shared epoch; stale or mixed-roster City rows remain in the vector.
     /// </summary>
     internal static bool TryRemoveCoreOwnedSelectedRuntimeSections(
         IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
@@ -2311,10 +2311,9 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
 
     /// <summary>
     /// Composes the four selected City owner families from the exact Core
-    /// owners. A legacy/full host vector may still contain every selected row;
-    /// that path retains the established identity/value rebind checks. The
-    /// current Core-backed host path omits the selected rows, while preserving
-    /// any additional compatibility Cities in the host remainder.
+    /// owners. Matching selected rows may have been omitted after exact host
+    /// congruence checking; stale or mixed-roster full vectors retain the
+    /// established identity/value and compatibility behavior.
     /// </summary>
     internal static bool TryComposeCoreOwnedCitySections(
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -3351,9 +3350,22 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return false;
         }
 
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
                 selectedRuntimeOwnerGraph,
                 personStoreComposedSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> cityComposedSections,
+                out diagnostic))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core restored boundary could not compose its exact City owner rows.";
+            return false;
+        }
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+                selectedRuntimeOwnerGraph,
+                cityComposedSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> npcKnowledgeAndPlanSections,
                 out diagnostic))
         {
