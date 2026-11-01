@@ -18,7 +18,7 @@ The focused test source SHA-256 is `3c52330c2e170a724e7b2983c6e63e94e75ce6a436d1
 The new regression verifies that:
 
 - The adapter rebuilds the projection only for the exact installed Guard Arrest payload and selected target identity.
-- Missing or ambiguous target projection fails before dispatch, with owner revisions and the P12 mutation epoch unchanged.
+- A missing target projection fails before dispatch, with owner revisions and the P12 mutation epoch unchanged. The implementation also rejects ambiguous duplicate runtime projections, but this test does not add a separate duplicate-projection assertion.
 - Projection reconstruction itself does not mutate the Core action owner or advance the P12 epoch.
 - The normal selected action stage executes Arrest through Core, preserves the exact target and deterministic draw, writes the expected Justice and target owners, and advances the P12 epoch.
 - The resulting census is readable after the daily operation scope closes.
