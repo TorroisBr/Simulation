@@ -8045,6 +8045,336 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
+    [Test]
+    public void SelectedDailyV1LocalBuyDispatchRebuildsProjectionFromExactCoreSlot()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        NpcActionData buy = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-ComprarMercadoria.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        Assert.That(buy, Is.Not.Null);
+        Assert.That(buy.actionType, Is.EqualTo(NpcActionType.BuyGoods));
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        if (!config.Actions.Contains(buy)) config.Actions.Add(buy);
+        bool originalCanFail = buy.canFail;
+        float originalSuccessChance = buy.baseSuccessChance;
+        buy.canFail = true;
+        buy.baseSuccessChance = 1f;
+        GameObject hostObject = new GameObject(
+            "P12 selected Core local BuyGoods without action projection");
+        simulationObjects.Add(hostObject);
+        IDisposable dailyAdvanceScope = null;
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+
+            NpcRuntime buyer = runtime.NpcRuntimes.FirstOrDefault(npc =>
+                npc?.NpcData?.job?.jobType == NpcJobType.Merchant
+                && npc.SelectedRuntimeOwners?.Lifecycle?.LifeState == NpcLifeState.Alive
+                && npc.SelectedRuntimeOwners?.MerchantTradePlan?.IsActive != true
+                && npc.SelectedRuntimeOwners?.Travel?.IsTraveling != true
+                && npc.CurrentCity?.Market?.Counterparty?.LiquidityMode == MarketLiquidityMode.Open
+                && npc.CurrentCity?.SelectedRuntimeOwners?.Market != null
+                && graph.Definitions.Items.Values.Any(candidate =>
+                    npc.CurrentCity.SelectedRuntimeOwners.Market.GetAmount(candidate) > 0
+                    && npc.SelectedRuntimeOwners.MoneyAccount.Balance >=
+                        npc.CurrentCity.SelectedRuntimeOwners.Market.GetPrice(candidate)));
+            Assert.That(buyer, Is.Not.Null,
+                "UnityBootstrap-Daily-v1 must provide a live Merchant in an open local market.");
+            CityRuntime city = buyer.CurrentCity;
+            DailyV1NpcRuntimeOwners buyerOwner = buyer.SelectedRuntimeOwners;
+            Assert.That(city, Is.Not.Null);
+            Assert.That(buyerOwner, Is.Not.Null);
+            Assert.That(buyer.CurrentActionRuntime, Is.Null);
+            Assert.That(buyer.CurrentAction, Is.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                buy.id, out DailyV1ActionDefinition actionDefinition), Is.True);
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue));
+
+            DailyV1ItemDefinition item = graph.Definitions.Items.Values
+                .Where(candidate => city.SelectedRuntimeOwners.Market.GetAmount(candidate) > 0
+                    && buyerOwner.MoneyAccount.Balance >=
+                        city.SelectedRuntimeOwners.Market.GetPrice(candidate))
+                .OrderBy(candidate => candidate.DefinitionId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            Assert.That(item, Is.Not.Null);
+            Assert.That(buyer.TryGetSelectedDailyV1ItemAsset(item, out ItemData itemAsset), Is.True);
+            Assert.That(itemAsset, Is.Not.Null);
+            float expectedUnitPrice = city.SelectedRuntimeOwners.Market.GetPrice(item);
+            Assert.That(expectedUnitPrice, Is.GreaterThan(0f));
+            int inventoryBeforeSetup = buyerOwner.Inventory.GetAmount(item);
+            int marketBeforeSetup = city.SelectedRuntimeOwners.Market.GetAmount(item);
+            Assert.That(marketBeforeSetup, Is.GreaterThan(0));
+            float balanceBeforeSetup = buyerOwner.MoneyAccount.Balance;
+            Assert.That(balanceBeforeSetup, Is.GreaterThanOrEqualTo(expectedUnitPrice));
+
+            foreach (NpcRuntime participant in city.ImportantNpcs)
+            {
+                Assert.That(participant?.RuntimeId, Is.Not.Null);
+                PersonId personId = new PersonId(
+                    "p12-selected-core-buy-person-" + participant.RuntimeId);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+
+            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+                graph.Definitions,
+                actionDefinition,
+                null,
+                city.RuntimeId,
+                item,
+                1,
+                expectedUnitPrice,
+                1f,
+                NpcTravelReason.None,
+                0f,
+                "core-buy-decision-" + buyerOwner.RuntimeId,
+                "core-buy-occurrence-" + buyerOwner.RuntimeId,
+                null,
+                null,
+                out DailyV1NpcActionPayloadOwner exactPayload), Is.True);
+            Assert.That(buyerOwner.ActionSlot.TrySetCurrentAction(
+                actionDefinition, exactPayload), Is.True);
+            buyerOwner.ActionSlot.NotifyCurrentActionMutationCommitted();
+
+            NpcActionRuntime initialProjection = new NpcActionRuntime(
+                buy, city, itemAsset, exactPayload.Amount, exactPayload.ExpectedUnitPrice);
+            Assert.That(initialProjection.TryUseSelectedPayload(
+                exactPayload, graph.Definitions), Is.True);
+            buyer.SetCurrentActionRuntime(initialProjection);
+            Assert.That(buyer.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            MethodInfo beginDailyAdvanceScope = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginDailyAdvanceScope, Is.Not.Null);
+            object[] scopeArguments = { "runtime.advance-day", null };
+            Assert.That(beginDailyAdvanceScope.Invoke(runtime, scopeArguments), Is.EqualTo(true));
+            dailyAdvanceScope = scopeArguments[1] as IDisposable;
+            Assert.That(dailyAdvanceScope, Is.Not.Null);
+
+            WritePrivateField<NpcActionRuntime>(buyer, "currentActionRuntime", null);
+            WritePrivateField<NpcActionData>(buyer, "currentAction", null);
+            Assert.That(buyer.CurrentActionRuntime, Is.Null);
+            Assert.That(buyerOwner.ActionSlot.CurrentAction, Is.SameAs(actionDefinition));
+            Assert.That(buyerOwner.ActionSlot.CurrentPayload, Is.SameAs(exactPayload));
+
+            long actionRevisionBeforeRecovery = buyerOwner.ActionSlot.Revision;
+            long accountRevisionBeforeRecovery = buyerOwner.MoneyAccount.Revision;
+            long inventoryRevisionBeforeRecovery = buyerOwner.Inventory.Revision;
+            long marketRevisionBeforeRecovery = city.SelectedRuntimeOwners.Market.Revision;
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochBeforeRecovery,
+                out ContinuationCensusFailure epochBeforeFailure),
+                Is.True, epochBeforeFailure.ToString());
+            MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                "TryCreateSelectedActorActionExecutionBoundary",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(createBoundary, Is.Not.Null);
+            object[] createArguments = { buyer, null, null };
+            Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true));
+            IDailyV1SelectedActorActionExecutionBoundary actorBoundary =
+                createArguments[2] as IDailyV1SelectedActorActionExecutionBoundary;
+            Assert.That(actorBoundary, Is.Not.Null);
+            MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+            Assert.That(getDispatchBoundary, Is.Not.Null);
+
+            List<CityRuntime> cityProjections = ReadPrivateField<List<CityRuntime>>(runtime, "cities");
+            int cityProjectionIndex = cityProjections.IndexOf(city);
+            Assert.That(cityProjectionIndex, Is.GreaterThanOrEqualTo(0));
+            CoreSelectedActionCountingRandomSource rejectedRandomSource =
+                new CoreSelectedActionCountingRandomSource();
+            FieldInfo selectedBindingsField = typeof(NpcRuntime).GetField(
+                "selectedDefinitionBindings", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(selectedBindingsField, Is.Not.Null);
+            object selectedBindings = selectedBindingsField.GetValue(buyer);
+            Assert.That(selectedBindings, Is.Not.Null);
+            FieldInfo itemAssetsField = selectedBindings.GetType().GetField(
+                "assetsByNode", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(itemAssetsField, Is.Not.Null);
+            System.Collections.IDictionary itemAssetsByNode =
+                itemAssetsField.GetValue(selectedBindings) as System.Collections.IDictionary;
+            Assert.That(itemAssetsByNode, Is.Not.Null);
+            Assert.That(itemAssetsByNode.Contains(item), Is.True);
+            object exactItemAsset = itemAssetsByNode[item];
+            itemAssetsByNode.Remove(item);
+            Assert.That(itemAssetsByNode.Contains(item), Is.False);
+            try
+            {
+                object[] missingItemBindingArguments = { buyerOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, missingItemBindingArguments),
+                    Is.EqualTo(false));
+                Assert.That(missingItemBindingArguments[1], Is.Null);
+                Assert.That(buyer.CurrentActionRuntime, Is.Null,
+                    "A missing exact ItemData binding cannot reconstruct the BuyGoods compatibility view.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, buyerOwner, rejectedRandomSource, runtime.CurrentDay,
+                        actorBoundary, out _, out _, out _));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+                Assert.That(buyerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+                Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+                Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long missingItemEpoch, out ContinuationCensusFailure missingItemFailure),
+                    Is.True, missingItemFailure.ToString());
+                Assert.That(missingItemEpoch, Is.EqualTo(mutationEpochBeforeRecovery));
+            }
+            finally
+            {
+                if (!itemAssetsByNode.Contains(item)) itemAssetsByNode.Add(item, exactItemAsset);
+            }
+
+
+            cityProjections.RemoveAt(cityProjectionIndex);
+            try
+            {
+                object[] missingCityArguments = { buyerOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, missingCityArguments),
+                    Is.EqualTo(false));
+                Assert.That(missingCityArguments[1], Is.Null);
+                Assert.That(buyer.CurrentActionRuntime, Is.Null,
+                    "A missing exact City projection cannot reconstruct the BuyGoods compatibility view.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, buyerOwner, rejectedRandomSource, runtime.CurrentDay,
+                        actorBoundary, out _, out _, out _));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+                Assert.That(buyerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+                Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+                Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long missingCityEpoch, out ContinuationCensusFailure missingCityFailure),
+                    Is.True, missingCityFailure.ToString());
+                Assert.That(missingCityEpoch, Is.EqualTo(mutationEpochBeforeRecovery));
+            }
+            finally
+            {
+                cityProjections.Insert(cityProjectionIndex, city);
+            }
+
+            cityProjections.Add(city);
+            try
+            {
+                object[] ambiguousCityArguments = { buyerOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, ambiguousCityArguments),
+                    Is.EqualTo(false));
+                Assert.That(ambiguousCityArguments[1], Is.Null);
+                Assert.That(buyer.CurrentActionRuntime, Is.Null,
+                    "Duplicate matching City projections are ambiguous and cannot authorize reconstruction.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, buyerOwner, rejectedRandomSource, runtime.CurrentDay,
+                        actorBoundary, out _, out _, out _));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+                Assert.That(buyerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+                Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+                Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long ambiguousCityEpoch, out ContinuationCensusFailure ambiguousCityFailure),
+                    Is.True, ambiguousCityFailure.ToString());
+                Assert.That(ambiguousCityEpoch, Is.EqualTo(mutationEpochBeforeRecovery));
+            }
+            finally
+            {
+                cityProjections.RemoveAt(cityProjections.Count - 1);
+            }
+
+            object[] recoveredDispatchArguments = { buyerOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(actorBoundary, recoveredDispatchArguments),
+                Is.EqualTo(true));
+            Assert.That(recoveredDispatchArguments[1],
+                Is.InstanceOf<IDailyV1SelectedActionDispatchBoundary>());
+            NpcActionRuntime compatibilityProjection = buyer.CurrentActionRuntime;
+            Assert.That(compatibilityProjection, Is.Not.Null);
+            Assert.That(compatibilityProjection.SelectedOwner, Is.SameAs(exactPayload));
+            Assert.That(compatibilityProjection.Action, Is.SameAs(buy));
+            Assert.That(compatibilityProjection.TargetCity, Is.SameAs(city));
+            Assert.That(compatibilityProjection.TargetItem, Is.SameAs(itemAsset));
+            Assert.That(compatibilityProjection.Amount, Is.EqualTo(exactPayload.Amount));
+            Assert.That(compatibilityProjection.ExpectedUnitPrice,
+                Is.EqualTo(exactPayload.ExpectedUnitPrice));
+            Assert.That(compatibilityProjection.OriginDecisionId,
+                Is.EqualTo(exactPayload.OriginDecisionId));
+            Assert.That(compatibilityProjection.StableOccurrenceKey,
+                Is.EqualTo(exactPayload.StableOccurrenceKey));
+            Assert.That(compatibilityProjection.MatchesSelectedOwner(), Is.True);
+            Assert.That(buyerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+            Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+            Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterRecovery,
+                out ContinuationCensusFailure epochAfterRecoveryFailure),
+                Is.True, epochAfterRecoveryFailure.ToString());
+            Assert.That(mutationEpochAfterRecovery, Is.EqualTo(mutationEpochBeforeRecovery),
+                "Rebuilding the exact BuyGoods compatibility view is not a P12 owner write.");
+
+            CoreSelectedActionCountingRandomSource randomSource =
+                new CoreSelectedActionCountingRandomSource();
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                graph, buyerOwner, randomSource, runtime.CurrentDay, actorBoundary,
+                out bool actionSucceeded, out NpcActionResultType? resultType,
+                out string resultMessage), Is.True);
+            Assert.That(actionSucceeded, Is.True);
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+            Assert.That(resultMessage, Is.Null);
+            Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+            Assert.That(randomSource.StreamKeys.Single(),
+                Is.EqualTo("action-success|" + buyerOwner.RuntimeId + "|"
+                    + exactPayload.OriginDecisionId + "|"
+                    + actionDefinition.DefinitionId + "|" + runtime.CurrentDay));
+            Assert.That(buyerOwner.MoneyAccount.Balance, Is.LessThan(balanceBeforeSetup));
+            Assert.That(buyerOwner.Inventory.GetAmount(item), Is.EqualTo(inventoryBeforeSetup + 1));
+            Assert.That(city.SelectedRuntimeOwners.Market.GetAmount(item), Is.EqualTo(marketBeforeSetup - 1));
+            Assert.That(buyerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery + 1));
+            Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery + 1));
+            Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery + 1));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterSale,
+                out ContinuationCensusFailure epochAfterSaleFailure),
+                Is.True, epochAfterSaleFailure.ToString());
+            Assert.That(mutationEpochAfterSale, Is.EqualTo(mutationEpochBeforeRecovery + 3),
+                "The successful selected purchase retains its existing account, inventory, and Market commit epochs.");
+            dailyAdvanceScope.Dispose();
+            dailyAdvanceScope = null;
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
+            dailyAdvanceScope?.Dispose();
+            buy.canFail = originalCanFail;
+            buy.baseSuccessChance = originalSuccessChance;
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
     [TestCase(ScheduledDirectiveMode.ForceOutcome)]
     [TestCase(ScheduledDirectiveMode.RequestAction)]
     public void SelectedDailyV1EscapeCompletesStatusAndDirectiveWithoutCrimeProvider(

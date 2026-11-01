@@ -12806,7 +12806,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             bool isSteal = actionType == DailyV1NpcDefinitionRules.StealActionTypeValue;
             bool isLocalOpenMarketSell =
                 actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue;
-            bool hasExactSupportedPayloadShape = isLocalOpenMarketSell
+            bool isLocalOpenMarketBuy =
+                actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue;
+            bool isLocalOpenMarketTrade = isLocalOpenMarketSell || isLocalOpenMarketBuy;
+            bool hasExactSupportedPayloadShape = isLocalOpenMarketTrade
                 ? payload != null
                     && payload.TargetNpcRuntimeId == null
                     && !string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
@@ -12847,7 +12850,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     action.DefinitionId, out DailyV1ActionDefinition admittedAction)
                 && ReferenceEquals(action, admittedAction)
                 && (isHideOrEscape || isFleeCity || isGuardArrest || isSteal
-                    || isLocalOpenMarketSell)
+                    || isLocalOpenMarketTrade)
                 && ReferenceEquals(payload?.Action, action)
                 && hasExactSupportedPayloadShape
                 && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
@@ -12910,7 +12913,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 || actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
                 || actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue
                 || actionType == DailyV1NpcDefinitionRules.StealActionTypeValue
-                || (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                || ((actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                    || actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue)
                     && !hasExactCurrentActionProjection);
             if (selectedCoreProjectionlessAction
                 && !IsExactSelectedCoreProjectionlessDispatchActionSlot(actor))
@@ -12919,7 +12923,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             if (!hasExactCurrentActionProjection)
             {
                 // Missing compatibility projections are supported for selected Core-owned
-                // Crime, Guard Arrest, Steal, FleeCity, and local open-market SellGoods actions.
+                // Crime, Guard Arrest, Steal, FleeCity, and local open-market BuyGoods/SellGoods actions.
                 // A present stale projection remains an identity error and fails closed.
                 if (exactRuntime.CurrentActionRuntime != null
                     || !IsExactSelectedCoreProjectionlessDispatchActionSlot(actor))
@@ -12959,7 +12963,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     && !TryGetExactCityProjectionByRuntimeId(
                         payload.TargetCityRuntimeId, out targetCityProjection))
                     return false;
-                if (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                if ((actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                        || actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue)
                     && (!TryGetExactCityProjectionByRuntimeId(
                             payload.TargetCityRuntimeId, out targetCityProjection)
                         || !ReferenceEquals(targetCityProjection, exactRuntime.CurrentCity)
@@ -12968,7 +12973,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     return false;
 
                 NpcActionRuntime compatibilityProjection;
-                if (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue)
+                if (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                    || actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue)
                 {
                     compatibilityProjection = new NpcActionRuntime(
                         actionAsset, targetCityProjection, targetItemProjection,
@@ -12996,14 +13002,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     || !HasExactCurrentActionProjection(actor))
                     return false;
 
-                // Hide, Escape, Guard Arrest, Steal, FleeCity, and local open-market SellGoods
+                // Hide, Escape, Guard Arrest, Steal, FleeCity, and local open-market BuyGoods/SellGoods
                 // already have Core-owned eligibility, roll, owner mutation, and P12 dispatch.
                 // The Unity action object is rebuilt only as the compatibility view of the
                 // exact Core payload; it does not execute the selected action or decide its outcome.
                 if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
                     || actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue
                     || actionType == DailyV1NpcDefinitionRules.StealActionTypeValue
-                    || actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue)
+                    || actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                    || actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue)
                 {
                     dispatchBoundary = new SelectedActionDispatchBoundaryAdapter(
                         runtime, exactRuntime, compatibilityProjection, actionAsset);
