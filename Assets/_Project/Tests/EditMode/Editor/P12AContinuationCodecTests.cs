@@ -224,7 +224,7 @@ public sealed class P12AContinuationCodecTests
     [Test]
     public void DotNetV2DescriptorRoundTripsThroughExplicitAtomicSlotAndUnityRejectsBeforeStaging()
     {
-        string root = Path.Combine(Path.GetTempPath(), "P12AContinuationStoreTests", Guid.NewGuid().ToString("N"));
+        string root = Path.Combine(Path.GetTempPath(), "p12-" + Guid.NewGuid().ToString("N"));
         string unityRoot = Path.Combine(root, "unity-host");
         string dotNetRoot = Path.Combine(root, "dotnet-host");
         try
