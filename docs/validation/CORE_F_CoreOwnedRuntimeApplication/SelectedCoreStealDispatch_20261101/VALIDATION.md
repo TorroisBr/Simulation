@@ -63,4 +63,4 @@ The following earlier attempts are not accepted validation results and remain pr
 
 ## Review status
 
-The first exact-tip review of commit `7559de3026580278798b365a8b1c4d90b8eb8605` returned NEEDS_CHANGES for the non-tautological no-draw evidence described above; it found no production defect. The current test correction and its exact-source validation are ready for independent re-review. This evidence does not accept or promote the checkpoint by itself.
+The first exact-tip review of commit `7559de3026580278798b365a8b1c4d90b8eb8605` returned NEEDS_CHANGES for the no-draw evidence gap described above; it found no production defect. The test was corrected, revalidated, and re-reviewed at exact commit `a8a65d3dff1cf02713a5fbfea92171ad7f3998cf` (tree `97a3a7a78ae76847e981a2a01f2c831523f136d9`). The independent review passed with no actionable findings and is recorded in [`the exact-tip review`](../../../reviews/CORE_F_SelectedCoreStealDispatch_REVIEW_A8A65D3D.md). This remains a candidate checkpoint only; it does not promote Core canonical.
