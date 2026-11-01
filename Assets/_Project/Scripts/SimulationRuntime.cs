@@ -12804,12 +12804,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             bool isFleeCity = actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue;
             bool isGuardArrest = actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue;
             bool isSteal = actionType == DailyV1NpcDefinitionRules.StealActionTypeValue;
+            bool hasActiveMerchantTradePlan = actor?.MerchantTradePlan?.IsActive == true;
             bool isLocalOpenMarketSell =
-                actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue;
+                actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                    && !hasActiveMerchantTradePlan;
+            bool isLocalPlannedMarketSell =
+                actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                    && hasActiveMerchantTradePlan;
             bool isLocalOpenMarketBuy =
-                actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue;
-            bool isLocalOpenMarketTrade = isLocalOpenMarketSell || isLocalOpenMarketBuy;
-            bool hasExactSupportedPayloadShape = isLocalOpenMarketTrade
+                actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+                    && !hasActiveMerchantTradePlan;
+            bool isSelectedCoreMarketAction = isLocalOpenMarketSell
+                || isLocalPlannedMarketSell || isLocalOpenMarketBuy;
+            bool hasExactSupportedPayloadShape = isSelectedCoreMarketAction
                 ? payload != null
                     && payload.TargetNpcRuntimeId == null
                     && !string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
@@ -12817,7 +12824,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                         actor?.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal)
                     && payload.TargetItem != null
                     && payload.Amount > 0
-                    && actor?.MerchantTradePlan?.IsActive != true
+                    && (isLocalPlannedMarketSell
+                        ? actor?.MerchantTradePlan != null
+                            && ReferenceEquals(payload.TargetItem,
+                                actor.MerchantTradePlan.ItemDefinition)
+                            && payload.Amount <= actor.MerchantTradePlan.RemainingAmount
+                            && string.Equals(payload.TargetCityRuntimeId,
+                                actor.MerchantTradePlan.TargetCityRuntimeId,
+                                StringComparison.Ordinal)
+                        : !hasActiveMerchantTradePlan)
                 : isFleeCity
                     ? payload != null
                         && payload.TargetNpcRuntimeId == null
@@ -12850,7 +12865,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     action.DefinitionId, out DailyV1ActionDefinition admittedAction)
                 && ReferenceEquals(action, admittedAction)
                 && (isHideOrEscape || isFleeCity || isGuardArrest || isSteal
-                    || isLocalOpenMarketTrade)
+                    || isSelectedCoreMarketAction)
                 && ReferenceEquals(payload?.Action, action)
                 && hasExactSupportedPayloadShape
                 && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
@@ -12923,7 +12938,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             if (!hasExactCurrentActionProjection)
             {
                 // Missing compatibility projections are supported for selected Core-owned
-                // Crime, Guard Arrest, Steal, FleeCity, and local open-market BuyGoods/SellGoods actions.
+                // Crime, Guard Arrest, Steal, FleeCity, local open-market trades, and active-plan local sales.
                 // A present stale projection remains an identity error and fails closed.
                 if (exactRuntime.CurrentActionRuntime != null
                     || !IsExactSelectedCoreProjectionlessDispatchActionSlot(actor))
@@ -13002,7 +13017,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     || !HasExactCurrentActionProjection(actor))
                     return false;
 
-                // Hide, Escape, Guard Arrest, Steal, FleeCity, and local open-market BuyGoods/SellGoods
+                // Hide, Escape, Guard Arrest, Steal, FleeCity, local open-market trades, and active-plan local sales
                 // already have Core-owned eligibility, roll, owner mutation, and P12 dispatch.
                 // The Unity action object is rebuilt only as the compatibility view of the
                 // exact Core payload; it does not execute the selected action or decide its outcome.
