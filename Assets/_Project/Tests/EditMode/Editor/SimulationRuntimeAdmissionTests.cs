@@ -6846,6 +6846,70 @@ public sealed class SimulationRuntimeAdmissionTests
                 "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
                 Assert.That(getDispatchBoundary, Is.Not.Null);
                 object[] dispatchArguments = { actorOwner, null };
+
+                long justiceRevisionBeforeRejectedDispatch = graph.JusticeRecordsOwner.Revision;
+                long npcCrimeJusticeRevisionBeforeRejectedDispatch = actorOwner.CrimeJusticeRevision;
+                RuntimeIdAllocator idAllocator = ReadPrivateField<RuntimeIdAllocator>(runtime, "runtimeIdAllocator");
+                SimulationRecordSequence recordSequence = ReadPrivateField<SimulationRecordSequence>(
+                    runtime, "simulationRecordSequence");
+                long eventIdRevisionBeforeRejectedDispatch = idAllocator.GetCensusRevision(
+                    RuntimeIdAllocatorCensusCounter.Events);
+                long recordSequenceRevisionBeforeRejectedDispatch = recordSequence.CensusRevision;
+                float bountyBeforeRejectedDispatch = justice.GetBounty(actor, actor.CurrentCity);
+                DailyV1JusticeSentenceOwner sentenceBeforeRejectedDispatch =
+                    graph.JusticeRecordsOwner.FindActiveSentence(actor.RuntimeId);
+                Assert.That(sentenceBeforeRejectedDispatch, Is.Not.Null);
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochBeforeRejectedDispatch,
+                    out ContinuationCensusFailure epochBeforeRejectedFailure),
+                    Is.True, epochBeforeRejectedFailure.ToString());
+
+                SimulationRuntimeAdmissionContext admittedContext =
+                    ReadPrivateField<SimulationRuntimeAdmissionContext>(runtime, "runtimeAdmissionContext");
+                Assert.That(admittedContext, Is.Not.Null);
+                WritePrivateField<SimulationRuntimeAdmissionContext>(runtime.ExecutionBoundaryState,
+                    "<AdmissionContext>k__BackingField", null);
+                try
+                {
+                    Assert.That(getDispatchBoundary.Invoke(actorBoundary, dispatchArguments),
+                        Is.EqualTo(false));
+                    Assert.That(dispatchArguments[1], Is.Null);
+                    Assert.That(actor.CurrentActionRuntime, Is.Null,
+                        "A rejected projectionless Escape does not reconstruct a compatibility projection.");
+                    Assert.That(graph.JusticeRecordsOwner.Revision,
+                        Is.EqualTo(justiceRevisionBeforeRejectedDispatch));
+                    Assert.That(actorOwner.CrimeJusticeRevision,
+                        Is.EqualTo(npcCrimeJusticeRevisionBeforeRejectedDispatch));
+                    Assert.That(actorOwner.ActionSlot.Revision,
+                        Is.EqualTo(actionRevisionBeforeProjectionRecovery));
+                    Assert.That(idAllocator.GetCensusRevision(RuntimeIdAllocatorCensusCounter.Events),
+                        Is.EqualTo(eventIdRevisionBeforeRejectedDispatch));
+                    Assert.That(recordSequence.CensusRevision,
+                        Is.EqualTo(recordSequenceRevisionBeforeRejectedDispatch));
+                    Assert.That(justice.GetBounty(actor, actor.CurrentCity),
+                        Is.EqualTo(bountyBeforeRejectedDispatch));
+                    Assert.That(graph.JusticeRecordsOwner.FindActiveSentence(actor.RuntimeId),
+                        Is.SameAs(sentenceBeforeRejectedDispatch));
+                    Assert.That(justice.IsArrested(actor), Is.True);
+                    Assert.That(justice.WasArrestedToday(actor), Is.False);
+                    Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                        out long mutationEpochAfterRejectedDispatch,
+                        out ContinuationCensusFailure epochAfterRejectedFailure),
+                        Is.True, epochAfterRejectedFailure.ToString());
+                    Assert.That(mutationEpochAfterRejectedDispatch,
+                        Is.EqualTo(mutationEpochBeforeRejectedDispatch),
+                        "Rejected projectionless Escape leaves Justice, NPC, event, sequence, and census state unchanged.");
+                }
+                finally
+                {
+                    WritePrivateField<SimulationRuntimeAdmissionContext>(runtime.ExecutionBoundaryState,
+                        "<AdmissionContext>k__BackingField", admittedContext);
+                }
+
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochBeforeProjectionRecovery,
+                    out ContinuationCensusFailure epochBeforeProjectionRecoveryFailure),
+                    Is.True, epochBeforeProjectionRecoveryFailure.ToString());
                 Assert.That(getDispatchBoundary.Invoke(actorBoundary, dispatchArguments),
                     Is.EqualTo(true));
                 IDailyV1SelectedActionDispatchBoundary dispatchBoundary =
@@ -6858,6 +6922,13 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(actorOwner.ActionSlot.Revision,
                     Is.EqualTo(actionRevisionBeforeProjectionRecovery),
                     "Restoring a compatibility projection does not write the Core action owner.");
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochAfterProjectionRecovery,
+                    out ContinuationCensusFailure epochAfterProjectionRecoveryFailure),
+                    Is.True, epochAfterProjectionRecoveryFailure.ToString());
+                Assert.That(mutationEpochAfterProjectionRecovery,
+                    Is.EqualTo(mutationEpochBeforeProjectionRecovery),
+                    "Restoring a compatibility projection does not publish a P12 owner mutation epoch.");
                 Assert.That(dispatchBoundary.TryGetCrimeActionBoundary(
                     actorOwner, actionDefinition,
                     out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary crimeBoundary),
@@ -6868,9 +6939,6 @@ public sealed class SimulationRuntimeAdmissionTests
                 long justiceRevisionBefore = graph.JusticeRecordsOwner.Revision;
                 long npcCrimeJusticeRevisionBefore = actorOwner.CrimeJusticeRevision;
                 float bountyBefore = justice.GetBounty(actor, actor.CurrentCity);
-                RuntimeIdAllocator idAllocator = ReadPrivateField<RuntimeIdAllocator>(runtime, "runtimeIdAllocator");
-                SimulationRecordSequence recordSequence = ReadPrivateField<SimulationRecordSequence>(
-                runtime, "simulationRecordSequence");
                 long eventIdRevisionBefore = idAllocator.GetCensusRevision(RuntimeIdAllocatorCensusCounter.Events);
                 long recordSequenceRevisionBefore = recordSequence.CensusRevision;
                 Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
