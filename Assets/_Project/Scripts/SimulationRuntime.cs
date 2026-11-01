@@ -12799,6 +12799,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             DailyV1ActionDefinition action = actor?.ActionSlot?.CurrentAction;
             DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
             int? actionType = action?.Values.actionType?.Value;
+            bool isCrossCityBuy = IsExactSelectedCrossCityBuySlot(
+                actor, exactRuntime, action, payload);
             bool isHideOrEscape = actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
                 || actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue;
             bool isFleeCity = actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue;
@@ -12819,16 +12821,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             bool isLocalOpenMarketBuy =
                 actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
                     && !hasActiveMerchantTradePlan;
+            isLocalOpenMarketBuy = isLocalOpenMarketBuy && !isCrossCityBuy;
             bool isSelectedCoreMarketAction = isLocalOpenMarketSell
-                || isLocalPlannedMarketSell || isPlannedNpcSell || isLocalOpenMarketBuy;
+                || isLocalPlannedMarketSell || isPlannedNpcSell || isLocalOpenMarketBuy
+                || isCrossCityBuy;
             bool hasExactSupportedPayloadShape = isSelectedCoreMarketAction
                 ? payload != null
                     && (isPlannedNpcSell
                         ? payload.TargetCityRuntimeId == null
                         : payload.TargetNpcRuntimeId == null
                             && !string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
-                            && string.Equals(payload.TargetCityRuntimeId,
-                                actor?.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal))
+                            && (isCrossCityBuy
+                                ? !string.Equals(payload.TargetCityRuntimeId,
+                                    actor?.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal)
+                                : string.Equals(payload.TargetCityRuntimeId,
+                                    actor?.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal)))
                     && payload.TargetItem != null
                     && payload.Amount > 0
                     && (isLocalPlannedMarketSell || isPlannedNpcSell
@@ -12879,6 +12886,32 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 && hasExactSupportedPayloadShape
                 && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
                     graph.Definitions, action);
+        }
+
+        private static bool IsExactSelectedCrossCityBuySlot(
+            DailyV1NpcRuntimeOwners actor,
+            NpcRuntime exactRuntime,
+            DailyV1ActionDefinition action,
+            DailyV1NpcActionPayloadOwner payload)
+        {
+            return actor != null
+                && exactRuntime != null
+                && action?.Values.actionType?.Value
+                    == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+                && ReferenceEquals(payload?.Action, action)
+                && payload.TargetNpcRuntimeId == null
+                && !string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+                && payload.TargetItem != null
+                && payload.Amount > 0
+                && actor.MerchantTradePlan != null
+                && !actor.MerchantTradePlan.IsActive
+                && exactRuntime.CurrentCity != null
+                && actor.Travel != null
+                && !actor.Travel.IsTraveling
+                && string.Equals(actor.Travel.CurrentCityRuntimeId,
+                    exactRuntime.CurrentCity.RuntimeId, StringComparison.Ordinal)
+                && !string.Equals(payload.TargetCityRuntimeId,
+                    exactRuntime.CurrentCity.RuntimeId, StringComparison.Ordinal);
         }
 
         private bool IsExactSelectedCoreCrimeOrGuardActionSlot(DailyV1NpcRuntimeOwners actor)
@@ -12947,7 +12980,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             if (!hasExactCurrentActionProjection)
             {
                 // Missing compatibility projections are supported for selected Core-owned
-                // Crime, Guard Arrest, Steal, FleeCity, local open-market trades, and active-plan local or NPC sales.
+                // Crime, Guard Arrest, Steal, FleeCity, local open-market trades,
+                // active-plan local or NPC sales, and cross-city BuyGoods.
                 // A present stale projection remains an identity error and fails closed.
                 if (exactRuntime.CurrentActionRuntime != null
                     || !IsExactSelectedCoreProjectionlessDispatchActionSlot(actor))
@@ -12969,6 +13003,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 bool isPlannedNpcSale = actionType
                     == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
                     && !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId);
+                bool isCrossCityBuy = IsExactSelectedCrossCityBuySlot(
+                    actor, exactRuntime, actor?.ActionSlot?.CurrentAction, payload);
                 if (actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue
                     || actionType == DailyV1NpcDefinitionRules.StealActionTypeValue
                     || isPlannedNpcSale)
@@ -12999,6 +13035,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                         || !ReferenceEquals(targetCityProjection, exactRuntime.CurrentCity)
                         || !ReferenceEquals(targetNpcProjection.CurrentCity,
                             targetCityProjection)
+                        || !exactRuntime.TryGetSelectedDailyV1ItemAsset(
+                            payload.TargetItem, out targetItemProjection))
+                        return false;
+                }
+                else if (isCrossCityBuy)
+                {
+                    if (!TryGetExactCityProjectionByRuntimeId(
+                            payload.TargetCityRuntimeId, out targetCityProjection)
+                        || ReferenceEquals(targetCityProjection, exactRuntime.CurrentCity)
                         || !exactRuntime.TryGetSelectedDailyV1ItemAsset(
                             payload.TargetItem, out targetItemProjection))
                         return false;
@@ -13048,8 +13093,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     || !HasExactCurrentActionProjection(actor))
                     return false;
 
-                // Hide, Escape, Guard Arrest, Steal, FleeCity, local open-market trades, and active-plan local or NPC sales
-                // already have Core-owned eligibility, roll, owner mutation, and P12 dispatch.
+                // Hide, Escape, Guard Arrest, Steal, FleeCity, local open-market trades,
+                // cross-city BuyGoods, and active-plan local or NPC sales already have
+                // Core-owned eligibility, roll, owner mutation, and P12 dispatch.
                 // The Unity action object is rebuilt only as the compatibility view of the
                 // exact Core payload; it does not execute the selected action or decide its outcome.
                 if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
