@@ -6446,6 +6446,260 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
+    [Test]
+    public void SelectedDailyV1HideDispatchBoundaryUsesExactCoreSlotWithoutUnityActionProjection()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
+            entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
+        NpcActionData hide = SimulationTestFactory.CreateAction(
+            "core-hide-without-unity-action-projection",
+            NpcActionType.Hide, NpcActionCategory.Justice);
+        hide.canFail = true;
+        hide.baseSuccessChance = 1f;
+        hide.crimeSettings.hiddenDays = 2;
+        config.Actions.Add(hide);
+
+        GameObject hostObject = new GameObject("P12 selected Core Hide without action projection");
+        simulationObjects.Add(hostObject);
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+            Assert.That(graph.JusticeRecordsOwner, Is.Not.Null);
+
+            NpcRuntime actor = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData != null && string.Equals(
+                    npc.NpcData.id, actorConfig.npc.id, StringComparison.Ordinal));
+            DailyV1NpcRuntimeOwners actorOwner = actor.SelectedRuntimeOwners;
+            Assert.That(actorOwner, Is.Not.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                hide.id, out DailyV1ActionDefinition actionDefinition), Is.True);
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.HideActionTypeValue));
+
+            foreach (NpcRuntime participant in actor.CurrentCity.ImportantNpcs)
+            {
+                Assert.That(participant?.NpcData, Is.Not.Null);
+                PersonId personId = new PersonId(
+                    "p12-selected-core-hide-person-" + participant.NpcData.id);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            Assert.That(actor.CurrentActionRuntime, Is.Null);
+            Assert.That(actor.CurrentAction, Is.Null);
+            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+                graph.Definitions, actionDefinition, null, null, null, 0,
+                0f, 1f, NpcTravelReason.None, 0f, null, null, null, null,
+                out DailyV1NpcActionPayloadOwner payload), Is.True);
+            // The fixture installs an exact Core slot to exercise the already
+            // admitted action stage without manufacturing a Unity projection.
+            Assert.That(actorOwner.ActionSlot.TrySetCurrentAction(
+                actionDefinition, payload), Is.True);
+            actorOwner.ActionSlot.NotifyCurrentActionMutationCommitted();
+
+            MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                "TryCreateSelectedActorActionExecutionBoundary",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(createBoundary, Is.Not.Null);
+            object[] createArguments = { actor, null, null };
+            Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true));
+            object actorBoundary = createArguments[2];
+            Assert.That(actorBoundary, Is.Not.Null);
+
+            MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+            Assert.That(getDispatchBoundary, Is.Not.Null);
+            PropertyInfo runtimeAdmissionProperty = typeof(SimulationRuntime).GetProperty(
+                "runtimeAdmissionContext", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(runtimeAdmissionProperty, Is.Not.Null);
+            SimulationRuntimeAdmissionContext liveRuntimeAdmission =
+                runtimeAdmissionProperty.GetValue(runtime) as SimulationRuntimeAdmissionContext;
+            Assert.That(liveRuntimeAdmission, Is.Not.Null);
+            Assert.That(runtime.ExecutionBoundaryState.AdmissionContext,
+                Is.SameAs(liveRuntimeAdmission));
+            Assert.That(liveRuntimeAdmission.IsOwnedByCurrentThread(), Is.True);
+
+            object[] dispatchArguments = { actorOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(actorBoundary, dispatchArguments),
+                Is.EqualTo(true));
+            IDailyV1SelectedActionDispatchBoundary dispatchBoundary =
+                dispatchArguments[1] as IDailyV1SelectedActionDispatchBoundary;
+            Assert.That(dispatchBoundary, Is.Not.Null);
+
+            Assert.That(dispatchBoundary.TryGetCrimeActionBoundary(
+                actorOwner, actionDefinition,
+                out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary crimeBoundary),
+                Is.True);
+            Assert.That(crimeBoundary, Is.Not.Null);
+            Assert.That(crimeBoundary.JusticeRecordsOwner,
+                Is.SameAs(graph.JusticeRecordsOwner));
+
+            SimulationRuntimeAdmissionContext admittedContext =
+                ReadPrivateField<SimulationRuntimeAdmissionContext>(
+                    runtime, "runtimeAdmissionContext");
+            Assert.That(admittedContext, Is.Not.Null);
+            long crimeJusticeRevisionBeforeRejectedDispatch = actorOwner.CrimeJusticeRevision;
+            long actionRevisionBeforeRejectedDispatch = actorOwner.ActionSlot.Revision;
+            int hiddenDaysBeforeRejectedDispatch = actorOwner.HiddenState.RemainingDays;
+            int statusCountBeforeRejectedDispatch = actorOwner.Status.Statuses.Count;
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochBeforeRejectedDispatch,
+                out ContinuationCensusFailure epochBeforeRejectedFailure),
+                Is.True, epochBeforeRejectedFailure.ToString());
+
+            WritePrivateField<SimulationRuntimeAdmissionContext>(
+                runtime.ExecutionBoundaryState, "<AdmissionContext>k__BackingField", null);
+            object[] unadmittedCreateArguments = { actor, null, null };
+            Assert.That(createBoundary.Invoke(runtime, unadmittedCreateArguments),
+                Is.EqualTo(true));
+            object[] unadmittedDispatchArguments = { actorOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(
+                unadmittedCreateArguments[2], unadmittedDispatchArguments),
+                Is.EqualTo(false));
+            Assert.That(unadmittedDispatchArguments[1], Is.Null);
+            Assert.That(actorOwner.CrimeJusticeRevision,
+                Is.EqualTo(crimeJusticeRevisionBeforeRejectedDispatch));
+            Assert.That(actorOwner.ActionSlot.Revision,
+                Is.EqualTo(actionRevisionBeforeRejectedDispatch));
+            Assert.That(actorOwner.HiddenState.RemainingDays,
+                Is.EqualTo(hiddenDaysBeforeRejectedDispatch));
+            Assert.That(actorOwner.Status.Statuses.Count,
+                Is.EqualTo(statusCountBeforeRejectedDispatch));
+            WritePrivateField(runtime.ExecutionBoundaryState, "<AdmissionContext>k__BackingField", admittedContext);
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterRejectedDispatch,
+                out ContinuationCensusFailure epochAfterRejectedFailure),
+                Is.True, epochAfterRejectedFailure.ToString());
+            Assert.That(mutationEpochAfterRejectedDispatch,
+                Is.EqualTo(mutationEpochBeforeRejectedDispatch),
+                "An unadmitted projectionless dispatch leaves the owner mutation epoch unchanged.");
+
+            NpcActionData staleAction = config.Actions.First(candidate =>
+                candidate != null && !ReferenceEquals(candidate, hide));
+            NpcActionRuntime staleProjection = new NpcActionRuntime(staleAction);
+            WritePrivateField(actor, "currentActionRuntime", staleProjection);
+            WritePrivateField(actor, "currentAction", staleAction);
+            object[] staleDispatchArguments = { actorOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(actorBoundary, staleDispatchArguments),
+                Is.EqualTo(false));
+            Assert.That(staleDispatchArguments[1], Is.Null,
+                "A present but non-matching Unity projection fails closed.");
+            WritePrivateField<NpcActionRuntime>(actor, "currentActionRuntime", null);
+            WritePrivateField<NpcActionData>(actor, "currentAction", null);
+            Assert.That(actorOwner.CrimeJusticeRevision,
+                Is.EqualTo(crimeJusticeRevisionBeforeRejectedDispatch));
+            Assert.That(actorOwner.ActionSlot.Revision,
+                Is.EqualTo(actionRevisionBeforeRejectedDispatch));
+            Assert.That(actorOwner.HiddenState.RemainingDays,
+                Is.EqualTo(hiddenDaysBeforeRejectedDispatch));
+            Assert.That(actorOwner.Status.Statuses.Count,
+                Is.EqualTo(statusCountBeforeRejectedDispatch));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterStaleProjection,
+                out ContinuationCensusFailure epochAfterStaleFailure),
+                Is.True, epochAfterStaleFailure.ToString());
+            Assert.That(mutationEpochAfterStaleProjection,
+                Is.EqualTo(mutationEpochBeforeRejectedDispatch),
+                "A stale Unity projection cannot authorize a Core owner write.");
+
+            Assert.That(actor.CurrentActionRuntime, Is.Null,
+                "Dispatch uses the exact Core action slot without reconstructing a Unity NpcActionRuntime.");
+
+            JusticeSystem justice = ReadPrivateField<JusticeSystem>(runtime, "justiceSystem");
+            MethodInfo beginCrimeJusticeScope = typeof(SimulationRuntime).GetMethod(
+                "TryBeginP12CrimeJusticeActionScope",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(justice, Is.Not.Null);
+            Assert.That(beginCrimeJusticeScope, Is.Not.Null);
+            object[] scopeArguments = { new[] { actor }, true, null };
+            Assert.That(beginCrimeJusticeScope.Invoke(runtime, scopeArguments),
+                Is.EqualTo(true));
+            IDisposable warrantScope = scopeArguments[2] as IDisposable;
+            Assert.That(warrantScope, Is.Not.Null);
+            using (warrantScope)
+                Assert.That(justice.CreateOrIncreaseWarrant(
+                    actor, actor.CurrentCity, 12f, 4), Is.Not.Null);
+
+            long justiceRevisionBefore = graph.JusticeRecordsOwner.Revision;
+            long npcCrimeJusticeRevisionBefore = actorOwner.CrimeJusticeRevision;
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochBefore, out ContinuationCensusFailure epochBeforeFailure),
+                Is.True, epochBeforeFailure.ToString());
+            CoreHideCountingRandomSource randomSource = new CoreHideCountingRandomSource();
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                graph, actorOwner, randomSource, runtime.CurrentDay,
+                actorBoundary as IDailyV1SelectedActorActionExecutionBoundary,
+                out bool actionSucceeded, out NpcActionResultType? resultType,
+                out string resultMessage), Is.True);
+            Assert.That(actionSucceeded, Is.True);
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+            Assert.That(resultMessage, Is.Null);
+            Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+            Assert.That(randomSource.StreamKeys.Single(),
+                Is.EqualTo("action-success|" + actor.RuntimeId + "|"
+                    + actionDefinition.DefinitionId + "|"
+                    + actionDefinition.DefinitionId + "|" + runtime.CurrentDay));
+
+            DailyV1StatusDefinition hiddenStatus = graph.Definitions.Statuses[
+                graph.Definitions.Configuration.hiddenStatus];
+            Assert.That(actorOwner.HiddenState.RemainingDays,
+                Is.EqualTo(hide.crimeSettings.hiddenDays + 1));
+            Assert.That(actorOwner.Status.Contains(hiddenStatus), Is.True);
+            Assert.That(actor.IsHidden, Is.True);
+            Assert.That(graph.JusticeRecordsOwner.Revision,
+                Is.EqualTo(justiceRevisionBefore),
+                "Hide reads the exact Justice owner without mutating it.");
+            Assert.That(actorOwner.CrimeJusticeRevision,
+                Is.EqualTo(npcCrimeJusticeRevisionBefore + 2),
+                "The hidden timer and Hidden status retain separate P12 owner writes.");
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfter, out ContinuationCensusFailure epochAfterFailure),
+                Is.True, epochAfterFailure.ToString());
+            Assert.That(mutationEpochAfter, Is.EqualTo(mutationEpochBefore + 2),
+                "Each Hide owner write publishes its own admitted mutation epoch.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    private sealed class CoreHideCountingRandomSource : IAuthoritativeRandomSource
+    {
+        internal int DrawCount => StreamKeys.Count;
+        internal List<string> StreamKeys { get; } = new List<string>();
+
+        public float NextUnit(string streamKey, long drawIndex = 0L)
+        {
+            StreamKeys.Add(streamKey);
+            return 0f;
+        }
+
+        public DeterministicRandomStream CreateStream(string streamKey) =>
+            new DeterministicRandomSource(1).CreateStream(streamKey);
+    }
+
     [TestCase(ScheduledDirectiveMode.ForceOutcome)]
     [TestCase(ScheduledDirectiveMode.RequestAction)]
     public void SelectedDailyV1EscapeCompletesStatusAndDirectiveWithoutCrimeProvider(

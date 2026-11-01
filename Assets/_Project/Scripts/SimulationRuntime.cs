@@ -628,8 +628,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         {
             this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
             this.actorRuntime = actorRuntime ?? throw new ArgumentNullException(nameof(actorRuntime));
-            this.actionRuntime = actionRuntime ?? throw new ArgumentNullException(nameof(actionRuntime));
-            this.actionAsset = actionAsset ?? throw new ArgumentNullException(nameof(actionAsset));
+            // Core-only selected Hide dispatch can operate from the exact admitted
+            // owner slot when Unity has no current-action projection.
+            this.actionRuntime = actionRuntime;
+            this.actionAsset = actionAsset;
         }
 
         public bool TryGetSoloTravelBoundary(
@@ -774,23 +776,35 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         {
             boundary = null;
             DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
-            if (!TryGetExactActor(actor, action, out NpcRuntime exactActor)
-                || !ReferenceEquals(exactActor, actorRuntime)
+            int? actionType = action?.Values.actionType?.Value;
+            NpcRuntime exactActor = null;
+            bool projectionlessCoreHide = actionRuntime == null && actionAsset == null
+                && actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
+                && TryGetExactAdmittedCoreHideActor(actor, action, out exactActor);
+            if (!projectionlessCoreHide
+                && (!TryGetExactActor(actor, action, out exactActor)
+                    || !ReferenceEquals(exactActor, actorRuntime)))
+                return false;
+
+            if (!ReferenceEquals(exactActor, actorRuntime)
                 || graph == null || graph.JusticeRecordsOwner == null
                 || runtime.justiceSystem == null
                 || !ReferenceEquals(graph.JusticeRecordsOwner, runtime.justiceSystem.CoreOwner)
-                || (action.Values.actionType?.Value != DailyV1NpcDefinitionRules.HideActionTypeValue
-                    && action.Values.actionType?.Value != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue))
+                || (actionType != DailyV1NpcDefinitionRules.HideActionTypeValue
+                    && actionType != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue))
                 return false;
 
             DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
             if (payload == null || payload.TargetNpcRuntimeId != null
-                || payload.TargetCityRuntimeId != null || payload.TargetItem != null || payload.Amount != 0
-                || actionRuntime.TargetNpc != null || actionRuntime.TargetCity != null
-                || actionRuntime.TargetItem != null || actionRuntime.Amount != 0
-                || !actionRuntime.SuccessChanceMultiplier.Equals(payload.SuccessChanceMultiplier)
-                || !string.Equals(actionRuntime.OriginDecisionId, payload.OriginDecisionId,
-                    StringComparison.Ordinal))
+                || payload.TargetCityRuntimeId != null || payload.TargetItem != null || payload.Amount != 0)
+                return false;
+
+            if (!projectionlessCoreHide
+                && (actionRuntime.TargetNpc != null || actionRuntime.TargetCity != null
+                    || actionRuntime.TargetItem != null || actionRuntime.Amount != 0
+                    || !actionRuntime.SuccessChanceMultiplier.Equals(payload.SuccessChanceMultiplier)
+                    || !string.Equals(actionRuntime.OriginDecisionId, payload.OriginDecisionId,
+                        StringComparison.Ordinal)))
                 return false;
 
             boundary = new SelectedCrimeActionBoundaryAdapter(
@@ -936,12 +950,54 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 exactActor, result, crossCityTargetLocation, actionRuntime.TargetCity);
         }
 
+        private bool TryGetExactAdmittedCoreHideActor(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition expectedAction,
+            out NpcRuntime exactRuntime)
+        {
+            exactRuntime = null;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            if (actor == null || expectedAction == null || graph == null
+                || expectedAction.Values.actionType?.Value
+                    != DailyV1NpcDefinitionRules.HideActionTypeValue
+                || !ReferenceEquals(graph, actorRuntime.SelectedRuntimeOwnerGraph)
+                || runtime.runtimeAdmissionContext == null
+                || !ReferenceEquals(runtime.ExecutionBoundaryState.AdmissionContext,
+                    runtime.runtimeAdmissionContext)
+                || !runtime.runtimeAdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(graph.Definitions, actor.Definitions)
+                || !graph.ContainsExactNpcOwner(actor)
+                || string.IsNullOrWhiteSpace(expectedAction.DefinitionId)
+                || !graph.Definitions.Actions.TryGetValue(
+                    expectedAction.DefinitionId, out DailyV1ActionDefinition admittedAction)
+                || !ReferenceEquals(admittedAction, expectedAction)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentAction, expectedAction)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentPayload?.Action, expectedAction)
+                || !DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
+                    graph.Definitions, expectedAction)
+                || !TryFindExactNpcRuntime(actor, out exactRuntime)
+                || !ReferenceEquals(exactRuntime, actorRuntime))
+            {
+                exactRuntime = null;
+                return false;
+            }
+
+            DailyV1NpcActionPayloadOwner payload = actor.ActionSlot.CurrentPayload;
+            return payload.TargetNpcRuntimeId == null
+                && payload.TargetCityRuntimeId == null
+                && payload.TargetItem == null
+                && payload.Amount == 0;
+        }
+
         private bool TryGetExactActor(
             DailyV1NpcRuntimeOwners actor,
             DailyV1ActionDefinition expectedAction,
             out NpcRuntime exactRuntime)
         {
             exactRuntime = null;
+            if (actionRuntime == null || actionAsset == null
+                || actor == null || expectedAction == null)
+                return false;
             DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
             if (actor == null || expectedAction == null || graph == null
                 || !ReferenceEquals(graph, actorRuntime.SelectedRuntimeOwnerGraph)
@@ -12097,6 +12153,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         private DailyV1NpcActionPayloadOwner preparedClearActionPayload;
         private DailyV1NpcRuntimeOwners preparedClearActionActor;
         private readonly SelectedActionSlotP12MutationProtocol selectedActionSlotP12MutationProtocol;
+        private DailyV1NpcRuntimeOwners projectionlessHideDispatchActor;
 
         internal SelectedDailyV1ActorTurnExecutionBoundary(
             SimulationRuntime runtime,
@@ -12664,12 +12721,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
-            if (IsProjectionIndependentNormalActionSlot(actor)
-                && !HasExactCurrentActionProjection(actor))
+            if (!HasExactCurrentActionProjection(actor)
+                && (IsProjectionIndependentNormalActionSlot(actor)
+                    || IsExactSelectedHideActionSlot(actor)))
             {
-                // A selected Normal action can execute from its exact Core
-                // slot without a Unity action projection. Never let a stale
-                // projection contribute target text to that Core-owned turn.
+                // Selected Normal and Hide behavior reads the exact Core slot.
+                // A missing or stale Unity action projection contributes no
+                // target text to either Core-owned action.
                 return;
             }
 
@@ -12705,6 +12763,34 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 && ReferenceEquals(actionRuntime.TargetNpc, exactTargetRuntime);
         }
 
+        private bool IsExactSelectedHideActionSlot(DailyV1NpcRuntimeOwners actor)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            DailyV1ActionDefinition action = actor?.ActionSlot?.CurrentAction;
+            DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
+            return exactRuntime.UsesSelectedDailyV1Definitions
+                && ReferenceEquals(exactRuntime.SelectedRuntimeOwnerGraph, graph)
+                && runtime.runtimeAdmissionContext != null
+                && ReferenceEquals(runtime.ExecutionBoundaryState.AdmissionContext,
+                    runtime.runtimeAdmissionContext)
+                && runtime.runtimeAdmissionContext.IsOwnedByCurrentThread()
+                && ReferenceEquals(graph.Definitions, actor?.Definitions)
+                && action != null
+                && !string.IsNullOrWhiteSpace(action.DefinitionId)
+                && graph.Definitions.Actions.TryGetValue(
+                    action.DefinitionId, out DailyV1ActionDefinition admittedAction)
+                && ReferenceEquals(action, admittedAction)
+                && action.Values.actionType?.Value
+                    == DailyV1NpcDefinitionRules.HideActionTypeValue
+                && ReferenceEquals(payload?.Action, action)
+                && payload.TargetNpcRuntimeId == null
+                && payload.TargetCityRuntimeId == null
+                && payload.TargetItem == null
+                && payload.Amount == 0
+                && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
+                    graph.Definitions, action);
+        }
+
         private bool IsProjectionIndependentNormalActionSlot(DailyV1NpcRuntimeOwners actor)
         {
             DailyV1ActionDefinition action = actor?.ActionSlot?.CurrentAction;
@@ -12726,10 +12812,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
             dispatchBoundary = null;
-            // Unity keeps its compatibility projection check at the Unity
-            // adapter boundary. Core dispatch itself depends on its exact
-            // action slot and the host operation ports, not NpcActionRuntime.
-            if (!HasExactCurrentActionProjection(actor)) return false;
+            projectionlessHideDispatchActor = null;
+            if (!HasExactCurrentActionProjection(actor))
+            {
+                // A missing projection is supported; a present but stale
+                // projection remains an identity error and fails closed.
+                if (exactRuntime.CurrentActionRuntime != null
+                    || !IsExactSelectedHideActionSlot(actor))
+                    return false;
+
+                // Hide already has Core-owned decision, eligibility, roll,
+                // owner mutation and P12 dispatch. Unity's action object is
+                // only an optional authoring projection for this exact slot.
+                projectionlessHideDispatchActor = actor;
+                dispatchBoundary = new SelectedActionDispatchBoundaryAdapter(
+                    runtime, exactRuntime, null, null);
+                return true;
+            }
+
             NpcActionRuntime actionRuntime = exactRuntime.CurrentActionRuntime;
             NpcActionData action = exactRuntime.CurrentAction;
             if (actionRuntime == null || action == null) return false;
@@ -12744,6 +12844,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             out string resultMessage)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (dispatch?.Kind == DailyV1SelectedActionDispatchKind.Crime
+                && ReferenceEquals(projectionlessHideDispatchActor, actor)
+                && IsExactSelectedHideActionSlot(actor))
+            {
+                // The Core Hide transition publishes its domain event through
+                // the host sink. There is no Unity action result to complete.
+                projectionlessHideDispatchActor = null;
+                resultMessage = null;
+                return true;
+            }
+            projectionlessHideDispatchActor = null;
             if (dispatch?.Kind == DailyV1SelectedActionDispatchKind.Normal)
             {
                 // Normal dispatch reports success from the exact Core slot.
@@ -12791,7 +12902,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     graph, actor, actor.ActionSlot?.CurrentAction)
                 : DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalActionForExactTarget(
                     graph, actor, actor.ActionSlot?.CurrentAction, target);
-            if (!exactProjectedAction && !projectionIndependentNormal)
+            bool projectionIndependentCoreHide = !HasExactCurrentActionProjection(actor)
+                && IsExactSelectedHideActionSlot(actor);
+            if (!exactProjectedAction && !projectionIndependentNormal
+                && !projectionIndependentCoreHide)
                 return false;
 
             if (!reuseExistingOperation
