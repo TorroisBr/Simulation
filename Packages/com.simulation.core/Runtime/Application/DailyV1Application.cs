@@ -584,6 +584,125 @@ internal sealed class DailyV1Application
         return true;
     }
 
+    /// <summary>
+    /// Composes one application session from the exact Core-owned P12-C/D/E/F
+    /// stages. P12-C may be a detached image root or an authorized private
+    /// boundary stage; Unity projections cannot reselect the owner instances
+    /// used by the active Core graph.
+    /// </summary>
+    internal bool TryCreateRestoredActiveRuntimeSessionFromOwnerStages(
+        DailyV1EffectiveDefinitions definitions,
+        P12CStagedCoreContinuationRoot stagedRoots,
+        DailyV1P12DCoreRestoreOwnerStage stagedD,
+        P12ECoreOwnerRestoreStage stagedE,
+        DailyV1P12FCoreOwnerRestoreStage stagedF,
+        SimulationTime simulationTime,
+        SimulationRuntimeAdmissionContext admissionContext,
+        NpcDecisionStore decisionStore,
+        DailyV1DomainEventAuthority eventAuthority,
+        long lastEconomySnapshotDay,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out DailyV1ActiveRuntimeSession candidate,
+        out SimulationCalendar calendar,
+        out string diagnostic)
+    {
+        candidate = null;
+        calendar = null;
+        diagnostic = null;
+        if (definitions == null || definitions.EffectiveConfiguration == null || definitions.Calendar == null)
+        {
+            diagnostic = "Core restore composition requires the admitted definitions, effective configuration, and calendar.";
+            return false;
+        }
+        if (stagedRoots == null)
+        {
+            diagnostic = "Core restore composition requires the staged P12-C Core root.";
+            return false;
+        }
+        if (stagedRoots.WorldIdentity == null || stagedRoots.RuntimeIdAllocator == null
+            || stagedRoots.RecordSequence == null || stagedRoots.SpatialAuthority == null
+            || stagedRoots.GenesisManifest == null || stagedRoots.DeterministicRandom == null)
+        {
+            diagnostic = "Core restore composition requires a complete detached P12-C root set.";
+            return false;
+        }
+        if (stagedD == null || stagedD.SpatialNetwork == null || stagedD.RuntimeIdentityIndex == null
+            || stagedD.Persons == null || stagedD.Genealogy == null
+            || stagedD.Cities == null || stagedD.Npcs == null)
+        {
+            diagnostic = "Core restore composition requires a complete P12-D owner graph.";
+            return false;
+        }
+        if (stagedE == null || stagedE.Persons == null
+            || !ReferenceEquals(stagedE.Persons, stagedD.Persons)
+            || stagedE.JusticeRecords == null)
+        {
+            diagnostic = "Core restore composition requires P12-E owners bound to the exact P12-D PersonStore.";
+            return false;
+        }
+        if (stagedF == null || stagedF.PoliticalKnowledge == null
+            || !stagedF.PoliticalKnowledge.IsBoundToPersonStore(stagedD.Persons)
+            || stagedF.ScheduledDirectives == null || stagedF.ActorChoices == null
+            || stagedF.TravelParties == null || stagedF.Expeditions == null)
+        {
+            diagnostic = "Core restore composition requires complete P12-F owners bound to the exact P12-D PersonStore.";
+            return false;
+        }
+        if (simulationTime == null || admissionContext == null
+            || !admissionContext.IsRestoredContinuation
+            || !admissionContext.IsOwnedByCurrentThread()
+            || !IsBootstrapOrRestoredDescendant(admissionContext))
+        {
+            diagnostic = "Core restore composition requires the current-thread restored continuation admission context.";
+            return false;
+        }
+        if (decisionStore == null || eventAuthority == null
+            || !eventAuthority.IsFor(stagedRoots.RuntimeIdAllocator, simulationTime,
+                stagedRoots.RecordSequence, decisionStore))
+        {
+            diagnostic = "Core restore composition requires event and decision authorities bound to the staged P12-C roots.";
+            return false;
+        }
+
+        CalendarDefinition calendarDefinition = definitions.Calendar.monthLengths != null
+            && definitions.Calendar.monthLengths.Count > 0
+            ? new CalendarDefinition(new List<int>(definitions.Calendar.monthLengths),
+                definitions.Calendar.daysPerWeek)
+            : new CalendarDefinition(definitions.Calendar.monthsPerYear,
+                definitions.Calendar.weeksPerMonth, definitions.Calendar.daysPerWeek);
+
+        return TryCreateRestoredActiveRuntimeSession(
+            definitions,
+            stagedRoots.GenesisManifest,
+            definitions.EffectiveConfiguration,
+            calendarDefinition,
+            simulationTime,
+            admissionContext,
+            stagedRoots.WorldIdentity,
+            stagedD.Cities,
+            stagedD.Npcs,
+            stagedD.SpatialNetwork,
+            stagedE.JusticeRecords,
+            stagedF.TravelParties,
+            stagedD.RuntimeIdentityIndex,
+            stagedD.Persons,
+            stagedD.Genealogy,
+            stagedF.ScheduledDirectives,
+            stagedF.Expeditions,
+            stagedRoots.SpatialAuthority,
+            eventAuthority,
+            stagedRoots.RuntimeIdAllocator,
+            stagedRoots.DeterministicRandom,
+            stagedRoots.RecordSequence,
+            decisionStore,
+            stagedF.ActorChoices,
+            lastEconomySnapshotDay,
+            replacementOperation,
+            out candidate,
+            out calendar,
+            out diagnostic);
+    }
+
     internal object ActiveSessionSyncRoot => activeSessionGate.SyncRoot;
     internal DailyV1ActiveRuntimeSession ActiveSession => activeSessionGate.Current;
     internal int ActiveOperationCount => activeSessionGate.ActiveOperationCount;

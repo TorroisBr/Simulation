@@ -41,6 +41,7 @@ internal sealed class P12DDailyV1OwnerPackage
     internal PersonStore Persons { get; }
     internal GenealogyStore Genealogy { get; }
     internal ExplorableSiteStore EmptyExplorableSites { get; }
+    internal DailyV1P12DCoreRestoreOwnerStage CoreRestoreOwners { get; }
 
     private P12DDailyV1OwnerPackage(
         DailyCaptureStagingAttempt stagingAttempt,
@@ -60,7 +61,8 @@ internal sealed class P12DDailyV1OwnerPackage
         ExplorableSiteOwnerSnapshot explorableSiteSnapshot,
         PersonStore persons,
         GenealogyStore genealogy,
-        ExplorableSiteStore emptyExplorableSites)
+        ExplorableSiteStore emptyExplorableSites,
+        DailyV1P12DCoreRestoreOwnerStage coreRestoreOwners = null)
     {
         StagingAttempt = stagingAttempt;
         WorldId = worldId;
@@ -82,6 +84,7 @@ internal sealed class P12DDailyV1OwnerPackage
         Persons = persons;
         Genealogy = genealogy;
         EmptyExplorableSites = emptyExplorableSites;
+        CoreRestoreOwners = coreRestoreOwners;
     }
 
     /// <summary>
@@ -666,7 +669,7 @@ internal sealed class P12DDailyV1OwnerPackage
             stagedSpatialNetwork, stagedCities, stagedNpcRoster, selectedCityOwners, selectedNpcOwners,
             citySnapshots, npcDRows, npcFRows,
             spatialSnapshot, personSnapshot, genealogySnapshot, siteSnapshot,
-            stagedPersons, stagedGenealogy, stagedSites);
+            stagedPersons, stagedGenealogy, stagedSites, stagedCoreOwnerGraph);
         failure = P12DDailyV1OwnerPackageFailure.None;
         return true;
     }

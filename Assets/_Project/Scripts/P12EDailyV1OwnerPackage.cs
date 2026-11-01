@@ -126,6 +126,7 @@ internal sealed class P12EDailyV1OwnerPackage
     internal P12EJusticeRecordsOwnerSnapshot JusticeSnapshot { get; }
     internal P12ECrimeSocialAppraisalOwnerSnapshot CrimeSocialSnapshot { get; }
     internal IReadOnlyList<P12EUnresolvedPoliticalKnowledgeBinding> UnresolvedPoliticalKnowledgeBindings { get; }
+    internal P12ECoreOwnerRestoreStage CoreOwnerRestoreStage { get; }
 
     private P12EDailyV1OwnerPackage(
         DailyCaptureStagingAttempt stagingAttempt,
@@ -160,7 +161,8 @@ internal sealed class P12EDailyV1OwnerPackage
         PersistentBattleOwnerSnapshot battleSnapshot,
         P12EJusticeRecordsOwnerSnapshot justiceSnapshot,
         P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialSnapshot,
-        IReadOnlyList<P12EUnresolvedPoliticalKnowledgeBinding> unresolvedBindings)
+        IReadOnlyList<P12EUnresolvedPoliticalKnowledgeBinding> unresolvedBindings,
+        P12ECoreOwnerRestoreStage coreOwnerRestoreStage = null)
     {
         StagingAttempt = stagingAttempt;
         WorldId = worldId;
@@ -196,6 +198,7 @@ internal sealed class P12EDailyV1OwnerPackage
         CrimeSocialSnapshot = crimeSocialSnapshot ?? throw new ArgumentNullException(nameof(crimeSocialSnapshot));
         UnresolvedPoliticalKnowledgeBindings = new ReadOnlyCollection<P12EUnresolvedPoliticalKnowledgeBinding>(
             new List<P12EUnresolvedPoliticalKnowledgeBinding>(unresolvedBindings));
+        CoreOwnerRestoreStage = coreOwnerRestoreStage;
     }
 
     internal static bool TryCaptureAndStage(
@@ -414,7 +417,7 @@ internal sealed class P12EDailyV1OwnerPackage
                 institutionOfficeSnapshot, propertyEstateSnapshot, factionSnapshot,
                 claimSnapshot, supportSnapshot, decisionSnapshot, militarySnapshot,
                 conflictSnapshot, warSnapshot, battleSnapshot, justiceSnapshot, crimeSocialSnapshot,
-                unresolvedBindings);
+                unresolvedBindings, coreOwnerStage);
             failure = P12EDailyV1OwnerPackageFailure.None;
             return true;
         }
@@ -559,7 +562,8 @@ internal sealed class P12EDailyV1OwnerPackage
                 stagedJustice, stagedCrimeSocial, crimeReceiptSnapshot, justiceReceiptSnapshot,
                 institutionOfficeSnapshot, propertyEstateSnapshot, factionSnapshot, claimSnapshot,
                 supportSnapshot, decisionSnapshot, militarySnapshot, conflictSnapshot, warSnapshot,
-                battleSnapshot, justiceSnapshot, crimeSocialSnapshot, unresolvedBindings);
+                battleSnapshot, justiceSnapshot, crimeSocialSnapshot, unresolvedBindings,
+                coreOwnerStage);
             failure = P12EDailyV1OwnerPackageFailure.None;
             return true;
         }

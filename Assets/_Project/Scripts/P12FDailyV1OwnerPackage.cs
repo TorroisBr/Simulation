@@ -362,6 +362,7 @@ internal sealed class P12FDailyV1OwnerPackage
     internal ExpeditionStore Expeditions { get; }
     internal IReadOnlyList<P12DNpcFRow> DetachedNpcRows { get; }
     internal IReadOnlyList<P12EUnresolvedPoliticalKnowledgeBinding> UnresolvedPoliticalKnowledgeBindings { get; }
+    internal DailyV1P12FCoreOwnerRestoreStage CoreOwnerRestoreStage { get; }
 
     internal P12FDailyV1OwnerPackage(
         DailyCaptureStagingAttempt stagingAttempt,
@@ -372,7 +373,8 @@ internal sealed class P12FDailyV1OwnerPackage
         TravelPartyStore travelParties,
         ExpeditionStore expeditions,
         IReadOnlyList<P12DNpcFRow> detachedNpcRows,
-        IReadOnlyList<P12EUnresolvedPoliticalKnowledgeBinding> unresolvedPoliticalKnowledgeBindings)
+        IReadOnlyList<P12EUnresolvedPoliticalKnowledgeBinding> unresolvedPoliticalKnowledgeBindings,
+        DailyV1P12FCoreOwnerRestoreStage coreOwnerRestoreStage = null)
     {
         StagingAttempt = stagingAttempt;
         WorldId = worldId ?? throw new ArgumentNullException(nameof(worldId));
@@ -386,6 +388,7 @@ internal sealed class P12FDailyV1OwnerPackage
         UnresolvedPoliticalKnowledgeBindings = new ReadOnlyCollection<P12EUnresolvedPoliticalKnowledgeBinding>(
             new List<P12EUnresolvedPoliticalKnowledgeBinding>(
                 unresolvedPoliticalKnowledgeBindings ?? throw new ArgumentNullException(nameof(unresolvedPoliticalKnowledgeBindings))));
+        CoreOwnerRestoreStage = coreOwnerRestoreStage;
     }
 
     /// <summary>Stages decoded F values against detached roots without a source token or owner vector.</summary>
@@ -505,7 +508,8 @@ internal sealed class P12FDailyV1OwnerPackage
                 coreOwnerStage.PoliticalKnowledge, coreOwnerStage.ScheduledDirectives,
                 coreOwnerStage.ActorChoices, coreOwnerStage.TravelParties,
                 coreOwnerStage.Expeditions,
-                context.P12DPackage.NpcFRows, stagedE.UnresolvedPoliticalKnowledgeBindings);
+                context.P12DPackage.NpcFRows, stagedE.UnresolvedPoliticalKnowledgeBindings,
+                coreOwnerStage);
             failure = P12FDailyV1OwnerPackageFailure.None;
             return true;
         }

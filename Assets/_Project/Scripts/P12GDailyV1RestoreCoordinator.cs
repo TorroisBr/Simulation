@@ -1529,37 +1529,66 @@ internal static partial class P12GDailyV1RestoreCoordinator
         }
         else
         {
-            if (!application.TryCreateRestoredActiveRuntimeSession(
-                    selectedDefinitions,
-                    stagedC.CoreRoot.GenesisManifest,
-                    effective,
-                    calendar,
-                    time,
-                    restoredAdmissionContext,
-                    stagedC.WorldIdentity,
-                    stagedD.SelectedCityOwners,
-                    stagedD.SelectedNpcOwners,
-                    stagedD.SpatialNetwork.SelectedOwner,
-                    stagedE.Justice.CoreOwner,
-                    stagedF.TravelParties,
-                    stagedD.RuntimeIdentities.CoreIdentityIndex,
-                    stagedD.Persons,
-                    stagedD.Genealogy,
-                    stagedF.ScheduledDirectives,
-                    stagedF.Expeditions,
-                    stagedC.SpatialAuthority,
-                    eventAuthority,
-                    stagedC.RuntimeIdAllocator,
-                    stagedC.DeterministicRandom,
-                    stagedC.RecordSequence,
-                    decisions,
-                    stagedF.ActorChoices,
-                    lastEconomySnapshotDay,
-                    replacementOperation,
-                    out coreRuntimeSession,
-                    out restoredCalendar,
-                    out diagnostic))
-                return false;
+            if (stagedD.StagingAttempt == null)
+            {
+                // Detached image restore retains the exact Core-owned D/E/F
+                // stages. Compose from those owners so Unity projections do
+                // not reselect the authoritative instances.
+                if (!application.TryCreateRestoredActiveRuntimeSessionFromOwnerStages(
+                        selectedDefinitions,
+                        stagedC.CoreRoot,
+                        stagedD.CoreRestoreOwners,
+                        stagedE.CoreOwnerRestoreStage,
+                        stagedF.CoreOwnerRestoreStage,
+                        time,
+                        restoredAdmissionContext,
+                        decisions,
+                        eventAuthority,
+                        lastEconomySnapshotDay,
+                        replacementOperation,
+                        out coreRuntimeSession,
+                        out restoredCalendar,
+                        out diagnostic))
+                    return false;
+            }
+            else
+            {
+                // The live-bound transactional path stages D against an
+                // in-flight capture attempt and has not yet published a
+                // complete Core D/E/F bundle. Keep its existing composition
+                // contract while preserving that staging reservation.
+                if (!application.TryCreateRestoredActiveRuntimeSession(
+                        selectedDefinitions,
+                        stagedC.CoreRoot.GenesisManifest,
+                        effective,
+                        calendar,
+                        time,
+                        restoredAdmissionContext,
+                        stagedC.WorldIdentity,
+                        stagedD.SelectedCityOwners,
+                        stagedD.SelectedNpcOwners,
+                        stagedD.SpatialNetwork.SelectedOwner,
+                        stagedE.Justice.CoreOwner,
+                        stagedF.TravelParties,
+                        stagedD.RuntimeIdentities.CoreIdentityIndex,
+                        stagedD.Persons,
+                        stagedD.Genealogy,
+                        stagedF.ScheduledDirectives,
+                        stagedF.Expeditions,
+                        stagedC.SpatialAuthority,
+                        eventAuthority,
+                        stagedC.RuntimeIdAllocator,
+                        stagedC.DeterministicRandom,
+                        stagedC.RecordSequence,
+                        decisions,
+                        stagedF.ActorChoices,
+                        lastEconomySnapshotDay,
+                        replacementOperation,
+                        out coreRuntimeSession,
+                        out restoredCalendar,
+                        out diagnostic))
+                    return false;
+            }
 
             if (coreRuntimeSession == null)
             {
