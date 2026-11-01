@@ -1855,16 +1855,21 @@ internal static class DailyV1SelectedActionDispatchStage
         if (!IsSelectedMerchantAction(actionType))
             return false;
 
+        bool activeMerchantPlan = actor.MerchantTradePlan?.IsActive == true;
+        bool plannedNpcSaleWithoutCityTarget =
+            actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            && activeMerchantPlan
+            && !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+            && payload.TargetCityRuntimeId == null;
         if (payload.TargetItem == null || payload.Amount <= 0
-            || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+            || (string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+                && !plannedNpcSaleWithoutCityTarget)
             || actor.Travel == null || actor.Travel.IsTraveling
             || string.IsNullOrWhiteSpace(actor.Travel.CurrentCityRuntimeId))
         {
             result = RejectedSelectedMerchantAction(actor, actionType, payload);
             return true;
         }
-
-        bool activeMerchantPlan = actor.MerchantTradePlan?.IsActive == true;
         if (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
             && activeMerchantPlan && payload.TargetNpcRuntimeId != null)
         {
