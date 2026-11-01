@@ -449,6 +449,19 @@ internal sealed class P12DDailyV1OwnerPackage
             return false;
         }
 
+        DailyV1P12DCoreRestoreOwnerStage coreRestoreOwners = null;
+        if (selectedDefinitions != null)
+        {
+            coreRestoreOwners = new DailyV1P12DCoreRestoreOwnerStage(
+                stagedSpatialNetwork.SelectedOwner,
+                stagedRuntimeIdentities.CoreIdentityIndex,
+                new DailyV1P12DSelectedCoreOwnerStage(selectedCityOwners, selectedNpcOwners),
+                stagedPersons,
+                stagedGenealogy,
+                personSnapshot,
+                genealogySnapshot);
+        }
+
         package = new P12DDailyV1OwnerPackage(
             stagingAttempt,
             stagedWorldId, stagedRuntimeIdentities, stagedSpatialNetwork,
@@ -456,7 +469,7 @@ internal sealed class P12DDailyV1OwnerPackage
             cityCaptures.Select(capture => capture.Snapshot).ToArray(),
             dProjection.Rows, fProjection.Rows,
             spatialSnapshot, personSnapshot, genealogySnapshot, siteSnapshot,
-            stagedPersons, stagedGenealogy, stagedSites);
+            stagedPersons, stagedGenealogy, stagedSites, coreRestoreOwners);
         failure = P12DDailyV1OwnerPackageFailure.None;
         return true;
     }

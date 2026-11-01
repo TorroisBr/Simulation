@@ -1529,67 +1529,35 @@ internal static partial class P12GDailyV1RestoreCoordinator
         }
         else
         {
-            if (stagedD.StagingAttempt == null)
+            // Both detached image staging and capture-bound staging retain
+            // their exact Core owner candidates. Compose through the same
+            // Core path so Unity projections cannot reselect owner instances
+            // for one restore route but not the other.
+            if (stagedD.CoreRestoreOwners == null
+                || stagedE.CoreOwnerRestoreStage == null
+                || stagedF.CoreOwnerRestoreStage == null)
             {
-                // Detached image restore retains the exact Core-owned D/E/F
-                // stages. Compose from those owners so Unity projections do
-                // not reselect the authoritative instances.
-                if (!application.TryCreateRestoredActiveRuntimeSessionFromOwnerStages(
-                        selectedDefinitions,
-                        effective,
-                        stagedC.CoreRoot,
-                        stagedD.CoreRestoreOwners,
-                        stagedE.CoreOwnerRestoreStage,
-                        stagedF.CoreOwnerRestoreStage,
-                        time,
-                        restoredAdmissionContext,
-                        decisions,
-                        eventAuthority,
-                        lastEconomySnapshotDay,
-                        replacementOperation,
-                        out coreRuntimeSession,
-                        out restoredCalendar,
-                        out diagnostic))
-                    return false;
+                diagnostic = "Core application restore composition requires retained P12-D/E/F owner stages.";
+                return false;
             }
-            else
-            {
-                // The live-bound transactional path stages D against an
-                // in-flight capture attempt and has not yet published a
-                // complete Core D/E/F bundle. Keep its existing composition
-                // contract while preserving that staging reservation.
-                if (!application.TryCreateRestoredActiveRuntimeSession(
-                        selectedDefinitions,
-                        stagedC.CoreRoot.GenesisManifest,
-                        effective,
-                        calendar,
-                        time,
-                        restoredAdmissionContext,
-                        stagedC.WorldIdentity,
-                        stagedD.SelectedCityOwners,
-                        stagedD.SelectedNpcOwners,
-                        stagedD.SpatialNetwork.SelectedOwner,
-                        stagedE.Justice.CoreOwner,
-                        stagedF.TravelParties,
-                        stagedD.RuntimeIdentities.CoreIdentityIndex,
-                        stagedD.Persons,
-                        stagedD.Genealogy,
-                        stagedF.ScheduledDirectives,
-                        stagedF.Expeditions,
-                        stagedC.SpatialAuthority,
-                        eventAuthority,
-                        stagedC.RuntimeIdAllocator,
-                        stagedC.DeterministicRandom,
-                        stagedC.RecordSequence,
-                        decisions,
-                        stagedF.ActorChoices,
-                        lastEconomySnapshotDay,
-                        replacementOperation,
-                        out coreRuntimeSession,
-                        out restoredCalendar,
-                        out diagnostic))
-                    return false;
-            }
+
+            if (!application.TryCreateRestoredActiveRuntimeSessionFromOwnerStages(
+                    selectedDefinitions,
+                    effective,
+                    stagedC.CoreRoot,
+                    stagedD.CoreRestoreOwners,
+                    stagedE.CoreOwnerRestoreStage,
+                    stagedF.CoreOwnerRestoreStage,
+                    time,
+                    restoredAdmissionContext,
+                    decisions,
+                    eventAuthority,
+                    lastEconomySnapshotDay,
+                    replacementOperation,
+                    out coreRuntimeSession,
+                    out restoredCalendar,
+                    out diagnostic))
+                return false;
 
             if (coreRuntimeSession == null)
             {

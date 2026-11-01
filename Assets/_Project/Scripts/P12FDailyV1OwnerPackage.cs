@@ -320,11 +320,17 @@ internal sealed class P12FDailyV1OwnerCapture
             return false;
         }
 
+        DailyV1P12FCoreOwnerRestoreStage coreOwnerStage = new DailyV1P12FCoreOwnerRestoreStage(
+            stagedPoliticalKnowledge,
+            stagedDirectives,
+            stagedActorChoices,
+            stagedTravelParties,
+            stagedExpeditions);
         package = new P12FDailyV1OwnerPackage(
             context.StagingAttempt, stagedC.WorldIdentity,
             stagedPoliticalKnowledge, stagedDirectives, stagedActorChoices,
             stagedTravelParties, stagedExpeditions, stagedD.NpcFRows,
-            stagedE.UnresolvedPoliticalKnowledgeBindings);
+            stagedE.UnresolvedPoliticalKnowledgeBindings, coreOwnerStage);
         failure = P12FDailyV1OwnerPackageFailure.None;
         return true;
     }
