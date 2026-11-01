@@ -41,6 +41,103 @@ internal sealed class DailyV1P12FCoreOwnerRestoreStage
     }
 }
 
+/// <summary>One ordered, unpublished Core owner staging operation for a restored image.</summary>
+internal sealed class DailyV1RestoredImageCoreOwnerStages
+{
+    private readonly DailyV1Application application;
+    private readonly P12AContinuationImage image;
+    private readonly DailyV1EffectiveDefinitions definitions;
+    private readonly DailyV1ActiveRuntimeSession expectedSession;
+    private readonly DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation;
+    private bool failed;
+
+    internal P12ADailyV1Census Census { get; }
+    internal P12ADailyV1ImageOwnerSnapshots Snapshots { get; }
+    internal P12CStagedCoreContinuationRoot CoreRoots { get; }
+    internal SimulationTime StagedTime { get; }
+    internal DailyV1P12DCoreRestoreOwnerStage D { get; private set; }
+    internal P12ECoreOwnerRestoreStage E { get; private set; }
+    internal DailyV1P12FCoreOwnerRestoreStage F { get; private set; }
+    internal ExplorableSiteStore EmptyExplorableSites { get; private set; }
+
+    internal P12AContinuationImage Image => image;
+    internal DailyV1EffectiveDefinitions Definitions => definitions;
+    internal DailyV1ActiveRuntimeSession ExpectedSession => expectedSession;
+    internal DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation ReplacementOperation => replacementOperation;
+    internal bool CanStageD => !failed && D == null && E == null && F == null;
+    internal bool CanStageE => !failed && D != null && E == null && F == null;
+    internal bool CanStageF => !failed && D != null && E != null && F == null;
+    internal bool IsComplete => !failed && D != null && E != null && F != null
+        && EmptyExplorableSites != null;
+
+    internal DailyV1RestoredImageCoreOwnerStages(
+        DailyV1Application application,
+        P12AContinuationImage image,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        P12ADailyV1Census census,
+        P12ADailyV1ImageOwnerSnapshots snapshots,
+        P12CStagedCoreContinuationRoot coreRoots,
+        SimulationTime stagedTime)
+    {
+        this.application = application ?? throw new ArgumentNullException(nameof(application));
+        this.image = image ?? throw new ArgumentNullException(nameof(image));
+        this.definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+        this.expectedSession = expectedSession;
+        this.replacementOperation = replacementOperation;
+        Census = census ?? throw new ArgumentNullException(nameof(census));
+        Snapshots = snapshots ?? throw new ArgumentNullException(nameof(snapshots));
+        CoreRoots = coreRoots ?? throw new ArgumentNullException(nameof(coreRoots));
+        StagedTime = stagedTime ?? throw new ArgumentNullException(nameof(stagedTime));
+    }
+
+    internal bool IsFor(
+        DailyV1Application candidateApplication,
+        P12AContinuationImage candidateImage,
+        DailyV1EffectiveDefinitions candidateDefinitions,
+        P12CStagedCoreContinuationRoot candidateCoreRoots,
+        DailyV1ActiveRuntimeSession candidateExpectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation candidateReplacementOperation) =>
+        !failed
+        && ReferenceEquals(application, candidateApplication)
+        && ReferenceEquals(image, candidateImage)
+        && ReferenceEquals(definitions, candidateDefinitions)
+        && ReferenceEquals(CoreRoots, candidateCoreRoots)
+        && ReferenceEquals(expectedSession, candidateExpectedSession)
+        && ReferenceEquals(replacementOperation, candidateReplacementOperation);
+
+    internal bool TryAcceptD(DailyV1P12DCoreRestoreOwnerStage staged)
+    {
+        if (!CanStageD || staged == null) return false;
+        D = staged;
+        return true;
+    }
+
+    internal bool TryAcceptE(P12ECoreOwnerRestoreStage staged)
+    {
+        if (!CanStageE || staged == null) return false;
+        E = staged;
+        return true;
+    }
+
+    internal bool TryAcceptF(DailyV1P12FCoreOwnerRestoreStage staged, ExplorableSiteStore emptyExplorableSites)
+    {
+        if (!CanStageF || staged == null || emptyExplorableSites == null) return false;
+        F = staged;
+        EmptyExplorableSites = emptyExplorableSites;
+        return true;
+    }
+
+    internal void Fail()
+    {
+        failed = true;
+        D = null;
+        E = null;
+        F = null;
+        EmptyExplorableSites = null;
+    }
+}
 /// <summary>
 /// Core-owned lifetime and operation gate for one selected Daily-v1
 /// application. Host adapters may retain projections, but this instance owns
@@ -2301,6 +2398,190 @@ internal sealed class DailyV1Application
                 "p12f.core-owners");
             return false;
         }
+    }
+
+    /// <summary>
+    /// Starts one application-owned image restore by admitting, decoding, and
+    /// privately staging P12-C. D, E, and F remain explicit ordered steps so
+    /// the host can project each exact Core stage at the established boundary.
+    /// </summary>
+    internal bool TryBeginRestoredImageCoreOwnerStages(
+        P12AContinuationImage image,
+        P12ACompatibilityDescriptor unityV1Identity,
+        P12ACompatibilityDescriptorV2 dotNetV2Identity,
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out bool admissionPassed,
+        out P12ADailyV1Census census,
+        out P12ADailyV1ImageOwnerSnapshots snapshots,
+        out P12CStagedCoreContinuationRoot coreRoots,
+        out DailyV1RestoredImageCoreOwnerStages stagedOwnerStages,
+        out P12AResult result,
+        Action imageDecoded = null,
+        Action<string> stageCompleted = null)
+    {
+        admissionPassed = false;
+        census = null;
+        snapshots = null;
+        coreRoots = null;
+        stagedOwnerStages = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (image == null || selectedDefinitions == null
+            || bootstrapAdmissionContext == null
+            || !HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        try
+        {
+            if (!TryAdmitDecodeAndStageRestoredContinuationImage(
+                    image, unityV1Identity, dotNetV2Identity, bootstrapAdmissionContext,
+                    expectedSession, replacementOperation,
+                    out admissionPassed, out census, out snapshots, out coreRoots,
+                    out result, imageDecoded, stageCompleted)
+                || !admissionPassed || census == null || snapshots == null || coreRoots == null)
+                return false;
+
+            stagedOwnerStages = new DailyV1RestoredImageCoreOwnerStages(
+                this, image, selectedDefinitions, expectedSession, replacementOperation,
+                census, snapshots, coreRoots, new SimulationTime(image.Header.Day));
+            result = null;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException
+            || exception is NullReferenceException)
+        {
+            stagedOwnerStages = null;
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12.core.restored-image-roots");
+            return false;
+        }
+    }
+
+    /// <summary>Stages P12-D Core owners after the admitted P12-C root was projected.</summary>
+    internal bool TryStageRestoredImageP12DOwners(
+        DailyV1RestoredImageCoreOwnerStages stages,
+        out DailyV1P12DCoreRestoreOwnerStage stagedOwners,
+        out P12AResult result)
+    {
+        stagedOwners = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (stages == null
+            || !stages.IsFor(this, stages.Image, stages.Definitions, stages.CoreRoots,
+                stages.ExpectedSession, stages.ReplacementOperation)
+            || !stages.CanStageD
+            || !HasRestoredContinuationStagingAuthority(stages.ExpectedSession, stages.ReplacementOperation))
+        {
+            stages?.Fail();
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        if (!TryStageRestoredP12DCoreOwnerGraphFromImageSnapshots(
+                stages.CoreRoots, stages.Snapshots, stages.Definitions,
+                stages.ExpectedSession, stages.ReplacementOperation,
+                out stagedOwners, out result)
+            || stagedOwners == null || !stages.TryAcceptD(stagedOwners))
+        {
+            stages.Fail();
+            stagedOwners = null;
+            return false;
+        }
+
+        result = null;
+        return true;
+    }
+
+    /// <summary>Stages P12-E Core owners from the exact P12-C/D portion of the operation.</summary>
+    internal bool TryStageRestoredImageP12EOwners(
+        DailyV1RestoredImageCoreOwnerStages stages,
+        out P12ECoreOwnerRestoreStage stagedOwners,
+        out P12AResult result,
+        Action<P12ECoreOwnerRestoreStep> stageObserver = null)
+    {
+        stagedOwners = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (stages == null
+            || !stages.IsFor(this, stages.Image, stages.Definitions, stages.CoreRoots,
+                stages.ExpectedSession, stages.ReplacementOperation)
+            || !stages.CanStageE
+            || !HasRestoredContinuationStagingAuthority(stages.ExpectedSession, stages.ReplacementOperation))
+        {
+            stages?.Fail();
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        P12ADailyV1ImageOwnerSnapshots snapshots = stages.Snapshots;
+        DailyV1P12DCoreRestoreOwnerStage d = stages.D;
+        if (!TryStageRestoredP12EOwners(
+                stages.CoreRoots, snapshots.InstitutionOffice, snapshots.PropertyEstate,
+                snapshots.Faction, snapshots.PoliticalClaims, snapshots.PoliticalSupport,
+                snapshots.PoliticalDecisions, snapshots.Justice, snapshots.Military,
+                snapshots.Conflicts, snapshots.Wars, snapshots.Battles,
+                false, d.Persons, d.Cities, d.Npcs, stages.Image.Header.Day,
+                stages.ExpectedSession, stages.ReplacementOperation,
+                out stagedOwners, out result, stageObserver)
+            || stagedOwners == null || !stages.TryAcceptE(stagedOwners))
+        {
+            stages.Fail();
+            stagedOwners = null;
+            return false;
+        }
+
+        result = null;
+        return true;
+    }
+
+    /// <summary>Stages P12-F Core owners against the exact D empty-site store and E owners.</summary>
+    internal bool TryStageRestoredImageP12FOwners(
+        DailyV1RestoredImageCoreOwnerStages stages,
+        ExplorableSiteStore stagedEmptyExplorableSites,
+        out DailyV1P12FCoreOwnerRestoreStage stagedOwners,
+        out P12AResult result,
+        Action<DailyV1P12FCoreOwnerRestoreStep> stageObserver = null)
+    {
+        stagedOwners = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (stages == null
+            || !stages.IsFor(this, stages.Image, stages.Definitions, stages.CoreRoots,
+                stages.ExpectedSession, stages.ReplacementOperation)
+            || !stages.CanStageF
+            || !HasRestoredContinuationStagingAuthority(stages.ExpectedSession, stages.ReplacementOperation)
+            || stagedEmptyExplorableSites == null
+            || stagedEmptyExplorableSites.Count != 0 || stagedEmptyExplorableSites.Revision != 0L)
+        {
+            stages?.Fail();
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        P12ADailyV1ImageOwnerSnapshots snapshots = stages.Snapshots;
+        DailyV1P12DCoreRestoreOwnerStage d = stages.D;
+        P12ECoreOwnerRestoreStage e = stages.E;
+        if (!TryStageRestoredP12FOwners(
+                stages.CoreRoots, snapshots.PoliticalKnowledge, snapshots.Directives,
+                snapshots.ActorChoices, snapshots.TravelParties, snapshots.Expeditions,
+                d.Persons, e.Institutions, e.PoliticalClaims, e.Factions, e.Offices,
+                e.PropertyOwnership, stages.Image.Header.Day, stages.StagedTime,
+                stages.Definitions, snapshots.NpcFRows, d.Npcs,
+                d.RuntimeIdentityIndex, d.SpatialNetwork, stagedEmptyExplorableSites,
+                stages.ExpectedSession, stages.ReplacementOperation,
+                out stagedOwners, out result, stageObserver)
+            || stagedOwners == null || !stages.TryAcceptF(stagedOwners, stagedEmptyExplorableSites))
+        {
+            stages.Fail();
+            stagedOwners = null;
+            return false;
+        }
+
+        result = null;
+        return true;
     }
 
     private bool HasRestoredContinuationStagingAuthority(

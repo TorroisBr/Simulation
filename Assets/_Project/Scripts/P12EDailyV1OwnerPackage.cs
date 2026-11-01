@@ -34,6 +34,7 @@ internal sealed class P12EDailyV1OwnerStagingContext
     internal DailyV1ActiveRuntimeSession ExpectedSession { get; }
     internal DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation ReplacementOperation { get; }
     internal DailyV1P12GContinuationSaveOperation ContinuationSaveOperation { get; }
+    internal DailyV1RestoredImageCoreOwnerStages RestoredImageCoreOwnerStages { get; }
 
     internal P12EDailyV1OwnerStagingContext(
         DailyCaptureStagingAttempt stagingAttempt,
@@ -49,7 +50,8 @@ internal sealed class P12EDailyV1OwnerStagingContext
         DailyV1Application application = null,
         DailyV1ActiveRuntimeSession expectedSession = null,
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
-        DailyV1P12GContinuationSaveOperation continuationSaveOperation = null)
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation = null,
+        DailyV1RestoredImageCoreOwnerStages restoredImageCoreOwnerStages = null)
     {
         StagingAttempt = stagingAttempt;
         P12CRoots = p12cRoots;
@@ -65,6 +67,7 @@ internal sealed class P12EDailyV1OwnerStagingContext
         ExpectedSession = expectedSession;
         ReplacementOperation = replacementOperation;
         ContinuationSaveOperation = continuationSaveOperation;
+        RestoredImageCoreOwnerStages = restoredImageCoreOwnerStages;
     }
 }
 
@@ -461,7 +464,15 @@ internal sealed class P12EDailyV1OwnerPackage
             || decoded.PoliticalSupport == null || decoded.PoliticalDecisions == null
             || decoded.Military == null || decoded.Conflicts == null || decoded.Wars == null
             || decoded.Battles == null || decoded.Justice == null || decoded.CrimeSocial == null
-            || decoded.CrimeReceipts == null || decoded.JusticeReceipts == null)
+            || decoded.CrimeReceipts == null || decoded.JusticeReceipts == null
+            || (context.RestoredImageCoreOwnerStages != null
+                && (context.Application == null
+                    || !context.RestoredImageCoreOwnerStages.IsFor(
+                        context.Application, image, context.RestoredImageCoreOwnerStages.Definitions,
+                        context.P12CRoots?.CoreRoot, context.ExpectedSession, context.ReplacementOperation)
+                    || !ReferenceEquals(context.RestoredImageCoreOwnerStages.Snapshots, decoded)
+                    || !ReferenceEquals(context.RestoredImageCoreOwnerStages.D,
+                        context.P12DPackage?.CoreRestoreOwners))))
             return false;
 
         try
@@ -488,15 +499,25 @@ internal sealed class P12EDailyV1OwnerPackage
             P12ECoreOwnerRestoreStage coreOwnerStage;
             if (context.Application != null)
             {
-                coreOwnerStageAccepted = context.Application.TryStageRestoredP12EOwners(
-                    stagedC.CoreRoot, institutionOfficeSnapshot, propertyEstateSnapshot,
-                    factionSnapshot, claimSnapshot, supportSnapshot, decisionSnapshot,
-                    justiceSnapshot, militarySnapshot, conflictSnapshot, warSnapshot,
-                    battleSnapshot, false, stagedD.Persons, stagedD.SelectedCityOwners,
-                    stagedD.SelectedNpcOwners, day, context.ExpectedSession,
-                    context.ReplacementOperation,
-                    out coreOwnerStage, out _,
-                    step => ObserveCoreOwnerRestoreStep(stageObserver, step));
+                if (context.RestoredImageCoreOwnerStages != null)
+                {
+                    coreOwnerStageAccepted = context.Application.TryStageRestoredImageP12EOwners(
+                        context.RestoredImageCoreOwnerStages,
+                        out coreOwnerStage, out _,
+                        step => ObserveCoreOwnerRestoreStep(stageObserver, step));
+                }
+                else
+                {
+                    coreOwnerStageAccepted = context.Application.TryStageRestoredP12EOwners(
+                        stagedC.CoreRoot, institutionOfficeSnapshot, propertyEstateSnapshot,
+                        factionSnapshot, claimSnapshot, supportSnapshot, decisionSnapshot,
+                        justiceSnapshot, militarySnapshot, conflictSnapshot, warSnapshot,
+                        battleSnapshot, false, stagedD.Persons, stagedD.SelectedCityOwners,
+                        stagedD.SelectedNpcOwners, day, context.ExpectedSession,
+                        context.ReplacementOperation,
+                        out coreOwnerStage, out _,
+                        step => ObserveCoreOwnerRestoreStep(stageObserver, step));
+                }
             }
             else
             {

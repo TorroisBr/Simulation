@@ -423,7 +423,17 @@ internal sealed class P12FDailyV1OwnerPackage
             || context.P12DPackage.WorldId == null || context.P12DPackage.WorldId.Value != image.Header.WorldId
             || selectedDefinitions == null || decoded.PoliticalKnowledge == null
             || decoded.Directives == null || decoded.ActorChoices == null
-            || decoded.TravelParties == null || decoded.Expeditions == null)
+            || decoded.TravelParties == null || decoded.Expeditions == null
+            || (context.RestoredImageCoreOwnerStages != null
+                && (context.Application == null
+                    || !context.RestoredImageCoreOwnerStages.IsFor(
+                        context.Application, image, selectedDefinitions,
+                        context.P12CRoots?.CoreRoot, context.ExpectedSession, context.ReplacementOperation)
+                    || !ReferenceEquals(context.RestoredImageCoreOwnerStages.Snapshots, decoded)
+                    || !ReferenceEquals(context.RestoredImageCoreOwnerStages.D,
+                        context.P12DPackage?.CoreRestoreOwners)
+                    || !ReferenceEquals(context.RestoredImageCoreOwnerStages.E,
+                        stagedE.CoreOwnerRestoreStage))))
             return false;
 
         if (!TryGetNpcRuntimeIds(context.P12DPackage.Npcs, out IReadOnlyList<string> stagedNpcRuntimeIds))
@@ -438,7 +448,18 @@ internal sealed class P12FDailyV1OwnerPackage
             DailyV1P12FCoreOwnerRestoreStage coreOwnerStage;
             if (context.Application != null)
             {
-                if (!context.Application.TryStageRestoredP12FOwners(
+                bool coreStageAccepted;
+                if (context.RestoredImageCoreOwnerStages != null)
+                {
+                    coreStageAccepted = context.Application.TryStageRestoredImageP12FOwners(
+                        context.RestoredImageCoreOwnerStages,
+                        context.P12DPackage.EmptyExplorableSites,
+                        out coreOwnerStage, out _,
+                        step => ObserveP12FCoreOwnerRestoreStep(stageObserver, step));
+                }
+                else
+                {
+                    coreStageAccepted = context.Application.TryStageRestoredP12FOwners(
                         context.P12CRoots.CoreRoot, decoded.PoliticalKnowledge,
                         decoded.Directives, decoded.ActorChoices, decoded.TravelParties,
                         decoded.Expeditions, context.P12DPackage.Persons,
@@ -451,8 +472,9 @@ internal sealed class P12FDailyV1OwnerPackage
                         context.P12DPackage.EmptyExplorableSites,
                         context.ExpectedSession, context.ReplacementOperation,
                         out coreOwnerStage, out _,
-                        step => ObserveP12FCoreOwnerRestoreStep(stageObserver, step))
-                    || coreOwnerStage == null)
+                        step => ObserveP12FCoreOwnerRestoreStep(stageObserver, step));
+                }
+                if (!coreStageAccepted || coreOwnerStage == null)
                 {
                     failure = P12FDailyV1OwnerPackageFailure.StageFailed;
                     return false;

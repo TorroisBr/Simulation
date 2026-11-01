@@ -83,6 +83,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
             P12ADailyV1ImageOwnerSnapshots decoded;
             P12AResult imageResult;
             P12CStagedContinuationRoot stagedC;
+            DailyV1RestoredImageCoreOwnerStages stagedCoreOwnerStages = null;
             if (application != null)
             {
                 Action<string> coreStageObserver = stageName =>
@@ -94,10 +95,11 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     stageObserver?.Invoke(stage);
                 };
 
-                bool restoredRootsPrepared = application.TryAdmitDecodeAndStageRestoredContinuationImage(
+                bool restoredRootsPrepared = application.TryBeginRestoredImageCoreOwnerStages(
                     image,
                     expectedCompatibilityV1,
                     expectedCompatibilityV2,
+                    selectedDefinitions,
                     bootstrapAdmissionContext,
                     replacementOperation?.ExpectedSession,
                     replacementOperation,
@@ -105,6 +107,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     out imageCensus,
                     out decoded,
                     out P12CStagedCoreContinuationRoot stagedCoreRoots,
+                    out stagedCoreOwnerStages,
                     out imageResult,
                     () => stageObserver?.Invoke(P12GDailyV1RestoreStage.SourceCaptured),
                     coreStageObserver);
@@ -211,14 +214,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             RuntimeIdentityRegistry stagedIdentities;
             if (application != null)
             {
-                if (!application.TryStageRestoredP12DCoreOwnerGraphFromImageSnapshots(
-                        stagedC.CoreRoot,
-                        decoded,
-                        selectedDefinitions,
-                        replacementOperation?.ExpectedSession,
-                        replacementOperation,
-                        out stagedCoreDOwners,
-                        out imageResult)
+                if (!application.TryStageRestoredImageP12DOwners(
+                        stagedCoreOwnerStages, out stagedCoreDOwners, out imageResult)
                     || stagedCoreDOwners == null)
                 {
                     failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
@@ -258,7 +255,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.DStaged);
 
-            SimulationTime stagedTime = new SimulationTime(image.Header.Day);
+            SimulationTime stagedTime = stagedCoreOwnerStages?.StagedTime ?? new SimulationTime(image.Header.Day);
             SimulationLogger logger = UnitySimulationLoggerAdapter.Create(configuration.LogSettings);
             logger.BeginSimulation(configuration.simulationName, configuration.EnabledModules,
                 configuration.Cities.Count, configuration.Npcs.Count);
@@ -275,7 +272,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 null, stagedC, stagedD, stagedTime, configuration.freeStatus,
                 configuration.wantedStatus, configuration.arrestedStatus,
                 configuration.hiddenStatus, eventRecorder, logger,
-                application, replacementOperation?.ExpectedSession, replacementOperation);
+                application, replacementOperation?.ExpectedSession, replacementOperation,
+                null, stagedCoreOwnerStages);
 
             if (!P12EDailyV1OwnerPackage.TryStageFromImage(image, decoded, eContext,
                     out P12EDailyV1OwnerPackage stagedE,
@@ -300,6 +298,12 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.FStaged);
             stageObserver?.Invoke(P12GDailyV1RestoreStage.OwnersStaged);
+            if (stagedCoreOwnerStages != null && !stagedCoreOwnerStages.IsComplete)
+            {
+                failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
+                diagnostic = "The Core application did not complete the exact ordered P12-C/D/E/F stage operation.";
+                return false;
+            }
 
             if (!TryBuildRestoredSession(configuration, effective, calendar, selectedDefinitions,
                     bootstrapAdmissionContext, image.Header.PoliticalWorldRevision,
