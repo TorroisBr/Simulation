@@ -7465,6 +7465,300 @@ public sealed class SimulationRuntimeAdmissionTests
             UnityEngine.Object.DestroyImmediate(config);
         }
     }
+    [Test]
+    public void SelectedDailyV1StealDispatchRebuildsProjectionFromExactCoreSlot()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        NpcActionData steal = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-Roubar.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        Assert.That(steal, Is.Not.Null);
+        Assert.That(steal.actionType, Is.EqualTo(NpcActionType.Steal));
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        if (!config.Actions.Contains(steal)) config.Actions.Add(steal);
+        bool originalStealCanFail = steal.canFail;
+        float originalStealBaseSuccessChance = steal.baseSuccessChance;
+        steal.canFail = true;
+        steal.baseSuccessChance = 1f;
+        GameObject hostObject = new GameObject("P12 selected Core Steal without action projection");
+        simulationObjects.Add(hostObject);
+        IDisposable dailyAdvanceScope = null;
+        try
+        {
+            NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
+                entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+            Assert.That(graph.JusticeRecordsOwner, Is.Not.Null);
+            JusticeSystem justice = ReadPrivateField<JusticeSystem>(runtime, "justiceSystem");
+            Assert.That(justice, Is.Not.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                steal.id, out DailyV1ActionDefinition actionDefinition), Is.True);
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.StealActionTypeValue));
+
+            NpcRuntime thiefRuntime = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData != null && string.Equals(
+                    npc.NpcData.id, actorConfig.npc.id, StringComparison.Ordinal));
+            CityRuntime city = thiefRuntime.CurrentCity;
+            Assert.That(city, Is.Not.Null);
+            NpcRuntime victimRuntime = city.ImportantNpcs.FirstOrDefault(candidate =>
+                candidate != null && !ReferenceEquals(candidate, thiefRuntime)
+                && ReferenceEquals(candidate.CurrentCity, city)
+                && candidate.SelectedRuntimeOwners?.Lifecycle?.LifeState == NpcLifeState.Alive
+                && candidate.SelectedRuntimeOwners?.MoneyAccount?.Balance >= 1f
+                && candidate.SelectedRuntimeOwners?.HiddenState?.RemainingDays <= 0);
+            Assert.That(victimRuntime, Is.Not.Null,
+                "The admitted local roster must include a living, co-located victim with spendable balance.");
+
+            DailyV1NpcRuntimeOwners thiefOwner = thiefRuntime.SelectedRuntimeOwners;
+            DailyV1NpcRuntimeOwners victimOwner = victimRuntime.SelectedRuntimeOwners;
+            Assert.That(thiefOwner, Is.Not.Null);
+            Assert.That(victimOwner, Is.Not.Null);
+            Assert.That(thiefRuntime.CurrentActionRuntime, Is.Null);
+            Assert.That(thiefRuntime.CurrentAction, Is.Null);
+
+            PersonId thiefPersonId = null;
+            PersonId victimPersonId = null;
+            foreach (NpcRuntime participant in city.ImportantNpcs)
+            {
+                Assert.That(participant?.SelectedRuntimeOwners, Is.Not.Null);
+                PersonId personId = new PersonId(
+                    "p12-selected-core-steal-person-" + participant.RuntimeId);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+                if (ReferenceEquals(participant, thiefRuntime)) thiefPersonId = personId;
+                if (ReferenceEquals(participant, victimRuntime)) victimPersonId = personId;
+            }
+            Assert.That(thiefPersonId, Is.Not.Null);
+            Assert.That(victimPersonId, Is.Not.Null);
+
+            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+                graph.Definitions,
+                actionDefinition,
+                victimOwner.RuntimeId,
+                null,
+                null,
+                1,
+                0f,
+                1f,
+                NpcTravelReason.None,
+                0f,
+                "core-steal-decision-" + thiefOwner.RuntimeId,
+                "core-steal-occurrence-" + thiefOwner.RuntimeId,
+                null,
+                null,
+                out DailyV1NpcActionPayloadOwner exactPayload), Is.True);
+            Assert.That(thiefOwner.ActionSlot.TrySetCurrentAction(
+                actionDefinition, exactPayload), Is.True);
+            thiefOwner.ActionSlot.NotifyCurrentActionMutationCommitted();
+
+            NpcActionRuntime initialProjection = new NpcActionRuntime(steal, victimRuntime);
+            Assert.That(initialProjection.TryUseSelectedPayload(
+                exactPayload, graph.Definitions), Is.True);
+            thiefRuntime.SetCurrentActionRuntime(initialProjection);
+            Assert.That(thiefRuntime.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            MethodInfo beginDailyAdvanceScope = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginDailyAdvanceScope, Is.Not.Null);
+            object[] dailyAdvanceScopeArguments = { "runtime.advance-day", null };
+            Assert.That(beginDailyAdvanceScope.Invoke(runtime, dailyAdvanceScopeArguments),
+                Is.EqualTo(true));
+            dailyAdvanceScope = dailyAdvanceScopeArguments[1] as IDisposable;
+            Assert.That(dailyAdvanceScope, Is.Not.Null);
+
+            // Keep the census baseline exact, then remove only the Unity compatibility projection
+            // to exercise the projectionless Core-owned dispatch path.
+            WritePrivateField<NpcActionRuntime>(thiefRuntime, "currentActionRuntime", null);
+            WritePrivateField<NpcActionData>(thiefRuntime, "currentAction", null);
+            Assert.That(thiefRuntime.CurrentActionRuntime, Is.Null);
+            Assert.That(thiefOwner.ActionSlot.CurrentPayload, Is.SameAs(exactPayload));
+
+            long actionRevisionBeforeRecovery = thiefOwner.ActionSlot.Revision;
+            long thiefMoneyRevisionBefore = thiefOwner.MoneyAccount.Revision;
+            long victimMoneyRevisionBefore = victimOwner.MoneyAccount.Revision;
+            long thiefCrimeJusticeRevisionBefore = thiefOwner.CrimeJusticeRevision;
+            long justiceRevisionBefore = graph.JusticeRecordsOwner.Revision;
+            float thiefBalanceBefore = thiefOwner.MoneyAccount.Balance;
+            float victimBalanceBefore = victimOwner.MoneyAccount.Balance;
+            int theftCountBefore = runtime.CrimeSocialAppraisal.TheftOutcomes.Count;
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochBefore,
+                out ContinuationCensusFailure epochBeforeFailure),
+                Is.True, epochBeforeFailure.ToString());
+
+            MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                "TryCreateSelectedActorActionExecutionBoundary",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(createBoundary, Is.Not.Null);
+            object[] createArguments = { thiefRuntime, null, null };
+            Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true));
+            IDailyV1SelectedActorActionExecutionBoundary actorBoundary =
+                createArguments[2] as IDailyV1SelectedActorActionExecutionBoundary;
+            Assert.That(actorBoundary, Is.Not.Null);
+            MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+            Assert.That(getDispatchBoundary, Is.Not.Null);
+            List<NpcRuntime> runtimeProjections = ReadPrivateField<List<NpcRuntime>>(
+                runtime, "npcRuntimes");
+            int victimProjectionIndex = runtimeProjections.IndexOf(victimRuntime);
+            Assert.That(victimProjectionIndex, Is.GreaterThanOrEqualTo(0));
+
+            CoreSelectedActionCountingRandomSource rejectedRandomSource =
+                new CoreSelectedActionCountingRandomSource();
+            runtimeProjections.RemoveAt(victimProjectionIndex);
+            try
+            {
+                object[] missingProjectionArguments = { thiefOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, missingProjectionArguments),
+                    Is.EqualTo(false));
+                Assert.That(missingProjectionArguments[1], Is.Null);
+                Assert.That(thiefRuntime.CurrentActionRuntime, Is.Null,
+                    "A missing exact victim projection cannot authorize reconstruction.");
+                Assert.That(thiefOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(thiefOwner.MoneyAccount.Revision, Is.EqualTo(thiefMoneyRevisionBefore));
+                Assert.That(victimOwner.MoneyAccount.Revision, Is.EqualTo(victimMoneyRevisionBefore));
+                Assert.That(graph.JusticeRecordsOwner.Revision, Is.EqualTo(justiceRevisionBefore));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long missingProjectionEpoch,
+                    out ContinuationCensusFailure missingProjectionEpochFailure),
+                    Is.True, missingProjectionEpochFailure.ToString());
+                Assert.That(missingProjectionEpoch, Is.EqualTo(mutationEpochBefore));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+            }
+            finally
+            {
+                runtimeProjections.Insert(victimProjectionIndex, victimRuntime);
+            }
+
+            runtimeProjections.Add(victimRuntime);
+            try
+            {
+                object[] duplicateProjectionArguments = { thiefOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, duplicateProjectionArguments),
+                    Is.EqualTo(false));
+                Assert.That(duplicateProjectionArguments[1], Is.Null);
+                Assert.That(thiefRuntime.CurrentActionRuntime, Is.Null,
+                    "An ambiguous victim projection cannot authorize reconstruction.");
+                Assert.That(thiefOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(thiefOwner.MoneyAccount.Revision, Is.EqualTo(thiefMoneyRevisionBefore));
+                Assert.That(victimOwner.MoneyAccount.Revision, Is.EqualTo(victimMoneyRevisionBefore));
+                Assert.That(graph.JusticeRecordsOwner.Revision, Is.EqualTo(justiceRevisionBefore));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long duplicateProjectionEpoch,
+                    out ContinuationCensusFailure duplicateProjectionEpochFailure),
+                    Is.True, duplicateProjectionEpochFailure.ToString());
+                Assert.That(duplicateProjectionEpoch, Is.EqualTo(mutationEpochBefore));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+            }
+            finally
+            {
+                runtimeProjections.RemoveAt(runtimeProjections.Count - 1);
+            }
+
+            object[] recoveredDispatchArguments = { thiefOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(actorBoundary, recoveredDispatchArguments),
+                Is.EqualTo(true));
+            Assert.That(recoveredDispatchArguments[1],
+                Is.InstanceOf<IDailyV1SelectedActionDispatchBoundary>());
+            NpcActionRuntime compatibilityProjection = thiefRuntime.CurrentActionRuntime;
+            Assert.That(compatibilityProjection, Is.Not.Null);
+            Assert.That(compatibilityProjection.SelectedOwner, Is.SameAs(exactPayload));
+            Assert.That(compatibilityProjection.TargetNpc, Is.SameAs(victimRuntime));
+            Assert.That(compatibilityProjection.Amount, Is.EqualTo(exactPayload.Amount));
+            Assert.That(compatibilityProjection.OriginDecisionId,
+                Is.EqualTo(exactPayload.OriginDecisionId));
+            Assert.That(compatibilityProjection.StableOccurrenceKey,
+                Is.EqualTo(exactPayload.StableOccurrenceKey));
+            Assert.That(compatibilityProjection.MatchesSelectedOwner(), Is.True);
+            Assert.That(thiefOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(thiefOwner.MoneyAccount.Revision, Is.EqualTo(thiefMoneyRevisionBefore));
+            Assert.That(victimOwner.MoneyAccount.Revision, Is.EqualTo(victimMoneyRevisionBefore));
+            Assert.That(graph.JusticeRecordsOwner.Revision, Is.EqualTo(justiceRevisionBefore));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterRecovery,
+                out ContinuationCensusFailure epochAfterRecoveryFailure),
+                Is.True, epochAfterRecoveryFailure.ToString());
+            Assert.That(mutationEpochAfterRecovery, Is.EqualTo(mutationEpochBefore),
+                "Rebuilding the exact Steal compatibility projection is not a P12 owner write.");
+
+            CoreSelectedActionCountingRandomSource randomSource =
+                new CoreSelectedActionCountingRandomSource();
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                graph, thiefOwner, randomSource, runtime.CurrentDay, actorBoundary,
+                out bool actionSucceeded, out NpcActionResultType? resultType,
+                out string resultMessage), Is.True);
+            Assert.That(actionSucceeded, Is.True);
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+            Assert.That(resultMessage, Is.Null);
+            Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+            Assert.That(randomSource.StreamKeys.Single(),
+                Is.EqualTo("action-success|" + thiefOwner.RuntimeId + "|"
+                    + exactPayload.OriginDecisionId + "|"
+                    + actionDefinition.DefinitionId + "|" + runtime.CurrentDay));
+            Assert.That(thiefOwner.MoneyAccount.Balance,
+                Is.EqualTo(thiefBalanceBefore + 1f).Within(0.0001f));
+            Assert.That(victimOwner.MoneyAccount.Balance,
+                Is.EqualTo(victimBalanceBefore - 1f).Within(0.0001f));
+            Assert.That(thiefOwner.MoneyAccount.Revision,
+                Is.EqualTo(thiefMoneyRevisionBefore + 1));
+            Assert.That(victimOwner.MoneyAccount.Revision,
+                Is.EqualTo(victimMoneyRevisionBefore + 1));
+            Assert.That(graph.JusticeRecordsOwner.Revision,
+                Is.EqualTo(justiceRevisionBefore + 1));
+            Assert.That(thiefOwner.CrimeJusticeRevision,
+                Is.GreaterThan(thiefCrimeJusticeRevisionBefore));
+            TheftOutcome theft = runtime.CrimeSocialAppraisal.TheftOutcomes.Outcomes.Single(outcome =>
+                string.Equals(outcome.OccurrenceKey, exactPayload.StableOccurrenceKey,
+                    StringComparison.Ordinal));
+            Assert.That(theft.PerpetratorPersonId, Is.EqualTo(thiefPersonId));
+            Assert.That(theft.VictimPersonId, Is.EqualTo(victimPersonId));
+            Assert.That(theft.LossAmount, Is.EqualTo(1));
+            Assert.That(theft.OccurredAbsoluteDay, Is.EqualTo(runtime.CurrentDay));
+            Assert.That(theft.OriginDecisionId, Is.EqualTo(exactPayload.OriginDecisionId));
+            Assert.That(runtime.CrimeSocialAppraisal.TheftOutcomes.Count,
+                Is.EqualTo(theftCountBefore + 1));
+            Assert.That(justice.HasActiveWarrantInCity(thiefRuntime, city), Is.True);
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterSteal,
+                out ContinuationCensusFailure epochAfterStealFailure),
+                Is.True, epochAfterStealFailure.ToString());
+            Assert.That(mutationEpochAfterSteal, Is.GreaterThan(mutationEpochBefore),
+                "The Steal money and Justice owner commits publish their admitted P12 epochs.");
+
+            dailyAdvanceScope.Dispose();
+            dailyAdvanceScope = null;
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
+            dailyAdvanceScope?.Dispose();
+            steal.canFail = originalStealCanFail;
+            steal.baseSuccessChance = originalStealBaseSuccessChance;
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
     [TestCase(ScheduledDirectiveMode.ForceOutcome)]
     [TestCase(ScheduledDirectiveMode.RequestAction)]
     public void SelectedDailyV1EscapeCompletesStatusAndDirectiveWithoutCrimeProvider(

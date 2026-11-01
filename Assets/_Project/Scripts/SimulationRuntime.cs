@@ -12754,7 +12754,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 && (IsProjectionIndependentNormalActionSlot(actor)
                     || IsExactSelectedCoreCrimeOrGuardActionSlot(actor)))
             {
-                // Selected Normal, Hide, Escape, and Guard Arrest read their exact Core slots.
+                // Selected Normal, Hide, Escape, Guard Arrest, and Steal read their exact Core slots.
                 // A missing projection contributes no target text to these
                 // Core-owned actions.
                 return;
@@ -12803,6 +12803,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 || actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue;
             bool isFleeCity = actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue;
             bool isGuardArrest = actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue;
+            bool isSteal = actionType == DailyV1NpcDefinitionRules.StealActionTypeValue;
             bool hasExactSupportedPayloadShape = isFleeCity
                 ? payload != null
                     && payload.TargetNpcRuntimeId == null
@@ -12813,8 +12814,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                         && payload.TargetCityRuntimeId == null
                         && payload.TargetItem == null
                         && payload.Amount == 0
-                    : isHideOrEscape
-                        && payload?.TargetNpcRuntimeId == null
+                    : isSteal
+                        ? !string.IsNullOrWhiteSpace(payload?.TargetNpcRuntimeId)
+                            && payload.TargetCityRuntimeId == null
+                            && payload.TargetItem == null
+                        : isHideOrEscape
+                            && payload?.TargetNpcRuntimeId == null
                         && payload.TargetCityRuntimeId == null
                         && payload.TargetItem == null
                         && payload.Amount == 0;
@@ -12830,7 +12835,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 && graph.Definitions.Actions.TryGetValue(
                     action.DefinitionId, out DailyV1ActionDefinition admittedAction)
                 && ReferenceEquals(action, admittedAction)
-                && (isHideOrEscape || isFleeCity || isGuardArrest)
+                && (isHideOrEscape || isFleeCity || isGuardArrest || isSteal)
                 && ReferenceEquals(payload?.Action, action)
                 && hasExactSupportedPayloadShape
                 && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
@@ -12842,7 +12847,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             int? actionType = actor?.ActionSlot?.CurrentAction?.Values.actionType?.Value;
             return (actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
                     || actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue
-                    || actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue)
+                    || actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue
+                    || actionType == DailyV1NpcDefinitionRules.StealActionTypeValue)
                 && IsExactSelectedCoreProjectionlessDispatchActionSlot(actor);
         }
 
@@ -12889,7 +12895,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
                 || actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue
                 || actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
-                || actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue;
+                || actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue
+                || actionType == DailyV1NpcDefinitionRules.StealActionTypeValue;
             if (selectedCoreProjectionlessAction
                 && !IsExactSelectedCoreProjectionlessDispatchActionSlot(actor))
                 return false;
@@ -12897,7 +12904,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             if (!HasExactCurrentActionProjection(actor))
             {
                 // Missing compatibility projections are supported for selected Core-owned
-                // Crime, Guard Arrest, and FleeCity actions. A present stale projection
+                // Crime, Guard Arrest, Steal, and FleeCity actions. A present stale projection
                 // remains an identity error and fails closed.
                 if (exactRuntime.CurrentActionRuntime != null
                     || !IsExactSelectedCoreProjectionlessDispatchActionSlot(actor))
@@ -12916,7 +12923,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     return false;
 
                 NpcRuntime targetNpcProjection = null;
-                if (actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue)
+                if (actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue
+                    || actionType == DailyV1NpcDefinitionRules.StealActionTypeValue)
                 {
                     if (string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
                         || !graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
@@ -12944,7 +12952,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                         payload.TravelReason, payload.ExpectedUnitPrice,
                         payload.ExpectedNetValue);
                 }
-                else if (actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue)
+                else if (actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue
+                    || actionType == DailyV1NpcDefinitionRules.StealActionTypeValue)
                 {
                     compatibilityProjection = new NpcActionRuntime(actionAsset, targetNpcProjection);
                 }
@@ -12958,13 +12967,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     || !HasExactCurrentActionProjection(actor))
                     return false;
 
-                // Hide, Escape, Guard Arrest, and FleeCity already have Core-owned
+                // Hide, Escape, Guard Arrest, Steal, and FleeCity already have Core-owned
                 // eligibility, roll,
                 // owner mutation, and P12 dispatch. The Unity action object is rebuilt
                 // only as the compatibility view of the exact Core payload; it does not
                 // execute the selected action or decide its outcome.
                 if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
-                    || actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue)
+                    || actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue
+                    || actionType == DailyV1NpcDefinitionRules.StealActionTypeValue)
                 {
                     dispatchBoundary = new SelectedActionDispatchBoundaryAdapter(
                         runtime, exactRuntime, compatibilityProjection, actionAsset);
