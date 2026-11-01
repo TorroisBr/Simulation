@@ -782,55 +782,95 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 return false;
             }
 
-            if (!targetRuntime.TryBindRestoredCandidateMutationGuard(out string mutationGuardDiagnostic))
+            if (application != null)
             {
-                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
-                diagnostic = mutationGuardDiagnostic;
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.CandidateGuardBound);
+                if (candidate.CoreRuntimeSession == null)
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
+                    diagnostic = "The Core application restore composition returned no candidate session to finalize.";
+                    return false;
+                }
 
-            if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> postBindingOwnerSections,
-                    out long postBindingMutationEpoch,
-                    out ContinuationCensusFailure postBindingCensusFailure))
-            {
-                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
-                diagnostic = "The private target could not recapture its owner vector after mutation-guard binding: "
-                    + postBindingCensusFailure + ".";
-                return false;
-            }
+                if (!application.TryFinalizeRestoredCandidateBoundary(
+                        candidate.CoreRuntimeSession,
+                        targetRuntime,
+                        stagedC.WorldIdentity,
+                        sourceToken.AbsoluteDay,
+                        sourceToken.CompletedCoreSequence,
+                        targetOwnerSections,
+                        targetMutationEpoch,
+                        replacementOperation?.ExpectedSession,
+                        replacementOperation,
+                        stageObserver == null
+                            ? null
+                            : stage => stageObserver(MapRestoreFinalizationStage(stage)),
+                        out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedOwnerSections,
+                        out long recapturedMutationEpoch,
+                        out DailyV1RestoredBoundaryFinalizationFailure finalizationFailure,
+                        out diagnostic))
+                {
+                    failure = MapRestoreFinalizationFailure(finalizationFailure);
+                    if (string.IsNullOrWhiteSpace(diagnostic))
+                        diagnostic = "The Core application could not finalize its restored owner boundary: "
+                            + finalizationFailure + ".";
+                    return false;
+                }
 
-            if (!P12GDailyV1OwnerVector.TryMatchCurrentTargetSnapshot(
-                    targetOwnerSections,
-                    targetMutationEpoch,
-                    postBindingOwnerSections,
-                    postBindingMutationEpoch,
-                    out P12GDailyV1OwnerVectorFailure postBindingVectorFailure,
-                    out string postBindingVectorDiagnostic))
-            {
-                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
-                diagnostic = "The private target owner vector changed during mutation-guard binding: "
-                    + (postBindingVectorDiagnostic ?? postBindingVectorFailure.ToString());
-                return false;
+                targetOwnerSections = recapturedOwnerSections;
+                targetMutationEpoch = recapturedMutationEpoch;
             }
-            targetOwnerSections = postBindingOwnerSections;
-            targetMutationEpoch = postBindingMutationEpoch;
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured);
+            else
+            {
+                if (!targetRuntime.TryBindRestoredCandidateMutationGuard(out string mutationGuardDiagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                    diagnostic = mutationGuardDiagnostic;
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.CandidateGuardBound);
 
-            if (!targetRuntime.TryAdmitRestoredDailyBoundary(
-                    stagedC.WorldIdentity,
-                    sourceToken.AbsoluteDay,
-                    sourceToken.CompletedCoreSequence,
-                    targetOwnerSections,
-                    targetMutationEpoch,
-                    out DailyCaptureEligibilityFailure admissionFailure))
-            {
-                failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
-                diagnostic = "The target-bound completed-boundary admission failed: " + admissionFailure + ".";
-                return false;
+                if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                        out IReadOnlyList<OwnerSectionCensusSnapshot> postBindingOwnerSections,
+                        out long postBindingMutationEpoch,
+                        out ContinuationCensusFailure postBindingCensusFailure))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                    diagnostic = "The private target could not recapture its owner vector after mutation-guard binding: "
+                        + postBindingCensusFailure + ".";
+                    return false;
+                }
+
+                if (!P12GDailyV1OwnerVector.TryMatchCurrentTargetSnapshot(
+                        targetOwnerSections,
+                        targetMutationEpoch,
+                        postBindingOwnerSections,
+                        postBindingMutationEpoch,
+                        out P12GDailyV1OwnerVectorFailure postBindingVectorFailure,
+                        out string postBindingVectorDiagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                    diagnostic = "The private target owner vector changed during mutation-guard binding: "
+                        + (postBindingVectorDiagnostic ?? postBindingVectorFailure.ToString());
+                    return false;
+                }
+                targetOwnerSections = postBindingOwnerSections;
+                targetMutationEpoch = postBindingMutationEpoch;
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured);
+
+                if (!targetRuntime.TryAdmitRestoredDailyBoundary(
+                        stagedC.WorldIdentity,
+                        sourceToken.AbsoluteDay,
+                        sourceToken.CompletedCoreSequence,
+                        targetOwnerSections,
+                        targetMutationEpoch,
+                        out DailyCaptureEligibilityFailure admissionFailure))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
+                    diagnostic = "The target-bound completed-boundary admission failed: " + admissionFailure + ".";
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.BoundaryAdmitted);
             }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.BoundaryAdmitted);
 
             if (!targetRuntime.HasValidRestoredDailyBoundaryAdmission()
                 || !targetRuntime.IsHealthyDailyOwnerThreadBoundary()
