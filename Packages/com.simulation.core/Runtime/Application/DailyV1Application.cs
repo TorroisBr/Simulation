@@ -56,6 +56,8 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
     internal P12CStagedCoreContinuationRoot CoreRoots { get; }
     internal SimulationTime StagedTime { get; }
     internal DailyV1P12DCoreRestoreOwnerStage D { get; private set; }
+    internal NpcDecisionStore DecisionStore { get; private set; }
+    internal DailyV1DomainEventAuthority EventAuthority { get; private set; }
     internal P12ECoreOwnerRestoreStage E { get; private set; }
     internal DailyV1P12FCoreOwnerRestoreStage F { get; private set; }
     internal ExplorableSiteStore EmptyExplorableSites { get; private set; }
@@ -65,10 +67,13 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
     internal DailyV1ActiveRuntimeSession ExpectedSession => expectedSession;
     internal DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation ReplacementOperation => replacementOperation;
     internal bool CanStageD => !failed && D == null && E == null && F == null;
-    internal bool CanStageE => !failed && D != null && E == null && F == null;
+    internal bool CanPrepareRuntimeAuthorities => !failed && D != null
+        && DecisionStore == null && EventAuthority == null && E == null && F == null;
+    internal bool CanStageE => !failed && D != null && DecisionStore != null
+        && EventAuthority != null && E == null && F == null;
     internal bool CanStageF => !failed && D != null && E != null && F == null;
-    internal bool IsComplete => !failed && D != null && E != null && F != null
-        && EmptyExplorableSites != null;
+    internal bool IsComplete => !failed && D != null && DecisionStore != null
+        && EventAuthority != null && E != null && F != null && EmptyExplorableSites != null;
 
     internal DailyV1RestoredImageCoreOwnerStages(
         DailyV1Application application,
@@ -121,6 +126,26 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
         return true;
     }
 
+    internal bool TryAcceptRuntimeAuthorities(
+        NpcDecisionStore decisionStore,
+        DailyV1DomainEventAuthority eventAuthority)
+    {
+        if (!CanPrepareRuntimeAuthorities || decisionStore == null || eventAuthority == null
+            || !eventAuthority.IsFor(CoreRoots.RuntimeIdAllocator, StagedTime,
+                CoreRoots.RecordSequence, decisionStore))
+            return false;
+        DecisionStore = decisionStore;
+        EventAuthority = eventAuthority;
+        return true;
+    }
+
+    internal bool HasRuntimeAuthorities(
+        NpcDecisionStore decisionStore,
+        DailyV1DomainEventAuthority eventAuthority) =>
+        !failed && D != null
+        && ReferenceEquals(DecisionStore, decisionStore)
+        && ReferenceEquals(EventAuthority, eventAuthority);
+
     internal bool TryAcceptF(DailyV1P12FCoreOwnerRestoreStage staged, ExplorableSiteStore emptyExplorableSites)
     {
         if (!CanStageF || staged == null || emptyExplorableSites == null) return false;
@@ -133,6 +158,8 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
     {
         failed = true;
         D = null;
+        DecisionStore = null;
+        EventAuthority = null;
         E = null;
         F = null;
         EmptyExplorableSites = null;
@@ -2495,6 +2522,66 @@ internal sealed class DailyV1Application
 
         result = null;
         return true;
+    }
+
+    /// <summary>
+    /// Creates the restored image's exact decision/event/history roots after
+    /// P12-D and before P12-E. The host supplies only its already-bound logger;
+    /// the Core application owns the stores and identity-bound record authority.
+    /// </summary>
+    internal bool TryPrepareRestoredImageCoreRuntimeAuthorities(
+        DailyV1RestoredImageCoreOwnerStages stages,
+        SimulationLogger diagnosticLogger,
+        out NpcDecisionStore decisionStore,
+        out DailyV1DomainEventAuthority eventAuthority,
+        out P12AResult result)
+    {
+        decisionStore = null;
+        eventAuthority = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        if (stages == null
+            || !stages.IsFor(this, stages.Image, stages.Definitions, stages.CoreRoots,
+                stages.ExpectedSession, stages.ReplacementOperation)
+            || !stages.CanPrepareRuntimeAuthorities
+            || !HasRestoredContinuationStagingAuthority(stages.ExpectedSession, stages.ReplacementOperation)
+            || diagnosticLogger == null)
+        {
+            stages?.Fail();
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            return false;
+        }
+
+        try
+        {
+            NpcDecisionStore candidateDecisionStore = new NpcDecisionStore(diagnosticLogger);
+            DailyV1DomainEventAuthority candidateEventAuthority = DailyV1DomainEventAuthority.Create(
+                stages.CoreRoots.RuntimeIdAllocator,
+                stages.StagedTime,
+                stages.CoreRoots.RecordSequence,
+                candidateDecisionStore,
+                diagnosticLogger);
+            if (!stages.TryAcceptRuntimeAuthorities(candidateDecisionStore, candidateEventAuthority))
+            {
+                stages.Fail();
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12.core.restored-image-record-authority");
+                return false;
+            }
+
+            decisionStore = candidateDecisionStore;
+            eventAuthority = candidateEventAuthority;
+            result = null;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException
+            || exception is NullReferenceException)
+        {
+            stages.Fail();
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12.core.restored-image-record-authority");
+            return false;
+        }
     }
 
     /// <summary>Stages P12-E Core owners from the exact P12-C/D portion of the operation.</summary>

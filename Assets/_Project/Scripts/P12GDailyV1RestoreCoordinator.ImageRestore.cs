@@ -259,9 +259,28 @@ internal static partial class P12GDailyV1RestoreCoordinator
             SimulationLogger logger = UnitySimulationLoggerAdapter.Create(configuration.LogSettings);
             logger.BeginSimulation(configuration.simulationName, configuration.EnabledModules,
                 configuration.Cities.Count, configuration.Npcs.Count);
-            NpcDecisionStore decisions = new NpcDecisionStore(logger);
-            DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
-                stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, decisions, logger);
+            NpcDecisionStore decisions;
+            DailyV1DomainEventAuthority eventAuthority;
+            if (application != null)
+            {
+                if (stagedCoreOwnerStages == null
+                    || !application.TryPrepareRestoredImageCoreRuntimeAuthorities(
+                        stagedCoreOwnerStages, logger,
+                        out decisions, out eventAuthority, out imageResult)
+                    || !stagedCoreOwnerStages.HasRuntimeAuthorities(decisions, eventAuthority))
+                {
+                    failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
+                    diagnostic = "The Core application could not create the exact P12-C-bound decision and event authorities: "
+                        + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
+                    return false;
+                }
+            }
+            else
+            {
+                decisions = new NpcDecisionStore(logger);
+                eventAuthority = DailyV1DomainEventAuthority.Create(
+                    stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, decisions, logger);
+            }
             HistoryStore history = eventAuthority.History;
             DomainEventStore eventStore = eventAuthority.EventStore;
             DomainEventRecorder eventRecorder = eventAuthority.Recorder;
