@@ -7634,6 +7634,10 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(missingProjectionArguments[1], Is.Null);
                 Assert.That(thiefRuntime.CurrentActionRuntime, Is.Null,
                     "A missing exact victim projection cannot authorize reconstruction.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, thiefOwner, rejectedRandomSource, runtime.CurrentDay, actorBoundary,
+                        out _, out _, out _));
                 Assert.That(thiefOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
                 Assert.That(thiefOwner.MoneyAccount.Revision, Is.EqualTo(thiefMoneyRevisionBefore));
                 Assert.That(victimOwner.MoneyAccount.Revision, Is.EqualTo(victimMoneyRevisionBefore));
@@ -7659,6 +7663,10 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(duplicateProjectionArguments[1], Is.Null);
                 Assert.That(thiefRuntime.CurrentActionRuntime, Is.Null,
                     "An ambiguous victim projection cannot authorize reconstruction.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, thiefOwner, rejectedRandomSource, runtime.CurrentDay, actorBoundary,
+                        out _, out _, out _));
                 Assert.That(thiefOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
                 Assert.That(thiefOwner.MoneyAccount.Revision, Is.EqualTo(thiefMoneyRevisionBefore));
                 Assert.That(victimOwner.MoneyAccount.Revision, Is.EqualTo(victimMoneyRevisionBefore));
