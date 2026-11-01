@@ -1536,6 +1536,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 // not reselect the authoritative instances.
                 if (!application.TryCreateRestoredActiveRuntimeSessionFromOwnerStages(
                         selectedDefinitions,
+                        effective,
                         stagedC.CoreRoot,
                         stagedD.CoreRestoreOwners,
                         stagedE.CoreOwnerRestoreStage,

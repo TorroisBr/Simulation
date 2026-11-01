@@ -121,6 +121,28 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
+    public void RestoredOwnerStageCompositionRejectsDifferentEffectiveConfigurationReference()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        EffectiveSimulationConfiguration differentConfiguration = SimulationConfigurationDefaults.Create();
+        Assert.That(ReferenceEquals(definitions.EffectiveConfiguration, differentConfiguration), Is.False);
+
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCreateRestoredActiveRuntimeSessionFromOwnerStages(
+            definitions,
+            differentConfiguration,
+            null, null, null, null,
+            null, null, null, null,
+            0L, null,
+            out DailyV1ActiveRuntimeSession candidate,
+            out SimulationCalendar calendar,
+            out string diagnostic), Is.False);
+        Assert.That(candidate, Is.Null);
+        Assert.That(calendar, Is.Null);
+        Assert.That(diagnostic, Does.Contain("exact admitted definitions and effective configuration"));
+    }
+
+    [Test]
     public void InitialGenesisRequiresCompletedNoSaveAdmission()
     {
         DailyV1Application application = new DailyV1Application();

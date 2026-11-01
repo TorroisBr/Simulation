@@ -592,6 +592,7 @@ internal sealed class DailyV1Application
     /// </summary>
     internal bool TryCreateRestoredActiveRuntimeSessionFromOwnerStages(
         DailyV1EffectiveDefinitions definitions,
+        EffectiveSimulationConfiguration effectiveConfiguration,
         P12CStagedCoreContinuationRoot stagedRoots,
         DailyV1P12DCoreRestoreOwnerStage stagedD,
         P12ECoreOwnerRestoreStage stagedE,
@@ -609,9 +610,11 @@ internal sealed class DailyV1Application
         candidate = null;
         calendar = null;
         diagnostic = null;
-        if (definitions == null || definitions.EffectiveConfiguration == null || definitions.Calendar == null)
+        if (definitions == null || effectiveConfiguration == null
+            || !ReferenceEquals(definitions.EffectiveConfiguration, effectiveConfiguration)
+            || definitions.Calendar == null)
         {
-            diagnostic = "Core restore composition requires the admitted definitions, effective configuration, and calendar.";
+            diagnostic = "Core restore composition requires the exact admitted definitions and effective configuration.";
             return false;
         }
         if (stagedRoots == null)
@@ -674,7 +677,7 @@ internal sealed class DailyV1Application
         return TryCreateRestoredActiveRuntimeSession(
             definitions,
             stagedRoots.GenesisManifest,
-            definitions.EffectiveConfiguration,
+            effectiveConfiguration,
             calendarDefinition,
             simulationTime,
             admissionContext,
