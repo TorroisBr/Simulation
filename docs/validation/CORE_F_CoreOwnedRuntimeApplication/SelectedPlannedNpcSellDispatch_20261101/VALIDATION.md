@@ -43,5 +43,3 @@ The CoreValidation private manifest SHA-256 is `3dbad3c8abe28a810b8e2fd1d73a9a84
 ## Boundary
 
 This candidate slice is limited to planned NPC SellGoods projection recovery and the corresponding Core dispatch gate. It does not complete CORE-F, claim a detached host or DailyV1Application integration, or advance Core canonical. No ProjectSettings, unrelated source files, local user modifications, or protected evidence were included in the candidate scope.
-
-
