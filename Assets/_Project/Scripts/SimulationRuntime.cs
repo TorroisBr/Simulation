@@ -12169,6 +12169,33 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 new SelectedActionSlotP12MutationProtocol(this);
         }
 
+        private bool TryGetExactCityProjectionByRuntimeId(
+            string runtimeId,
+            out CityRuntime projectedCity)
+        {
+            projectedCity = null;
+            if (string.IsNullOrWhiteSpace(runtimeId) || runtime.Cities == null
+                || graph.SpatialNetwork == null)
+                return false;
+
+            foreach (CityRuntime candidate in runtime.Cities)
+            {
+                DailyV1CityRuntimeOwners owner = candidate?.SelectedRuntimeOwners;
+                if (owner == null
+                    || !string.Equals(owner.RuntimeId, runtimeId, StringComparison.Ordinal))
+                    continue;
+                if (projectedCity != null
+                    || !graph.ContainsExactCityOwner(owner)
+                    || !graph.SpatialNetwork.TryGetLocation(
+                        owner.LocationRuntimeId, out SpatialLocationRuntime exactLocation)
+                    || !ReferenceEquals(candidate.Location, exactLocation))
+                    return false;
+                projectedCity = candidate;
+            }
+
+            return projectedCity != null;
+        }
+
         public bool IsReservedToday(DailyV1NpcRuntimeOwners actor)
         {
             RequireExactActor(actor);
@@ -12765,12 +12792,26 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 && ReferenceEquals(actionRuntime.TargetNpc, exactTargetRuntime);
         }
 
-        private bool IsExactSelectedCoreCrimeActionSlot(DailyV1NpcRuntimeOwners actor)
+        private bool IsExactSelectedCoreProjectionlessDispatchActionSlot(
+            DailyV1NpcRuntimeOwners actor)
         {
             NpcRuntime exactRuntime = RequireExactActor(actor);
             DailyV1ActionDefinition action = actor?.ActionSlot?.CurrentAction;
             DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
             int? actionType = action?.Values.actionType?.Value;
+            bool isHideOrEscape = actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
+                || actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue;
+            bool isFleeCity = actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue;
+            bool hasExactSupportedPayloadShape = isFleeCity
+                ? payload != null
+                    && payload.TargetNpcRuntimeId == null
+                    && !string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+                    && payload.TargetItem == null
+                : isHideOrEscape
+                    && payload?.TargetNpcRuntimeId == null
+                    && payload.TargetCityRuntimeId == null
+                    && payload.TargetItem == null
+                    && payload.Amount == 0;
             return exactRuntime.UsesSelectedDailyV1Definitions
                 && ReferenceEquals(exactRuntime.SelectedRuntimeOwnerGraph, graph)
                 && runtime.runtimeAdmissionContext != null
@@ -12783,15 +12824,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 && graph.Definitions.Actions.TryGetValue(
                     action.DefinitionId, out DailyV1ActionDefinition admittedAction)
                 && ReferenceEquals(action, admittedAction)
-                && (actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
-                    || actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)
+                && (isHideOrEscape || isFleeCity)
                 && ReferenceEquals(payload?.Action, action)
-                && payload.TargetNpcRuntimeId == null
-                && payload.TargetCityRuntimeId == null
-                && payload.TargetItem == null
-                && payload.Amount == 0
+                && hasExactSupportedPayloadShape
                 && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
                     graph.Definitions, action);
+        }
+
+        private bool IsExactSelectedCoreCrimeActionSlot(DailyV1NpcRuntimeOwners actor)
+        {
+            int? actionType = actor?.ActionSlot?.CurrentAction?.Values.actionType?.Value;
+            return (actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
+                    || actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)
+                && IsExactSelectedCoreProjectionlessDispatchActionSlot(actor);
         }
 
         private bool IsProjectionIndependentNormalActionSlot(DailyV1NpcRuntimeOwners actor)
@@ -12817,17 +12862,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             dispatchBoundary = null;
             projectionlessCoreCrimeDispatchActor = null;
             int? actionType = actor?.ActionSlot?.CurrentAction?.Values.actionType?.Value;
-            bool selectedCoreCrimeAction = actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
-                || actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue;
-            if (selectedCoreCrimeAction && !IsExactSelectedCoreCrimeActionSlot(actor))
+            bool selectedCoreProjectionlessAction =
+                actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
+                || actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue
+                || actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue;
+            if (selectedCoreProjectionlessAction
+                && !IsExactSelectedCoreProjectionlessDispatchActionSlot(actor))
                 return false;
 
             if (!HasExactCurrentActionProjection(actor))
             {
-                // A missing projection is supported for selected Crime actions. A present
-                // stale projection remains an identity error and fails closed.
+                // Missing compatibility projections are supported for selected Core-owned
+                // Crime and FleeCity actions. A present stale projection remains an identity
+                // error and fails closed.
                 if (exactRuntime.CurrentActionRuntime != null
-                    || !IsExactSelectedCoreCrimeActionSlot(actor))
+                    || !IsExactSelectedCoreProjectionlessDispatchActionSlot(actor))
                     return false;
 
                 // P12 capture keeps the Unity action object as a compatibility view of the
@@ -12841,20 +12890,40 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                         selectedAction, out NpcActionData actionAsset)
                     || actionAsset == null)
                     return false;
-                NpcActionRuntime compatibilityProjection = new NpcActionRuntime(actionAsset);
+
+                CityRuntime targetCityProjection = null;
+                if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
+                    && !TryGetExactCityProjectionByRuntimeId(
+                        payload.TargetCityRuntimeId, out targetCityProjection))
+                    return false;
+
+                NpcActionRuntime compatibilityProjection = actionType
+                    == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
+                    ? new NpcActionRuntime(actionAsset, targetCityProjection, null,
+                        payload.TravelReason, payload.ExpectedUnitPrice,
+                        payload.ExpectedNetValue)
+                    : new NpcActionRuntime(actionAsset);
                 if (!compatibilityProjection.TryUseSelectedPayload(payload, graph.Definitions)
                     || !exactRuntime.TryInstallPrecommittedCurrentActionRuntime(
                         compatibilityProjection, notifyP12MutationBoundary: false)
                     || !HasExactCurrentActionProjection(actor))
                     return false;
 
-                // Hide and Escape already have Core-owned decision, eligibility, roll,
-                // owner mutation and P12 dispatch. This boundary republishes only the
-                // Unity compatibility projection from the exact Core payload; it does
-                // not execute the action through that projection.
-                projectionlessCoreCrimeDispatchActor = actor;
-                dispatchBoundary = new SelectedActionDispatchBoundaryAdapter(
-                    runtime, exactRuntime, null, null);
+                // Hide, Escape, and FleeCity already have Core-owned eligibility, roll,
+                // owner mutation, and P12 dispatch. The Unity action object is rebuilt
+                // only as the compatibility view of the exact Core payload; it does not
+                // execute the selected action or decide its outcome.
+                if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue)
+                {
+                    dispatchBoundary = new SelectedActionDispatchBoundaryAdapter(
+                        runtime, exactRuntime, compatibilityProjection, actionAsset);
+                }
+                else
+                {
+                    projectionlessCoreCrimeDispatchActor = actor;
+                    dispatchBoundary = new SelectedActionDispatchBoundaryAdapter(
+                        runtime, exactRuntime, null, null);
+                }
                 return true;
             }
 
@@ -12874,7 +12943,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             NpcRuntime exactRuntime = RequireExactActor(actor);
             if (dispatch?.Kind == DailyV1SelectedActionDispatchKind.Crime
                 && ReferenceEquals(projectionlessCoreCrimeDispatchActor, actor)
-                && IsExactSelectedCoreCrimeActionSlot(actor))
+                && IsExactSelectedCoreProjectionlessDispatchActionSlot(actor))
             {
                 // The Core Crime transition publishes its domain event through
                 // the host sink. There is no Unity action result to complete.

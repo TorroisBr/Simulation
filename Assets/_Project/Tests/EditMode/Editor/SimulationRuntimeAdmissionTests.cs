@@ -6646,7 +6646,7 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
                 out long mutationEpochBefore, out ContinuationCensusFailure epochBeforeFailure),
                 Is.True, epochBeforeFailure.ToString());
-            CoreHideCountingRandomSource randomSource = new CoreHideCountingRandomSource();
+            CoreSelectedActionCountingRandomSource randomSource = new CoreSelectedActionCountingRandomSource();
             Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
                 graph, actorOwner, randomSource, runtime.CurrentDay,
                 actorBoundary as IDailyV1SelectedActorActionExecutionBoundary,
@@ -6685,7 +6685,7 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
-    private sealed class CoreHideCountingRandomSource : IAuthoritativeRandomSource
+    private sealed class CoreSelectedActionCountingRandomSource : IAuthoritativeRandomSource
     {
         internal int DrawCount => StreamKeys.Count;
         internal List<string> StreamKeys { get; } = new List<string>();
@@ -6944,7 +6944,7 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
                     out long mutationEpochBefore, out ContinuationCensusFailure epochBeforeFailure),
                     Is.True, epochBeforeFailure.ToString());
-                CoreHideCountingRandomSource randomSource = new CoreHideCountingRandomSource();
+                CoreSelectedActionCountingRandomSource randomSource = new CoreSelectedActionCountingRandomSource();
                 Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
                     graph, actorOwner, randomSource, runtime.CurrentDay, actorBoundary,
                     out bool actionSucceeded, out NpcActionResultType? resultType,
@@ -6996,6 +6996,252 @@ public sealed class SimulationRuntimeAdmissionTests
             UnityEngine.Object.DestroyImmediate(config);
         }
     }
+    [Test]
+    public void SelectedDailyV1FleeCityDispatchRebuildsProjectionFromExactCoreSlot()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
+            entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
+        NpcActionData flee = SimulationTestFactory.CreateAction(
+            "core-flee-city-without-unity-action-projection",
+            NpcActionType.FleeCity, NpcActionCategory.Crime);
+        flee.canFail = true;
+        flee.baseSuccessChance = 1f;
+        flee.statusNecessariosParaFazerAcao.Add(config.freeStatus);
+        config.Actions.Add(flee);
+        config.ScheduledDirectives.Clear();
+
+        GameObject hostObject = new GameObject("P12 selected Core FleeCity without action projection");
+        simulationObjects.Add(hostObject);
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+
+            NpcRuntime actor = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData != null && string.Equals(
+                    npc.NpcData.id, actorConfig.npc.id, StringComparison.Ordinal));
+            DailyV1NpcRuntimeOwners actorOwner = actor.SelectedRuntimeOwners;
+            Assert.That(actorOwner, Is.Not.Null);
+            Assert.That(actor.CurrentCity, Is.Not.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                flee.id, out DailyV1ActionDefinition actionDefinition), Is.True);
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.FleeCityActionTypeValue));
+            Assert.That(actor.CurrentActionRuntime, Is.Null);
+
+            CityRuntime destination = null;
+            float expectedTravelCost = -1f;
+            foreach (CityRuntime candidate in runtime.Cities)
+            {
+                DailyV1CityRuntimeOwners candidateOwner = candidate?.SelectedRuntimeOwners;
+                if (candidate == null || candidateOwner == null
+                    || ReferenceEquals(candidate, actor.CurrentCity)
+                    || !graph.ContainsExactCityOwner(candidateOwner)
+                    || !graph.TryPlanSelectedSoloTravel(actorOwner,
+                        actorOwner.Travel.CurrentLocationRuntimeId,
+                        candidateOwner.LocationRuntimeId,
+                        candidateOwner.RuntimeId,
+                        out SpatialRouteRuntime route,
+                        out float travelCost)
+                    || route == null
+                    || !actorOwner.MoneyAccount.CanDebit(travelCost))
+                    continue;
+
+                destination = candidate;
+                expectedTravelCost = travelCost;
+                break;
+            }
+            Assert.That(destination, Is.Not.Null,
+                "The admitted authored profile supplies an exact directly reachable destination city.");
+            DailyV1CityRuntimeOwners destinationOwner = destination.SelectedRuntimeOwners;
+            Assert.That(graph.ContainsExactCityOwner(destinationOwner), Is.True);
+
+            foreach (NpcRuntime participant in actor.CurrentCity.ImportantNpcs)
+            {
+                Assert.That(participant?.NpcData, Is.Not.Null);
+                PersonId personId = new PersonId(
+                    "p12-selected-core-flee-person-" + participant.NpcData.id);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            MethodInfo beginDailyAdvanceScope = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginDailyAdvanceScope, Is.Not.Null);
+            object[] dailyAdvanceScopeArguments = { "runtime.advance-day", null };
+            Assert.That(beginDailyAdvanceScope.Invoke(runtime, dailyAdvanceScopeArguments), Is.EqualTo(true));
+            IDisposable dailyAdvanceScope = dailyAdvanceScopeArguments[1] as IDisposable;
+            Assert.That(dailyAdvanceScope, Is.Not.Null);
+            try
+            {
+                actor.SetCurrentActionRuntime(new NpcActionRuntime(
+                    flee, destination, null, NpcTravelReason.Flee, expectedTravelCost, 0f));
+                Assert.That(actor.CurrentActionRuntime, Is.Not.Null);
+                DailyV1NpcActionPayloadOwner exactPayload = actorOwner.ActionSlot.CurrentPayload;
+                Assert.That(actorOwner.ActionSlot.CurrentAction, Is.SameAs(actionDefinition));
+                Assert.That(exactPayload.Action, Is.SameAs(actionDefinition));
+                Assert.That(exactPayload.TargetCityRuntimeId,
+                    Is.EqualTo(destinationOwner.RuntimeId));
+                Assert.That(actor.CurrentActionRuntime.SelectedOwner, Is.SameAs(exactPayload));
+                Assert.That(actor.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+
+                long actionRevisionBeforeRecovery = actorOwner.ActionSlot.Revision;
+                long travelPlanRevisionBeforeRecovery = actorOwner.TravelPlan.Revision;
+                long travelRevisionBeforeRecovery = actorOwner.Travel.Revision;
+                long moneyRevisionBeforeRecovery = actorOwner.MoneyAccount.Revision;
+                float moneyBalanceBeforeRecovery = actorOwner.MoneyAccount.Balance;
+                string currentCityBeforeRecovery = actorOwner.Travel.CurrentCityRuntimeId;
+                string currentLocationBeforeRecovery = actorOwner.Travel.CurrentLocationRuntimeId;
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochBeforeRecovery,
+                    out ContinuationCensusFailure epochBeforeRecoveryFailure),
+                    Is.True, epochBeforeRecoveryFailure.ToString());
+
+                WritePrivateField<NpcActionRuntime>(actor, "currentActionRuntime", null);
+                WritePrivateField<NpcActionData>(actor, "currentAction", null);
+                Assert.That(actor.CurrentActionRuntime, Is.Null);
+
+                MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                    "TryCreateSelectedActorActionExecutionBoundary",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(createBoundary, Is.Not.Null);
+                object[] createArguments = { actor, null, null };
+                Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true));
+                IDailyV1SelectedActorActionExecutionBoundary actorBoundary =
+                    createArguments[2] as IDailyV1SelectedActorActionExecutionBoundary;
+                Assert.That(actorBoundary, Is.Not.Null);
+                MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                    "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+                Assert.That(getDispatchBoundary, Is.Not.Null);
+                object[] dispatchArguments = { actorOwner, null };
+
+                SimulationRuntimeAdmissionContext admittedContext =
+                    ReadPrivateField<SimulationRuntimeAdmissionContext>(runtime, "runtimeAdmissionContext");
+                Assert.That(admittedContext, Is.Not.Null);
+                WritePrivateField<SimulationRuntimeAdmissionContext>(runtime.ExecutionBoundaryState,
+                    "<AdmissionContext>k__BackingField", null);
+                try
+                {
+                    Assert.That(getDispatchBoundary.Invoke(actorBoundary, dispatchArguments),
+                        Is.EqualTo(false));
+                    Assert.That(dispatchArguments[1], Is.Null);
+                    Assert.That(actor.CurrentActionRuntime, Is.Null,
+                        "An unadmitted FleeCity slot does not reconstruct its Unity projection.");
+                    Assert.That(actorOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                    Assert.That(actorOwner.TravelPlan.Revision,
+                        Is.EqualTo(travelPlanRevisionBeforeRecovery));
+                    Assert.That(actorOwner.Travel.Revision, Is.EqualTo(travelRevisionBeforeRecovery));
+                    Assert.That(actorOwner.MoneyAccount.Revision,
+                        Is.EqualTo(moneyRevisionBeforeRecovery));
+                    Assert.That(actorOwner.MoneyAccount.Balance, Is.EqualTo(moneyBalanceBeforeRecovery));
+                    Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                        out long mutationEpochAfterRejected,
+                        out ContinuationCensusFailure epochAfterRejectedFailure),
+                        Is.True, epochAfterRejectedFailure.ToString());
+                    Assert.That(mutationEpochAfterRejected, Is.EqualTo(mutationEpochBeforeRecovery));
+                }
+                finally
+                {
+                    WritePrivateField<SimulationRuntimeAdmissionContext>(runtime.ExecutionBoundaryState,
+                        "<AdmissionContext>k__BackingField", admittedContext);
+                }
+
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, dispatchArguments),
+                    Is.EqualTo(true));
+                IDailyV1SelectedActionDispatchBoundary dispatchBoundary =
+                    dispatchArguments[1] as IDailyV1SelectedActionDispatchBoundary;
+                Assert.That(dispatchBoundary, Is.Not.Null);
+                Assert.That(actor.CurrentActionRuntime, Is.Not.Null);
+                Assert.That(actor.CurrentActionRuntime.SelectedOwner, Is.SameAs(exactPayload));
+                Assert.That(actor.CurrentActionRuntime.TargetCity, Is.SameAs(destination));
+                Assert.That(actor.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+                Assert.That(actorOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(actorOwner.TravelPlan.Revision,
+                    Is.EqualTo(travelPlanRevisionBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochAfterRecovery,
+                    out ContinuationCensusFailure epochAfterRecoveryFailure),
+                    Is.True, epochAfterRecoveryFailure.ToString());
+                Assert.That(mutationEpochAfterRecovery, Is.EqualTo(mutationEpochBeforeRecovery),
+                    "Rebuilding the compatibility projection does not write the selected action owner or P12 epoch.");
+
+                CoreSelectedActionCountingRandomSource randomSource =
+                    new CoreSelectedActionCountingRandomSource();
+                Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                    graph, actorOwner, randomSource, runtime.CurrentDay, actorBoundary,
+                    out bool actionSucceeded, out NpcActionResultType? resultType,
+                    out string resultMessage), Is.True);
+                Assert.That(actionSucceeded, Is.True);
+                Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+                Assert.That(resultMessage, Is.Null);
+                Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+                Assert.That(randomSource.StreamKeys.Single(), Is.EqualTo(
+                    "action-success|" + actor.RuntimeId + "|"
+                    + actionDefinition.DefinitionId + "|"
+                    + actionDefinition.DefinitionId + "|" + runtime.CurrentDay));
+
+                Assert.That(actorOwner.TravelPlan.TargetCityRuntimeId,
+                    Is.EqualTo(destinationOwner.RuntimeId));
+                Assert.That(actorOwner.TravelPlan.TargetLocationRuntimeId,
+                    Is.EqualTo(destinationOwner.LocationRuntimeId));
+                Assert.That(actorOwner.TravelPlan.Reason, Is.EqualTo(NpcTravelReason.Flee));
+                Assert.That(actorOwner.TravelPlan.Utility, Is.EqualTo(80f));
+                Assert.That(actorOwner.TravelPlan.ExpectedCost, Is.EqualTo(expectedTravelCost));
+                Assert.That(actorOwner.TravelPlan.Revision,
+                    Is.EqualTo(travelPlanRevisionBeforeRecovery + 1));
+                Assert.That(actor.TravelPlan.TargetCity, Is.SameAs(destination));
+                Assert.That(actor.TravelPlan.TargetLocation, Is.SameAs(destination.Location));
+                Assert.That(actorOwner.Travel.Revision, Is.EqualTo(travelRevisionBeforeRecovery),
+                    "FleeCity prepares pending travel and does not move the actor.");
+                Assert.That(actorOwner.Travel.CurrentCityRuntimeId,
+                    Is.EqualTo(currentCityBeforeRecovery));
+                Assert.That(actorOwner.Travel.CurrentLocationRuntimeId,
+                    Is.EqualTo(currentLocationBeforeRecovery));
+                Assert.That(actorOwner.MoneyAccount.Revision, Is.EqualTo(moneyRevisionBeforeRecovery),
+                    "FleeCity records the route cost without charging the actor.");
+                Assert.That(actorOwner.MoneyAccount.Balance, Is.EqualTo(moneyBalanceBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochAfterFlee,
+                    out ContinuationCensusFailure epochAfterFleeFailure),
+                    Is.True, epochAfterFleeFailure.ToString());
+                Assert.That(mutationEpochAfterFlee, Is.EqualTo(mutationEpochBeforeRecovery + 1),
+                    "Only the committed TravelPlan owner write publishes a P12 census epoch.");
+            }
+            finally
+            {
+                dailyAdvanceScope.Dispose();
+            }
+
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
     [TestCase(ScheduledDirectiveMode.ForceOutcome)]
     [TestCase(ScheduledDirectiveMode.RequestAction)]
     public void SelectedDailyV1EscapeCompletesStatusAndDirectiveWithoutCrimeProvider(
