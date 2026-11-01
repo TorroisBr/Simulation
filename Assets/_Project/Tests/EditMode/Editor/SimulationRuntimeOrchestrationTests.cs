@@ -41,6 +41,14 @@ public sealed class SimulationRuntimeOrchestrationTests
             return false;
         }
 
+        public bool TryCreateSelectedDailyExecutionHostPorts(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedDailyExecutionHostPorts hostPorts)
+        {
+            hostPorts = null;
+            return false;
+        }
+
         public bool TryBindRestoredCandidateMutationGuard(out string diagnostic)
         {
             diagnostic = "This rejected advance-boundary fixture does not bind restored candidates.";

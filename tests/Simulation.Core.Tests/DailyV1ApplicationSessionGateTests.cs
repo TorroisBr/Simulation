@@ -134,6 +134,20 @@ public sealed class DailyV1ApplicationSessionGateTests
             return false;
         }
 
+        public bool TryCreateSelectedDailyExecutionHostPorts(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedDailyExecutionHostPorts hostPorts)
+        {
+            ActiveOperationCountAtStageCreation = state.ActiveOperationCount;
+            OperationEntered = ActiveOperationCountAtStageCreation == 2;
+            RequestedRuntimeProtocolOperationId =
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance;
+            onOperationEntry?.Invoke();
+            SelectedBoundaryRequested = true;
+            hostPorts = null;
+            return false;
+        }
+
         public bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
         {
             LegacyAdvanceInvocationCount++;

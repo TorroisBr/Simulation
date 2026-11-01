@@ -163,8 +163,9 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
     bool CanBeginDailyAdvanceOperation { get; }
     bool IsFactualReadWorldPublished { get; }
     bool HasActiveDailyOperationContext { get; }
-    bool TryCreateSelectedDailyExecutionBoundary(
-        out IDailyV1SelectedDailyExecutionBoundary executionBoundary);
+    bool TryCreateSelectedDailyExecutionHostPorts(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedDailyExecutionHostPorts hostPorts);
     bool TryCaptureOwnerSectionCensus(
         DailyV1CaptureScopeAllowance allowedOuterScope,
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
@@ -276,8 +277,19 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
     }
 
     public bool TryCreateSelectedDailyExecutionBoundary(
-        out IDailyV1SelectedDailyExecutionBoundary executionBoundary) =>
-        hostPorts.TryCreateSelectedDailyExecutionBoundary(out executionBoundary);
+        out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
+    {
+        executionBoundary = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = executionState.SelectedRuntimeOwnerGraph;
+        if (!hostPorts.TryCreateSelectedDailyExecutionHostPorts(
+                graph, out IDailyV1SelectedDailyExecutionHostPorts hostExecutionPorts)
+            || hostExecutionPorts == null
+            || !DailyV1CoreSelectedDailyExecutionBoundary.TryCreate(
+                executionState, graph, hostExecutionPorts, out executionBoundary))
+            return false;
+
+        return true;
+    }
 
     public bool TryCaptureCompletedDailyCaptureEvidence(
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,

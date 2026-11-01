@@ -11330,10 +11330,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.HasActiveDailyOperationContext =>
         HasActiveDailyOperationContext();
 
-    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCreateSelectedDailyExecutionBoundary(
-        out IDailyV1SelectedDailyExecutionBoundary executionBoundary) =>
-        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).TryCreateSelectedDailyExecutionBoundary(
-            out executionBoundary);
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCreateSelectedDailyExecutionHostPorts(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedDailyExecutionHostPorts hostPorts)
+    {
+        hostPorts = null;
+        if (graph == null
+            || !ReferenceEquals(SelectedRuntimeOwnerGraph, graph)
+            || graph.Definitions == null)
+            return false;
+
+        hostPorts = new SelectedDailyV1ExecutionBoundary(this);
+        return true;
+    }
 
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCaptureOwnerSectionCensus(
         DailyV1CaptureScopeAllowance allowedOuterScope,
@@ -11519,7 +11528,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     }
 
     private sealed class SelectedDailyV1ExecutionBoundary
-        : IDailyV1SelectedDailyExecutionBoundary
+        : IDailyV1SelectedDailyExecutionBoundary,
+          IDailyV1SelectedDailyExecutionHostPorts
     {
         private readonly SimulationRuntime runtime;
 

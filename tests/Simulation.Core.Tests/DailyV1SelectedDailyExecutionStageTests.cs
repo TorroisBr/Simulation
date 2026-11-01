@@ -748,6 +748,43 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
+    public void CoreSelectedBoundaryBuildsContextsFromTheExactAdmittedStateAndGraph()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        FakeBoundary hostPorts = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore);
+
+        Assert.That(DailyV1CoreSelectedDailyExecutionBoundary.TryCreate(
+            state, graph, hostPorts,
+            out IDailyV1SelectedDailyExecutionBoundary selectedBoundary), Is.True);
+        Assert.That(selectedBoundary,
+            Is.TypeOf<DailyV1CoreSelectedDailyExecutionBoundary>());
+
+        Assert.That(selectedBoundary.TryCreateSelectedActorTurnContext(
+            graph, out IDailyV1SelectedActorTurnExecutionContext actorContext), Is.True);
+        Assert.That(actorContext.RuntimeRoster, Is.SameAs(state.SelectedRuntimeActorRoster));
+        Assert.That(actorContext.PersonStore, Is.SameAs(graph.PersonStore));
+        Assert.That(actorContext.ActorChoiceStore, Is.SameAs(state.SelectedActorChoiceStore));
+        Assert.That(actorContext.CoreRoots.IdAllocator, Is.SameAs(state.SelectedRuntimeIdAllocator));
+        Assert.That(actorContext.CoreRoots.RecordSequence, Is.SameAs(state.SelectedRecordSequence));
+        Assert.That(hostPorts.Calls, Does.Not.Contain("execution-boundary"),
+            "Core creates its selected execution boundary instead of asking the host to manufacture one.");
+
+        DailyV1SelectedRuntimeOwnerGraph substitutedGraph = CreateGraph(composition.Definitions);
+        Assert.That(DailyV1CoreSelectedDailyExecutionBoundary.TryCreate(
+            state, substitutedGraph, hostPorts,
+            out IDailyV1SelectedDailyExecutionBoundary rejected), Is.False);
+        Assert.That(rejected, Is.Null);
+        Assert.That(selectedBoundary.TryCreateSelectedActorTurnContext(
+            substitutedGraph, out _), Is.False,
+            "The Core adapter rejects a substituted owner graph.");
+    }
+
+    [Test]
     public void AdmittedActorTurnContextUsesOnlyCoreBoundRosterAndOwnerRoots()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
@@ -1174,7 +1211,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         return CopyWithEconomyEnabled(definitions, true);
     }
 
-    private sealed class FakeBoundary : IDailyV1SelectedDailyExecutionBoundary
+    private sealed class FakeBoundary : IDailyV1SelectedDailyExecutionBoundary,
+        IDailyV1SelectedDailyExecutionHostPorts
     {
         private readonly RuntimeIdAllocator runtimeIdAllocator;
         private readonly IAuthoritativeRandomSource randomSource;

@@ -56,6 +56,244 @@ internal interface IDailyV1SelectedDailyExecutionBoundary
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedTravelDayHostPorts hostPorts);
 }
+/// <summary>
+/// Narrow Unity-owned effects and adapters for one admitted selected runtime.
+/// Core, rather than the host, builds the selected execution boundary and
+/// derives actor, demography, day-start, and travel contexts from the exact
+/// execution state and owner graph. The host contributes projection, writer,
+/// logging, and P12 ports only.
+/// </summary>
+internal interface IDailyV1SelectedDailyExecutionHostPorts
+{
+    void BeginLoggerDay(long absoluteDay);
+    bool HasExactCrimeJusticeProjectionOwnerBindings(
+        DailyV1SelectedRuntimeOwnerGraph graph);
+    bool TryCreateSelectedDemographyHostPorts(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedDemographyHostPorts hostPorts);
+    void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result);
+    /// <summary>
+    /// Retains the established whole-stage compatibility path for a mixed
+    /// roster that contains runtime members outside the admitted Core graph.
+    /// </summary>
+    void BeginSimulationDay();
+    void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph);
+    void LogSelectedDailyEconomy(
+        DailyV1CityRuntimeOwners owner,
+        SimulationLogCategory category,
+        string message);
+    void EnsureSelectedLocalKnowledgeCanRun(DailyV1SelectedRuntimeOwnerGraph graph);
+    bool TryCreateSelectedActorTurnBoundary(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1ActorTurnExecutionBoundary boundary);
+    bool TryCreateSelectedTravelDayHostPorts(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedTravelDayHostPorts hostPorts);
+}
+
+/// <summary>
+/// Core constructs one selected execution adapter for the exact admitted
+/// session. The wrapper owns session/graph binding and all selected contexts;
+/// its Unity ports cannot select a different roster, owner store, clock, or
+/// execution graph.
+/// </summary>
+internal sealed class DailyV1CoreSelectedDailyExecutionBoundary
+    : IDailyV1SelectedDailyExecutionBoundary
+{
+    private readonly DailyV1ExecutionBoundaryState executionState;
+    private readonly DailyV1SelectedRuntimeOwnerGraph ownerGraph;
+    private readonly IDailyV1SelectedDailyExecutionHostPorts hostPorts;
+
+    private DailyV1CoreSelectedDailyExecutionBoundary(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+        IDailyV1SelectedDailyExecutionHostPorts hostPorts)
+    {
+        this.executionState = executionState;
+        this.ownerGraph = ownerGraph;
+        this.hostPorts = hostPorts;
+    }
+
+    internal static bool TryCreate(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+        IDailyV1SelectedDailyExecutionHostPorts hostPorts,
+        out IDailyV1SelectedDailyExecutionBoundary boundary)
+    {
+        boundary = null;
+        if (executionState == null || ownerGraph == null || hostPorts == null
+            || !executionState.HasAdmittedSelectedDailyExecution
+            || !executionState.SelectedRuntimeExecutionRootsBound
+            || !executionState.HasRuntimeProtocolOperationInventory
+            || executionState.AdmissionContext?.Profile
+                != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, ownerGraph)
+            || ownerGraph.Definitions?.EffectiveConfiguration == null
+            || executionState.SimulationTime == null)
+            return false;
+
+        boundary = new DailyV1CoreSelectedDailyExecutionBoundary(
+            executionState, ownerGraph, hostPorts);
+        return true;
+    }
+
+    private bool IsBoundTo(DailyV1SelectedRuntimeOwnerGraph graph) =>
+        graph != null
+        && executionState.HasAdmittedSelectedDailyExecution
+        && executionState.SelectedRuntimeExecutionRootsBound
+        && executionState.HasRuntimeProtocolOperationInventory
+        && executionState.AdmissionContext?.Profile
+            == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+        && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, ownerGraph)
+        && ReferenceEquals(graph, ownerGraph)
+        && graph.Definitions?.EffectiveConfiguration != null
+        && executionState.SimulationTime != null;
+
+    private void EnsureBoundTo(DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (!IsBoundTo(graph))
+            throw new InvalidOperationException(
+                "The Core selected execution adapter no longer matches its admitted session and owner graph.");
+    }
+
+    public void BeginLoggerDay(long absoluteDay)
+    {
+        EnsureBoundTo(ownerGraph);
+        hostPorts.BeginLoggerDay(absoluteDay);
+    }
+
+    public bool HasExactCrimeJusticeProjectionOwnerBindings(
+        DailyV1SelectedRuntimeOwnerGraph graph) =>
+        IsBoundTo(graph) && hostPorts.HasExactCrimeJusticeProjectionOwnerBindings(graph);
+
+    public bool TryCreateSelectedDemographyContext(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedDemographyExecutionContext context)
+    {
+        context = null;
+        return TryCreateSelectedDemographyHostPorts(
+                graph, out IDailyV1SelectedDemographyHostPorts ports)
+            && DailyV1CoreSelectedDemographyExecutionContext.TryCreate(
+                executionState, ownerGraph, ports, out context);
+    }
+
+    public bool TryCreateSelectedDemographyHostPorts(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedDemographyHostPorts selectedHostPorts)
+    {
+        selectedHostPorts = null;
+        if (!IsBoundTo(graph)
+            || !hostPorts.TryCreateSelectedDemographyHostPorts(
+                ownerGraph, out selectedHostPorts)
+            || selectedHostPorts?.Boundary == null)
+        {
+            selectedHostPorts = null;
+            return false;
+        }
+        return true;
+    }
+
+    public void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result)
+    {
+        EnsureBoundTo(ownerGraph);
+        hostPorts.PublishSelectedDemographyResult(result);
+    }
+
+    public bool TryCreateSelectedDayStartContext(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedDayStartExecutionContext context)
+    {
+        context = null;
+        // An admitted day-start roster is derived by Core from its exact actor
+        // roster. Only the mixed-roster fallback calls BeginSimulationDay.
+        return false;
+    }
+
+    public void BeginSimulationDay()
+    {
+        EnsureBoundTo(ownerGraph);
+        hostPorts.BeginSimulationDay();
+    }
+
+    public void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        EnsureBoundTo(graph);
+        hostPorts.EnsureSelectedEconomyCanRun(ownerGraph);
+    }
+
+    public void LogSelectedDailyEconomy(
+        DailyV1CityRuntimeOwners owner,
+        SimulationLogCategory category,
+        string message)
+    {
+        EnsureBoundTo(ownerGraph);
+        bool exactCityOwner = false;
+        for (int index = 0; index < ownerGraph.Cities.Count; index++)
+            if (ReferenceEquals(ownerGraph.Cities[index], owner))
+            {
+                exactCityOwner = true;
+                break;
+            }
+        if (!exactCityOwner)
+            throw new InvalidOperationException(
+                "The Core daily economy logger received a City outside the admitted owner graph.");
+        hostPorts.LogSelectedDailyEconomy(owner, category, message);
+    }
+
+    public void EnsureSelectedLocalKnowledgeCanRun(DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        EnsureBoundTo(graph);
+        hostPorts.EnsureSelectedLocalKnowledgeCanRun(ownerGraph);
+    }
+
+    public bool TryCreateSelectedActorTurnContext(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedActorTurnExecutionContext context)
+    {
+        context = null;
+        return IsBoundTo(graph)
+            && DailyV1SelectedActorTurnExecutionContextFactory.TryCreate(
+                executionState, ownerGraph, this, out context);
+    }
+
+    public bool TryCreateSelectedActorTurnBoundary(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1ActorTurnExecutionBoundary boundary)
+    {
+        boundary = null;
+        return IsBoundTo(graph)
+            && hostPorts.TryCreateSelectedActorTurnBoundary(ownerGraph, out boundary)
+            && boundary != null;
+    }
+
+    public bool TryCreateSelectedTravelDayContext(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedTravelDayExecutionContext context)
+    {
+        context = null;
+        return TryCreateSelectedTravelDayHostPorts(
+                graph, out IDailyV1SelectedTravelDayHostPorts ports)
+            && DailyV1CoreSelectedTravelDayExecutionContext.TryCreate(
+                executionState, ownerGraph, ports, out context);
+    }
+
+    public bool TryCreateSelectedTravelDayHostPorts(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedTravelDayHostPorts selectedHostPorts)
+    {
+        selectedHostPorts = null;
+        if (!IsBoundTo(graph)
+            || !hostPorts.TryCreateSelectedTravelDayHostPorts(
+                ownerGraph, out selectedHostPorts)
+            || selectedHostPorts?.Boundary == null
+            || selectedHostPorts.P12Protocol == null)
+        {
+            selectedHostPorts = null;
+            return false;
+        }
+        return true;
+    }
+}
 
 /// <summary>
 /// Compatibility ports for the established start-of-day Crime/Justice and
