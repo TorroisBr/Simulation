@@ -11522,12 +11522,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             && graph.TravelParties != null
             && graph.Expeditions != null
             && graph.ScheduledDirectives != null
+            && graph.PoliticalKnowledgeStore != null
             && state.SelectedActorChoiceStore != null
             && ReferenceEquals(state.SelectedActorChoiceStore, actorChoiceStore)
             && ReferenceEquals(state.SelectedActorChoiceStore.PersonStore, graph.PersonStore)
             && ReferenceEquals(graph.TravelParties, travelPartySystem?.Store)
             && ReferenceEquals(graph.Expeditions, expeditionSystem?.Store)
             && ReferenceEquals(graph.ScheduledDirectives, scheduledDirectiveSystem?.Store)
+            && ReferenceEquals(graph.PoliticalKnowledgeStore, politicalKnowledgeStore)
             && ReferenceEquals(graph.PersonStore, personStore);
     }
 

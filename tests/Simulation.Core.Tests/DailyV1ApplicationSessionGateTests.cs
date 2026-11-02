@@ -490,6 +490,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(graph.GenealogyStore, Is.Not.Null);
         Assert.That(actorChoices, Is.Not.Null);
         Assert.That(actorChoices.PersonStore, Is.SameAs(graph.PersonStore));
+        PoliticalKnowledgeStore politicalKnowledge =
+            graph.PoliticalKnowledgeStore ?? CreateAndBindCorePoliticalKnowledgeStore(graph);
         ReplaceSelectedSpatialOwnerCensus(sections, graph);
         ReplaceOwnerSectionWithCurrentCensus(sections,
             graph.PersonStore.GetMembershipCensusWitness());
@@ -497,6 +499,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             graph.PersonStore.GetMaterializationBindingCensusWitness());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new GenealogyCensusProvider(graph.GenealogyStore).GetCurrentCensus());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            new PoliticalKnowledgeStoreCensusProvider(politicalKnowledge).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
@@ -2087,7 +2091,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             ActorChoiceP11CensusProvider.SectionId,
             ScheduledDirectiveCensusProvider.SectionId,
             TravelPartyCensusProvider.SectionId,
-            ExpeditionCensusProvider.SectionId
+            ExpeditionCensusProvider.SectionId,
+            PoliticalKnowledgeStoreCensusProvider.SectionId
         })
         {
             OwnerSectionCensusSnapshot current = captured.Single(section => section.SectionId == sectionId);
@@ -2096,6 +2101,12 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(exact.Cardinality, Is.EqualTo(current.Cardinality), sectionId);
             Assert.That(exact.Revision, Is.EqualTo(current.Revision), sectionId);
         }
+
+        OwnerSectionCensusSnapshot politicalKnowledgeSection = captured.Single(section =>
+            section.SectionId == PoliticalKnowledgeStoreCensusProvider.SectionId);
+        Assert.That(politicalKnowledgeSection.OwnerInstanceIdentity,
+            Is.SameAs(graph.PoliticalKnowledgeStore),
+            "The P12-F census row is bound to the exact Core PoliticalKnowledge owner.");
 
         string targetSectionId = ActorChoiceP11CensusProvider.SectionId;
         OwnerSectionCensusSnapshot target = captured.Single(section => section.SectionId == targetSectionId);
@@ -2132,6 +2143,34 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12FSections(
             graph, actorChoices, stale, out _, out _), Is.False,
             "Stale revision is rejected even when the owner identity and cardinality match.");
+
+        OwnerSectionCensusSnapshot[] foreignPoliticalKnowledge =
+            (OwnerSectionCensusSnapshot[])captured.Clone();
+        int politicalKnowledgeIndex = Array.FindIndex(foreignPoliticalKnowledge,
+            section => section.SectionId == PoliticalKnowledgeStoreCensusProvider.SectionId);
+        foreignPoliticalKnowledge[politicalKnowledgeIndex] = new OwnerSectionCensusSnapshot(
+            politicalKnowledgeSection.SectionId,
+            politicalKnowledgeSection.SchemaVersion,
+            politicalKnowledgeSection.Role,
+            new object(),
+            politicalKnowledgeSection.Cardinality,
+            politicalKnowledgeSection.Revision);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12FSections(
+            graph, actorChoices, foreignPoliticalKnowledge, out _, out _), Is.False,
+            "Matching PoliticalKnowledge census values cannot substitute a foreign owner identity.");
+
+        OwnerSectionCensusSnapshot[] stalePoliticalKnowledge =
+            (OwnerSectionCensusSnapshot[])captured.Clone();
+        stalePoliticalKnowledge[politicalKnowledgeIndex] = new OwnerSectionCensusSnapshot(
+            politicalKnowledgeSection.SectionId,
+            politicalKnowledgeSection.SchemaVersion,
+            politicalKnowledgeSection.Role,
+            politicalKnowledgeSection.OwnerInstanceIdentity,
+            politicalKnowledgeSection.Cardinality,
+            politicalKnowledgeSection.Revision + 1L);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12FSections(
+            graph, actorChoices, stalePoliticalKnowledge, out _, out _), Is.False,
+            "A stale PoliticalKnowledge revision cannot be rebound as current Core owner evidence.");
     }
 
     [Test]
@@ -2198,6 +2237,30 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(hostRemainder.Any(section => section.SectionId == sectionId), Is.False, sectionId);
 
         ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
+        OwnerSectionCensusSnapshot politicalKnowledgeRow = completeHostVector.Single(section =>
+            section.SectionId == PoliticalKnowledgeStoreCensusProvider.SectionId);
+        Assert.That(politicalKnowledgeRow.OwnerInstanceIdentity,
+            Is.SameAs(graph.PoliticalKnowledgeStore));
+
+        OwnerSectionCensusSnapshot[] wrongPoliticalKnowledgeIdentity = completeHostVector.Select(section =>
+            section.SectionId == PoliticalKnowledgeStoreCensusProvider.SectionId
+                ? new OwnerSectionCensusSnapshot(
+                    section.SectionId, section.SchemaVersion, section.Role, new object(),
+                    section.Cardinality, section.Revision)
+                : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                wrongPoliticalKnowledgeIdentity, graph, out _, out _), Is.False,
+            "The Core census transfer rejects a host row that substitutes a PoliticalKnowledge owner.");
+        OwnerSectionCensusSnapshot[] stalePoliticalKnowledgeRevision = completeHostVector.Select(section =>
+            section.SectionId == PoliticalKnowledgeStoreCensusProvider.SectionId
+                ? new OwnerSectionCensusSnapshot(
+                    section.SectionId, section.SchemaVersion, section.Role,
+                    section.OwnerInstanceIdentity, section.Cardinality, section.Revision + 1L)
+                : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                stalePoliticalKnowledgeRevision, graph, out _, out _), Is.False,
+            "The Core census transfer rejects a stale PoliticalKnowledge revision.");
+
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
                 graph, hostRemainder,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> personComposed,
@@ -2331,6 +2394,9 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 graph, actorChoices, cityComposed.Concat(new[] { actorChoice }).ToArray(), out _, out _), Is.False,
             "The host cannot reintroduce a P12-F section whose authority has moved to Core.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                graph, actorChoices, cityComposed.Concat(new[] { politicalKnowledgeRow }).ToArray(), out _, out _), Is.False,
+            "The host cannot reintroduce the Core-owned PoliticalKnowledge census row.");
         OwnerSectionCensusSnapshot personMembership = completeHostVector.Single(section =>
             section.SectionId == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(

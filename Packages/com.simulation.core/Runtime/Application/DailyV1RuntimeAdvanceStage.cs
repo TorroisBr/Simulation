@@ -617,7 +617,8 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         ActorChoiceP11CensusProvider.SectionId,
         ScheduledDirectiveCensusProvider.SectionId,
         TravelPartyCensusProvider.SectionId,
-        ExpeditionCensusProvider.SectionId
+        ExpeditionCensusProvider.SectionId,
+        PoliticalKnowledgeStoreCensusProvider.SectionId
     };
 
     /// <summary>
@@ -639,7 +640,8 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         ActorChoiceP11CensusProvider.SectionId,
         ScheduledDirectiveCensusProvider.SectionId,
         TravelPartyCensusProvider.SectionId,
-        ExpeditionCensusProvider.SectionId
+        ExpeditionCensusProvider.SectionId,
+        PoliticalKnowledgeStoreCensusProvider.SectionId
     };
 
     internal static IReadOnlyList<string> CoreOwnedSelectedRuntimeSectionIds { get; } =
@@ -656,10 +658,11 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             out diagnostic);
 
     /// <summary>
-    /// Removes the four selected City census rows only after Core confirms
-    /// their captured identity, schema, cardinality, and revision against the
-    /// exact session graph. Unity still captures the full quiescent vector and
-    /// shared epoch; stale or mixed-roster City rows remain in the vector.
+    /// Removes selected Core-owned P12-F and City census rows only after Core
+    /// confirms the PoliticalKnowledge row and selected City identities,
+    /// schemas, cardinalities, and revisions against the exact session graph.
+    /// Unity still captures the full quiescent vector and shared epoch; stale
+    /// or mixed-roster City rows remain in the vector.
     /// </summary>
     internal static bool TryRemoveCoreOwnedSelectedRuntimeSections(
         IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
@@ -671,7 +674,14 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         diagnostic = null;
         if (graph == null || completeHostSections == null)
         {
-            diagnostic = "The selected Core City census requires a complete host vector and owner graph.";
+            diagnostic = "The selected Core owner census requires a complete host vector and owner graph.";
+            return false;
+        }
+        if (graph.PersonStore == null
+            || graph.PoliticalKnowledgeStore == null
+            || !graph.PoliticalKnowledgeStore.IsBoundToPersonStore(graph.PersonStore))
+        {
+            diagnostic = "The selected Core census requires the exact PoliticalKnowledge owner bound to its PersonStore.";
             return false;
         }
         if (!DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(completeHostSections))
@@ -705,6 +715,33 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
         foreach (OwnerSectionCensusSnapshot section in copiedHostSections)
             hostBySectionId.Add(section.SectionId, section);
+
+        OwnerSectionCensusWitness politicalKnowledgeWitness;
+        try
+        {
+            politicalKnowledgeWitness =
+                new PoliticalKnowledgeStoreCensusProvider(graph.PoliticalKnowledgeStore).GetCurrentCensus();
+        }
+        catch (InvalidOperationException)
+        {
+            diagnostic = "The selected Core PoliticalKnowledge census provider could not read its exact owner.";
+            return false;
+        }
+        if (politicalKnowledgeWitness == null
+            || !hostBySectionId.TryGetValue(
+                PoliticalKnowledgeStoreCensusProvider.SectionId,
+                out OwnerSectionCensusSnapshot hostPoliticalKnowledge)
+            || hostPoliticalKnowledge.Role != OwnerSectionRole.Required
+            || hostPoliticalKnowledge.SchemaVersion != politicalKnowledgeWitness.SchemaVersion
+            || !ReferenceEquals(
+                hostPoliticalKnowledge.OwnerInstanceIdentity,
+                politicalKnowledgeWitness.OwnerInstanceIdentity)
+            || hostPoliticalKnowledge.Cardinality != politicalKnowledgeWitness.Cardinality
+            || hostPoliticalKnowledge.Revision != politicalKnowledgeWitness.Revision)
+        {
+            diagnostic = "The host census differs from the exact Core PoliticalKnowledge owner.";
+            return false;
+        }
 
         int cityPresenceRows = CountFamilyRows(
             copiedHostSections, DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix);
@@ -1053,6 +1090,8 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             || graph.TravelParties == null
             || graph.Expeditions == null
             || graph.PersonStore == null
+            || graph.PoliticalKnowledgeStore == null
+            || !graph.PoliticalKnowledgeStore.IsBoundToPersonStore(graph.PersonStore)
             || actorChoiceStore == null
             || !ReferenceEquals(actorChoiceStore.PersonStore, graph.PersonStore)
             || hostOwnedSections == null)
@@ -1084,7 +1123,8 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 new ActorChoiceP11CensusProvider(actorChoiceStore).GetCurrentCensus(),
                 new ScheduledDirectiveCensusProvider(graph.ScheduledDirectives).GetCurrentCensus(),
                 new TravelPartyCensusProvider(graph.TravelParties).GetCurrentCensus(),
-                new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus()
+                new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus(),
+                new PoliticalKnowledgeStoreCensusProvider(graph.PoliticalKnowledgeStore).GetCurrentCensus()
             };
         }
         catch (Exception exception) when (
@@ -1157,6 +1197,8 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             || graph.TravelParties == null
             || graph.Expeditions == null
             || graph.PersonStore == null
+            || graph.PoliticalKnowledgeStore == null
+            || !graph.PoliticalKnowledgeStore.IsBoundToPersonStore(graph.PersonStore)
             || actorChoiceStore == null
             || !ReferenceEquals(actorChoiceStore.PersonStore, graph.PersonStore)
             || hostSections == null)
@@ -1187,7 +1229,8 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 new ActorChoiceP11CensusProvider(actorChoiceStore).GetCurrentCensus(),
                 new ScheduledDirectiveCensusProvider(graph.ScheduledDirectives).GetCurrentCensus(),
                 new TravelPartyCensusProvider(graph.TravelParties).GetCurrentCensus(),
-                new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus()
+                new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus(),
+                new PoliticalKnowledgeStoreCensusProvider(graph.PoliticalKnowledgeStore).GetCurrentCensus()
             };
         }
         catch (InvalidOperationException)
