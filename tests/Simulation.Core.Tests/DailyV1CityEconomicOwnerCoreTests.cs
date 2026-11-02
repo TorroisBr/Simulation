@@ -439,8 +439,19 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     public void SelectedRuntimeMembershipGraphRetainsExactGenealogyOwner()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out _);
+        PersonStore persons = new PersonStore();
+        Assert.That(graph.TryBindPersonStore(persons), Is.True);
         GenealogyStore genealogy = new GenealogyStore();
         Assert.That(graph.TryBindGenealogyStore(genealogy), Is.True);
+        InstitutionStore institutions = new InstitutionStore();
+        PoliticalKnowledgeStore politicalKnowledge = new PoliticalKnowledgeStore(
+            persons,
+            institutions,
+            new PoliticalClaimStore(),
+            new FactionStore(persons),
+            new OfficeStore(institutions),
+            new PropertyOwnershipStore(persons));
+        Assert.That(graph.TryBindPoliticalKnowledgeStore(politicalKnowledge), Is.True);
 
         DailyV1NpcDefinition definition = graph.Definitions.Npcs.Values.First();
         Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
@@ -449,13 +460,18 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         Assert.That(graph.TryCreateWithAddedNpc(
             addedNpc, out DailyV1SelectedRuntimeOwnerGraph addedGraph), Is.True);
         Assert.That(addedGraph.GenealogyStore, Is.SameAs(genealogy));
+        Assert.That(addedGraph.PoliticalKnowledgeStore, Is.SameAs(politicalKnowledge));
         Assert.That(new GenealogyCensusProvider(addedGraph.GenealogyStore)
             .GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(genealogy));
+        Assert.That(new PoliticalKnowledgeStoreCensusProvider(addedGraph.PoliticalKnowledgeStore)
+            .GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(politicalKnowledge));
 
         Assert.That(addedGraph.TryCreateWithoutNpc(
             addedNpc, out DailyV1SelectedRuntimeOwnerGraph restoredGraph), Is.True);
         Assert.That(restoredGraph.GenealogyStore, Is.SameAs(genealogy),
             "Roster removal must retain the session's exact Genealogy authority too.");
+        Assert.That(restoredGraph.PoliticalKnowledgeStore, Is.SameAs(politicalKnowledge),
+            "Roster removal must retain the session's exact PoliticalKnowledge authority too.");
     }
 
     [Test]

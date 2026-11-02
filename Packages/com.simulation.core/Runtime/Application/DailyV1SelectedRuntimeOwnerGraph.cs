@@ -1031,6 +1031,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             return false;
 
         if ((GenealogyStore != null && !graph.TryBindGenealogyStore(GenealogyStore))
+            || (PoliticalKnowledgeStore != null
+                && !graph.TryBindPoliticalKnowledgeStore(PoliticalKnowledgeStore))
             || (ScheduledDirectives != null && !graph.TryBindScheduledDirectives(ScheduledDirectives))
             || (Expeditions != null && !graph.TryBindExpeditionStore(Expeditions)))
         {
