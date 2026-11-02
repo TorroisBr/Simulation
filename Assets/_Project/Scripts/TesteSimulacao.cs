@@ -691,7 +691,7 @@ public class TesteSimulacao : MonoBehaviour
                                 stagedSelectedDefinitions.Configuration.enabledModules);
                             AppendScenarioDiagnostics(effectiveConfiguration);
 
-                            if (!dailyV1Application.TryPrepareInitialGenesisWithHostLogger(
+                            if (!dailyV1Application.TryPrepareInitialGenesisStart(
                                     stagedSelectedDefinitions,
                                     logger,
                                     completedStage =>
@@ -701,13 +701,17 @@ public class TesteSimulacao : MonoBehaviour
                                                 "Core Daily-v1 genesis completed a stage more than once.");
                                         stageCompleted?.Invoke(completedStage);
                                     },
-                                    out selectedCoreGenesis,
-                                    out selectedCoreRuntimeSession,
-                                    out string coreGenesisDiagnostic))
+                                    out DailyV1ApplicationStartPreparation coreStartPreparation,
+                                    out string coreGenesisDiagnostic)
+                                || coreStartPreparation == null
+                                || coreStartPreparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                                || coreStartPreparation.PersistenceResult?.Code != P12AResultCode.NoSave)
                                 throw new System.InvalidOperationException(
-                                    "The Core Daily-v1 application could not prepare its unpublished genesis session: "
+                                    "The Core Daily-v1 application could not prepare its admitted genesis start: "
                                     + coreGenesisDiagnostic);
 
+                            selectedCoreGenesis = coreStartPreparation.GenesisComposition;
+                            selectedCoreRuntimeSession = coreStartPreparation.CoreSession;
                             if (!ReferenceEquals(selectedCoreGenesis.AdmissionContext,
                                     runtimeAdmissionContext)
                                 || !ReferenceEquals(selectedCoreRuntimeSession.Definitions,

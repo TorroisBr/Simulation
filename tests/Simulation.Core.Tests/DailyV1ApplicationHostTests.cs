@@ -243,10 +243,19 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(loadResult.Code, Is.EqualTo(P12AResultCode.NoSave));
 
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
-        Assert.That(application.TryPrepareInitialGenesis(
-            definitions, allocateWorldId: null, stageCompleted: null,
-            out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.True, diagnostic);
-        Assert.That(candidate, Is.Not.Null);
+        Assert.That(application.TryPrepareInitialGenesisStart(
+            definitions,
+            new SimulationLogger(new SimulationLogSettings(), "missing-slot-root", (_, __) => { }),
+            stageCompleted: null,
+            out DailyV1ApplicationStartPreparation preparation,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(preparation, Is.Not.Null);
+        Assert.That(preparation.Application, Is.SameAs(application));
+        Assert.That(preparation.Kind, Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+        Assert.That(preparation.PersistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(preparation.CoreSession, Is.Not.Null);
+        Assert.That(application.ActiveSession, Is.Null,
+            "Core genesis preparation remains unpublished until the host boundary is admitted.");
     }
 
     [Test]

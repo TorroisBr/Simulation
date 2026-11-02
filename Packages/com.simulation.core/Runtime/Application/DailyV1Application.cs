@@ -519,6 +519,52 @@ internal sealed class DailyV1Application
             out composition, out candidate, out diagnostic);
 
     /// <summary>
+    /// Packages the already-admitted NoSave genesis candidate as one Core
+    /// start-preparation value for the host projection boundary.
+    /// </summary>
+    internal bool TryPrepareInitialGenesisStart(
+        DailyV1EffectiveDefinitions definitions,
+        SimulationLogger diagnosticLogger,
+        Action<string> stageCompleted,
+        out DailyV1ApplicationStartPreparation preparation,
+        out string diagnostic)
+    {
+        preparation = null;
+        diagnostic = null;
+        if (definitions == null || diagnosticLogger == null)
+        {
+            diagnostic = "The admitted definitions and Core logger are required to prepare the genesis start.";
+            return false;
+        }
+
+        if (!TryPrepareInitialGenesisWithHostLogger(
+                definitions, diagnosticLogger, stageCompleted,
+                out DailyV1GenesisComposition composition,
+                out DailyV1ActiveRuntimeSession candidate,
+                out diagnostic)
+            || composition == null || candidate == null)
+        {
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "Core did not prepare the exact admitted genesis composition and session.";
+            return false;
+        }
+
+        if (!ReferenceEquals(composition.Definitions, definitions)
+            || !ReferenceEquals(candidate.Definitions, definitions)
+            || !ReferenceEquals(candidate.ExecutionBoundaryState.AdmissionContext,
+                bootstrapAdmissionContext))
+        {
+            diagnostic = "Core genesis start preparation changed the admitted definitions or bootstrap identity.";
+            return false;
+        }
+
+        preparation = new DailyV1ApplicationStartPreparation(
+            this, DailyV1ApplicationStartPreparationKind.GenesisPrepared,
+            null, composition, candidate, diagnosticLogger,
+            new P12AResult(P12AResultCode.NoSave));
+        return true;
+    }
+    /// <summary>
     /// Deterministic identity-injection seam for Core tests. Production hosts
     /// use the overload without an allocator so identity authority remains in
     /// Core.
