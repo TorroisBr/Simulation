@@ -11519,6 +11519,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             && state.SelectedRuntimeExecutionRootsBound
             && graph != null
             && graph.PersonStore != null
+            && graph.RuntimeIdentityIndex != null
+            && graph.SpatialNetwork != null
+            && graph.PersonSpatialPositionStore != null
+            && graph.LegacySpatialAnchors != null
             && graph.TravelParties != null
             && graph.Expeditions != null
             && graph.ScheduledDirectives != null
@@ -11526,6 +11530,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             && state.SelectedActorChoiceStore != null
             && ReferenceEquals(state.SelectedActorChoiceStore, actorChoiceStore)
             && ReferenceEquals(state.SelectedActorChoiceStore.PersonStore, graph.PersonStore)
+            && p12RuntimeIdentityRegistry != null
+            && ReferenceEquals(graph.RuntimeIdentityIndex, p12RuntimeIdentityRegistry.CoreIdentityIndex)
+            && p12SpatialNetworkRuntime != null
+            && ReferenceEquals(graph.SpatialNetwork, p12SpatialNetworkRuntime.SelectedOwner)
+            && personSpatialPositionStore != null
+            && ReferenceEquals(graph.PersonSpatialPositionStore, personSpatialPositionStore)
+            && ReferenceEquals(graph.PersonSpatialPositionStore.SpatialAuthorityStore, spatialAuthorityStore)
+            && legacySpatialAnchorBindingStore != null
+            && ReferenceEquals(graph.LegacySpatialAnchors, legacySpatialAnchorBindingStore)
             && ReferenceEquals(graph.TravelParties, travelPartySystem?.Store)
             && ReferenceEquals(graph.Expeditions, expeditionSystem?.Store)
             && ReferenceEquals(graph.ScheduledDirectives, scheduledDirectiveSystem?.Store)

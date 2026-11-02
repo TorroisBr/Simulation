@@ -239,6 +239,23 @@ public sealed class DailyV1ApplicationSessionGateTests
             HashSet<string> coreOwnedSectionIds = new HashSet<string>(
                 DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds,
                 StringComparer.Ordinal);
+            if (DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedIdentitySpatialCensusSections(
+                    state.SelectedRuntimeOwnerGraph,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> identitySpatialRows,
+                    out _))
+            {
+                HashSet<string> activeIdentitySpatialIds = new HashSet<string>(
+                    identitySpatialRows.Select(section => section.SectionId),
+                    StringComparer.Ordinal);
+                foreach (string sectionId in DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedIdentitySpatialSectionIds)
+                    if (!activeIdentitySpatialIds.Contains(sectionId))
+                        coreOwnedSectionIds.Remove(sectionId);
+            }
+            else
+            {
+                foreach (string sectionId in DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedIdentitySpatialSectionIds)
+                    coreOwnedSectionIds.Remove(sectionId);
+            }
             ownerSections = Array.AsReadOnly(admissionOwnerSections
                 .Where(section => section != null && !coreOwnedSectionIds.Contains(section.SectionId))
                 .ToArray());
@@ -400,6 +417,24 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
         Assert.That(sections, Is.Not.Null);
         Assert.That(graph?.SpatialNetwork, Is.Not.Null);
+        if (graph.RuntimeIdentityIndex != null)
+        {
+            DailyV1RuntimeIdentityKind[] identityKinds =
+            {
+                DailyV1RuntimeIdentityKind.Npc,
+                DailyV1RuntimeIdentityKind.City,
+                DailyV1RuntimeIdentityKind.Location,
+                DailyV1RuntimeIdentityKind.Route,
+                DailyV1RuntimeIdentityKind.ExplorableSite,
+                DailyV1RuntimeIdentityKind.LocalPlace,
+                DailyV1RuntimeIdentityKind.LocalConnection,
+                DailyV1RuntimeIdentityKind.NotableItem
+            };
+            foreach (DailyV1RuntimeIdentityKind identityKind in identityKinds)
+                ReplaceOwnerSectionWithCurrentCensus(sections,
+                    graph.RuntimeIdentityIndex.GetOwnerSectionCensusWitness(identityKind));
+        }
+
         ReplaceOwnerSectionWithCurrentCensus(sections, new OwnerSectionCensusWitness(
             P12ASpatialNetworkOwnerCodec.LocationsSectionId,
             P12ASpatialNetworkOwnerCodec.SchemaVersion,
@@ -412,6 +447,39 @@ public sealed class DailyV1ApplicationSessionGateTests
             graph.SpatialNetwork,
             graph.SpatialNetwork.RouteCount,
             graph.SpatialNetwork.Revision));
+
+        SpatialAuthorityStore spatial = graph.PersonSpatialPositionStore?.SpatialAuthorityStore;
+        if (spatial != null)
+        {
+            ReplaceOwnerSectionWithCurrentCensus(sections, new OwnerSectionCensusWitness(
+                P12P8AImageSectionContract.HexSectionId,
+                P12P8AImageSectionContract.SchemaVersion,
+                spatial, spatial.HexCount, spatial.Revision));
+            ReplaceOwnerSectionWithCurrentCensus(sections, new OwnerSectionCensusWitness(
+                P12P8AImageSectionContract.LocationSectionId,
+                P12P8AImageSectionContract.SchemaVersion,
+                spatial, spatial.LocationCount, spatial.Revision));
+            ReplaceOwnerSectionWithCurrentCensus(sections, new OwnerSectionCensusWitness(
+                P12P8AImageSectionContract.ScaleContextSectionId,
+                P12P8AImageSectionContract.SchemaVersion,
+                spatial, spatial.HasGeography ? 1 : 0, spatial.Revision));
+            ReplaceOwnerSectionWithCurrentCensus(sections, new OwnerSectionCensusWitness(
+                DailyV1SelectedOwnerSectionCensusContract.SpatialPassageStateSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.SpatialPassageStateSchemaVersion,
+                spatial.PassageAuthority,
+                spatial.PassageAuthority.Options.Count + spatial.PassageAuthority.Barriers.Count,
+                spatial.Revision));
+            ReplaceOwnerSectionWithCurrentCensus(sections, new OwnerSectionCensusWitness(
+                DailyV1SelectedOwnerSectionCensusContract.SpatialCrossingSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.SpatialCrossingSchemaVersion,
+                spatial, spatial.CrossingCount, spatial.Revision));
+        }
+        if (graph.LegacySpatialAnchors != null)
+            ReplaceOwnerSectionWithCurrentCensus(sections,
+                new LegacySpatialAnchorBindingCensusProvider(graph.LegacySpatialAnchors).GetCurrentCensus());
+        if (graph.PersonSpatialPositionStore != null)
+            ReplaceOwnerSectionWithCurrentCensus(sections,
+                new PersonSpatialPositionCensusProvider(graph.PersonSpatialPositionStore).GetCurrentCensus());
     }
 
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundP12FSectionVector(
@@ -2211,6 +2279,17 @@ public sealed class DailyV1ApplicationSessionGateTests
         OwnerSectionCensusSnapshot[] completeHostVector =
             CreateCoreBoundCompleteOwnerSectionVector(session);
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedIdentitySpatialCensusSections(
+                graph, out IReadOnlyList<OwnerSectionCensusSnapshot> activeIdentitySpatialRows,
+                out string activeIdentitySpatialDiagnostic), Is.True, activeIdentitySpatialDiagnostic);
+        string[] activeIdentitySpatialIds = activeIdentitySpatialRows
+            .Select(section => section.SectionId).ToArray();
+        HashSet<string> activeIdentitySpatialIdSet = new HashSet<string>(
+            activeIdentitySpatialIds, StringComparer.Ordinal);
+        int coreOwnedNonIdentitySpatialCount =
+            DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds.Count
+            - DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedIdentitySpatialSectionIds.Count
+            + activeIdentitySpatialIds.Length;
 
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
                 completeHostVector,
@@ -2219,10 +2298,17 @@ public sealed class DailyV1ApplicationSessionGateTests
                 out string diagnostic), Is.True, diagnostic);
         Assert.That(hostRemainder.Count,
             Is.EqualTo(completeHostVector.Length
-                - DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds.Count
+                - coreOwnedNonIdentitySpatialCount
                 - graph.Cities.Count * 4));
         foreach (string sectionId in DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds)
-            Assert.That(hostRemainder.Any(section => section.SectionId == sectionId), Is.False, sectionId);
+        {
+            bool hostRetainsUnavailableCoreSource =
+                Array.IndexOf(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedIdentitySpatialSectionIds.ToArray(),
+                    sectionId) >= 0
+                && !activeIdentitySpatialIdSet.Contains(sectionId);
+            Assert.That(hostRemainder.Any(section => section.SectionId == sectionId),
+                Is.EqualTo(hostRetainsUnavailableCoreSource), sectionId);
+        }
         foreach (DailyV1CityRuntimeOwners city in graph.Cities)
         foreach (string sectionId in new[]
         {
@@ -2265,8 +2351,16 @@ public sealed class DailyV1ApplicationSessionGateTests
                 graph, hostRemainder,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> personComposed,
                 out diagnostic), Is.True, diagnostic);
-        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedIdentitySpatialSections(
                 graph, personComposed,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> identitySpatialComposed,
+                out diagnostic), Is.True, diagnostic);
+        Assert.That(identitySpatialComposed.Count - personComposed.Count,
+            Is.EqualTo(activeIdentitySpatialIds.Length));
+        foreach (string sectionId in DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedIdentitySpatialSectionIds)
+            Assert.That(identitySpatialComposed.Any(section => section.SectionId == sectionId), Is.True, sectionId);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
+                graph, identitySpatialComposed,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> cityComposed,
                 out diagnostic), Is.True, diagnostic);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
@@ -2290,19 +2384,78 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(rebuilt.Revision, Is.EqualTo(original.Revision), original.SectionId);
         }
 
-        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
-                graph, hostRemainder.Skip(1).ToArray(), out IReadOnlyList<OwnerSectionCensusSnapshot> missingRowComposed,
-                out _), Is.True);
-        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
-                graph, missingRowComposed,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> missingRowWithCities,
-                out _), Is.True);
-        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                graph, actorChoices, missingRowWithCities, out _, out _), Is.False,
-            "Core must fail closed when the unmigrated host remainder is incomplete.");
+        string hostOwnedIdentitySpatialId = DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedIdentitySpatialSectionIds
+            .First(sectionId => !activeIdentitySpatialIdSet.Contains(sectionId));
+        Assert.That(hostRemainder.Any(section => section.SectionId == hostOwnedIdentitySpatialId), Is.True,
+            hostOwnedIdentitySpatialId);
+        OwnerSectionCensusSnapshot[] missingHostIdentitySpatialRow = hostRemainder
+            .Where(section => section.SectionId != hostOwnedIdentitySpatialId).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedIdentitySpatialSections(
+                graph, missingHostIdentitySpatialRow,
+                out _, out _), Is.False,
+            "Core must fail closed when a fixed identity or spatial row remains host-owned but is omitted.");
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
                 graph, hostRemainder.Concat(hostRemainder.Take(1)).ToArray(), out _, out _), Is.False,
             "Core must fail closed when the host remainder duplicates a section.");
+
+        foreach (string sectionId in activeIdentitySpatialIds)
+        {
+            OwnerSectionCensusSnapshot original = completeHostVector.Single(section =>
+                section.SectionId == sectionId);
+            OwnerSectionCensusSnapshot[] substitutedIdentity = completeHostVector.Select(section =>
+                section.SectionId == sectionId
+                    ? new OwnerSectionCensusSnapshot(section.SectionId, section.SchemaVersion,
+                        section.Role, new object(), section.Cardinality, section.Revision)
+                    : section).ToArray();
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                    substitutedIdentity, graph, out _, out _), Is.False,
+                "Core rejects a substitute identity for " + sectionId + ".");
+
+            OwnerSectionCensusSnapshot[] staleRevision = completeHostVector.Select(section =>
+                section.SectionId == sectionId
+                    ? new OwnerSectionCensusSnapshot(section.SectionId, section.SchemaVersion,
+                        section.Role, section.OwnerInstanceIdentity, section.Cardinality, section.Revision + 1L)
+                    : section).ToArray();
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                    staleRevision, graph, out _, out _), Is.False,
+                "Core rejects a stale local revision for " + sectionId + ".");
+
+            OwnerSectionCensusSnapshot[] wrongSchema = completeHostVector.Select(section =>
+                section.SectionId == sectionId
+                    ? new OwnerSectionCensusSnapshot(section.SectionId, section.SchemaVersion + 1,
+                        section.Role, section.OwnerInstanceIdentity, section.Cardinality, section.Revision)
+                    : section).ToArray();
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                    wrongSchema, graph, out _, out _), Is.False,
+                "Core rejects a substituted schema for " + sectionId + ".");
+
+            OwnerSectionCensusSnapshot[] wrongCardinality = completeHostVector.Select(section =>
+                section.SectionId == sectionId
+                    ? new OwnerSectionCensusSnapshot(section.SectionId, section.SchemaVersion,
+                        section.Role, section.OwnerInstanceIdentity, section.Cardinality + 1, section.Revision)
+                    : section).ToArray();
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                    wrongCardinality, graph, out _, out _), Is.False,
+                "Core rejects a substituted cardinality for " + sectionId + ".");
+
+            OwnerSectionRole wrongRole = original.Role == OwnerSectionRole.Required
+                ? OwnerSectionRole.ExplicitlyEmpty
+                : OwnerSectionRole.Required;
+            OwnerSectionCensusSnapshot[] wrongRoleRows = completeHostVector.Select(section =>
+                section.SectionId == sectionId
+                    ? new OwnerSectionCensusSnapshot(section.SectionId, section.SchemaVersion,
+                        wrongRole, section.OwnerInstanceIdentity, section.Cardinality, section.Revision)
+                    : section).ToArray();
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                    wrongRoleRows, graph, out _, out _), Is.False,
+                "Core rejects a substituted role for " + sectionId + ".");
+        }
+
+        OwnerSectionCensusSnapshot[] partialIdentitySpatial = completeHostVector.Where(section =>
+            section.SectionId != activeIdentitySpatialIds[0]).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedIdentitySpatialSections(
+                graph, partialIdentitySpatial, out _, out _), Is.False,
+            "The Core composer rejects a host that omits only part of the identity/geography family.");
 
         OwnerSectionCensusSnapshot selectedCitySection = completeHostVector.First(section =>
             section.SectionId.StartsWith(
@@ -2386,7 +2539,7 @@ public sealed class DailyV1ApplicationSessionGateTests
                 out diagnostic), Is.True, diagnostic);
         Assert.That(mixedCityComposed.Count,
             Is.EqualTo(mixedCityHostVector.Length
-                - DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds.Count),
+                - coreOwnedNonIdentitySpatialCount),
             "A mixed City roster keeps the complete host vector after the unrelated Core rows are removed.");
 
         OwnerSectionCensusSnapshot actorChoice = completeHostVector.Single(section =>

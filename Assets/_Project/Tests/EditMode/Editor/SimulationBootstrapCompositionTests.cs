@@ -837,7 +837,8 @@ public sealed class SimulationBootstrapCompositionTests
             OwnerSectionCensusWitness witness = spatialNetworkProviders[i].GetCurrentCensus();
             Assert.That(witness.SectionId, Is.EqualTo(spatialNetworkSectionIds[i]));
             Assert.That(witness.SchemaVersion, Is.EqualTo(SpatialNetworkCensusProvider.SchemaVersion));
-            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(simulation.Bootstrap.SpatialNetwork));
+            Assert.That(witness.OwnerInstanceIdentity,
+                Is.SameAs(simulation.Bootstrap.SpatialNetwork.SelectedOwner));
             Assert.That(witness.OwnerInstanceIdentity, Is.Not.SameAs(runtimeIdentityOwner));
             Assert.That(witness.Cardinality, Is.EqualTo(expectedSpatialNetworkCardinalities[i]));
             Assert.That(witness.Revision, Is.EqualTo(4L));
@@ -3948,8 +3949,8 @@ public sealed class SimulationBootstrapCompositionTests
         SpatialNetworkRuntime spatialNetwork =
             (SpatialNetworkRuntime)GetRuntimeOwner(runtime, "p12SpatialNetworkRuntime");
         Assert.That(spatialNetwork, Is.SameAs(bootstrap.SpatialNetwork));
-        AddExpectedDailyV1OwnerIdentity(expected, SpatialNetworkCensusProvider.LocationsSectionId, spatialNetwork);
-        AddExpectedDailyV1OwnerIdentity(expected, SpatialNetworkCensusProvider.RoutesSectionId, spatialNetwork);
+        AddExpectedDailyV1OwnerIdentity(expected, SpatialNetworkCensusProvider.LocationsSectionId, spatialNetwork.SelectedOwner);
+        AddExpectedDailyV1OwnerIdentity(expected, SpatialNetworkCensusProvider.RoutesSectionId, spatialNetwork.SelectedOwner);
 
         SpatialAuthorityStore spatialAuthority = runtime.SpatialAuthorityStore;
         AddExpectedDailyV1OwnerIdentity(expected, SpatialHexCensusProvider.SectionId, spatialAuthority);

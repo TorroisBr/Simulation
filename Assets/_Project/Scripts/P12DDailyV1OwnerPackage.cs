@@ -815,10 +815,10 @@ internal sealed class P12DDailyV1OwnerPackage
                    sourceGenealogy, genealogySnapshot.Records?.Count ?? -1, genealogySnapshot.Revision)
             && TryMatch(token.OwnerSections, SpatialNetworkCensusProvider.LocationsSectionId,
                    SpatialNetworkCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                   sourceSpatial, spatialSnapshot.LocationRuntimeIds?.Count ?? -1, spatialSnapshot.Revision)
+                   sourceSpatial.SelectedOwner, spatialSnapshot.LocationRuntimeIds?.Count ?? -1, spatialSnapshot.Revision)
             && TryMatch(token.OwnerSections, SpatialNetworkCensusProvider.RoutesSectionId,
                    SpatialNetworkCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                   sourceSpatial, spatialSnapshot.Routes?.Count ?? -1, spatialSnapshot.Revision)
+                   sourceSpatial.SelectedOwner, spatialSnapshot.Routes?.Count ?? -1, spatialSnapshot.Revision)
             && TryMatch(token.OwnerSections, ExplorableSiteCensusProvider.SectionId,
                    ExplorableSiteCensusProvider.SchemaVersion, OwnerSectionRole.ExplicitlyEmpty,
                    sourceSites, siteSnapshot.Sites?.Count ?? -1, siteSnapshot.Revision)

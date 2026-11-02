@@ -121,7 +121,7 @@ public sealed partial class SimulationRuntime
                 SpatialNetworkCensusProvider.LocationsSectionId,
                 SpatialNetworkCensusProvider.SchemaVersion,
                 OwnerSectionRole.Required,
-                p12SpatialNetworkRuntime,
+                p12SpatialNetworkRuntime.SelectedOwner,
                 expectedInitialCardinality: 2)
             || !TryRegisterP12FixedOwnerSection(
                 protocol,
@@ -129,7 +129,7 @@ public sealed partial class SimulationRuntime
                 SpatialNetworkCensusProvider.RoutesSectionId,
                 SpatialNetworkCensusProvider.SchemaVersion,
                 OwnerSectionRole.Required,
-                p12SpatialNetworkRuntime,
+                p12SpatialNetworkRuntime.SelectedOwner,
                 expectedInitialCardinality: 2)
             || !TryRegisterP12FixedOwnerSection(
                 protocol,

@@ -1971,13 +1971,25 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        // The host census omits exact selected City rows after Core verifies
-        // their owner identity and revision. Restore those witnesses before
-        // the structural P12-F completeness gate, just as the final recapture
-        // path does below.
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedIdentitySpatialSections(
                 candidateSession.OwnerGraph,
                 personStoreSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> identitySpatialSections,
+                out diagnostic))
+        {
+            targetOwnerSections = null;
+            targetMutationEpoch = 0L;
+            failure = P12GDailyV1OwnerVectorFailure.MissingTargetVector;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The private target could not compose its Core-owned identity and spatial census.";
+            return false;
+        }
+
+        // Restore the exact Core identity, spatial and City witnesses before
+        // the structural P12-F completeness gate, just as final recapture does.
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
+                candidateSession.OwnerGraph,
+                identitySpatialSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> citySections,
                 out diagnostic))
         {

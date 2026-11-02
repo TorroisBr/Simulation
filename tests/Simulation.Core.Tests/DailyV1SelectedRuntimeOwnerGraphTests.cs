@@ -881,6 +881,11 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(graph.TryCreateWithoutNpc(actor,
             out DailyV1SelectedRuntimeOwnerGraph rosterAfterRemoval), Is.True);
         Assert.That(rosterAfterRemoval.TravelParties, Is.SameAs(partyStore));
+        Assert.That(rosterAfterRemoval.RuntimeIdentityIndex, Is.SameAs(graph.RuntimeIdentityIndex));
+        Assert.That(rosterAfterRemoval.SpatialNetwork, Is.SameAs(graph.SpatialNetwork));
+        Assert.That(rosterAfterRemoval.PersonSpatialPositionStore,
+            Is.SameAs(graph.PersonSpatialPositionStore));
+        Assert.That(rosterAfterRemoval.LegacySpatialAnchors, Is.SameAs(graph.LegacySpatialAnchors));
 
         Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
             "npc/added-travel-party-preservation", graph.Definitions,
@@ -889,6 +894,11 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(graph.TryCreateWithAddedNpc(addedNpc,
             out DailyV1SelectedRuntimeOwnerGraph rosterAfterAddition), Is.True);
         Assert.That(rosterAfterAddition.TravelParties, Is.SameAs(partyStore));
+        Assert.That(rosterAfterAddition.RuntimeIdentityIndex, Is.SameAs(graph.RuntimeIdentityIndex));
+        Assert.That(rosterAfterAddition.SpatialNetwork, Is.SameAs(graph.SpatialNetwork));
+        Assert.That(rosterAfterAddition.PersonSpatialPositionStore,
+            Is.SameAs(graph.PersonSpatialPositionStore));
+        Assert.That(rosterAfterAddition.LegacySpatialAnchors, Is.SameAs(graph.LegacySpatialAnchors));
     }
 
     [Test]

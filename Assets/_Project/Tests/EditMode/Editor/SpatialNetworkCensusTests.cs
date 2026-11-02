@@ -36,7 +36,9 @@ public sealed class SpatialNetworkCensusTests
         {
             OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
             Assert.That(witness.SchemaVersion, Is.EqualTo(SpatialNetworkCensusProvider.SchemaVersion));
-            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(owner));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(owner.SelectedOwner));
+            Assert.That(witness.OwnerInstanceIdentity, Is.Not.SameAs(owner),
+                "The passive census identifies the selected Core authority, not its Unity projection.");
             Assert.That(witness.Cardinality, Is.Zero);
             Assert.That(witness.Revision, Is.Zero);
         }

@@ -49,6 +49,10 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
     internal const string JusticeRecordsSectionId = "p12b.justice-records";
     internal const string CrimeP18ReceiptsSectionId = "p12b.crime-p18-receipts";
     internal const string JusticeP18ReceiptsSectionId = "p12b.justice-p18-receipts";
+    internal const string SpatialPassageStateSectionId = "p8b.passage-option-barrier-state";
+    internal const string SpatialCrossingSectionId = "p8b.crossings";
+    internal const int SpatialPassageStateSchemaVersion = 1;
+    internal const int SpatialCrossingSchemaVersion = 1;
 
     internal static IReadOnlyList<string> NpcPrefixes { get; } = ReadOnly(new[]
     {
@@ -74,7 +78,7 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
     {
         "p12c.runtime-identities.explorable-sites", "p12c.runtime-identities.local-places",
         "p12c.runtime-identities.local-connections", "p12c.runtime-identities.notable-items",
-        ExplorableSiteSectionId, "p8b.passage-option-barrier-state", "p8b.crossings",
+        ExplorableSiteSectionId, SpatialPassageStateSectionId, SpatialCrossingSectionId,
         "p8c.city-site-location-bindings", "p8c.person-positions", "p8d.spatial-route-observations",
         "p8d.person-route-plan-history", "p12f.npc-decision-occurrence-receipts",
         "p12e.economy-keyed-sale-receipts"
@@ -164,6 +168,9 @@ internal static class DailyV1SelectedOwnerSectionCensusContract
 
     internal static bool IsCompleteSnapshot(IReadOnlyList<OwnerSectionCensusSnapshot> snapshots)
         => IsCompleteSnapshotCore(snapshots, requireExactAliasIdentity: true);
+
+    internal static bool IsFixedEmptySection(string sectionId) =>
+        ContainsOrdinal(FixedEmpty, sectionId);
 
     /// <summary>
     /// Validates the complete section inventory and family cardinalities while

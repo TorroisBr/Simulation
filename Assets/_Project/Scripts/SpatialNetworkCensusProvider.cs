@@ -19,13 +19,14 @@ public static class SpatialNetworkCensusProvider
 
     private sealed class SectionProvider : IOwnerSectionCensusProvider
     {
-        private readonly SpatialNetworkRuntime owner;
+        private readonly SpatialNetworkOwner owner;
         private readonly Section section;
         private readonly string sectionId;
 
         public SectionProvider(SpatialNetworkRuntime owner, Section section, string sectionId)
         {
-            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            if (owner == null) throw new ArgumentNullException(nameof(owner));
+            this.owner = owner.SelectedOwner;
             this.section = section;
             this.sectionId = sectionId;
         }
