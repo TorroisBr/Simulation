@@ -642,6 +642,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     restoredAdmissionContextFactoryForTest,
                     application,
                     replacementOperation,
+                    null,
+                    null,
                     out SimulationActiveSession candidate,
                     out diagnostic))
             {
@@ -1384,6 +1386,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest,
         DailyV1Application application,
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        P12AContinuationImage coreImage,
+        DailyV1RestoredImageCoreOwnerStages stagedImageCoreOwners,
         out SimulationActiveSession candidate,
         out string diagnostic)
     {
@@ -1395,6 +1399,18 @@ internal static partial class P12GDailyV1RestoreCoordinator
             || !eventAuthority.IsFor(stagedC.RuntimeIdAllocator, time, stagedC.RecordSequence, decisions))
         {
             diagnostic = "The detached Core event/history roots do not match their staged runtime identities.";
+            return false;
+        }
+
+        if (stagedImageCoreOwners != null
+            && (application == null || coreImage == null || stagedC.CoreRoot == null
+                || !stagedImageCoreOwners.MatchesCompositionInputs(
+                    application, coreImage, selectedDefinitions, stagedC.CoreRoot,
+                    replacementOperation?.ExpectedSession, replacementOperation, time,
+                    stagedD?.CoreRestoreOwners, stagedE?.CoreOwnerRestoreStage,
+                    stagedF?.CoreOwnerRestoreStage, decisions, eventAuthority)))
+        {
+            diagnostic = "The restored Core session composition inputs no longer match the exact staged image owner token.";
             return false;
         }
 
@@ -1491,21 +1507,24 @@ internal static partial class P12GDailyV1RestoreCoordinator
         if (effective.GuardCrime.Enabled == true)
             actionProviders.Add(new GuardSystem(stagedE.Justice, config.hiddenStatus, effective.GuardCrime));
         NpcDecisionSystem decisionsSystem = new NpcDecisionSystem(actionProviders, stagedC.DeterministicRandom);
-        SimulationRuntimeAdmissionContext restoredAdmissionContext;
-        bool restoredAdmissionContextCreated = application != null
-            && restoredAdmissionContextFactoryForTest == null
-            ? application.TryCreateRestoredContinuationAdmissionContext(
-                replacementOperation?.ExpectedSession,
-                replacementOperation,
-                out restoredAdmissionContext,
-                out diagnostic)
-            : TryCreateRestoredAdmissionContext(
-                sourceAdmissionContext,
-                restoredAdmissionContextFactoryForTest,
-                out restoredAdmissionContext,
-                out diagnostic);
-        if (!restoredAdmissionContextCreated)
-            return false;
+        SimulationRuntimeAdmissionContext restoredAdmissionContext = null;
+        if (stagedImageCoreOwners == null)
+        {
+            bool restoredAdmissionContextCreated = application != null
+                && restoredAdmissionContextFactoryForTest == null
+                ? application.TryCreateRestoredContinuationAdmissionContext(
+                    replacementOperation?.ExpectedSession,
+                    replacementOperation,
+                    out restoredAdmissionContext,
+                    out diagnostic)
+                : TryCreateRestoredAdmissionContext(
+                    sourceAdmissionContext,
+                    restoredAdmissionContextFactoryForTest,
+                    out restoredAdmissionContext,
+                    out diagnostic);
+            if (!restoredAdmissionContextCreated)
+                return false;
+        }
 
         if (!DailyV1DefinitionAdapter.TryCreateBindings(
                 config, selectedDefinitions,
@@ -1566,6 +1585,25 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     out coreRuntimeSession,
                     out diagnostic))
                 return false;
+        }
+        else if (stagedImageCoreOwners != null)
+        {
+            if (!application.TryComposeRestoredImageCoreSession(
+                    stagedImageCoreOwners,
+                    lastEconomySnapshotDay,
+                    out coreRuntimeSession,
+                    out restoredCalendar,
+                    out diagnostic)
+                || coreRuntimeSession == null)
+                return false;
+
+            restoredAdmissionContext = coreRuntimeSession.AdmissionContext;
+            if (restoredAdmissionContext == null)
+            {
+                diagnostic = "The Core-composed restored image session has no retained admission identity.";
+                return false;
+            }
+            restoredExecutionBoundary = coreRuntimeSession.ExecutionBoundaryState;
         }
         else
         {

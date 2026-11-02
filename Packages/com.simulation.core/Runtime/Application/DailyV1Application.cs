@@ -61,6 +61,7 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
     internal P12ECoreOwnerRestoreStage E { get; private set; }
     internal DailyV1P12FCoreOwnerRestoreStage F { get; private set; }
     internal ExplorableSiteStore EmptyExplorableSites { get; private set; }
+    internal DailyV1ActiveRuntimeSession CoreSession { get; private set; }
 
     internal P12AContinuationImage Image => image;
     internal DailyV1EffectiveDefinitions Definitions => definitions;
@@ -74,6 +75,7 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
     internal bool CanStageF => !failed && D != null && E != null && F == null;
     internal bool IsComplete => !failed && D != null && DecisionStore != null
         && EventAuthority != null && E != null && F != null && EmptyExplorableSites != null;
+    internal bool CanComposeCoreSession => IsComplete && CoreSession == null;
 
     internal DailyV1RestoredImageCoreOwnerStages(
         DailyV1Application application,
@@ -146,6 +148,102 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
         && ReferenceEquals(DecisionStore, decisionStore)
         && ReferenceEquals(EventAuthority, eventAuthority);
 
+    internal bool MatchesCompositionInputs(
+        DailyV1Application candidateApplication,
+        P12AContinuationImage candidateImage,
+        DailyV1EffectiveDefinitions candidateDefinitions,
+        P12CStagedCoreContinuationRoot candidateCoreRoots,
+        DailyV1ActiveRuntimeSession candidateExpectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation candidateReplacementOperation,
+        SimulationTime candidateTime,
+        DailyV1P12DCoreRestoreOwnerStage candidateD,
+        P12ECoreOwnerRestoreStage candidateE,
+        DailyV1P12FCoreOwnerRestoreStage candidateF,
+        NpcDecisionStore candidateDecisionStore,
+        DailyV1DomainEventAuthority candidateEventAuthority) =>
+        IsFor(candidateApplication, candidateImage, candidateDefinitions, candidateCoreRoots,
+            candidateExpectedSession, candidateReplacementOperation)
+        && CanComposeCoreSession
+        && ReferenceEquals(StagedTime, candidateTime)
+        && ReferenceEquals(D, candidateD)
+        && ReferenceEquals(E, candidateE)
+        && ReferenceEquals(F, candidateF)
+        && HasRuntimeAuthorities(candidateDecisionStore, candidateEventAuthority);
+
+    internal bool TryAcceptCoreSession(
+        DailyV1ActiveRuntimeSession candidate,
+        SimulationRuntimeAdmissionContext candidateAdmissionContext,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (!CanComposeCoreSession || candidate == null || candidateAdmissionContext == null
+            || !ReferenceEquals(candidate.Definitions, definitions)
+            || !ReferenceEquals(candidate.EventAuthority, EventAuthority)
+            || !ReferenceEquals(candidate.SimulationTime, StagedTime)
+            || !ReferenceEquals(candidate.AdmissionContext, candidateAdmissionContext)
+            || !candidateAdmissionContext.IsRestoredContinuation
+            || !candidateAdmissionContext.IsOwnedByCurrentThread())
+        {
+            diagnostic = "The candidate session does not retain the exact image definitions, time, event authority, or restored admission identity.";
+            return false;
+        }
+
+        DailyV1ExecutionBoundaryState state = candidate.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = candidate.OwnerGraph;
+        if (state == null || !ReferenceEquals(state.SimulationTime, StagedTime)
+            || !ReferenceEquals(state.AdmissionContext, candidateAdmissionContext)
+            || !ReferenceEquals(state.WorldId, CoreRoots.WorldIdentity)
+            || !ReferenceEquals(state.SelectedRuntimeIdAllocator, CoreRoots.RuntimeIdAllocator)
+            || !ReferenceEquals(state.SelectedRecordSequence, CoreRoots.RecordSequence)
+            || !ReferenceEquals(state.SelectedRandomSource, CoreRoots.DeterministicRandom)
+            || !ReferenceEquals(state.SelectedDecisionStore, DecisionStore)
+            || !ReferenceEquals(state.SelectedActorChoiceStore, F.ActorChoices))
+        {
+            diagnostic = "The candidate Core execution state does not retain the exact staged P12-C roots and P12-F decision owners.";
+            return false;
+        }
+
+        if (graph == null
+            || !ReferenceEquals(graph.Definitions, definitions)
+            || !ReferenceEquals(graph.SpatialNetwork, D.SpatialNetwork)
+            || !ReferenceEquals(graph.RuntimeIdentityIndex, D.RuntimeIdentityIndex)
+            || !ReferenceEquals(graph.PersonStore, D.Persons)
+            || !ReferenceEquals(graph.GenealogyStore, D.Genealogy)
+            || !ReferenceEquals(graph.JusticeRecordsOwner, E.JusticeRecords)
+            || !ReferenceEquals(graph.ScheduledDirectives, F.ScheduledDirectives)
+            || !ReferenceEquals(graph.TravelParties, F.TravelParties)
+            || !ReferenceEquals(graph.Expeditions, F.Expeditions))
+        {
+            diagnostic = "The candidate Core owner graph does not retain the exact staged P12-D/E/F authority instances.";
+            return false;
+        }
+
+        if (candidate.EventAuthority.DecisionOccurrenceReceipts == null
+            || !ReferenceEquals(candidate.EventAuthority.DecisionOccurrenceReceipts.DecisionStore, DecisionStore))
+        {
+            diagnostic = "The candidate Core event authority is not bound to the staged decision store.";
+            return false;
+        }
+
+        if (!SameReferences(graph.Cities, D.Cities) || !SameReferences(graph.Npcs, D.Npcs))
+        {
+            diagnostic = "The candidate Core owner graph changed the ordered P12-D City or NPC owner instances.";
+            return false;
+        }
+
+        CoreSession = candidate;
+        return true;
+    }
+
+    private static bool SameReferences<T>(IReadOnlyList<T> actual, IReadOnlyList<T> expected)
+        where T : class
+    {
+        if (actual == null || expected == null || actual.Count != expected.Count) return false;
+        for (int i = 0; i < actual.Count; i++)
+            if (!ReferenceEquals(actual[i], expected[i])) return false;
+        return true;
+    }
+
     internal bool TryAcceptF(DailyV1P12FCoreOwnerRestoreStage staged, ExplorableSiteStore emptyExplorableSites)
     {
         if (!CanStageF || staged == null || emptyExplorableSites == null) return false;
@@ -163,6 +261,7 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
         E = null;
         F = null;
         EmptyExplorableSites = null;
+        CoreSession = null;
     }
 }
 /// <summary>
@@ -2582,6 +2681,80 @@ internal sealed class DailyV1Application
                 "p12.core.restored-image-record-authority");
             return false;
         }
+    }
+
+    /// <summary>
+    /// Composes and retains the restored Core session from one exact ordered
+    /// image-stage token. The application derives the continuation identity
+    /// itself; the Unity restore coordinator receives the resulting session
+    /// only as a projection input.
+    /// </summary>
+    internal bool TryComposeRestoredImageCoreSession(
+        DailyV1RestoredImageCoreOwnerStages stages,
+        long lastEconomySnapshotDay,
+        out DailyV1ActiveRuntimeSession candidate,
+        out SimulationCalendar calendar,
+        out string diagnostic)
+    {
+        candidate = null;
+        calendar = null;
+        diagnostic = null;
+        if (stages == null
+            || !stages.IsFor(this, stages.Image, stages.Definitions, stages.CoreRoots,
+                stages.ExpectedSession, stages.ReplacementOperation)
+            || !stages.CanComposeCoreSession
+            || !HasRestoredContinuationStagingAuthority(stages.ExpectedSession, stages.ReplacementOperation))
+        {
+            stages?.Fail();
+            diagnostic = "The Core application no longer owns the exact complete restored-image staging operation.";
+            return false;
+        }
+
+        if (!TryCreateRestoredContinuationAdmissionContext(
+                stages.ExpectedSession, stages.ReplacementOperation,
+                out SimulationRuntimeAdmissionContext restoredAdmissionContext,
+                out diagnostic)
+            || restoredAdmissionContext == null)
+        {
+            stages.Fail();
+            return false;
+        }
+
+        if (!TryCreateRestoredActiveRuntimeSessionFromOwnerStages(
+                stages.Definitions,
+                stages.Definitions.EffectiveConfiguration,
+                stages.CoreRoots,
+                stages.D,
+                stages.E,
+                stages.F,
+                stages.StagedTime,
+                restoredAdmissionContext,
+                stages.DecisionStore,
+                stages.EventAuthority,
+                lastEconomySnapshotDay,
+                stages.ReplacementOperation,
+                out DailyV1ActiveRuntimeSession candidateSession,
+                out SimulationCalendar candidateCalendar,
+                out diagnostic))
+        {
+            stages.Fail();
+            return false;
+        }
+
+        if (candidateSession == null
+            || !stages.TryAcceptCoreSession(candidateSession, restoredAdmissionContext, out diagnostic))
+        {
+            stages.Fail();
+            candidate = null;
+            calendar = null;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core application could not bind the composed session to its exact restored-image stages.";
+            return false;
+        }
+
+        candidate = candidateSession;
+        calendar = candidateCalendar;
+        return true;
     }
 
     /// <summary>Stages P12-E Core owners from the exact P12-C/D portion of the operation.</summary>

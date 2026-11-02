@@ -330,6 +330,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     stagedTime, eventAuthority, decisions, decisionRecorder,
                     economyTransactions, logger, null,
                     application, replacementOperation,
+                    image, stagedCoreOwnerStages,
                     out SimulationActiveSession candidate, out diagnostic)
                 || candidate == null)
             {
