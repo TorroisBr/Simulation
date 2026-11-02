@@ -270,6 +270,55 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
 /// application. Host adapters may retain projections, but this instance owns
 /// the exact active Core session and its serialized publication boundary.
 /// </summary>
+internal enum DailyV1ApplicationStartPreparationKind : byte
+{
+    RestoreRequired = 1,
+    GenesisPrepared = 2
+}
+
+/// <summary>
+/// Result of Core's single initial-slot admission decision. A restored image
+/// is returned without constructing genesis and with an unstarted logger; a missing slot returns a private
+/// Core genesis candidate with its logger begun. Neither state is published until the
+/// runtime boundary is admitted by the application gate.
+/// </summary>
+internal sealed class DailyV1ApplicationStartPreparation
+{
+    internal DailyV1Application Application { get; }
+    internal DailyV1ApplicationStartPreparationKind Kind { get; }
+    internal P12AContinuationImage RestoreImage { get; }
+    internal DailyV1GenesisComposition GenesisComposition { get; }
+    internal DailyV1ActiveRuntimeSession CoreSession { get; }
+    internal SimulationLogger Logger { get; }
+    internal P12AResult PersistenceResult { get; }
+
+    internal DailyV1ApplicationStartPreparation(
+        DailyV1Application application,
+        DailyV1ApplicationStartPreparationKind kind,
+        P12AContinuationImage restoreImage,
+        DailyV1GenesisComposition genesisComposition,
+        DailyV1ActiveRuntimeSession coreSession,
+        SimulationLogger logger,
+        P12AResult persistenceResult)
+    {
+        Application = application ?? throw new ArgumentNullException(nameof(application));
+        if (!Enum.IsDefined(typeof(DailyV1ApplicationStartPreparationKind), kind))
+            throw new ArgumentOutOfRangeException(nameof(kind));
+        if ((kind == DailyV1ApplicationStartPreparationKind.RestoreRequired
+                && (restoreImage == null || genesisComposition != null || coreSession != null))
+            || (kind == DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                && (restoreImage != null || genesisComposition == null || coreSession == null)))
+            throw new ArgumentException("The initial start preparation does not match its selected admission path.");
+
+        Kind = kind;
+        RestoreImage = restoreImage;
+        GenesisComposition = genesisComposition;
+        CoreSession = coreSession;
+        Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        PersistenceResult = persistenceResult ?? throw new ArgumentNullException(nameof(persistenceResult));
+    }
+}
+
 internal sealed class DailyV1Application
 {
     private readonly DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession> activeSessionGate =
@@ -288,6 +337,136 @@ internal sealed class DailyV1Application
     // create and return the application only after genesis or restore commits.
     internal DailyV1Application() { }
 
+    /// <summary>
+    /// Makes the one Core-owned initial admission decision before allocating a
+    /// world identity. A present continuation is returned for detached restore;
+    /// only a proven NoSave result may prepare genesis. Publication remains a
+    /// separate serialized operation after the matching runtime boundary is
+    /// ready, so this is not the public TryStart entry point.
+    /// </summary>
+    internal static bool TryPrepareStart(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ApplicationHost host,
+        out DailyV1ApplicationStartPreparation preparation,
+        out P12AResult persistenceResult,
+        out string diagnostic)
+    {
+        preparation = null;
+        persistenceResult = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        diagnostic = null;
+        if (definitions == null || host == null)
+        {
+            diagnostic = "The selected Daily-v1 definitions and explicit application host are required.";
+            return false;
+        }
+
+        DailyV1Application application = new DailyV1Application();
+        if (application.TryLoadInitialContinuationImageForStart(
+                definitions, host, out P12AContinuationImage image, out persistenceResult))
+        {
+            if (image == null)
+            {
+                diagnostic = "Initial continuation admission succeeded without returning its decoded image.";
+                return false;
+            }
+
+            try
+            {
+                SimulationLogger restoreLogger = CreateInitialLogger(definitions, host);
+                preparation = new DailyV1ApplicationStartPreparation(
+                    application, DailyV1ApplicationStartPreparationKind.RestoreRequired,
+                    image, null, null, restoreLogger, persistenceResult);
+                return true;
+            }
+            catch (Exception exception) when (exception is ArgumentException
+                || exception is InvalidOperationException
+                || exception is OverflowException)
+            {
+                diagnostic = "Core could not initialize the admitted restore session logger: " + exception.Message;
+                return false;
+            }
+        }
+
+        if (persistenceResult == null || persistenceResult.Code != P12AResultCode.NoSave)
+        {
+            diagnostic = "Initial continuation admission did not prove an empty slot; genesis remains blocked."
+                + (persistenceResult == null ? string.Empty : " " + persistenceResult.Code + ".");
+            return false;
+        }
+
+        try
+        {
+            SimulationLogger logger = CreateInitialLogger(definitions, host);
+
+            BeginInitialLogger(definitions, logger);
+
+            if (!application.TryPrepareInitialGenesisWithHostLogger(
+                    definitions, logger, host.StageCompleted,
+                    out DailyV1GenesisComposition genesis,
+                    out DailyV1ActiveRuntimeSession coreSession,
+                    out diagnostic)
+                || genesis == null || coreSession == null
+                || !ReferenceEquals(genesis.Definitions, definitions)
+                || !ReferenceEquals(coreSession.Definitions, definitions)
+                || !ReferenceEquals(coreSession.ExecutionBoundaryState.AdmissionContext,
+                    application.bootstrapAdmissionContext))
+            {
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "Core genesis did not retain the admitted definitions and bootstrap identity.";
+                return false;
+            }
+
+            preparation = new DailyV1ApplicationStartPreparation(
+                application, DailyV1ApplicationStartPreparationKind.GenesisPrepared,
+                null, genesis, coreSession, logger, persistenceResult);
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            diagnostic = "Core could not prepare the admitted initial Daily-v1 genesis: " + exception.Message;
+            return false;
+        }
+    }
+
+    private static SimulationLogger CreateInitialLogger(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ApplicationHost host)
+    {
+        DailyV1SimulationConfigData configuration = definitions.Configuration;
+        Action<DailyV1LogSeverity, string> logOutput = host.LogOutput
+            ?? ((severity, message) => { });
+        DailyV1SimulationLogSettings selectedLogSettings = configuration?.logSettings;
+        SimulationLogSettings logSettings = selectedLogSettings == null
+            ? new SimulationLogSettings()
+            : new SimulationLogSettings
+            {
+                showDay = selectedLogSettings.showDay,
+                npcActions = selectedLogSettings.npcActions,
+                trade = selectedLogSettings.trade,
+                travel = selectedLogSettings.travel,
+                crime = selectedLogSettings.crime,
+                justice = selectedLogSettings.justice,
+                economyProduction = selectedLogSettings.economyProduction,
+                economyConsumption = selectedLogSettings.economyConsumption,
+                market = selectedLogSettings.market
+            };
+        SimulationLogger logger = new SimulationLogger(
+            logSettings, host.PersistentDataRoot, logOutput);
+        return logger;
+    }
+    private static void BeginInitialLogger(
+        DailyV1EffectiveDefinitions definitions,
+        SimulationLogger logger)
+    {
+        DailyV1SimulationConfigData configuration = definitions.Configuration;
+        logger.BeginSimulation(
+            configuration?.simulationName,
+            configuration?.enabledModules,
+            definitions.Cities.Count,
+            definitions.Npcs.Count);
+    }
     /// <summary>
     /// Captures the selected bootstrap owner-thread identity once, inside the
     /// Core application that will own the resulting active session.

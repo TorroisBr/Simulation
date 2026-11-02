@@ -307,6 +307,67 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
+    public void CoreStartPreparationOwnsNoSaveDecisionAndPreparesOneUnpublishedGenesis()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        List<string> completedStages = new List<string>();
+        List<string> logMessages = new List<string>();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "start-preparation-root", new MissingSlotOperations(),
+            completedStages.Add,
+            (severity, message) => logMessages.Add(message),
+            unityV1Identity: UnityIdentity());
+
+        Assert.That(DailyV1Application.TryPrepareStart(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult persistenceResult,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(preparation, Is.Not.Null);
+        Assert.That(preparation.Kind, Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+        Assert.That(preparation.PersistenceResult, Is.SameAs(persistenceResult));
+        Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(preparation.RestoreImage, Is.Null);
+        Assert.That(preparation.GenesisComposition, Is.Not.Null);
+        Assert.That(preparation.CoreSession, Is.Not.Null);
+        Assert.That(preparation.Logger, Is.Not.Null);
+        Assert.That(preparation.Application.ActiveSession, Is.Null,
+            "The start preparation must not publish a session before runtime-boundary admission.");
+        Assert.That(ReferenceEquals(preparation.GenesisComposition.Definitions, definitions), Is.True);
+        Assert.That(ReferenceEquals(preparation.CoreSession.Definitions, definitions), Is.True);
+        Assert.That(completedStages, Is.Not.Empty);
+        Assert.That(new HashSet<string>(completedStages, StringComparer.Ordinal).Count,
+            Is.EqualTo(completedStages.Count), "Core must preserve the once-only stage callback contract.");
+        Assert.That(preparation.Logger.FullLog, Does.Contain(definitions.Configuration.simulationName));
+        Assert.That(preparation.Logger.FullLog, Does.Not.Contain("start-preparation-root"),
+            "The private storage root must not be emitted through the host log sink.");
+    }
+
+    [Test]
+    public void CoreStartPreparationDoesNotFallThroughToGenesisForAnInvalidExistingSlot()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        int completedStageCount = 0;
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "corrupt-start-root", new CorruptSlotOperations(),
+            _ => completedStageCount++, null,
+            unityV1Identity: UnityIdentity());
+
+        Assert.That(DailyV1Application.TryPrepareStart(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult persistenceResult,
+            out string diagnostic), Is.False);
+
+        Assert.That(preparation, Is.Null);
+        Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.CorruptOrTruncated));
+        Assert.That(diagnostic, Does.Contain("genesis remains blocked"));
+        Assert.That(completedStageCount, Is.Zero,
+            "A corrupt existing slot must be rejected before genesis stages begin.");
+    }
+
+    [Test]
     public void InvalidInitialSlotBlocksGenesisOnTheSameApplication()
     {
         DailyV1Application application = new DailyV1Application();
