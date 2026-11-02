@@ -2410,6 +2410,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
                     substitutedIdentity, graph, out _, out _), Is.False,
                 "Core rejects a substitute identity for " + sectionId + ".");
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedIdentitySpatialSections(
+                    graph, substitutedIdentity, out _, out _), Is.False,
+                "Core composition rejects a substitute identity for " + sectionId + ".");
 
             OwnerSectionCensusSnapshot[] staleRevision = completeHostVector.Select(section =>
                 section.SectionId == sectionId
@@ -2419,6 +2422,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
                     staleRevision, graph, out _, out _), Is.False,
                 "Core rejects a stale local revision for " + sectionId + ".");
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedIdentitySpatialSections(
+                    graph, staleRevision, out _, out _), Is.False,
+                "Core composition rejects a stale local revision for " + sectionId + ".");
 
             OwnerSectionCensusSnapshot[] wrongSchema = completeHostVector.Select(section =>
                 section.SectionId == sectionId
@@ -2428,6 +2434,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
                     wrongSchema, graph, out _, out _), Is.False,
                 "Core rejects a substituted schema for " + sectionId + ".");
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedIdentitySpatialSections(
+                    graph, wrongSchema, out _, out _), Is.False,
+                "Core composition rejects a substituted schema for " + sectionId + ".");
 
             OwnerSectionCensusSnapshot[] wrongCardinality = completeHostVector.Select(section =>
                 section.SectionId == sectionId
@@ -2437,6 +2446,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
                     wrongCardinality, graph, out _, out _), Is.False,
                 "Core rejects a substituted cardinality for " + sectionId + ".");
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedIdentitySpatialSections(
+                    graph, wrongCardinality, out _, out _), Is.False,
+                "Core composition rejects a substituted cardinality for " + sectionId + ".");
 
             OwnerSectionRole wrongRole = original.Role == OwnerSectionRole.Required
                 ? OwnerSectionRole.ExplicitlyEmpty
@@ -2449,6 +2461,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
                     wrongRoleRows, graph, out _, out _), Is.False,
                 "Core rejects a substituted role for " + sectionId + ".");
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedIdentitySpatialSections(
+                    graph, wrongRoleRows, out _, out _), Is.False,
+                "Core composition rejects a substituted role for " + sectionId + ".");
         }
 
         OwnerSectionCensusSnapshot[] partialIdentitySpatial = completeHostVector.Where(section =>

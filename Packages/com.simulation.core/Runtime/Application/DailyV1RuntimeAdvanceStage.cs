@@ -895,6 +895,8 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         }
 
         HashSet<string> hostSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, OwnerSectionCensusSnapshot> hostBySectionId =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
         foreach (OwnerSectionCensusSnapshot section in hostSections)
         {
             if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
@@ -903,6 +905,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 diagnostic = "The host census contains a missing or duplicate owner section.";
                 return false;
             }
+            hostBySectionId.Add(section.SectionId, section);
         }
 
         if (!TryCreateCoreOwnedIdentitySpatialCensusSections(
@@ -929,8 +932,20 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
 
         if (presentActiveCount == activeSectionIds.Count)
         {
-            // A compatibility host retains the complete source vector. Keep
-            // its exact captured facts for the normal completed-boundary gate.
+            // A compatibility host retains the complete source vector. Its
+            // active Core rows must still match the exact current Core owners.
+            foreach (OwnerSectionCensusSnapshot expected in coreSections)
+            {
+                if (!hostBySectionId.TryGetValue(expected.SectionId,
+                        out OwnerSectionCensusSnapshot actual)
+                    || !HasExactOwnerSectionFacts(actual, expected))
+                {
+                    diagnostic = "The host census differs from the exact Core identity or spatial owner at "
+                        + expected.SectionId + ".";
+                    return false;
+                }
+            }
+
             OwnerSectionCensusSnapshot[] copied = new OwnerSectionCensusSnapshot[hostSections.Count];
             for (int i = 0; i < copied.Length; i++) copied[i] = hostSections[i];
             composedSections = Array.AsReadOnly(copied);
