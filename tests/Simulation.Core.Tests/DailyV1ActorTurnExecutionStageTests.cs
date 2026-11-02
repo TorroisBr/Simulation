@@ -2130,8 +2130,8 @@ public sealed class DailyV1SelectedActionDispatchOutcomeTests
     [Test]
     public void HostCompletionContractCannotReturnOrReplaceActionOutcome()
     {
-        var method = typeof(IDailyV1SelectedActorActionExecutionBoundary).GetMethod(
-            nameof(IDailyV1SelectedActorActionExecutionBoundary.TryCompleteDispatch));
+        var method = typeof(IDailyV1SelectedActorActionHostPorts).GetMethod(
+            nameof(IDailyV1SelectedActorActionHostPorts.TryCompleteDispatch));
         Assert.That(method, Is.Not.Null);
         var parameters = method.GetParameters();
         int outputCount = 0;

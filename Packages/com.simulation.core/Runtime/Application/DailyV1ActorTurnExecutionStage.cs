@@ -79,9 +79,19 @@ internal interface IDailyV1SelectedActorChoiceExecutionContext
 /// projection identity is not part of Core's execution contract.
 /// </summary>
 internal interface IDailyV1SelectedActorActionExecutionBoundary
+    : IDailyV1SelectedActorActionHostPorts
 {
     IAuthoritativeRandomSource RandomSource { get; }
     bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor);
+}
+
+/// <summary>
+/// Effect-only callbacks used by the Core-owned selected actor-turn boundary.
+/// This contract deliberately excludes action-policy selection and decision
+/// roots: those are derived from the admitted Core session and exact graph.
+/// </summary>
+internal interface IDailyV1SelectedActorActionHostPorts
+{
     /// <summary>
     /// True when this host requires an action-object projection to admit and
     /// publish selected Core action slots. A detached Core host may return
@@ -142,6 +152,526 @@ internal interface IDailyV1SelectedActorActionExecutionBoundary
         DailyV1NpcRuntimeOwners actor,
         DailyV1ActionDefinition action,
         out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary);
+}
+
+/// <summary>
+/// Projection-only callbacks for a captured one-shot actor choice. Owner
+/// clearing, decision identity lookup, and action execution remain Core-owned.
+/// </summary>
+internal interface IDailyV1SelectedActorChoiceHostPorts
+{
+    bool TryPrepareRequestedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload);
+    bool TryRefreshRequestedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload);
+    bool CanCommitRequestedActionSlot(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload);
+    bool TryPublishRequestedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload);
+    void CancelPreparedRequestedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload);
+    void LogRequestedActionDecisionFailure(string message);
+}
+
+/// <summary>
+/// The admitted Unity host supplies only effects around the selected actor
+/// operations. The Core factory consumes this bundle to construct its own
+/// policy boundary, binding roots, roster and exact owners from session state.
+/// </summary>
+internal interface IDailyV1SelectedActorTurnHostPorts
+    : IDailyV1SelectedActorActionHostPorts,
+      IDailyV1SelectedActorChoiceHostPorts,
+      IDailyV1SelectedMerchantTradeStateP12HostPorts,
+      IDailyV1SelectedMerchantTradeStateAdmissionBoundary,
+      IDailyV1SelectedActionSlotP12MutationBoundary,
+      IDailyV1SelectedCrimeJusticeDailyBoundary
+{
+}
+
+/// <summary>
+/// Core-created admitted actor-turn boundary. The exact owner graph, roots,
+/// PersonStore, ActorChoiceStore, and roster come from the bound execution
+/// state; Unity can provide only effect ports and cannot replace actor policy.
+/// </summary>
+internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
+    : IDailyV1ActorTurnExecutionBoundary,
+      IDailyV1SelectedActorChoiceExecutionContext,
+      IDailyV1CoreActorChoiceExecutionBoundary,
+      IDailyV1SelectedMerchantTradeStateP12HostPorts,
+      IDailyV1SelectedMerchantTradeStateAdmissionBoundary,
+      IDailyV1SelectedActionSlotP12MutationBoundary,
+      IDailyV1SelectedCrimeJusticeDailyBoundary
+{
+    private readonly DailyV1ExecutionBoundaryState executionState;
+    private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+    private readonly PersonStore personStore;
+    private readonly ActorChoiceStore actorChoiceStore;
+    private readonly DailyV1ActorTurnCoreRoots coreRoots;
+    private readonly IReadOnlyCollection<DailyV1NpcRuntimeOwners> exactRosterOwners;
+    private readonly IDailyV1SelectedActorTurnHostPorts hostPorts;
+    private IDailyV1SelectedMerchantTradeStateBoundary merchantBoundary;
+
+    private DailyV1CoreSelectedActorTurnExecutionBoundary(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        ActorChoiceStore actorChoiceStore,
+        DailyV1ActorTurnCoreRoots coreRoots,
+        IReadOnlyCollection<DailyV1NpcRuntimeOwners> exactRosterOwners,
+        IDailyV1SelectedActorTurnHostPorts hostPorts)
+    {
+        this.executionState = executionState;
+        this.graph = graph;
+        this.personStore = personStore;
+        this.actorChoiceStore = actorChoiceStore;
+        this.coreRoots = coreRoots;
+        this.exactRosterOwners = exactRosterOwners;
+        this.hostPorts = hostPorts;
+    }
+
+    internal static bool TryCreate(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        ActorChoiceStore actorChoiceStore,
+        DailyV1ActorTurnCoreRoots coreRoots,
+        IDailyV1SelectedActorTurnHostPorts hostPorts,
+        out DailyV1CoreSelectedActorTurnExecutionBoundary boundary)
+    {
+        boundary = null;
+        if (executionState == null || graph == null || personStore == null
+            || actorChoiceStore == null || coreRoots == null || hostPorts == null
+            || !executionState.HasAdmittedSelectedDailyExecution
+            || !executionState.SelectedRuntimeExecutionRootsBound
+            || !executionState.HasRuntimeProtocolOperationInventory
+            || executionState.AdmissionContext?.Profile
+                != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+            || !ReferenceEquals(graph.PersonStore, personStore)
+            || !ReferenceEquals(actorChoiceStore.PersonStore, personStore)
+            || !ReferenceEquals(executionState.SelectedActorChoiceStore, actorChoiceStore)
+            || !coreRoots.IsBoundTo(executionState, graph, personStore, actorChoiceStore)
+            || !executionState.HasExactSelectedRuntimeActorTurnRoots(
+                graph, personStore, actorChoiceStore, coreRoots.RandomSource)
+            || executionState.SelectedRuntimeActorRoster == null)
+            return false;
+
+        if (!DailyV1ActorTurnExecutionStage.TryBuildRoster(
+                graph, executionState.SelectedRuntimeActorRoster,
+                out IReadOnlyList<DailyV1ActorTurnRosterEntry> roster))
+            return false;
+
+        List<DailyV1NpcRuntimeOwners> selectedOwners = new List<DailyV1NpcRuntimeOwners>();
+        foreach (DailyV1ActorTurnRosterEntry entry in roster)
+            if (entry.ActorOwner != null)
+                selectedOwners.Add(entry.ActorOwner);
+        if (!graph.MatchesExactOwnerInstances(graph.Cities, selectedOwners))
+            return false;
+
+        boundary = new DailyV1CoreSelectedActorTurnExecutionBoundary(
+            executionState, graph, personStore, actorChoiceStore, coreRoots,
+            selectedOwners.AsReadOnly(), hostPorts);
+        return true;
+    }
+
+    internal bool IsBoundTo(
+        DailyV1ExecutionBoundaryState expectedState,
+        DailyV1SelectedRuntimeOwnerGraph expectedGraph,
+        DailyV1ActorTurnCoreRoots expectedRoots) =>
+        ReferenceEquals(executionState, expectedState)
+        && ReferenceEquals(graph, expectedGraph)
+        && ReferenceEquals(coreRoots, expectedRoots)
+        && executionState.HasAdmittedSelectedDailyExecution
+        && executionState.SelectedRuntimeExecutionRootsBound
+        && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+        && coreRoots.IsBoundTo(executionState, graph, personStore, actorChoiceStore)
+        && ReferenceEquals(executionState.SelectedActorChoiceStore, actorChoiceStore)
+        && ReferenceEquals(actorChoiceStore.PersonStore, personStore)
+        && ReferenceEquals(graph.PersonStore, personStore);
+
+    internal void BindMerchantBoundary(IDailyV1SelectedMerchantTradeStateBoundary selectedBoundary)
+    {
+        if (selectedBoundary != null && merchantBoundary != null)
+            throw new InvalidOperationException("The Core actor-turn Merchant boundary is already bound.");
+        merchantBoundary = selectedBoundary;
+    }
+
+    private bool TryGetExactActor(DailyV1NpcRuntimeOwners actor)
+    {
+        if (!IsBoundTo(executionState, graph, coreRoots)
+            || actor == null || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(graph.Definitions, actor.Definitions))
+            return false;
+        foreach (DailyV1NpcRuntimeOwners selected in exactRosterOwners)
+            if (ReferenceEquals(selected, actor))
+                return true;
+        return false;
+    }
+
+    private void RequireExactActor(DailyV1NpcRuntimeOwners actor)
+    {
+        if (!TryGetExactActor(actor))
+            throw new InvalidOperationException(
+                "The Core actor-turn boundary received an owner outside its exact admitted roster and graph.");
+    }
+
+    private void RequireBoundMerchant()
+    {
+        if (merchantBoundary == null
+            || !(merchantBoundary is DailyV1CoreSelectedMerchantTradeStateBoundary coreMerchant)
+            || !coreMerchant.IsBoundTo(graph, coreRoots))
+            throw new InvalidOperationException(
+                "The admitted actor turn has no exact Core Merchant state boundary.");
+    }
+
+    // Core actor-turn policy. These legacy callbacks are deliberately not
+    // delegated to the Unity effect adapter.
+    public bool IsReservedToday(DailyV1NpcRuntimeOwners actor)
+    {
+        RequireExactActor(actor);
+        return false;
+    }
+
+    public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) =>
+        throw new InvalidOperationException(
+            "Admitted Daily-v1 directives are processed by the Core actor-turn stage.");
+
+    public bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal) =>
+        throw new InvalidOperationException(
+            "Admitted Daily-v1 choices are processed by the Core actor-turn stage.");
+
+    public void AdvanceMerchantTradeState(DailyV1NpcRuntimeOwners actor)
+    {
+        RequireExactActor(actor);
+        RequireBoundMerchant();
+        long absoluteDay = executionState.SimulationTime.AbsoluteDay;
+        if (!ExecuteWithinSelectedMerchantDailyOperation(
+                actor,
+                () => DailyV1SelectedMerchantTradeStateOperation.TryAdvance(
+                    graph, actor, absoluteDay, merchantBoundary, coreRoots)))
+            throw new InvalidOperationException(
+                "The admitted Core Merchant daily operation could not complete.");
+    }
+
+    public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor)
+    {
+        RequireExactActor(actor);
+        if (!DailyV1SelectedActorActionExecutionStage.TryExecuteAutonomousAction(
+                graph, actor, personStore, coreRoots.RandomSource,
+                executionState.SimulationTime.AbsoluteDay, this, coreRoots))
+            throw new InvalidOperationException(
+                "The admitted Core actor action could not complete.");
+    }
+
+    public IAuthoritativeRandomSource RandomSource => coreRoots.RandomSource;
+    public bool RequiresActionProjection => hostPorts.RequiresActionProjection;
+    public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) =>
+        TryGetExactActor(actor);
+
+    public bool TryGetActorChoiceExecutionContext(
+        DailyV1NpcRuntimeOwners actor,
+        out IDailyV1ActorChoiceExecutionBoundary executionBoundary)
+    {
+        executionBoundary = null;
+        if (!TryGetExactActor(actor)) return false;
+        executionBoundary = this;
+        return true;
+    }
+
+    public void ClearCurrentAction(DailyV1NpcRuntimeOwners actor)
+    {
+        RequireExactActor(actor);
+        if (!DailyV1SelectedActorActionExecutionStage.TryClearCurrentAction(graph, actor, this))
+            throw new InvalidOperationException(
+                "The Core actor-turn boundary could not clear its exact action owner and projection.");
+    }
+
+    public bool TryGetDecisionRecordOwners(
+        DailyV1NpcRuntimeOwners actor,
+        out RuntimeIdAllocator idAllocator,
+        out SimulationRecordSequence recordSequence,
+        out NpcDecisionStore decisionStore)
+    {
+        idAllocator = null;
+        recordSequence = null;
+        decisionStore = null;
+        if (!TryGetExactActor(actor) || !coreRoots.IsBoundToGraph(graph)) return false;
+        idAllocator = coreRoots.IdAllocator;
+        recordSequence = coreRoots.RecordSequence;
+        decisionStore = coreRoots.DecisionStore;
+        return idAllocator != null && recordSequence != null && decisionStore != null;
+    }
+
+    public NpcActionResultType? ExecuteCurrentAction(DailyV1NpcRuntimeOwners actor) =>
+        throw new InvalidOperationException(
+            "Admitted Daily-v1 actor choices execute through the Core action stage, not a host callback.");
+
+    // Narrow host effect ports. Every call is fenced to the exact selected actor.
+    public void LogSkippedDirective(ScheduledDirective directive, string reason) =>
+        hostPorts.LogSkippedDirective(directive, reason);
+
+    public bool TryCreateActionProjectionBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        out IDailyV1SelectedActionProjectionBoundary projectionBoundary)
+    {
+        projectionBoundary = null;
+        return TryGetExactActor(actor)
+            && hostPorts.TryCreateActionProjectionBoundary(actor, out projectionBoundary)
+            && projectionBoundary != null;
+    }
+
+    public bool TryPrepareSelectedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionCandidate selected,
+        IDailyV1SelectedActionProjectionBoundary projectionBoundary,
+        DailyV1NpcActionPayloadOwner payload) =>
+        TryGetExactActor(actor)
+        && hostPorts.TryPrepareSelectedActionProjection(
+            actor, selected, projectionBoundary, payload);
+
+    public bool CanCommitSelectedActionSlot(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload) =>
+        TryGetExactActor(actor) && hostPorts.CanCommitSelectedActionSlot(actor, payload);
+
+    public bool TryPublishSelectedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload) =>
+        TryGetExactActor(actor) && hostPorts.TryPublishSelectedActionProjection(actor, payload);
+
+    public void CancelPreparedSelectedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        RequireExactActor(actor);
+        hostPorts.CancelPreparedSelectedActionProjection(actor, payload);
+    }
+
+    public void LogSelectedActionDecisionFailure(DailyV1NpcRuntimeOwners actor, string message)
+    {
+        RequireExactActor(actor);
+        hostPorts.LogSelectedActionDecisionFailure(actor, message);
+    }
+
+    public bool TryPrepareCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor) =>
+        TryGetExactActor(actor) && hostPorts.TryPrepareCurrentActionClearProjection(actor);
+
+    public bool CanCommitCurrentActionClear(DailyV1NpcRuntimeOwners actor) =>
+        TryGetExactActor(actor) && hostPorts.CanCommitCurrentActionClear(actor);
+
+    public bool TryPublishCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor) =>
+        TryGetExactActor(actor) && hostPorts.TryPublishCurrentActionClearProjection(actor);
+
+    public void CancelPreparedCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor)
+    {
+        RequireExactActor(actor);
+        hostPorts.CancelPreparedCurrentActionClearProjection(actor);
+    }
+
+    public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor)
+    {
+        RequireExactActor(actor);
+        hostPorts.LogChosenActionTarget(actor);
+    }
+
+    public bool TryGetDispatchBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        out IDailyV1SelectedActionDispatchBoundary dispatchBoundary)
+    {
+        dispatchBoundary = null;
+        return TryGetExactActor(actor)
+            && hostPorts.TryGetDispatchBoundary(actor, out dispatchBoundary)
+            && dispatchBoundary != null;
+    }
+
+    public bool TryCompleteDispatch(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1SelectedActionDispatchResult dispatch,
+        out string resultMessage)
+    {
+        resultMessage = null;
+        return TryGetExactActor(actor)
+            && hostPorts.TryCompleteDispatch(actor, dispatch, out resultMessage);
+    }
+
+    public bool TryGetActionStatusBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcRuntimeOwners target,
+        bool reuseExistingOperation,
+        out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary boundary)
+    {
+        boundary = null;
+        if (!TryGetExactActor(actor)
+            || (target != null && !graph.ContainsExactNpcOwner(target)))
+            return false;
+        return hostPorts.TryGetActionStatusBoundary(
+            actor, target, reuseExistingOperation, out boundary)
+            && boundary != null;
+    }
+
+    public bool TryPrepareForcedOutcomeActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload) =>
+        TryGetExactActor(actor)
+        && hostPorts.TryPrepareForcedOutcomeActionProjection(actor, action, payload);
+
+    public bool TryGetForcedEscapeBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
+    {
+        boundary = null;
+        return TryGetExactActor(actor)
+            && hostPorts.TryGetForcedEscapeBoundary(actor, action, out boundary)
+            && boundary != null;
+    }
+
+    public bool TryPrepareRequestedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload) =>
+        TryGetExactActor(actor) && hostPorts.TryPrepareRequestedActionProjection(actor, payload);
+
+    public bool TryRefreshRequestedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload) =>
+        TryGetExactActor(actor) && hostPorts.TryRefreshRequestedActionProjection(actor, payload);
+
+    public bool CanCommitRequestedActionSlot(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload) =>
+        TryGetExactActor(actor) && hostPorts.CanCommitRequestedActionSlot(actor, payload);
+
+    public bool TryPublishRequestedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload) =>
+        TryGetExactActor(actor) && hostPorts.TryPublishRequestedActionProjection(actor, payload);
+
+    public void CancelPreparedRequestedActionProjection(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        RequireExactActor(actor);
+        hostPorts.CancelPreparedRequestedActionProjection(actor, payload);
+    }
+
+    public void LogRequestedActionDecisionFailure(string message) =>
+        hostPorts.LogRequestedActionDecisionFailure(message);
+
+    public bool OwnsSelectedActionSlotP12Mutation => hostPorts.OwnsSelectedActionSlotP12Mutation;
+
+    public bool CanCommitSelectedActionSlotP12Mutation(
+        DailyV1SelectedRuntimeOwnerGraph expectedGraph,
+        DailyV1NpcRuntimeOwners actor) =>
+        ReferenceEquals(expectedGraph, graph)
+        && TryGetExactActor(actor)
+        && hostPorts.CanCommitSelectedActionSlotP12Mutation(graph, actor);
+
+    public bool NotifySelectedActionSlotP12MutationCommitted(
+        DailyV1SelectedRuntimeOwnerGraph expectedGraph,
+        DailyV1NpcRuntimeOwners actor,
+        string sectionId,
+        long revision) =>
+        ReferenceEquals(expectedGraph, graph)
+        && TryGetExactActor(actor)
+        && hostPorts.NotifySelectedActionSlotP12MutationCommitted(
+            graph, actor, sectionId, revision);
+
+    public bool CanAdmitSelectedMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) =>
+        TryGetExactActor(actor) && hostPorts.CanAdmitSelectedMerchantPlanMutation(actor);
+
+    public bool NotifySelectedMerchantPlanMutationCommitted(
+        DailyV1NpcRuntimeOwners actor,
+        long revision) =>
+        TryGetExactActor(actor)
+        && hostPorts.NotifySelectedMerchantPlanMutationCommitted(actor, revision);
+
+    public bool CanProjectSelectedMerchantTravelPlanMutation(
+        DailyV1NpcRuntimeOwners actor,
+        string targetLocationRuntimeId,
+        string targetCityRuntimeId) =>
+        TryGetExactActor(actor)
+        && hostPorts.CanProjectSelectedMerchantTravelPlanMutation(
+            actor, targetLocationRuntimeId, targetCityRuntimeId);
+
+    public bool CanAdmitSelectedMerchantTravelPlanMutation(DailyV1NpcRuntimeOwners actor) =>
+        TryGetExactActor(actor)
+        && hostPorts.CanAdmitSelectedMerchantTravelPlanMutation(actor);
+
+    public bool NotifySelectedMerchantTravelPlanMutationCommitted(
+        DailyV1NpcRuntimeOwners actor,
+        long revision) =>
+        TryGetExactActor(actor)
+        && hostPorts.NotifySelectedMerchantTravelPlanMutationCommitted(actor, revision);
+
+    public NpcDecisionRecord RecordTradeRedirect(
+        DailyV1NpcRuntimeOwners actor,
+        string targetLocationRuntimeId,
+        CommercialDecisionEvidence evidence) =>
+        TryGetExactActor(actor)
+            ? hostPorts.RecordTradeRedirect(actor, targetLocationRuntimeId, evidence)
+            : throw new InvalidOperationException("A Merchant decision referenced an actor outside the Core roster.");
+
+    public void LogTradeDecisionFailure(string message) => hostPorts.LogTradeDecisionFailure(message);
+    public void LogTrade(string message) => hostPorts.LogTrade(message);
+
+    public bool ExecuteWithinSelectedMerchantDailyOperation(
+        DailyV1NpcRuntimeOwners actor,
+        Func<bool> operation) =>
+        TryGetExactActor(actor)
+        && hostPorts.ExecuteWithinSelectedMerchantDailyOperation(actor, operation);
+
+    public DailyV1JusticeRecordsOwner JusticeRecordsOwner => graph.JusticeRecordsOwner;
+
+    public void ExecuteWithinDailyMutation(
+        DailyV1SelectedCrimeJusticeDailyPhase phase,
+        Action mutation)
+    {
+        if (!Enum.IsDefined(typeof(DailyV1SelectedCrimeJusticeDailyPhase), phase)
+            || mutation == null)
+            throw new ArgumentException("The admitted Core actor turn requires a valid Crime/Justice P12 operation.");
+        hostPorts.ExecuteWithinDailyMutation(phase, mutation);
+    }
+
+    public bool CanProjectStatusChanges(
+        DailyV1NpcRuntimeOwners owner,
+        IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
+        TryGetExactActor(owner) && hostPorts.CanProjectStatusChanges(owner, statusToAdd);
+
+    public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner)
+    {
+        RequireExactActor(owner);
+        hostPorts.EnsureMutationAllowed(owner);
+    }
+
+    public void NotifyStatusMutationCommitted(
+        DailyV1NpcRuntimeOwners owner,
+        DailyV1StatusDefinition status,
+        bool added)
+    {
+        RequireExactActor(owner);
+        hostPorts.NotifyStatusMutationCommitted(owner, status, added);
+    }
+
+    public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
+    {
+        RequireExactActor(owner);
+        hostPorts.NotifyHiddenMutationCommitted(owner);
+    }
+
+    public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence) =>
+        hostPorts.CanRemoveSentenceProjection(sentence);
+
+    public void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence) =>
+        hostPorts.CommitSentenceProjectionRemoval(sentence);
+
+    public void Log(SimulationLogCategory category, string message) => hostPorts.Log(category, message);
+    public void LogWarning(string message) => hostPorts.LogWarning(message);
 }
 
 /// <summary>

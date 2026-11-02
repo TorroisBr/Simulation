@@ -42,9 +42,9 @@ internal interface IDailyV1SelectedDailyExecutionBoundary
     bool TryCreateSelectedActorTurnContext(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedActorTurnExecutionContext context);
-    bool TryCreateSelectedActorTurnBoundary(
+    bool TryCreateSelectedActorTurnHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
-        out IDailyV1ActorTurnExecutionBoundary boundary);
+        out IDailyV1SelectedActorTurnHostPorts hostPorts);
     bool TryCreateSelectedTravelDayContext(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedTravelDayExecutionContext context);
@@ -83,9 +83,9 @@ internal interface IDailyV1SelectedDailyExecutionHostPorts
         SimulationLogCategory category,
         string message);
     void EnsureSelectedLocalKnowledgeCanRun(DailyV1SelectedRuntimeOwnerGraph graph);
-    bool TryCreateSelectedActorTurnBoundary(
+    bool TryCreateSelectedActorTurnHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
-        out IDailyV1ActorTurnExecutionBoundary boundary);
+        out IDailyV1SelectedActorTurnHostPorts hostPorts);
     bool TryCreateSelectedTravelDayHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedTravelDayHostPorts hostPorts);
@@ -256,14 +256,14 @@ internal sealed class DailyV1CoreSelectedDailyExecutionBoundary
                 executionState, ownerGraph, this, out context);
     }
 
-    public bool TryCreateSelectedActorTurnBoundary(
+    public bool TryCreateSelectedActorTurnHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
-        out IDailyV1ActorTurnExecutionBoundary boundary)
+        out IDailyV1SelectedActorTurnHostPorts selectedHostPorts)
     {
-        boundary = null;
+        selectedHostPorts = null;
         return IsBoundTo(graph)
-            && hostPorts.TryCreateSelectedActorTurnBoundary(ownerGraph, out boundary)
-            && boundary != null;
+            && hostPorts.TryCreateSelectedActorTurnHostPorts(ownerGraph, out selectedHostPorts)
+            && selectedHostPorts != null;
     }
 
     public bool TryCreateSelectedTravelDayContext(
@@ -535,9 +535,9 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             || graph.PersonStore == null
             || executionState.SelectedActorChoiceStore == null
             || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore)
-            || !hostBoundary.TryCreateSelectedActorTurnBoundary(
-                graph, out IDailyV1ActorTurnExecutionBoundary actorBoundary)
-            || actorBoundary == null)
+            || !hostBoundary.TryCreateSelectedActorTurnHostPorts(
+                graph, out IDailyV1SelectedActorTurnHostPorts actorHostPorts)
+            || actorHostPorts == null)
             return false;
 
         DailyV1ActorTurnCoreRoots coreRoots = executionState.SelectedRuntimeActorTurnCoreRoots;
@@ -546,17 +546,24 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 executionState, graph, graph.PersonStore, executionState.SelectedActorChoiceStore))
             return false;
 
+        if (!DailyV1CoreSelectedActorTurnExecutionBoundary.TryCreate(
+                executionState, graph, graph.PersonStore,
+                executionState.SelectedActorChoiceStore, coreRoots,
+                actorHostPorts,
+                out DailyV1CoreSelectedActorTurnExecutionBoundary actorBoundary)
+            || !TryCreateCoreMerchantBoundary(
+                graph, coreRoots, actorBoundary,
+                out IDailyV1SelectedMerchantTradeStateBoundary merchantTradeBoundary))
+            return false;
+        actorBoundary.BindMerchantBoundary(merchantTradeBoundary);
+
         context = new CoreSelectedActorTurnExecutionContext(
             executionState.SelectedRuntimeActorRoster,
             graph.PersonStore,
             executionState.SelectedActorChoiceStore,
             coreRoots,
             actorBoundary,
-            TryCreateCoreMerchantBoundary(
-                graph, coreRoots, actorBoundary,
-                out IDailyV1SelectedMerchantTradeStateBoundary merchantTradeBoundary)
-                ? merchantTradeBoundary
-                : null);
+            merchantTradeBoundary);
         if (context.MerchantTradeBoundary == null
             && graph.Definitions.EffectiveConfiguration?.MerchantTrade?.Enabled == true)
         {

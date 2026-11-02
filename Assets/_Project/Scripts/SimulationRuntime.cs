@@ -11692,17 +11692,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedActorTurnExecutionContext context) =>
             runtime.TryCreateSelectedDailyV1ActorTurnContext(graph, out context);
-        public bool TryCreateSelectedActorTurnBoundary(
+        public bool TryCreateSelectedActorTurnHostPorts(
             DailyV1SelectedRuntimeOwnerGraph graph,
-            out IDailyV1ActorTurnExecutionBoundary boundary)
+            out IDailyV1SelectedActorTurnHostPorts hostPorts)
         {
-            boundary = null;
-            if (!runtime.TryCreateSelectedDailyV1ActorTurnContext(
-                    graph, out IDailyV1SelectedActorTurnExecutionContext context)
-                || context?.Boundary == null)
-                return false;
-            boundary = context.Boundary;
-            return true;
+            return runtime.TryCreateSelectedDailyV1ActorTurnHostPorts(graph, out hostPorts);
         }
         public bool TryCreateSelectedTravelDayContext(
             DailyV1SelectedRuntimeOwnerGraph graph,
@@ -11908,6 +11902,23 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         out IDailyV1SelectedActorTurnExecutionContext context)
     {
         context = null;
+        if (!TryCreateSelectedDailyV1ActorTurnHostPorts(
+                graph, out IDailyV1SelectedActorTurnHostPorts hostPorts)
+            || !(hostPorts is SelectedDailyV1ActorTurnExecutionBoundary actorBoundary)
+            || !TryReadCoreSelectedRuntimeActorRoster(
+                out IReadOnlyList<DailyV1ActorTurnRosterProjection> runtimeRoster))
+            return false;
+
+        context = new SelectedDailyV1ActorTurnExecutionContext(
+            runtimeRoster, personStore, actorChoiceStore, actorBoundary);
+        return true;
+    }
+
+    private bool TryCreateSelectedDailyV1ActorTurnHostPorts(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedActorTurnHostPorts hostPorts)
+    {
+        hostPorts = null;
         if (graph == null || actorChoiceStore == null || personStore == null)
             return false;
         EffectiveMerchantTradeConfiguration selectedMerchantConfiguration =
@@ -11951,11 +11962,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             runtimeByOwner.Add(owner, runtime);
         }
 
-        context = new SelectedDailyV1ActorTurnExecutionContext(
-            runtimeRoster,
-            personStore,
-            actorChoiceStore,
-            new SelectedDailyV1ActorTurnExecutionBoundary(this, graph, runtimeByOwner));
+        hostPorts = new SelectedDailyV1ActorTurnExecutionBoundary(this, graph, runtimeByOwner);
         return true;
     }
 
@@ -12170,10 +12177,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             IDailyV1SelectedActorChoiceExecutionContext,
             IDailyV1CoreActorChoiceExecutionBoundary,
             IDailyV1SelectedMerchantTradeStateBoundary,
-            IDailyV1SelectedMerchantTradeStateAdmissionBoundary,
-            IDailyV1SelectedMerchantTradeStateP12HostPorts,
-            IDailyV1SelectedActorActionExecutionBoundary,
-            IDailyV1SelectedActionSlotP12MutationBoundary,
+            IDailyV1SelectedActorTurnHostPorts,
             IDailyV1SelectedCrimeJusticeDailyBoundary
     {
         private readonly SimulationRuntime runtime;

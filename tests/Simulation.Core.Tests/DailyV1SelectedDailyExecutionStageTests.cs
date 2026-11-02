@@ -174,7 +174,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
-    public void AdmittedStageRejectsSubstitutedDayStartOwnerBeforeLoggerOrMutation()
+    public void AdmittedActorBoundaryUsesExactCoreJusticeOwnerDespiteHostSubstitution()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
         FakeBoundary boundary = new FakeBoundary(
@@ -187,21 +187,16 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             SubstituteJusticeRecordsOwner = new DailyV1JusticeRecordsOwner()
         };
 
-        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
-            DailyV1SelectedDailyExecutionStage.Advance(
-                composition.ExecutionBoundaryState, composition.OwnerGraph, boundary));
-
-        Assert.That(failure.Message, Does.Contain("exact Core day-start owner"));
-        Assert.That(boundary.Calls, Is.EqualTo(new[]
-        {
-            "actor-context",
-            "crime-justice-projection-bindings"
-        }),
-            "A selected execution proves its exact day-start boundary before logger or gameplay callbacks.");
-        Assert.That(boundary.Calls, Does.Not.Contain("begin-day"));
-        Assert.That(boundary.Calls, Does.Not.Contain("economy-preflight"));
-        Assert.That(boundary.Calls, Does.Not.Contain("knowledge-preflight"));
-        Assert.That(boundary.Calls, Does.Not.Contain("travel-context"));
+        Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreate(
+            composition.ExecutionBoundaryState, composition.OwnerGraph, boundary,
+            out IDailyV1SelectedActorTurnExecutionContext context), Is.True);
+        Assert.That(context.Boundary, Is.InstanceOf<IDailyV1SelectedCrimeJusticeDailyBoundary>());
+        Assert.That(((IDailyV1SelectedCrimeJusticeDailyBoundary)context.Boundary).JusticeRecordsOwner,
+            Is.SameAs(composition.OwnerGraph.JusticeRecordsOwner));
+        Assert.That(((IDailyV1SelectedCrimeJusticeDailyBoundary)context.Boundary).JusticeRecordsOwner,
+            Is.Not.SameAs(boundary.SubstituteJusticeRecordsOwner),
+            "The Core boundary binds Justice identity from its exact selected owner graph.");
+        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-host-ports" }));
     }
 
     [Test]
@@ -225,7 +220,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(failure.Message, Does.Contain("Unity projection bindings"));
         Assert.That(boundary.Calls, Is.EqualTo(new[]
         {
-            "actor-context",
+            "actor-host-ports",
             "crime-justice-projection-bindings"
         }), "A stale Unity projection must fail before logger, day-start, or gameplay callbacks.");
         Assert.That(composition.OwnerGraph.JusticeRecordsOwner.Revision, Is.EqualTo(justiceRevision),
@@ -233,7 +228,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
-    public void AdmittedDayStartBoundaryFailurePrecedesEnabledDemographyWriter()
+    public void AdmittedDayStartUsesCoreBoundaryBeforeEnabledDemographyWriter()
     {
         DailyV1EffectiveDefinitions definitions = CopyWithNaturalMortalityEnabled(
             DailyV1CapturedSelectedContentFixture.CreateDefinitions(), true);
@@ -253,13 +248,14 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             DailyV1SelectedDailyExecutionStage.Advance(
                 composition.ExecutionBoundaryState, composition.OwnerGraph, boundary));
 
-        Assert.That(failure.Message, Does.Contain("exact Core day-start owner"));
-        Assert.That(boundary.Calls, Is.EqualTo(new[]
-        {
-            "actor-context",
-            "crime-justice-projection-bindings"
-        }),
-            "The missing required operation boundary is rejected before logger or enabled demographic writer callbacks.");
+        Assert.That(failure.Message, Does.Contain("demography failed"),
+            "The Core day-start owner binding is already established before enabled demographic preparation.");
+        Assert.That(boundary.Calls, Does.Contain("actor-host-ports"));
+        Assert.That(boundary.Calls, Does.Contain("crime-justice-projection-bindings"));
+        Assert.That(boundary.Calls, Does.Contain("travel-context"));
+        Assert.That(boundary.Calls, Does.Contain("demography-host-ports"));
+        Assert.That(boundary.Calls, Does.Not.Contain("actor-context"),
+            "An admitted day does not request a second host-owned actor/day-start context.");
         Assert.That(boundary.PublishedDemographyResult, Is.Null,
             "No daily result is published after day-start preflight rejection.");
     }
@@ -290,7 +286,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(boundary.Calls,
             Is.EqualTo(new[]
             {
-                "actor-context",
+                "actor-host-ports",
                 "crime-justice-projection-bindings",
                 "travel-context"
             }),
@@ -300,7 +296,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
-    public void AdmittedDailyStageRejectsHostOwnedActionFallbackBeforeAnyDailyCallback()
+    public void AdmittedDailyStageDoesNotLetLegacyHostFlagSelectActorPolicy()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
         FakeBoundary boundary = new FakeBoundary(
@@ -310,23 +306,20 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             UseSelectedActionExecution = false
         };
-        long marketRevision = composition.OwnerGraph.Cities[0].Market.Revision;
-        long spatialKnowledgeRevision = composition.OwnerGraph.Npcs[0].SpatialKnowledge.Revision;
-        DailyCaptureEligibilityToken captureToken =
-            composition.ExecutionBoundaryState.CurrentCaptureToken;
+        FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(
+            composition.ExecutionBoundaryState, boundary);
+        Assert.That(composition.ExecutionBoundaryState.TryAdvanceDay(
+            advanceBoundary, out SimulationRuntimeAdvanceFailure failure), Is.True, failure.ToString());
 
-        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
-            DailyV1SelectedDailyExecutionStage.Advance(
-                composition.ExecutionBoundaryState, composition.OwnerGraph, boundary));
-
-        Assert.That(failure.Message, Does.Contain("host-owned action execution"));
-        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }),
-            "The admitted Core-owned action contract is proven before logger, daily, owner, or capture effects.");
-        Assert.That(composition.OwnerGraph.Cities[0].Market.Revision, Is.EqualTo(marketRevision));
-        Assert.That(composition.OwnerGraph.Npcs[0].SpatialKnowledge.Revision,
-            Is.EqualTo(spatialKnowledgeRevision));
-        Assert.That(composition.ExecutionBoundaryState.CurrentCaptureToken, Is.SameAs(captureToken),
-            "A preflight rejection does not invalidate or replace the prior completed-boundary token.");
+        Assert.That(boundary.Calls, Does.Contain("actor-host-ports"));
+        Assert.That(boundary.Calls, Does.Contain("logger:1"));
+        Assert.That(boundary.DecisionOwnerLookupCount, Is.Zero,
+            "The Core actor-turn boundary uses its bound decision roots, not a legacy host-selected action policy.");
+        Assert.That(boundary.LegacyActorChoiceCallbackCount, Is.Zero);
+        Assert.That(boundary.LegacyActionCallbackCount, Is.Zero);
+        Assert.That(boundary.LegacyDirectiveCallbackCount, Is.Zero);
+        Assert.That(composition.ExecutionBoundaryState.CurrentCaptureToken, Is.Not.Null,
+            "The same admitted daily operation still reaches its completed capture boundary.");
     }
 
     [Test]
@@ -546,9 +539,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "Selected directives execute through Core rather than the legacy host callback.");
         Assert.That(dailyBoundary.Calls, Does.Not.Contain("begin-day"),
             "The admitted selected path runs the Core day-start stages instead of delegating to Unity's whole-day callback.");
-        Assert.That(dailyBoundary.Calls, Does.Contain("actor-context"));
-        Assert.That(dailyBoundary.Calls.Count(call => call == "actor-context"), Is.EqualTo(1),
-            "The actor-turn context prepared before the clock advance is reused for execution.");
+        Assert.That(dailyBoundary.Calls, Does.Contain("actor-host-ports"));
+        Assert.That(dailyBoundary.Calls.Count(call => call == "actor-host-ports"), Is.EqualTo(1),
+            "Core prepares one actor-turn effect bundle before the clock advance and reuses its Core policy boundary.");
         Assert.That(dailyBoundary.Calls, Does.Contain("travel-context"));
         Assert.That(dailyBoundary.Calls.Count(call => call == "travel-context"), Is.EqualTo(1),
             "The selected travel/P12 context prepared before the clock advance is reused for execution.");
@@ -580,7 +573,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(state.TryAdvanceDay(
             advanceBoundary, out SimulationRuntimeAdvanceFailure failure), Is.True, failure.ToString());
 
-        Assert.That(boundary.Calls, Does.Contain("actor-context"));
+        Assert.That(boundary.Calls, Does.Contain("actor-host-ports"));
         Assert.That(boundary.DecisionOwnerLookupCount, Is.Zero,
             "The state-bound Core roots are authoritative; the host's failing owner lookup is not consulted.");
         Assert.That(state.CompletedCoreSequence, Is.EqualTo(1L));
@@ -588,7 +581,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
-    public void RuntimeAdvanceRejectsPerActorChoiceBoundaryThatFallsBackBeforeDailyWritesAndCapturePublication()
+    public void AdmittedActorTurnPolicyAndDecisionRootsAreConstructedByCore()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
@@ -602,23 +595,31 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             UseSelectedActionExecution = true,
             ActorChoiceSelectedActionExecutionOverride = false
         };
-        // The returned per-actor boundary has the same exact roots and Core
-        // contract type, but it would use the legacy host action callback.
-        FakeRuntimeAdvanceBoundary advanceBoundary = new FakeRuntimeAdvanceBoundary(state, dailyBoundary);
-
-        Assert.Throws<InvalidOperationException>(() =>
-            state.TryAdvanceDay(advanceBoundary, out _));
-
-        Assert.That(dailyBoundary.Calls, Is.EqualTo(new[] { "actor-context" }),
-            "Per-actor action-mode proof completes before logger, daily-stage, owner, or capture callbacks.");
-        Assert.That(dailyBoundary.SelectedActionDispatchLookupCount, Is.Zero);
-        Assert.That(advanceBoundary.Calls, Does.Contain("fault"));
-        Assert.That(advanceBoundary.Calls, Does.Not.Contain("capture-evidence"));
-        Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(initialDay),
-            "The selected actor-turn context is now preflighted before the clock advances.");
-        Assert.That(state.CompletedCoreSequence, Is.Zero);
-        Assert.That(state.CurrentCaptureToken, Is.Null);
-        Assert.That(state.AdvanceLeaseHeld, Is.False);
+        Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreate(
+            state, graph, dailyBoundary,
+            out IDailyV1SelectedActorTurnExecutionContext context), Is.True);
+        Assert.That(context.Boundary, Is.TypeOf<DailyV1CoreSelectedActorTurnExecutionBoundary>());
+        Assert.That(ReferenceEquals(context.Boundary, dailyBoundary.LastActorTurnHostPorts), Is.False,
+            "Core constructs the policy boundary; the Unity test double is only its effects bundle.");
+        Assert.That(context.CoreRoots.RandomSource, Is.SameAs(state.SelectedRandomSource));
+        Assert.That(((IDailyV1SelectedActorActionExecutionBoundary)context.Boundary).RandomSource,
+            Is.SameAs(state.SelectedRandomSource));
+        Assert.That(context.CoreRoots.IdAllocator, Is.SameAs(state.SelectedRuntimeIdAllocator));
+        Assert.That(context.CoreRoots.RecordSequence, Is.SameAs(state.SelectedRecordSequence));
+        Assert.That(context.CoreRoots.DecisionStore, Is.SameAs(state.SelectedDecisionStore));
+        Assert.That(dailyBoundary.DecisionOwnerLookupCount, Is.Zero,
+            "The host cannot select decision allocator, sequence, or store roots for an admitted actor.");
+        Assert.That(((IDailyV1SelectedActorActionExecutionBoundary)context.Boundary)
+            .UsesSelectedDailyV1ActionExecution(graph.Npcs[0]), Is.True,
+            "Core derives selected-action eligibility from the exact admitted graph and roster.");
+        Assert.That(context.Boundary, Is.Not.InstanceOf<IDailyV1SelectedActorTurnHostPorts>(),
+            "The effect bundle cannot be used as the actor-turn policy boundary.");
+        Assert.That(typeof(IDailyV1SelectedActorTurnHostPorts).GetMethod("TryProcessActorChoice"), Is.Null);
+        Assert.That(typeof(IDailyV1SelectedActorTurnHostPorts).GetMethod("TryGetDecisionRecordOwners"), Is.Null);
+        Assert.That(typeof(IDailyV1SelectedActorTurnHostPorts).GetProperty("RandomSource"), Is.Null,
+            "Unity effect ports expose neither actor-turn policy nor session decision/random roots.");
+        Assert.That(dailyBoundary.Calls, Is.EqualTo(new[] { "actor-host-ports" }));
+        Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(initialDay));
     }
 
     [Test]
@@ -645,7 +646,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(failure.Message, Does.Contain("Unity projection bindings"));
         Assert.That(dailyBoundary.Calls, Is.EqualTo(new[]
         {
-            "actor-context",
+            "actor-host-ports",
             "crime-justice-projection-bindings"
         }));
         Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(initialDay),
@@ -679,7 +680,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(state.TryAdvanceDay(
             advanceBoundary, out SimulationRuntimeAdvanceFailure failure), Is.True, failure.ToString());
 
-        Assert.That(dailyBoundary.Calls, Does.Contain("actor-context"));
+        Assert.That(dailyBoundary.Calls, Does.Contain("actor-host-ports"));
         Assert.That(dailyBoundary.DecisionOwnerLookupCount, Is.Zero,
             "A runtime advance consumes only the roots bound to its execution state.");
         Assert.That(advanceBoundary.Calls, Does.Not.Contain("fault"));
@@ -820,7 +821,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             out IDailyV1SelectedActorTurnExecutionContext nextContext), Is.True);
         Assert.That(nextContext.CoreRoots, Is.SameAs(context.CoreRoots),
             "Subsequent daily contexts must reuse the exact Core session-owned roots.");
-        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-context" }));
+        Assert.That(boundary.Calls, Is.EqualTo(new[] { "actor-host-ports" }));
     }
 
     [Test]
@@ -1253,8 +1254,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool UseSelectedActionExecution { get; set; }
         internal bool? ActorChoiceSelectedActionExecutionOverride { get; set; }
         internal bool FailDecisionRecordOwnerResolution { get; set; }
+        internal IDailyV1SelectedActorTurnHostPorts LastActorTurnHostPorts { get; private set; }
         internal int DecisionOwnerLookupCount { get; private set; }
         internal int SelectedActionDispatchLookupCount { get; private set; }
+        internal int LegacyActorChoiceCallbackCount { get; set; }
+        internal int LegacyActionCallbackCount { get; set; }
+        internal int LegacyDirectiveCallbackCount { get; set; }
         internal DailyV1JusticeRecordsOwner SubstituteJusticeRecordsOwner { get; set; }
         public void BeginLoggerDay(long absoluteDay) => Calls.Add("logger:" + absoluteDay);
         public bool HasExactCrimeJusticeProjectionOwnerBindings(
@@ -1345,14 +1350,15 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 runtimeRoster, people, choices, new FakeActorTurnBoundary(this));
             return true;
         }
-        public bool TryCreateSelectedActorTurnBoundary(
+        public bool TryCreateSelectedActorTurnHostPorts(
             DailyV1SelectedRuntimeOwnerGraph graph,
-            out IDailyV1ActorTurnExecutionBoundary boundary)
+            out IDailyV1SelectedActorTurnHostPorts hostPorts)
         {
             Assert.That(graph, Is.Not.Null);
             CurrentGraph = graph;
-            Calls.Add("actor-context");
-            boundary = new FakeActorTurnBoundary(this);
+            Calls.Add("actor-host-ports");
+            LastActorTurnHostPorts = new FakeActorTurnBoundary(this);
+            hostPorts = LastActorTurnHostPorts;
             return true;
         }
         internal DailyV1SelectedRuntimeOwnerGraph CurrentGraph { get; private set; }
@@ -1647,8 +1653,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             IDailyV1SelectedActorChoiceExecutionContext,
             IDailyV1CoreActorChoiceExecutionBoundary,
             IDailyV1SelectedMerchantTradeStateBoundary,
-            IDailyV1SelectedMerchantTradeStateAdmissionBoundary,
-            IDailyV1SelectedMerchantTradeStateP12HostPorts,
+            IDailyV1SelectedActorTurnHostPorts,
             IDailyV1SelectedCrimeJusticeDailyBoundary
         {
             private readonly FakeBoundary owner;
@@ -1661,12 +1666,20 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 this.selectedActionExecution = selectedActionExecution;
             }
             public bool IsReservedToday(DailyV1NpcRuntimeOwners actor) => false;
-            public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive) =>
+            public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive)
+            {
+                owner.LegacyDirectiveCallbackCount++;
                 owner.Calls.Add("directive");
-            public bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal) => false;
+            }
+            public bool TryProcessActorChoice(DailyV1NpcRuntimeOwners actor, int rosterOrdinal)
+            {
+                owner.LegacyActorChoiceCallbackCount++;
+                return false;
+            }
             public void AdvanceMerchantTradeState(DailyV1NpcRuntimeOwners actor) =>
                 owner.Calls.Add("actor-merchant:" + actor.RuntimeId);
-            public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor) { }
+            public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor) =>
+                owner.LegacyActionCallbackCount++;
 
             public bool TryGetActorChoiceExecutionContext(
                 DailyV1NpcRuntimeOwners actor,
@@ -1734,6 +1747,15 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public bool ExecuteWithinSelectedMerchantDailyOperation(
                 DailyV1NpcRuntimeOwners actor,
                 Func<bool> operation) => operation != null && operation();
+            public bool OwnsSelectedActionSlotP12Mutation => false;
+            public bool CanCommitSelectedActionSlotP12Mutation(
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                DailyV1NpcRuntimeOwners actor) => true;
+            public bool NotifySelectedActionSlotP12MutationCommitted(
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                DailyV1NpcRuntimeOwners actor,
+                string sectionId,
+                long revision) => true;
 
             private FakeDayStartOperationBoundary DayStartBoundary =>
                 new FakeDayStartOperationBoundary(owner, owner.CurrentGraph);
