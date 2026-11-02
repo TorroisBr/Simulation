@@ -56,9 +56,17 @@ restoration, or CORE-F completion.
   separate `dotnet-trx-source-context-v1` required by the public TRX adapter.
   The adapter rejected the private runner manifest as an unsupported context;
   no source context was fabricated and no public .NET TRX package is claimed.
+  The Master independently parsed the protected original cold/warm TRX with
+  the repository `Get-TrxFacts` parser and compared all 992
+  `(testId, executionId, outcome)` tuples per run with the private runner
+  manifest: both comparisons had zero mismatches, every result was Passed, and
+  the exact six changed Core source/test file hashes matched the input
+  inventory. Cold TRX SHA-256 is
+  `3f5d8b6497bddb47e900ea52dffa78515eed9a8e2a82e9d94bdb87b2c5d37a3d`; warm
+  TRX SHA-256 is
+  `2c757cf262328feaac6830b14821b404ec9d5ece1a02ceb7383d87aae83c6f07`.
   Original cold/warm TRX reports, logs, and the private manifest remain
-  unchanged in owner-only local evidence. Their SHA-256 values are recorded in
-  the private manifest.
+  unchanged in owner-only local evidence.
 - `git diff --check`: PASS.
 
 The first two Unity attempts produced no XML because the candidate had a
