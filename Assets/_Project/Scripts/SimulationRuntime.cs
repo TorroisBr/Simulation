@@ -2888,15 +2888,28 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             this.factionStore,
             this.politicalClaimStore,
             simulationTime.AbsoluteDay);
-        this.politicalKnowledgeStore = ClonePoliticalKnowledgeStore(
-            politicalKnowledgeStore,
-            resolvedPersonStore,
-            resolvedInstitutionStore,
-            simulationTime.AbsoluteDay,
-            this.politicalClaimStore,
-            this.factionStore,
-            this.officeStore,
-            resolvedPropertyOwnershipStore);
+        PoliticalKnowledgeStore coreStagedPoliticalKnowledge = selectedExecutionBoundaryState?
+            .SelectedRuntimeOwnerGraph?.PoliticalKnowledgeStore;
+        if (coreStagedPoliticalKnowledge != null)
+        {
+            if (!ReferenceEquals(coreStagedPoliticalKnowledge, politicalKnowledgeStore))
+                throw new ArgumentException(
+                    "The Unity runtime must project the exact PoliticalKnowledgeStore admitted by its Core execution boundary.",
+                    nameof(politicalKnowledgeStore));
+            this.politicalKnowledgeStore = coreStagedPoliticalKnowledge;
+        }
+        else
+        {
+            this.politicalKnowledgeStore = ClonePoliticalKnowledgeStore(
+                politicalKnowledgeStore,
+                resolvedPersonStore,
+                resolvedInstitutionStore,
+                simulationTime.AbsoluteDay,
+                this.politicalClaimStore,
+                this.factionStore,
+                this.officeStore,
+                resolvedPropertyOwnershipStore);
+        }
         long initialPoliticalWorldRevision = politicalWorldRevision ?? 0L;
         this.politicalWorldRevision = initialPoliticalWorldRevision;
         lastPoliticalTruthFingerprint = ComputePoliticalTruthFingerprint();

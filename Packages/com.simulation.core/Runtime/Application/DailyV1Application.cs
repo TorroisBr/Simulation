@@ -210,6 +210,7 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
             || !ReferenceEquals(graph.PersonStore, D.Persons)
             || !ReferenceEquals(graph.GenealogyStore, D.Genealogy)
             || !ReferenceEquals(graph.JusticeRecordsOwner, E.JusticeRecords)
+            || !ReferenceEquals(graph.PoliticalKnowledgeStore, F.PoliticalKnowledge)
             || !ReferenceEquals(graph.ScheduledDirectives, F.ScheduledDirectives)
             || !ReferenceEquals(graph.TravelParties, F.TravelParties)
             || !ReferenceEquals(graph.Expeditions, F.Expeditions))
@@ -897,7 +898,7 @@ internal sealed class DailyV1Application
             : new CalendarDefinition(definitions.Calendar.monthsPerYear,
                 definitions.Calendar.weeksPerMonth, definitions.Calendar.daysPerWeek);
 
-        return TryCreateRestoredActiveRuntimeSession(
+        if (!TryCreateRestoredActiveRuntimeSession(
             definitions,
             stagedRoots.GenesisManifest,
             effectiveConfiguration,
@@ -926,7 +927,19 @@ internal sealed class DailyV1Application
             replacementOperation,
             out candidate,
             out calendar,
-            out diagnostic);
+            out diagnostic))
+            return false;
+
+        if (candidate == null
+            || !candidate.OwnerGraph.TryBindPoliticalKnowledgeStore(stagedF.PoliticalKnowledge))
+        {
+            candidate = null;
+            calendar = null;
+            diagnostic = "The restored Core owner graph could not bind the exact P12-F PoliticalKnowledge owner to its P12-D PersonStore.";
+            return false;
+        }
+
+        return true;
     }
 
     internal object ActiveSessionSyncRoot => activeSessionGate.SyncRoot;

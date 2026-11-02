@@ -89,6 +89,9 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         Assert.That(ownerVectorValidatedStageIndex,
             Is.LessThan(restoreStages.IndexOf(P12GDailyV1RestoreStage.TargetSpatialInvariantsValidated)));
         Assert.That(restored, Is.Not.Null);
+        Assert.That(restored.Runtime.SelectedRuntimeOwnerGraph.PoliticalKnowledgeStore,
+            Is.SameAs(restored.Runtime.PoliticalKnowledgeStoreForWorldBoundary),
+            "The restored Core owner graph and Unity runtime projection must retain the exact staged PoliticalKnowledge authority.");
         Assert.That(restored.Composition.SelectedDefinitions,
             Is.SameAs(anchor.Composition.SelectedDefinitions),
             "Detached restore must consume the canonical typed graph selected by the admitted profile.");
