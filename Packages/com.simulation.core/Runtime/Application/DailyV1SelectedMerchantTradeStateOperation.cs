@@ -36,6 +36,250 @@ internal interface IDailyV1SelectedMerchantTradeStateBoundary
 }
 
 /// <summary>
+/// P12 admission, projection preflight/receipt, and presentation callbacks for
+/// selected Merchant owner writes. Core performs every authoritative plan
+/// write and owns its revision decision; the host preflights a required Unity
+/// projection before admission and mirrors/publishes the committed revision
+/// afterward.
+/// </summary>
+internal interface IDailyV1SelectedMerchantTradeStateP12HostPorts
+{
+    bool CanAdmitSelectedMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
+    bool NotifySelectedMerchantPlanMutationCommitted(
+        DailyV1NpcRuntimeOwners actor,
+        long revision);
+    bool CanProjectSelectedMerchantTravelPlanMutation(
+        DailyV1NpcRuntimeOwners actor,
+        string targetLocationRuntimeId,
+        string targetCityRuntimeId);
+    bool CanAdmitSelectedMerchantTravelPlanMutation(DailyV1NpcRuntimeOwners actor);
+    bool NotifySelectedMerchantTravelPlanMutationCommitted(
+        DailyV1NpcRuntimeOwners actor,
+        long revision);
+    NpcDecisionRecord RecordTradeRedirect(
+        DailyV1NpcRuntimeOwners actor,
+        string targetLocationRuntimeId,
+        CommercialDecisionEvidence evidence);
+    void LogTradeDecisionFailure(string message);
+    void LogTrade(string message);
+}
+
+/// <summary>
+/// Core-owned selected Merchant state boundary. The host contributes only
+/// P12 admission/receipt callbacks and presentation; graph-owned plan state,
+/// travel-plan commits, idempotent no-op decisions, and Core decision identity
+/// remain here.
+/// </summary>
+internal sealed class DailyV1CoreSelectedMerchantTradeStateBoundary
+    : IDailyV1SelectedMerchantTradeStateBoundary
+{
+    private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+    private readonly DailyV1ActorTurnCoreRoots coreRoots;
+    private readonly IDailyV1SelectedMerchantTradeStateP12HostPorts hostPorts;
+
+    private DailyV1CoreSelectedMerchantTradeStateBoundary(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1ActorTurnCoreRoots coreRoots,
+        IDailyV1SelectedMerchantTradeStateP12HostPorts hostPorts)
+    {
+        this.graph = graph;
+        this.coreRoots = coreRoots;
+        this.hostPorts = hostPorts;
+    }
+
+    internal static bool TryCreate(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1ActorTurnCoreRoots coreRoots,
+        IDailyV1SelectedMerchantTradeStateP12HostPorts hostPorts,
+        out DailyV1CoreSelectedMerchantTradeStateBoundary boundary)
+    {
+        boundary = null;
+        if (graph == null || hostPorts == null
+            || (coreRoots != null && !coreRoots.IsBoundToGraph(graph)))
+            return false;
+
+        boundary = new DailyV1CoreSelectedMerchantTradeStateBoundary(
+            graph, coreRoots, hostPorts);
+        return true;
+    }
+
+    internal bool IsBoundTo(
+        DailyV1SelectedRuntimeOwnerGraph candidateGraph,
+        DailyV1ActorTurnCoreRoots candidateRoots) =>
+        ReferenceEquals(graph, candidateGraph)
+        && ReferenceEquals(coreRoots, candidateRoots)
+        && (coreRoots == null || coreRoots.IsBoundToGraph(graph));
+
+    public bool TryInstallPlanState(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ItemDefinition item,
+        string originCityRuntimeId,
+        string targetCityRuntimeId,
+        int plannedAmount,
+        int remainingAmount,
+        float purchasePricePerItem,
+        int waitDaysAtDestination,
+        int pendingTravelDays,
+        string originDecisionId)
+    {
+        if (!IsExactActor(actor) || actor.MerchantTradePlan == null)
+            return false;
+
+        DailyV1NpcMerchantTradePlanOwner owner = actor.MerchantTradePlan;
+        if (owner.MatchesState(item, originCityRuntimeId, targetCityRuntimeId,
+                plannedAmount, remainingAmount, purchasePricePerItem,
+                waitDaysAtDestination, pendingTravelDays, originDecisionId))
+            return true;
+
+        if (!hostPorts.CanAdmitSelectedMerchantPlanMutation(actor)
+            || !owner.TryInstallState(item, originCityRuntimeId, targetCityRuntimeId,
+                plannedAmount, remainingAmount, purchasePricePerItem,
+                waitDaysAtDestination, pendingTravelDays, originDecisionId))
+            return false;
+
+        if (!hostPorts.NotifySelectedMerchantPlanMutationCommitted(actor, owner.Revision))
+            throw new InvalidOperationException(
+                "A Core-committed Merchant plan mutation could not publish its exact P12 owner revision.");
+        return true;
+    }
+
+    public bool TrySetTradeTravelPlan(
+        DailyV1NpcRuntimeOwners actor,
+        string targetCityRuntimeId,
+        float utility,
+        string originDecisionId)
+    {
+        if (!IsExactActor(actor) || actor.TravelPlan == null) return false;
+        if (!TryGetExactCityLocation(targetCityRuntimeId,
+                out DailyV1CityRuntimeOwners targetCity,
+                out SpatialLocationRuntime targetLocation))
+            return false;
+
+        long priorRevision = actor.TravelPlan.Revision;
+        if (!graph.TryCommitMerchantTradeTravelPlan(
+                actor, targetCityRuntimeId, utility, originDecisionId,
+                () => hostPorts.CanProjectSelectedMerchantTravelPlanMutation(
+                        actor, targetLocation.RuntimeId, targetCity.RuntimeId)
+                    && hostPorts.CanAdmitSelectedMerchantTravelPlanMutation(actor),
+                out _))
+            return false;
+
+        if (actor.TravelPlan.Revision != priorRevision
+            && !hostPorts.NotifySelectedMerchantTravelPlanMutationCommitted(
+                actor, actor.TravelPlan.Revision))
+            throw new InvalidOperationException(
+                "A Core-committed Merchant travel-plan mutation could not publish its exact P12 owner revision.");
+        return true;
+    }
+
+    public void ClearTradeTravelPlan(DailyV1NpcRuntimeOwners actor)
+    {
+        if (!IsExactActor(actor) || actor.TravelPlan == null)
+            throw new InvalidOperationException(
+                "The Core Merchant operation cannot clear a travel plan outside its exact owner graph.");
+
+        DailyV1NpcTravelPlanOwner owner = actor.TravelPlan;
+        if (owner.Matches(null, null, NpcTravelReason.None, 0f, 0f, null))
+            return;
+
+        if (!owner.CanCommit(null, null, NpcTravelReason.None, 0f, 0f, null)
+            || !hostPorts.CanProjectSelectedMerchantTravelPlanMutation(
+                actor, null, null)
+            || !hostPorts.CanAdmitSelectedMerchantTravelPlanMutation(actor))
+            return;
+
+        long priorRevision = owner.Revision;
+        if (!owner.TryCommit(null, null, NpcTravelReason.None, 0f, 0f, null)
+            || owner.Revision == priorRevision)
+            return;
+
+        if (!hostPorts.NotifySelectedMerchantTravelPlanMutationCommitted(actor, owner.Revision))
+            throw new InvalidOperationException(
+                "A Core-committed Merchant travel-plan clear could not publish its exact P12 owner revision.");
+    }
+
+    public NpcDecisionRecord RecordTradeRedirect(
+        DailyV1NpcRuntimeOwners actor,
+        string targetLocationRuntimeId,
+        CommercialDecisionEvidence evidence)
+    {
+        if (!IsExactActor(actor) || string.IsNullOrWhiteSpace(targetLocationRuntimeId))
+            return null;
+
+        if (coreRoots == null)
+            return hostPorts.RecordTradeRedirect(actor, targetLocationRuntimeId, evidence);
+        if (!coreRoots.IsBoundToGraph(graph))
+            throw new InvalidOperationException(
+                "The selected Merchant redirect cannot use decision roots from another owner graph.");
+
+        DailyV1CityRuntimeOwners target = null;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            if (string.Equals(city.LocationRuntimeId, targetLocationRuntimeId, StringComparison.Ordinal))
+            {
+                if (target != null) return null;
+                target = city;
+            }
+        if (target == null) return null;
+
+        long absoluteDay = coreRoots.AbsoluteDay;
+        if (absoluteDay < 0L) return null;
+        try
+        {
+            return DailyV1DecisionRecordOperation.Record(
+                coreRoots.IdAllocator, coreRoots.RecordSequence, coreRoots.DecisionStore,
+                absoluteDay,
+                actor.RuntimeId, NpcDecisionType.TradeRedirect,
+                NpcDecisionOrigin.Autonomous, null, null, null,
+                target.LocationRuntimeId, evidence, null);
+        }
+        catch (ArgumentException exception)
+        {
+            hostPorts.LogTradeDecisionFailure(
+                "Cannot create NPC decision record: " + exception.Message);
+            return null;
+        }
+        catch (InvalidOperationException exception)
+        {
+            hostPorts.LogTradeDecisionFailure(
+                "Cannot allocate NPC decision identity: " + exception.Message);
+            return null;
+        }
+    }
+
+    public void LogTradeDecisionFailure(string message) =>
+        hostPorts.LogTradeDecisionFailure(message);
+
+    public void LogTrade(string message) => hostPorts.LogTrade(message);
+
+    private bool IsExactActor(DailyV1NpcRuntimeOwners actor) =>
+        actor != null && graph.ContainsExactNpcOwner(actor)
+        && ReferenceEquals(actor.Definitions, graph.Definitions);
+
+    private bool TryGetExactCityLocation(
+        string cityRuntimeId,
+        out DailyV1CityRuntimeOwners city,
+        out SpatialLocationRuntime location)
+    {
+        city = null;
+        location = null;
+        if (string.IsNullOrWhiteSpace(cityRuntimeId) || graph.SpatialNetwork == null)
+            return false;
+        foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+        {
+            if (candidate == null
+                || !string.Equals(candidate.RuntimeId, cityRuntimeId, StringComparison.Ordinal))
+                continue;
+            if (city != null || !graph.ContainsExactCityOwner(candidate))
+                return false;
+            city = candidate;
+        }
+        return city != null
+            && graph.SpatialNetwork.TryGetLocation(city.LocationRuntimeId, out location)
+            && location != null;
+    }
+}
+
+/// <summary>
 /// Existing Unity/P12 admission wrapper for one selected actor's daily
 /// Merchant state operation. Core owns invoking the operation and its owner
 /// mutations; the host supplies only the established admission lifetime.

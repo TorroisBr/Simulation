@@ -1525,6 +1525,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public ActorChoiceStore ActorChoiceStore { get; }
             public DailyV1ActorTurnCoreRoots CoreRoots => null;
             public IDailyV1ActorTurnExecutionBoundary Boundary { get; }
+            public IDailyV1SelectedMerchantTradeStateBoundary MerchantTradeBoundary =>
+                Boundary as IDailyV1SelectedMerchantTradeStateBoundary;
         }
 
         private sealed class FakeDayStartContext : IDailyV1SelectedDayStartExecutionContext
@@ -1646,6 +1648,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             IDailyV1CoreActorChoiceExecutionBoundary,
             IDailyV1SelectedMerchantTradeStateBoundary,
             IDailyV1SelectedMerchantTradeStateAdmissionBoundary,
+            IDailyV1SelectedMerchantTradeStateP12HostPorts,
             IDailyV1SelectedCrimeJusticeDailyBoundary
         {
             private readonly FakeBoundary owner;
@@ -1718,6 +1721,16 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 CommercialDecisionEvidence evidence) => null;
             public void LogTradeDecisionFailure(string message) { }
             public void LogTrade(string message) { }
+            public bool CanAdmitSelectedMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) => true;
+            public bool NotifySelectedMerchantPlanMutationCommitted(
+                DailyV1NpcRuntimeOwners actor, long revision) => true;
+            public bool CanProjectSelectedMerchantTravelPlanMutation(
+                DailyV1NpcRuntimeOwners actor,
+                string targetLocationRuntimeId,
+                string targetCityRuntimeId) => true;
+            public bool CanAdmitSelectedMerchantTravelPlanMutation(DailyV1NpcRuntimeOwners actor) => true;
+            public bool NotifySelectedMerchantTravelPlanMutationCommitted(
+                DailyV1NpcRuntimeOwners actor, long revision) => true;
             public bool ExecuteWithinSelectedMerchantDailyOperation(
                 DailyV1NpcRuntimeOwners actor,
                 Func<bool> operation) => operation != null && operation();

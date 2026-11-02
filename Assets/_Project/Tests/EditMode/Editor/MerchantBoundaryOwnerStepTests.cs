@@ -139,6 +139,88 @@ public sealed class MerchantBoundaryOwnerStepTests
     }
 
     [Test]
+    public void CoreCommittedTravelPlanSnapshotProjectsSetReplayAndClearOnce()
+    {
+        ThreeCityFixture world = new ThreeCityFixture();
+        DailyV1NpcTravelPlanOwner owner = new DailyV1NpcTravelPlanOwner();
+        NpcTravelPlanRuntime projection = new NpcTravelPlanRuntime();
+        Assert.That(projection.TryBindSelectedOwner(owner), Is.True);
+        List<string> notifications = new List<string>();
+        projection.BindP12MutationBoundary(
+            () =>
+            {
+                notifications.Add("admit:" + owner.Revision);
+                return true;
+            },
+            () => notifications.Add("receipt:" + owner.Revision));
+
+        Assert.That(projection.CanAdmitSelectedOwnerMutation(), Is.True);
+        Assert.That(owner.TryCommit(world.B.Location.RuntimeId, world.B.RuntimeId,
+            NpcTravelReason.Trade, 70f, 2f, "decision/core-travel-set"), Is.True);
+        NpcTravelPlanState committedSet = new NpcTravelPlanState(
+            world.B.Location, world.B, NpcTravelReason.Trade,
+            70f, 2f, "decision/core-travel-set");
+        Assert.That(projection.PublishCommittedOwnerState(committedSet), Is.True);
+        Assert.That(projection.MatchesSelectedOwner(), Is.True);
+        Assert.That(projection.TargetCity, Is.SameAs(world.B));
+        Assert.That(projection.TargetLocation, Is.SameAs(world.B.Location));
+        Assert.That(projection.TargetCity.RuntimeId, Is.EqualTo(owner.TargetCityRuntimeId));
+        Assert.That(projection.TargetLocation.RuntimeId,
+            Is.EqualTo(owner.TargetLocationRuntimeId));
+        Assert.That(projection.Revision, Is.EqualTo(1L));
+        Assert.That(notifications, Is.EqualTo(new[] { "admit:0", "receipt:1" }));
+
+        Assert.That(owner.TryCommit(world.B.Location.RuntimeId, world.B.RuntimeId,
+            NpcTravelReason.Trade, 70f, 2f, "decision/core-travel-set"), Is.True,
+            "Replaying the exact Core state is a no-op.");
+        Assert.That(projection.PublishCommittedOwnerState(committedSet), Is.True,
+            "An exact replay does not repeat the P12 receipt.");
+        Assert.That(owner.Revision, Is.EqualTo(1L));
+        Assert.That(projection.MatchesSelectedOwner(), Is.True);
+        Assert.That(notifications, Is.EqualTo(new[] { "admit:0", "receipt:1" }));
+
+        Assert.That(projection.CanAdmitSelectedOwnerMutation(), Is.True);
+        Assert.That(owner.TryCommit(null, null, NpcTravelReason.None,
+            0f, 0f, null), Is.True);
+        NpcTravelPlanState committedClear = new NpcTravelPlanState(
+            null, null, NpcTravelReason.None, 0f, 0f, null);
+        Assert.That(projection.PublishCommittedOwnerState(committedClear), Is.True);
+        Assert.That(projection.MatchesSelectedOwner(), Is.True);
+        Assert.That(projection.TargetCity, Is.Null);
+        Assert.That(projection.TargetLocation, Is.Null);
+        Assert.That(projection.Reason, Is.EqualTo(NpcTravelReason.None));
+        Assert.That(projection.Revision, Is.EqualTo(2L));
+        Assert.That(notifications, Is.EqualTo(new[]
+        {
+            "admit:0", "receipt:1", "admit:1", "receipt:2"
+        }), "Each Core owner write admits once, then publishes one exact-revision P12 receipt.");
+    }
+
+    [Test]
+    public void CoreCommittedTravelPlanProjectionRejectsMismatchedOwnerSnapshot()
+    {
+        ThreeCityFixture world = new ThreeCityFixture();
+        DailyV1NpcTravelPlanOwner owner = new DailyV1NpcTravelPlanOwner();
+        NpcTravelPlanRuntime projection = new NpcTravelPlanRuntime();
+        Assert.That(projection.TryBindSelectedOwner(owner), Is.True);
+        int receipts = 0;
+        projection.BindP12MutationBoundary(() => true, () => receipts++);
+
+        Assert.That(owner.TryCommit(world.B.Location.RuntimeId, world.B.RuntimeId,
+            NpcTravelReason.Trade, 70f, 2f, "decision/core-travel-mismatch"), Is.True);
+        NpcTravelPlanState mismatched = new NpcTravelPlanState(
+            world.A.Location, world.A, NpcTravelReason.Trade,
+            70f, 2f, "decision/core-travel-mismatch");
+
+        Assert.That(projection.PublishCommittedOwnerState(mismatched), Is.False);
+        Assert.That(projection.TargetCity, Is.Null);
+        Assert.That(projection.TargetLocation, Is.Null);
+        Assert.That(projection.MatchesSelectedOwner(), Is.False);
+        Assert.That(receipts, Is.Zero,
+            "A mismatched projection cannot publish a P12 receipt for the committed owner.");
+    }
+
+    [Test]
     public void PlanUrgencyDescriptor_FreezesRosterOrderAndStablePersonIdentity()
     {
         ThreeCityFixture world = new ThreeCityFixture();

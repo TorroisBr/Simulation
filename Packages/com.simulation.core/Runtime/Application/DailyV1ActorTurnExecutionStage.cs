@@ -281,7 +281,8 @@ internal static class DailyV1ActorTurnExecutionStage
         bool merchantTradeEnabled,
         bool requireCoreOwnedSelectedOperations,
         DailyV1ActorTurnCoreRoots coreRoots,
-        IDailyV1ActorTurnExecutionBoundary boundary)
+        IDailyV1ActorTurnExecutionBoundary boundary,
+        IDailyV1SelectedMerchantTradeStateBoundary selectedMerchantTradeBoundary = null)
     {
         if (graph == null || roster == null || personStore == null
             || actorChoiceStore == null || boundary == null)
@@ -343,10 +344,33 @@ internal static class DailyV1ActorTurnExecutionStage
             }
 
             if (merchantTradeEnabled
-                && (!(boundary is IDailyV1SelectedMerchantTradeStateBoundary)
+                && (!(boundary is IDailyV1SelectedMerchantTradeStateP12HostPorts)
                     || !(boundary is IDailyV1SelectedMerchantTradeStateAdmissionBoundary)))
                 throw new InvalidOperationException(
-                    "An admitted Daily-v1 Merchant turn requires Core trade-state execution and its P12 admission boundary.");
+                    "An admitted Daily-v1 Merchant turn requires Core trade-state effect ports and its P12 operation admission boundary.");
+        }
+
+        IDailyV1SelectedMerchantTradeStateBoundary coreMerchantTradeBoundary =
+            selectedMerchantTradeBoundary;
+        if (merchantTradeEnabled)
+        {
+            if (requireCoreOwnedSelectedOperations)
+            {
+                if (coreMerchantTradeBoundary == null
+                    && boundary is IDailyV1SelectedMerchantTradeStateP12HostPorts merchantHostPorts
+                    && DailyV1CoreSelectedMerchantTradeStateBoundary.TryCreate(
+                        graph, coreRoots, merchantHostPorts,
+                        out DailyV1CoreSelectedMerchantTradeStateBoundary selectedCoreMerchantBoundary))
+                    coreMerchantTradeBoundary = selectedCoreMerchantBoundary;
+                if (!(coreMerchantTradeBoundary is DailyV1CoreSelectedMerchantTradeStateBoundary coreBoundary)
+                    || !coreBoundary.IsBoundTo(graph, coreRoots))
+                    throw new InvalidOperationException(
+                        "The admitted Daily-v1 Merchant operation requires Core owner writes and exact P12 effect ports.");
+            }
+            else
+            {
+                coreMerchantTradeBoundary ??= boundary as IDailyV1SelectedMerchantTradeStateBoundary;
+            }
         }
 
         foreach (DailyV1ActorTurnRosterEntry entry in roster)
@@ -423,7 +447,8 @@ internal static class DailyV1ActorTurnExecutionStage
 
             if (merchantTradeEnabled)
                 AdvanceMerchantTradeState(graph, actor, absoluteDay, boundary,
-                    requireCoreOwnedSelectedOperations, coreRoots);
+                    requireCoreOwnedSelectedOperations, coreRoots,
+                    coreMerchantTradeBoundary);
 
             if (TryProcessScheduledDirective(graph, actor, scheduledDirectiveStore, absoluteDay, boundary,
                     requireCoreOwnedSelectedOperations, coreRoots))
@@ -587,7 +612,8 @@ internal static class DailyV1ActorTurnExecutionStage
         long absoluteDay,
         IDailyV1ActorTurnExecutionBoundary boundary,
         bool requireCoreOwnedSelectedOperations,
-        DailyV1ActorTurnCoreRoots coreRoots)
+        DailyV1ActorTurnCoreRoots coreRoots,
+        IDailyV1SelectedMerchantTradeStateBoundary selectedMerchantBoundary)
     {
         if (requireCoreOwnedSelectedOperations
             && !(boundary is IDailyV1SelectedActorActionExecutionBoundary))
@@ -597,14 +623,14 @@ internal static class DailyV1ActorTurnExecutionStage
             && (requireCoreOwnedSelectedOperations
                 || selectedActionBoundary.UsesSelectedDailyV1ActionExecution(actor)))
         {
-            if (!(boundary is IDailyV1SelectedMerchantTradeStateBoundary merchantBoundary)
+            if (selectedMerchantBoundary == null
                 || !(boundary is IDailyV1SelectedMerchantTradeStateAdmissionBoundary admissionBoundary))
                 throw new InvalidOperationException(
                     "The selected Daily-v1 actor omitted its Core Merchant operation and P12 admission boundaries.");
             if (!admissionBoundary.ExecuteWithinSelectedMerchantDailyOperation(
                     actor,
                     () => DailyV1SelectedMerchantTradeStateOperation.TryAdvance(
-                        graph, actor, absoluteDay, merchantBoundary, coreRoots)))
+                        graph, actor, absoluteDay, selectedMerchantBoundary, coreRoots)))
                 throw new InvalidOperationException(
                     "The selected Core Merchant daily operation could not complete through its admitted owner graph.");
             return;

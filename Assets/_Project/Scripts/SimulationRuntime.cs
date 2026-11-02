@@ -12161,6 +12161,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         public ActorChoiceStore ActorChoiceStore { get; }
         public DailyV1ActorTurnCoreRoots CoreRoots => null;
         public IDailyV1ActorTurnExecutionBoundary Boundary { get; }
+        public IDailyV1SelectedMerchantTradeStateBoundary MerchantTradeBoundary =>
+            Boundary as IDailyV1SelectedMerchantTradeStateBoundary;
     }
 
     private sealed class SelectedDailyV1ActorTurnExecutionBoundary
@@ -12169,6 +12171,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             IDailyV1CoreActorChoiceExecutionBoundary,
             IDailyV1SelectedMerchantTradeStateBoundary,
             IDailyV1SelectedMerchantTradeStateAdmissionBoundary,
+            IDailyV1SelectedMerchantTradeStateP12HostPorts,
             IDailyV1SelectedActorActionExecutionBoundary,
             IDailyV1SelectedActionSlotP12MutationBoundary,
             IDailyV1SelectedCrimeJusticeDailyBoundary
@@ -12491,6 +12494,122 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         public void ClearTradeTravelPlan(DailyV1NpcRuntimeOwners actor)
         {
             RequireExactActor(actor).ClearTravelPlan();
+        }
+
+        public bool CanAdmitSelectedMerchantPlanMutation(DailyV1NpcRuntimeOwners actor)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            return ReferenceEquals(exactRuntime.MerchantTradePlan.SelectedOwner,
+                    actor.MerchantTradePlan)
+                && exactRuntime.MerchantTradePlan.CanAdmitSelectedPlanOwnerMutation();
+        }
+
+        public bool NotifySelectedMerchantPlanMutationCommitted(
+            DailyV1NpcRuntimeOwners actor,
+            long revision)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (!ReferenceEquals(exactRuntime.MerchantTradePlan.SelectedOwner,
+                    actor.MerchantTradePlan)
+                || actor.MerchantTradePlan.Revision != revision)
+                return false;
+            exactRuntime.MerchantTradePlan.PublishSelectedPlanOwnerMutation();
+            return true;
+        }
+
+        public bool CanAdmitSelectedMerchantTravelPlanMutation(DailyV1NpcRuntimeOwners actor)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            return ReferenceEquals(exactRuntime.TravelPlan.SelectedOwner, actor.TravelPlan)
+                && exactRuntime.TravelPlan.MatchesSelectedOwner()
+                && exactRuntime.TravelPlan.CanAdmitSelectedTradeTravelPlanMutation();
+        }
+
+        public bool CanProjectSelectedMerchantTravelPlanMutation(
+            DailyV1NpcRuntimeOwners actor,
+            string targetLocationRuntimeId,
+            string targetCityRuntimeId)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (!ReferenceEquals(exactRuntime.TravelPlan.SelectedOwner, actor.TravelPlan)
+                || !exactRuntime.TravelPlan.MatchesSelectedOwner())
+                return false;
+
+            if (targetLocationRuntimeId == null && targetCityRuntimeId == null)
+                return exactRuntime.TravelPlan.CanProjectOwnerState(
+                    new NpcTravelPlanState(null, null, NpcTravelReason.None,
+                        0f, 0f, null));
+
+            if (graph.SpatialNetwork == null
+                || string.IsNullOrWhiteSpace(targetLocationRuntimeId)
+                || string.IsNullOrWhiteSpace(targetCityRuntimeId)
+                || !graph.SpatialNetwork.TryGetLocation(
+                    targetLocationRuntimeId, out SpatialLocationRuntime exactLocation)
+                || !TryGetExactCityProjectionByRuntimeId(
+                    targetCityRuntimeId, out CityRuntime exactCity)
+                || !ReferenceEquals(exactCity.Location, exactLocation))
+                return false;
+
+            DailyV1CityRuntimeOwners exactCityOwner = exactCity.SelectedRuntimeOwners;
+            return graph.ContainsExactCityOwner(exactCityOwner)
+                && exactRuntime.TravelPlan.CanProjectSelectedTradePlanTarget(
+                    actor.TravelPlan, exactCityOwner, targetCityRuntimeId,
+                    targetLocationRuntimeId, exactLocation, exactCity);
+        }
+
+        public bool NotifySelectedMerchantTravelPlanMutationCommitted(
+            DailyV1NpcRuntimeOwners actor,
+            long revision)
+        {
+            NpcRuntime exactRuntime = RequireExactActor(actor);
+            if (!ReferenceEquals(exactRuntime.TravelPlan.SelectedOwner, actor.TravelPlan)
+                || actor.TravelPlan.Revision != revision)
+                return false;
+            if (!TryCreateExactCommittedTravelPlanProjection(
+                    actor.TravelPlan, out NpcTravelPlanState committedState))
+                return false;
+            return exactRuntime.TravelPlan.PublishCommittedOwnerState(committedState);
+        }
+
+        private bool TryCreateExactCommittedTravelPlanProjection(
+            DailyV1NpcTravelPlanOwner owner,
+            out NpcTravelPlanState state)
+        {
+            state = null;
+            if (owner == null)
+                return false;
+
+            if (owner.TargetLocationRuntimeId == null
+                && owner.TargetCityRuntimeId == null
+                && owner.Reason == NpcTravelReason.None
+                && owner.Utility.Equals(0f)
+                && owner.ExpectedCost.Equals(0f)
+                && owner.OriginDecisionId == null)
+            {
+                state = new NpcTravelPlanState(null, null, NpcTravelReason.None,
+                    0f, 0f, null);
+                return true;
+            }
+
+            if (graph.SpatialNetwork == null)
+                return false;
+
+            SpatialLocationRuntime location = null;
+            if (owner.TargetLocationRuntimeId != null
+                && !graph.SpatialNetwork.TryGetLocation(
+                    owner.TargetLocationRuntimeId, out location))
+                return false;
+
+            CityRuntime city = null;
+            if (owner.TargetCityRuntimeId != null
+                && (!TryGetExactCityProjectionByRuntimeId(
+                        owner.TargetCityRuntimeId, out city)
+                    || !ReferenceEquals(city.Location, location)))
+                return false;
+
+            state = new NpcTravelPlanState(location, city, owner.Reason,
+                owner.Utility, owner.ExpectedCost, owner.OriginDecisionId);
+            return true;
         }
 
         public NpcDecisionRecord RecordTradeRedirect(

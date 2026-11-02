@@ -442,6 +442,7 @@ internal interface IDailyV1SelectedActorTurnExecutionContext
     ActorChoiceStore ActorChoiceStore { get; }
     DailyV1ActorTurnCoreRoots CoreRoots { get; }
     IDailyV1ActorTurnExecutionBoundary Boundary { get; }
+    IDailyV1SelectedMerchantTradeStateBoundary MerchantTradeBoundary { get; }
 }
 
 /// <summary>
@@ -459,6 +460,7 @@ internal sealed class DailyV1ActorTurnCoreRoots
     internal RuntimeIdAllocator IdAllocator { get; }
     internal SimulationRecordSequence RecordSequence { get; }
     internal NpcDecisionStore DecisionStore { get; }
+    internal long AbsoluteDay => executionState.SimulationTime?.AbsoluteDay ?? -1L;
 
     internal DailyV1ActorTurnCoreRoots(
         DailyV1ExecutionBoundaryState executionState,
@@ -549,7 +551,36 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             graph.PersonStore,
             executionState.SelectedActorChoiceStore,
             coreRoots,
-            actorBoundary);
+            actorBoundary,
+            TryCreateCoreMerchantBoundary(
+                graph, coreRoots, actorBoundary,
+                out IDailyV1SelectedMerchantTradeStateBoundary merchantTradeBoundary)
+                ? merchantTradeBoundary
+                : null);
+        if (context.MerchantTradeBoundary == null
+            && graph.Definitions.EffectiveConfiguration?.MerchantTrade?.Enabled == true)
+        {
+            context = null;
+            return false;
+        }
+        return true;
+    }
+
+    private static bool TryCreateCoreMerchantBoundary(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1ActorTurnCoreRoots coreRoots,
+        IDailyV1ActorTurnExecutionBoundary actorBoundary,
+        out IDailyV1SelectedMerchantTradeStateBoundary merchantBoundary)
+    {
+        merchantBoundary = null;
+        if (graph?.Definitions?.EffectiveConfiguration?.MerchantTrade?.Enabled != true)
+            return true;
+        if (!(actorBoundary is IDailyV1SelectedMerchantTradeStateP12HostPorts hostPorts)
+            || !DailyV1CoreSelectedMerchantTradeStateBoundary.TryCreate(
+                graph, coreRoots, hostPorts,
+                out DailyV1CoreSelectedMerchantTradeStateBoundary coreBoundary))
+            return false;
+        merchantBoundary = coreBoundary;
         return true;
     }
 
@@ -561,13 +592,15 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             PersonStore personStore,
             ActorChoiceStore actorChoiceStore,
             DailyV1ActorTurnCoreRoots coreRoots,
-            IDailyV1ActorTurnExecutionBoundary boundary)
+            IDailyV1ActorTurnExecutionBoundary boundary,
+            IDailyV1SelectedMerchantTradeStateBoundary merchantTradeBoundary)
         {
             RuntimeRoster = runtimeRoster ?? throw new ArgumentNullException(nameof(runtimeRoster));
             PersonStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
             ActorChoiceStore = actorChoiceStore ?? throw new ArgumentNullException(nameof(actorChoiceStore));
             CoreRoots = coreRoots ?? throw new ArgumentNullException(nameof(coreRoots));
             Boundary = boundary ?? throw new ArgumentNullException(nameof(boundary));
+            MerchantTradeBoundary = merchantTradeBoundary;
         }
 
         public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
@@ -575,6 +608,7 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
         public ActorChoiceStore ActorChoiceStore { get; }
         public DailyV1ActorTurnCoreRoots CoreRoots { get; }
         public IDailyV1ActorTurnExecutionBoundary Boundary { get; }
+        public IDailyV1SelectedMerchantTradeStateBoundary MerchantTradeBoundary { get; }
     }
 }
 
@@ -877,8 +911,7 @@ internal static class DailyV1SelectedDailyExecutionStage
         {
             if (!(actorTurnContext.Boundary
                     is IDailyV1SelectedCrimeJusticeDailyBoundary crimeJusticeBoundary)
-                || !(actorTurnContext.Boundary
-                    is IDailyV1SelectedMerchantTradeStateBoundary merchantTradeBoundary)
+                || actorTurnContext.MerchantTradeBoundary == null
                 || !boundary.HasExactCrimeJusticeProjectionOwnerBindings(graph)
                 || !ReferenceEquals(graph.JusticeRecordsOwner,
                     crimeJusticeBoundary.JusticeRecordsOwner)
@@ -892,7 +925,7 @@ internal static class DailyV1SelectedDailyExecutionStage
             dayStartContext = new CoreSelectedDayStartExecutionContext(
                 executionState.SelectedRuntimeActorRoster,
                 crimeJusticeBoundary,
-                merchantTradeBoundary);
+                actorTurnContext.MerchantTradeBoundary);
             hasSelectedDayStartContext = true;
             dayStartContextPreflighted = true;
         }
@@ -1183,7 +1216,8 @@ internal static class DailyV1SelectedDailyExecutionStage
                 graph.Definitions.EffectiveConfiguration.MerchantTrade.Enabled,
                 requireCoreOwnedSelectedOperations: executionState != null,
                 actorTurnContext.CoreRoots,
-                actorTurnContext.Boundary))
+                actorTurnContext.Boundary,
+                actorTurnContext.MerchantTradeBoundary))
             throw new InvalidOperationException(
                 "The selected Core actor-turn stage could not run with the exact admitted graph and runtime roster.");
         if (!travelContextPreflighted
@@ -1264,10 +1298,10 @@ internal static class DailyV1SelectedDailyExecutionStage
         }
         bool merchantTradeEnabled = graph.Definitions.EffectiveConfiguration?.MerchantTrade?.Enabled == true;
         if (merchantTradeEnabled
-            && (!(actorTurnContext.Boundary is IDailyV1SelectedMerchantTradeStateBoundary)
+            && (!(actorTurnContext.Boundary is IDailyV1SelectedMerchantTradeStateP12HostPorts)
                 || !(actorTurnContext.Boundary is IDailyV1SelectedMerchantTradeStateAdmissionBoundary)))
         {
-            failure = "actor action boundary does not provide the selected Core Merchant operation and P12 admission contracts";
+            failure = "actor action boundary does not provide the Core Merchant P12 effect ports and operation admission contract";
             return false;
         }
         if (!executionState.HasExactSelectedRuntimeActorTurnRoots(

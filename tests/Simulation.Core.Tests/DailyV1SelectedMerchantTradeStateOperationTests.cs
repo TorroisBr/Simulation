@@ -225,6 +225,226 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
     }
 
     [Test]
+    public void AdmittedMerchantPlanWriteIsCoreOwnedAndPublishesOneExactRevision()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out _);
+        DailyV1NpcRuntimeOwners merchant = graph.Npcs.First(owner =>
+            DailyV1NpcDefinitionRules.HasJobType(owner.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+            && DailyV1NpcDefinitionRules.HasMerchantBehavior(owner.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.TravelingMerchantBehaviorValue));
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(owner =>
+            string.Equals(owner.RuntimeId, merchant.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal));
+        DailyV1MarketItemState row = city.Market.Items.First();
+        Assert.That(merchant.Inventory.TryAddItem(row.Item, 2), Is.True);
+        Assert.That(graph.TryInstallMerchantTradePlan(merchant, row.Item,
+            city.RuntimeId, city.RuntimeId, 2, row.CurrentPrice + 100f,
+            "decision/core-owned-merchant-plan"), Is.True);
+        long priorRevision = merchant.MerchantTradePlan.Revision;
+        RecordingMerchantP12HostPorts hostPorts = new RecordingMerchantP12HostPorts();
+        Assert.That(DailyV1CoreSelectedMerchantTradeStateBoundary.TryCreate(
+            graph, null, hostPorts,
+            out DailyV1CoreSelectedMerchantTradeStateBoundary coreBoundary), Is.True);
+
+        Assert.That(DailyV1SelectedMerchantTradeStateOperation.TryAdvance(
+            graph, merchant, 39L, coreBoundary), Is.True);
+
+        Assert.That(merchant.MerchantTradePlan.WaitDaysAtDestination, Is.EqualTo(1));
+        Assert.That(merchant.MerchantTradePlan.Revision, Is.EqualTo(priorRevision + 1));
+        Assert.That(hostPorts.Events, Is.EqualTo(new[]
+        {
+            "admit-plan",
+            "publish-plan:" + (priorRevision + 1)
+        }), "Core performs the owner write between one P12 admission and one exact-revision receipt.");
+
+        long committedRevision = merchant.MerchantTradePlan.Revision;
+        Assert.That(coreBoundary.TryInstallPlanState(merchant,
+            merchant.MerchantTradePlan.ItemDefinition,
+            merchant.MerchantTradePlan.OriginCityRuntimeId,
+            merchant.MerchantTradePlan.TargetCityRuntimeId,
+            merchant.MerchantTradePlan.PlannedAmount,
+            merchant.MerchantTradePlan.RawRemainingAmount,
+            merchant.MerchantTradePlan.PurchasePricePerItem,
+            merchant.MerchantTradePlan.WaitDaysAtDestination,
+            merchant.MerchantTradePlan.PendingTravelDays,
+            merchant.MerchantTradePlan.OriginDecisionId), Is.True);
+        Assert.That(merchant.MerchantTradePlan.Revision, Is.EqualTo(committedRevision),
+            "Replaying the committed owner state is an exact no-op.");
+        Assert.That(hostPorts.Events, Has.Count.EqualTo(2),
+            "A replay does not reserve or publish a second P12 owner mutation.");
+        Assert.That(typeof(IDailyV1SelectedMerchantTradeStateP12HostPorts)
+            .GetMethod("TryInstallPlanState"), Is.Null,
+            "Unity's Merchant P12 port cannot supply an authoritative owner write.");
+        Assert.That(typeof(IDailyV1SelectedMerchantTradeStateP12HostPorts)
+            .GetProperty("RandomSource"), Is.Null,
+            "Unity's Merchant P12 port cannot substitute the Core decision root.");
+    }
+
+    [Test]
+    public void MerchantPlanAdmissionRejectionLeavesCoreOwnerAndRevisionUnchanged()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out _);
+        DailyV1NpcRuntimeOwners merchant = graph.Npcs.First(owner =>
+            DailyV1NpcDefinitionRules.HasJobType(owner.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue));
+        DailyV1ItemDefinition item = graph.Definitions.Items.Values.First();
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(owner =>
+            string.Equals(owner.RuntimeId, merchant.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal));
+        Assert.That(graph.TryInstallMerchantTradePlan(merchant, item,
+            city.RuntimeId, city.RuntimeId, 3, 2f, "decision/preexisting-plan"), Is.True);
+        long priorRevision = merchant.MerchantTradePlan.Revision;
+        string priorDecisionId = merchant.MerchantTradePlan.OriginDecisionId;
+        RecordingMerchantP12HostPorts hostPorts = new RecordingMerchantP12HostPorts
+        {
+            AdmitMerchantPlan = false
+        };
+        Assert.That(DailyV1CoreSelectedMerchantTradeStateBoundary.TryCreate(
+            graph, null, hostPorts,
+            out DailyV1CoreSelectedMerchantTradeStateBoundary coreBoundary), Is.True);
+        DailyV1SelectedRuntimeOwnerGraph foreignGraph = CreateGraph(out _);
+        DailyV1NpcRuntimeOwners foreignMerchant = foreignGraph.Npcs.First(owner =>
+            DailyV1NpcDefinitionRules.HasJobType(owner.Definition, foreignGraph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue));
+        Assert.That(coreBoundary.TryInstallPlanState(foreignMerchant, item,
+            city.RuntimeId, city.RuntimeId, 4, 3, 2f, 0, 0,
+            "decision/foreign-owner-graph"), Is.False,
+            "The Core boundary accepts only the exact owner instance from its bound graph.");
+        Assert.That(hostPorts.Events, Is.Empty,
+            "A foreign graph is rejected before requesting a host P12 admission.");
+
+        Assert.That(coreBoundary.TryInstallPlanState(merchant, item,
+            city.RuntimeId, city.RuntimeId, 4, 3, 2f, 0, 0,
+            "decision/rejected-plan"), Is.False);
+
+        Assert.That(merchant.MerchantTradePlan.PlannedAmount, Is.EqualTo(3));
+        Assert.That(merchant.MerchantTradePlan.OriginDecisionId, Is.EqualTo(priorDecisionId));
+        Assert.That(merchant.MerchantTradePlan.Revision, Is.EqualTo(priorRevision));
+        Assert.That(hostPorts.Events, Is.EqualTo(new[] { "admit-plan" }));
+    }
+
+    [Test]
+    public void MerchantTravelPlanWriteAndClearUseCoreRevisionWithSingleP12Receipt()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out SpatialNetworkOwner spatial);
+        DailyV1NpcRuntimeOwners merchant = graph.Npcs.First(owner =>
+            DailyV1NpcDefinitionRules.HasJobType(owner.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+            && DailyV1NpcDefinitionRules.HasMerchantBehavior(owner.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.TravelingMerchantBehaviorValue));
+        DailyV1CityRuntimeOwners origin = graph.Cities.Single(owner =>
+            string.Equals(owner.RuntimeId, merchant.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners destination = graph.Cities.First(owner =>
+            !ReferenceEquals(owner, origin));
+        Assert.That(graph.TryInstallMerchantTradePlan(merchant,
+            graph.Definitions.Items.Values.First(), origin.RuntimeId,
+            destination.RuntimeId, 2, 1f, "decision/travel-plan"), Is.True);
+        Assert.That(spatial.TryGetLocation(origin.LocationRuntimeId,
+            out SpatialLocationRuntime originLocation), Is.True);
+        Assert.That(spatial.TryGetLocation(destination.LocationRuntimeId,
+            out SpatialLocationRuntime destinationLocation), Is.True);
+        SpatialRouteRuntime route = new SpatialRouteRuntime(
+            "route/core-merchant-travel-plan", originLocation, destinationLocation, 2);
+        Assert.That(spatial.TryRegisterRoute(route, () => true), Is.True);
+        long priorRevision = merchant.TravelPlan.Revision;
+        RecordingMerchantP12HostPorts hostPorts = new RecordingMerchantP12HostPorts();
+        Assert.That(DailyV1CoreSelectedMerchantTradeStateBoundary.TryCreate(
+            graph, null, hostPorts,
+            out DailyV1CoreSelectedMerchantTradeStateBoundary coreBoundary), Is.True);
+
+        Assert.That(coreBoundary.TrySetTradeTravelPlan(merchant,
+            destination.RuntimeId, 70f, "decision/travel-plan"), Is.True);
+        Assert.That(merchant.TravelPlan.Revision, Is.EqualTo(priorRevision + 1));
+        Assert.That(hostPorts.Events, Is.EqualTo(new[]
+        {
+            "project-travel:" + destination.RuntimeId,
+            "admit-travel",
+            "publish-travel:" + (priorRevision + 1)
+        }));
+
+        Assert.That(coreBoundary.TrySetTradeTravelPlan(merchant,
+            destination.RuntimeId, 70f, "decision/travel-plan"), Is.True);
+        Assert.That(merchant.TravelPlan.Revision, Is.EqualTo(priorRevision + 1),
+            "Replaying the exact route is a no-op.");
+        Assert.That(hostPorts.Events, Has.Count.EqualTo(3),
+            "An exact travel-plan replay has no second P12 admission or receipt.");
+
+        hostPorts.AllowTravelProjection = false;
+        coreBoundary.ClearTradeTravelPlan(merchant);
+        Assert.That(merchant.TravelPlan.Revision, Is.EqualTo(priorRevision + 1),
+            "A clear that cannot be projected leaves the Core owner unchanged.");
+        Assert.That(merchant.TravelPlan.TargetCityRuntimeId,
+            Is.EqualTo(destination.RuntimeId));
+        Assert.That(hostPorts.Events, Is.EqualTo(new[]
+        {
+            "project-travel:" + destination.RuntimeId,
+            "admit-travel", "publish-travel:" + (priorRevision + 1),
+            "project-travel:"
+        }), "A null clear projection is preflighted before P12 admission.");
+
+        hostPorts.AllowTravelProjection = true;
+        coreBoundary.ClearTradeTravelPlan(merchant);
+        Assert.That(merchant.TravelPlan.Revision, Is.EqualTo(priorRevision + 2));
+        Assert.That(merchant.TravelPlan.Reason, Is.EqualTo(NpcTravelReason.None));
+        Assert.That(hostPorts.Events, Is.EqualTo(new[]
+        {
+            "project-travel:" + destination.RuntimeId,
+            "admit-travel", "publish-travel:" + (priorRevision + 1),
+            "project-travel:", "project-travel:",
+            "admit-travel", "publish-travel:" + (priorRevision + 2)
+        }));
+    }
+
+    [Test]
+    public void MerchantTravelPlanProjectionMismatchRejectsBeforeAdmissionAndCoreWrite()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out SpatialNetworkOwner spatial);
+        DailyV1NpcRuntimeOwners merchant = graph.Npcs.First(owner =>
+            DailyV1NpcDefinitionRules.HasJobType(owner.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+            && DailyV1NpcDefinitionRules.HasMerchantBehavior(owner.Definition,
+                graph.Definitions, DailyV1NpcDefinitionRules.TravelingMerchantBehaviorValue));
+        DailyV1CityRuntimeOwners origin = graph.Cities.Single(owner =>
+            string.Equals(owner.RuntimeId, merchant.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal));
+        DailyV1CityRuntimeOwners destination = graph.Cities.First(owner =>
+            !ReferenceEquals(owner, origin));
+        Assert.That(graph.TryInstallMerchantTradePlan(merchant,
+            graph.Definitions.Items.Values.First(), origin.RuntimeId,
+            destination.RuntimeId, 2, 1f,
+            "decision/travel-plan-projection-mismatch"), Is.True);
+        Assert.That(spatial.TryGetLocation(origin.LocationRuntimeId,
+            out SpatialLocationRuntime originLocation), Is.True);
+        Assert.That(spatial.TryGetLocation(destination.LocationRuntimeId,
+            out SpatialLocationRuntime destinationLocation), Is.True);
+        Assert.That(spatial.TryRegisterRoute(new SpatialRouteRuntime(
+            "route/core-merchant-projection-mismatch", originLocation,
+            destinationLocation, 2), () => true), Is.True);
+        long priorRevision = merchant.TravelPlan.Revision;
+        RecordingMerchantP12HostPorts hostPorts = new RecordingMerchantP12HostPorts
+        {
+            AllowTravelProjection = false
+        };
+        Assert.That(DailyV1CoreSelectedMerchantTradeStateBoundary.TryCreate(
+            graph, null, hostPorts,
+            out DailyV1CoreSelectedMerchantTradeStateBoundary coreBoundary), Is.True);
+
+        Assert.That(coreBoundary.TrySetTradeTravelPlan(merchant,
+            destination.RuntimeId, 70f,
+            "decision/travel-plan-projection-mismatch"), Is.False);
+
+        Assert.That(merchant.TravelPlan.Revision, Is.EqualTo(priorRevision));
+        Assert.That(merchant.TravelPlan.TargetCityRuntimeId, Is.Null);
+        Assert.That(merchant.TravelPlan.TargetLocationRuntimeId, Is.Null);
+        Assert.That(hostPorts.Events, Is.EqualTo(new[]
+        {
+            "project-travel:" + destination.RuntimeId
+        }), "A missing projection is rejected before P12 admission and Core owner mutation.");
+    }
+
+    [Test]
     public void MerchantDailyPassRedirectsFromKnownCoreRouteAndRecordsCoreEvidence()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out SpatialNetworkOwner spatial);
@@ -400,6 +620,57 @@ public sealed class DailyV1SelectedMerchantTradeStateOperationTests
             cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
         Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
         return graph;
+    }
+
+    private sealed class RecordingMerchantP12HostPorts
+        : IDailyV1SelectedMerchantTradeStateP12HostPorts
+    {
+        internal readonly List<string> Events = new List<string>();
+        internal bool AdmitMerchantPlan = true;
+        internal bool AdmitTravelPlan = true;
+        internal bool AllowTravelProjection = true;
+
+        public bool CanAdmitSelectedMerchantPlanMutation(DailyV1NpcRuntimeOwners actor)
+        {
+            Events.Add("admit-plan");
+            return AdmitMerchantPlan;
+        }
+
+        public bool NotifySelectedMerchantPlanMutationCommitted(
+            DailyV1NpcRuntimeOwners actor, long revision)
+        {
+            Events.Add("publish-plan:" + revision);
+            return true;
+        }
+
+        public bool CanProjectSelectedMerchantTravelPlanMutation(
+            DailyV1NpcRuntimeOwners actor,
+            string targetLocationRuntimeId,
+            string targetCityRuntimeId)
+        {
+            Events.Add("project-travel:" + targetCityRuntimeId);
+            return AllowTravelProjection;
+        }
+
+        public bool CanAdmitSelectedMerchantTravelPlanMutation(DailyV1NpcRuntimeOwners actor)
+        {
+            Events.Add("admit-travel");
+            return AdmitTravelPlan;
+        }
+
+        public bool NotifySelectedMerchantTravelPlanMutationCommitted(
+            DailyV1NpcRuntimeOwners actor, long revision)
+        {
+            Events.Add("publish-travel:" + revision);
+            return true;
+        }
+
+        public NpcDecisionRecord RecordTradeRedirect(
+            DailyV1NpcRuntimeOwners actor,
+            string targetLocationRuntimeId,
+            CommercialDecisionEvidence evidence) => null;
+        public void LogTradeDecisionFailure(string message) { }
+        public void LogTrade(string message) { }
     }
 
     private sealed class FakeBoundary : IDailyV1SelectedMerchantTradeStateBoundary
