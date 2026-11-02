@@ -5180,7 +5180,7 @@ public sealed class SimulationRuntimeAdmissionTests
                 OwnerSectionCensusSnapshot spatialRoutes = operation.SourceWitness.TokenOwnerSections.Single(
                     section => section.SectionId == P12ASpatialNetworkOwnerCodec.RoutesSectionId);
                 Assert.That(spatialLocations.OwnerInstanceIdentity,
-                    Is.SameAs(spatialProjection));
+                    Is.SameAs(spatialProjection.SelectedOwner));
                 Assert.That(spatialLocations.OwnerInstanceIdentity,
                     Is.SameAs(spatialRoutes.OwnerInstanceIdentity));
                 Assert.That(spatialLocations.Cardinality,

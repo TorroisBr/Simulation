@@ -3758,9 +3758,22 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return false;
         }
 
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedIdentitySpatialSections(
                 selectedRuntimeOwnerGraph,
                 personStoreComposedSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> identitySpatialComposedSections,
+                out diagnostic))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core restored boundary could not compose its exact identity and spatial owner rows.";
+            return false;
+        }
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
+                selectedRuntimeOwnerGraph,
+                identitySpatialComposedSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> cityComposedSections,
                 out diagnostic))
         {
