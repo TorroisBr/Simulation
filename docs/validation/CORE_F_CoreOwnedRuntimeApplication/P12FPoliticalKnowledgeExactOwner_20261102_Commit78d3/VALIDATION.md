@@ -36,3 +36,17 @@ The official filtered Smoke run is retained privately. The full EditMode package
 ## Review and scope status
 
 This correction addresses the prior review finding that Core restoration did not retain the staged P12-F `PoliticalKnowledgeStore`. The graph now requires reference identity, and the Unity projection no longer clones that Core-owned instance. The candidate still requires a fresh independent exact-tip review. It is not promoted to Core canonical, and it does not claim full CORE-F acceptance, a detached .NET host, or any Phase 12/13 readiness change.
+
+
+## Exact-source CoreValidation TRX package
+
+The earlier CoreValidation rows above record prior private runs. The exact candidate source was subsequently validated in a clean detached E: worktree at commit `94b124c4c1e9881c66ccfb0179501304249ec50e`, committed tree `d201f74b101f2c4af601885f7e87a02dcc3a7064`. Its production and test source is unchanged from implementation commit `78d3bffa527b7599167e5c84b6315ed95f708439`; the intervening candidate changes are documentation and validation artifacts only.
+
+The official CoreValidation run was `2372f3152e0d4e1e95e42b49167d33be`, input digest `e7173fbe946f84daa5b6df4855ddff90f245be49f9add7d32ccc8f08cc3d4812`. It ran the supported `-SkipLab` TRX package profile: cold 988/988 and warm 988/988 passed, with zero failed, error, or not-executed cases; inputs were stable, the validation worktree had no changes, and it had no Unity Library. A separate official default-mode run on the same candidate also completed PASS (run `7047f07448ed401797baa0404f23221d`); its additional Lab logs do not fit the closed TRX package profile and are not included in this package.
+
+The privacy-safe package is in `DotNetTrx/`:
+
+- Manifest: `coref-p12f-political-knowledge-corevalidation-988-20261102.manifest.json`, SHA-256 `c960c995437d33e556ff93cf14c6b73998b4a89e54f0c3e2c0eee097d93b20d3`.
+- Archive: `coref-p12f-political-knowledge-corevalidation-988-20261102.zip`, SHA-256 `6b130e34d53395f38c6a7e91970321c47b77562d0cf40a9c2c80f9c70fc3ee0f`.
+
+The approved packager created the two normalized cold/warm reports and completed its embedded private original-to-projection comparison against the owner-only runner manifest and original reports. A separate archive-only `Verify` returned `VALID: runs=1 entries=2`; its `originalComparisonNotPerformed` result is expected for verification without private context. The public manifest contains no absolute workstation paths, and the private original report hashes still match the runner manifest. Raw reports, logger, source context, and retained assemblies remain private; none are included in the archive.
