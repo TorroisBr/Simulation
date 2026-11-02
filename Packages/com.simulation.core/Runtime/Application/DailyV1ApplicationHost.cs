@@ -5,6 +5,15 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 
+/// <summary>
+/// Opaque host-owned projection retained only so the application can publish
+/// or replace the matching host view under the same serialized session gate.
+/// It carries no runtime authority or simulation state.
+/// </summary>
+internal interface IDailyV1ApplicationHostProjection
+{
+}
+
 public enum DailyV1LogSeverity : byte
 {
     Log = 0,

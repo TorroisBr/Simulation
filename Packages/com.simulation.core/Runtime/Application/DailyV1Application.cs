@@ -275,6 +275,8 @@ internal sealed class DailyV1Application
     private readonly DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession> activeSessionGate =
         new DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>(
             session => session.ExecutionBoundaryState);
+    private readonly Dictionary<DailyV1ActiveRuntimeSession, IDailyV1ApplicationHostProjection>
+        activeHostProjections = new Dictionary<DailyV1ActiveRuntimeSession, IDailyV1ApplicationHostProjection>();
     private SimulationRuntimeAdmissionContext bootstrapAdmissionContext;
     private bool initialContinuationLoadAttempted;
     private bool initialContinuationLoadBlocksGenesis;
@@ -1472,6 +1474,54 @@ internal sealed class DailyV1Application
                 || !IsBootstrapOrRestoredDescendant(candidate.AdmissionContext))
                 return false;
             return activeSessionGate.TryPublishInitial(candidate);
+        }
+    }
+
+    /// <summary>
+    /// Binds and publishes the Core session and its opaque host projection as
+    /// one application-owned transaction. The projection is not consulted for
+    /// domain decisions; it exists only for a host such as Unity to expose its
+    /// already-created presentation/compatibility view of this exact session.
+    /// </summary>
+    internal bool TryPublishInitialWithHostProjection(
+        DailyV1ActiveRuntimeSession candidate,
+        IDailyV1ApplicationHostProjection hostProjection,
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts)
+    {
+        if (candidate == null || hostProjection == null || hostPorts == null)
+            return false;
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (activeSessionGate.Current != null
+                || activeHostProjections.ContainsKey(candidate)
+                || !TryBindRuntimeAdvanceBoundary(candidate, hostPorts))
+                return false;
+
+            activeHostProjections.Add(candidate, hostProjection);
+            if (TryPublishInitial(candidate)) return true;
+
+            activeHostProjections.Remove(candidate);
+            return false;
+        }
+    }
+
+    /// <summary>Returns the projection registered with the exact published Core session.</summary>
+    internal bool TryGetPublishedHostProjection(
+        DailyV1ActiveRuntimeSession session,
+        out IDailyV1ApplicationHostProjection hostProjection)
+    {
+        hostProjection = null;
+        if (session == null) return false;
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (!ReferenceEquals(activeSessionGate.Current, session)
+                || !activeHostProjections.TryGetValue(session, out hostProjection))
+            {
+                hostProjection = null;
+                return false;
+            }
+            return true;
         }
     }
 
@@ -3143,6 +3193,16 @@ internal sealed class DailyV1Application
         DailyV1ActiveRuntimeSession expectedSession,
         DailyV1ActiveRuntimeSession candidate,
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out string diagnostic) =>
+        TryCommitRestoredCandidateCore(
+            expectedSession, candidate, replacementOperation,
+            hostProjectionTransaction: false, out diagnostic);
+
+    private bool TryCommitRestoredCandidateCore(
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ActiveRuntimeSession candidate,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        bool hostProjectionTransaction,
         out string diagnostic)
     {
         diagnostic = null;
@@ -3154,6 +3214,24 @@ internal sealed class DailyV1Application
 
         lock (activeSessionGate.SyncRoot)
         {
+            if (hostProjectionTransaction)
+            {
+                if (!activeHostProjections.ContainsKey(candidate)
+                    || (expectedSession == null
+                        ? activeHostProjections.Count != 1
+                        : !activeHostProjections.ContainsKey(expectedSession)
+                            || activeHostProjections.Count != 2))
+                {
+                    diagnostic = "The Core restore commit does not have the exact staged host projection set.";
+                    return false;
+                }
+            }
+            else if (activeHostProjections.Count != 0)
+            {
+                diagnostic = "A session with a host projection must be replaced through the application projection transaction.";
+                return false;
+            }
+
             SimulationRuntimeAdmissionContext candidateAdmission = candidate.AdmissionContext;
             if (bootstrapAdmissionContext == null
                 || !bootstrapAdmissionContext.IsOwnedByCurrentThread()
@@ -3206,6 +3284,72 @@ internal sealed class DailyV1Application
                 return false;
             }
 
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Commits a detached Core replacement together with the corresponding
+    /// host projection under the application's one session gate. This keeps a
+    /// Unity adapter from maintaining a second publication authority while
+    /// still allowing the host to construct its view before the exchange.
+    /// </summary>
+    internal bool TryCommitRestoredCandidateWithHostProjection(
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ActiveRuntimeSession candidate,
+        IDailyV1ApplicationHostProjection expectedHostProjection,
+        IDailyV1ApplicationHostProjection candidateHostProjection,
+        IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (candidate == null || candidateHostProjection == null || candidateHostPorts == null)
+        {
+            diagnostic = "A restored Core candidate, its host projection, and its exact host boundary are required.";
+            return false;
+        }
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            DailyV1ActiveRuntimeSession current = activeSessionGate.Current;
+            if (expectedSession == null)
+            {
+                if (current != null || expectedHostProjection != null
+                    || replacementOperation != null || activeHostProjections.ContainsKey(candidate))
+                {
+                    diagnostic = "Initial restore requires an unused Core application and no prior host projection.";
+                    return false;
+                }
+            }
+            else if (!ReferenceEquals(current, expectedSession)
+                || expectedHostProjection == null
+                || !activeHostProjections.TryGetValue(expectedSession,
+                    out IDailyV1ApplicationHostProjection currentProjection)
+                || !ReferenceEquals(currentProjection, expectedHostProjection))
+            {
+                diagnostic = "Replacement restore requires the exact current Core session and its registered host projection.";
+                return false;
+            }
+
+            if (activeHostProjections.ContainsKey(candidate)
+                || !TryBindRuntimeAdvanceBoundary(candidate, candidateHostPorts))
+            {
+                diagnostic = "The restored Core candidate could not bind its exact runtime boundary or already has a projection.";
+                return false;
+            }
+
+            activeHostProjections.Add(candidate, candidateHostProjection);
+            if (!TryCommitRestoredCandidateCore(
+                    expectedSession, candidate, replacementOperation,
+                    hostProjectionTransaction: true, out diagnostic))
+            {
+                activeHostProjections.Remove(candidate);
+                return false;
+            }
+
+            if (expectedSession != null)
+                activeHostProjections.Remove(expectedSession);
             return true;
         }
     }

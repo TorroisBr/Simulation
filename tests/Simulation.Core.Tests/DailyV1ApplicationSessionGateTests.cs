@@ -7,6 +7,10 @@ using NUnit.Framework;
 
 public sealed class DailyV1ApplicationSessionGateTests
 {
+    private sealed class TestHostProjection : IDailyV1ApplicationHostProjection
+    {
+    }
+
     private sealed class MissingContinuationSlotOperations : IAtomicFileSlotOperations
     {
         internal int OpenReadCount { get; private set; }
@@ -1505,7 +1509,7 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         ApplicationAdvanceBoundary boundary = new ApplicationAdvanceBoundary(
             restoredState, null, ownerSections, 23L);
-        Assert.That(application.TryBindRuntimeAdvanceBoundary(candidate, boundary), Is.True);
+        TestHostProjection projection = new TestHostProjection();
 
         List<OwnerSectionCensusSnapshot> changedOwners = new List<OwnerSectionCensusSnapshot>(ownerSections);
         OwnerSectionCensusSnapshot original = changedOwners[0];
@@ -1515,16 +1519,21 @@ public sealed class DailyV1ApplicationSessionGateTests
         // The adapter remains identity-bound; mutate only its fresh read-only
         // census to model an owner change between staging and commit.
         boundary.SetAdmissionEvidence(changedOwners, 23L);
-        Assert.That(application.TryCommitRestoredCandidate(
-            null, candidate, null, out diagnostic), Is.False);
+        Assert.That(application.TryCommitRestoredCandidateWithHostProjection(
+            null, candidate, null, projection, boundary, null, out diagnostic), Is.False);
         Assert.That(application.ActiveSession, Is.Null,
             "A stale private target must not become the initial application session.");
+        Assert.That(application.TryGetPublishedHostProjection(candidate, out _), Is.False,
+            "A rejected private candidate cannot leave a host projection registered.");
         Assert.That(diagnostic, Does.Contain("healthy, idle, exact Core continuation"));
 
         boundary.SetAdmissionEvidence(ownerSections, 23L);
-        Assert.That(application.TryCommitRestoredCandidate(
-            null, candidate, null, out diagnostic), Is.True, diagnostic);
+        Assert.That(application.TryCommitRestoredCandidateWithHostProjection(
+            null, candidate, null, projection, boundary, null, out diagnostic), Is.True, diagnostic);
         Assert.That(application.ActiveSession, Is.SameAs(candidate));
+        Assert.That(application.TryGetPublishedHostProjection(candidate,
+            out IDailyV1ApplicationHostProjection publishedProjection), Is.True);
+        Assert.That(publishedProjection, Is.SameAs(projection));
         Assert.That(boundary.RequestedSessionReplacement, Is.EqualTo(false));
     }
 
@@ -1570,10 +1579,14 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         ApplicationAdvanceBoundary sourceBoundary = new ApplicationAdvanceBoundary(
             sourceState, null, sourceOwners, sourceEpoch);
-        Assert.That(application.TryBindRuntimeAdvanceBoundary(sourceSession, sourceBoundary), Is.True);
-        Assert.That(application.TryCommitRestoredCandidate(
-            null, sourceSession, null, out diagnostic), Is.True, diagnostic);
+        TestHostProjection sourceProjection = new TestHostProjection();
+        Assert.That(application.TryCommitRestoredCandidateWithHostProjection(
+            null, sourceSession, null, sourceProjection, sourceBoundary, null,
+            out diagnostic), Is.True, diagnostic);
         Assert.That(application.ActiveSession, Is.SameAs(sourceSession));
+        Assert.That(application.TryGetPublishedHostProjection(sourceSession,
+            out IDailyV1ApplicationHostProjection publishedSourceProjection), Is.True);
+        Assert.That(publishedSourceProjection, Is.SameAs(sourceProjection));
 
         Assert.That(application.TryCreateRestoredContinuationAdmissionContext(
             sourceSession, null, out SimulationRuntimeAdmissionContext unreservedReplacementAdmission,
@@ -1612,7 +1625,7 @@ public sealed class DailyV1ApplicationSessionGateTests
                 out DailyV1ActiveRuntimeSession candidate, out diagnostic), Is.True, diagnostic);
             ApplicationAdvanceBoundary candidateBoundary = new ApplicationAdvanceBoundary(
                 candidateState, null, candidateOwners, candidateEpoch);
-            Assert.That(application.TryBindRuntimeAdvanceBoundary(candidate, candidateBoundary), Is.True);
+            TestHostProjection candidateProjection = new TestHostProjection();
 
             List<OwnerSectionCensusSnapshot> staleSourceOwners = new List<OwnerSectionCensusSnapshot>(sourceOwners);
             OwnerSectionCensusSnapshot first = staleSourceOwners[0];
@@ -1620,15 +1633,26 @@ public sealed class DailyV1ApplicationSessionGateTests
                 first.SectionId, first.SchemaVersion, first.Role, new object(),
                 first.Cardinality, first.Revision);
             sourceBoundary.SetAdmissionEvidence(staleSourceOwners, sourceEpoch);
-            Assert.That(application.TryCommitRestoredCandidate(
-                sourceSession, candidate, replacementOperation, out diagnostic), Is.False);
+            Assert.That(application.TryCommitRestoredCandidateWithHostProjection(
+                sourceSession, candidate, sourceProjection, candidateProjection,
+                candidateBoundary, replacementOperation, out diagnostic), Is.False);
             Assert.That(application.ActiveSession, Is.SameAs(sourceSession),
                 "A replacement must retain the current restored session when its fresh source census is stale.");
+            Assert.That(application.TryGetPublishedHostProjection(sourceSession,
+                out IDailyV1ApplicationHostProjection retainedSourceProjection), Is.True);
+            Assert.That(retainedSourceProjection, Is.SameAs(sourceProjection));
+            Assert.That(application.TryGetPublishedHostProjection(candidate, out _), Is.False);
 
             sourceBoundary.SetAdmissionEvidence(sourceOwners, sourceEpoch);
-            Assert.That(application.TryCommitRestoredCandidate(
-                sourceSession, candidate, replacementOperation, out diagnostic), Is.True, diagnostic);
+            Assert.That(application.TryCommitRestoredCandidateWithHostProjection(
+                sourceSession, candidate, sourceProjection, candidateProjection,
+                candidateBoundary, replacementOperation, out diagnostic), Is.True, diagnostic);
             Assert.That(application.ActiveSession, Is.SameAs(candidate));
+            Assert.That(application.TryGetPublishedHostProjection(candidate,
+                out IDailyV1ApplicationHostProjection publishedCandidateProjection), Is.True);
+            Assert.That(publishedCandidateProjection, Is.SameAs(candidateProjection));
+            Assert.That(application.TryGetPublishedHostProjection(sourceSession, out _), Is.False,
+                "A successful replacement must retire the former host projection with its Core session.");
             Assert.That(sourceBoundary.RequestedSessionReplacement, Is.EqualTo(true));
         }
     }
@@ -1678,6 +1702,32 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(completedStages, Is.Not.Empty);
         Assert.That(application.ActiveSession, Is.Null,
             "Core-owned genesis remains private until a real runtime boundary is bound and published.");
+    }
+
+    [Test]
+    public void ApplicationPublishesGenesisAndExactHostProjectionTogether()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession candidate,
+            out string diagnostic), Is.True, diagnostic);
+        EnsureRuntimeProtocolInventory(candidate.ExecutionBoundaryState);
+
+        TestHostProjection projection = new TestHostProjection();
+        ApplicationAdvanceBoundary hostBoundary = new ApplicationAdvanceBoundary(
+            candidate.ExecutionBoundaryState, null);
+        Assert.That(application.TryGetPublishedHostProjection(candidate, out _), Is.False,
+            "A private prepared session cannot expose its host projection before publication.");
+        Assert.That(application.TryPublishInitialWithHostProjection(
+            candidate, projection, hostBoundary), Is.True);
+        Assert.That(application.ActiveSession, Is.SameAs(candidate));
+        Assert.That(application.TryGetPublishedHostProjection(candidate,
+            out IDailyV1ApplicationHostProjection publishedProjection), Is.True);
+        Assert.That(publishedProjection, Is.SameAs(projection));
     }
 
     [Test]

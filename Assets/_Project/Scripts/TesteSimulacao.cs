@@ -8,7 +8,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>Immutable reference set for the currently published TesteSimulacao session.</summary>
-internal sealed class SimulationActiveSession
+internal sealed class SimulationActiveSession : IDailyV1ApplicationHostProjection
 {
     private readonly Dictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation;
 
@@ -203,8 +203,6 @@ public class TesteSimulacao : MonoBehaviour
     private readonly DailyV1ApplicationSessionGate<SimulationActiveSession> compatibilitySessionGate =
         new DailyV1ApplicationSessionGate<SimulationActiveSession>(
             session => session.ExecutionBoundaryState);
-    private readonly Dictionary<DailyV1ActiveRuntimeSession, SimulationActiveSession> activeSessionProjections =
-        new Dictionary<DailyV1ActiveRuntimeSession, SimulationActiveSession>();
     private SimulationActiveSession activeSession => CaptureActiveSession();
     private SimulationRuntimeAdmissionContext runtimeAdmissionContext;
     private SimulationOperationScope bootstrapPublicationScope;
@@ -1012,8 +1010,9 @@ public class TesteSimulacao : MonoBehaviour
         {
             DailyV1ActiveRuntimeSession coreSession = dailyV1Application.ActiveSession;
             if (coreSession != null)
-                return activeSessionProjections.TryGetValue(coreSession, out SimulationActiveSession projection)
-                    ? projection
+                return dailyV1Application.TryGetPublishedHostProjection(
+                        coreSession, out IDailyV1ApplicationHostProjection projection)
+                    ? projection as SimulationActiveSession
                     : null;
 
             return compatibilitySessionGate.Current;
@@ -1053,7 +1052,9 @@ public class TesteSimulacao : MonoBehaviour
             {
                 if (expectedSession != null && expectedCoreSession == null
                     || currentCoreSession == null
-                    || !activeSessionProjections.TryGetValue(currentCoreSession, out session)
+                    || !dailyV1Application.TryGetPublishedHostProjection(
+                        currentCoreSession, out IDailyV1ApplicationHostProjection projection)
+                    || (session = projection as SimulationActiveSession) == null
                     || !dailyV1Application.TryBeginOperation(
                         expectedCoreSession, scopeKind, out DailyV1ActiveRuntimeSession admittedCoreSession))
                 {
@@ -1102,15 +1103,8 @@ public class TesteSimulacao : MonoBehaviour
             DailyV1ActiveRuntimeSession coreSession = candidateSession.CoreRuntimeSession;
             if (coreSession == null)
                 return compatibilitySessionGate.TryPublishInitial(candidateSession);
-
-            if (activeSessionProjections.ContainsKey(coreSession)
-                || !dailyV1Application.TryBindRuntimeAdvanceBoundary(
-                    coreSession, candidateSession.Runtime)) return false;
-            activeSessionProjections.Add(coreSession, candidateSession);
-            if (dailyV1Application.TryPublishInitial(coreSession)) return true;
-
-            activeSessionProjections.Remove(coreSession);
-            return false;
+            return dailyV1Application.TryPublishInitialWithHostProjection(
+                coreSession, candidateSession, candidateSession.Runtime);
         }
     }
 
@@ -1199,40 +1193,12 @@ public class TesteSimulacao : MonoBehaviour
         SimulationActiveSession candidateProjection,
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation)
     {
-        if (candidateCoreSession == null || candidateProjection == null
-            || activeSessionProjections.ContainsKey(candidateCoreSession))
+        if (candidateCoreSession == null || candidateProjection == null)
             return false;
-
-        if (expectedCoreSession == null)
-        {
-            if (expectedProjection != null || exclusiveOperation != null)
-                return false;
-        }
-        else if (expectedProjection == null
-            || !activeSessionProjections.TryGetValue(
-                expectedCoreSession, out SimulationActiveSession currentProjection)
-            || !ReferenceEquals(currentProjection, expectedProjection))
-            return false;
-
-        if (!dailyV1Application.TryBindRuntimeAdvanceBoundary(
-                candidateCoreSession, candidateProjection.Runtime))
-            return false;
-
-        // Register the host projection before the Core exchange. Both writes
-        // are under the same gate lock, so readers can observe neither a
-        // published Core session without its adapter nor a stale projection.
-        activeSessionProjections.Add(candidateCoreSession, candidateProjection);
-        bool published = dailyV1Application.TryCommitRestoredCandidate(
-            expectedCoreSession, candidateCoreSession, exclusiveOperation, out _);
-        if (!published)
-        {
-            activeSessionProjections.Remove(candidateCoreSession);
-            return false;
-        }
-
-        if (expectedCoreSession != null)
-            activeSessionProjections.Remove(expectedCoreSession);
-        return true;
+        return dailyV1Application.TryCommitRestoredCandidateWithHostProjection(
+            expectedCoreSession, candidateCoreSession, expectedProjection,
+            candidateProjection, candidateProjection.Runtime, exclusiveOperation,
+            out _);
     }
 
     /// <summary>
