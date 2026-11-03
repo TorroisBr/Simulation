@@ -345,6 +345,80 @@ public sealed class DomainEventAuthorityCoreTests
     }
 
     [Test]
+    public void TravelPartyAdvanceRejectsWhileMutationEpochReservationIsActive()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        System.Collections.Generic.IReadOnlyList<string> operationContractIds =
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                hasRuntimeAdmission: true,
+                hasTravelPartySystem: true,
+                hasTravelSystem: false);
+        foreach (string operationContractId in operationContractIds)
+            Assert.That(state.TryRegisterRuntimeProtocolOperationContract(operationContractId), Is.True,
+                operationContractId);
+        Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+
+        bool dailyAdvanceStarted = false;
+        bool reservationReleased = false;
+        DailyV1MutationEpochReservation reservation = null;
+        try
+        {
+            dailyAdvanceStarted = state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance);
+            Assert.That(dailyAdvanceStarted, Is.True);
+            Assert.That(state.MutationEpochState.TryReserve(out reservation), Is.True);
+            Assert.That(reservation, Is.Not.Null);
+
+            int operationCountBefore = state.ActiveRuntimeOperationCount;
+            var protocol = new NoOpTravelPartyAdvanceProtocol();
+            bool callbackInvoked = false;
+            bool result = state.ExecuteSelectedP12TravelPartyAdvance(
+                composition.OwnerGraph,
+                protocol,
+                () => { callbackInvoked = true; return true; });
+
+            Assert.That(result, Is.False);
+            Assert.That(callbackInvoked, Is.False,
+                "The operation callback must not run while the shared mutation epoch has a reserved commit.");
+            Assert.That(state.ActiveRuntimeOperationCount, Is.EqualTo(operationCountBefore),
+                "Rejected admission must leave the enclosing daily scope unchanged.");
+            Assert.That(protocol.FaultClosedCalls, Is.EqualTo(1));
+            Assert.That(state.MutationEpochState.HasActiveReservation, Is.True,
+                "Rejecting the operation must not consume another operation's reservation.");
+
+            reservationReleased = state.MutationEpochState.TryRelease(reservation);
+            Assert.That(reservationReleased, Is.True);
+            Assert.That(state.ActiveRuntimeOperationCount, Is.EqualTo(operationCountBefore));
+        }
+        finally
+        {
+            if (reservation != null && !reservationReleased)
+                Assert.That(state.MutationEpochState.TryRelease(reservation), Is.True);
+            try
+            {
+                if (dailyAdvanceStarted)
+                    Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
+        }
+
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.True);
+    }
+
+    [Test]
     public void AdmittedCoreSessionRecordsCommittedSoloArrivalWithItsExactClockAndOwners()
     {
         DailyV1EffectiveDefinitions definitions =

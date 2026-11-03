@@ -817,7 +817,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || AdmissionContext == null
                 || !AdmissionContext.IsOwnedByCurrentThread()
                 || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
-                || selectedP12TravelPartyAdvanceContext != null)
+                || selectedP12TravelPartyAdvanceContext != null
+                || mutationEpochState.HasActiveReservation)
             {
                 FaultSelectedTravelPartyAdvance(protocol);
                 return false;
