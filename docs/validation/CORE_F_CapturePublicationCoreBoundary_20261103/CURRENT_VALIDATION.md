@@ -112,6 +112,12 @@ package above applies to the corrected admission boundary.
 ## Status
 
 This is a validated intermediate candidate only. Exact-tip independent review
-of the combined diff is pending. It is not promoted and does not complete the
-89-family census, Core-owned P12 capture/restoration, `TryStart`, or the
+of candidate `e7da26a3ee8ececaf3a0f31f81235e72c4d75fbf` passed as
+`VALIDATED_CANDIDATE` against `ff3852fd3a283a2ad2bcba8fe29d3660908e397f`.
+The durable review record is [CORE-F Selected Runtime Publication and Admission
+Review](../../reviews/CORE_F_CAPTURE_PUBLICATION_ADMISSION_E7DA26A3.md), commit
+`04b13be8dac3011381dfc2d26dfd66ef1e30ac69` on
+`codex/review/coref-runtime-admission-e7da26a`. The candidate is not promoted;
+the private .NET TRX packaging limitation remains. This slice does not complete
+the 89-family census, Core-owned P12 capture/restoration, `TryStart`, or the
 detached .NET host.
