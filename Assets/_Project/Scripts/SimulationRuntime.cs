@@ -11121,6 +11121,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
+        // This internal capture is the complete private target census used by
+        // the restore coordinator. The selected host-port adapter applies the
+        // P12-F omission exactly once when it crosses into Core.
         ownerSections = captured;
         mutationEpoch = capturedMutationEpoch;
         failure = ContinuationCensusFailure.None;
@@ -11425,9 +11428,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        // The Core boundary selects and recomposes migrated rows after checking
-        // this adapter's exact-instance binding evidence.
-        ownerSections = completeHostSections;
+        // Core owns these five rows. Keep the Unity protocol's full internal
+        // provider inventory for its operation baselines, but never return its
+        // P12-F values or identities across the selected host port.
+        if (HasExactCoreOwnedSelectedCensusSources())
+        {
+            if (!TryCreateCoreOwnedP12FHostRemainder(
+                    completeHostSections,
+                    out ownerSections))
+            {
+                mutationEpoch = 0L;
+                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+        }
+        else
+        {
+            ownerSections = completeHostSections;
+        }
 
         failure = DailyCaptureEligibilityFailure.None;
         return true;
@@ -11453,8 +11471,64 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        ownerSections = completeHostSections;
+        if (HasExactCoreOwnedSelectedCensusSources())
+        {
+            if (!TryCreateCoreOwnedP12FHostRemainder(
+                    completeHostSections,
+                    out ownerSections))
+            {
+                mutationEpoch = 0L;
+                diagnostic = "The selected Unity census could not produce the exact host remainder after omitting Core-owned P12-F rows.";
+                return false;
+            }
+        }
+        else
+        {
+            ownerSections = completeHostSections;
+        }
         diagnostic = null;
+        return true;
+    }
+
+    private static bool TryCreateCoreOwnedP12FHostRemainder(
+        IReadOnlyList<OwnerSectionCensusSnapshot> completeOwnerSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections)
+    {
+        hostOwnedSections = null;
+        if (!DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+                completeOwnerSections))
+            return false;
+
+        IReadOnlyList<string> coreOwnedP12FSectionIds =
+            DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds;
+        if (coreOwnedP12FSectionIds == null || coreOwnedP12FSectionIds.Count != 5)
+            return false;
+
+        HashSet<string> remainingCoreOwnedIds =
+            new HashSet<string>(coreOwnedP12FSectionIds, StringComparer.Ordinal);
+        if (remainingCoreOwnedIds.Count != coreOwnedP12FSectionIds.Count)
+            return false;
+
+        HashSet<string> observedIds = new HashSet<string>(StringComparer.Ordinal);
+        List<OwnerSectionCensusSnapshot> remainder =
+            new List<OwnerSectionCensusSnapshot>(
+                completeOwnerSections.Count - coreOwnedP12FSectionIds.Count);
+        foreach (OwnerSectionCensusSnapshot section in completeOwnerSections)
+        {
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !observedIds.Add(section.SectionId))
+                return false;
+
+            if (remainingCoreOwnedIds.Remove(section.SectionId))
+                continue;
+
+            remainder.Add(section);
+        }
+
+        if (remainingCoreOwnedIds.Count != 0)
+            return false;
+
+        hostOwnedSections = Array.AsReadOnly(remainder.ToArray());
         return true;
     }
 

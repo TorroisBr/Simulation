@@ -2262,8 +2262,23 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                candidateSession.OwnerGraph,
+                candidateSession.ExecutionBoundaryState.SelectedActorChoiceStore,
                 targetOwnerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeTargetSections,
+                out diagnostic))
+        {
+            targetOwnerSections = null;
+            targetMutationEpoch = 0L;
+            failure = P12GDailyV1OwnerVectorFailure.MissingTargetVector;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The private target host remainder could not be completed from the exact Core-owned P12-F graph.";
+            return false;
+        }
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                completeTargetSections,
                 candidateSession.OwnerGraph,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
                 out diagnostic))

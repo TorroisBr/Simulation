@@ -222,7 +222,18 @@ public sealed class DailyV1ApplicationSessionGateTests
                 onContinuationSaveEvidenceCapture?.Invoke(ContinuationSaveEvidenceCaptureCount);
             }
 
-            ownerSections = admissionOwnerSections;
+            if (HasExactCoreOwnedSelectedCensusSources && admissionOwnerSections != null)
+            {
+                HashSet<string> coreP12FIds = new HashSet<string>(
+                    DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds,
+                    StringComparer.Ordinal);
+                ownerSections = Array.AsReadOnly(admissionOwnerSections
+                    .Where(section => !coreP12FIds.Contains(section.SectionId)).ToArray());
+            }
+            else
+            {
+                ownerSections = admissionOwnerSections;
+            }
             mutationEpoch = admissionMutationEpoch;
             onOwnerSectionCensusCapture?.Invoke(allowedOuterScope);
             if (ReturnPartialOwnerEvidenceThenFail)
@@ -239,8 +250,7 @@ public sealed class DailyV1ApplicationSessionGateTests
                 && CensusFailure == DailyCaptureEligibilityFailure.None
                 && !ReturnPartialOwnerEvidenceThenFail;
             if (!captured) return false;
-            LastCapturedOwnerSections = admissionOwnerSections;
-            ownerSections = admissionOwnerSections;
+            LastCapturedOwnerSections = ownerSections;
             return true;
         }
 
@@ -2248,8 +2258,10 @@ public sealed class DailyV1ApplicationSessionGateTests
             sessionReplacement: false,
             out IReadOnlyList<OwnerSectionCensusSnapshot> admittedSections,
             out _, out failure), Is.True);
-        Assert.That(hostPorts.LastCapturedOwnerSections, Is.SameAs(completeHostVector),
-            "The host returns its complete census vector; Core selects and recomposes its migrated rows.");
+        Assert.That(hostPorts.LastCapturedOwnerSections, Has.Count.EqualTo(completeHostVector.Count - 5),
+            "The selected host port omits the five P12-F rows whose source is the Core owner graph.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds.All(coreOwnedId =>
+                hostPorts.LastCapturedOwnerSections.All(section => section.SectionId != coreOwnedId)), Is.True);
         OwnerSectionCensusSnapshot genealogySection =
             admittedSections.Single(section => section.SectionId == GenealogyCensusProvider.SectionId);
         Assert.That(genealogySection.OwnerInstanceIdentity,
@@ -2733,6 +2745,104 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
                 graph, hostRemainder.Concat(new[] { personMembership }).ToArray(), out _, out _), Is.False,
             "The host cannot reintroduce a PersonStore alias section whose authority has moved to Core.");
+    }
+
+    [Test]
+    public void CoreP12FCensusAcceptsOnlyItsExactHostOmissionAndReadsLiveOwners()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out _);
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
+        OwnerSectionCensusSnapshot[] completeVector =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        IReadOnlyList<string> coreOwnedIds =
+            DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds;
+        HashSet<string> coreOwnedIdSet = new HashSet<string>(coreOwnedIds, StringComparer.Ordinal);
+        Assert.That(coreOwnedIds, Has.Count.EqualTo(5));
+
+        OwnerSectionCensusSnapshot[] hostRemainder = completeVector
+            .Where(section => !coreOwnedIdSet.Contains(section.SectionId)).ToArray();
+        Assert.That(hostRemainder, Has.Length.EqualTo(completeVector.Length - 5));
+        Assert.That(hostRemainder.Any(section => coreOwnedIdSet.Contains(section.SectionId)), Is.False);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                graph, actorChoices, hostRemainder,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> composed,
+                out string diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(composed), Is.True);
+        Assert.That(composed.Select(section => section.SectionId),
+            Is.EqualTo(completeVector.Select(section => section.SectionId)
+                .OrderBy(sectionId => sectionId, StringComparer.Ordinal)));
+
+        OwnerSectionCensusWitness[] currentCoreWitnesses =
+        {
+            new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus(),
+            new ScheduledDirectiveCensusProvider(graph.ScheduledDirectives).GetCurrentCensus(),
+            new TravelPartyCensusProvider(graph.TravelParties).GetCurrentCensus(),
+            new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus(),
+            new PoliticalKnowledgeStoreCensusProvider(graph.PoliticalKnowledgeStore).GetCurrentCensus()
+        };
+        foreach (OwnerSectionCensusWitness witness in currentCoreWitnesses)
+        {
+            OwnerSectionCensusSnapshot actual = composed.Single(section =>
+                section.SectionId == witness.SectionId);
+            Assert.That(actual.Role, Is.EqualTo(OwnerSectionRole.Required), witness.SectionId);
+            Assert.That(actual.SchemaVersion, Is.EqualTo(witness.SchemaVersion), witness.SectionId);
+            Assert.That(actual.OwnerInstanceIdentity, Is.SameAs(witness.OwnerInstanceIdentity), witness.SectionId);
+            Assert.That(actual.Cardinality, Is.EqualTo(witness.Cardinality), witness.SectionId);
+            Assert.That(actual.Revision, Is.EqualTo(witness.Revision), witness.SectionId);
+        }
+
+        foreach (string coreOwnedId in coreOwnedIds)
+        {
+            OwnerSectionCensusSnapshot hostSuppliedRow = completeVector.Single(section =>
+                section.SectionId == coreOwnedId);
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                    graph, actorChoices, hostRemainder.Concat(new[] { hostSuppliedRow }).ToArray(),
+                    out _, out _), Is.False,
+                "A partial omission that leaves a host-supplied Core row is rejected: " + coreOwnedId);
+
+            OwnerSectionCensusSnapshot substitutedRow = new OwnerSectionCensusSnapshot(
+                hostSuppliedRow.SectionId, hostSuppliedRow.SchemaVersion, hostSuppliedRow.Role,
+                new object(), hostSuppliedRow.Cardinality, hostSuppliedRow.Revision);
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                    graph, actorChoices, hostRemainder.Concat(new[] { substitutedRow }).ToArray(),
+                    out _, out _), Is.False,
+                "A substituted Core owner fact is rejected: " + coreOwnedId);
+        }
+
+        OwnerSectionCensusSnapshot omittedHostRow = hostRemainder[0];
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                graph, actorChoices,
+                hostRemainder.Where(section => section.SectionId != omittedHostRow.SectionId).ToArray(),
+                out _, out _), Is.False,
+            "Omitting any additional host-owned section fails the complete 89-family gate.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                graph, actorChoices, hostRemainder.Concat(new[] { hostRemainder[0] }).ToArray(),
+                out _, out _), Is.False,
+            "Duplicating a host-owned section is rejected.");
+
+        OwnerSectionCensusSnapshot beforeActorChoice = composed.Single(section =>
+            section.SectionId == ActorChoiceP11CensusProvider.SectionId);
+        Assert.That(actorChoices.TryCapture(
+                "census-live-owner-input",
+                new PersonId("person-census-live-owner"),
+                "action.sell-goods",
+                WorldCommandOrigin.LocalPlayer,
+                WorldCommandAuthorityMode.Request,
+                0L,
+                out _,
+                out ActorChoiceStoreFailureCode captureFailure), Is.True, captureFailure.ToString());
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                graph, actorChoices, hostRemainder,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> afterMutation,
+                out diagnostic), Is.True, diagnostic);
+        OwnerSectionCensusSnapshot afterActorChoice = afterMutation.Single(section =>
+            section.SectionId == ActorChoiceP11CensusProvider.SectionId);
+        Assert.That(afterActorChoice.OwnerInstanceIdentity, Is.SameAs(beforeActorChoice.OwnerInstanceIdentity));
+        Assert.That(afterActorChoice.Cardinality, Is.EqualTo(beforeActorChoice.Cardinality + 1));
+        Assert.That(afterActorChoice.Revision, Is.EqualTo(beforeActorChoice.Revision + 1L));
     }
 
     [Test]

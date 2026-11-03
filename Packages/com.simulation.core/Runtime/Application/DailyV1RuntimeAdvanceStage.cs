@@ -402,8 +402,18 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
 
         if (hostPorts.HasExactCoreOwnedSelectedCensusSources)
         {
-            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+            // The selected Unity port omits P12-F rows because their authority
+            // is the exact Core owner graph. Recompose them before the shared
+            // removal/coverage gate so only Core-derived facts can complete the
+            // full selected vector.
+            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                    executionState.SelectedRuntimeOwnerGraph,
+                    executionState.SelectedActorChoiceStore,
                     ownerSections,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreP12FSections,
+                    out _)
+                || !DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                    completeCoreP12FSections,
                     executionState.SelectedRuntimeOwnerGraph,
                     out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
                     out _))
@@ -3768,9 +3778,22 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
         if (hostPorts.HasExactCoreOwnedSelectedCensusSources)
         {
-            IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections = ownerSections;
+            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                    selectedRuntimeOwnerGraph,
+                    selectedActorChoiceStore,
+                    ownerSections,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreP12FSections,
+                    out diagnostic))
+            {
+                ownerSections = null;
+                mutationEpoch = 0L;
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "The Core restored boundary could not compose its omitted P12-F owner rows.";
+                return false;
+            }
+
             if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
-                    completeHostSections,
+                    completeCoreP12FSections,
                     selectedRuntimeOwnerGraph,
                     out ownerSections,
                     out diagnostic))
