@@ -45,7 +45,18 @@ The official Unity evidence runner completed the full EditMode selection on the 
 - Public evidence archive SHA-256: 06adadb3cfdeba0afd9c770401ec5f5c693eab80c6dbdc44ee7ae690fc5908a6
 - Official package verification with the private run manifest: VALID, 1 run, 1 entry
 
-The package contains the sanitized XML report and no local workstation paths. The original Unity log and private manifest remain in protected evidence storage. No separate Smoke run is claimed.
+The package contains the sanitized XML report and no local workstation paths. The original Unity log and private manifest remain in protected evidence storage. The regression's stable NUnit identity is recorded additively in TEST_CASE_IDENTITY_MAP.md; the historical 49 CORE-B identities remain unchanged.
+
+A separate official Smoke selection was run after this full EditMode run on the same stable validation worktree and exact source/test tree:
+
+- Run ID: d7f3241732334e8a90ddb366a2f69797
+- Result: 5/5 PASS; 0 failed, skipped, or inconclusive
+- Input snapshot SHA-256 before and after: 04fb7176ce67f2baf9d1c8a29047f1d94090568ab5d05e06a3f369a1c7af0356
+- Private run-manifest SHA-256: de57bc1152e993a1bd0390005aec77d4a5cb1ac4ae946dc2a479a57d6783ad8e
+- Original XML SHA-256: ffa12b84ecd46d3d74cb357baf371e19026a33950244c7033c345f80bf771e2e
+- Original log SHA-256: d5594eb3ff1b9d8815739b3b636cd5a7388cadf35f28db745ba06efa041275f3
+
+The filtered Smoke report and manifest remain private. No separate normalized Smoke package is claimed because the official packager's complete-suite count rules reject filtered NUnit XML with parent-suite totals; the full EditMode package contains the five Smoke identities and passing results.
 
 ## Attempt disposition
 
