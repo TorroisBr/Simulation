@@ -683,7 +683,18 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
-    internal bool TryBeginRuntimeProtocolOperation(string operationContractId)
+    internal bool TryBeginRuntimeProtocolOperation(string operationContractId) =>
+        TryBeginRuntimeProtocolOperation(
+            operationContractId,
+            requireNoActiveRuntimeProtocolOperations: false);
+
+    /// <summary>
+    /// Starts an outer runtime operation only when the protocol registry is
+    /// idle. Admission and registration stay atomic in the Core execution state.
+    /// </summary>
+    internal bool TryBeginRuntimeProtocolOperation(
+        string operationContractId,
+        bool requireNoActiveRuntimeProtocolOperations)
     {
         lock (operationSyncRoot)
         {
@@ -693,6 +704,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || !runtimeProtocolOperationInventorySealed
                 || string.IsNullOrWhiteSpace(operationContractId)
                 || !expectedRuntimeProtocolOperationContracts.Contains(operationContractId)
+                || (requireNoActiveRuntimeProtocolOperations
+                    && activeRuntimeProtocolOperationContracts.Count != 0)
                 || activeRuntimeProtocolOperationContracts.Count == int.MaxValue)
                 return false;
             if (!TryAddOperationScope(DailyV1OperationScopeKind.RuntimeProtocol)) return false;

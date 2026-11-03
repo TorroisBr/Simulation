@@ -160,8 +160,6 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
-    bool CanBeginDailyAdvanceOperation { get; }
-    bool IsFactualReadWorldPublished { get; }
     bool HasActiveDailyOperationContext { get; }
     bool TryCreateSelectedDailyExecutionHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -232,14 +230,9 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
     public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
     {
         operationScope = null;
-        if (!hostPorts.CanBeginDailyAdvanceOperation)
-        {
-            hostPorts.FaultRuntimeAdmission();
-            return false;
-        }
-
         if (!executionState.TryBeginRuntimeProtocolOperation(
-                DailyV1RuntimeProtocolOperationContracts.DailyAdvance))
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+                requireNoActiveRuntimeProtocolOperations: true))
         {
             hostPorts.FaultRuntimeAdmission();
             return false;
@@ -354,7 +347,7 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
-        if (!hostPorts.IsFactualReadWorldPublished || executionState.WorldId == null)
+        if (!executionState.IsFactualReadWorldPublished || executionState.WorldId == null)
         {
             failure = DailyCaptureEligibilityFailure.WorldNotPublished;
             return false;
@@ -3654,7 +3647,6 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             || currentCaptureToken != null
             || completedCoreSequence != 0L
             || factualReadWorldPublished
-            || hostPorts.IsFactualReadWorldPublished
             || AdvanceLeaseHeld
             || ActiveOperationCount != 0
             || hostPorts.HasActiveDailyOperationContext
@@ -3720,7 +3712,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return false;
         }
 
-        if (!hostPorts.IsFactualReadWorldPublished
+        if (!IsFactualReadWorldPublished
             || !IsHealthyDailyOwnerThreadBoundary()
             || !HasValidRestoredDailyBoundaryAdmission(boundary))
         {

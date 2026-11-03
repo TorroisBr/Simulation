@@ -97,8 +97,6 @@ public sealed class DailyV1ApplicationSessionGateTests
             return ownerSections;
         }
         public DailyV1ExecutionBoundaryState ExecutionState => state;
-        public bool CanBeginDailyAdvanceOperation { get; set; } = true;
-        public bool IsFactualReadWorldPublished { get; set; } = true;
         public bool HasActiveDailyOperationContext { get; set; }
         public DailyCaptureEligibilityFailure CensusFailure { get; set; }
         public bool HasIntradayTimeline => false;
@@ -344,7 +342,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         Action onOperationEntry,
         out DailyV1ActiveRuntimeSession session,
         out ApplicationAdvanceBoundary boundary,
-        DailyV1EffectiveDefinitions definitions = null)
+        DailyV1EffectiveDefinitions definitions = null,
+        bool publishWorld = true)
     {
         DailyV1Application application = new DailyV1Application();
         definitions ??= DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -353,6 +352,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out session, out string diagnostic), Is.True, diagnostic);
+        if (publishWorld)
+            Assert.That(session.ExecutionBoundaryState.TryMarkFactualReadWorldPublished(), Is.True);
         EnsureRuntimeProtocolInventory(session.ExecutionBoundaryState);
         boundary = new ApplicationAdvanceBoundary(session.ExecutionBoundaryState, onOperationEntry);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(session, boundary), Is.True);
@@ -1489,6 +1490,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             23L,
             ownerSections,
             out _), Is.True);
+        Assert.That(restoredState.TryMarkFactualReadWorldPublished(), Is.True);
 
         FieldInfo decisionStoreField = typeof(DailyV1ExecutionBoundaryState).GetField(
             "selectedDecisionStore", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -1571,6 +1573,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             sourceEpoch,
             sourceOwners,
             out DailyCaptureEligibilityToken sourceToken), Is.True);
+        Assert.That(sourceState.TryMarkFactualReadWorldPublished(), Is.True);
         Assert.That(sourceToken.BoundaryProvenance,
             Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
         Assert.That(application.TryCreateRestoredActiveRuntimeSession(
@@ -1619,6 +1622,7 @@ public sealed class DailyV1ApplicationSessionGateTests
                 candidateEpoch,
                 candidateOwners,
                 out _), Is.True);
+            Assert.That(candidateState.TryMarkFactualReadWorldPublished(), Is.True);
 
             Assert.That(application.TryCreateRestoredActiveRuntimeSession(
                 candidateState, definitions, 0L, replacementOperation,
@@ -2097,21 +2101,32 @@ public sealed class DailyV1ApplicationSessionGateTests
     [Test]
     public void CoreAdvanceRequiresHealthyIdleP12OperationAdmissionBeforeOpeningItsScope()
     {
-        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+        CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session,
             out ApplicationAdvanceBoundary hostPorts);
-        hostPorts.CanBeginDailyAdvanceOperation = false;
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
+        DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
+            session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
 
-        Assert.That(application.TryAdvanceDay(
-            out SimulationRuntimeAdvanceFailure failure), Is.False);
+        try
+        {
+            Assert.That(coreBoundary.TryEnterDailyAdvanceOperation(
+                out IDisposable rejectedScope), Is.False);
+            Assert.That(rejectedScope, Is.Null);
+            Assert.That(state.ActiveOperationCount, Is.EqualTo(1));
+            Assert.That(state.ActiveRuntimeOperationCount, Is.EqualTo(1));
+            Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
+            Assert.That(hostPorts.Faulted, Is.True);
+        }
+        finally
+        {
+            Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+        }
 
-        Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
-        Assert.That(session.SimulationTime.AbsoluteDay, Is.Zero,
-            "An unhealthy P12 protocol is rejected before Core advances the admitted clock.");
-        Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
-        Assert.That(session.ExecutionBoundaryState.ActiveRuntimeOperationCount, Is.Zero);
-        Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
-        Assert.That(hostPorts.Faulted, Is.True);
+        Assert.That(state.ActiveOperationCount, Is.Zero);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
     }
 
     [Test]
@@ -2708,14 +2723,14 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session,
-            out ApplicationAdvanceBoundary hostPorts);
+            out ApplicationAdvanceBoundary hostPorts,
+            publishWorld: false);
         DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
             session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
         Assert.That(coreBoundary, Is.Not.Null);
         hostPorts.SetAdmissionEvidence(
             DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot(), mutationEpoch: 29L);
 
-        hostPorts.IsFactualReadWorldPublished = false;
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
             sessionReplacement: false, out IReadOnlyList<OwnerSectionCensusSnapshot> sections,
             out long epoch, out DailyCaptureEligibilityFailure failure), Is.False);
@@ -2724,7 +2739,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(epoch, Is.Zero);
         Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero);
 
-        hostPorts.IsFactualReadWorldPublished = true;
+        Assert.That(session.ExecutionBoundaryState.TryMarkFactualReadWorldPublished(), Is.True);
         hostPorts.HasActiveDailyOperationContext = true;
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
             sessionReplacement: false, out sections, out epoch, out failure), Is.False);
