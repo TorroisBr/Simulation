@@ -36,11 +36,24 @@ expanded, and no canonical promotion is claimed.
   warm TRX SHA-256:
   `cafa64b70a90cef3ab7a5561d663ef63f78b18ce87c08b744fb3a8c465690d13`.
 - Official Unity ALL EditMode: `3296/3296` PASS, zero failures, skips, or
-  inconclusive cases. All five Smoke cases are present and passed in this
-  unfiltered run. Unity input digest was stable at
+  inconclusive cases. Unity input digest was stable at
   `59b96d04259b4f0f094d5b426714d8770a1f36fcbb55babe5b5a23273e8e566d`.
   Unity Editor: `6000.3.9f1`; run ID:
   `1c75eb4db5e141cc8da8f81c243bffeb`.
+- Official filtered Smoke: `5/5` PASS, zero failures, skips, or inconclusive
+  cases (`TestFilter=Smoke`; run ID `cc49bb61fdb54bf9ae2a8ff7dedb7b09`).
+  The source and tree remained `ec79b69bb70844a5d78fd444fa2460ad5fc4ead5`
+  and `894a1626c545b31ff3a99b418591774dd967883c` before and after the run.
+  Private run-manifest SHA-256 is
+  `e84eee50a033812742a31c431b1868d9b0083102df58703a3fa4d105fdd0ecf9`;
+  original XML SHA-256 is
+  `d3efbf95d222b40f5cc4d25f53c37c1ba1985b579ac13a4f7ebc158f899b055a`
+  (6,364 bytes), and original log SHA-256 is
+  `98dbb16f2cb51f58787cee0e5f0f0534e28ba20e0be40d8bb3ff624cbc799626`
+  (52,464 bytes). The protected original is retained privately. No separate
+  normalized Smoke package is claimed because the supported packager rejects
+  the filtered report's inconsistent parent-suite aggregate; the full EditMode
+  package independently contains the same five passing Smoke identities.
 - The privacy-normalized Unity result package is in `Unity/`. Its manifest is
   `coref-restored-travel-party-bindings-20261102.manifest.json`, SHA-256
   `787883291a759be667dc12cce81c907de50078116a88f43a222d0cc954a9cd73`.
