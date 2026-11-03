@@ -30,6 +30,23 @@ The CoreValidation manifest input digest was `6be84a823ec51701da5947dde7563f3e5d
 | `tests/Simulation.Core.Tests/DailyV1ApplicationHostTests.cs` | `a251597190519d43e4998a79f886127cdf4dbee52c84548c9eec77722861db00` |
 | `Assets/_Project/Tests/EditMode/Editor/P12GOwnerEntryQualificationTests.cs` | `c59982310181d738a68b1ab85e3a1fc3e3eb311fde21d6876625fa13d104aca7` |
 
-`git diff --check HEAD^ HEAD` passed. Evidence manifests and original XML/log artifacts remain in the protected E: validation store and are not copied into this repository. A separate PlayMode filter experiment returned a zero-test report and is excluded; the five required Smoke cases passed under the documented EditMode `Smoke` filter and appear in the full EditMode report.
+`git diff --check HEAD^ HEAD` passed. Evidence manifests and original XML/log artifacts remain in the protected local validation storage and are not copied into this repository. A separate PlayMode filter experiment returned a zero-test report and is excluded; the five required Smoke cases passed under the documented EditMode `Smoke` filter and appear in the full EditMode report.
 
 This is a candidate checkpoint only. It does not complete `DailyV1Application.TryStart`, detached .NET hosting, or CORE-F acceptance, and it does not promote Core canonical.
+
+## Public normalized Unity evidence package
+
+The complete EditMode result was packaged with the repository's official validation evidence packager. The package contains the normalized complete EditMode report; it records 3299 passed tests and zero failed, skipped, or inconclusive results. Smoke's required five cases are included in that complete run.
+
+- Bundle: `coref-initial-restore-editmode-20261103`
+- Manifest: `UnityEvidence/coref-initial-restore-editmode-20261103.manifest.json`
+- Manifest SHA-256: `5a5a7c33d07e5398b2aa08d83cd07331e8e6226d348f675d201cf19e9bca6f32`
+- Archive: `UnityEvidence/coref-initial-restore-editmode-20261103.zip` (174984 bytes)
+- Archive SHA-256: `6b0b9c5ccaf3a58455d99b1fce3853e1c0c8114898288313eb1134415d1dcef3`
+- The official package verifier passed against the retained private run manifest. The archive and public manifest contain no local account or protected-store path matches.
+
+Original Unity XML, logs, and private manifests remain unchanged in protected local evidence storage and are not part of this repository package. The .NET TRX files and CoreValidation manifest also remain protected and unchanged; this validation record does not claim a public normalized .NET TRX package or an independent inspection of those private originals.
+
+## Independent review boundary
+
+The independent exact-tip review passed the implementation and tests at code commit `4fff61b27a3cafb6badb7423e7dc434d5559408e` / tree `7db93bccc24a92baa646b24583d9fd28f21aef1a`. The reviewer did not inspect the protected private manifests or this validation record. The evidence statements above are therefore the Master Orchestrator's validation/package verification, not part of the reviewer's PASS. CORE-F remains an incomplete candidate and Core canonical is unchanged.
