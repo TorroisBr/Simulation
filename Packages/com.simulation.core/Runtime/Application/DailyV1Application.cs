@@ -2253,6 +2253,30 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        if (!hostPorts.HasExactCoreOwnedSelectedCensusSources)
+        {
+            targetOwnerSections = null;
+            targetMutationEpoch = 0L;
+            failure = P12GDailyV1OwnerVectorFailure.MissingTargetVector;
+            diagnostic = "The restored image requires exact Core-owned selected census sources before composition.";
+            return false;
+        }
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                targetOwnerSections,
+                candidateSession.OwnerGraph,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
+                out diagnostic))
+        {
+            targetOwnerSections = null;
+            targetMutationEpoch = 0L;
+            failure = P12GDailyV1OwnerVectorFailure.MissingTargetVector;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The restored image host vector could not be reduced to its exact host-owned remainder.";
+            return false;
+        }
+        targetOwnerSections = hostOwnedSections;
+
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
                 candidateSession.OwnerGraph, targetOwnerSections, out diagnostic))
         {
