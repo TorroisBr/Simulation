@@ -2913,6 +2913,20 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void SelectedSharedCensusProtocolReadsCoreOwnedFaultLatch()
+    {
+        SimulationRuntime runtime = CreateUnpublishedDailyCaptureRuntime(new SimulationTime());
+        DailyV1ExecutionBoundaryState state =
+            ReadPrivateField<DailyV1ExecutionBoundaryState>(runtime, "dailyExecutionBoundary");
+
+        state.MarkSelectedRuntimeCensusProtocolFaulted();
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted),
+            "A fault latched by the Core execution boundary is authoritative to the shared census protocol.");
+    }
+
+    [Test]
     public void DailyProfileRejectsWrongThreadWithoutAdvancingAndFaultsPartialProtocol()
     {
         SimulationRuntime runtime = new SimulationRuntime(

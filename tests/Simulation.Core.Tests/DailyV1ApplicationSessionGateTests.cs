@@ -1899,7 +1899,9 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(boundary.SelectedBoundaryRequested, Is.True);
         Assert.That(boundary.LegacyAdvanceInvocationCount, Is.Zero,
             "The selected Core session cannot delegate a failed stage to the host day or intraday advance.");
-        Assert.That(boundary.Faulted, Is.True);
+        Assert.That(session.ExecutionBoundaryState.IsSelectedRuntimeCensusProtocolFaulted, Is.True);
+        Assert.That(boundary.Faulted, Is.False,
+            "Selected Core failures are latched without a host callback.");
         Assert.That(applicationReentryAccepted, Is.False,
             "Application queries cannot reenter the active session while Core owns its daily advance reservation.");
         Assert.That(session.SimulationTime.AbsoluteDay, Is.Zero,
@@ -1958,7 +1960,9 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(boundary.SelectedBoundaryRequested, Is.True);
         Assert.That(boundary.LegacyAdvanceInvocationCount, Is.Zero,
             "A selected multi-day Core session cannot delegate to the host day or intraday advance.");
-        Assert.That(boundary.Faulted, Is.True);
+        Assert.That(session.ExecutionBoundaryState.IsSelectedRuntimeCensusProtocolFaulted, Is.True);
+        Assert.That(boundary.Faulted, Is.False,
+            "Selected Core failures are latched without a host callback.");
         Assert.That(applicationReentryAccepted, Is.False,
             "Application queries cannot reenter the active session during a batch reservation.");
         Assert.That(session.SimulationTime.AbsoluteDay, Is.Zero,
@@ -2079,7 +2083,9 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.EqualTo(1),
             "A scope disposed by another thread cannot make the owner-thread operation registry appear idle.");
         Assert.That(session.ExecutionBoundaryState.CurrentCaptureToken, Is.Null);
-        Assert.That(hostPorts.Faulted, Is.True);
+        Assert.That(session.ExecutionBoundaryState.IsSelectedRuntimeCensusProtocolFaulted, Is.True);
+        Assert.That(hostPorts.Faulted, Is.False,
+            "The selected Core boundary latches protocol faults without a Unity host callback.");
     }
 
     [Test]
@@ -2102,7 +2108,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(state.ActiveOperationCount, Is.EqualTo(1));
             Assert.That(state.ActiveRuntimeOperationCount, Is.EqualTo(1));
             Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
-            Assert.That(hostPorts.Faulted, Is.True);
+            Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.True);
+            Assert.That(hostPorts.Faulted, Is.False,
+                "Core owns failure latching for the selected advance boundary.");
         }
         finally
         {
@@ -2130,7 +2138,9 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
         Assert.That(session.ExecutionBoundaryState.ActiveRuntimeOperationCount, Is.Zero);
         Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
-        Assert.That(hostPorts.Faulted, Is.True);
+        Assert.That(session.ExecutionBoundaryState.IsSelectedRuntimeCensusProtocolFaulted, Is.True);
+        Assert.That(hostPorts.Faulted, Is.False,
+            "Core owns failure latching for an unready selected census protocol.");
     }
 
     [Test]
@@ -2151,7 +2161,9 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(state.ActiveOperationCount, Is.Zero);
         Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
         Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
-        Assert.That(hostPorts.Faulted, Is.True);
+        Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.True);
+        Assert.That(hostPorts.Faulted, Is.False,
+            "A preexisting Core fault does not call into the selected host ports.");
     }
 
     [Test]

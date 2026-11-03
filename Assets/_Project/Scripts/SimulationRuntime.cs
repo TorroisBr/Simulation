@@ -11493,9 +11493,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             && ReferenceEquals(graph.PersonStore, personStore);
     }
 
-    void IDailyV1SelectedRuntimeAdvanceHostPorts.FaultRuntimeAdmission() =>
-        ((IDailyV1RuntimeAdvanceEvidenceBoundary)this).FaultRuntimeAdmission();
-
     /// <summary>
     /// Acquires this runtime's single-writer advance lease for a larger composed
     /// chronological operation. This is reentrancy protection, not a thread lock.

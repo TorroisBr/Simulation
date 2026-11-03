@@ -175,7 +175,6 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out string diagnostic);
-    void FaultRuntimeAdmission();
 }
 
 /// <summary>
@@ -233,18 +232,17 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         operationScope = null;
         if (!IsOwnerCensusProtocolReady())
         {
-            hostPorts.FaultRuntimeAdmission();
+            executionState.MarkSelectedRuntimeCensusProtocolFaulted();
             return false;
         }
 
         if (!executionState.TryBeginSelectedRuntimeDailyAdvanceOperation())
         {
-            hostPorts.FaultRuntimeAdmission();
+            executionState.MarkSelectedRuntimeCensusProtocolFaulted();
             return false;
         }
 
-        operationScope = new RuntimeProtocolOperationScope(
-            executionState, hostPorts.FaultRuntimeAdmission);
+        operationScope = new RuntimeProtocolOperationScope(executionState);
         return true;
     }
 
@@ -263,17 +261,13 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
     private sealed class RuntimeProtocolOperationScope : IDisposable
     {
         private readonly DailyV1ExecutionBoundaryState executionState;
-        private readonly Action faultRuntimeAdmission;
         private int disposed;
 
         internal RuntimeProtocolOperationScope(
-            DailyV1ExecutionBoundaryState executionState,
-            Action faultRuntimeAdmission)
+            DailyV1ExecutionBoundaryState executionState)
         {
             this.executionState = executionState
                 ?? throw new ArgumentNullException(nameof(executionState));
-            this.faultRuntimeAdmission = faultRuntimeAdmission
-                ?? throw new ArgumentNullException(nameof(faultRuntimeAdmission));
         }
 
         public void Dispose()
@@ -282,7 +276,7 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             if (executionState.TryEndRuntimeProtocolOperation()) return;
 
             executionState.InvalidateCurrentCaptureToken();
-            faultRuntimeAdmission();
+            executionState.MarkSelectedRuntimeCensusProtocolFaulted();
         }
     }
 
@@ -622,7 +616,7 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
     }
 
 
-    public void FaultRuntimeAdmission() => hostPorts.FaultRuntimeAdmission();
+    public void FaultRuntimeAdmission() => executionState.MarkSelectedRuntimeCensusProtocolFaulted();
 }
 
 /// <summary>

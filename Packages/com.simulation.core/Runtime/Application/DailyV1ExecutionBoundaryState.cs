@@ -486,6 +486,15 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    internal bool IsSelectedRuntimeCensusProtocolFaulted
+    {
+        get
+        {
+            lock (operationSyncRoot)
+                return selectedRuntimeCensusProtocolFaulted;
+        }
+    }
+
     internal void MarkSelectedRuntimeCensusProtocolFaulted()
     {
         lock (operationSyncRoot)

@@ -3211,7 +3211,9 @@ public sealed class ContinuationCensusProtocol
         return true;
     }
 
-    private bool IsFaulted() => Volatile.Read(ref protocolFaulted) != 0;
+    private bool IsFaulted() => sharedExecutionState != null
+        ? sharedExecutionState.IsSelectedRuntimeCensusProtocolFaulted
+        : Volatile.Read(ref protocolFaulted) != 0;
 
     private bool IsOwnerThreadBound() => Volatile.Read(ref ownerThreadBinding) != null;
 
@@ -3219,8 +3221,10 @@ public sealed class ContinuationCensusProtocol
 
     private void Fault()
     {
-        Interlocked.Exchange(ref protocolFaulted, 1);
-        sharedExecutionState?.MarkSelectedRuntimeCensusProtocolFaulted();
+        if (sharedExecutionState != null)
+            sharedExecutionState.MarkSelectedRuntimeCensusProtocolFaulted();
+        else
+            Interlocked.Exchange(ref protocolFaulted, 1);
     }
 }
 
