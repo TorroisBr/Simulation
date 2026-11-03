@@ -777,6 +777,10 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     {
         lock (operationSyncRoot)
         {
+            if (AdmissionContext?.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                && selectedRuntimeCensusProtocolFaulted)
+                return false;
+
             if ((exclusiveSessionReplacementInProgress
                     && allowance != DailyV1CaptureScopeAllowance.SessionReplacementValidation)
                 || (AdmissionContext != null && !AdmissionContext.IsOwnedByCurrentThread()))

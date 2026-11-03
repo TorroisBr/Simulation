@@ -2155,6 +2155,34 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void FaultedSelectedCensusProtocolCannotPassCaptureScopeAssessment()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out _);
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+
+        Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.True);
+        Assert.That(state.TryAssessCaptureScope(
+            DailyV1CaptureScopeAllowance.SessionReplacementValidation), Is.True);
+        state.MarkSelectedRuntimeCensusProtocolFaulted();
+
+        Assert.That(state.ActiveOperationCount, Is.Zero);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.False,
+            "An idle but faulted Core census protocol cannot authorize admission evidence.");
+        Assert.That(state.TryAssessCaptureScope(
+            DailyV1CaptureScopeAllowance.SessionReplacementValidation), Is.False,
+            "Detached restore cannot source a capture vector from a faulted active runtime.");
+        Assert.That(state.TryAssessCaptureScope(
+            DailyV1CaptureScopeAllowance.ContinuationSave), Is.False,
+            "A faulted protocol cannot publish continuation bytes.");
+        Assert.That(state.TryAssessCaptureScope(
+            DailyV1CaptureScopeAllowance.DailyAdvance), Is.False,
+            "A faulted protocol cannot authorize advance-finalization capture.");
+    }
+
+    [Test]
     public void ApplicationDoesNotAdvanceWhileRuntimeProtocolOperationIsActive()
     {
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(
