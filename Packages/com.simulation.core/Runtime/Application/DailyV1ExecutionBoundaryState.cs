@@ -461,6 +461,31 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    /// <summary>
+    /// Confirms that a restored target has a healthy selected-runtime census
+    /// protocol and no Core operation scope before its mutation guard is bound.
+    /// Unlike a host context flag, this assessment is owned by the authoritative
+    /// execution state and also rejects a faulted protocol with no registered
+    /// operation scope.
+    /// </summary>
+    internal bool TryAssessRestoredBoundaryQuiescence()
+    {
+        lock (operationSyncRoot)
+        {
+            return selectedRuntimeCensusProtocolReady
+                && !selectedRuntimeCensusProtocolFaulted
+                && AdmissionContext != null
+                && AdmissionContext.Profile
+                    == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                && AdmissionContext.IsOwnedByCurrentThread()
+                && runtimeIdentityBound
+                && runtimeConfigurationBound
+                && runtimeProtocolOperationInventorySealed
+                && !exclusiveSessionReplacementInProgress
+                && activeOperationScopes.Count == 0;
+        }
+    }
+
     internal void MarkSelectedRuntimeCensusProtocolFaulted()
     {
         lock (operationSyncRoot)

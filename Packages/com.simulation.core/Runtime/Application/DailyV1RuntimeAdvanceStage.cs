@@ -3679,7 +3679,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             || completedCoreSequence != 0L
             || factualReadWorldPublished
             || AdvanceLeaseHeld
-            || ActiveOperationCount != 0
+            || !TryAssessRestoredBoundaryQuiescence()
             || !mutationGuard.CanMutate
             || !runtimeIdentityBound
             || !runtimeConfigurationBound

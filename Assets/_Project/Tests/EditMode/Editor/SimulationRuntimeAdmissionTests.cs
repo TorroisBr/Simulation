@@ -10502,6 +10502,115 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsFaultedUnscopedNpcMembershipBeforeBindingMutationGuard()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G faulted unscoped membership restore target");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(original.Runtime);
+
+            SimulationActiveSession privateCandidate = null;
+            IDisposable unscopedMembershipScope = null;
+            bool faultInjected = false;
+            bool mutationGuardBoundStageObserved = false;
+            DailyV1Application application = ReadPrivateField<DailyV1Application>(
+                source, "dailyV1Application");
+            Assert.That(application, Is.Not.Null);
+            Assert.That(application.ActiveSession, Is.SameAs(original.CoreRuntimeSession));
+            Assert.That(application.TryBeginExclusiveOperation(
+                original.CoreRuntimeSession,
+                out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation),
+                Is.True);
+
+            SimulationActiveSession restored;
+            P12GDailyV1RestoreFailure failure;
+            string diagnostic;
+            bool restoreSucceeded;
+            using (replacementOperation)
+            {
+                restoreSucceeded = P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
+                    original,
+                    original.AdmissionContext,
+                    out restored,
+                    out failure,
+                    out diagnostic,
+                    stageObserver: stage =>
+                    {
+                        if (stage == P12GDailyV1RestoreStage.TargetTravelPartyBindingsValidated)
+                        {
+                            Assert.That(privateCandidate, Is.Not.Null);
+                            SimulationRuntime targetRuntime = privateCandidate.Runtime;
+                            Assert.That(targetRuntime.AreCoreMutationGuardAuthoritiesBound, Is.False);
+
+                            MethodInfo faultMembershipProtocol = typeof(SimulationRuntime).GetMethod(
+                                "FaultNpcMembershipCensusBoundary",
+                                BindingFlags.Instance | BindingFlags.NonPublic);
+                            MethodInfo beginMembershipScope = typeof(SimulationRuntime).GetMethod(
+                                "BeginNpcMembershipCensusScope",
+                                BindingFlags.Instance | BindingFlags.NonPublic);
+                            Assert.That(faultMembershipProtocol, Is.Not.Null);
+                            Assert.That(beginMembershipScope, Is.Not.Null);
+
+                            faultMembershipProtocol.Invoke(targetRuntime, null);
+                            unscopedMembershipScope = beginMembershipScope.Invoke(targetRuntime, null) as IDisposable;
+                            Assert.That(unscopedMembershipScope, Is.Not.Null,
+                                "The failed membership admission leaves its context available for the restored-boundary check.");
+                            object membershipContext = ReadPrivateField<object>(
+                                targetRuntime, "activeNpcMembershipCensusContext");
+                            Assert.That(membershipContext, Is.Not.Null);
+                            FieldInfo membershipProtocolScopeField = membershipContext.GetType().GetField(
+                                "ProtocolScope", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                            Assert.That(membershipProtocolScopeField, Is.Not.Null);
+                            Assert.That(membershipProtocolScopeField.GetValue(membershipContext), Is.Null,
+                                "The failed admission leaves no registered Core operation scope.");
+                            Assert.That(targetRuntime.TryAssessNpcRosterCensus(
+                                    out ContinuationCensusFailure censusFailure), Is.False);
+                            Assert.That(censusFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+                            Assert.That(targetRuntime.ExecutionBoundaryState.ActiveOperationCount, Is.Zero,
+                                "This failed membership admission has no Core operation scope, so quiescence must also inspect protocol health.");
+                            faultInjected = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.CandidateGuardBound)
+                        {
+                            mutationGuardBoundStageObserved = true;
+                        }
+                    },
+                    privateCandidateObserver: candidate => privateCandidate = candidate,
+                    replacementOperation: replacementOperation,
+                    application: application);
+            }
+
+            unscopedMembershipScope?.Dispose();
+
+            Assert.That(faultInjected, Is.True);
+            Assert.That(restoreSucceeded, Is.False);
+            Assert.That(mutationGuardBoundStageObserved, Is.False,
+                "Core must reject this unhealthy candidate before binding any owner mutation guard.");
+            Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.False);
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetAdmissionFailed), diagnostic);
+            Assert.That(diagnostic, Does.Contain("exact unadmitted Core owner-thread boundary"));
+            Assert.That(restored, Is.Null);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreRejectsPostGraphPersonPositionMutationAfterGuardBindingAndKeepsSourceRetryable()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
