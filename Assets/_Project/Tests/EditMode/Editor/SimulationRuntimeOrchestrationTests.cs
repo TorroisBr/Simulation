@@ -24,11 +24,6 @@ public sealed class SimulationRuntimeOrchestrationTests
 
         public DailyV1ExecutionBoundaryState ExecutionState { get; }
         public bool HasExactCoreOwnedSelectedCensusSources => true;
-        public bool TryReadOwnerCensusRuntimeOperationCount(out int activeOperationCount)
-        {
-            activeOperationCount = ExecutionState.ActiveRuntimeOperationCount;
-            return true;
-        }
         public bool IsFactualReadWorldPublished => true;
         public bool HasActiveDailyOperationContext => false;
         public bool HasIntradayTimeline => false;

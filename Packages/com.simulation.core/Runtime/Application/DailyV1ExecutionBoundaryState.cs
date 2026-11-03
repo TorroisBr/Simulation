@@ -93,6 +93,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private bool runtimeIdentityBound;
     private bool runtimeConfigurationBound;
     private bool runtimeProtocolOperationInventorySealed;
+    private bool selectedRuntimeCensusProtocolReady;
+    private bool selectedRuntimeCensusProtocolFaulted;
     private bool exclusiveSessionReplacementInProgress;
     private DailyV1AdvanceLease advanceLease;
     private long advanceLeaseInitialCompletedSequence;
@@ -408,6 +410,65 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    /// <summary>
+    /// Binds the host census protocol's sealed readiness to this selected Core
+    /// runtime. The protocol owns provider composition; Core owns the bound
+    /// owner-thread readiness, operation count, and fault latch.
+    /// </summary>
+    internal bool TryMarkSelectedRuntimeCensusProtocolReady()
+    {
+        lock (operationSyncRoot)
+        {
+            if (selectedRuntimeCensusProtocolReady
+                || selectedRuntimeCensusProtocolFaulted
+                || AdmissionContext == null
+                || AdmissionContext.Profile
+                    != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !runtimeIdentityBound
+                || !runtimeConfigurationBound
+                || !runtimeProtocolOperationInventorySealed
+                || expectedRuntimeProtocolOperationContracts.Count == 0
+                || activeOperationScopes.Count != 0
+                || exclusiveSessionReplacementInProgress)
+                return false;
+
+            selectedRuntimeCensusProtocolReady = true;
+            return true;
+        }
+    }
+
+    internal bool TryReadSelectedRuntimeCensusOperationCount(out int count)
+    {
+        count = 0;
+        lock (operationSyncRoot)
+        {
+            if (!selectedRuntimeCensusProtocolReady
+                || selectedRuntimeCensusProtocolFaulted
+                || AdmissionContext == null
+                || AdmissionContext.Profile
+                    != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !runtimeIdentityBound
+                || !runtimeConfigurationBound
+                || !runtimeProtocolOperationInventorySealed
+                || exclusiveSessionReplacementInProgress)
+                return false;
+
+            foreach (DailyV1OperationScopeKind scope in activeOperationScopes)
+                if (scope == DailyV1OperationScopeKind.RuntimeProtocol) count++;
+            return true;
+        }
+    }
+
+    internal void MarkSelectedRuntimeCensusProtocolFaulted()
+    {
+        lock (operationSyncRoot)
+        {
+            selectedRuntimeCensusProtocolFaulted = true;
+            selectedRuntimeCensusProtocolReady = false;
+        }
+    }
     internal bool HasRuntimeProtocolOperationContract(string operationContractId)
     {
         if (string.IsNullOrWhiteSpace(operationContractId)) return false;
@@ -707,6 +768,22 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     ? DailyV1OperationScopeKind.DailyAdvance
                     : (DailyV1OperationScopeKind)byte.MaxValue;
             return activeOperationScopes[0] == expected;
+        }
+    }
+
+    internal bool TryBeginSelectedRuntimeDailyAdvanceOperation()
+    {
+        lock (operationSyncRoot)
+        {
+            if (!selectedRuntimeCensusProtocolReady
+                || selectedRuntimeCensusProtocolFaulted
+                || AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread())
+                return false;
+
+            return TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+                requireNoActiveRuntimeProtocolOperations: true);
         }
     }
 

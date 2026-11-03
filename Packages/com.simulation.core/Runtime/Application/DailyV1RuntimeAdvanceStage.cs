@@ -160,7 +160,6 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
-    bool TryReadOwnerCensusRuntimeOperationCount(out int activeOperationCount);
     bool HasExactCoreOwnedSelectedCensusSources { get; }
     bool HasActiveDailyOperationContext { get; }
     bool TryCreateSelectedDailyExecutionHostPorts(
@@ -238,9 +237,7 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
-        if (!executionState.TryBeginRuntimeProtocolOperation(
-                DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
-                requireNoActiveRuntimeProtocolOperations: true))
+        if (!executionState.TryBeginSelectedRuntimeDailyAdvanceOperation())
         {
             hostPorts.FaultRuntimeAdmission();
             return false;
@@ -257,9 +254,7 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         if (admissionContext == null || !admissionContext.IsOwnedByCurrentThread())
             return false;
 
-        if (!hostPorts.TryReadOwnerCensusRuntimeOperationCount(
-                out int censusOperationCount)
-            || censusOperationCount < 0)
+        if (!executionState.TryReadSelectedRuntimeCensusOperationCount(out int censusOperationCount))
             return false;
 
         return censusOperationCount == executionState.ActiveRuntimeOperationCount;

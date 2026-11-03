@@ -98,19 +98,10 @@ public sealed class DailyV1ApplicationSessionGateTests
             return ownerSections;
         }
         public DailyV1ExecutionBoundaryState ExecutionState => state;
-        public bool OwnerCensusOperationCountReadable { get; set; } = true;
-        public int? ReportedOwnerCensusOperationCount { get; set; }
         public bool HasExactCoreOwnedSelectedCensusSources { get; set; } = true;
         public bool HasActiveDailyOperationContext { get; set; }
         public DailyCaptureEligibilityFailure CensusFailure { get; set; }
         public bool HasIntradayTimeline => false;
-
-        public bool TryReadOwnerCensusRuntimeOperationCount(out int activeOperationCount)
-        {
-            activeOperationCount = ReportedOwnerCensusOperationCount
-                ?? state.ActiveRuntimeOperationCount;
-            return OwnerCensusOperationCountReadable;
-        }
 
         public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
             => TryEnterRuntimeProtocolOperation(
@@ -333,7 +324,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         out DailyV1ActiveRuntimeSession session,
         out ApplicationAdvanceBoundary boundary,
         DailyV1EffectiveDefinitions definitions = null,
-        bool publishWorld = true)
+        bool publishWorld = true,
+        bool markCensusProtocolReady = true)
     {
         DailyV1Application application = new DailyV1Application();
         definitions ??= DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -345,6 +337,9 @@ public sealed class DailyV1ApplicationSessionGateTests
         if (publishWorld)
             Assert.That(session.ExecutionBoundaryState.TryMarkFactualReadWorldPublished(), Is.True);
         EnsureRuntimeProtocolInventory(session.ExecutionBoundaryState);
+        if (markCensusProtocolReady)
+            Assert.That(session.ExecutionBoundaryState.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True,
+                "The Core boundary fixture models a successfully bound census protocol.");
         boundary = new ApplicationAdvanceBoundary(session.ExecutionBoundaryState, onOperationEntry);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(session, boundary), Is.True);
         Assert.That(application.TryPublishInitial(session), Is.True);
@@ -2120,12 +2115,12 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void CoreAdvanceRequiresReadableHostCensusOperationCountBeforeOpeningItsScope()
+    public void CoreAdvanceRequiresBoundCensusProtocolBeforeOpeningItsScope()
     {
         CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session,
-            out ApplicationAdvanceBoundary hostPorts);
-        hostPorts.OwnerCensusOperationCountReadable = false;
+            out ApplicationAdvanceBoundary hostPorts,
+            markCensusProtocolReady: false);
         DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
             session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
 
@@ -2140,12 +2135,13 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void CoreAdvanceRejectsHostCensusOperationCountThatDiffersFromItsSession()
+    public void CoreAdvanceRejectsFaultedCensusProtocolBeforeOpeningItsScope()
     {
         CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session,
             out ApplicationAdvanceBoundary hostPorts);
-        hostPorts.ReportedOwnerCensusOperationCount = 1;
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        state.MarkSelectedRuntimeCensusProtocolFaulted();
         DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
             session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
 
@@ -2153,27 +2149,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             out IDisposable operationScope), Is.False);
 
         Assert.That(operationScope, Is.Null);
-        Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
-        Assert.That(session.ExecutionBoundaryState.ActiveRuntimeOperationCount, Is.Zero);
-        Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
-        Assert.That(hostPorts.Faulted, Is.True);
-    }
-
-    [Test]
-    public void CoreAdvanceRejectsNegativeHostCensusOperationCount()
-    {
-        CreateApplicationWithAdvanceBoundary(
-            null, out DailyV1ActiveRuntimeSession session,
-            out ApplicationAdvanceBoundary hostPorts);
-        hostPorts.ReportedOwnerCensusOperationCount = -1;
-        DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
-            session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
-
-        Assert.That(coreBoundary.TryEnterDailyAdvanceOperation(
-            out IDisposable operationScope), Is.False);
-
-        Assert.That(operationScope, Is.Null);
-        Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
+        Assert.That(state.ActiveOperationCount, Is.Zero);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
         Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
         Assert.That(hostPorts.Faulted, Is.True);
     }

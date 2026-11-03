@@ -1278,6 +1278,13 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
         }
+        if (sharedExecutionState != null
+            && !sharedExecutionState.TryMarkSelectedRuntimeCensusProtocolReady())
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
         return true;
     }
 
@@ -3210,7 +3217,11 @@ public sealed class ContinuationCensusProtocol
 
     internal void FaultClosed() => Fault();
 
-    private void Fault() => Interlocked.Exchange(ref protocolFaulted, 1);
+    private void Fault()
+    {
+        Interlocked.Exchange(ref protocolFaulted, 1);
+        sharedExecutionState?.MarkSelectedRuntimeCensusProtocolFaulted();
+    }
 }
 
 /// <summary>
