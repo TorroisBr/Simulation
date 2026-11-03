@@ -276,6 +276,17 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(candidate, Is.Null);
     }
     [Test]
+    public void InitialRestoredImageStagingRejectsMissingAdmissionBeforeDecoding()
+    {
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext bootstrapContext), Is.True);
+
+        AssertInitialRestoreAdmissionRejected(application, null, AdmissionOnlyImage(),
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(), bootstrapContext);
+    }
+
+    [Test]
     public void InitialRestoredImageStagingRejectsForeignGenesisAndWrongImageAdmissionsBeforeDecoding()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

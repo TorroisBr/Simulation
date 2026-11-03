@@ -3132,8 +3132,10 @@ internal sealed class DailyV1Application
         coreRoots = null;
         stagedOwnerStages = null;
         result = new P12AResult(P12AResultCode.Busy);
-        if (initialStartAdmission != null
-            && !IsForInitialRestoreAdmission(initialStartAdmission, image))
+        bool isInitialApplicationRestore = expectedSession == null && replacementOperation == null;
+        if (isInitialApplicationRestore
+            ? initialStartAdmission == null || !IsForInitialRestoreAdmission(initialStartAdmission, image)
+            : initialStartAdmission != null)
         {
             result = new P12AResult(P12AResultCode.InvalidOwnerValue, "p12.initial-start-admission");
             return false;
