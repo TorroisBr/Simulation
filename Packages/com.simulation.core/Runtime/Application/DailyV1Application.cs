@@ -319,6 +319,45 @@ internal sealed class DailyV1ApplicationStartPreparation
     }
 }
 
+internal enum DailyV1ApplicationStartAdmissionKind : byte
+{
+    RestoreRequired = 1,
+    GenesisRequired = 2
+}
+
+/// <summary>
+/// Carries the exact initial P12 slot decision made by one application into
+/// its matching restore projection or genesis preparation.
+/// </summary>
+internal sealed class DailyV1ApplicationStartAdmission
+{
+    internal DailyV1Application Application { get; }
+    internal DailyV1ApplicationStartAdmissionKind Kind { get; }
+    internal P12AContinuationImage RestoreImage { get; }
+    internal P12AResult PersistenceResult { get; }
+
+    internal DailyV1ApplicationStartAdmission(
+        DailyV1Application application,
+        DailyV1ApplicationStartAdmissionKind kind,
+        P12AContinuationImage restoreImage,
+        P12AResult persistenceResult)
+    {
+        Application = application ?? throw new ArgumentNullException(nameof(application));
+        if (!Enum.IsDefined(typeof(DailyV1ApplicationStartAdmissionKind), kind))
+            throw new ArgumentOutOfRangeException(nameof(kind));
+        if (persistenceResult == null
+            || (kind == DailyV1ApplicationStartAdmissionKind.RestoreRequired
+                && (restoreImage == null || persistenceResult.Code != P12AResultCode.Loaded))
+            || (kind == DailyV1ApplicationStartAdmissionKind.GenesisRequired
+                && (restoreImage != null || persistenceResult.Code != P12AResultCode.NoSave)))
+            throw new ArgumentException("The start admission does not match its exact initial slot result.");
+
+        Kind = kind;
+        RestoreImage = restoreImage;
+        PersistenceResult = persistenceResult;
+    }
+}
+
 internal sealed class DailyV1Application
 {
     private readonly DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession> activeSessionGate =
@@ -330,6 +369,7 @@ internal sealed class DailyV1Application
     private bool initialContinuationLoadAttempted;
     private bool initialContinuationLoadBlocksGenesis;
     private P12AResult initialContinuationLoadResult;
+    private P12AContinuationImage initialContinuationImage;
     private bool initialGenesisPreparationAttempted;
     private DailyV1GenesisComposition preparedInitialGenesis;
     private DailyV1ActiveRuntimeSession preparedInitialSession;
@@ -362,21 +402,19 @@ internal sealed class DailyV1Application
         }
 
         DailyV1Application application = new DailyV1Application();
-        if (application.TryLoadInitialContinuationImageForStart(
-                definitions, host, out P12AContinuationImage image, out persistenceResult))
-        {
-            if (image == null)
-            {
-                diagnostic = "Initial continuation admission succeeded without returning its decoded image.";
-                return false;
-            }
+        if (!application.TryAdmitInitialStart(
+                definitions, host, out DailyV1ApplicationStartAdmission admission,
+                out persistenceResult, out diagnostic))
+            return false;
 
+        if (admission.Kind == DailyV1ApplicationStartAdmissionKind.RestoreRequired)
+        {
             try
             {
                 SimulationLogger restoreLogger = CreateInitialLogger(definitions, host);
                 preparation = new DailyV1ApplicationStartPreparation(
                     application, DailyV1ApplicationStartPreparationKind.RestoreRequired,
-                    image, null, null, restoreLogger, persistenceResult);
+                    admission.RestoreImage, null, null, restoreLogger, admission.PersistenceResult);
                 return true;
             }
             catch (Exception exception) when (exception is ArgumentException
@@ -388,44 +426,39 @@ internal sealed class DailyV1Application
             }
         }
 
-        if (persistenceResult == null || persistenceResult.Code != P12AResultCode.NoSave)
+        if (admission.Kind != DailyV1ApplicationStartAdmissionKind.GenesisRequired)
         {
-            diagnostic = "Initial continuation admission did not prove an empty slot; genesis remains blocked."
-                + (persistenceResult == null ? string.Empty : " " + persistenceResult.Code + ".");
+            diagnostic = "Initial continuation admission did not select a supported start path.";
             return false;
         }
 
         try
         {
             SimulationLogger logger = CreateInitialLogger(definitions, host);
-
             BeginInitialLogger(definitions, logger);
 
-            if (!application.TryPrepareInitialGenesisWithHostLogger(
-                    definitions, logger, host.StageCompleted,
-                    out DailyV1GenesisComposition genesis,
-                    out DailyV1ActiveRuntimeSession coreSession,
-                    out diagnostic)
-                || genesis == null || coreSession == null
-                || !ReferenceEquals(genesis.Definitions, definitions)
-                || !ReferenceEquals(coreSession.Definitions, definitions)
-                || !ReferenceEquals(coreSession.ExecutionBoundaryState.AdmissionContext,
+            if (!application.TryPrepareInitialGenesisStart(
+                    admission, definitions, logger, host.StageCompleted,
+                    out preparation, out diagnostic)
+                || preparation == null
+                || preparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                || !ReferenceEquals(preparation.GenesisComposition.Definitions, definitions)
+                || !ReferenceEquals(preparation.CoreSession.Definitions, definitions)
+                || !ReferenceEquals(preparation.CoreSession.ExecutionBoundaryState.AdmissionContext,
                     application.bootstrapAdmissionContext))
             {
                 if (string.IsNullOrWhiteSpace(diagnostic))
                     diagnostic = "Core genesis did not retain the admitted definitions and bootstrap identity.";
+                preparation = null;
                 return false;
             }
-
-            preparation = new DailyV1ApplicationStartPreparation(
-                application, DailyV1ApplicationStartPreparationKind.GenesisPrepared,
-                null, genesis, coreSession, logger, persistenceResult);
             return true;
         }
         catch (Exception exception) when (exception is ArgumentException
             || exception is InvalidOperationException
             || exception is OverflowException)
         {
+            preparation = null;
             diagnostic = "Core could not prepare the admitted initial Daily-v1 genesis: " + exception.Message;
             return false;
         }
@@ -519,6 +552,177 @@ internal sealed class DailyV1Application
             definitions, null, diagnosticLogger, stageCompleted,
             out composition, out candidate, out diagnostic);
 
+    /// <summary>
+    /// Performs the initial slot read once and binds its exact NoSave or
+    /// restored-image result to this application instance.
+    /// </summary>
+    internal bool TryAdmitInitialStart(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ApplicationHost host,
+        out DailyV1ApplicationStartAdmission admission,
+        out P12AResult result,
+        out string diagnostic)
+    {
+        admission = null;
+        result = new P12AResult(P12AResultCode.Busy);
+        diagnostic = null;
+
+        bool loaded = TryLoadInitialContinuationImageForStart(
+            definitions, host, out P12AContinuationImage image, out result);
+        if (loaded)
+        {
+            if (image == null || result == null || result.Code != P12AResultCode.Loaded)
+            {
+                diagnostic = "Initial continuation admission succeeded without its exact loaded image and result.";
+                return false;
+            }
+
+            admission = new DailyV1ApplicationStartAdmission(
+                this, DailyV1ApplicationStartAdmissionKind.RestoreRequired, image, result);
+            return true;
+        }
+
+        if (result != null && result.Code == P12AResultCode.NoSave
+            && TryGetInitialNoSaveAdmissionResult(out P12AResult admittedNoSaveResult)
+            && ReferenceEquals(result, admittedNoSaveResult)
+            && TryCreateInitialStartAdmissionFromNoSave(
+                admittedNoSaveResult, out admission))
+            return true;
+
+        diagnostic = "Initial continuation admission did not prove an empty slot; genesis remains blocked."
+            + (result == null ? string.Empty : " " + result.Code + ".");
+        return false;
+    }
+
+    /// <summary>
+    /// Binds a previously completed exact NoSave inspection to this
+    /// application when Unity cannot construct its compatibility descriptor
+    /// until after the normal bootstrap path continues.
+    /// </summary>
+    internal bool TryCreateInitialStartAdmissionFromNoSave(
+        out DailyV1ApplicationStartAdmission admission,
+        out string diagnostic)
+    {
+        admission = null;
+        diagnostic = null;
+        if (!TryGetInitialNoSaveAdmissionResult(out P12AResult result)
+            || !TryCreateInitialStartAdmissionFromNoSave(result, out admission))
+        {
+            diagnostic = "Core cannot bind a genesis start without this application's completed NoSave result.";
+            return false;
+        }
+        return true;
+    }
+
+    private bool TryCreateInitialStartAdmissionFromNoSave(
+        P12AResult result,
+        out DailyV1ApplicationStartAdmission admission)
+    {
+        admission = null;
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (result == null
+                || !initialContinuationLoadAttempted
+                || initialContinuationLoadBlocksGenesis
+                || !ReferenceEquals(initialContinuationLoadResult, result)
+                || result.Code != P12AResultCode.NoSave
+                || bootstrapAdmissionContext == null
+                || !bootstrapAdmissionContext.IsOwnedByCurrentThread()
+                || initialGenesisPreparationAttempted
+                || preparedInitialGenesis != null
+                || preparedInitialSession != null
+                || activeSessionGate.Current != null
+                || activeSessionGate.ActiveOperationCount != 0)
+                return false;
+
+            admission = new DailyV1ApplicationStartAdmission(
+                this, DailyV1ApplicationStartAdmissionKind.GenesisRequired, null, result);
+            return true;
+        }
+    }
+
+    internal bool IsForInitialRestoreAdmission(
+        DailyV1ApplicationStartAdmission admission,
+        P12AContinuationImage image)
+    {
+        lock (activeSessionGate.SyncRoot)
+        {
+            return admission != null
+                && image != null
+                && ReferenceEquals(admission.Application, this)
+                && admission.Kind == DailyV1ApplicationStartAdmissionKind.RestoreRequired
+                && ReferenceEquals(admission.RestoreImage, image)
+                && ReferenceEquals(initialContinuationImage, image)
+                && initialContinuationLoadAttempted
+                && initialContinuationLoadBlocksGenesis
+                && ReferenceEquals(initialContinuationLoadResult, admission.PersistenceResult)
+                && admission.PersistenceResult.Code == P12AResultCode.Loaded
+                && bootstrapAdmissionContext != null
+                && bootstrapAdmissionContext.IsOwnedByCurrentThread()
+                && !initialGenesisPreparationAttempted
+                && preparedInitialGenesis == null
+                && preparedInitialSession == null
+                && activeSessionGate.Current == null
+                && activeSessionGate.ActiveOperationCount == 0;
+        }
+    }
+
+    private bool IsForInitialGenesisAdmission(DailyV1ApplicationStartAdmission admission)
+    {
+        lock (activeSessionGate.SyncRoot)
+        {
+            return admission != null
+                && ReferenceEquals(admission.Application, this)
+                && admission.Kind == DailyV1ApplicationStartAdmissionKind.GenesisRequired
+                && admission.RestoreImage == null
+                && initialContinuationLoadAttempted
+                && !initialContinuationLoadBlocksGenesis
+                && ReferenceEquals(initialContinuationLoadResult, admission.PersistenceResult)
+                && admission.PersistenceResult.Code == P12AResultCode.NoSave
+                && bootstrapAdmissionContext != null
+                && bootstrapAdmissionContext.IsOwnedByCurrentThread()
+                && !initialGenesisPreparationAttempted
+                && preparedInitialGenesis == null
+                && preparedInitialSession == null
+                && activeSessionGate.Current == null
+                && activeSessionGate.ActiveOperationCount == 0;
+        }
+    }
+
+    /// <summary>
+    /// Packages the admitted NoSave genesis candidate only when the exact
+    /// admission token belongs to this application instance.
+    /// </summary>
+    internal bool TryPrepareInitialGenesisStart(
+        DailyV1ApplicationStartAdmission admission,
+        DailyV1EffectiveDefinitions definitions,
+        SimulationLogger diagnosticLogger,
+        Action<string> stageCompleted,
+        out DailyV1ApplicationStartPreparation preparation,
+        out string diagnostic)
+    {
+        preparation = null;
+        diagnostic = null;
+        if (!IsForInitialGenesisAdmission(admission))
+        {
+            diagnostic = "Core genesis start preparation requires the exact NoSave admission owned by this application.";
+            return false;
+        }
+
+        if (!TryPrepareInitialGenesisStart(
+                definitions, diagnosticLogger, stageCompleted,
+                out preparation, out diagnostic))
+            return false;
+
+        if (preparation == null
+            || !ReferenceEquals(preparation.PersistenceResult, admission.PersistenceResult))
+        {
+            preparation = null;
+            diagnostic = "Core genesis start preparation changed the exact initial NoSave result.";
+            return false;
+        }
+        return true;
+    }
     /// <summary>
     /// Packages the already-admitted NoSave genesis candidate as one Core
     /// start-preparation value for the host projection boundary.
@@ -1904,6 +2108,7 @@ internal sealed class DailyV1Application
                 || result == null
                 || result.Code != P12AResultCode.NoSave;
             initialContinuationLoadResult = result;
+            initialContinuationImage = null;
         }
         return inspected;
     }
@@ -2008,6 +2213,7 @@ internal sealed class DailyV1Application
             initialContinuationLoadBlocksGenesis =
                 loaded || result == null || result.Code != P12AResultCode.NoSave;
             initialContinuationLoadResult = result;
+            initialContinuationImage = loaded ? image : null;
         }
 
         if (!loaded && (result == null || result.Code != P12AResultCode.NoSave))

@@ -229,37 +229,73 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(candidate, Is.Null);
     }
     [Test]
-    public void InitialNoSaveAdmissionAllowsCoreGenesisOnTheSameApplication()
+    public void InitialNoSaveAdmissionTokenIsBoundToOneApplicationAndExactResult()
     {
         DailyV1Application application = new DailyV1Application();
-        P12ACompatibilityDescriptor unity = UnityIdentity();
         DailyV1ApplicationHost host = new DailyV1ApplicationHost(
             "missing-slot-root", new MissingSlotOperations(), null, null,
-            unityV1Identity: unity);
+            unityV1Identity: UnityIdentity());
+        Assert.That(application.TryAdmitInitialStart(
+            null, host, out DailyV1ApplicationStartAdmission admission,
+            out P12AResult loadResult, out string admissionDiagnostic),
+            Is.True, admissionDiagnostic);
 
-        Assert.That(application.TryLoadInitialContinuationImageForStart(
-            null, host, out P12AContinuationImage image, out P12AResult loadResult), Is.False);
-        Assert.That(image, Is.Null);
+        Assert.That(admission, Is.Not.Null);
+        Assert.That(admission.Application, Is.SameAs(application));
+        Assert.That(admission.Kind, Is.EqualTo(DailyV1ApplicationStartAdmissionKind.GenesisRequired));
+        Assert.That(admission.RestoreImage, Is.Null);
+        Assert.That(admission.PersistenceResult, Is.SameAs(loadResult));
         Assert.That(loadResult.Code, Is.EqualTo(P12AResultCode.NoSave));
 
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        SimulationLogger logger = new SimulationLogger(
+            new SimulationLogSettings(), "missing-slot-root", (_, __) => { });
+        DailyV1Application otherApplication = new DailyV1Application();
+        Assert.That(otherApplication.TryPrepareInitialGenesisStart(
+            admission, definitions, logger, stageCompleted: null,
+            out DailyV1ApplicationStartPreparation wrongPreparation,
+            out string wrongDiagnostic), Is.False);
+        Assert.That(wrongPreparation, Is.Null);
+        Assert.That(wrongDiagnostic, Does.Contain("owned by this application"));
+
         Assert.That(application.TryPrepareInitialGenesisStart(
-            definitions,
-            new SimulationLogger(new SimulationLogSettings(), "missing-slot-root", (_, __) => { }),
-            stageCompleted: null,
+            admission, definitions, logger, stageCompleted: null,
             out DailyV1ApplicationStartPreparation preparation,
             out string diagnostic), Is.True, diagnostic);
         Assert.That(preparation, Is.Not.Null);
         Assert.That(preparation.Application, Is.SameAs(application));
         Assert.That(preparation.Kind, Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
         Assert.That(preparation.PersistenceResult, Is.SameAs(loadResult),
-            "Start preparation must carry the actual result from Core's initial continuation-slot admission.");
-        Assert.That(preparation.PersistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+            "Genesis preparation must carry the exact NoSave object returned by initial slot admission.");
         Assert.That(preparation.CoreSession, Is.Not.Null);
         Assert.That(application.ActiveSession, Is.Null,
             "Core genesis preparation remains unpublished until the host boundary is admitted.");
     }
 
+    [Test]
+    public void InspectedNoSaveCanBeBoundToTheSameApplicationGenesisAdmission()
+    {
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryInspectInitialContinuationSlotForStart(
+            "missing-slot-root", new MissingSlotOperations(),
+            out bool exists, out P12AResult result), Is.True);
+        Assert.That(exists, Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+
+        Assert.That(application.TryCreateInitialStartAdmissionFromNoSave(
+            out DailyV1ApplicationStartAdmission admission, out string admissionDiagnostic),
+            Is.True, admissionDiagnostic);
+        Assert.That(admission.PersistenceResult, Is.SameAs(result));
+
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(application.TryPrepareInitialGenesisStart(
+            admission, definitions,
+            new SimulationLogger(new SimulationLogSettings(), "missing-slot-root", (_, __) => { }),
+            stageCompleted: null,
+            out DailyV1ApplicationStartPreparation preparation,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(preparation.PersistenceResult, Is.SameAs(result));
+    }
     [Test]
     public void RestoredAdmissionIdentityIsDerivedByTheApplicationFromItsBootstrapLineage()
     {

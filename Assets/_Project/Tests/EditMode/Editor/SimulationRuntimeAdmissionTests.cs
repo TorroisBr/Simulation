@@ -16412,6 +16412,10 @@ public sealed class SimulationRuntimeAdmissionTests
             {
                 Assert.That(exists, Is.False);
                 Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+                Assert.That(application.TryCreateInitialStartAdmissionFromNoSave(
+                    out DailyV1ApplicationStartAdmission admission,
+                    out string admissionDiagnostic), Is.True, admissionDiagnostic);
+                WritePrivateField(bootstrap, "dailyV1StartAdmission", admission);
             }
             else
             {

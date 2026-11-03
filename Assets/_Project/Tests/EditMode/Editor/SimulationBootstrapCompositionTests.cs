@@ -5232,6 +5232,10 @@ public sealed class SimulationBootstrapCompositionTests
             {
                 Assert.That(exists, Is.False);
                 Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+                Assert.That(application.TryCreateInitialStartAdmissionFromNoSave(
+                    out DailyV1ApplicationStartAdmission admission,
+                    out string admissionDiagnostic), Is.True, admissionDiagnostic);
+                typeof(TesteSimulacao).GetField("dailyV1StartAdmission", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(simulation, admission);
             }
             else
             {

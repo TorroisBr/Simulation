@@ -200,6 +200,7 @@ public class TesteSimulacao : MonoBehaviour
     // publication authority. The separate compatibility gate is used only for
     // legacy, unadmitted bootstrap sessions; both paths are mutually exclusive.
     private readonly DailyV1Application dailyV1Application = new DailyV1Application();
+    private DailyV1ApplicationStartAdmission dailyV1StartAdmission;
     private readonly DailyV1ApplicationSessionGate<SimulationActiveSession> compatibilitySessionGate =
         new DailyV1ApplicationSessionGate<SimulationActiveSession>(
             session => session.ExecutionBoundaryState);
@@ -335,7 +336,16 @@ public class TesteSimulacao : MonoBehaviour
             bool inspected = dailyV1Application.TryInspectInitialContinuationSlotForStart(
                 persistentDataPath, fileOperations, out bool exists, out P12AResult slotResult);
             if (inspected && !exists && slotResult?.Code == P12AResultCode.NoSave)
-                return false;
+            {
+                if (dailyV1Application.TryCreateInitialStartAdmissionFromNoSave(
+                        out dailyV1StartAdmission, out string fallbackAdmissionDiagnostic))
+                    return false;
+
+                bootstrapFailed = true;
+                UnityEngine.Debug.LogError("P12-A empty-slot admission could not be bound to the active Core application. "
+                    + fallbackAdmissionDiagnostic);
+                return true;
+            }
 
             bootstrapFailed = true;
             if (!inspected)
@@ -356,17 +366,32 @@ public class TesteSimulacao : MonoBehaviour
         DailyV1ApplicationHost host = new DailyV1ApplicationHost(
             persistentDataPath, fileOperations, stageCompleted: null, logOutput: null,
             unityV1Identity: compatibility);
-        if (!dailyV1Application.TryLoadInitialContinuationImageForStart(
-                null, host, out P12AContinuationImage image, out P12AResult loadResult))
+        if (!dailyV1Application.TryAdmitInitialStart(
+                null, host, out dailyV1StartAdmission,
+                out P12AResult loadResult, out string admissionDiagnostic))
         {
-            if (loadResult?.Code == P12AResultCode.NoSave)
-                return false;
-
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A continuation load failed; genesis was not started. "
                 + (loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString()));
             return true;
         }
+
+        if (dailyV1StartAdmission == null)
+        {
+            bootstrapFailed = true;
+            UnityEngine.Debug.LogError("P12-A continuation admission returned no Core start token; genesis was not started.");
+            return true;
+        }
+        if (dailyV1StartAdmission.Kind == DailyV1ApplicationStartAdmissionKind.GenesisRequired)
+            return false;
+        if (dailyV1StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.RestoreRequired
+            || dailyV1StartAdmission.RestoreImage == null)
+        {
+            bootstrapFailed = true;
+            UnityEngine.Debug.LogError("P12-A continuation admission returned an invalid restore token; genesis was not started.");
+            return true;
+        }
+        P12AContinuationImage image = dailyV1StartAdmission.RestoreImage;
 
         EffectiveSimulationConfiguration effective;
         CalendarDefinition calendar;
@@ -397,6 +422,12 @@ public class TesteSimulacao : MonoBehaviour
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A detached continuation restoration failed; genesis was not started. "
                 + restoreFailure + ": " + restoreDiagnostic);
+            return true;
+        }
+        if (!dailyV1Application.IsForInitialRestoreAdmission(dailyV1StartAdmission, image))
+        {
+            bootstrapFailed = true;
+            UnityEngine.Debug.LogError("P12-A restored projection no longer matches the exact Core initial-slot admission; genesis was not started.");
             return true;
         }
         if (!TryPublishRestoredSession(null, candidate))
@@ -692,6 +723,7 @@ public class TesteSimulacao : MonoBehaviour
                             AppendScenarioDiagnostics(effectiveConfiguration);
 
                             if (!dailyV1Application.TryPrepareInitialGenesisStart(
+                                    dailyV1StartAdmission,
                                     stagedSelectedDefinitions,
                                     logger,
                                     completedStage =>
