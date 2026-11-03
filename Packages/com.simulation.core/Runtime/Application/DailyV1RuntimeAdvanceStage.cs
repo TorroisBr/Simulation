@@ -151,8 +151,9 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 /// <summary>
 /// Host-owned ports for the selected Daily-v1 session. Census ports return
 /// only owner rows that have not yet migrated to the Core owner graph; Core
-/// composes the exact P12-F rows itself. The host still supplies quiescence,
-/// owner-thread, and shared mutation-epoch evidence for the complete protocol.
+/// composes the exact P12-F rows itself. The host supplies the census operation
+/// count and shared mutation-epoch evidence; Core checks owner-thread identity
+/// and matches the count against its session operation registry.
 /// This intentionally excludes runtime clocks, whole-day advancement, and
 /// intraday timeline selection; Core binds those authorities to the exact
 /// execution state.
@@ -160,7 +161,7 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
-    bool IsOwnerCensusProtocolReady { get; }
+    bool TryReadOwnerCensusRuntimeOperationCount(out int activeOperationCount);
     bool HasActiveDailyOperationContext { get; }
     bool TryCreateSelectedDailyExecutionHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -231,7 +232,7 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
     public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
     {
         operationScope = null;
-        if (!hostPorts.IsOwnerCensusProtocolReady)
+        if (!IsOwnerCensusProtocolReady())
         {
             hostPorts.FaultRuntimeAdmission();
             return false;
@@ -248,6 +249,20 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         operationScope = new RuntimeProtocolOperationScope(
             executionState, hostPorts.FaultRuntimeAdmission);
         return true;
+    }
+
+    private bool IsOwnerCensusProtocolReady()
+    {
+        SimulationRuntimeAdmissionContext admissionContext = executionState.AdmissionContext;
+        if (admissionContext == null || !admissionContext.IsOwnedByCurrentThread())
+            return false;
+
+        if (!hostPorts.TryReadOwnerCensusRuntimeOperationCount(
+                out int censusOperationCount)
+            || censusOperationCount < 0)
+            return false;
+
+        return censusOperationCount == executionState.ActiveRuntimeOperationCount;
     }
 
     private sealed class RuntimeProtocolOperationScope : IDisposable

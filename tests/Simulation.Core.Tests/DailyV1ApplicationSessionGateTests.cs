@@ -97,10 +97,18 @@ public sealed class DailyV1ApplicationSessionGateTests
             return ownerSections;
         }
         public DailyV1ExecutionBoundaryState ExecutionState => state;
-        public bool IsOwnerCensusProtocolReady { get; set; } = true;
+        public bool OwnerCensusOperationCountReadable { get; set; } = true;
+        public int? ReportedOwnerCensusOperationCount { get; set; }
         public bool HasActiveDailyOperationContext { get; set; }
         public DailyCaptureEligibilityFailure CensusFailure { get; set; }
         public bool HasIntradayTimeline => false;
+
+        public bool TryReadOwnerCensusRuntimeOperationCount(out int activeOperationCount)
+        {
+            activeOperationCount = ReportedOwnerCensusOperationCount
+                ?? state.ActiveRuntimeOperationCount;
+            return OwnerCensusOperationCountReadable;
+        }
 
         public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
             => TryEnterRuntimeProtocolOperation(
@@ -2131,12 +2139,12 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void CoreAdvanceRequiresHealthyHostCensusProtocolBeforeOpeningItsScope()
+    public void CoreAdvanceRequiresReadableHostCensusOperationCountBeforeOpeningItsScope()
     {
         CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session,
             out ApplicationAdvanceBoundary hostPorts);
-        hostPorts.IsOwnerCensusProtocolReady = false;
+        hostPorts.OwnerCensusOperationCountReadable = false;
         DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
             session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
 
@@ -2146,6 +2154,45 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(operationScope, Is.Null);
         Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
         Assert.That(session.ExecutionBoundaryState.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
+        Assert.That(hostPorts.Faulted, Is.True);
+    }
+
+    [Test]
+    public void CoreAdvanceRejectsHostCensusOperationCountThatDiffersFromItsSession()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary hostPorts);
+        hostPorts.ReportedOwnerCensusOperationCount = 1;
+        DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
+            session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
+
+        Assert.That(coreBoundary.TryEnterDailyAdvanceOperation(
+            out IDisposable operationScope), Is.False);
+
+        Assert.That(operationScope, Is.Null);
+        Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
+        Assert.That(session.ExecutionBoundaryState.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
+        Assert.That(hostPorts.Faulted, Is.True);
+    }
+
+    [Test]
+    public void CoreAdvanceRejectsNegativeHostCensusOperationCount()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary hostPorts);
+        hostPorts.ReportedOwnerCensusOperationCount = -1;
+        DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
+            session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
+
+        Assert.That(coreBoundary.TryEnterDailyAdvanceOperation(
+            out IDisposable operationScope), Is.False);
+
+        Assert.That(operationScope, Is.Null);
+        Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
         Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
         Assert.That(hostPorts.Faulted, Is.True);
     }
