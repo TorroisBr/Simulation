@@ -695,6 +695,88 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
     }
 
     [Test]
+    public void RestoredTravelPartyBindingsRequireExactSynchronizedCoreOwnerState()
+    {
+        CreateSelectedTravelFixture(NpcTravelReason.Trade,
+            out _, out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners first, out DailyV1CityRuntimeOwners destination,
+            out _, out TravelPartyStore parties);
+
+        DailyV1CityRuntimeOwners origin = graph.Cities.Single(city =>
+            string.Equals(city.RuntimeId, first.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal));
+        DailyV1NpcRuntimeOwners second = graph.Npcs.First(npc =>
+            !ReferenceEquals(npc, first)
+            && string.Equals(npc.Travel.CurrentCityRuntimeId, origin.RuntimeId,
+                StringComparison.Ordinal));
+        Assert.That(graph.SpatialNetwork.TryGetRoute("route/selected-dispatch",
+            out SpatialRouteRuntime route), Is.True);
+
+        const string partyId = "party/restored-owner-graph";
+        const string decisionId = "decision/restored-owner-graph";
+        TravelPartyRuntime party = new TravelPartyRuntime(partyId,
+            origin.LocationRuntimeId, destination.LocationRuntimeId, route.RuntimeId,
+            new[] { first.RuntimeId, second.RuntimeId }, Array.Empty<string>(),
+            route.TravelDays, decisionId,
+            new[]
+            {
+                new TravelPartyMemberCost(first.RuntimeId, 0f),
+                new TravelPartyMemberCost(second.RuntimeId, 0f)
+            });
+        Assert.That(parties.Add(party), Is.True);
+
+        Assert.That(first.Travel.TryInstallState(null, null,
+            destination.LocationRuntimeId, destination.RuntimeId, 2, route.TravelDays,
+            route.RuntimeId, true, decisionId, partyId, first.Travel.Revision), Is.True);
+        Assert.That(second.Travel.TryInstallState(null, null,
+            destination.LocationRuntimeId, destination.RuntimeId, 2, route.TravelDays,
+            route.RuntimeId, true, decisionId, partyId, second.Travel.Revision), Is.True);
+        Assert.That(graph.TryValidateRestoredTravelPartyBindings(out string diagnostic), Is.True,
+            diagnostic);
+
+        Assert.That(second.Travel.TryInstallState(null, null,
+            destination.LocationRuntimeId, destination.RuntimeId, 1, route.TravelDays,
+            route.RuntimeId, true, decisionId, partyId, second.Travel.Revision), Is.True);
+        Assert.That(graph.TryValidateRestoredTravelPartyBindings(out diagnostic), Is.False,
+            "A restored party cannot contain members at different daily progress boundaries.");
+
+        Assert.That(second.Travel.TryInstallState(null, null,
+            destination.LocationRuntimeId, destination.RuntimeId, 2, route.TravelDays,
+            route.RuntimeId, true, decisionId, "party/unrelated", second.Travel.Revision), Is.True);
+        Assert.That(graph.TryValidateRestoredTravelPartyBindings(out diagnostic), Is.False,
+            "The Core NPC owner must reciprocally name its exact active party.");
+    }
+
+    [Test]
+    public void RestoredTravelPartyBindingsRejectRouteWithDifferentOwnerEndpoints()
+    {
+        CreateSelectedTravelFixture(NpcTravelReason.Trade,
+            out _, out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out DailyV1CityRuntimeOwners destination,
+            out _, out TravelPartyStore parties);
+
+        DailyV1CityRuntimeOwners origin = graph.Cities.Single(city =>
+            string.Equals(city.RuntimeId, actor.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal));
+        Assert.That(graph.SpatialNetwork.TryGetRoute("route/selected-dispatch-return",
+            out SpatialRouteRuntime reversedRoute), Is.True);
+        const string partyId = "party/restored-reversed-route";
+        TravelPartyRuntime party = new TravelPartyRuntime(partyId,
+            origin.LocationRuntimeId, destination.LocationRuntimeId, reversedRoute.RuntimeId,
+            new[] { actor.RuntimeId }, Array.Empty<string>(), reversedRoute.TravelDays,
+            "decision/restored-reversed-route",
+            new[] { new TravelPartyMemberCost(actor.RuntimeId, 0f) });
+        Assert.That(parties.Add(party), Is.True);
+        Assert.That(actor.Travel.TryInstallState(null, null,
+            destination.LocationRuntimeId, destination.RuntimeId, 2, reversedRoute.TravelDays,
+            reversedRoute.RuntimeId, true, party.OriginDecisionId, partyId,
+            actor.Travel.Revision), Is.True);
+
+        Assert.That(graph.TryValidateRestoredTravelPartyBindings(out string diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain("Location/Route binding"));
+    }
+
+    [Test]
     public void MerchantTradeTravelPlanUsesCoreDirectRouteAndAdmissionBeforeOwnerCommit()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

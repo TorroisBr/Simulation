@@ -1122,6 +1122,127 @@ internal static partial class P12GDailyV1RestoreCoordinator
         out string diagnostic)
     {
         diagnostic = null;
+        DailyV1ActiveRuntimeSession coreSession = session?.CoreRuntimeSession;
+        if (coreSession == null)
+            return TryValidateLegacyTravelPartyBindings(session, out diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph = coreSession.OwnerGraph;
+        TravelPartyStore projectedParties = session.Composition?.TravelParties;
+        SimulationRuntime runtime = session.Runtime;
+        RuntimeIdentityRegistry identities = session.IdentityRegistry;
+        SpatialNetworkRuntime spatialNetwork = session.SpatialNetwork;
+        if (ownerGraph == null || runtime == null || identities == null || spatialNetwork == null
+            || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, ownerGraph)
+            || !ReferenceEquals(projectedParties, ownerGraph.TravelParties)
+            || !ReferenceEquals(identities.CoreIdentityIndex, ownerGraph.RuntimeIdentityIndex))
+        {
+            diagnostic = "The selected Core session and Unity restore projection do not retain the same TravelParty, runtime, or identity owners.";
+            return false;
+        }
+
+        if (!ownerGraph.TryValidateRestoredTravelPartyBindings(out diagnostic))
+            return false;
+
+        return TryValidateTravelPartyProjectionBindings(
+            session, ownerGraph, out diagnostic);
+    }
+
+    private static bool TryValidateTravelPartyProjectionBindings(
+        SimulationActiveSession session,
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        TravelPartyStore parties = ownerGraph?.TravelParties;
+        SimulationRuntime runtime = session?.Runtime;
+        RuntimeIdentityRegistry identities = session?.IdentityRegistry;
+        SpatialNetworkRuntime spatialNetwork = session?.SpatialNetwork;
+        if (parties == null || runtime == null || identities == null || spatialNetwork == null)
+        {
+            diagnostic = "The selected Unity projection of the Core TravelParty graph is unavailable.";
+            return false;
+        }
+
+        Dictionary<string, NpcRuntime> npcsById = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || !npcsById.TryAdd(npc.RuntimeId, npc))
+            {
+                diagnostic = "The selected Unity NPC projection has a missing or duplicate RuntimeId.";
+                return false;
+            }
+        }
+
+        Dictionary<string, string> partyByMemberId = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (TravelPartyRuntime party in parties.ActiveParties)
+        {
+            if (party == null
+                || !identities.TryGetLocation(party.OriginLocationRuntimeId, out SpatialLocationRuntime origin)
+                || !identities.TryGetLocation(party.DestinationLocationRuntimeId, out SpatialLocationRuntime destination)
+                || !identities.TryGetRoute(party.RouteRuntimeId, out SpatialRouteRuntime route)
+                || !spatialNetwork.TryGetRoute(party.RouteRuntimeId, out SpatialRouteRuntime networkRoute)
+                || !ReferenceEquals(route, networkRoute)
+                || !ReferenceEquals(route.Origin, origin)
+                || !ReferenceEquals(route.Destination, destination))
+            {
+                diagnostic = "The Unity projection does not resolve an active Core TravelParty's exact Location/Route objects.";
+                return false;
+            }
+
+            session.TryGetCityByLocation(destination, out CityRuntime expectedDestinationCity);
+            foreach (string memberId in party.MemberRuntimeIds)
+            {
+                if (string.IsNullOrWhiteSpace(memberId)
+                    || !partyByMemberId.TryAdd(memberId, party.TravelPartyId)
+                    || !npcsById.TryGetValue(memberId, out NpcRuntime member)
+                    || !identities.TryGetNpc(memberId, out NpcRuntime registeredMember)
+                    || !ReferenceEquals(member, registeredMember)
+                    || !ownerGraph.TryGetNpcOwner(memberId, out DailyV1NpcRuntimeOwners owner)
+                    || !ReferenceEquals(member.SelectedRuntimeOwnerGraph, ownerGraph)
+                    || !member.IsAlive
+                    || !member.IsTraveling
+                    || member.CurrentLocation != null
+                    || member.CurrentCity != null
+                    || !ReferenceEquals(member.DestinationLocation, destination)
+                    || !ReferenceEquals(member.DestinationCity, expectedDestinationCity)
+                    || !string.Equals(expectedDestinationCity?.RuntimeId,
+                        owner.Travel.DestinationCityRuntimeId, StringComparison.Ordinal)
+                    || !string.Equals(member.TravelRouteRuntimeId,
+                        owner.Travel.TravelRouteRuntimeId, StringComparison.Ordinal)
+                    || member.TravelDaysTotal != owner.Travel.TravelDaysTotal
+                    || member.TravelDaysRemaining != owner.Travel.TravelDaysRemaining
+                    || member.TravelStartedToday != owner.Travel.TravelStartedToday
+                    || !string.Equals(member.TravelOriginDecisionId,
+                        owner.Travel.TravelOriginDecisionId, StringComparison.Ordinal)
+                    || !string.Equals(member.ActiveTravelPartyId,
+                        owner.Travel.ActiveTravelPartyId, StringComparison.Ordinal))
+                {
+                    diagnostic = "An active Core TravelParty member does not resolve to its exact Unity NPC, Location, City, and travel-state projection.";
+                    return false;
+                }
+            }
+        }
+
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            if (string.IsNullOrWhiteSpace(npc.ActiveTravelPartyId)) continue;
+            if (!partyByMemberId.TryGetValue(npc.RuntimeId, out string partyId)
+                || !string.Equals(partyId, npc.ActiveTravelPartyId, StringComparison.Ordinal))
+            {
+                diagnostic = "A Unity NPC ActiveTravelPartyId has no reciprocal active Core party-member projection.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool TryValidateLegacyTravelPartyBindings(
+        SimulationActiveSession session,
+        out string diagnostic)
+    {
+        diagnostic = null;
         TravelPartyStore parties = session?.Composition?.TravelParties;
         SimulationRuntime runtime = session?.Runtime;
         RuntimeIdentityRegistry identities = session?.IdentityRegistry;

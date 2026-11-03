@@ -1191,6 +1191,156 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     }
 
     /// <summary>
+    /// Validates the restored P8 TravelParty authority against this exact
+    /// selected Core owner graph. Unity projection references are checked by
+    /// the host adapter after this domain binding check succeeds.
+    /// </summary>
+    internal bool TryValidateRestoredTravelPartyBindings(out string diagnostic)
+    {
+        diagnostic = null;
+        TravelPartyStore partyStore = TravelParties;
+        SpatialNetworkOwner spatial = SpatialNetwork;
+        DailyV1RuntimeIdentityIndex identities = RuntimeIdentityIndex;
+        if (partyStore == null || spatial == null || identities == null
+            || !partyStore.ValidateCensus(out int partyCount, out _)
+            || partyCount != partyStore.ActiveParties.Count)
+        {
+            diagnostic = "The Core TravelParty owner census is unavailable or inconsistent.";
+            return false;
+        }
+
+        Dictionary<string, DailyV1NpcRuntimeOwners> npcsById =
+            new Dictionary<string, DailyV1NpcRuntimeOwners>(StringComparer.Ordinal);
+        foreach (DailyV1NpcRuntimeOwners npc in npcs)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || npc.Lifecycle == null || npc.Travel == null
+                || !identities.HasIdentity(npc.RuntimeId, DailyV1RuntimeIdentityKind.Npc)
+                || !npcsById.TryAdd(npc.RuntimeId, npc))
+            {
+                diagnostic = "The Core NPC owner graph has a missing, duplicate, or unregistered RuntimeId.";
+                return false;
+            }
+        }
+
+        Dictionary<string, string> partyByMemberId =
+            new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (TravelPartyRuntime party in partyStore.ActiveParties)
+        {
+            if (party == null || !party.IsActive || party.MemberRuntimeIds == null
+                || party.MemberRuntimeIds.Count == 0
+                || !identities.HasIdentity(party.OriginLocationRuntimeId,
+                    DailyV1RuntimeIdentityKind.Location)
+                || !identities.HasIdentity(party.DestinationLocationRuntimeId,
+                    DailyV1RuntimeIdentityKind.Location)
+                || !identities.HasIdentity(party.RouteRuntimeId,
+                    DailyV1RuntimeIdentityKind.Route)
+                || !spatial.TryGetLocation(party.OriginLocationRuntimeId,
+                    out SpatialLocationRuntime origin)
+                || !spatial.TryGetLocation(party.DestinationLocationRuntimeId,
+                    out SpatialLocationRuntime destination)
+                || !spatial.TryGetRoute(party.RouteRuntimeId,
+                    out SpatialRouteRuntime route)
+                || !ReferenceEquals(route.Origin, origin)
+                || !ReferenceEquals(route.Destination, destination)
+                || route.TravelDays != party.TravelDaysTotal
+                || !TryFindUniqueCityAtLocation(destination.RuntimeId,
+                    out DailyV1CityRuntimeOwners expectedDestinationCity))
+            {
+                diagnostic = "An active Core TravelParty has an unresolved or inconsistent Location/Route binding.";
+                return false;
+            }
+
+            string expectedDestinationCityId = expectedDestinationCity?.RuntimeId;
+            int sharedRemainingDays = -1;
+            bool? sharedStartedToday = null;
+            foreach (string memberId in party.MemberRuntimeIds)
+            {
+                if (string.IsNullOrWhiteSpace(memberId)
+                    || !partyByMemberId.TryAdd(memberId, party.TravelPartyId)
+                    || !npcsById.TryGetValue(memberId,
+                        out DailyV1NpcRuntimeOwners member))
+                {
+                    diagnostic = "An active Core TravelParty has a duplicate or unresolved member RuntimeId.";
+                    return false;
+                }
+
+                DailyV1NpcTravelOwner travel = member.Travel;
+                if (member.Lifecycle.LifeState != NpcLifeState.Alive
+                    || !travel.IsTraveling
+                    || travel.CurrentLocationRuntimeId != null
+                    || travel.CurrentCityRuntimeId != null
+                    || !string.Equals(travel.DestinationLocationRuntimeId,
+                        party.DestinationLocationRuntimeId, StringComparison.Ordinal)
+                    || !string.Equals(travel.DestinationCityRuntimeId,
+                        expectedDestinationCityId, StringComparison.Ordinal)
+                    || !string.Equals(travel.TravelRouteRuntimeId,
+                        party.RouteRuntimeId, StringComparison.Ordinal)
+                    || travel.TravelDaysTotal != party.TravelDaysTotal
+                    || travel.TravelDaysRemaining <= 0
+                    || travel.TravelDaysRemaining > party.TravelDaysTotal
+                    || !string.Equals(travel.TravelOriginDecisionId,
+                        party.OriginDecisionId, StringComparison.Ordinal))
+                {
+                    diagnostic = "An active Core TravelParty member does not resolve to its exact traveling NPC owner state.";
+                    return false;
+                }
+
+                if (!string.Equals(travel.ActiveTravelPartyId,
+                    party.TravelPartyId, StringComparison.Ordinal))
+                {
+                    diagnostic = "An NPC ActiveTravelPartyId does not reciprocally identify its staged owner party.";
+                    return false;
+                }
+
+                if (sharedRemainingDays < 0)
+                {
+                    sharedRemainingDays = travel.TravelDaysRemaining;
+                    sharedStartedToday = travel.TravelStartedToday;
+                }
+                else if (sharedRemainingDays != travel.TravelDaysRemaining
+                    || sharedStartedToday != travel.TravelStartedToday)
+                {
+                    diagnostic = "Active Core TravelParty members do not share the same remaining-day/start boundary.";
+                    return false;
+                }
+            }
+        }
+
+        foreach (DailyV1NpcRuntimeOwners npc in npcs)
+        {
+            if (string.IsNullOrWhiteSpace(npc.Travel.ActiveTravelPartyId)) continue;
+            if (!partyByMemberId.TryGetValue(npc.RuntimeId, out string partyId)
+                || !string.Equals(partyId, npc.Travel.ActiveTravelPartyId,
+                    StringComparison.Ordinal))
+            {
+                diagnostic = "A Core NPC ActiveTravelPartyId has no reciprocal active-party member binding.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool TryFindUniqueCityAtLocation(
+        string locationRuntimeId,
+        out DailyV1CityRuntimeOwners city)
+    {
+        city = null;
+        if (string.IsNullOrWhiteSpace(locationRuntimeId)) return false;
+        foreach (DailyV1CityRuntimeOwners candidate in cities)
+        {
+            if (candidate == null) return false;
+            if (!string.Equals(candidate.LocationRuntimeId, locationRuntimeId,
+                    StringComparison.Ordinal))
+                continue;
+            if (city != null) return false;
+            city = candidate;
+        }
+        return true;
+    }
+
+    /// <summary>
     /// Commits one prepared travel/presence operation only when its NPC and all
     /// affected City authorities are exact members of this selected runtime.
     /// The host admission callback runs before any owner revision or value changes.
