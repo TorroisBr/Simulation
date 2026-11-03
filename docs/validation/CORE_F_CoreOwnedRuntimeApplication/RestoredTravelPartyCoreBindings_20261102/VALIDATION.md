@@ -99,4 +99,7 @@ source changes:
 - Three pre-existing uncommitted ProjectSettings changes were present in the
   Unity input and remain untouched and unstaged.
 
-Independent exact-tip review is pending. This candidate is not canonical.
+Independent exact-tip review returned `VALIDATED_CANDIDATE` for tip
+`f6fbb47fc1d85e2d5b3f20bf688bd2411eca166b`; see
+[`INDEPENDENT_REVIEW.md`](INDEPENDENT_REVIEW.md). The implementation and test
+source tree remains unchanged. This candidate is not canonical.
