@@ -655,8 +655,169 @@ public sealed class ContinuationCensusProtocolTests
         DailyV1ExecutionBoundaryState sharedExecutionState = new DailyV1ExecutionBoundaryState(
             new SimulationTime(), admission, SimulationRuntimeCompositionProfile.Standard,
             new WorldId(System.Guid.NewGuid()));
+        Assert.That(sharedExecutionState.TryBindRuntimeConfiguration(
+            SimulationConfigurationResolver.ResolveOrThrow(),
+            new SimulationCalendar(new CalendarDefinition(1, 1, 1))), Is.True);
 
-                ContinuationCensusProtocol protocol = CreateOperationProtocol(sharedExecutionState);
+        ContinuationCensusProtocol protocol =
+            CreateSpatialKnowledgeProtocol(store, roster, sharedExecutionState);
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure initialFailure), Is.True,
+            initialFailure.ToString());
+        Assert.That(protocol.SpatialKnowledgeFamilyProviders, Has.Count.EqualTo(2));
+        AssertSharedCoreInventoryMatchesProviderProjection(sharedExecutionState, protocol);
+
+        IReadOnlyList<DailyV1OwnerSectionContractIdentity> contractsBefore =
+            sharedExecutionState.GetExpectedOwnerSectionContractInventory(out long revisionBefore);
+        long personStoreRevisionAtStart = store.Revision;
+        long mutationEpochBefore = sharedExecutionState.MutationEpochState.CurrentEpoch;
+        NpcRuntime materializedNpc = new NpcRuntime("npc-shared-roster-after", null);
+
+        Assert.That(protocol.TryEnterOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcMembership,
+            out SimulationOperationScope membershipScope,
+            out ContinuationCensusFailure enterFailure), Is.True, enterFailure.ToString());
+        roster.Add(materializedNpc);
+        Assert.That(TryBindPerson(store, person.PersonId, materializedNpc.RuntimeId), Is.True);
+        Assert.That(store.Revision, Is.EqualTo(personStoreRevisionAtStart + 1L));
+        Assert.That(store.MaterializedBindingCount, Is.EqualTo(1));
+
+        Assert.That(protocol.TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
+            new[]
+            {
+                PersonMembershipCensusProvider.SectionId,
+                PersonMaterializationBindingCensusProvider.SectionId
+            },
+            personStoreRevisionAtStart,
+            out ContinuationCensusFailure transitionFailure), Is.True, transitionFailure.ToString());
+        membershipScope.Dispose();
+
+        Assert.That(sharedExecutionState.ExpectedOwnerSectionContractInventoryRevision, Is.EqualTo(revisionBefore + 1L));
+        Assert.That(sharedExecutionState.MutationEpochState.CurrentEpoch, Is.EqualTo(mutationEpochBefore + 1L));
+        Assert.That(protocol.SpatialKnowledgeFamilyProviders, Has.Count.EqualTo(4));
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure finalFailure), Is.True,
+            finalFailure.ToString());
+
+        AssertSharedCoreInventoryMatchesProviderProjection(sharedExecutionState, protocol);
+        IReadOnlyList<DailyV1OwnerSectionContractIdentity> contractsAfter =
+            sharedExecutionState.GetExpectedOwnerSectionContractInventory(out long revisionAfter);
+        Assert.That(revisionAfter, Is.EqualTo(revisionBefore + 1L));
+        Assert.That(contractsAfter, Has.Count.EqualTo(contractsBefore.Count + 2));
+
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
+            out long observedMutationEpoch,
+            out ContinuationCensusFailure captureFailure), Is.True, captureFailure.ToString());
+        Assert.That(snapshots, Has.Count.EqualTo(contractsAfter.Count));
+        Assert.That(observedMutationEpoch, Is.EqualTo(sharedExecutionState.MutationEpochState.CurrentEpoch));
+
+        for (int index = 0; index < contractsAfter.Count; index++)
+        {
+            Assert.That(snapshots[index].SectionId, Is.EqualTo(contractsAfter[index].SectionId));
+            Assert.That(snapshots[index].SchemaVersion, Is.EqualTo(contractsAfter[index].SchemaVersion));
+            Assert.That(snapshots[index].Role, Is.EqualTo(contractsAfter[index].Role));
+        }
+
+        OwnerSectionCensusSnapshot membershipSnapshot = FindSnapshot(
+            snapshots, PersonMembershipCensusProvider.SectionId);
+        OwnerSectionCensusSnapshot bindingSnapshot = FindSnapshot(
+            snapshots, PersonMaterializationBindingCensusProvider.SectionId);
+        Assert.That(membershipSnapshot.Cardinality, Is.EqualTo(1));
+        Assert.That(bindingSnapshot.Cardinality, Is.EqualTo(1));
+        Assert.That(membershipSnapshot.Revision, Is.EqualTo(store.Revision));
+        Assert.That(bindingSnapshot.Revision, Is.EqualTo(store.Revision));
+    }
+
+    private static void AssertSharedCoreInventoryMatchesProviderProjection(
+        DailyV1ExecutionBoundaryState sharedExecutionState,
+        ContinuationCensusProtocol protocol)
+    {
+        IReadOnlyList<DailyV1OwnerSectionContractIdentity> coreContracts =
+            sharedExecutionState.GetExpectedOwnerSectionContractInventory(out long revision);
+        Assert.That(revision, Is.EqualTo(sharedExecutionState.ExpectedOwnerSectionContractInventoryRevision));
+
+        FieldInfo projectionField = typeof(ContinuationCensusProtocol).GetField(
+            "expectedSections", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(projectionField, Is.Not.Null);
+        Dictionary<string, OwnerSectionContract> providerProjection =
+            projectionField.GetValue(protocol) as Dictionary<string, OwnerSectionContract>;
+        Assert.That(providerProjection, Is.Not.Null);
+        Assert.That(providerProjection, Has.Count.EqualTo(coreContracts.Count),
+            "The Core owner catalogue cardinality must match the provider-facing projection.");
+
+        string previousSectionId = null;
+        foreach (DailyV1OwnerSectionContractIdentity coreContract in coreContracts)
+        {
+            Assert.That(previousSectionId == null
+                || System.StringComparer.Ordinal.Compare(previousSectionId, coreContract.SectionId) < 0, Is.True,
+                "The Core owner catalogue is ordinally sorted.");
+            previousSectionId = coreContract.SectionId;
+
+            Assert.That(providerProjection.TryGetValue(
+                coreContract.SectionId, out OwnerSectionContract projected), Is.True);
+            Assert.That(projected.SchemaVersion, Is.EqualTo(coreContract.SchemaVersion));
+            Assert.That(projected.Role, Is.EqualTo(coreContract.Role));
+        }
+    }
+
+    private static OwnerSectionCensusSnapshot FindSnapshot(
+        IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
+        string sectionId)
+    {
+        foreach (OwnerSectionCensusSnapshot snapshot in snapshots)
+            if (snapshot.SectionId == sectionId) return snapshot;
+        Assert.Fail("Expected owner section was not captured: " + sectionId);
+        return null;
+    }
+
+    [Test]
+    public void DuplicateNpcInReconciliationFailsBeforePublishingAnyFamilyOrEpoch()
+    {
+        PersonStore store = new PersonStore();
+        List<NpcRuntime> roster = new List<NpcRuntime> { new NpcRuntime("npc-malformed-family", null) };
+        ContinuationCensusProtocol protocol = CreateSpatialKnowledgeProtocol(store, roster);
+        IReadOnlyList<IOwnerSectionCensusProvider> providersBefore = protocol.SpatialKnowledgeFamilyProviders;
+
+        Assert.That(protocol.TryEnterOperation("runtime.npc-membership", out SimulationOperationScope scope, out _), Is.True);
+        roster.Add(new NpcRuntime("npc-malformed-family", null));
+        Assert.That(protocol.TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
+            new string[0], store.Revision, out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+        Assert.That(protocol.SpatialKnowledgeFamilyProviders, Is.SameAs(providersBefore));
+        Assert.That(protocol.TryReadMutationEpoch(out long epoch, out ContinuationCensusFailure epochFailure), Is.False);
+        Assert.That(epoch, Is.Zero);
+        Assert.That(epochFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+        scope.Dispose();
+    }
+
+    [Test]
+    public void MissedRosterReconciliationFailsClosedOnAssessment()
+    {
+        PersonStore store = new PersonStore();
+        List<NpcRuntime> roster = new List<NpcRuntime> { new NpcRuntime("npc-missed-family", null) };
+        ContinuationCensusProtocol protocol = CreateSpatialKnowledgeProtocol(store, roster);
+        IReadOnlyList<IOwnerSectionCensusProvider> providersBefore = protocol.SpatialKnowledgeFamilyProviders;
+        roster.Add(new NpcRuntime("npc-unnotified-family", null));
+
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+        Assert.That(protocol.SpatialKnowledgeFamilyProviders, Is.SameAs(providersBefore));
+        Assert.That(protocol.TryReadMutationEpoch(out long epoch, out ContinuationCensusFailure epochFailure), Is.False);
+        Assert.That(epoch, Is.Zero);
+        Assert.That(epochFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    [Test]
+    public void SharedCensusBindingPublishesReadinessAndFaultsCoreState()
+    {
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        DailyV1ExecutionBoundaryState sharedExecutionState =
+            new DailyV1ExecutionBoundaryState(
+                new SimulationTime(), admission,
+                SimulationRuntimeCompositionProfile.Standard,
+                new WorldId(System.Guid.NewGuid()));
+
+        ContinuationCensusProtocol protocol = CreateOperationProtocol(sharedExecutionState);
         Assert.That(sharedExecutionState.TryReadSelectedRuntimeCensusOperationCount(
             out int count), Is.True);
         Assert.That(count, Is.Zero);
