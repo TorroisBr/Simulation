@@ -11385,9 +11385,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.HasExactCoreOwnedSelectedCensusSources =>
         HasExactCoreOwnedSelectedCensusSources();
 
-    bool IDailyV1SelectedRuntimeAdvanceHostPorts.HasActiveDailyOperationContext =>
-        HasActiveDailyOperationContext();
-
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCreateSelectedDailyExecutionHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedDailyExecutionHostPorts hostPorts)

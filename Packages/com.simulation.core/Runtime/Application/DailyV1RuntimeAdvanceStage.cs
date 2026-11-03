@@ -154,14 +154,14 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 /// reports whether its migrated census sources are bound to the exact Core
 /// owner instances; Core validates that evidence, selects those rows, and
 /// recomposes them from the admitted owner graph. Core owns the owner-thread
-/// check and runtime-operation count comparison. This intentionally excludes
+/// check and runtime-operation quiescence through its operation registry. This
+/// intentionally excludes
 /// clocks, whole-day advancement, and intraday timeline selection.
 /// </summary>
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
     bool HasExactCoreOwnedSelectedCensusSources { get; }
-    bool HasActiveDailyOperationContext { get; }
     bool TryCreateSelectedDailyExecutionHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedDailyExecutionHostPorts hostPorts);
@@ -357,8 +357,7 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         }
 
         bool dailyAdvanceScope = allowedOuterScope == DailyV1CaptureScopeAllowance.DailyAdvance;
-        if (executionState.AdvanceLeaseHeld != dailyAdvanceScope
-            || hostPorts.HasActiveDailyOperationContext)
+        if (executionState.AdvanceLeaseHeld != dailyAdvanceScope)
         {
             failure = DailyCaptureEligibilityFailure.OperationInProgress;
             return false;
@@ -399,7 +398,6 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         }
 
         if (executionState.AdvanceLeaseHeld != dailyAdvanceScope
-            || hostPorts.HasActiveDailyOperationContext
             || !executionState.TryAssessCaptureScope(allowedOuterScope))
         {
             ownerSections = null;
@@ -3682,7 +3680,6 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             || factualReadWorldPublished
             || AdvanceLeaseHeld
             || ActiveOperationCount != 0
-            || hostPorts.HasActiveDailyOperationContext
             || !mutationGuard.CanMutate
             || !runtimeIdentityBound
             || !runtimeConfigurationBound

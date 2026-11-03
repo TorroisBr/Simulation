@@ -99,7 +99,6 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
         public DailyV1ExecutionBoundaryState ExecutionState => state;
         public bool HasExactCoreOwnedSelectedCensusSources { get; set; } = true;
-        public bool HasActiveDailyOperationContext { get; set; }
         public DailyCaptureEligibilityFailure CensusFailure { get; set; }
         public bool HasIntradayTimeline => false;
 
@@ -2799,13 +2798,13 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero);
 
         Assert.That(session.ExecutionBoundaryState.TryMarkFactualReadWorldPublished(), Is.True);
-        hostPorts.HasActiveDailyOperationContext = true;
+        Assert.That(session.ExecutionBoundaryState.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcMembership), Is.True);
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
             sessionReplacement: false, out sections, out epoch, out failure), Is.False);
         Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
         Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero);
-
-        hostPorts.HasActiveDailyOperationContext = false;
+        Assert.That(session.ExecutionBoundaryState.TryEndRuntimeProtocolOperation(), Is.True);
         hostPorts.CensusFailure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
             sessionReplacement: false, out sections, out epoch, out failure), Is.False);
@@ -2815,16 +2814,19 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(1));
 
         hostPorts.CensusFailure = DailyCaptureEligibilityFailure.None;
-        hostPorts.SetOwnerSectionCensusCaptureCallback(
-            _ => hostPorts.HasActiveDailyOperationContext = true);
+        bool operationOpenedDuringCapture = false;
+        hostPorts.SetOwnerSectionCensusCaptureCallback(_ =>
+            operationOpenedDuringCapture = session.ExecutionBoundaryState.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.NpcMembership));
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
             sessionReplacement: false, out sections, out epoch, out failure), Is.False,
-            "Core must discard evidence if a host P12 mutation context becomes active during the census read.");
+            "Core must discard evidence if a P12 runtime operation enters the shared registry during the census read.");
         Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
         Assert.That(sections, Is.Null);
         Assert.That(epoch, Is.Zero);
         Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(2));
-        hostPorts.HasActiveDailyOperationContext = false;
+        Assert.That(operationOpenedDuringCapture, Is.True);
+        Assert.That(session.ExecutionBoundaryState.TryEndRuntimeProtocolOperation(), Is.True);
         hostPorts.SetOwnerSectionCensusCaptureCallback(null);
     }
 
