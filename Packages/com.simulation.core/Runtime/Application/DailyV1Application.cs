@@ -329,6 +329,7 @@ internal sealed class DailyV1Application
     private SimulationRuntimeAdmissionContext bootstrapAdmissionContext;
     private bool initialContinuationLoadAttempted;
     private bool initialContinuationLoadBlocksGenesis;
+    private P12AResult initialContinuationLoadResult;
     private bool initialGenesisPreparationAttempted;
     private DailyV1GenesisComposition preparedInitialGenesis;
     private DailyV1ActiveRuntimeSession preparedInitialSession;
@@ -537,6 +538,12 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        if (!TryGetInitialNoSaveAdmissionResult(out P12AResult admittedNoSaveResult))
+        {
+            diagnostic = "Core genesis start preparation requires the actual initial continuation admission result to be NoSave.";
+            return false;
+        }
+
         if (!TryPrepareInitialGenesisWithHostLogger(
                 definitions, diagnosticLogger, stageCompleted,
                 out DailyV1GenesisComposition composition,
@@ -558,11 +565,30 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        if (!TryGetInitialNoSaveAdmissionResult(out P12AResult currentAdmissionResult)
+            || !ReferenceEquals(admittedNoSaveResult, currentAdmissionResult))
+        {
+            diagnostic = "The Core continuation admission result changed while genesis was being prepared.";
+            return false;
+        }
+
         preparation = new DailyV1ApplicationStartPreparation(
             this, DailyV1ApplicationStartPreparationKind.GenesisPrepared,
             null, composition, candidate, diagnosticLogger,
-            new P12AResult(P12AResultCode.NoSave));
+            admittedNoSaveResult);
         return true;
+    }
+
+    private bool TryGetInitialNoSaveAdmissionResult(out P12AResult result)
+    {
+        lock (activeSessionGate.SyncRoot)
+        {
+            result = initialContinuationLoadResult;
+            return initialContinuationLoadAttempted
+                && !initialContinuationLoadBlocksGenesis
+                && result != null
+                && result.Code == P12AResultCode.NoSave;
+        }
     }
     /// <summary>
     /// Deterministic identity-injection seam for Core tests. Production hosts
@@ -1833,6 +1859,7 @@ internal sealed class DailyV1Application
                 {
                     initialContinuationLoadAttempted = true;
                     initialContinuationLoadBlocksGenesis = true;
+                    initialContinuationLoadResult = result;
                 }
             }
             return false;
@@ -1860,6 +1887,7 @@ internal sealed class DailyV1Application
             {
                 initialContinuationLoadBlocksGenesis = true;
                 result = new P12AResult(P12AResultCode.WrongThread);
+                initialContinuationLoadResult = result;
                 return false;
             }
 
@@ -1875,6 +1903,7 @@ internal sealed class DailyV1Application
                 || exists
                 || result == null
                 || result.Code != P12AResultCode.NoSave;
+            initialContinuationLoadResult = result;
         }
         return inspected;
     }
@@ -1915,6 +1944,7 @@ internal sealed class DailyV1Application
                 {
                     initialContinuationLoadAttempted = true;
                     initialContinuationLoadBlocksGenesis = true;
+                    initialContinuationLoadResult = result;
                 }
             }
             return false;
@@ -1946,6 +1976,7 @@ internal sealed class DailyV1Application
 
             initialContinuationLoadAttempted = true;
             initialContinuationLoadBlocksGenesis = true;
+            initialContinuationLoadResult = result;
         }
 
         bool loaded;
@@ -1976,6 +2007,7 @@ internal sealed class DailyV1Application
             // closed rather than creating a replacement world.
             initialContinuationLoadBlocksGenesis =
                 loaded || result == null || result.Code != P12AResultCode.NoSave;
+            initialContinuationLoadResult = result;
         }
 
         if (!loaded && (result == null || result.Code != P12AResultCode.NoSave))

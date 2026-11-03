@@ -252,6 +252,8 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(preparation, Is.Not.Null);
         Assert.That(preparation.Application, Is.SameAs(application));
         Assert.That(preparation.Kind, Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+        Assert.That(preparation.PersistenceResult, Is.SameAs(loadResult),
+            "Start preparation must carry the actual result from Core's initial continuation-slot admission.");
         Assert.That(preparation.PersistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
         Assert.That(preparation.CoreSession, Is.Not.Null);
         Assert.That(application.ActiveSession, Is.Null,
