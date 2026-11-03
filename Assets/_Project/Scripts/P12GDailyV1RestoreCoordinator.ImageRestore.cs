@@ -18,11 +18,12 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Action<P12GDailyV1RestoreStage> stageObserver = null,
         DailyV1Application application = null,
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
-        Action<SimulationActiveSession> privateCandidateObserverForTest = null)
+        Action<SimulationActiveSession> privateCandidateObserverForTest = null,
+        DailyV1ApplicationStartAdmission initialStartAdmission = null)
         => TryCreateRestoredSessionFromImageCore(image, expectedCompatibility, null,
             configuration, effective, calendar, selectedDefinitions, bootstrapAdmissionContext,
             out restoredSession, out failure, out diagnostic, stageObserver,
-            application, replacementOperation, privateCandidateObserverForTest);
+            application, replacementOperation, privateCandidateObserverForTest, initialStartAdmission);
 
     internal static bool TryCreateRestoredSessionFromDotNetV2Image(
         P12AContinuationImage image,
@@ -38,11 +39,12 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Action<P12GDailyV1RestoreStage> stageObserver = null,
         DailyV1Application application = null,
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
-        Action<SimulationActiveSession> privateCandidateObserverForTest = null)
+        Action<SimulationActiveSession> privateCandidateObserverForTest = null,
+        DailyV1ApplicationStartAdmission initialStartAdmission = null)
         => TryCreateRestoredSessionFromImageCore(image, null, expectedCompatibility,
             configuration, effective, calendar, selectedDefinitions, bootstrapAdmissionContext,
             out restoredSession, out failure, out diagnostic, stageObserver,
-            application, replacementOperation, privateCandidateObserverForTest);
+            application, replacementOperation, privateCandidateObserverForTest, initialStartAdmission);
 
     /// <summary>
     /// Builds a private Daily-v1 candidate solely from a fully decoded persisted
@@ -64,7 +66,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Action<P12GDailyV1RestoreStage> stageObserver = null,
         DailyV1Application application = null,
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
-        Action<SimulationActiveSession> privateCandidateObserverForTest = null)
+        Action<SimulationActiveSession> privateCandidateObserverForTest = null,
+        DailyV1ApplicationStartAdmission initialStartAdmission = null)
     {
         restoredSession = null;
         failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
@@ -110,7 +113,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     out stagedCoreOwnerStages,
                     out imageResult,
                     () => stageObserver?.Invoke(P12GDailyV1RestoreStage.SourceCaptured),
-                    coreStageObserver);
+                    coreStageObserver,
+                    initialStartAdmission);
                 if (!admissionPassed)
                 {
                     bool hostIdentityRejected = imageResult?.Code == P12AResultCode.WrongThread

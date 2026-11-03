@@ -417,7 +417,8 @@ public class TesteSimulacao : MonoBehaviour
                 image, compatibility, simulationConfig, effective, calendar, currentDefinitions,
                 runtimeAdmissionContext, out SimulationActiveSession candidate,
                 out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic,
-                application: dailyV1Application))
+                application: dailyV1Application,
+                initialStartAdmission: dailyV1StartAdmission))
         {
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A detached continuation restoration failed; genesis was not started. "

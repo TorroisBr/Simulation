@@ -3123,7 +3123,8 @@ internal sealed class DailyV1Application
         out DailyV1RestoredImageCoreOwnerStages stagedOwnerStages,
         out P12AResult result,
         Action imageDecoded = null,
-        Action<string> stageCompleted = null)
+        Action<string> stageCompleted = null,
+        DailyV1ApplicationStartAdmission initialStartAdmission = null)
     {
         admissionPassed = false;
         census = null;
@@ -3131,6 +3132,13 @@ internal sealed class DailyV1Application
         coreRoots = null;
         stagedOwnerStages = null;
         result = new P12AResult(P12AResultCode.Busy);
+        if (initialStartAdmission != null
+            && !IsForInitialRestoreAdmission(initialStartAdmission, image))
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue, "p12.initial-start-admission");
+            return false;
+        }
+
         if (image == null || selectedDefinitions == null
             || bootstrapAdmissionContext == null
             || !HasRestoredContinuationStagingAuthority(expectedSession, replacementOperation))

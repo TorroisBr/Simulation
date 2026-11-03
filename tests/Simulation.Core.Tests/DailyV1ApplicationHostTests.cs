@@ -83,6 +83,53 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
     }
 
+    private static P12AContinuationImage AdmissionOnlyImage()
+    {
+        P12ACompatibilityDescriptor identity = UnityIdentity();
+        var header = new P12AContinuationHeader(
+            System.Guid.Parse("f063489a-4fd1-430c-8fe8-51f8d1f6f3bf").ToString("D"),
+            0L, 1L, -1L, "admission-fixture-p9-stage",
+            identity.P9Fingerprint, "admission-fixture-p8-profile",
+            identity.P8Fingerprint, 0L, identity);
+        return new P12AContinuationImage(
+            header, new P12ACausalRootPayload(null, null),
+            Array.Empty<P12AOwnerSection>());
+    }
+
+    private static void AssertInitialRestoreAdmissionRejected(
+        DailyV1Application application,
+        DailyV1ApplicationStartAdmission admission,
+        P12AContinuationImage image,
+        DailyV1EffectiveDefinitions definitions,
+        SimulationRuntimeAdmissionContext bootstrapContext)
+    {
+        int imageDecoded = 0;
+        int stageCallbacks = 0;
+        bool accepted = application.TryBeginRestoredImageCoreOwnerStages(
+            image, UnityIdentity(), null, definitions, bootstrapContext,
+            expectedSession: null, replacementOperation: null,
+            out bool admissionPassed, out P12ADailyV1Census census,
+            out P12ADailyV1ImageOwnerSnapshots snapshots,
+            out P12CStagedCoreContinuationRoot roots,
+            out DailyV1RestoredImageCoreOwnerStages stages,
+            out P12AResult result,
+            () => imageDecoded++,
+            _ => stageCallbacks++,
+            initialStartAdmission: admission);
+
+        Assert.That(accepted, Is.False);
+        Assert.That(admissionPassed, Is.False);
+        Assert.That(census, Is.Null);
+        Assert.That(snapshots, Is.Null);
+        Assert.That(roots, Is.Null);
+        Assert.That(stages, Is.Null);
+        Assert.That(result?.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+        Assert.That(result?.SectionCode, Is.EqualTo("p12.initial-start-admission"));
+        Assert.That(imageDecoded, Is.Zero);
+        Assert.That(stageCallbacks, Is.Zero);
+        Assert.That(application.ActiveSession, Is.Null);
+    }
+
     [Test]
     public void HostPortsAndDotNetIdentityAreCapturedWithoutPersistingTheStorageRoot()
     {
@@ -228,6 +275,42 @@ public sealed class DailyV1ApplicationHostTests
             out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.False);
         Assert.That(candidate, Is.Null);
     }
+    [Test]
+    public void InitialRestoredImageStagingRejectsForeignGenesisAndWrongImageAdmissionsBeforeDecoding()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        P12AContinuationImage admittedImage = AdmissionOnlyImage();
+        P12AContinuationImage wrongImage = AdmissionOnlyImage();
+
+        DailyV1Application target = new DailyV1Application();
+        Assert.That(target.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext targetContext), Is.True);
+        DailyV1Application foreign = new DailyV1Application();
+        Assert.That(foreign.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext foreignContext), Is.True);
+
+        DailyV1ApplicationStartAdmission foreignRestore = new DailyV1ApplicationStartAdmission(
+            foreign, DailyV1ApplicationStartAdmissionKind.RestoreRequired,
+            admittedImage, new P12AResult(P12AResultCode.Loaded));
+        AssertInitialRestoreAdmissionRejected(target, foreignRestore, admittedImage,
+            definitions, targetContext);
+
+        DailyV1ApplicationStartAdmission wrongImageRestore = new DailyV1ApplicationStartAdmission(
+            target, DailyV1ApplicationStartAdmissionKind.RestoreRequired,
+            admittedImage, new P12AResult(P12AResultCode.Loaded));
+        AssertInitialRestoreAdmissionRejected(target, wrongImageRestore, wrongImage,
+            definitions, targetContext);
+
+        DailyV1Application genesisApplication = new DailyV1Application();
+        Assert.That(genesisApplication.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext genesisContext), Is.True);
+        DailyV1ApplicationStartAdmission genesisAdmission = new DailyV1ApplicationStartAdmission(
+            genesisApplication, DailyV1ApplicationStartAdmissionKind.GenesisRequired,
+            null, new P12AResult(P12AResultCode.NoSave));
+        AssertInitialRestoreAdmissionRejected(genesisApplication, genesisAdmission,
+            admittedImage, definitions, genesisContext);
+    }
+
     [Test]
     public void InitialNoSaveAdmissionTokenIsBoundToOneApplicationAndExactResult()
     {
