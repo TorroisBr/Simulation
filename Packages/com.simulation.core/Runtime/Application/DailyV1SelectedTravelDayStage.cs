@@ -40,7 +40,6 @@ internal interface IDailyV1SelectedP12TravelPartyAdvanceProtocol
         IReadOnlyList<string> expectedSectionIds);
 
     bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
-    bool TryEnterOperation(out IDisposable operationScope);
     bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds);
     void FaultClosed();
 }

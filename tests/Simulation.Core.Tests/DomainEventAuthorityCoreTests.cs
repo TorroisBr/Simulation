@@ -232,6 +232,16 @@ public sealed class DomainEventAuthorityCoreTests
         DomainEventStore store = authority.EventStore;
         DomainEventRecorder recorder = authority.Recorder;
         DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        Assert.That(state.HasRegisteredRuntimeProtocolOperationContracts, Is.False);
+        System.Collections.Generic.IReadOnlyList<string> operationContractIds =
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                hasRuntimeAdmission: true,
+                hasTravelPartySystem: true,
+                hasTravelSystem: false);
+        foreach (string operationContractId in operationContractIds)
+            Assert.That(state.TryRegisterRuntimeProtocolOperationContract(operationContractId), Is.True,
+                operationContractId);
+        Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
         Assert.That(state.TryBindSelectedTravelEventRecorders(recorder, null), Is.True);
         Assert.That(state.TryRecordSelectedTravelPartyArrival(
             party, out bool eventRecordedOutsideP12), Is.False,
@@ -239,19 +249,45 @@ public sealed class DomainEventAuthorityCoreTests
         Assert.That(eventRecordedOutsideP12, Is.False);
 
         Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+        bool dailyAdvanceStarted = false;
         try
         {
+            dailyAdvanceStarted = state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance);
+            Assert.That(dailyAdvanceStarted, Is.True);
+            bool coreOperationWasVisibleToCapture = false;
             bool scopeResult = state.ExecuteSelectedP12TravelPartyAdvance(
                 graph,
                 new NoOpTravelPartyAdvanceProtocol(),
-                () => state.TryRecordSelectedTravelPartyArrival(
-                    party, out bool wasRecorded) && wasRecorded);
+                () =>
+                {
+                    coreOperationWasVisibleToCapture =
+                        state.ActiveRuntimeOperationCount == 2
+                        && !state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None);
+                    return state.TryRecordSelectedTravelPartyArrival(
+                        party, out bool wasRecorded) && wasRecorded;
+                });
             Assert.That(scopeResult, Is.True);
+            Assert.That(coreOperationWasVisibleToCapture, Is.True,
+                "The Core-owned party operation must be nested in the daily operation and block capture.");
+            Assert.That(state.ActiveRuntimeOperationCount, Is.EqualTo(1),
+                "The nested party operation must close while the outer daily operation remains active.");
+            Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.False);
         }
         finally
         {
-            lease.Dispose();
+            try
+            {
+                if (dailyAdvanceStarted)
+                    Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
         }
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.True);
 
         Assert.That(store.Events, Has.Count.EqualTo(1));
         TravelPartyArrivedEvent recorded = store.Events[0] as TravelPartyArrivedEvent;
@@ -273,6 +309,39 @@ public sealed class DomainEventAuthorityCoreTests
         Assert.That(history.HistoricalEvents, Is.Empty);
         Assert.That(composition.RecordSequence.CaptureSnapshot().NextSequence, Is.EqualTo(2L));
         Assert.That(composition.RuntimeIdAllocator.AllocateEventId(), Is.EqualTo("event-000002"));
+    }
+
+    [Test]
+    public void TravelPartyAdvanceRejectsWhenCoreOperationInventoryIsNotSealed()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+        bool callbackInvoked = false;
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+        try
+        {
+            Assert.That(state.ExecuteSelectedP12TravelPartyAdvance(
+                composition.OwnerGraph,
+                protocol,
+                () => { callbackInvoked = true; return true; }), Is.False);
+        }
+        finally
+        {
+            lease.Dispose();
+        }
+
+        Assert.That(callbackInvoked, Is.False);
+        Assert.That(protocol.FaultClosedCalls, Is.EqualTo(1));
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.True);
     }
 
     [Test]
@@ -377,20 +446,10 @@ public sealed class DomainEventAuthorityCoreTests
         public bool TryValidateUnchangedSections(
             System.Collections.Generic.IReadOnlyList<string> sectionIds) => sectionIds != null;
 
-        public bool TryEnterOperation(out System.IDisposable operationScope)
-        {
-            operationScope = new EmptyScope();
-            return true;
-        }
-
         public bool NotifyCommittedMutations(
             System.Collections.Generic.IReadOnlyCollection<string> sectionIds) => sectionIds != null;
 
-        public void FaultClosed() { }
-    }
-
-    private sealed class EmptyScope : System.IDisposable
-    {
-        public void Dispose() { }
+        public int FaultClosedCalls { get; private set; }
+        public void FaultClosed() => FaultClosedCalls++;
     }
 }

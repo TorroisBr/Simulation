@@ -289,18 +289,6 @@ public sealed partial class SimulationRuntime
                 || (runtime.npcRosterCensusProtocol != null
                     && runtime.npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _));
 
-        public bool TryEnterOperation(out IDisposable operationScope)
-        {
-            operationScope = null;
-            if (runtime.runtimeAdmissionContext == null) return true;
-            if (!runtime.TryEnterRuntimeAdmissionOperation(
-                    DailyV1RuntimeProtocolOperationContracts.TravelPartyAdvance,
-                    out SimulationOperationScope scope))
-                return false;
-            operationScope = scope;
-            return true;
-        }
-
         public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) =>
             runtime.runtimeAdmissionContext == null
                 || (runtime.npcRosterCensusProtocol != null

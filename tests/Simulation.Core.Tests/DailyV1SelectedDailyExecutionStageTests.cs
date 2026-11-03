@@ -1000,7 +1000,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             IReadOnlyList<string> operationContractIds =
                 DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
                     hasRuntimeAdmission: true,
-                    hasTravelPartySystem: false,
+                    hasTravelPartySystem: true,
                     hasTravelSystem: hasSoloTravelOperation);
             foreach (string operationContractId in operationContractIds)
                 Assert.That(composition.ExecutionBoundaryState.TryRegisterRuntimeProtocolOperationContract(
@@ -1496,20 +1496,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
 
             public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) => sectionIds != null;
 
-            public bool TryEnterOperation(out IDisposable operationScope)
-            {
-                operationScope = EmptyDisposable.Instance;
-                return true;
-            }
-
             public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) => sectionIds != null;
             public void FaultClosed() { }
-        }
-
-        private sealed class EmptyDisposable : IDisposable
-        {
-            internal static readonly EmptyDisposable Instance = new EmptyDisposable();
-            public void Dispose() { }
         }
 
         private sealed class FakeActorTurnContext : IDailyV1SelectedActorTurnExecutionContext

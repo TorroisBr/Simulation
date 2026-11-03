@@ -127,25 +127,52 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         internal readonly HashSet<string> AllowedSectionIds;
         internal readonly HashSet<string> ChangedSectionIds =
             new HashSet<string>(StringComparer.Ordinal);
-        internal IDisposable ProtocolScope;
+        internal IDisposable RuntimeProtocolScope;
 
         internal SelectedP12TravelPartyAdvanceContext(
             DailyV1SelectedRuntimeOwnerGraph graph,
             IDailyV1SelectedP12TravelPartyAdvanceProtocol protocol,
             IEnumerable<string> sectionIds,
-            IDisposable protocolScope)
+            IDisposable runtimeProtocolScope)
         {
             Graph = graph;
             Protocol = protocol;
             OwnerThread = Thread.CurrentThread;
             OwnerManagedThreadId = OwnerThread.ManagedThreadId;
             AllowedSectionIds = new HashSet<string>(sectionIds, StringComparer.Ordinal);
-            ProtocolScope = protocolScope;
+            RuntimeProtocolScope = runtimeProtocolScope;
         }
 
         internal bool IsOwnedByCurrentThread() =>
             ReferenceEquals(OwnerThread, Thread.CurrentThread)
             && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
+
+    private sealed class SelectedP12TravelPartyRuntimeProtocolScope : IDisposable
+    {
+        private readonly DailyV1ExecutionBoundaryState executionState;
+        private readonly IDailyV1SelectedP12TravelPartyAdvanceProtocol protocol;
+        private int disposed;
+
+        internal SelectedP12TravelPartyRuntimeProtocolScope(
+            DailyV1ExecutionBoundaryState executionState,
+            IDailyV1SelectedP12TravelPartyAdvanceProtocol protocol)
+        {
+            this.executionState = executionState
+                ?? throw new ArgumentNullException(nameof(executionState));
+            this.protocol = protocol
+                ?? throw new ArgumentNullException(nameof(protocol));
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+            if (executionState.TryEndRuntimeProtocolOperation()) return;
+
+            executionState.InvalidateCurrentCaptureToken();
+            try { protocol.FaultClosed(); }
+            catch { }
+        }
     }
 
     private sealed class SelectedP12SoloTravelStartContext
@@ -782,7 +809,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         if (protocol == null) throw new ArgumentNullException(nameof(protocol));
 
         IReadOnlyList<string> sectionIds = CreateSelectedTravelPartyAdvanceSectionIds(graph);
-        IDisposable protocolScope = null;
+        IDisposable runtimeProtocolScope = null;
         SelectedP12TravelPartyAdvanceContext context = null;
         lock (operationSyncRoot)
         {
@@ -800,26 +827,24 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             {
                 if (!protocol.TryValidateOwnerSections(graph, sectionIds)
                     || !protocol.TryValidateUnchangedSections(sectionIds)
-                    || !protocol.TryEnterOperation(out protocolScope)
-                    || protocolScope == null)
+                    || !TryBeginRuntimeProtocolOperation(
+                        DailyV1RuntimeProtocolOperationContracts.TravelPartyAdvance))
                 {
                     FaultSelectedTravelPartyAdvance(protocol);
-                    IDisposable rejectedScope = protocolScope;
-                    protocolScope = null;
-                    try { rejectedScope?.Dispose(); }
-                    catch { FaultSelectedTravelPartyAdvance(protocol); }
                     return false;
                 }
 
+                runtimeProtocolScope = new SelectedP12TravelPartyRuntimeProtocolScope(
+                    this, protocol);
                 context = new SelectedP12TravelPartyAdvanceContext(
-                    graph, protocol, sectionIds, protocolScope);
+                    graph, protocol, sectionIds, runtimeProtocolScope);
                 selectedP12TravelPartyAdvanceContext = context;
             }
             catch
             {
                 FaultSelectedTravelPartyAdvance(protocol);
-                IDisposable failedScope = protocolScope;
-                protocolScope = null;
+                IDisposable failedScope = runtimeProtocolScope;
+                runtimeProtocolScope = null;
                 try { failedScope?.Dispose(); }
                 catch { FaultSelectedTravelPartyAdvance(protocol); }
                 return false;
@@ -1417,9 +1442,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             {
                 if (ReferenceEquals(selectedP12TravelPartyAdvanceContext, context))
                     selectedP12TravelPartyAdvanceContext = null;
-                IDisposable protocolScope = context?.ProtocolScope;
-                if (context != null) context.ProtocolScope = null;
-                try { protocolScope?.Dispose(); }
+                IDisposable runtimeProtocolScope = context?.RuntimeProtocolScope;
+                if (context != null) context.RuntimeProtocolScope = null;
+                try { runtimeProtocolScope?.Dispose(); }
                 catch { FaultSelectedTravelPartyAdvance(context?.Protocol); }
             }
         }
