@@ -160,6 +160,7 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
+    bool IsOwnerCensusProtocolReady { get; }
     bool HasActiveDailyOperationContext { get; }
     bool TryCreateSelectedDailyExecutionHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -230,6 +231,12 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
     public bool TryEnterDailyAdvanceOperation(out IDisposable operationScope)
     {
         operationScope = null;
+        if (!hostPorts.IsOwnerCensusProtocolReady)
+        {
+            hostPorts.FaultRuntimeAdmission();
+            return false;
+        }
+
         if (!executionState.TryBeginRuntimeProtocolOperation(
                 DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
                 requireNoActiveRuntimeProtocolOperations: true))

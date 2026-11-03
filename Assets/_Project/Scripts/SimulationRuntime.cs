@@ -11382,6 +11382,21 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     DailyV1ExecutionBoundaryState IDailyV1SelectedRuntimeAdvanceHostPorts.ExecutionState =>
         dailyExecutionBoundary;
 
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.IsOwnerCensusProtocolReady
+    {
+        get
+        {
+            ContinuationCensusProtocol census = npcRosterCensusProtocol;
+            if (census == null
+                || !IsRuntimeAdmissionOwnerThreadCurrent()
+                || !census.TryReadActiveOperationCount(
+                    out int censusOperationCount, out _))
+                return false;
+
+            return censusOperationCount == dailyExecutionBoundary.ActiveRuntimeOperationCount;
+        }
+    }
+
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.HasActiveDailyOperationContext =>
         HasActiveDailyOperationContext();
 

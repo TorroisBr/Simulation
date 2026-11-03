@@ -97,6 +97,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             return ownerSections;
         }
         public DailyV1ExecutionBoundaryState ExecutionState => state;
+        public bool IsOwnerCensusProtocolReady { get; set; } = true;
         public bool HasActiveDailyOperationContext { get; set; }
         public DailyCaptureEligibilityFailure CensusFailure { get; set; }
         public bool HasIntradayTimeline => false;
@@ -2119,6 +2120,56 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(state.ActiveRuntimeOperationCount, Is.EqualTo(1));
             Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
             Assert.That(hostPorts.Faulted, Is.True);
+        }
+        finally
+        {
+            Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+        }
+
+        Assert.That(state.ActiveOperationCount, Is.Zero);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void CoreAdvanceRequiresHealthyHostCensusProtocolBeforeOpeningItsScope()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary hostPorts);
+        hostPorts.IsOwnerCensusProtocolReady = false;
+        DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
+            session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
+
+        Assert.That(coreBoundary.TryEnterDailyAdvanceOperation(
+            out IDisposable operationScope), Is.False);
+
+        Assert.That(operationScope, Is.Null);
+        Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
+        Assert.That(session.ExecutionBoundaryState.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
+        Assert.That(hostPorts.Faulted, Is.True);
+    }
+
+    [Test]
+    public void ApplicationDoesNotAdvanceWhileRuntimeProtocolOperationIsActive()
+    {
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary hostPorts);
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
+
+        try
+        {
+            Assert.That(application.TryAdvanceDay(
+                out SimulationRuntimeAdvanceFailure failure), Is.False);
+            Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress));
+            Assert.That(session.SimulationTime.AbsoluteDay, Is.Zero,
+                "The application session gate rejects overlapping runtime work before the day clock advances.");
+            Assert.That(state.ActiveRuntimeOperationCount, Is.EqualTo(1));
+            Assert.That(hostPorts.SelectedBoundaryRequested, Is.False);
+            Assert.That(hostPorts.Faulted, Is.False);
         }
         finally
         {
