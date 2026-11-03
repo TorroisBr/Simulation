@@ -149,19 +149,19 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 }
 
 /// <summary>
-/// Host-owned ports for the selected Daily-v1 session. Census ports return
-/// only owner rows that have not yet migrated to the Core owner graph; Core
-/// composes the exact P12-F rows itself. The host supplies the census operation
-/// count and shared mutation-epoch evidence; Core checks owner-thread identity
-/// and matches the count against its session operation registry.
-/// This intentionally excludes runtime clocks, whole-day advancement, and
-/// intraday timeline selection; Core binds those authorities to the exact
-/// execution state.
+/// Host-owned ports for the selected Daily-v1 session. Census capture returns
+/// the complete quiescent host vector and shared mutation epoch. The host also
+/// reports whether its migrated census sources are bound to the exact Core
+/// owner instances; Core validates that evidence, selects those rows, and
+/// recomposes them from the admitted owner graph. Core owns the owner-thread
+/// check and runtime-operation count comparison. This intentionally excludes
+/// clocks, whole-day advancement, and intraday timeline selection.
 /// </summary>
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
     bool TryReadOwnerCensusRuntimeOperationCount(out int activeOperationCount);
+    bool HasExactCoreOwnedSelectedCensusSources { get; }
     bool HasActiveDailyOperationContext { get; }
     bool TryCreateSelectedDailyExecutionHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -411,6 +411,22 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             mutationEpoch = 0L;
             failure = DailyCaptureEligibilityFailure.OperationInProgress;
             return false;
+        }
+
+        if (hostPorts.HasExactCoreOwnedSelectedCensusSources)
+        {
+            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                    ownerSections,
+                    executionState.SelectedRuntimeOwnerGraph,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
+                    out _))
+            {
+                ownerSections = null;
+                mutationEpoch = 0L;
+                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+            ownerSections = hostOwnedSections;
         }
 
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
@@ -753,7 +769,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             diagnostic = "The selected Core census requires its exact PersonStore and PoliticalKnowledge owners.";
             return false;
         }
-        if (!DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(completeHostSections))
+        if (!DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(completeHostSections))
         {
             diagnostic = "The host census is not a complete selected Daily-v1 owner vector.";
             return false;
@@ -1310,7 +1326,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     {
         hostOwnedSections = null;
         diagnostic = null;
-        if (!DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(completeHostSections))
+        if (!DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(completeHostSections))
         {
             diagnostic = "The host census is not a complete selected Daily-v1 owner vector.";
             return false;
@@ -3762,6 +3778,23 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             diagnostic = "The private target did not produce a complete quiescent owner vector: "
                 + (string.IsNullOrWhiteSpace(captureDiagnostic) ? "OwnerCoverageIncomplete" : captureDiagnostic) + ".";
             return false;
+        }
+
+        if (hostPorts.HasExactCoreOwnedSelectedCensusSources)
+        {
+            IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections = ownerSections;
+            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                    completeHostSections,
+                    selectedRuntimeOwnerGraph,
+                    out ownerSections,
+                    out diagnostic))
+            {
+                ownerSections = null;
+                mutationEpoch = 0L;
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "The Core restored boundary could not select its exact migrated owner census rows.";
+                return false;
+            }
         }
 
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(

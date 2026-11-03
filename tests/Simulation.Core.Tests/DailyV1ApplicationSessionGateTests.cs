@@ -71,6 +71,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         internal bool? RequestedSessionReplacement { get; private set; }
         internal DailyV1CaptureScopeAllowance? RequestedCaptureScopeAllowance { get; private set; }
         internal int OwnerCensusCaptureCount { get; private set; }
+        internal IReadOnlyList<OwnerSectionCensusSnapshot> LastCapturedOwnerSections { get; private set; }
         internal bool ReturnPartialOwnerEvidenceThenFail { get; set; }
         internal int ContinuationSaveEvidenceCaptureCount { get; private set; }
         internal void ThrowOnContinuationSaveCapture(Exception exception) =>
@@ -99,6 +100,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         public DailyV1ExecutionBoundaryState ExecutionState => state;
         public bool OwnerCensusOperationCountReadable { get; set; } = true;
         public int? ReportedOwnerCensusOperationCount { get; set; }
+        public bool HasExactCoreOwnedSelectedCensusSources { get; set; } = true;
         public bool HasActiveDailyOperationContext { get; set; }
         public DailyCaptureEligibilityFailure CensusFailure { get; set; }
         public bool HasIntradayTimeline => false;
@@ -247,29 +249,8 @@ public sealed class DailyV1ApplicationSessionGateTests
                 && CensusFailure == DailyCaptureEligibilityFailure.None
                 && !ReturnPartialOwnerEvidenceThenFail;
             if (!captured) return false;
-            HashSet<string> coreOwnedSectionIds = new HashSet<string>(
-                DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds,
-                StringComparer.Ordinal);
-            if (DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedIdentitySpatialCensusSections(
-                    state.SelectedRuntimeOwnerGraph,
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> identitySpatialRows,
-                    out _))
-            {
-                HashSet<string> activeIdentitySpatialIds = new HashSet<string>(
-                    identitySpatialRows.Select(section => section.SectionId),
-                    StringComparer.Ordinal);
-                foreach (string sectionId in DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedIdentitySpatialSectionIds)
-                    if (!activeIdentitySpatialIds.Contains(sectionId))
-                        coreOwnedSectionIds.Remove(sectionId);
-            }
-            else
-            {
-                foreach (string sectionId in DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedIdentitySpatialSectionIds)
-                    coreOwnedSectionIds.Remove(sectionId);
-            }
-            ownerSections = Array.AsReadOnly(admissionOwnerSections
-                .Where(section => section != null && !coreOwnedSectionIds.Contains(section.SectionId))
-                .ToArray());
+            LastCapturedOwnerSections = admissionOwnerSections;
+            ownerSections = admissionOwnerSections;
             return true;
         }
 
@@ -2236,8 +2217,9 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
             session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
         Assert.That(coreBoundary, Is.Not.Null);
-        hostPorts.SetAdmissionEvidence(
-            CreateCoreBoundCompleteOwnerSectionVector(session), mutationEpoch: 17L);
+        IReadOnlyList<OwnerSectionCensusSnapshot> completeHostVector =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        hostPorts.SetAdmissionEvidence(completeHostVector, mutationEpoch: 17L);
 
         Assert.That(coreBoundary.TryCaptureCompletedDailyCaptureEvidence(
             out _, out _, out DailyCaptureEligibilityFailure failure), Is.False,
@@ -2250,6 +2232,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             sessionReplacement: false,
             out IReadOnlyList<OwnerSectionCensusSnapshot> admittedSections,
             out _, out failure), Is.True);
+        Assert.That(hostPorts.LastCapturedOwnerSections, Is.SameAs(completeHostVector),
+            "The host returns its complete census vector; Core selects and recomposes its migrated rows.");
         OwnerSectionCensusSnapshot genealogySection =
             admittedSections.Single(section => section.SectionId == GenealogyCensusProvider.SectionId);
         Assert.That(genealogySection.OwnerInstanceIdentity,

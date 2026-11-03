@@ -11382,6 +11382,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     DailyV1ExecutionBoundaryState IDailyV1SelectedRuntimeAdvanceHostPorts.ExecutionState =>
         dailyExecutionBoundary;
 
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.HasExactCoreOwnedSelectedCensusSources =>
+        HasExactCoreOwnedSelectedCensusSources();
+
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryReadOwnerCensusRuntimeOperationCount(
         out int activeOperationCount)
     {
@@ -11434,28 +11437,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        if (HasExactCoreOwnedSelectedCensusSources())
-        {
-            DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
-            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
-                    completeHostSections,
-                    graph,
-                    out ownerSections,
-                    out _))
-            {
-                mutationEpoch = 0L;
-                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-                return false;
-            }
-        }
-        else
-        {
-            // Compatibility runtimes may still own these authorities locally.
-            // Keep their full rows until the injected Core boundary is bound to
-            // the exact same selected stores; filtering earlier would create a
-            // census gap instead of an authority transfer.
-            ownerSections = completeHostSections;
-        }
+        // The Core boundary selects and recomposes migrated rows after checking
+        // this adapter's exact-instance binding evidence.
+        ownerSections = completeHostSections;
 
         failure = DailyCaptureEligibilityFailure.None;
         return true;
@@ -11481,25 +11465,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        if (HasExactCoreOwnedSelectedCensusSources())
-        {
-            DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
-            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
-                    completeHostSections,
-                    graph,
-                    out ownerSections,
-                    out diagnostic))
-            {
-                mutationEpoch = 0L;
-                return false;
-            }
-        }
-        else
-        {
-            ownerSections = completeHostSections;
-            diagnostic = null;
-        }
-
+        ownerSections = completeHostSections;
         diagnostic = null;
         return true;
     }

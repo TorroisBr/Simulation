@@ -23,6 +23,7 @@ public sealed class SimulationRuntimeOrchestrationTests
             ExecutionState = state;
 
         public DailyV1ExecutionBoundaryState ExecutionState { get; }
+        public bool HasExactCoreOwnedSelectedCensusSources => true;
         public bool TryReadOwnerCensusRuntimeOperationCount(out int activeOperationCount)
         {
             activeOperationCount = ExecutionState.ActiveRuntimeOperationCount;
