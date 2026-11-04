@@ -154,11 +154,34 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             Is.False,
             "A restored Core session must not advance through its application authority before atomic publication.");
         Assert.That(unpublishedAdvanceFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
-        Assert.That(restoreApplication.TryCommitRestoredCandidate(
-                expectedSession: null,
-                candidate: restored.CoreRuntimeSession,
-                replacementOperation: null,
-                out string publishDiagnostic),
+        object candidateBoundaryBeforeAdmissionCommit =
+            restored.CoreRuntimeSession.RuntimeAdvanceBoundary;
+        Assert.That(restoreApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+                null, image, restored.CoreRuntimeSession, restored, restored.Runtime,
+                out string missingAdmissionDiagnostic),
+            Is.False, "Initial restore publication cannot omit its exact slot admission.");
+        Assert.That(missingAdmissionDiagnostic, Does.Contain("exact admitted image token"));
+
+        P12AContinuationImage sameBytesDifferentImage = DecodeCompletedImage(
+            sourceImageBytes, source.Session, anchor.NormalContext);
+        Assert.That(sameBytesDifferentImage, Is.Not.SameAs(image));
+        Assert.That(restoreApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+                initialStartAdmission, sameBytesDifferentImage, restored.CoreRuntimeSession,
+                restored, restored.Runtime, out string substitutedImageDiagnostic),
+            Is.False, "An equivalent but separately decoded image cannot substitute for the admitted source object.");
+        Assert.That(substitutedImageDiagnostic, Does.Contain("exact admitted image token"));
+        Assert.That(restoreApplication.ActiveSession, Is.Null,
+            "Rejected initial admission must leave the Core session unpublished.");
+        Assert.That(restoreApplication.TryGetPublishedHostProjection(
+                restored.CoreRuntimeSession, out _), Is.False,
+            "Rejected initial admission must not register its host projection.");
+        Assert.That(restored.CoreRuntimeSession.RuntimeAdvanceBoundary,
+            Is.SameAs(candidateBoundaryBeforeAdmissionCommit),
+            "Rejected admission must not bind or replace the candidate's runtime boundary.");
+
+        Assert.That(restoreApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+                initialStartAdmission, image, restored.CoreRuntimeSession,
+                restored, restored.Runtime, out string publishDiagnostic),
             Is.True, publishDiagnostic);
 
         for (int boundary = 1; boundary <= 2; boundary++)

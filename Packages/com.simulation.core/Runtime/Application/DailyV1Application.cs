@@ -3801,6 +3801,33 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
+    /// Verifies the exact initial-slot restore admission while holding the same
+    /// gate used to publish the reconstructed Core session and host projection.
+    /// </summary>
+    internal bool TryCommitInitialRestoredCandidateWithHostProjection(
+        DailyV1ApplicationStartAdmission initialStartAdmission,
+        P12AContinuationImage image,
+        DailyV1ActiveRuntimeSession candidate,
+        IDailyV1ApplicationHostProjection candidateHostProjection,
+        IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (!IsForInitialRestoreAdmission(initialStartAdmission, image))
+            {
+                diagnostic = "Initial restore publication requires this application's exact admitted image token.";
+                return false;
+            }
+
+            return TryCommitRestoredCandidateWithHostProjection(
+                null, candidate, null, candidateHostProjection, candidateHostPorts,
+                null, out diagnostic);
+        }
+    }
+
+    /// <summary>
     /// Commits a detached Core replacement together with the corresponding
     /// host projection under the application's one session gate. This keeps a
     /// Unity adapter from maintaining a second publication authority while

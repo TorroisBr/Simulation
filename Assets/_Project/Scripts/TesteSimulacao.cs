@@ -425,13 +425,8 @@ public class TesteSimulacao : MonoBehaviour
                 + restoreFailure + ": " + restoreDiagnostic);
             return true;
         }
-        if (!dailyV1Application.IsForInitialRestoreAdmission(dailyV1StartAdmission, image))
-        {
-            bootstrapFailed = true;
-            UnityEngine.Debug.LogError("P12-A restored projection no longer matches the exact Core initial-slot admission; genesis was not started.");
-            return true;
-        }
-        if (!TryPublishRestoredSession(null, candidate))
+        if (!TryPublishRestoredSession(
+                null, candidate, null, dailyV1StartAdmission, image))
         {
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A detached continuation passed private validation but bootstrap publication failed; genesis was not started.");
@@ -1158,9 +1153,26 @@ public class TesteSimulacao : MonoBehaviour
         SimulationActiveSession candidateSession,
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation)
     {
+        return TryPublishRestoredSession(
+            expectedSession, candidateSession, exclusiveOperation, null, null);
+    }
+
+    private bool TryPublishRestoredSession(
+        SimulationActiveSession expectedSession,
+        SimulationActiveSession candidateSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation,
+        DailyV1ApplicationStartAdmission initialStartAdmission,
+        P12AContinuationImage initialRestoreImage)
+    {
         if (candidateSession == null)
             return false;
         if (!ReferenceEquals(candidateSession.Configuration, simulationConfig))
+            return false;
+        bool initialRestoreAdmissionSupplied = initialStartAdmission != null
+            || initialRestoreImage != null;
+        if ((initialStartAdmission == null) != (initialRestoreImage == null)
+            || (initialRestoreAdmissionSupplied
+                && (expectedSession != null || candidateSession.CoreRuntimeSession == null)))
             return false;
 
         lock (dailyV1Application.ActiveSessionSyncRoot)
@@ -1209,9 +1221,15 @@ public class TesteSimulacao : MonoBehaviour
             if (expectedSession == null)
             {
                 if (dailyV1Application.ActiveSession != null) return false;
+                if ((initialStartAdmission == null) != (initialRestoreImage == null))
+                    return false;
                 return TryCommitCoreRestoredCandidateWithProjection(
-                    null, candidateCoreSession, null, candidateSession, exclusiveOperation);
+                    null, candidateCoreSession, null, candidateSession, exclusiveOperation,
+                    initialStartAdmission, initialRestoreImage);
             }
+
+            if (initialStartAdmission != null || initialRestoreImage != null)
+                return false;
 
             if (expectedCoreSession == null
                 || !expectedSession.IsProfileCompatibleWith(candidateSession)
@@ -1228,10 +1246,22 @@ public class TesteSimulacao : MonoBehaviour
         DailyV1ActiveRuntimeSession candidateCoreSession,
         SimulationActiveSession expectedProjection,
         SimulationActiveSession candidateProjection,
-        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation)
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation,
+        DailyV1ApplicationStartAdmission initialStartAdmission = null,
+        P12AContinuationImage initialRestoreImage = null)
     {
         if (candidateCoreSession == null || candidateProjection == null)
             return false;
+        if (initialStartAdmission != null || initialRestoreImage != null)
+        {
+            if (expectedCoreSession != null || expectedProjection != null
+                || exclusiveOperation != null || initialStartAdmission == null
+                || initialRestoreImage == null)
+                return false;
+            return dailyV1Application.TryCommitInitialRestoredCandidateWithHostProjection(
+                initialStartAdmission, initialRestoreImage, candidateCoreSession,
+                candidateProjection, candidateProjection.Runtime, out _);
+        }
         return dailyV1Application.TryCommitRestoredCandidateWithHostProjection(
             expectedCoreSession, candidateCoreSession, expectedProjection,
             candidateProjection, candidateProjection.Runtime, exclusiveOperation,
