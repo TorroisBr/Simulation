@@ -1884,7 +1884,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         DailyV1ActorTurnCoreRoots replacementActorTurnRoots = null;
         if (selectedRuntimeExecutionRootsBound)
         {
-            if (!ReferenceEquals(replacement.PersonStore, selectedActorChoiceStore?.PersonStore))
+            if (!ReferenceEquals(replacement.PersonStore, selectedActorChoiceStore?.PersonStore)
+                || selectedRuntimeIdAllocator == null
+                || !replacement.TryBindRuntimeIdAllocator(selectedRuntimeIdAllocator))
                 return false;
             try
             {
@@ -2130,7 +2132,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         DailyV1ActorTurnCoreRoots replacementActorTurnRoots = null;
         if (selectedRuntimeExecutionRootsBound)
         {
-            if (selectedActorChoiceStore == null
+            if (selectedRuntimeIdAllocator == null
+                || !replacementGraph.TryBindRuntimeIdAllocator(selectedRuntimeIdAllocator)
+                || selectedActorChoiceStore == null
                 || !ReferenceEquals(replacementGraph.PersonStore, selectedActorChoiceStore.PersonStore))
                 return false;
             try
@@ -2208,6 +2212,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
         if (selectedRuntimeExecutionRootsBound)
             return ReferenceEquals(selectedRuntimeIdAllocator, runtimeIdAllocator)
+                && ReferenceEquals(selectedRuntimeOwnerGraph.RuntimeIdAllocator, runtimeIdAllocator)
                 && ReferenceEquals(selectedRandomSource, randomSource)
                 && ReferenceEquals(selectedRecordSequence, recordSequence)
                 && ReferenceEquals(selectedDecisionStore, decisionStore)
@@ -2222,6 +2227,10 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         {
             selectedRuntimeActorTurnCoreRoots = new DailyV1ActorTurnCoreRoots(
                 this, selectedRuntimeOwnerGraph);
+            if (!selectedRuntimeOwnerGraph.TryBindRuntimeIdAllocator(runtimeIdAllocator))
+                throw new ArgumentException(
+                    "The selected owner graph is already bound to a different runtime ID allocator.",
+                    nameof(runtimeIdAllocator));
         }
         catch (ArgumentException)
         {
@@ -2366,6 +2375,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         return selectedRuntimeExecutionRootsBound
             && ReferenceEquals(selectedRuntimeOwnerGraph, graph)
             && ReferenceEquals(graph?.PersonStore, personStore)
+            && ReferenceEquals(graph?.RuntimeIdAllocator, runtimeIdAllocator)
             && ReferenceEquals(selectedActorChoiceStore, actorChoiceStore)
             && ReferenceEquals(actorChoiceStore?.PersonStore, personStore)
             && ReferenceEquals(selectedRandomSource, randomSource)
@@ -2386,6 +2396,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 this, graph, personStore, actorChoiceStore)
             && ReferenceEquals(selectedRuntimeOwnerGraph, graph)
             && ReferenceEquals(graph?.PersonStore, personStore)
+            && ReferenceEquals(graph?.RuntimeIdAllocator, selectedRuntimeIdAllocator)
             && ReferenceEquals(selectedActorChoiceStore, actorChoiceStore)
             && ReferenceEquals(actorChoiceStore?.PersonStore, personStore)
             && ReferenceEquals(selectedRandomSource, randomSource);

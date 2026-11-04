@@ -513,6 +513,15 @@ public sealed class DailyV1ApplicationSessionGateTests
             new TravelPartyCensusProvider(graph.TravelParties).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(graph.RuntimeIdAllocator)
+                .GetCurrentCensus());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(graph.RuntimeIdAllocator)
+                .GetCurrentCensus());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            RuntimeIdAllocatorCensusProvider.CreateTravelPartyCounterProvider(graph.RuntimeIdAllocator)
+                .GetCurrentCensus());
         sections = ReplaceSelectedNpcOwnerSectionVector(graph, sections);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
             graph, sections, out _, out string diagnostic), Is.True, diagnostic);
@@ -576,6 +585,15 @@ public sealed class DailyV1ApplicationSessionGateTests
             new TravelPartyCensusProvider(graph.TravelParties).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(graph.RuntimeIdAllocator)
+                .GetCurrentCensus());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(graph.RuntimeIdAllocator)
+                .GetCurrentCensus());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            RuntimeIdAllocatorCensusProvider.CreateTravelPartyCounterProvider(graph.RuntimeIdAllocator)
+                .GetCurrentCensus());
         sections = ReplaceCityOwnerSectionVector(graph, sections);
         sections = ReplaceSelectedNpcOwnerSectionVector(graph, sections);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
@@ -2725,6 +2743,133 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
                 graph, hostRemainder.Concat(new[] { personMembership }).ToArray(), out _, out _), Is.False,
             "The host cannot reintroduce a PersonStore alias section whose authority has moved to Core.");
+    }
+
+    [Test]
+    public void CoreRuntimeAllocatorCensusIsBoundToTheExactExecutionRoot()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out _);
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        RuntimeIdAllocator allocator = session.ExecutionBoundaryState.SelectedRuntimeIdAllocator;
+        Assert.That(graph.RuntimeIdAllocator, Is.SameAs(allocator));
+
+        OwnerSectionCensusSnapshot[] completeVector =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds,
+            Has.Count.EqualTo(3));
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedRuntimeIdAllocatorCensusSections(
+                graph, out IReadOnlyList<OwnerSectionCensusSnapshot> coreRows,
+                out string diagnostic), Is.True, diagnostic);
+        object allocatorOwnerIdentity = coreRows[0].OwnerInstanceIdentity;
+        Assert.That(allocatorOwnerIdentity, Is.Not.Null);
+
+        foreach (OwnerSectionCensusSnapshot coreRow in coreRows)
+        {
+            Assert.That(coreRow.Role, Is.EqualTo(OwnerSectionRole.Required), coreRow.SectionId);
+            Assert.That(coreRow.OwnerInstanceIdentity, Is.SameAs(allocatorOwnerIdentity), coreRow.SectionId);
+            Assert.That(coreRow.Cardinality, Is.EqualTo(1), coreRow.SectionId);
+            OwnerSectionCensusSnapshot captured = completeVector.Single(section =>
+                section.SectionId == coreRow.SectionId);
+            Assert.That(captured.OwnerInstanceIdentity, Is.SameAs(coreRow.OwnerInstanceIdentity), coreRow.SectionId);
+            Assert.That(captured.Cardinality, Is.EqualTo(coreRow.Cardinality), coreRow.SectionId);
+            Assert.That(captured.Revision, Is.EqualTo(coreRow.Revision), coreRow.SectionId);
+        }
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedRuntimeIdAllocatorSections(
+                graph, completeVector,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> composed,
+                out diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(composed), Is.True);
+
+        HashSet<string> allocatorIds = new HashSet<string>(
+            DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds,
+            StringComparer.Ordinal);
+        OwnerSectionCensusSnapshot[] hostWithoutAllocatorRows = completeVector
+            .Where(section => !allocatorIds.Contains(section.SectionId)).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedRuntimeIdAllocatorSections(
+                graph, hostWithoutAllocatorRows, out IReadOnlyList<OwnerSectionCensusSnapshot> recomposed,
+                out diagnostic), Is.True, diagnostic,
+            "The Core application can rebuild the complete vector after removing all allocator facts from the host boundary.");
+        Assert.That(recomposed.Select(section => section.SectionId),
+            Is.EqualTo(composed.Select(section => section.SectionId)));
+
+        OwnerSectionCensusSnapshot[] partialAllocatorRows = completeVector
+            .Where(section => section.SectionId != RuntimeIdAllocatorCensusProvider.EventsSectionId)
+            .ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedRuntimeIdAllocatorSections(
+                graph, partialAllocatorRows, out _, out _), Is.False,
+            "Partial host omission of the fixed allocator triplet fails closed.");
+
+        foreach (OwnerSectionCensusSnapshot coreRow in coreRows)
+        {
+            OwnerSectionCensusSnapshot[] wrongOwner = completeVector.Select(section =>
+                section.SectionId == coreRow.SectionId
+                    ? new OwnerSectionCensusSnapshot(section.SectionId, section.SchemaVersion,
+                        section.Role, new object(), section.Cardinality, section.Revision)
+                    : section).ToArray();
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedRuntimeIdAllocatorSections(
+                    graph, wrongOwner, out _, out _), Is.False,
+                "A substitute allocator identity is rejected for " + coreRow.SectionId + ".");
+
+            OwnerSectionCensusSnapshot[] staleRevision = completeVector.Select(section =>
+                section.SectionId == coreRow.SectionId
+                    ? new OwnerSectionCensusSnapshot(section.SectionId, section.SchemaVersion,
+                        section.Role, section.OwnerInstanceIdentity, section.Cardinality, section.Revision + 1L)
+                    : section).ToArray();
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedRuntimeIdAllocatorSections(
+                    graph, staleRevision, out _, out _), Is.False,
+                "A stale allocator counter revision is rejected for " + coreRow.SectionId + ".");
+        }
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                completeVector, graph, out IReadOnlyList<OwnerSectionCensusSnapshot> hostRemainder,
+                out diagnostic), Is.True, diagnostic);
+        Assert.That(hostRemainder.Any(section => allocatorIds.Contains(section.SectionId)), Is.False);
+
+        OwnerSectionCensusSnapshot[] beforeWrites = composed.Where(section =>
+            allocatorIds.Contains(section.SectionId)).ToArray();
+        allocator.AllocateEventId();
+        allocator.AllocateDecisionId();
+        allocator.AllocateTravelPartyId();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedRuntimeIdAllocatorSections(
+                graph, hostWithoutAllocatorRows,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> afterWrites,
+                out diagnostic), Is.True, diagnostic);
+        foreach (OwnerSectionCensusSnapshot before in beforeWrites)
+        {
+            OwnerSectionCensusSnapshot after = afterWrites.Single(section =>
+                section.SectionId == before.SectionId);
+            Assert.That(after.OwnerInstanceIdentity, Is.SameAs(allocatorOwnerIdentity), before.SectionId);
+            Assert.That(after.Revision, Is.GreaterThan(before.Revision), before.SectionId);
+        }
+
+        Assert.That(graph.TryCreateWithoutNpc(graph.Npcs[0],
+            out DailyV1SelectedRuntimeOwnerGraph replacementGraph), Is.True);
+        Assert.That(replacementGraph.RuntimeIdAllocator, Is.Null,
+            "A newly composed membership graph starts without an execution-root binding.");
+        DailyV1ExecutionBoundaryState executionState = session.ExecutionBoundaryState;
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> expectedRoster = executionState.SelectedRuntimeActorRoster;
+        Assert.That(executionState.TryCreateSelectedRuntimeActorRosterWithoutMember(
+            graph.Npcs[0].RuntimeId, replacementGraph,
+            out IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster), Is.True);
+        Assert.That(executionState.TryReplaceSelectedRuntimeMembership(
+            graph, replacementGraph, expectedRoster, replacementRoster), Is.True);
+        Assert.That(replacementGraph.RuntimeIdAllocator, Is.SameAs(allocator));
+        Assert.That(executionState.HasExactSelectedRuntimeExecutionRoots(
+            replacementGraph,
+            replacementGraph.PersonStore,
+            executionState.SelectedActorChoiceStore,
+            executionState.SelectedRandomSource,
+            allocator,
+            executionState.SelectedRecordSequence,
+            executionState.SelectedDecisionStore), Is.True);
+        Assert.That(executionState.HasExactSelectedRuntimeActorTurnRoots(
+            replacementGraph,
+            replacementGraph.PersonStore,
+            executionState.SelectedActorChoiceStore,
+            executionState.SelectedRandomSource), Is.True);
     }
 
     [Test]

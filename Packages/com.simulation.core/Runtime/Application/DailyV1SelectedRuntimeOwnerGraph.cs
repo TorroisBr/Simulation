@@ -26,6 +26,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal LegacySpatialAnchorBindingStore LegacySpatialAnchors { get; private set; }
     internal ScheduledDirectiveStore ScheduledDirectives { get; private set; }
     internal PoliticalKnowledgeStore PoliticalKnowledgeStore { get; private set; }
+    internal RuntimeIdAllocator RuntimeIdAllocator { get; private set; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
         DailyV1EffectiveDefinitions definitions,
@@ -87,6 +88,19 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         if (PoliticalKnowledgeStore != null)
             return ReferenceEquals(PoliticalKnowledgeStore, store);
         PoliticalKnowledgeStore = store;
+        return true;
+    }
+
+    /// <summary>
+    /// Binds the exact allocator root admitted by the owning Core execution
+    /// boundary. The graph retains the authority reference; it does not own a
+    /// second allocator or reproduce its counters.
+    /// </summary>
+    internal bool TryBindRuntimeIdAllocator(RuntimeIdAllocator allocator)
+    {
+        if (allocator == null) return false;
+        if (RuntimeIdAllocator != null) return ReferenceEquals(RuntimeIdAllocator, allocator);
+        RuntimeIdAllocator = allocator;
         return true;
     }
 

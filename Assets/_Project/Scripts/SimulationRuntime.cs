@@ -11545,6 +11545,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             && graph.PersonSpatialPositionStore != null
             && graph.LegacySpatialAnchors != null
             && graph.TravelParties != null
+            && ReferenceEquals(graph.RuntimeIdAllocator, state.SelectedRuntimeIdAllocator)
             && graph.Expeditions != null
             && graph.ScheduledDirectives != null
             && graph.PoliticalKnowledgeStore != null

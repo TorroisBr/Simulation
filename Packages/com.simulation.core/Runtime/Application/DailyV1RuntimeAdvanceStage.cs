@@ -686,6 +686,16 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         PoliticalKnowledgeStoreCensusProvider.SectionId
     };
 
+    private static readonly string[] CoreOwnedRuntimeIdAllocatorSectionIdValues =
+    {
+        RuntimeIdAllocatorCensusProvider.EventsSectionId,
+        RuntimeIdAllocatorCensusProvider.DecisionsSectionId,
+        RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId
+    };
+
+    internal static IReadOnlyList<string> CoreOwnedRuntimeIdAllocatorSectionIds { get; } =
+        Array.AsReadOnly(CoreOwnedRuntimeIdAllocatorSectionIdValues);
+
     /// <summary>
     /// Fixed selected-profile rows whose live source is the exact Core session
     /// graph. The Unity census protocol still tracks quiescence and mutation
@@ -723,11 +733,167 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         ScheduledDirectiveCensusProvider.SectionId,
         TravelPartyCensusProvider.SectionId,
         ExpeditionCensusProvider.SectionId,
-        PoliticalKnowledgeStoreCensusProvider.SectionId
+        PoliticalKnowledgeStoreCensusProvider.SectionId,
+        RuntimeIdAllocatorCensusProvider.EventsSectionId,
+        RuntimeIdAllocatorCensusProvider.DecisionsSectionId,
+        RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId
     };
 
     internal static IReadOnlyList<string> CoreOwnedSelectedRuntimeSectionIds { get; } =
         Array.AsReadOnly(CoreOwnedSelectedRuntimeSectionIdValues);
+
+    internal static bool TryCreateCoreOwnedRuntimeIdAllocatorCensusSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+        out string diagnostic)
+    {
+        sections = null;
+        diagnostic = null;
+        RuntimeIdAllocator allocator = graph?.RuntimeIdAllocator;
+        if (allocator == null)
+        {
+            diagnostic = "The Core runtime census requires the exact admitted RuntimeIdAllocator owner.";
+            return false;
+        }
+
+        OwnerSectionCensusWitness[] witnesses;
+        try
+        {
+            witnesses = new OwnerSectionCensusWitness[]
+            {
+                RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(allocator).GetCurrentCensus(),
+                RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(allocator).GetCurrentCensus(),
+                RuntimeIdAllocatorCensusProvider.CreateTravelPartyCounterProvider(allocator).GetCurrentCensus()
+            };
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            diagnostic = "The Core RuntimeIdAllocator provider could not read its exact owner.";
+            return false;
+        }
+
+        if (witnesses.Length != CoreOwnedRuntimeIdAllocatorSectionIdValues.Length)
+        {
+            diagnostic = "The Core RuntimeIdAllocator provider set is incomplete.";
+            return false;
+        }
+
+        HashSet<string> observedIds = new HashSet<string>(StringComparer.Ordinal);
+        OwnerSectionCensusSnapshot[] built =
+            new OwnerSectionCensusSnapshot[witnesses.Length];
+        RuntimeIdAllocatorCensusCounter[] counters =
+        {
+            RuntimeIdAllocatorCensusCounter.Events,
+            RuntimeIdAllocatorCensusCounter.Decisions,
+            RuntimeIdAllocatorCensusCounter.TravelParties
+        };
+        for (int i = 0; i < witnesses.Length; i++)
+        {
+            OwnerSectionCensusWitness witness = witnesses[i];
+            if (witness == null
+                || !string.Equals(witness.SectionId,
+                    CoreOwnedRuntimeIdAllocatorSectionIdValues[i], StringComparison.Ordinal)
+                || witness.SchemaVersion != RuntimeIdAllocatorCensusProvider.SchemaVersion
+                || witness.OwnerInstanceIdentity == null
+                || (i > 0 && !ReferenceEquals(
+                    witness.OwnerInstanceIdentity, witnesses[0].OwnerInstanceIdentity))
+                || witness.Cardinality != 1
+                || witness.Revision < 0L
+                || !observedIds.Add(witness.SectionId)
+                || !RuntimeIdAllocatorOwnerBridge.TryMatchCurrentCensus(
+                    allocator, counters[i], witness.OwnerInstanceIdentity,
+                    witness.Revision, out _))
+            {
+                diagnostic = "The Core RuntimeIdAllocator provider returned an invalid selected counter witness.";
+                return false;
+            }
+
+            built[i] = new OwnerSectionCensusSnapshot(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision);
+        }
+
+        sections = Array.AsReadOnly(built);
+        return true;
+    }
+
+    /// <summary>
+    /// Replaces the selected event, decision, and travel-party allocator rows
+    /// with witnesses read from the allocator bound to the Core owner graph.
+    /// The Unity census remains the quiescence/epoch source. A complete host
+    /// triplet must match exactly; a fully removed triplet is composed from
+    /// Core; partial omission or stale/substituted facts fail closed.
+    /// </summary>
+    internal static bool TryComposeCoreOwnedRuntimeIdAllocatorSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> composedSections,
+        out string diagnostic)
+    {
+        composedSections = null;
+        diagnostic = null;
+        if (hostSections == null
+            || !TryCreateCoreOwnedRuntimeIdAllocatorCensusSections(
+                graph, out IReadOnlyList<OwnerSectionCensusSnapshot> coreRows, out diagnostic))
+        {
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core allocator census requires its exact owner graph and host rows.";
+            return false;
+        }
+
+        Dictionary<string, OwnerSectionCensusSnapshot> hostById =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot section in hostSections)
+        {
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !hostById.TryAdd(section.SectionId, section))
+            {
+                diagnostic = "The selected census contains a missing or duplicate section identity.";
+                return false;
+            }
+        }
+
+        int presentRows = 0;
+        foreach (OwnerSectionCensusSnapshot expected in coreRows)
+        {
+            if (!hostById.TryGetValue(expected.SectionId,
+                    out OwnerSectionCensusSnapshot actual))
+                continue;
+
+            presentRows++;
+            if (!HasExactOwnerSectionFacts(actual, expected))
+            {
+                diagnostic = "The host census differs from the exact Core RuntimeIdAllocator owner at "
+                    + expected.SectionId + ".";
+                return false;
+            }
+        }
+
+        if (presentRows != 0 && presentRows != coreRows.Count)
+        {
+            diagnostic = "The host census partially omitted the Core RuntimeIdAllocator counter set.";
+            return false;
+        }
+
+        List<OwnerSectionCensusSnapshot> composed =
+            new List<OwnerSectionCensusSnapshot>(hostSections.Count - presentRows + coreRows.Count);
+        foreach (OwnerSectionCensusSnapshot section in hostSections)
+            if (Array.IndexOf(CoreOwnedRuntimeIdAllocatorSectionIdValues, section.SectionId) < 0)
+                composed.Add(section);
+        composed.AddRange(coreRows);
+        composed.Sort((left, right) =>
+            StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+
+        composedSections = Array.AsReadOnly(composed.ToArray());
+        return true;
+    }
 
     internal static bool TryRemoveCoreOwnedSelectedRuntimeSections(
         IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
@@ -783,6 +949,21 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
         foreach (OwnerSectionCensusSnapshot section in copiedHostSections)
             hostBySectionId.Add(section.SectionId, section);
+
+        if (!TryCreateCoreOwnedRuntimeIdAllocatorCensusSections(
+                graph, out IReadOnlyList<OwnerSectionCensusSnapshot> allocatorRows, out diagnostic))
+            return false;
+        foreach (OwnerSectionCensusSnapshot expected in allocatorRows)
+        {
+            if (!hostBySectionId.TryGetValue(expected.SectionId,
+                    out OwnerSectionCensusSnapshot actual)
+                || !HasExactOwnerSectionFacts(actual, expected))
+            {
+                diagnostic = "The host census differs from the exact Core RuntimeIdAllocator owner at "
+                    + expected.SectionId + ".";
+                return false;
+            }
+        }
 
         if (!TryCreateCoreOwnedIdentitySpatialCensusSections(
                 graph,
@@ -1496,10 +1677,16 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
         }
 
+        if (!TryComposeCoreOwnedRuntimeIdAllocatorSections(
+                graph, hostOwnedSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> sectionsWithAllocatorRows,
+                out diagnostic))
+            return false;
+
         HashSet<string> hostSectionIds = new HashSet<string>(StringComparer.Ordinal);
         List<OwnerSectionCensusSnapshot> composed =
-            new List<OwnerSectionCensusSnapshot>(hostOwnedSections.Count + CoreOwnedP12FSectionIdValues.Length);
-        foreach (OwnerSectionCensusSnapshot section in hostOwnedSections)
+            new List<OwnerSectionCensusSnapshot>(sectionsWithAllocatorRows.Count + CoreOwnedP12FSectionIdValues.Length);
+        foreach (OwnerSectionCensusSnapshot section in sectionsWithAllocatorRows)
         {
             if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
                 || !hostSectionIds.Add(section.SectionId)
