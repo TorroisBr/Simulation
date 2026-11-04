@@ -15,7 +15,8 @@ internal enum DailyV1P12DSelectedCoreOwnerStageFailure
     InvalidCityMembership,
     InvalidSpatialOwnerSnapshot,
     PersonStoreHydrationRejected,
-    GenealogyHydrationRejected
+    GenealogyHydrationRejected,
+    ExplorableSiteStoreHydrationRejected
 }
 
 /// <summary>
@@ -62,12 +63,14 @@ internal sealed class DailyV1P12DCoreRestoreOwnerStage
 {
     private readonly PersonStoreOwnerSnapshot personSnapshot;
     private readonly GenealogyOwnerSnapshot genealogySnapshot;
+    private readonly ExplorableSiteOwnerSnapshot siteSnapshot;
 
     internal SpatialNetworkOwner SpatialNetwork { get; }
     internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex { get; }
     internal DailyV1P12DSelectedCoreOwnerStage SelectedOwners { get; }
     internal PersonStore Persons { get; }
     internal GenealogyStore Genealogy { get; }
+    internal ExplorableSiteStore EmptyExplorableSites { get; }
     internal IReadOnlyList<DailyV1CityRuntimeOwners> Cities => SelectedOwners?.Cities;
     internal IReadOnlyList<DailyV1NpcRuntimeOwners> Npcs => SelectedOwners?.Npcs;
 
@@ -77,26 +80,38 @@ internal sealed class DailyV1P12DCoreRestoreOwnerStage
         DailyV1P12DSelectedCoreOwnerStage selectedOwners,
         PersonStore persons,
         GenealogyStore genealogy,
+        ExplorableSiteStore emptyExplorableSites,
         PersonStoreOwnerSnapshot personSnapshot,
-        GenealogyOwnerSnapshot genealogySnapshot)
+        GenealogyOwnerSnapshot genealogySnapshot,
+        ExplorableSiteOwnerSnapshot siteSnapshot)
     {
         SpatialNetwork = spatialNetwork ?? throw new ArgumentNullException(nameof(spatialNetwork));
         RuntimeIdentityIndex = runtimeIdentityIndex ?? throw new ArgumentNullException(nameof(runtimeIdentityIndex));
         SelectedOwners = selectedOwners ?? throw new ArgumentNullException(nameof(selectedOwners));
         Persons = persons ?? throw new ArgumentNullException(nameof(persons));
         Genealogy = genealogy ?? throw new ArgumentNullException(nameof(genealogy));
+        EmptyExplorableSites = emptyExplorableSites ?? throw new ArgumentNullException(nameof(emptyExplorableSites));
+        if (EmptyExplorableSites.Count != 0 || EmptyExplorableSites.Revision != 0L)
+            throw new ArgumentException("The selected Daily-v1 P12-D site owner must remain exactly empty.", nameof(emptyExplorableSites));
         this.personSnapshot = personSnapshot ?? throw new ArgumentNullException(nameof(personSnapshot));
         this.genealogySnapshot = genealogySnapshot ?? throw new ArgumentNullException(nameof(genealogySnapshot));
+        this.siteSnapshot = siteSnapshot ?? throw new ArgumentNullException(nameof(siteSnapshot));
     }
 
     internal bool MatchesImageOwnerValues(
         PersonStoreOwnerSnapshot expectedPersons,
-        GenealogyOwnerSnapshot expectedGenealogy)
+        GenealogyOwnerSnapshot expectedGenealogy,
+        ExplorableSiteOwnerSnapshot expectedSites)
     {
         if (!ReferenceEquals(personSnapshot, expectedPersons)
             || !ReferenceEquals(genealogySnapshot, expectedGenealogy)
+            || !ReferenceEquals(siteSnapshot, expectedSites)
             || Persons == null || Genealogy == null
-            || expectedPersons == null || expectedGenealogy == null)
+            || EmptyExplorableSites == null
+            || expectedPersons == null || expectedGenealogy == null
+            || expectedSites == null || expectedSites.SchemaVersion != ExplorableSiteOwnerSnapshot.CurrentSchemaVersion
+            || expectedSites.Revision != 0L || expectedSites.Sites == null || expectedSites.Sites.Count != 0
+            || EmptyExplorableSites.Count != 0 || EmptyExplorableSites.Revision != 0L)
             return false;
 
         PersonStoreOwnerSnapshot actualPersons = Persons.CaptureOwnerSnapshot();
@@ -167,6 +182,7 @@ internal static class DailyV1P12DSelectedCoreOwnerStager
         P12CRuntimeIdentityOwnerSnapshot runtimeIdentitySnapshot,
         PersonStoreOwnerSnapshot personSnapshot,
         GenealogyOwnerSnapshot genealogySnapshot,
+        ExplorableSiteOwnerSnapshot siteSnapshot,
         IReadOnlyList<DailyV1P12DCityCoreOwnerHydrationInput> cityInputs,
         IReadOnlyList<P12DNpcDRow> npcDRows,
         IReadOnlyList<P12DNpcFRow> npcFRows,
@@ -178,6 +194,7 @@ internal static class DailyV1P12DSelectedCoreOwnerStager
         failure = DailyV1P12DSelectedCoreOwnerStageFailure.InvalidInput;
         if (definitions == null || spatialSnapshot == null || runtimeIdentitySnapshot == null
             || personSnapshot == null || genealogySnapshot?.Export == null
+            || siteSnapshot == null
             || cityInputs == null || npcDRows == null || npcFRows == null
             || travelPartySnapshot?.Parties == null)
             return false;
@@ -195,6 +212,17 @@ internal static class DailyV1P12DSelectedCoreOwnerStager
             || genealogy == null)
         {
             failure = DailyV1P12DSelectedCoreOwnerStageFailure.GenealogyHydrationRejected;
+            return false;
+        }
+
+        if (!ExplorableSiteStore.TryCreateFromOwnerSnapshot(
+                siteSnapshot, Array.Empty<DailyV1ExplorableSiteDefinition>(),
+                Array.Empty<SpatialLocationRuntime>(),
+                out ExplorableSiteStore emptyExplorableSites, out _)
+            || emptyExplorableSites == null
+            || emptyExplorableSites.Count != 0 || emptyExplorableSites.Revision != 0L)
+        {
+            failure = DailyV1P12DSelectedCoreOwnerStageFailure.ExplorableSiteStoreHydrationRejected;
             return false;
         }
 
@@ -231,7 +259,8 @@ internal static class DailyV1P12DSelectedCoreOwnerStager
 
         stage = new DailyV1P12DCoreRestoreOwnerStage(
             spatialNetwork, runtimeIdentityIndex, selectedOwners,
-            persons, genealogy, personSnapshot, genealogySnapshot);
+            persons, genealogy, emptyExplorableSites,
+            personSnapshot, genealogySnapshot, siteSnapshot);
         failure = DailyV1P12DSelectedCoreOwnerStageFailure.None;
         return true;
     }

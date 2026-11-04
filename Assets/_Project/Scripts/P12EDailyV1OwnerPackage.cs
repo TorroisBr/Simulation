@@ -496,15 +496,26 @@ internal sealed class P12EDailyV1OwnerPackage
             P12AJusticeReceiptOwnerSnapshot justiceReceiptSnapshot = decoded.JusticeReceipts;
 
             bool coreOwnerStageAccepted;
-            P12ECoreOwnerRestoreStage coreOwnerStage;
+            P12ECoreOwnerRestoreStage coreOwnerStage = null;
             if (context.Application != null)
             {
                 if (context.RestoredImageCoreOwnerStages != null)
                 {
-                    coreOwnerStageAccepted = context.Application.TryStageRestoredImageP12EOwners(
-                        context.RestoredImageCoreOwnerStages,
-                        out coreOwnerStage, out _,
-                        step => ObserveCoreOwnerRestoreStep(stageObserver, step));
+                    if (context.RestoredImageCoreOwnerStages.E != null)
+                    {
+                        // The application may have completed this exact Core
+                        // stage as part of its ordered restored-image sequence.
+                        // Reuse that authority; never stage a second owner graph.
+                        coreOwnerStage = context.RestoredImageCoreOwnerStages.E;
+                        coreOwnerStageAccepted = true;
+                    }
+                    else
+                    {
+                        coreOwnerStageAccepted = context.Application.TryStageRestoredImageP12EOwners(
+                            context.RestoredImageCoreOwnerStages,
+                            out coreOwnerStage, out _,
+                            step => ObserveCoreOwnerRestoreStep(stageObserver, step));
+                    }
                 }
                 else
                 {
@@ -680,7 +691,7 @@ internal sealed class P12EDailyV1OwnerPackage
         return builder.TryBuild(out staged, out _);
     }
 
-    private static void ObserveCoreOwnerRestoreStep(
+    internal static void ObserveCoreOwnerRestoreStep(
         Action<P12GDailyV1RestoreStage> stageObserver,
         P12ECoreOwnerRestoreStep step)
     {

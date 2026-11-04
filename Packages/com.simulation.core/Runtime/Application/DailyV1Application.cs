@@ -12,6 +12,17 @@ internal enum DailyV1P12FCoreOwnerRestoreStep
     Expeditions = 4
 }
 
+/// <summary>Completed private Core owner stages whose host projections must be made in order.</summary>
+internal enum DailyV1RestoredImageCoreOwnerStageBoundary : byte
+{
+    None = 0,
+    P12DOwners = 1,
+    RuntimeAuthorities = 2,
+    P12EOwners = 3,
+    P12FOwners = 4,
+    CoreSessionComposition = 5
+}
+
 internal enum DailyV1RestoredImageOwnerVectorStage : byte
 {
     Captured = 1
@@ -62,6 +73,7 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
     internal DailyV1P12FCoreOwnerRestoreStage F { get; private set; }
     internal ExplorableSiteStore EmptyExplorableSites { get; private set; }
     internal DailyV1ActiveRuntimeSession CoreSession { get; private set; }
+    internal SimulationCalendar CoreCalendar { get; private set; }
 
     internal P12AContinuationImage Image => image;
     internal DailyV1EffectiveDefinitions Definitions => definitions;
@@ -75,7 +87,7 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
     internal bool CanStageF => !failed && D != null && E != null && F == null;
     internal bool IsComplete => !failed && D != null && DecisionStore != null
         && EventAuthority != null && E != null && F != null && EmptyExplorableSites != null;
-    internal bool CanComposeCoreSession => IsComplete && CoreSession == null;
+    internal bool CanComposeCoreSession => IsComplete && CoreSession == null && CoreCalendar == null;
 
     internal DailyV1RestoredImageCoreOwnerStages(
         DailyV1Application application,
@@ -163,7 +175,7 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
         DailyV1DomainEventAuthority candidateEventAuthority) =>
         IsFor(candidateApplication, candidateImage, candidateDefinitions, candidateCoreRoots,
             candidateExpectedSession, candidateReplacementOperation)
-        && CanComposeCoreSession
+        && (CanComposeCoreSession || (CoreSession != null && CoreCalendar != null))
         && ReferenceEquals(StagedTime, candidateTime)
         && ReferenceEquals(D, candidateD)
         && ReferenceEquals(E, candidateE)
@@ -172,11 +184,13 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
 
     internal bool TryAcceptCoreSession(
         DailyV1ActiveRuntimeSession candidate,
+        SimulationCalendar candidateCalendar,
         SimulationRuntimeAdmissionContext candidateAdmissionContext,
         out string diagnostic)
     {
         diagnostic = null;
-        if (!CanComposeCoreSession || candidate == null || candidateAdmissionContext == null
+        if (!CanComposeCoreSession || candidate == null || candidateCalendar == null || candidateAdmissionContext == null
+            || !ReferenceEquals(candidate.Calendar, candidateCalendar)
             || !ReferenceEquals(candidate.Definitions, definitions)
             || !ReferenceEquals(candidate.EventAuthority, EventAuthority)
             || !ReferenceEquals(candidate.SimulationTime, StagedTime)
@@ -233,6 +247,7 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
         }
 
         CoreSession = candidate;
+        CoreCalendar = candidateCalendar;
         return true;
     }
 
@@ -263,6 +278,7 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
         F = null;
         EmptyExplorableSites = null;
         CoreSession = null;
+        CoreCalendar = null;
     }
 }
 /// <summary>
@@ -2951,7 +2967,7 @@ internal sealed class DailyV1Application
         if (stagedRoots == null || !stagedRoots.IsDetached || snapshots == null
             || definitions == null || snapshots.SpatialNetwork == null
             || snapshots.RuntimeIdentities == null || snapshots.Persons == null
-            || snapshots.Genealogy == null || snapshots.Cities == null
+            || snapshots.Genealogy == null || snapshots.Sites == null || snapshots.Cities == null
             || snapshots.NpcDRows == null || snapshots.NpcFRows == null
             || snapshots.TravelParties == null)
         {
@@ -2965,6 +2981,7 @@ internal sealed class DailyV1Application
                 snapshots.RuntimeIdentities,
                 snapshots.Persons,
                 snapshots.Genealogy,
+                snapshots.Sites,
                 snapshots.Cities,
                 snapshots.NpcDRows,
                 snapshots.NpcFRows,
@@ -3409,7 +3426,8 @@ internal sealed class DailyV1Application
         }
 
         if (candidateSession == null
-            || !stages.TryAcceptCoreSession(candidateSession, restoredAdmissionContext, out diagnostic))
+            || !stages.TryAcceptCoreSession(
+                candidateSession, candidateCalendar, restoredAdmissionContext, out diagnostic))
         {
             stages.Fail();
             candidate = null;
@@ -3422,6 +3440,132 @@ internal sealed class DailyV1Application
         candidate = candidateSession;
         calendar = candidateCalendar;
         return true;
+    }
+
+    /// <summary>
+    /// Owns the ordered private image restore stages after P12-C: Core P12-D,
+    /// runtime record authorities, Core P12-E, Core P12-F, then the Core session.
+    /// The host may project each completed stage before Core advances to the next;
+    /// it receives only the stage identity and cannot replace Core owner values.
+    /// The resulting session remains private and unfinalized for the later commit gate.
+    /// </summary>
+    internal bool TryStageRestoredImageCoreOwnerStagesAndComposeSession(
+        DailyV1RestoredImageCoreOwnerStages stages,
+        SimulationLogger diagnosticLogger,
+        long lastEconomySnapshotDay,
+        Func<DailyV1RestoredImageCoreOwnerStageBoundary, bool> projectCompletedStage,
+        Action<P12ECoreOwnerRestoreStep> p12EOwnerStageObserver,
+        Action<DailyV1P12FCoreOwnerRestoreStep> p12FOwnerStageObserver,
+        out DailyV1RestoredImageCoreOwnerStageBoundary failedBoundary,
+        out P12AResult result,
+        out string diagnostic)
+    {
+        failedBoundary = DailyV1RestoredImageCoreOwnerStageBoundary.None;
+        result = new P12AResult(P12AResultCode.Busy);
+        diagnostic = null;
+        if (stages == null
+            || !stages.IsFor(this, stages.Image, stages.Definitions, stages.CoreRoots,
+                stages.ExpectedSession, stages.ReplacementOperation)
+            || !HasRestoredContinuationStagingAuthority(stages.ExpectedSession, stages.ReplacementOperation)
+            || diagnosticLogger == null)
+        {
+            stages?.Fail();
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            diagnostic = "The Core application no longer owns the exact private restored-image operation.";
+            return false;
+        }
+
+        try
+        {
+            failedBoundary = DailyV1RestoredImageCoreOwnerStageBoundary.P12DOwners;
+            if (!TryStageRestoredImageP12DOwners(stages, out _, out result))
+            {
+                diagnostic = "Core could not stage the P12-D image owners.";
+                stages.Fail();
+                return false;
+            }
+            if (projectCompletedStage != null
+                && !projectCompletedStage(DailyV1RestoredImageCoreOwnerStageBoundary.P12DOwners))
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12.core.restored-image-p12d-projection");
+                diagnostic = "The host rejected the completed private P12-D projection.";
+                stages.Fail();
+                return false;
+            }
+
+            failedBoundary = DailyV1RestoredImageCoreOwnerStageBoundary.RuntimeAuthorities;
+            if (!TryPrepareRestoredImageCoreRuntimeAuthorities(
+                    stages, diagnosticLogger, out _, out _, out result))
+            {
+                diagnostic = "Core could not prepare the restored decision and event authorities.";
+                stages.Fail();
+                return false;
+            }
+
+            failedBoundary = DailyV1RestoredImageCoreOwnerStageBoundary.P12EOwners;
+            if (!TryStageRestoredImageP12EOwners(
+                    stages, out _, out result, p12EOwnerStageObserver))
+            {
+                diagnostic = "Core could not stage the P12-E image owners.";
+                stages.Fail();
+                return false;
+            }
+            if (projectCompletedStage != null
+                && !projectCompletedStage(DailyV1RestoredImageCoreOwnerStageBoundary.P12EOwners))
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12.core.restored-image-p12e-projection");
+                diagnostic = "The host rejected the completed private P12-E projection.";
+                stages.Fail();
+                return false;
+            }
+
+            failedBoundary = DailyV1RestoredImageCoreOwnerStageBoundary.P12FOwners;
+            if (!TryStageRestoredImageP12FOwners(
+                    stages, stages.D.EmptyExplorableSites, out _, out result,
+                    p12FOwnerStageObserver))
+            {
+                diagnostic = "Core could not stage the P12-F image owners.";
+                stages.Fail();
+                return false;
+            }
+            if (projectCompletedStage != null
+                && !projectCompletedStage(DailyV1RestoredImageCoreOwnerStageBoundary.P12FOwners))
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12.core.restored-image-p12f-projection");
+                diagnostic = "The host rejected the completed private P12-F projection.";
+                stages.Fail();
+                return false;
+            }
+
+            failedBoundary = DailyV1RestoredImageCoreOwnerStageBoundary.CoreSessionComposition;
+            if (!TryComposeRestoredImageCoreSession(
+                    stages, lastEconomySnapshotDay, out _, out _, out diagnostic))
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12.core.restored-image-session");
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "Core could not compose the private restored-image session.";
+                stages.Fail();
+                return false;
+            }
+
+            failedBoundary = DailyV1RestoredImageCoreOwnerStageBoundary.None;
+            result = null;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException
+            || exception is NullReferenceException)
+        {
+            stages.Fail();
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12.core.restored-image-owner-stages");
+            diagnostic = "The private Core restored-image owner sequence failed: " + exception.Message;
+            return false;
+        }
     }
 
     /// <summary>Stages P12-E Core owners from the exact P12-C/D portion of the operation.</summary>

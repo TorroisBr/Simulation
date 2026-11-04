@@ -458,8 +458,10 @@ internal sealed class P12DDailyV1OwnerPackage
                 new DailyV1P12DSelectedCoreOwnerStage(selectedCityOwners, selectedNpcOwners),
                 stagedPersons,
                 stagedGenealogy,
+                stagedSites,
                 personSnapshot,
-                genealogySnapshot);
+                genealogySnapshot,
+                siteSnapshot);
         }
 
         package = new P12DDailyV1OwnerPackage(
@@ -517,7 +519,8 @@ internal sealed class P12DDailyV1OwnerPackage
                     || stagedCoreOwnerGraph.SelectedOwners == null
                     || stagedCoreOwnerGraph.Persons == null
                     || stagedCoreOwnerGraph.Genealogy == null
-                    || !stagedCoreOwnerGraph.MatchesImageOwnerValues(personSnapshot, genealogySnapshot)
+                    || stagedCoreOwnerGraph.EmptyExplorableSites == null
+                    || !stagedCoreOwnerGraph.MatchesImageOwnerValues(personSnapshot, genealogySnapshot, siteSnapshot)
                     || !ReferenceEquals(stagedCoreOwnerGraph.RuntimeIdentityIndex,
                         stagedRuntimeIdentities.CoreIdentityIndex)
                     || !stagedRuntimeIdentities.HasNoBoundRuntimeProjections
@@ -542,7 +545,7 @@ internal sealed class P12DDailyV1OwnerPackage
 
         if (stagedCoreOwnerGraph != null)
         {
-            if (!stagedCoreOwnerGraph.MatchesImageOwnerValues(personSnapshot, genealogySnapshot))
+            if (!stagedCoreOwnerGraph.MatchesImageOwnerValues(personSnapshot, genealogySnapshot, siteSnapshot))
             { failure = P12DDailyV1OwnerPackageFailure.InvalidOwnerSnapshot; return false; }
             stagedPersons = stagedCoreOwnerGraph.Persons;
             stagedGenealogy = stagedCoreOwnerGraph.Genealogy;
@@ -666,9 +669,16 @@ internal sealed class P12DDailyV1OwnerPackage
                 : stagedRuntimeIdentities.RegisterNpc(npc)))
             { failure = P12DDailyV1OwnerPackageFailure.InvalidIdentityRoot; return false; }
 
-        if (!ExplorableSiteStore.TryCreateFromOwnerSnapshot(siteSnapshot, admittedDailySiteDefinitions,
-                stagedLocations, out ExplorableSiteStore stagedSites, out _)
-            || stagedSites == null || stagedSites.Count != 0 || stagedSites.Revision != 0L
+        ExplorableSiteStore stagedSites = stagedCoreOwnerGraph?.EmptyExplorableSites;
+        if (stagedSites == null
+            && !ExplorableSiteStore.TryCreateFromOwnerSnapshot(siteSnapshot, admittedDailySiteDefinitions,
+                stagedLocations, out stagedSites, out _))
+        {
+            failure = P12DDailyV1OwnerPackageFailure.InvalidRelation;
+            return false;
+        }
+
+        if (stagedSites == null || stagedSites.Count != 0 || stagedSites.Revision != 0L
             || !TryValidateFinalGraph(stagedCities, stagedNpcRoster, stagedPersons, stagedGenealogy,
                 stagedLocations, stagedSpatialNetwork, citySnapshots, npcDRows))
         { failure = P12DDailyV1OwnerPackageFailure.InvalidRelation; return false; }

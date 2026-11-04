@@ -132,9 +132,10 @@ public sealed class DailyV1P12DSelectedCoreOwnerStagerTests
             {
                 new ParentageRecord(new PersonId("person/two"), new PersonId("person/one"))
             });
+        ExplorableSiteOwnerSnapshot sites = CreateEmptySiteSnapshot();
 
         Assert.That(DailyV1P12DSelectedCoreOwnerStager.TryCreateFromImageValues(
-            definitions, spatial, identities, persons, genealogy, new[] { city },
+            definitions, spatial, identities, persons, genealogy, sites, new[] { city },
             new[] { npcTwo.DRow, npcOne.DRow }, new[] { npcTwoF, npcOneF }, parties,
             out DailyV1P12DCoreRestoreOwnerStage staged,
             out DailyV1P12DSelectedCoreOwnerStageFailure failure), Is.True, failure.ToString());
@@ -146,13 +147,32 @@ public sealed class DailyV1P12DSelectedCoreOwnerStagerTests
         Assert.That(staged.Persons.MaterializedBindingCount, Is.EqualTo(persons.BindingCount));
         Assert.That(staged.Genealogy.Revision, Is.EqualTo(genealogy.Revision));
         Assert.That(staged.Genealogy.Records, Is.EqualTo(genealogy.Records).AsCollection);
-        Assert.That(staged.MatchesImageOwnerValues(persons, genealogy), Is.True);
+        Assert.That(staged.EmptyExplorableSites.Count, Is.Zero);
+        Assert.That(staged.EmptyExplorableSites.Revision, Is.Zero);
+        Assert.That(staged.MatchesImageOwnerValues(persons, genealogy, sites), Is.True);
         Assert.That(staged.MatchesImageOwnerValues(
             new PersonStoreOwnerSnapshot(PersonStoreOwnerSnapshot.CurrentSchemaId,
                 PersonStoreOwnerSnapshot.CurrentSchemaVersion, persons.Revision,
                 persons.MembershipCount, persons.BindingCount, persons.Rows),
-            genealogy), Is.False,
+            genealogy, sites), Is.False,
             "The Core stage is bound to the exact decoded snapshot instances, not lookalike host values.");
+        Assert.That(staged.MatchesImageOwnerValues(persons, genealogy, CreateEmptySiteSnapshot()), Is.False,
+            "The exact empty site owner is bound to the same decoded site section.");
+        ExplorableSiteOwnerSnapshot unsupportedSites = new ExplorableSiteOwnerSnapshot(
+            ExplorableSiteOwnerSnapshot.CurrentSchemaVersion, 1L,
+            new[]
+            {
+                new ExplorableSiteOwnerSnapshotRecord(
+                    "site/runtime", "site/instance", "site/definition", city.ResolvedLocationRuntimeId)
+            });
+        Assert.That(DailyV1P12DSelectedCoreOwnerStager.TryCreateFromImageValues(
+            definitions, spatial, identities, persons, genealogy, unsupportedSites, new[] { city },
+            new[] { npcTwo.DRow, npcOne.DRow }, new[] { npcTwoF, npcOneF }, parties,
+            out DailyV1P12DCoreRestoreOwnerStage siteRejectedStage,
+            out DailyV1P12DSelectedCoreOwnerStageFailure siteFailure), Is.False);
+        Assert.That(siteRejectedStage, Is.Null);
+        Assert.That(siteFailure,
+            Is.EqualTo(DailyV1P12DSelectedCoreOwnerStageFailure.ExplorableSiteStoreHydrationRejected));
         Assert.That(staged.SpatialNetwork.RouteCount, Is.EqualTo(1));
         Assert.That(staged.SpatialNetwork.Routes[0].RuntimeId, Is.EqualTo("route/staged"));
         Assert.That(staged.RuntimeIdentityIndex.CensusRevision, Is.EqualTo(identities.Revision));
@@ -194,6 +214,7 @@ public sealed class DailyV1P12DSelectedCoreOwnerStagerTests
         P12FTravelPartyOwnerSnapshot parties = new P12FTravelPartyOwnerSnapshot(
             P12FTravelPartyOwnerSnapshot.CurrentSchemaVersion, 0L,
             Array.Empty<P12FTravelPartyOwnerSnapshotRecord>());
+        ExplorableSiteOwnerSnapshot sites = CreateEmptySiteSnapshot();
         PersonStoreOwnerSnapshot persons = new PersonStoreOwnerSnapshot(
             PersonStoreOwnerSnapshot.CurrentSchemaId, PersonStoreOwnerSnapshot.CurrentSchemaVersion,
             0L, 0, 0, Array.Empty<PersonStoreOwnerSnapshotRow>());
@@ -202,7 +223,7 @@ public sealed class DailyV1P12DSelectedCoreOwnerStagerTests
             Array.Empty<ParentageRecord>());
 
         Assert.That(DailyV1P12DSelectedCoreOwnerStager.TryCreateFromImageValues(
-            definitions, spatial, identities, persons, genealogy, new[] { city }, new[] { npc.DRow },
+            definitions, spatial, identities, persons, genealogy, sites, new[] { city }, new[] { npc.DRow },
             new[] { CreateNpcFRow("npc/one") }, parties,
             out DailyV1P12DCoreRestoreOwnerStage staged,
             out DailyV1P12DSelectedCoreOwnerStageFailure failure), Is.False);
@@ -231,6 +252,7 @@ public sealed class DailyV1P12DSelectedCoreOwnerStagerTests
         P12FTravelPartyOwnerSnapshot parties = new P12FTravelPartyOwnerSnapshot(
             P12FTravelPartyOwnerSnapshot.CurrentSchemaVersion, 0L,
             Array.Empty<P12FTravelPartyOwnerSnapshotRecord>());
+        ExplorableSiteOwnerSnapshot sites = CreateEmptySiteSnapshot();
         GenealogyOwnerSnapshot validGenealogy = new GenealogyOwnerSnapshot(
             GenealogyOwnerSnapshot.CurrentSchemaVersion, 0L, Array.Empty<ParentageRecord>());
         PersonStoreOwnerSnapshot malformedPersons = new PersonStoreOwnerSnapshot(
@@ -243,7 +265,7 @@ public sealed class DailyV1P12DSelectedCoreOwnerStagerTests
             });
 
         Assert.That(DailyV1P12DSelectedCoreOwnerStager.TryCreateFromImageValues(
-            definitions, spatial, identities, malformedPersons, validGenealogy, new[] { city },
+            definitions, spatial, identities, malformedPersons, validGenealogy, sites, new[] { city },
             new[] { npc.DRow }, new[] { CreateNpcFRow("npc/one") }, parties,
             out DailyV1P12DCoreRestoreOwnerStage failedPersonStage,
             out DailyV1P12DSelectedCoreOwnerStageFailure personFailure), Is.False);
@@ -257,7 +279,7 @@ public sealed class DailyV1P12DSelectedCoreOwnerStagerTests
         GenealogyOwnerSnapshot malformedGenealogy = new GenealogyOwnerSnapshot(
             GenealogyOwnerSnapshot.CurrentSchemaVersion + 1, 0L, Array.Empty<ParentageRecord>());
         Assert.That(DailyV1P12DSelectedCoreOwnerStager.TryCreateFromImageValues(
-            definitions, spatial, identities, validPersons, malformedGenealogy, new[] { city },
+            definitions, spatial, identities, validPersons, malformedGenealogy, sites, new[] { city },
             new[] { npc.DRow }, new[] { CreateNpcFRow("npc/one") }, parties,
             out DailyV1P12DCoreRestoreOwnerStage failedGenealogyStage,
             out DailyV1P12DSelectedCoreOwnerStageFailure genealogyFailure), Is.False);
@@ -303,6 +325,11 @@ public sealed class DailyV1P12DSelectedCoreOwnerStagerTests
         Assert.That(spatial.TryInstallRestoredLocation(location, () => true), Is.True);
         return spatial;
     }
+
+    private static ExplorableSiteOwnerSnapshot CreateEmptySiteSnapshot() =>
+        new ExplorableSiteOwnerSnapshot(
+            ExplorableSiteOwnerSnapshot.CurrentSchemaVersion, 0L,
+            Array.Empty<ExplorableSiteOwnerSnapshotRecord>());
 
     private static DailyV1P12DCityCoreOwnerHydrationInput CreateCityInput(
         DailyV1EffectiveDefinitions definitions,

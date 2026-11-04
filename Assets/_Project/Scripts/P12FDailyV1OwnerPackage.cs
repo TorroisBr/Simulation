@@ -451,11 +451,21 @@ internal sealed class P12FDailyV1OwnerPackage
                 bool coreStageAccepted;
                 if (context.RestoredImageCoreOwnerStages != null)
                 {
-                    coreStageAccepted = context.Application.TryStageRestoredImageP12FOwners(
-                        context.RestoredImageCoreOwnerStages,
-                        context.P12DPackage.EmptyExplorableSites,
-                        out coreOwnerStage, out _,
-                        step => ObserveP12FCoreOwnerRestoreStep(stageObserver, step));
+                    if (context.RestoredImageCoreOwnerStages.F != null)
+                    {
+                        // Continue with the exact Core owner graph already
+                        // staged by the application restore operation.
+                        coreOwnerStage = context.RestoredImageCoreOwnerStages.F;
+                        coreStageAccepted = true;
+                    }
+                    else
+                    {
+                        coreStageAccepted = context.Application.TryStageRestoredImageP12FOwners(
+                            context.RestoredImageCoreOwnerStages,
+                            context.P12DPackage.EmptyExplorableSites,
+                            out coreOwnerStage, out _,
+                            step => ObserveP12FCoreOwnerRestoreStep(stageObserver, step));
+                    }
                 }
                 else
                 {
@@ -569,7 +579,7 @@ internal sealed class P12FDailyV1OwnerPackage
         return true;
     }
 
-    private static void ObserveP12FCoreOwnerRestoreStep(
+    internal static void ObserveP12FCoreOwnerRestoreStep(
         Action<P12GDailyV1RestoreStage> stageObserver,
         DailyV1P12FCoreOwnerRestoreStep step)
     {

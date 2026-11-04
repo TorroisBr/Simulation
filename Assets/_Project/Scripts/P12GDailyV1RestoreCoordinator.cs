@@ -1709,14 +1709,27 @@ internal static partial class P12GDailyV1RestoreCoordinator
         }
         else if (stagedImageCoreOwners != null)
         {
-            if (!application.TryComposeRestoredImageCoreSession(
-                    stagedImageCoreOwners,
-                    lastEconomySnapshotDay,
-                    out coreRuntimeSession,
-                    out restoredCalendar,
-                    out diagnostic)
-                || coreRuntimeSession == null)
+            if (stagedImageCoreOwners.CoreSession != null)
+            {
+                coreRuntimeSession = stagedImageCoreOwners.CoreSession;
+                restoredCalendar = stagedImageCoreOwners.CoreCalendar;
+                if (restoredCalendar == null
+                    || !ReferenceEquals(coreRuntimeSession.Calendar, restoredCalendar))
+                {
+                    diagnostic = "The already composed Core restored session lost its exact calendar projection.";
+                    return false;
+                }
+            }
+            else if (!application.TryComposeRestoredImageCoreSession(
+                         stagedImageCoreOwners,
+                         lastEconomySnapshotDay,
+                         out coreRuntimeSession,
+                         out restoredCalendar,
+                         out diagnostic)
+                     || coreRuntimeSession == null)
+            {
                 return false;
+            }
 
             restoredAdmissionContext = coreRuntimeSession.AdmissionContext;
             if (restoredAdmissionContext == null)
