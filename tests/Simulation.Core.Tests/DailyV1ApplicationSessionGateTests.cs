@@ -45,6 +45,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         private readonly DailyV1ExecutionBoundaryState state;
         private readonly Action onOperationEntry;
         private IReadOnlyList<OwnerSectionCensusSnapshot> admissionOwnerSections;
+        private object justiceProjectionIdentity;
+        private long justiceP18ReceiptRevision;
         private long admissionMutationEpoch;
         private Exception continuationSaveCaptureException;
         private Action<int> onContinuationSaveEvidenceCapture;
@@ -59,6 +61,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             this.state = state;
             this.onOperationEntry = onOperationEntry;
             this.admissionOwnerSections = SortHostOwnerSections(admissionOwnerSections);
+            CaptureJusticeProjectionIdentity(this.admissionOwnerSections);
             this.admissionMutationEpoch = admissionMutationEpoch;
         }
 
@@ -86,6 +89,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             long mutationEpoch)
         {
             admissionOwnerSections = SortHostOwnerSections(ownerSections);
+            CaptureJusticeProjectionIdentity(admissionOwnerSections);
             admissionMutationEpoch = mutationEpoch;
         }
 
@@ -97,8 +101,39 @@ public sealed class DailyV1ApplicationSessionGateTests
                     StringComparer.Ordinal.Compare(left?.SectionId, right?.SectionId));
             return ownerSections;
         }
+        private void CaptureJusticeProjectionIdentity(
+            IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections)
+        {
+            if (justiceProjectionIdentity != null || ownerSections == null) return;
+            OwnerSectionCensusSnapshot records = ownerSections.FirstOrDefault(section =>
+                string.Equals(section?.SectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId, StringComparison.Ordinal));
+            OwnerSectionCensusSnapshot receipts = ownerSections.FirstOrDefault(section =>
+                string.Equals(section?.SectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId, StringComparison.Ordinal));
+            if (records == null || receipts == null
+                || !ReferenceEquals(records.OwnerInstanceIdentity, receipts.OwnerInstanceIdentity)) return;
+            justiceProjectionIdentity = records.OwnerInstanceIdentity;
+            justiceP18ReceiptRevision = receipts.Revision;
+        }
+
         public DailyV1ExecutionBoundaryState ExecutionState => state;
         public bool HasExactCoreOwnedSelectedCensusSources { get; set; } = true;
+        public bool TryGetExactJusticeRecordsCensusProjectionIdentity(
+            DailyV1JusticeRecordsOwner owner,
+            out object projectionIdentity,
+            out long p18ReceiptRevision)
+        {
+            projectionIdentity = null;
+            p18ReceiptRevision = 0L;
+            if (owner == null || justiceProjectionIdentity == null
+                || !ReferenceEquals(state.SelectedRuntimeOwnerGraph?.JusticeRecordsOwner, owner))
+                return false;
+            projectionIdentity = justiceProjectionIdentity;
+            p18ReceiptRevision = justiceP18ReceiptRevision;
+            return true;
+        }
+
         public DailyCaptureEligibilityFailure CensusFailure { get; set; }
         public bool HasIntradayTimeline => false;
 
@@ -525,7 +560,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         sections = ReplaceSelectedNpcOwnerSectionVector(graph, sections);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
             graph, sections, out _, out string diagnostic), Is.True, diagnostic);
-        return sections;
+        return RebindCoreJusticeOwnerSectionVector(graph, sections);
     }
 
     private static PoliticalKnowledgeStore CreateAndBindCorePoliticalKnowledgeStore(
@@ -549,13 +584,36 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1ActiveRuntimeSession session)
     {
         OwnerSectionCensusSnapshot[] existing = CreateCoreBoundP12FSectionVectorWithoutCity(session);
-        return ReplaceCityOwnerSectionVector(session, existing);
+        return RebindCoreJusticeOwnerSectionVector(session.OwnerGraph, ReplaceCityOwnerSectionVector(session, existing));
+    }
+
+    private static OwnerSectionCensusSnapshot[] RebindCoreJusticeOwnerSectionVector(
+        DailyV1SelectedRuntimeOwnerGraph graph, OwnerSectionCensusSnapshot[] sections)
+    {
+        DailyV1JusticeRecordsOwner justiceOwner = graph?.JusticeRecordsOwner;
+        Assert.That(justiceOwner, Is.Not.Null);
+        int recordCardinality = checked(justiceOwner.WantedRecords.Count + justiceOwner.Sentences.Count);
+        int recordsIndex = Array.FindIndex(sections, section => string.Equals(section.SectionId,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId, StringComparison.Ordinal));
+        int receiptsIndex = Array.FindIndex(sections, section => string.Equals(section.SectionId,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId, StringComparison.Ordinal));
+        Assert.That(recordsIndex, Is.GreaterThanOrEqualTo(0));
+        Assert.That(receiptsIndex, Is.GreaterThanOrEqualTo(0));
+        object justiceProjectionIdentity = sections[recordsIndex].OwnerInstanceIdentity;
+        sections[recordsIndex] = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required, justiceProjectionIdentity, recordCardinality, justiceOwner.Revision);
+        sections[receiptsIndex] = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required, justiceProjectionIdentity, 1, sections[receiptsIndex].Revision);
+        return sections;
     }
 
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundCompleteOwnerSectionVector(
         DailyV1ActiveRuntimeSession session)
         => CreateCoreBoundCityAndP12FSectionVector(session);
-
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundCompleteOwnerSectionVector(
         DailyV1SelectedRuntimeOwnerGraph graph,
         ActorChoiceStore actorChoices)
@@ -598,7 +656,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         sections = ReplaceSelectedNpcOwnerSectionVector(graph, sections);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
             graph, sections, out _, out string diagnostic), Is.True, diagnostic);
-        return sections;
+        return RebindCoreJusticeOwnerSectionVector(graph, sections);
     }
 
     private static OwnerSectionCensusSnapshot[] ReplaceSelectedNpcOwnerSectionVector(
@@ -2311,6 +2369,79 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
 
         Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void CoreRejectsJusticeCensusThatDoesNotMatchItsExactOwnerAndProjection()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary hostPorts);
+        DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
+            session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
+        Assert.That(coreBoundary, Is.Not.Null);
+        OwnerSectionCensusSnapshot[] baseline = CreateCoreBoundCompleteOwnerSectionVector(session);
+        OwnerSectionCensusSnapshot baselineRecords = baseline.Single(section => string.Equals(
+            section.SectionId, DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId, StringComparison.Ordinal));
+        OwnerSectionCensusSnapshot baselineReceipts = baseline.Single(section => string.Equals(
+            section.SectionId, DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId, StringComparison.Ordinal));
+        Assert.That(baselineRecords.OwnerInstanceIdentity, Is.SameAs(baselineReceipts.OwnerInstanceIdentity));
+        hostPorts.SetAdmissionEvidence(baseline, mutationEpoch: 73L);
+
+        Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(false,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> admitted, out long admittedEpoch,
+            out DailyCaptureEligibilityFailure failure), Is.True);
+        Assert.That(admittedEpoch, Is.EqualTo(73L));
+        Assert.That(admitted.Single(section => section.SectionId
+                == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId).Cardinality,
+            Is.EqualTo(session.OwnerGraph.JusticeRecordsOwner.WantedRecords.Count
+                + session.OwnerGraph.JusticeRecordsOwner.Sentences.Count));
+        Assert.That(admitted.Single(section => section.SectionId
+                == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId).Revision,
+            Is.EqualTo(session.OwnerGraph.JusticeRecordsOwner.Revision));
+
+        void Reject(Action<List<OwnerSectionCensusSnapshot>> mutate, string reason)
+        {
+            List<OwnerSectionCensusSnapshot> candidate = baseline.ToList();
+            mutate(candidate);
+            hostPorts.SetAdmissionEvidence(candidate.ToArray(), mutationEpoch: 74L);
+            bool captured = coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(false,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> rejected, out long rejectedEpoch, out failure);
+            Assert.That(captured, Is.False, reason);
+            Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete), reason);
+            Assert.That(rejected, Is.Null, reason);
+            Assert.That(rejectedEpoch, Is.Zero, reason);
+        }
+
+        void Replace(List<OwnerSectionCensusSnapshot> rows, string id,
+            Func<OwnerSectionCensusSnapshot, OwnerSectionCensusSnapshot> rewrite)
+        {
+            int index = rows.FindIndex(section => string.Equals(section.SectionId, id, StringComparison.Ordinal));
+            Assert.That(index, Is.GreaterThanOrEqualTo(0), id);
+            rows[index] = rewrite(rows[index]);
+        }
+
+        OwnerSectionCensusSnapshot Change(OwnerSectionCensusSnapshot row,
+            int? schema = null, OwnerSectionRole? role = null, object identity = null,
+            bool replaceIdentity = false, int? cardinality = null, long? revision = null) =>
+            new OwnerSectionCensusSnapshot(row.SectionId, schema ?? row.SchemaVersion,
+                role ?? row.Role, replaceIdentity ? identity : row.OwnerInstanceIdentity,
+                cardinality ?? row.Cardinality, revision ?? row.Revision);
+
+        string recordsId = DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId;
+        string receiptsId = DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId;
+        Reject(rows => rows.RemoveAll(section => section.SectionId == recordsId), "Missing Justice records row.");
+        Reject(rows => rows.Add(rows.Single(section => section.SectionId == recordsId)), "Duplicate Justice records row.");
+        Reject(rows => Replace(rows, recordsId, row => Change(row, schema: row.SchemaVersion + 1)), "Wrong Justice schema.");
+        Reject(rows => Replace(rows, recordsId, row => Change(row, role: OwnerSectionRole.ExplicitlyEmpty)), "Wrong Justice role.");
+        Reject(rows => Replace(rows, recordsId, row => Change(row, identity: new object(), replaceIdentity: true)), "Wrong Justice owner identity.");
+        Reject(rows => Replace(rows, recordsId, row => Change(row, cardinality: row.Cardinality + 1)), "Wrong Justice cardinality.");
+        Reject(rows => Replace(rows, recordsId, row => Change(row, revision: row.Revision + 1L)), "Stale Justice revision.");
+        Reject(rows => rows.RemoveAll(section => section.SectionId == receiptsId), "Missing Justice receipt row.");
+        Reject(rows => rows.Add(rows.Single(section => section.SectionId == receiptsId)), "Duplicate Justice receipt row.");
+        Reject(rows => Replace(rows, receiptsId, row => Change(row, identity: new object(), replaceIdentity: true)), "Wrong Justice receipt alias.");
+        Reject(rows => Replace(rows, receiptsId, row => Change(row, cardinality: row.Cardinality + 1)), "Wrong Justice receipt cardinality.");
+        Reject(rows => Replace(rows, receiptsId, row => Change(row, revision: row.Revision + 1L)), "Stale Justice receipt revision.");
     }
 
     [Test]

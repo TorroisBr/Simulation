@@ -11450,6 +11450,33 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.HasExactCoreOwnedSelectedCensusSources =>
         HasExactCoreOwnedSelectedCensusSources();
 
+    bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryGetExactJusticeRecordsCensusProjectionIdentity(
+        DailyV1JusticeRecordsOwner owner,
+        out object projectionIdentity,
+        out long p18ReceiptRevision)
+    {
+        projectionIdentity = null;
+        p18ReceiptRevision = 0L;
+        if (owner == null || justiceSystem == null
+            || !ReferenceEquals(SelectedRuntimeOwnerGraph?.JusticeRecordsOwner, owner)
+            || !ReferenceEquals(justiceSystem.CoreOwner, owner))
+            return false;
+
+        try
+        {
+            long receiptRevision = justiceSystem.P12P18ReceiptCensusRevision;
+            if (receiptRevision < 0L) return false;
+            projectionIdentity = justiceSystem;
+            p18ReceiptRevision = receiptRevision;
+            return true;
+        }
+        catch (Exception exception) when (exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            return false;
+        }
+    }
+
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCreateSelectedDailyExecutionHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedDailyExecutionHostPorts hostPorts)

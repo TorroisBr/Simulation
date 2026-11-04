@@ -163,6 +163,10 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
     bool HasExactCoreOwnedSelectedCensusSources { get; }
+    bool TryGetExactJusticeRecordsCensusProjectionIdentity(
+        DailyV1JusticeRecordsOwner owner,
+        out object projectionIdentity,
+        out long p18ReceiptRevision);
     bool TryCreateSelectedDailyExecutionHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedDailyExecutionHostPorts hostPorts);
@@ -399,6 +403,23 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             mutationEpoch = 0L;
             failure = DailyCaptureEligibilityFailure.OperationInProgress;
             return false;
+        }
+
+        if (hostPorts.HasExactCoreOwnedSelectedCensusSources)
+        {
+            DailyV1JusticeRecordsOwner justiceOwner =
+                executionState.SelectedRuntimeOwnerGraph?.JusticeRecordsOwner;
+            if (!hostPorts.TryGetExactJusticeRecordsCensusProjectionIdentity(
+                    justiceOwner, out object justiceProjectionIdentity, out long p18ReceiptRevision)
+                || !DailyV1SelectedRuntimeOwnerCensusSource.TryValidateCoreOwnedJusticeSections(
+                    executionState.SelectedRuntimeOwnerGraph, ownerSections, justiceProjectionIdentity,
+                    p18ReceiptRevision, out _))
+            {
+                ownerSections = null;
+                mutationEpoch = 0L;
+                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                return false;
+            }
         }
 
         if (hostPorts.HasExactCoreOwnedSelectedCensusSources)
@@ -1384,6 +1405,86 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             "fixed Core-owned P12-F",
             out hostOwnedSections,
             out diagnostic);
+
+    /// <summary>
+    /// Checks the host-projected Justice census against the exact selected Core owner.
+    /// The host supplies only the Unity projection identity and its receipt revision;
+    /// Core derives record cardinality and revision from the authoritative owner.
+    /// </summary>
+    internal static bool TryValidateCoreOwnedJusticeSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+        object projectionIdentity,
+        long expectedP18ReceiptRevision,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        DailyV1JusticeRecordsOwner owner = graph?.JusticeRecordsOwner;
+        if (owner == null || sections == null || projectionIdentity == null
+            || expectedP18ReceiptRevision < 0L)
+        {
+            diagnostic = "The exact selected Justice owner or its census projection is unavailable.";
+            return false;
+        }
+
+        int expectedRecordCardinality;
+        try
+        {
+            expectedRecordCardinality = checked(owner.WantedRecords.Count + owner.Sentences.Count);
+        }
+        catch (OverflowException)
+        {
+            diagnostic = "The selected Justice owner cardinality exceeds the census representation.";
+            return false;
+        }
+
+        OwnerSectionCensusSnapshot records = null;
+        OwnerSectionCensusSnapshot receipts = null;
+        foreach (OwnerSectionCensusSnapshot section in sections)
+        {
+            if (section == null) continue;
+            if (string.Equals(section.SectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId, StringComparison.Ordinal))
+            {
+                if (records != null)
+                {
+                    diagnostic = "The host Justice records census contains a duplicate section identity.";
+                    return false;
+                }
+                records = section;
+            }
+            else if (string.Equals(section.SectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId, StringComparison.Ordinal))
+            {
+                if (receipts != null)
+                {
+                    diagnostic = "The host Justice receipt census contains a duplicate section identity.";
+                    return false;
+                }
+                receipts = section;
+            }
+        }
+
+        bool recordsMatch = records != null
+            && records.SchemaVersion == DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+            && records.Role == OwnerSectionRole.Required
+            && ReferenceEquals(records.OwnerInstanceIdentity, projectionIdentity)
+            && records.Cardinality == expectedRecordCardinality
+            && records.Revision == owner.Revision;
+        bool receiptsMatch = receipts != null
+            && receipts.SchemaVersion == DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+            && receipts.Role == OwnerSectionRole.Required
+            && ReferenceEquals(receipts.OwnerInstanceIdentity, projectionIdentity)
+            && receipts.Cardinality == 1
+            && receipts.Revision == expectedP18ReceiptRevision;
+        if (!recordsMatch || !receiptsMatch)
+        {
+            diagnostic = "The Justice census does not match its exact Core owner and Unity projection.";
+            return false;
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// Enforces the two excluded P18 receipt-owner rows in the admitted P12-D
@@ -3964,6 +4065,23 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             diagnostic = "The private target did not produce a complete quiescent owner vector: "
                 + (string.IsNullOrWhiteSpace(captureDiagnostic) ? "OwnerCoverageIncomplete" : captureDiagnostic) + ".";
             return false;
+        }
+
+        if (hostPorts.HasExactCoreOwnedSelectedCensusSources)
+        {
+            DailyV1JusticeRecordsOwner justiceOwner = selectedRuntimeOwnerGraph?.JusticeRecordsOwner;
+            if (!hostPorts.TryGetExactJusticeRecordsCensusProjectionIdentity(
+                    justiceOwner, out object justiceProjectionIdentity, out long p18ReceiptRevision)
+                || !DailyV1SelectedRuntimeOwnerCensusSource.TryValidateCoreOwnedJusticeSections(
+                    selectedRuntimeOwnerGraph, ownerSections, justiceProjectionIdentity,
+                    p18ReceiptRevision, out diagnostic))
+            {
+                ownerSections = null;
+                mutationEpoch = 0L;
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "The Core restored boundary could not validate its exact Justice owner census.";
+                return false;
+            }
         }
 
         if (hostPorts.HasExactCoreOwnedSelectedCensusSources)

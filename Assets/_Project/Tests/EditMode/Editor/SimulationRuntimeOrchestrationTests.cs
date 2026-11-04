@@ -24,6 +24,14 @@ public sealed class SimulationRuntimeOrchestrationTests
 
         public DailyV1ExecutionBoundaryState ExecutionState { get; }
         public bool HasExactCoreOwnedSelectedCensusSources => true;
+        public bool TryGetExactJusticeRecordsCensusProjectionIdentity(
+            DailyV1JusticeRecordsOwner owner, out object projectionIdentity, out long p18ReceiptRevision)
+        {
+            projectionIdentity = null;
+            p18ReceiptRevision = 0L;
+            return false;
+        }
+
         public bool IsFactualReadWorldPublished => true;
         public bool HasActiveDailyOperationContext => false;
         public bool HasIntradayTimeline => false;
