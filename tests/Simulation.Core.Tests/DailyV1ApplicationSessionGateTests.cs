@@ -1451,12 +1451,14 @@ public sealed class DailyV1ApplicationSessionGateTests
             out DailyV1ActiveRuntimeSession session, out diagnostic), Is.True, diagnostic);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(
             session, new ApplicationAdvanceBoundary(session.ExecutionBoundaryState, null)), Is.True);
-        Assert.That(application.TryPublishInitial(session), Is.True);
-        Assert.That(application.ActiveSession, Is.SameAs(session));
+        Assert.That(application.TryPublishInitial(session), Is.False,
+            "A restored descendant cannot use the generic genesis publication surface.");
+        Assert.That(application.ActiveSession, Is.Null,
+            "Restored publication requires the exact initial slot-admission token.");
     }
 
     [Test]
-    public void CoreRestoreCommitRechecksCandidateCensusBeforeInitialPublication()
+    public void CoreRestoreGenericInitialPublicationRequiresExactSlotAdmission()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1Application application = new DailyV1Application();
@@ -1507,83 +1509,56 @@ public sealed class DailyV1ApplicationSessionGateTests
             restoredState, null, ownerSections, 23L);
         TestHostProjection projection = new TestHostProjection();
 
-        List<OwnerSectionCensusSnapshot> changedOwners = new List<OwnerSectionCensusSnapshot>(ownerSections);
-        OwnerSectionCensusSnapshot original = changedOwners[0];
-        changedOwners[0] = new OwnerSectionCensusSnapshot(
-            original.SectionId, original.SchemaVersion, original.Role, new object(),
-            original.Cardinality, original.Revision);
-        // The adapter remains identity-bound; mutate only its fresh read-only
-        // census to model an owner change between staging and commit.
-        boundary.SetAdmissionEvidence(changedOwners, 23L);
+        // The generic commit surface is for a replacement. Initial restored
+        // publication must use the separate exact slot-admission token path.
+        Assert.That(application.TryCommitRestoredCandidate(
+            null, candidate, null, out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain("exact initial slot admission"));
+        Assert.That(application.TryPublishInitial(candidate), Is.False);
+        Assert.That(application.TryPublishInitialWithHostProjection(
+            candidate, projection, boundary), Is.False,
+            "A tokenless initial candidate must be rejected before binding its host boundary.");
+        Assert.That(application.TryGetPublishedHostProjection(candidate, out _), Is.False);
         Assert.That(application.TryCommitRestoredCandidateWithHostProjection(
             null, candidate, null, projection, boundary, null, out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain("exact initial slot admission"));
         Assert.That(application.ActiveSession, Is.Null,
-            "A stale private target must not become the initial application session.");
+            "A restored candidate without the initial slot token remains private.");
         Assert.That(application.TryGetPublishedHostProjection(candidate, out _), Is.False,
-            "A rejected private candidate cannot leave a host projection registered.");
-        Assert.That(diagnostic, Does.Contain("healthy, idle, exact Core continuation"));
-
-        boundary.SetAdmissionEvidence(ownerSections, 23L);
-        Assert.That(application.TryCommitRestoredCandidateWithHostProjection(
-            null, candidate, null, projection, boundary, null, out diagnostic), Is.True, diagnostic);
-        Assert.That(application.ActiveSession, Is.SameAs(candidate));
-        Assert.That(application.TryGetPublishedHostProjection(candidate,
-            out IDailyV1ApplicationHostProjection publishedProjection), Is.True);
-        Assert.That(publishedProjection, Is.SameAs(projection));
-        Assert.That(boundary.RequestedSessionReplacement, Is.EqualTo(false));
+            "A rejected candidate cannot leave a host projection registered.");
     }
 
     [Test]
-    public void CoreRestoreReplacementAcceptsRestoredSourceTokenAndRejectsStaleSourceCensus()
+    public void CoreRestoreReplacementAcceptsRestoredCandidateTokenAndRejectsStaleSourceCensus()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1Application application = new DailyV1Application();
         Assert.That(application.TryCaptureBootstrapAdmissionContext(
             out SimulationRuntimeAdmissionContext bootstrapAdmission), Is.True);
-        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
-            definitions, bootstrapAdmission, out DailyV1GenesisComposition sourceComposition,
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out DailyV1GenesisComposition sourceComposition,
+            out DailyV1ActiveRuntimeSession sourceSession,
             out string diagnostic), Is.True, diagnostic);
-        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
-            definitions, bootstrapAdmission, out DailyV1GenesisComposition candidateComposition,
-            out diagnostic), Is.True, diagnostic);
-
-        Assert.That(application.TryCreateRestoredContinuationAdmissionContext(
-            null, null, out SimulationRuntimeAdmissionContext sourceAdmission,
-            out diagnostic), Is.True, diagnostic);
-        DailyV1ExecutionBoundaryState sourceState =
-            CreateBoundaryWithAdmission(sourceComposition, sourceAdmission);
-        OwnerSectionCensusSnapshot[] sourceOwners =
-            CreateCoreBoundCompleteOwnerSectionVector(
-                sourceComposition.OwnerGraph, sourceComposition.ActorChoiceStore);
-        const long sourceEpoch = 23L;
-        Assert.That(sourceState.TryCreateRestoredContinuationToken(
-            sourceAdmission,
-            sourceState.ConfigurationIdentity,
-            sourceState.CalendarIdentity,
-            sourceState.CompositionProfile,
-            sourceState.WorldId,
-            sourceState.SimulationTime.AbsoluteDay,
-            1L,
-            sourceEpoch,
-            sourceOwners,
-            out DailyCaptureEligibilityToken sourceToken), Is.True);
+        DailyV1ExecutionBoundaryState sourceState = sourceSession.ExecutionBoundaryState;
+        EnsureRuntimeProtocolInventory(sourceState);
+        Assert.That(sourceState.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
         Assert.That(sourceState.TryMarkFactualReadWorldPublished(), Is.True);
-        Assert.That(sourceToken.BoundaryProvenance,
-            Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
-        Assert.That(application.TryCreateRestoredActiveRuntimeSession(
-            sourceState, definitions, 0L, null,
-            out DailyV1ActiveRuntimeSession sourceSession, out diagnostic), Is.True, diagnostic);
-
+        OwnerSectionCensusSnapshot[] sourceOwners =
+            CreateCoreBoundCompleteOwnerSectionVector(sourceSession);
+        const long sourceEpoch = 23L;
         ApplicationAdvanceBoundary sourceBoundary = new ApplicationAdvanceBoundary(
             sourceState, null, sourceOwners, sourceEpoch);
         TestHostProjection sourceProjection = new TestHostProjection();
-        Assert.That(application.TryCommitRestoredCandidateWithHostProjection(
-            null, sourceSession, null, sourceProjection, sourceBoundary, null,
-            out diagnostic), Is.True, diagnostic);
+        Assert.That(application.TryPublishInitialWithHostProjection(
+            sourceSession, sourceProjection, sourceBoundary), Is.True);
         Assert.That(application.ActiveSession, Is.SameAs(sourceSession));
         Assert.That(application.TryGetPublishedHostProjection(sourceSession,
             out IDailyV1ApplicationHostProjection publishedSourceProjection), Is.True);
         Assert.That(publishedSourceProjection, Is.SameAs(sourceProjection));
+        Assert.That(InstallCompletedBoundaryToken(
+            sourceSession, sourceBoundary, sourceOwners, sourceEpoch), Is.Not.Null);
 
         Assert.That(application.TryCreateRestoredContinuationAdmissionContext(
             sourceSession, null, out SimulationRuntimeAdmissionContext unreservedReplacementAdmission,
@@ -1597,7 +1572,12 @@ public sealed class DailyV1ApplicationSessionGateTests
                 sourceSession, replacementOperation,
                 out SimulationRuntimeAdmissionContext candidateAdmission,
                 out diagnostic), Is.True, diagnostic);
-            Assert.That(candidateAdmission.IsRestoredContinuationOf(bootstrapAdmission), Is.True);
+            Assert.That(candidateAdmission.IsRestoredContinuation, Is.True);
+
+            Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions, bootstrapAdmission,
+                out DailyV1GenesisComposition candidateComposition,
+                out diagnostic), Is.True, diagnostic);
 
             DailyV1ExecutionBoundaryState candidateState =
                 CreateBoundaryWithAdmission(candidateComposition, candidateAdmission);

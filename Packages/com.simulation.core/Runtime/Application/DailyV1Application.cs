@@ -1899,6 +1899,9 @@ internal sealed class DailyV1Application
 
     internal bool TryPublishInitial(DailyV1ActiveRuntimeSession candidate)
     {
+        if (candidate == null || candidate.AdmissionContext?.IsRestoredContinuation == true)
+            return false;
+
         // A Core session is not active until its exact execution boundary is
         // bound. Publishing an unbound genesis value creates a session that
         // cannot advance and leaves the application with no valid runtime.
@@ -1943,7 +1946,10 @@ internal sealed class DailyV1Application
         IDailyV1ApplicationHostProjection hostProjection,
         IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts)
     {
-        if (candidate == null || hostProjection == null || hostPorts == null)
+        if (candidate == null
+            || candidate.AdmissionContext?.IsRestoredContinuation == true
+            || hostProjection == null
+            || hostPorts == null)
             return false;
 
         lock (activeSessionGate.SyncRoot)
@@ -3708,19 +3714,28 @@ internal sealed class DailyV1Application
         out string diagnostic) =>
         TryCommitRestoredCandidateCore(
             expectedSession, candidate, replacementOperation,
-            hostProjectionTransaction: false, out diagnostic);
+            hostProjectionTransaction: false,
+            initialRestoreAdmissionVerified: false, out diagnostic);
 
     private bool TryCommitRestoredCandidateCore(
         DailyV1ActiveRuntimeSession expectedSession,
         DailyV1ActiveRuntimeSession candidate,
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
         bool hostProjectionTransaction,
+        bool initialRestoreAdmissionVerified,
         out string diagnostic)
     {
         diagnostic = null;
         if (candidate == null)
         {
             diagnostic = "The Core application cannot commit a null restored session.";
+            return false;
+        }
+
+        if (expectedSession == null
+            && (!initialRestoreAdmissionVerified || !hostProjectionTransaction))
+        {
+            diagnostic = "Initial Core restore publication requires the exact initial slot admission.";
             return false;
         }
 
@@ -3769,6 +3784,7 @@ internal sealed class DailyV1Application
                     || initialGenesisPreparationAttempted
                     || preparedInitialGenesis != null
                     || preparedInitialSession != null
+                || !initialRestoreAdmissionVerified
                     || !activeSessionGate.TryPublishInitial(candidate))
                 {
                     diagnostic = "Initial restore requires an unused Core application and a candidate with no replacement reservation.";
@@ -3821,9 +3837,9 @@ internal sealed class DailyV1Application
                 return false;
             }
 
-            return TryCommitRestoredCandidateWithHostProjection(
+            return TryCommitRestoredCandidateWithHostProjectionCore(
                 null, candidate, null, candidateHostProjection, candidateHostPorts,
-                null, out diagnostic);
+                null, initialRestoreAdmissionVerified: true, out diagnostic);
         }
     }
 
@@ -3842,10 +3858,31 @@ internal sealed class DailyV1Application
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
         out string diagnostic)
     {
+        return TryCommitRestoredCandidateWithHostProjectionCore(
+            expectedSession, candidate, expectedHostProjection, candidateHostProjection,
+            candidateHostPorts, replacementOperation,
+            initialRestoreAdmissionVerified: false, out diagnostic);
+    }
+
+    private bool TryCommitRestoredCandidateWithHostProjectionCore(
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ActiveRuntimeSession candidate,
+        IDailyV1ApplicationHostProjection expectedHostProjection,
+        IDailyV1ApplicationHostProjection candidateHostProjection,
+        IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        bool initialRestoreAdmissionVerified,
+        out string diagnostic)
+    {
         diagnostic = null;
         if (candidate == null || candidateHostProjection == null || candidateHostPorts == null)
         {
             diagnostic = "A restored Core candidate, its host projection, and its exact host boundary are required.";
+            return false;
+        }
+        if (expectedSession == null && !initialRestoreAdmissionVerified)
+        {
+            diagnostic = "Initial Core restore publication requires the exact initial slot admission.";
             return false;
         }
 
@@ -3881,7 +3918,9 @@ internal sealed class DailyV1Application
             activeHostProjections.Add(candidate, candidateHostProjection);
             if (!TryCommitRestoredCandidateCore(
                     expectedSession, candidate, replacementOperation,
-                    hostProjectionTransaction: true, out diagnostic))
+                    hostProjectionTransaction: true,
+                    initialRestoreAdmissionVerified: initialRestoreAdmissionVerified,
+                    out diagnostic))
             {
                 activeHostProjections.Remove(candidate);
                 return false;

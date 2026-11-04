@@ -162,6 +162,24 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             Is.False, "Initial restore publication cannot omit its exact slot admission.");
         Assert.That(missingAdmissionDiagnostic, Does.Contain("exact admitted image token"));
 
+        Assert.That(restoreApplication.TryCommitRestoredCandidateWithHostProjection(
+                null, restored.CoreRuntimeSession, null, restored, restored.Runtime,
+                null, out string genericInitialDiagnostic),
+            Is.False,
+            "The generic Core restore publication route cannot bypass initial slot admission.");
+        Assert.That(genericInitialDiagnostic, Does.Contain("exact initial slot admission"));
+
+        DailyV1Application foreignStartApplication = new DailyV1Application();
+        DailyV1ApplicationStartAdmission foreignStartAdmission = AdmitInitialRestore(
+            foreignStartApplication, sourceImageBytes, image.Header.Compatibility);
+        Assert.That(restoreApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+                foreignStartAdmission, foreignStartAdmission.RestoreImage,
+                restored.CoreRuntimeSession, restored, restored.Runtime,
+                out string foreignStartDiagnostic),
+            Is.False,
+            "A different Core application cannot publish with its own initial restore admission.");
+        Assert.That(foreignStartDiagnostic, Does.Contain("exact admitted image token"));
+
         P12AContinuationImage sameBytesDifferentImage = DecodeCompletedImage(
             sourceImageBytes, source.Session, anchor.NormalContext);
         Assert.That(sameBytesDifferentImage, Is.Not.SameAs(image));
