@@ -88,6 +88,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         new DailyV1MutationEpochState();
     private readonly AuthoritativeMutationGuard mutationGuard =
         new AuthoritativeMutationGuard();
+    private bool selectedCoreOwnerMutationGuardAuthoritiesBound;
     private bool coreMutationGuardAuthoritiesBound;
     private volatile bool factualReadWorldPublished;
     private bool runtimeIdentityBound;
@@ -239,7 +240,60 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     internal AuthoritativeMutationGuard MutationGuard => mutationGuard;
     internal bool CanMutate => mutationGuard.CanMutate;
     internal bool CoreMutationGuardAuthoritiesBound => coreMutationGuardAuthoritiesBound;
+    internal bool SelectedCoreOwnerMutationGuardAuthoritiesBound =>
+        selectedCoreOwnerMutationGuardAuthoritiesBound;
     internal bool IsFactualReadWorldPublished => factualReadWorldPublished;
+
+    /// <summary>
+    /// Binds the exact selected Core graph before the host is asked to bind
+    /// remaining non-graph authorities and Unity projections. Core owns these
+    /// owner instances and the shared execution guard; the host cannot select
+    /// or substitute the roots that have already been bound here.
+    /// </summary>
+    internal bool TryBindSelectedCoreOwnerMutationGuardAuthorities(
+        out string diagnostic)
+    {
+        diagnostic = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = selectedRuntimeOwnerGraph;
+        if (!HasAdmittedSelectedDailyExecution
+            || graph == null
+            || AdmissionContext?.Profile
+                != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !AdmissionContext.IsRestoredContinuation
+            || !AdmissionContext.IsOwnedByCurrentThread()
+            || coreMutationGuardAuthoritiesBound
+            || !mutationGuard.CanMutate
+            || factualReadWorldPublished
+            || currentCaptureToken != null
+            || completedCoreSequence != 0L
+            || AdvanceLeaseHeld
+            || ActiveOperationCount != 0)
+        {
+            diagnostic = "The selected Core owner graph is not at its private, healthy restored boundary.";
+            return false;
+        }
+
+        if (!SimulationTimeOwnerBridge.CanBindMutationStatus(SimulationTime, mutationGuard)
+            || !((IAuthoritativeMutationGuardBindable)selectedActorChoiceStore)
+                .CanBindMutationGuard(mutationGuard)
+            || !graph.CanBindMutationGuard(mutationGuard))
+        {
+            diagnostic = "A selected Core owner root is already bound to another mutation guard.";
+            return false;
+        }
+
+        if (!SimulationTimeOwnerBridge.TryBindMutationStatus(SimulationTime, mutationGuard)
+            || !((IAuthoritativeMutationGuardBindable)selectedActorChoiceStore)
+                .TryBindMutationGuard(mutationGuard)
+            || !graph.TryBindMutationGuard(mutationGuard))
+        {
+            diagnostic = "The selected Core owner graph could not bind its shared mutation guard.";
+            return false;
+        }
+
+        selectedCoreOwnerMutationGuardAuthoritiesBound = true;
+        return true;
+    }
 
     internal bool TryMarkCoreMutationGuardAuthoritiesBound()
     {

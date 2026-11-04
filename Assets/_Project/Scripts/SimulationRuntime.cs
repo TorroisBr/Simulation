@@ -7774,13 +7774,48 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
     private void BindCoreMutationGuardAuthorities()
     {
+        DailyV1SelectedRuntimeOwnerGraph preboundCoreGraph =
+            dailyExecutionBoundary.SelectedCoreOwnerMutationGuardAuthoritiesBound
+                ? dailyExecutionBoundary.SelectedRuntimeOwnerGraph
+                : null;
+        bool coreBoundSimulationTime = preboundCoreGraph != null;
+        if (preboundCoreGraph != null
+            && (!ReferenceEquals(simulationTime, dailyExecutionBoundary.SimulationTime)
+                || !ReferenceEquals(personStore, preboundCoreGraph.PersonStore)
+                || !ReferenceEquals(actorChoiceStore, dailyExecutionBoundary.SelectedActorChoiceStore)))
+        {
+            throw new InvalidOperationException(
+                "The Unity restored projection does not reference the exact Core-bound selected owner graph.");
+        }
+
         List<IAuthoritativeMutationGuardBindable> authorities = new List<IAuthoritativeMutationGuardBindable>();
-        AddRequiredMutationGuardBinding(authorities, personStore, nameof(PersonStore));
-        AddRequiredMutationGuardBinding(authorities, actorChoiceStore, nameof(ActorChoiceStore));
-        AddRequiredMutationGuardBinding(authorities, spatialAuthorityStore, nameof(SpatialAuthorityStore));
+        if (preboundCoreGraph == null)
+        {
+            AddRequiredMutationGuardBinding(authorities, personStore, nameof(PersonStore));
+            AddRequiredMutationGuardBinding(authorities, actorChoiceStore, nameof(ActorChoiceStore));
+            AddRequiredMutationGuardBinding(authorities, spatialAuthorityStore, nameof(SpatialAuthorityStore));
+            AddRequiredMutationGuardBinding(authorities, legacySpatialAnchorBindingStore, nameof(LegacySpatialAnchorBindingStore));
+            AddRequiredMutationGuardBinding(authorities, personSpatialPositionStore, nameof(PersonSpatialPositionStore));
+        }
+        else
+        {
+            if (preboundCoreGraph.PersonSpatialPositionStore == null
+                || !ReferenceEquals(personSpatialPositionStore,
+                    preboundCoreGraph.PersonSpatialPositionStore))
+                AddRequiredMutationGuardBinding(authorities, personSpatialPositionStore,
+                    nameof(PersonSpatialPositionStore));
+            if (preboundCoreGraph.LegacySpatialAnchors == null
+                || !ReferenceEquals(legacySpatialAnchorBindingStore,
+                    preboundCoreGraph.LegacySpatialAnchors))
+                AddRequiredMutationGuardBinding(authorities, legacySpatialAnchorBindingStore,
+                    nameof(LegacySpatialAnchorBindingStore));
+            if (preboundCoreGraph.PersonSpatialPositionStore == null
+                || !ReferenceEquals(spatialAuthorityStore,
+                    preboundCoreGraph.PersonSpatialPositionStore.SpatialAuthorityStore))
+                AddRequiredMutationGuardBinding(authorities, spatialAuthorityStore,
+                    nameof(SpatialAuthorityStore));
+        }
         AddRequiredMutationGuardBinding(authorities, structureStore, nameof(StructureStore));
-        AddRequiredMutationGuardBinding(authorities, legacySpatialAnchorBindingStore, nameof(LegacySpatialAnchorBindingStore));
-        AddRequiredMutationGuardBinding(authorities, personSpatialPositionStore, nameof(PersonSpatialPositionStore));
         AddRequiredMutationGuardBinding(authorities, spatialRouteKnowledgeStore, nameof(SpatialRouteKnowledgeStore));
         AddRequiredMutationGuardBinding(authorities, personRoutePlanStore, nameof(PersonRoutePlanStore));
         AddRequiredMutationGuardBinding(authorities, armedForceStore, nameof(ArmedForceStore));
@@ -7790,10 +7825,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         AddRequiredMutationGuardBinding(authorities, conflictStore, nameof(PersistentConflictStore));
         AddRequiredMutationGuardBinding(authorities, warStore, nameof(PersistentWarStore));
         AddRequiredMutationGuardBinding(authorities, battleStore, nameof(PersistentBattleStore));
-        AddRequiredMutationGuardBinding(
-            authorities,
-            new GenealogyMutationGuardBinding(genealogyStore),
-            nameof(GenealogyStore));
+        if (preboundCoreGraph == null
+            || preboundCoreGraph.GenealogyStore == null
+            || !ReferenceEquals(preboundCoreGraph.GenealogyStore, genealogyStore))
+            AddRequiredMutationGuardBinding(
+                authorities,
+                new GenealogyMutationGuardBinding(genealogyStore),
+                nameof(GenealogyStore));
         AddRequiredMutationGuardBinding(
             authorities,
             new CoreOwnerMutationGuardBindable(
@@ -7816,7 +7854,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             nameof(PoliticalClaimStore));
         AddRequiredMutationGuardBinding(authorities, factionStore, nameof(FactionStore));
         AddRequiredMutationGuardBinding(authorities, politicalSupportStore, nameof(PoliticalSupportStore));
-        AddRequiredMutationGuardBinding(authorities, politicalKnowledgeStore, nameof(PoliticalKnowledgeStore));
+        if (preboundCoreGraph == null
+            || preboundCoreGraph.PoliticalKnowledgeStore == null
+            || !ReferenceEquals(preboundCoreGraph.PoliticalKnowledgeStore, politicalKnowledgeStore))
+            AddRequiredMutationGuardBinding(authorities, politicalKnowledgeStore, nameof(PoliticalKnowledgeStore));
         AddRequiredMutationGuardBinding(authorities, politicalDecisionStore, nameof(PoliticalDecisionStore));
         AddRequiredMutationGuardBinding(authorities, crimeSocialAppraisalWorldState, nameof(CrimeSocialAppraisalWorldState));
         AddRequiredMutationGuardBinding(authorities, scheduledDirectiveSystem, nameof(ScheduledDirectiveSystem));
@@ -7850,7 +7891,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             }
         }
 
-        if (!SimulationTimeOwnerBridge.CanBindMutationStatus(simulationTime, mutationGuard))
+        if (!coreBoundSimulationTime
+            && !SimulationTimeOwnerBridge.CanBindMutationStatus(simulationTime, mutationGuard))
         {
             throw new InvalidOperationException(
                 "A mutable SimulationRuntime input became bound to another runtime during composition.");
@@ -7865,7 +7907,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             }
         }
 
-        if (!SimulationTimeOwnerBridge.TryBindMutationStatus(simulationTime, mutationGuard))
+        if (!coreBoundSimulationTime
+            && !SimulationTimeOwnerBridge.TryBindMutationStatus(simulationTime, mutationGuard))
         {
             throw new InvalidOperationException(
                 "A mutable SimulationRuntime input could not bind to its runtime mutation guard.");

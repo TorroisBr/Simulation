@@ -208,6 +208,100 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         return true;
     }
 
+    /// <summary>
+    /// Preflights the mutation guard against the exact mutable Core roots in
+    /// this selected graph. Unity projections may bind their host adapters to
+    /// the same guard afterward, but cannot choose or bind these Core owners.
+    /// </summary>
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (guard == null
+            || PersonStore == null
+            || JusticeRecordsOwner == null
+            || TravelParties == null
+            || ScheduledDirectives == null)
+            return false;
+
+        List<IAuthoritativeMutationGuardBindable> authorities =
+            CreateMutationGuardAuthorities();
+        if (authorities == null) return false;
+        foreach (IAuthoritativeMutationGuardBindable authority in authorities)
+            if (authority == null || !authority.CanBindMutationGuard(guard))
+                return false;
+
+        if (GenealogyStore != null
+            && !GenealogyOwnerBridge.CanBindMutationStatus(GenealogyStore, guard))
+            return false;
+
+        foreach (DailyV1CityRuntimeOwners city in cities)
+            if (city == null || city.Population == null
+                || !PopulationOwnerBridge.CanBindMutationStatus(city.Population, guard))
+                return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// Binds Core-owned selected roots as one preflighted operation. A late
+    /// failure leaves this restored graph private; callers must not publish it.
+    /// </summary>
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
+    {
+        if (!CanBindMutationGuard(guard)) return false;
+
+        List<IAuthoritativeMutationGuardBindable> authorities =
+            CreateMutationGuardAuthorities();
+        if (authorities == null) return false;
+        foreach (IAuthoritativeMutationGuardBindable authority in authorities)
+            if (!authority.TryBindMutationGuard(guard))
+                return false;
+
+        if (GenealogyStore != null
+            && !GenealogyOwnerBridge.TryBindMutationStatus(GenealogyStore, guard))
+            return false;
+
+        foreach (DailyV1CityRuntimeOwners city in cities)
+            if (!PopulationOwnerBridge.TryBindMutationStatus(city.Population, guard))
+                return false;
+
+        return true;
+    }
+
+    private List<IAuthoritativeMutationGuardBindable> CreateMutationGuardAuthorities()
+    {
+        List<IAuthoritativeMutationGuardBindable> authorities =
+            new List<IAuthoritativeMutationGuardBindable>();
+        if (!AddMutationGuardAuthority(authorities, PersonStore)
+            || !AddMutationGuardAuthority(authorities, JusticeRecordsOwner)
+            || !AddMutationGuardAuthority(authorities, TravelParties)
+            || !AddMutationGuardAuthority(authorities, ScheduledDirectives))
+            return null;
+
+        if (!AddMutationGuardAuthorityIfPresent(authorities, PoliticalKnowledgeStore)
+            || !AddMutationGuardAuthorityIfPresent(authorities, PersonSpatialPositionStore)
+            || !AddMutationGuardAuthorityIfPresent(
+                authorities, PersonSpatialPositionStore?.SpatialAuthorityStore)
+            || !AddMutationGuardAuthorityIfPresent(authorities, LegacySpatialAnchors))
+            return null;
+        return authorities;
+    }
+
+    private static bool AddMutationGuardAuthority(
+        List<IAuthoritativeMutationGuardBindable> authorities,
+        object owner)
+    {
+        if (!(owner is IAuthoritativeMutationGuardBindable authority)) return false;
+        authorities.Add(authority);
+        return true;
+    }
+
+    private static bool AddMutationGuardAuthorityIfPresent(
+        List<IAuthoritativeMutationGuardBindable> authorities,
+        object owner)
+    {
+        return owner == null || AddMutationGuardAuthority(authorities, owner);
+    }
+
     internal static bool TryCreate(
         DailyV1EffectiveDefinitions definitions,
         IEnumerable<DailyV1CityRuntimeOwners> cityOwners,

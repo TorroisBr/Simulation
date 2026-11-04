@@ -100,6 +100,90 @@ public sealed class DailyV1GenesisComposerTests
     }
 
     [Test]
+    public void RestoredCoreBindsItsExactOwnerGraphBeforeHostProjectionBinding()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition source,
+            out string sourceDiagnostic), Is.True, sourceDiagnostic);
+
+        SimulationRuntimeAdmissionContext restoredAdmission =
+            source.AdmissionContext.CreateRestoredContinuationContext();
+        SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
+        Assert.That(DailyV1RestoredExecutionBoundaryComposer.TryCreate(
+            definitions, source.EffectiveConfiguration, source.Calendar, restoredTime,
+            restoredAdmission, source.WorldId, source.OwnerGraph,
+            source.RuntimeIdAllocator, source.RandomSource, source.RecordSequence,
+            source.DecisionStore, source.ActorChoiceStore,
+            out DailyV1ExecutionBoundaryState restoredBoundary,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = restoredBoundary.SelectedRuntimeOwnerGraph;
+        AuthoritativeMutationGuard foreignGuard = new AuthoritativeMutationGuard();
+        Assert.That(((IAuthoritativeMutationGuardBindable)graph.PersonStore)
+            .CanBindMutationGuard(foreignGuard), Is.True);
+        Assert.That(PopulationOwnerBridge.CanBindMutationStatus(
+            graph.Cities[0].Population, foreignGuard), Is.True);
+
+        Assert.That(restoredBoundary.TryBindSelectedCoreOwnerMutationGuardAuthorities(
+            out diagnostic), Is.True, diagnostic);
+        Assert.That(restoredBoundary.SelectedCoreOwnerMutationGuardAuthoritiesBound, Is.True);
+        Assert.That(((IAuthoritativeMutationGuardBindable)graph.PersonStore)
+            .CanBindMutationGuard(restoredBoundary.MutationGuard), Is.True,
+            "Core binds the exact graph root to its own session guard.");
+        Assert.That(((IAuthoritativeMutationGuardBindable)graph.PersonStore)
+            .CanBindMutationGuard(foreignGuard), Is.False,
+            "A host callback cannot replace the selected graph's Core guard.");
+        Assert.That(PopulationOwnerBridge.CanBindMutationStatus(
+            graph.Cities[0].Population, foreignGuard), Is.False,
+            "The selected City population authority is bound before Unity projection binding.");
+        Assert.That(SimulationTimeOwnerBridge.CanBindMutationStatus(
+            restoredTime, foreignGuard), Is.False);
+        Assert.That(((IAuthoritativeMutationGuardBindable)source.ActorChoiceStore)
+            .CanBindMutationGuard(foreignGuard), Is.False);
+    }
+
+    [Test]
+    public void RestoredCoreMutationGuardPreflightDoesNotPartiallyBindAnInvalidGraph()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition source,
+            out string sourceDiagnostic), Is.True, sourceDiagnostic);
+
+        SimulationRuntimeAdmissionContext restoredAdmission =
+            source.AdmissionContext.CreateRestoredContinuationContext();
+        SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
+        Assert.That(DailyV1RestoredExecutionBoundaryComposer.TryCreate(
+            definitions, source.EffectiveConfiguration, source.Calendar, restoredTime,
+            restoredAdmission, source.WorldId, source.OwnerGraph,
+            source.RuntimeIdAllocator, source.RandomSource, source.RecordSequence,
+            source.DecisionStore, source.ActorChoiceStore,
+            out DailyV1ExecutionBoundaryState restoredBoundary,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = restoredBoundary.SelectedRuntimeOwnerGraph;
+        AuthoritativeMutationGuard foreignGuard = new AuthoritativeMutationGuard();
+        Assert.That(PopulationOwnerBridge.TryBindMutationStatus(
+            graph.Cities[0].Population, foreignGuard), Is.True);
+
+        Assert.That(restoredBoundary.TryBindSelectedCoreOwnerMutationGuardAuthorities(
+            out diagnostic), Is.False);
+        Assert.That(restoredBoundary.SelectedCoreOwnerMutationGuardAuthoritiesBound, Is.False);
+        Assert.That(((IAuthoritativeMutationGuardBindable)graph.PersonStore)
+            .CanBindMutationGuard(foreignGuard), Is.True,
+            "Core preflights the entire graph before binding any member.");
+        Assert.That(SimulationTimeOwnerBridge.CanBindMutationStatus(
+            restoredTime, foreignGuard), Is.True);
+        Assert.That(((IAuthoritativeMutationGuardBindable)source.ActorChoiceStore)
+            .CanBindMutationGuard(foreignGuard), Is.True);
+    }
+
+    [Test]
     public void RestoredExecutionBoundaryComposerOwnsSelectedP12DOwnerGraphAdmission()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

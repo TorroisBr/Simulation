@@ -153,9 +153,10 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 /// the complete quiescent host vector and shared mutation epoch. The host also
 /// reports whether its migrated census sources are bound to the exact Core
 /// owner instances; Core validates that evidence, selects those rows, and
-/// recomposes them from the admitted owner graph. Core owns the owner-thread
-/// check and runtime-operation quiescence through its operation registry. This
-/// intentionally excludes
+/// recomposes them from the admitted owner graph. During restoration Core binds
+/// its selected owner authorities before asking the host to bind runtime
+/// projections. Core owns the owner-thread check and runtime-operation
+/// quiescence through its operation registry. This intentionally excludes
 /// clocks, whole-day advancement, and intraday timeline selection.
 /// </summary>
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
@@ -3822,9 +3823,10 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
     /// <summary>
     /// Finalizes an unpublished restored candidate under this exact Core
-    /// execution state. The host supplies only the complete owner census and
-    /// one-way guard-binding ports; Core owns revalidation, restored-token
-    /// creation, and factual-read publication.
+    /// execution state. Core first binds its exact selected owner graph; the
+    /// host then binds remaining non-graph authorities and runtime projections,
+    /// and supplies the complete owner census. Core owns revalidation,
+    /// restored-token creation, and factual-read publication.
     /// </summary>
     internal bool TryFinalizeRestoredDailyBoundary(
         IDailyV1RuntimeAdvanceEvidenceBoundary boundary,
@@ -3881,7 +3883,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return false;
         }
 
-        if (!hostPorts.TryBindRestoredCandidateMutationGuard(out diagnostic)
+        if (!TryBindSelectedCoreOwnerMutationGuardAuthorities(out diagnostic)
+            || !hostPorts.TryBindRestoredCandidateMutationGuard(out diagnostic)
             || !CoreMutationGuardAuthoritiesBound)
         {
             failure = DailyV1RestoredBoundaryFinalizationFailure.MutationGuardBindingFailed;
