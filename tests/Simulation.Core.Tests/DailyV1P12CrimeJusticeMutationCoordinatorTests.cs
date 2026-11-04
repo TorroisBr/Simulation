@@ -146,6 +146,91 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
     }
 
     [Test]
+    public void SelectedGuardArrestScopeDerivesExactNpcJusticeAndReceiptSectionsFromCoreGraph()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition,
+                out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        Assert.That(graph.Npcs.Count, Is.GreaterThanOrEqualTo(2));
+        DailyV1NpcRuntimeOwners guard = graph.Npcs[0];
+        DailyV1NpcRuntimeOwners target = graph.Npcs[1];
+        object justiceCensusIdentity = new object();
+        FakeProtocol protocol = new FakeProtocol();
+        int faults = 0;
+        DailyV1P12CrimeJusticeMutationCoordinator coordinator =
+            CreateCoordinator(protocol, () => faults++);
+
+        Assert.That(coordinator.TryBeginSelectedGuardArrestMutation(
+                graph, guard, targetPresent: true, target,
+                justiceCensusIdentity, includeCrimeReceiptSection: true,
+                out IDisposable scope), Is.True);
+        using (scope) { }
+
+        string guardSection = DailyV1SelectedOwnerSectionCensusContract
+            .NpcStatusCrimeSectionIdFor(guard.RuntimeId);
+        string targetSection = DailyV1SelectedOwnerSectionCensusContract
+            .NpcStatusCrimeSectionIdFor(target.RuntimeId);
+        Assert.That(protocol.Calls, Is.EqualTo(new[]
+        {
+            "validate:" + string.Join("|", new[]
+            {
+                guardSection,
+                targetSection,
+                DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId
+            })
+        }));
+        Assert.That(guard.CrimeJusticeRevision, Is.Zero);
+        Assert.That(target.CrimeJusticeRevision, Is.Zero);
+        Assert.That(graph.JusticeRecordsOwner.Revision, Is.Zero);
+        Assert.That(faults, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedGuardArrestScopeRejectsForeignTargetBeforeCensusAdmission()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition,
+                out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners guard = graph.Npcs[0];
+        DailyV1NpcDefinition foreignDefinition = definitions.Npcs.Values
+            .First(definition => !ReferenceEquals(definition, guard.Definition));
+        Assert.That(DailyV1NpcRuntimeOwners.TryCreateInitial(
+            "foreign-arrest-target", definitions, foreignDefinition, 0f,
+            out DailyV1NpcRuntimeOwners foreignTarget), Is.True);
+
+        FakeProtocol protocol = new FakeProtocol();
+        int faults = 0;
+        DailyV1P12CrimeJusticeMutationCoordinator coordinator =
+            CreateCoordinator(protocol, () => faults++);
+        Assert.That(coordinator.TryBeginSelectedGuardArrestMutation(
+            graph, guard, targetPresent: true, foreignTarget,
+            new object(), includeCrimeReceiptSection: true,
+            out IDisposable scope), Is.False);
+
+        Assert.That(scope, Is.Null);
+        Assert.That(protocol.Calls, Is.Empty,
+            "A target outside the exact selected graph must be rejected before census baselines are queried.");
+        Assert.That(guard.CrimeJusticeRevision, Is.Zero);
+        Assert.That(foreignTarget.CrimeJusticeRevision, Is.Zero);
+        Assert.That(graph.JusticeRecordsOwner.Revision, Is.Zero);
+        Assert.That(faults, Is.EqualTo(1));
+    }
+
+    [Test]
     public void SelectedDailyMutationDerivesNpcOwnersAndSectionsFromExactAdmittedCoreGraph()
     {
         DailyV1EffectiveDefinitions definitions =

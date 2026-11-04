@@ -7457,8 +7457,8 @@ public sealed class SimulationRuntimeAdmissionTests
                 Is.EqualTo(justiceRevisionBeforeRecovery + 1),
                 "The Guard commits the sentence once to the exact Justice owner.");
             Assert.That(targetOwner.CrimeJusticeRevision,
-                Is.GreaterThan(targetRevisionBeforeRecovery),
-                "The admitted arrest commits its target status writes through the exact NPC owner.");
+                Is.EqualTo(targetRevisionBeforeRecovery + 2),
+                "The admitted arrest removes Free and adds Arrested through the exact NPC owner.");
             Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
                 out long mutationEpochAfterArrest,
                 out ContinuationCensusFailure epochAfterArrestFailure),

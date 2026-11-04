@@ -1321,6 +1321,25 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             {
                 if (operation == null) return false;
                 if (runtime.runtimeAdmissionContext == null) return operation();
+
+                DailyV1SelectedRuntimeOwnerGraph selectedGraph = runtime.SelectedRuntimeOwnerGraph;
+                if (selectedGraph != null)
+                {
+                    if (!runtime.P12CrimeJusticeMutationCoordinator
+                            .TryBeginSelectedGuardArrestMutation(
+                                selectedGraph,
+                                guardRuntime.SelectedRuntimeOwners,
+                                targetRuntime != null,
+                                targetRuntime?.SelectedRuntimeOwners,
+                                runtime.justiceSystem,
+                                runtime.crimeSystem != null,
+                                out IDisposable selectedScope))
+                        throw new InvalidOperationException(
+                            "P12 Core could not admit the selected Guard Arrest owners and receipt sections.");
+
+                    using (selectedScope) return operation();
+                }
+
                 IReadOnlyList<NpcRuntime> participants = targetRuntime == null
                     ? new[] { guardRuntime }
                     : new[] { guardRuntime, targetRuntime };

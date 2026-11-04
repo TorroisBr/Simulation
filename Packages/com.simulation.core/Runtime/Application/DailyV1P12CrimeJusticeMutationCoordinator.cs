@@ -414,6 +414,68 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         return TryBeginImmediateMutation(owners, sections, out scope);
     }
 
+    /// <summary>
+    /// Builds the selected Guard-Arrest P12 scope from the exact admitted Core
+    /// graph. The host supplies only the opaque census identity used by the
+    /// existing Justice provider and whether the selected Crime receipt owner
+    /// is composed. Core derives NPC/Justice owner bindings and every section
+    /// ID; it does not accept a caller-assembled participant or section list.
+    /// </summary>
+    internal bool TryBeginSelectedGuardArrestMutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners guard,
+        bool targetPresent,
+        DailyV1NpcRuntimeOwners target,
+        object justiceCensusOwnerIdentity,
+        bool includeCrimeReceiptSection,
+        out IDisposable scope)
+    {
+        scope = null;
+        if (!isAdmissionEnabled()) return true;
+
+        if (graph == null || graph.Definitions == null || guard == null
+            || justiceCensusOwnerIdentity == null
+            || !graph.ContainsExactNpcOwner(guard)
+            || !ReferenceEquals(guard.Definitions, graph.Definitions)
+            || (targetPresent != (target != null))
+            || (targetPresent && (!graph.ContainsExactNpcOwner(target)
+                || !ReferenceEquals(target.Definitions, graph.Definitions)))
+            || graph.JusticeRecordsOwner == null)
+        {
+            faultAdmission();
+            return false;
+        }
+
+        List<DailyV1P12CrimeJusticeOwnerBinding> owners =
+            new List<DailyV1P12CrimeJusticeOwnerBinding>(targetPresent ? 3 : 2);
+        List<string> sections = new List<string>(targetPresent ? 5 : 4);
+        HashSet<DailyV1NpcRuntimeOwners> uniqueNpcs =
+            new HashSet<DailyV1NpcRuntimeOwners>(ReferenceIdentityComparer.Instance);
+
+        List<DailyV1NpcRuntimeOwners> participants = !targetPresent
+            ? new List<DailyV1NpcRuntimeOwners> { guard }
+            : new List<DailyV1NpcRuntimeOwners> { guard, target };
+        foreach (DailyV1NpcRuntimeOwners npc in participants)
+        {
+            if (!uniqueNpcs.Add(npc)) continue;
+            DailyV1P12CrimeJusticeOwnerBinding binding =
+                DailyV1P12CrimeJusticeOwnerBinding.ForNpcStatusOwner(npc);
+            owners.Add(binding);
+            sections.Add(binding.SectionId);
+        }
+
+        DailyV1P12CrimeJusticeOwnerBinding justiceBinding =
+            DailyV1P12CrimeJusticeOwnerBinding.ForJusticeRecordsOwner(
+                justiceCensusOwnerIdentity, graph.JusticeRecordsOwner);
+        owners.Add(justiceBinding);
+        sections.Add(justiceBinding.SectionId);
+        sections.Add(DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+        if (includeCrimeReceiptSection)
+            sections.Add(DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId);
+
+        return TryBeginImmediateMutation(owners, sections, out scope);
+    }
+
     internal bool CanReuseImmediateMutation(
         IReadOnlyList<DailyV1P12CrimeJusticeOwnerBinding> owners,
         IReadOnlyList<string> sectionIds)
