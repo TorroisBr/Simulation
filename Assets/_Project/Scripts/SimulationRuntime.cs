@@ -12267,6 +12267,50 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             runtime.RunP12CrimeJusticeDailyMutation(graph, phase, mutation);
         }
 
+        public bool TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+            DailyV1SelectedRuntimeOwnerGraph expectedGraph,
+            out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
+        {
+            binding = null;
+            if (!ReferenceEquals(expectedGraph, graph)) return false;
+
+            bool admissionEnabled = runtime.runtimeAdmissionContext != null;
+            if (admissionEnabled)
+            {
+                if (runtime.npcRosterCensusProtocol == null)
+                {
+                    runtime.FaultRuntimeAdmission();
+                    return false;
+                }
+
+                if (runtime.justiceSystem != null
+                    && (graph.JusticeRecordsOwner == null
+                        || !ReferenceEquals(runtime.justiceSystem.CoreOwner,
+                            graph.JusticeRecordsOwner)))
+                {
+                    runtime.FaultRuntimeAdmission();
+                    return false;
+                }
+                if (runtime.crimeSystem != null
+                    && (graph.JusticeRecordsOwner == null
+                        || !ReferenceEquals(runtime.crimeSystem.JusticeOwner?.CoreOwner,
+                            graph.JusticeRecordsOwner)))
+                {
+                    runtime.FaultRuntimeAdmission();
+                    return false;
+                }
+            }
+
+            binding = new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+                runtime.P12CrimeJusticeMutationProtocol,
+                runtime.crimeSystem,
+                runtime.p12CrimeJusticeBoundCrimeSystem,
+                runtime.justiceSystem,
+                runtime.p12CrimeJusticeBoundJusticeSystem,
+                admissionEnabled);
+            return true;
+        }
+
         public DailyV1JusticeRecordsOwner JusticeRecordsOwner => graph.JusticeRecordsOwner;
 
         public bool CanProjectStatusChanges(

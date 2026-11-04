@@ -122,13 +122,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         DailyV1SelectedDailyExecutionStage.Advance(
             composition.ExecutionBoundaryState, composition.OwnerGraph, boundary);
 
-        Assert.That(boundary.DayStartPhases, Is.EqualTo(new[]
-        {
-            DailyV1SelectedCrimeJusticeDailyPhase.ClearArrestedToday,
-            DailyV1SelectedCrimeJusticeDailyPhase.AdvanceHiddenStatuses,
-            DailyV1SelectedCrimeJusticeDailyPhase.AdvanceSentences,
-            DailyV1SelectedCrimeJusticeDailyPhase.SyncWantedStatuses
-        }), "The admitted state-backed day-start stages use the roster and selected system-presence facts already bound to Core state, not host flags.");
+        Assert.That(boundary.LegacyCrimeJusticeDailyMutations, Is.Zero,
+            "The admitted Crime/Justice stages must not delegate their P12 reservation to the Unity host boundary.");
+        Assert.That(boundary.CoreCrimeJusticeDailyReservations, Is.EqualTo(4),
+            "Core owns all four ordered Crime/Justice daily P12 reservations.");
         Assert.That(boundary.Calls, Does.Not.Contain("begin-day"));
         Assert.That(boundary.Calls, Does.Not.Contain("day-start-context"),
             "The admitted selected stage derives its day-start inputs from the same Core-bound actor context.");
@@ -1240,6 +1237,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal List<string> Calls { get; } = new List<string>();
         internal List<DailyV1SelectedCrimeJusticeDailyPhase> DayStartPhases { get; } =
             new List<DailyV1SelectedCrimeJusticeDailyPhase>();
+        internal int CoreCrimeJusticeDailyReservations { get; set; }
+        internal int LegacyCrimeJusticeDailyMutations { get; set; }
         internal DailyV1SelectedDemographyResult PublishedDemographyResult { get; private set; }
         internal bool ThrowOnDemography { get; set; }
         internal bool ThrowOnBeginDay { get; set; }
@@ -1646,12 +1645,15 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             private readonly FakeBoundary owner;
             private readonly bool? selectedActionExecution;
+            private readonly PermissiveCrimeJusticeMutationProtocol crimeJusticeProtocol =
+                new PermissiveCrimeJusticeMutationProtocol(null);
             internal FakeActorTurnBoundary(
                 FakeBoundary owner,
                 bool? selectedActionExecution = null)
             {
                 this.owner = owner;
                 this.selectedActionExecution = selectedActionExecution;
+                crimeJusticeProtocol.Owner = owner;
             }
             public bool IsReservedToday(DailyV1NpcRuntimeOwners actor) => false;
             public void ProcessScheduledDirective(DailyV1NpcRuntimeOwners actor, ScheduledDirective directive)
@@ -1751,9 +1753,28 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public DailyV1JusticeRecordsOwner JusticeRecordsOwner =>
                 DayStartBoundary.JusticeRecordsOwner;
 
+            public bool TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
+            {
+                binding = null;
+                if (graph == null || !ReferenceEquals(graph, owner.CurrentGraph)) return false;
+                object justiceIdentity = graph.JusticeRecordsOwner;
+                binding = new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+                    crimeJusticeProtocol,
+                    this, this,
+                    justiceIdentity, justiceIdentity,
+                    admissionEnabled: true);
+                return true;
+            }
+
             public void ExecuteWithinDailyMutation(
                 DailyV1SelectedCrimeJusticeDailyPhase phase,
-                Action mutation) => DayStartBoundary.ExecuteWithinDailyMutation(phase, mutation);
+                Action mutation)
+            {
+                owner.LegacyCrimeJusticeDailyMutations++;
+                DayStartBoundary.ExecuteWithinDailyMutation(phase, mutation);
+            }
 
             public bool CanProjectStatusChanges(
                 DailyV1NpcRuntimeOwners actor,
@@ -1781,6 +1802,32 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 DayStartBoundary.Log(category, message);
 
             public void LogWarning(string message) => DayStartBoundary.LogWarning(message);
+
+            private sealed class PermissiveCrimeJusticeMutationProtocol
+                : IDailyV1P12CrimeJusticeMutationProtocol
+            {
+                internal FakeBoundary Owner { get; set; }
+
+                internal PermissiveCrimeJusticeMutationProtocol(FakeBoundary owner) => Owner = owner;
+
+                public void FaultClosed() { }
+                public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
+                    sectionIds != null && sectionIds.Count > 0;
+                public bool TryReserveMutationEpoch(out object reservation)
+                {
+                    if (Owner != null) Owner.CoreCrimeJusticeDailyReservations++;
+                    reservation = new object();
+                    return true;
+                }
+                public bool TryNotifyReservedCommittedMutations(
+                    object reservation,
+                    IReadOnlyCollection<string> sectionIds) =>
+                    reservation != null && sectionIds != null && sectionIds.Count > 0;
+                public void ReleaseMutationEpoch(object reservation) { }
+                public bool TryValidateMutationEpochCapacity() => true;
+                public bool NotifyCommittedMutation(string sectionId) =>
+                    !string.IsNullOrWhiteSpace(sectionId);
+            }
 
             public IAuthoritativeRandomSource RandomSource => owner.randomSource;
             public bool RequiresActionProjection => true;

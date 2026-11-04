@@ -189,8 +189,52 @@ internal interface IDailyV1SelectedActorTurnHostPorts
       IDailyV1SelectedMerchantTradeStateP12HostPorts,
       IDailyV1SelectedMerchantTradeStateAdmissionBoundary,
       IDailyV1SelectedActionSlotP12MutationBoundary,
-      IDailyV1SelectedCrimeJusticeDailyBoundary
+      IDailyV1SelectedCrimeJusticeDailyProjectionPorts,
+      IDailyV1SelectedCrimeJusticeDailyMutationHostPort
 {
+}
+
+/// <summary>
+/// Exact host-side census identities needed by the selected Crime/Justice
+/// operation. Core retains phase admission, reservation, mutation tracking,
+/// and epoch publication; the host only binds its existing census protocol
+/// and opaque Unity receipt-owner identities.
+/// </summary>
+internal sealed class DailyV1SelectedCrimeJusticeDailyMutationHostBinding
+{
+    internal IDailyV1P12CrimeJusticeMutationProtocol Protocol { get; }
+    internal object CrimeOwnerIdentity { get; }
+    internal object CrimeReceiptCensusOwnerIdentity { get; }
+    internal object JusticeOwnerIdentity { get; }
+    internal object JusticeReceiptCensusOwnerIdentity { get; }
+    internal bool AdmissionEnabled { get; }
+
+    internal DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+        IDailyV1P12CrimeJusticeMutationProtocol protocol,
+        object crimeOwnerIdentity,
+        object crimeReceiptCensusOwnerIdentity,
+        object justiceOwnerIdentity,
+        object justiceReceiptCensusOwnerIdentity,
+        bool admissionEnabled)
+    {
+        Protocol = protocol;
+        CrimeOwnerIdentity = crimeOwnerIdentity;
+        CrimeReceiptCensusOwnerIdentity = crimeReceiptCensusOwnerIdentity;
+        JusticeOwnerIdentity = justiceOwnerIdentity;
+        JusticeReceiptCensusOwnerIdentity = justiceReceiptCensusOwnerIdentity;
+        AdmissionEnabled = admissionEnabled;
+    }
+}
+
+/// <summary>
+/// Supplies exact external census bindings for a selected Crime/Justice
+/// operation. It does not execute or reserve the operation.
+/// </summary>
+internal interface IDailyV1SelectedCrimeJusticeDailyMutationHostPort
+{
+    bool TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding);
 }
 
 /// <summary>
@@ -635,7 +679,39 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         if (!Enum.IsDefined(typeof(DailyV1SelectedCrimeJusticeDailyPhase), phase)
             || mutation == null)
             throw new ArgumentException("The admitted Core actor turn requires a valid Crime/Justice P12 operation.");
-        hostPorts.ExecuteWithinDailyMutation(phase, mutation);
+        if (!hostPorts.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
+            || binding == null)
+        {
+            executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+            throw new InvalidOperationException(
+                "The selected Crime/Justice operation could not bind its exact host census identities to the admitted Core session.");
+        }
+
+        if (!binding.AdmissionEnabled)
+        {
+            mutation();
+            return;
+        }
+
+        if (binding.Protocol == null)
+        {
+            executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+            throw new InvalidOperationException(
+                "The selected Crime/Justice operation lost its exact P12 census protocol.");
+        }
+
+        executionState.ExecuteSelectedP12CrimeJusticeDailyMutation(
+            binding.Protocol,
+            graph,
+            phase,
+            binding.CrimeOwnerIdentity,
+            binding.CrimeReceiptCensusOwnerIdentity,
+            binding.JusticeOwnerIdentity,
+            binding.JusticeReceiptCensusOwnerIdentity,
+            includeCrimeReceiptSection: binding.CrimeOwnerIdentity != null,
+            includeJusticeReceiptSection: binding.JusticeOwnerIdentity != null,
+            mutation);
     }
 
     public bool CanProjectStatusChanges(

@@ -1106,13 +1106,23 @@ internal static class DailyV1SelectedDailyExecutionStage
             }
             else
             {
+                // An admitted selected session executes its Crime/Justice P12
+                // reservations through the Core actor-turn boundary. The
+                // day-start host context still supplies the exact roster and
+                // projection authority, but it cannot own the reservation or
+                // epoch lifecycle. Non-admitted compatibility execution keeps
+                // the established host boundary.
+                IDailyV1SelectedCrimeJusticeDailyBoundary crimeJusticeBoundary =
+                    executionState?.HasAdmittedSelectedDailyExecution == true
+                        ? actorTurnContext?.Boundary as IDailyV1SelectedCrimeJusticeDailyBoundary
+                        : dayStartContext.CrimeJusticeBoundary;
                 IReadOnlyList<DailyV1ActorTurnRosterProjection> dayStartRuntimeRoster =
                     executionState?.SelectedRuntimeActorRoster ?? dayStartContext.RuntimeRoster;
                 if (dayStartRuntimeRoster == null
-                    || dayStartContext.CrimeJusticeBoundary == null
+                    || crimeJusticeBoundary == null
                     || dayStartContext.MerchantTradeBoundary == null
                     || !ReferenceEquals(graph.JusticeRecordsOwner,
-                        dayStartContext.CrimeJusticeBoundary.JusticeRecordsOwner)
+                        crimeJusticeBoundary.JusticeRecordsOwner)
                     || graph.Definitions.EffectiveConfiguration?.MerchantTrade == null
                     || !DailyV1ActorTurnExecutionStage.TryBuildRoster(
                         graph, dayStartRuntimeRoster,
@@ -1145,7 +1155,7 @@ internal static class DailyV1SelectedDailyExecutionStage
                         dayStartRoster,
                         selectedCrimeInfrastructurePresent,
                         selectedJusticeInfrastructurePresent,
-                        dayStartContext.CrimeJusticeBoundary))
+                        crimeJusticeBoundary))
                     throw new InvalidOperationException(
                         "The selected Core Crime/Justice day-start stage rejected its exact owner graph.");
 

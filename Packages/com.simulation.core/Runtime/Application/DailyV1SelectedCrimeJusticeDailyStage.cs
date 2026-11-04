@@ -15,19 +15,27 @@ internal enum DailyV1SelectedCrimeJusticeDailyPhase
 /// compatibility projections, and presentation output. Core owns all
 /// selected Crime/Justice decisions and writes the shared owners directly.
 /// </summary>
-internal interface IDailyV1SelectedCrimeJusticeDailyBoundary
+internal interface IDailyV1SelectedCrimeJusticeDailyProjectionPorts
     : DailyV1SelectedActionExecutionStage.ISelectedNpcOwnerMutationBoundary
 {
     DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
-
-    void ExecuteWithinDailyMutation(
-        DailyV1SelectedCrimeJusticeDailyPhase phase,
-        Action mutation);
-
     bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence);
     void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence);
     void Log(SimulationLogCategory category, string message);
     void LogWarning(string message);
+}
+
+/// <summary>
+/// Core-owned selected Crime/Justice day-start boundary. The execution-state
+/// coordinator owns every P12 operation; the Unity host contributes only
+/// projection checks and post-commit compatibility notifications.
+/// </summary>
+internal interface IDailyV1SelectedCrimeJusticeDailyBoundary
+    : IDailyV1SelectedCrimeJusticeDailyProjectionPorts
+{
+    void ExecuteWithinDailyMutation(
+        DailyV1SelectedCrimeJusticeDailyPhase phase,
+        Action mutation);
 }
 
 /// <summary>
