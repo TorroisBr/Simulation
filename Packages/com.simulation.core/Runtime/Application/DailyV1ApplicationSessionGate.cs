@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Threading;
 
 /// <summary>
@@ -18,6 +20,54 @@ internal sealed class DailyV1SessionReportState
     internal void MarkEconomySnapshotDay(long day)
     {
         LastEconomySnapshotDay = day;
+    }
+}
+
+/// <summary>
+/// Single-use proof for the final application-owned commit of an initial
+/// restored image. It binds the already validated image-to-target owner vector
+/// to the exact private Core session until boundary finalization and publication
+/// complete together under the application gate.
+/// </summary>
+internal sealed class DailyV1InitialRestoredImageCommitProof
+{
+    private readonly ReadOnlyCollection<OwnerSectionCensusSnapshot> targetOwnerSections;
+
+    internal P12AContinuationImage Image { get; }
+    internal WorldId WorldId { get; }
+    internal long AbsoluteDay { get; }
+    internal long CompletedCoreSequence { get; }
+    internal IReadOnlyList<OwnerSectionCensusSnapshot> TargetOwnerSections => targetOwnerSections;
+    internal long TargetMutationEpoch { get; }
+    internal Action<DailyV1RestoredBoundaryFinalizationStage> StageObserver { get; }
+
+    internal DailyV1InitialRestoredImageCommitProof(
+        P12AContinuationImage image,
+        WorldId worldId,
+        long absoluteDay,
+        long completedCoreSequence,
+        IReadOnlyList<OwnerSectionCensusSnapshot> targetOwnerSections,
+        long targetMutationEpoch,
+        Action<DailyV1RestoredBoundaryFinalizationStage> stageObserver)
+    {
+        Image = image ?? throw new ArgumentNullException(nameof(image));
+        WorldId = worldId ?? throw new ArgumentNullException(nameof(worldId));
+        if (absoluteDay < 0L) throw new ArgumentOutOfRangeException(nameof(absoluteDay));
+        if (completedCoreSequence < 0L) throw new ArgumentOutOfRangeException(nameof(completedCoreSequence));
+        if (targetOwnerSections == null) throw new ArgumentNullException(nameof(targetOwnerSections));
+
+        List<OwnerSectionCensusSnapshot> copy = new List<OwnerSectionCensusSnapshot>(targetOwnerSections.Count);
+        foreach (OwnerSectionCensusSnapshot section in targetOwnerSections)
+        {
+            if (section == null) throw new ArgumentException("A restored target owner section is null.", nameof(targetOwnerSections));
+            copy.Add(section);
+        }
+
+        AbsoluteDay = absoluteDay;
+        CompletedCoreSequence = completedCoreSequence;
+        this.targetOwnerSections = new ReadOnlyCollection<OwnerSectionCensusSnapshot>(copy);
+        TargetMutationEpoch = targetMutationEpoch;
+        StageObserver = stageObserver;
     }
 }
 
@@ -129,6 +179,7 @@ internal sealed class DailyV1P12CRuntimeRoots
 internal sealed class DailyV1ActiveRuntimeSession
 {
     private IDailyV1RuntimeAdvanceEvidenceBoundary runtimeAdvanceBoundary;
+    private DailyV1InitialRestoredImageCommitProof initialRestoreCommitProof;
 
     private DailyV1ActiveRuntimeSession(
         DailyV1ExecutionBoundaryState executionBoundaryState,
@@ -163,6 +214,35 @@ internal sealed class DailyV1ActiveRuntimeSession
     internal SimulationCalendar Calendar => ExecutionBoundaryState.CalendarIdentity;
     internal string ProfileFingerprint { get; }
     internal IDailyV1RuntimeAdvanceEvidenceBoundary RuntimeAdvanceBoundary => runtimeAdvanceBoundary;
+
+    internal bool TryBindInitialRestoreCommitProof(
+        DailyV1InitialRestoredImageCommitProof proof)
+    {
+        if (proof == null || initialRestoreCommitProof != null
+            || !ReferenceEquals(proof.WorldId, WorldId)
+            || proof.AbsoluteDay != SimulationTime?.AbsoluteDay
+            || AdmissionContext?.IsRestoredContinuation != true)
+            return false;
+
+        initialRestoreCommitProof = proof;
+        return true;
+    }
+
+    internal bool TryGetInitialRestoreCommitProof(
+        P12AContinuationImage image,
+        out DailyV1InitialRestoredImageCommitProof proof)
+    {
+        proof = initialRestoreCommitProof;
+        return proof != null && image != null && ReferenceEquals(proof.Image, image);
+    }
+
+    internal bool ClearInitialRestoreCommitProof(
+        DailyV1InitialRestoredImageCommitProof proof)
+    {
+        if (proof == null || !ReferenceEquals(initialRestoreCommitProof, proof)) return false;
+        initialRestoreCommitProof = null;
+        return true;
+    }
 
     /// <summary>
     /// Binds the session once to the host boundary constructed for this exact

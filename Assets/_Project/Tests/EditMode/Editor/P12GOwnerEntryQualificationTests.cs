@@ -132,6 +132,10 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             Is.GreaterThan(restoreStages.IndexOf(P12GDailyV1RestoreStage.CandidateComposed)));
         Assert.That(ownerVectorValidatedStageIndex,
             Is.LessThan(restoreStages.IndexOf(P12GDailyV1RestoreStage.TargetSpatialInvariantsValidated)));
+        Assert.That(restoreStages.Contains(P12GDailyV1RestoreStage.CandidateGuardBound), Is.False,
+            "Initial restore boundary finalization is held by the application until its atomic publication gate.");
+        Assert.That(restoreStages.Contains(P12GDailyV1RestoreStage.BoundaryAdmitted), Is.False,
+            "The completed restore token is not published on the private projection before application commit.");
         Assert.That(restored, Is.Not.Null);
         Assert.That(restored.Runtime.SelectedRuntimeOwnerGraph.PoliticalKnowledgeStore,
             Is.SameAs(restored.Runtime.PoliticalKnowledgeStoreForWorldBoundary),
@@ -139,21 +143,14 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         Assert.That(restored.Composition.SelectedDefinitions,
             Is.SameAs(anchor.Composition.SelectedDefinitions),
             "Detached restore must consume the canonical typed graph selected by the admitted profile.");
-        DailyCaptureEligibilityToken restoredToken = GetCompletedToken(restored.Runtime);
-        Assert.That(restoredToken.BoundaryProvenance,
-            Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
-        AssertMilitaryAndKnowledgeOwners(restored, restoredToken);
-        AssertDailyV1Parity(source.Session, sourceToken, restored, restoredToken,
-            "source/image-restored at the captured boundary");
-        AssertDailyV1Parity(restored, restoredToken, control.Session, controlToken,
-            "image-restored/control at the captured boundary");
-        Assert.That(EncodeCompletedImage(restored, restoreBootstrapContext), Is.EqualTo(sourceImageBytes),
-            "Every persisted owner payload, alias group, root and revision must be reproduced exactly after image restore.");
-
-        Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure unpublishedAdvanceFailure),
+        Assert.That(restored.Runtime.TryGetCompletedDailyCaptureToken(
+                out DailyCaptureEligibilityToken unpublishedToken,
+                out DailyCaptureEligibilityFailure unpublishedTokenFailure),
             Is.False,
-            "A restored Core session must not advance through its application authority before atomic publication.");
-        Assert.That(unpublishedAdvanceFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
+            "A restored Core session must not expose a completed capture token before atomic publication.");
+        Assert.That(unpublishedToken, Is.Null);
+        Assert.That(unpublishedTokenFailure, Is.EqualTo(DailyCaptureEligibilityFailure.WorldNotPublished),
+            "The detached candidate remains unpublished until the application commit gate completes.");
         object candidateBoundaryBeforeAdmissionCommit =
             restored.CoreRuntimeSession.RuntimeAdvanceBoundary;
         Assert.That(restoreApplication.TryCommitInitialRestoredCandidateWithHostProjection(
@@ -161,6 +158,12 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 out string missingAdmissionDiagnostic),
             Is.False, "Initial restore publication cannot omit its exact slot admission.");
         Assert.That(missingAdmissionDiagnostic, Does.Contain("exact admitted image token"));
+
+        Assert.That(restoreApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+                initialStartAdmission, image, restored.CoreRuntimeSession, null,
+                restored.Runtime, out string missingProjectionDiagnostic),
+            Is.False, "Initial restore must reject a missing host projection before boundary finalization.");
+        Assert.That(missingProjectionDiagnostic, Does.Contain("host projection"));
 
         Assert.That(restoreApplication.TryCommitRestoredCandidateWithHostProjection(
                 null, restored.CoreRuntimeSession, null, restored, restored.Runtime,
@@ -201,6 +204,23 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 initialStartAdmission, image, restored.CoreRuntimeSession,
                 restored, restored.Runtime, out string publishDiagnostic),
             Is.True, publishDiagnostic);
+        Assert.That(restoreStages.Count(stage =>
+                stage == P12GDailyV1RestoreStage.CandidateGuardBound), Is.EqualTo(1));
+        Assert.That(restoreStages.Count(stage =>
+                stage == P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured), Is.EqualTo(1));
+        Assert.That(restoreStages.Count(stage =>
+                stage == P12GDailyV1RestoreStage.BoundaryAdmitted), Is.EqualTo(1));
+
+        DailyCaptureEligibilityToken restoredToken = GetCompletedToken(restored.Runtime);
+        Assert.That(restoredToken.BoundaryProvenance,
+            Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
+        AssertMilitaryAndKnowledgeOwners(restored, restoredToken);
+        AssertDailyV1Parity(source.Session, sourceToken, restored, restoredToken,
+            "source/image-restored at the captured boundary");
+        AssertDailyV1Parity(restored, restoredToken, control.Session, controlToken,
+            "image-restored/control at the captured boundary");
+        Assert.That(EncodeCompletedImage(restored, restoreBootstrapContext), Is.EqualTo(sourceImageBytes),
+            "Every persisted owner payload, alias group, root and revision must be reproduced exactly after image restore.");
 
         for (int boundary = 1; boundary <= 2; boundary++)
         {
@@ -283,20 +303,26 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             application: restoreApplication,
             initialStartAdmission: initialStartAdmission,
             privateCandidateObserverForTest: candidate => privateCandidate = candidate),
-            Is.False);
+            Is.True);
 
         Assert.That(mutationInjected, Is.True);
         Assert.That(targetRosterMutationApplied, Is.True);
-        Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetOwnerVectorFailed), diagnostic);
-        Assert.That(restored, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.None), diagnostic);
+        Assert.That(restored, Is.Not.Null);
         Assert.That(restoreStages.Count(stage =>
                 stage == P12GDailyV1RestoreStage.TargetOwnerVectorValidated),
             Is.EqualTo(1), "The persisted image owner vector must be validated exactly once.");
+
+        Assert.That(restoreApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+                initialStartAdmission, image, restored.CoreRuntimeSession, restored,
+                restored.Runtime, out string commitDiagnostic),
+            Is.False,
+            "The application commit must reject a target roster changed after the staged image owner-vector capture.");
+        Assert.That(commitDiagnostic, Does.Contain("missing or has changed cardinality"));
         Assert.That(restoreStages.Count(stage => stage == P12GDailyV1RestoreStage.CandidateGuardBound),
-            Is.EqualTo(1), "The private candidate must bind its guard before the final owner-vector recapture.");
+            Is.EqualTo(1), "The application commit binds the guard before the final owner-vector recapture.");
         Assert.That(restoreStages.Contains(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured), Is.False);
         Assert.That(restoreStages.Contains(P12GDailyV1RestoreStage.BoundaryAdmitted), Is.False);
-        Assert.That(diagnostic, Does.Contain("missing or has changed cardinality"));
         Assert.That(privateCandidate, Is.Not.Null);
         Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.True,
             "The rejected candidate may have a bound private guard, but it remains unpublished and is discarded.");
@@ -411,6 +437,10 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     application: coreAdmissionApplication,
                     initialStartAdmission: initialStartAdmission),
                 Is.True, aliasRetryFailure + ": " + aliasRetryDiagnostic);
+            Assert.That(coreAdmissionApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+                    initialStartAdmission, validImage, aliasRetry.CoreRuntimeSession,
+                    aliasRetry, aliasRetry.Runtime, out string aliasRetryCommitDiagnostic),
+                Is.True, aliasRetryCommitDiagnostic);
             Assert.That(EncodeCompletedImage(aliasRetry, anchor.NormalContext), Is.EqualTo(validBytes));
             return;
         }

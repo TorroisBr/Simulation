@@ -436,29 +436,52 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     return false;
                 }
 
-                if (!application.TryFinalizeRestoredCandidateBoundary(
-                        candidate.CoreRuntimeSession,
-                        targetRuntime,
-                        stagedC.WorldIdentity,
-                        image.Header.Day,
-                        image.Header.Sequence,
-                        targetSections,
-                        targetEpoch,
-                        replacementOperation?.ExpectedSession,
-                        replacementOperation,
-                        finalizationStage => stageObserver?.Invoke(
-                            MapRestoreFinalizationStage(finalizationStage)),
-                        out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedSections,
-                        out long recapturedEpoch,
-                        out DailyV1RestoredBoundaryFinalizationFailure finalizationFailure,
-                        out diagnostic))
+                Action<DailyV1RestoredBoundaryFinalizationStage> finalizationObserver =
+                    finalizationStage => stageObserver?.Invoke(
+                        MapRestoreFinalizationStage(finalizationStage));
+                if (initialStartAdmission != null && replacementOperation == null)
                 {
-                    failure = MapRestoreFinalizationFailure(finalizationFailure);
-                    return false;
+                    if (stagedCoreOwnerStages == null
+                        || !application.TryBindInitialRestoredImageCommitProof(
+                            initialStartAdmission,
+                            stagedCoreOwnerStages,
+                            candidate.CoreRuntimeSession,
+                            targetSections,
+                            targetEpoch,
+                            finalizationObserver,
+                            out diagnostic))
+                    {
+                        failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
+                        if (string.IsNullOrWhiteSpace(diagnostic))
+                            diagnostic = "The Core application could not bind the validated initial image target to its private restore transaction.";
+                        return false;
+                    }
                 }
+                else
+                {
+                    if (!application.TryFinalizeRestoredCandidateBoundary(
+                            candidate.CoreRuntimeSession,
+                            targetRuntime,
+                            stagedC.WorldIdentity,
+                            image.Header.Day,
+                            image.Header.Sequence,
+                            targetSections,
+                            targetEpoch,
+                            replacementOperation?.ExpectedSession,
+                            replacementOperation,
+                            finalizationObserver,
+                            out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedSections,
+                            out long recapturedEpoch,
+                            out DailyV1RestoredBoundaryFinalizationFailure finalizationFailure,
+                            out diagnostic))
+                    {
+                        failure = MapRestoreFinalizationFailure(finalizationFailure);
+                        return false;
+                    }
 
-                targetSections = recapturedSections;
-                targetEpoch = recapturedEpoch;
+                    targetSections = recapturedSections;
+                    targetEpoch = recapturedEpoch;
+                }
             }
             else
             {

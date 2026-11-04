@@ -2665,6 +2665,80 @@ internal sealed class DailyV1Application
             out failure,
             out diagnostic);
     }
+
+    /// <summary>
+    /// Binds the exact already-validated initial image target vector to its
+    /// private Core session. The application consumes this proof later while
+    /// finalizing the restored boundary and publishing the Core session plus
+    /// host projection under one gate.
+    /// </summary>
+    internal bool TryBindInitialRestoredImageCommitProof(
+        DailyV1ApplicationStartAdmission initialStartAdmission,
+        DailyV1RestoredImageCoreOwnerStages stages,
+        DailyV1ActiveRuntimeSession candidateSession,
+        IReadOnlyList<OwnerSectionCensusSnapshot> validatedTargetSections,
+        long validatedMutationEpoch,
+        Action<DailyV1RestoredBoundaryFinalizationStage> stageObserver,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (stages == null
+                || !IsForInitialRestoreAdmission(initialStartAdmission, stages.Image)
+                || !stages.IsFor(this, stages.Image, stages.Definitions, stages.CoreRoots,
+                    candidateExpectedSession: null, candidateReplacementOperation: null)
+                || !stages.IsComplete
+                || !ReferenceEquals(stages.CoreSession, candidateSession)
+                || candidateSession == null
+                || !HasRestoredContinuationStagingAuthority(null, null)
+                || !string.Equals(stages.CoreRoots.WorldIdentity?.Value,
+                    stages.Image.Header?.WorldId, StringComparison.Ordinal)
+                || stages.Image.Header?.Day != candidateSession.SimulationTime?.AbsoluteDay)
+            {
+                diagnostic = "Initial restore proof requires the exact admitted image and its complete private Core C/D/E/F session.";
+                return false;
+            }
+
+            if (!TryValidateRestoredImageOwnerVector(
+                    stages.Census, validatedTargetSections, null, null,
+                    out P12GDailyV1OwnerVectorFailure vectorFailure,
+                    out string vectorDiagnostic))
+            {
+                diagnostic = "The initial restored Core session has no valid image-to-target owner-vector proof: "
+                    + (string.IsNullOrWhiteSpace(vectorDiagnostic)
+                        ? vectorFailure.ToString()
+                        : vectorDiagnostic);
+                return false;
+            }
+
+            DailyV1InitialRestoredImageCommitProof proof;
+            try
+            {
+                proof = new DailyV1InitialRestoredImageCommitProof(
+                    stages.Image,
+                    stages.CoreRoots.WorldIdentity,
+                    stages.Image.Header.Day,
+                    stages.Image.Header.Sequence,
+                    validatedTargetSections,
+                    validatedMutationEpoch,
+                    stageObserver);
+            }
+            catch (ArgumentException)
+            {
+                diagnostic = "The initial restored image target-vector proof could not be retained.";
+                return false;
+            }
+
+            if (!candidateSession.TryBindInitialRestoreCommitProof(proof))
+            {
+                diagnostic = "The exact initial image proof could not be bound once to its private restored Core session.";
+                return false;
+            }
+
+            return true;
+        }
+    }
     /// <summary>
     /// Stages the detached P12-C roots for an image through this application.
     /// Replacement staging is bound to the exact published session and its
@@ -3837,9 +3911,60 @@ internal sealed class DailyV1Application
                 return false;
             }
 
-            return TryCommitRestoredCandidateWithHostProjectionCore(
+            if (candidate == null
+                || !candidate.TryGetInitialRestoreCommitProof(
+                    image, out DailyV1InitialRestoredImageCommitProof proof)
+                || candidateHostProjection == null
+                || candidateHostPorts == null
+                || !ReferenceEquals(candidate.ExecutionBoundaryState,
+                    candidateHostPorts.ExecutionState))
+            {
+                diagnostic = "Initial restore publication requires the exact private candidate, image proof, host projection, and host boundary.";
+                return false;
+            }
+
+            bool finalized;
+            DailyV1RestoredBoundaryFinalizationFailure finalizationFailure;
+            try
+            {
+                finalized = TryFinalizeRestoredCandidateBoundary(
+                    candidate,
+                    candidateHostPorts,
+                    proof.WorldId,
+                    proof.AbsoluteDay,
+                    proof.CompletedCoreSequence,
+                    proof.TargetOwnerSections,
+                    proof.TargetMutationEpoch,
+                    expectedSession: null,
+                    replacementOperation: null,
+                    proof.StageObserver,
+                    out _,
+                    out _,
+                    out finalizationFailure,
+                    out diagnostic);
+            }
+            catch (Exception exception) when (exception is ArgumentException
+                || exception is InvalidOperationException || exception is OverflowException
+                || exception is NullReferenceException)
+            {
+                diagnostic = "The Core application could not finalize the private restored boundary: "
+                    + exception.Message;
+                return false;
+            }
+
+            if (!finalized)
+            {
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "The Core application rejected initial restored-boundary finalization: "
+                        + finalizationFailure + ".";
+                return false;
+            }
+
+            bool committed = TryCommitRestoredCandidateWithHostProjectionCore(
                 null, candidate, null, candidateHostProjection, candidateHostPorts,
                 null, initialRestoreAdmissionVerified: true, out diagnostic);
+            if (committed) candidate.ClearInitialRestoreCommitProof(proof);
+            return committed;
         }
     }
 
