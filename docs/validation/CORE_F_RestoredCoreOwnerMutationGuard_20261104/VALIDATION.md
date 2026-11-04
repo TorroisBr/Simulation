@@ -13,7 +13,7 @@ Official CoreValidation run 7907828ffdb2445cb378e59e965b9f5c: cold 1,012/1,012 P
 
 - Protected run manifest SHA-256: 9d14582008c531928452bf58ecdf3250e18a8a63eed8c64ba30296b46a6a8455
 - Cold TRX SHA-256: fe7b606994eade7d181e9c5abdb78820d061e4b1c0c6245f13090460e829575e
-- Warm TRX SHA-256: 863e7e71f559dcbb27a060df204eadb3b2ac1de795de7ff1532033f38714a49db
+- Warm TRX SHA-256: 863e7e71f559dcbbdb68bdbe61d04fdd9063fb64f64a9545d5b6cd073f28d563
 
 The original TRX and full run artifacts remain in the protected validation store. The run used a worktree with Unity Library present; this is not evidence of Library-independent validation.
 
@@ -23,7 +23,7 @@ The original TRX and full run artifacts remain in the protected validation store
 - Full EditMode, run 384c6cacbad44855b6ddfded47432397: 3,299/3,299 PASS; stable input snapshot c88e939396a2a4e728710ebe66028b68cf1f78282a6f2eb49a6bf2807d57b5f0.
 - EditMode Smoke, run 634a817a4cbd4c729f80d66328ac2354: 5/5 PASS, same stable input snapshot.
 - Final full EditMode package verifies against its original run manifest. Package manifest SHA-256: 5671ac0c0bb486db9e87a1db441b1a2fcf304967b59eb88a4dbce1411e612ae7. Archive SHA-256: df8e91349ddad888eabbbbc6ec7cd5a1831c12aadaf4b3bbf9f5ee5846b7650d.
-- Full EditMode XML SHA-256: 85b2bb22ee5ec82558c02a8f0ac10ceee67d70cbcba8269b2b49b92fadc0a53.
+- Full EditMode XML SHA-256: 85b2bb22ee5ec82558c02a8f0ac10ceee67d70cbc1eb46eb75af1f40930ffbfb.
 - Full EditMode log SHA-256: 5f3f1faf1fa5ac38abcd6256d28bd2c8b67b7d0ddbe92885492ad84379ffcc7b.
 
 The focused Core regression was 3/3 PASS for:
