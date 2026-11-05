@@ -1692,6 +1692,150 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
+    /// Seals a completed P12 image using exact operation-bound Core sections.
+    /// Unity may provide compatibility sections for owners that have not yet
+    /// migrated; overlapping Core sections are checked and replaced by Core.
+    /// </summary>
+    internal bool TryComposeCoreOwnedContinuationImage(
+        DailyV1P12GContinuationSaveOperation operation,
+        P12ACompatibilityDescriptor unityCompatibility,
+        P12ACompatibilityDescriptorV2 dotNetCompatibility,
+        long politicalWorldRevision,
+        IReadOnlyList<P12AOwnerSection> adapterEncodedOwnerSections,
+        out P12AContinuationImage image,
+        out P12ADailyV1SectionManifest manifest,
+        out P12AResult result)
+    {
+        image = null;
+        manifest = null;
+        result = new P12AResult(P12AResultCode.CaptureRejected);
+        if (operation == null || !operation.IsActive || !operation.IsOwnedBy(this)
+            || operation.CoreNpcOwnerSources == null
+            || !ReferenceEquals(activeSessionGate.Current, operation.Session)
+            || adapterEncodedOwnerSections == null)
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12d.core-selected-npc-sources");
+            return false;
+        }
+
+        if (!operation.TryEncodeCoreP12DOwnerSections(
+                out IReadOnlyList<P12AOwnerSection> p12DOwnerSections,
+                out bool includesNpcOwnerSections,
+                out result))
+            return false;
+        if (!includesNpcOwnerSections)
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12d.core-selected-npc-sources");
+            return false;
+        }
+
+        DailyCaptureEligibilityToken token = operation.SourceWitness?.Token;
+        if (token == null)
+        {
+            result = new P12AResult(P12AResultCode.CaptureRejected);
+            return false;
+        }
+
+        if (!operation.TryEncodeCoreP12EOwnerSections(
+                token.AbsoluteDay,
+                out IReadOnlyList<P12AOwnerSection> p12EOwnerSections,
+                out result)
+            || !operation.TryEncodeCoreP12FOwnerSections(
+                out IReadOnlyList<P12AOwnerSection> p12FOwnerSections,
+                out result))
+            return false;
+
+        Dictionary<string, P12AOwnerSection> coreSections =
+            new Dictionary<string, P12AOwnerSection>(StringComparer.Ordinal);
+        if (!TryAddCoreSections(coreSections, p12DOwnerSections)
+            || !TryAddCoreSections(coreSections, p12EOwnerSections)
+            || !TryAddCoreSections(coreSections, p12FOwnerSections))
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12a.core-owner-section-identity");
+            return false;
+        }
+
+        List<P12AOwnerSection> encodedOwnerSections =
+            new List<P12AOwnerSection>(adapterEncodedOwnerSections.Count + coreSections.Count);
+        HashSet<string> adapterSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (P12AOwnerSection adapterSection in adapterEncodedOwnerSections)
+        {
+            if (adapterSection == null || string.IsNullOrWhiteSpace(adapterSection.Id)
+                || !adapterSectionIds.Add(adapterSection.Id))
+            {
+                result = new P12AResult(P12AResultCode.MissingOrDuplicateSection,
+                    adapterSection?.Id);
+                return false;
+            }
+
+            if (coreSections.TryGetValue(adapterSection.Id, out P12AOwnerSection coreSection))
+            {
+                if (!AreEncodedOwnerSectionsEqual(coreSection, adapterSection))
+                {
+                    result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                        "p12a.core-owner-section-conflict", adapterSection.Id);
+                    return false;
+                }
+                continue;
+            }
+
+            encodedOwnerSections.Add(adapterSection);
+        }
+
+        foreach (KeyValuePair<string, P12AOwnerSection> coreSection in coreSections)
+            encodedOwnerSections.Add(coreSection.Value);
+
+        return TryComposeContinuationImage(
+            operation,
+            unityCompatibility,
+            dotNetCompatibility,
+            politicalWorldRevision,
+            encodedOwnerSections,
+            out image,
+            out manifest,
+            out result);
+    }
+
+    private static bool TryAddCoreSections(
+        Dictionary<string, P12AOwnerSection> destination,
+        IReadOnlyList<P12AOwnerSection> source)
+    {
+        if (destination == null || source == null) return false;
+        foreach (P12AOwnerSection section in source)
+        {
+            if (section == null || string.IsNullOrWhiteSpace(section.Id)
+                || !destination.TryAdd(section.Id, section))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool AreEncodedOwnerSectionsEqual(
+        P12AOwnerSection left,
+        P12AOwnerSection right)
+    {
+        if (left == null || right == null || left.Id != right.Id
+            || left.Major != right.Major || left.Minor != right.Minor
+            || left.Role != right.Role || left.AliasGroup != right.AliasGroup
+            || left.Revision != right.Revision || left.Rows.Count != right.Rows.Count)
+            return false;
+
+        for (int index = 0; index < left.Rows.Count; index++)
+        {
+            P12AOwnerRow leftRow = left.Rows[index];
+            P12AOwnerRow rightRow = right.Rows[index];
+            if (leftRow.OwnerKey != rightRow.OwnerKey
+                || leftRow.Revision != rightRow.Revision
+                || !P12AContinuationCodec.BytesEqual(leftRow.Payload, rightRow.Payload))
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
     /// Seals the typed owner sections into one immutable Daily-v1 image under
     /// the exact Core continuation-save operation. The owner vector comes
     /// from that operation's completed-boundary witness; a host cannot

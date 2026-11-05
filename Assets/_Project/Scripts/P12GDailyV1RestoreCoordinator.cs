@@ -1023,14 +1023,23 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 return false;
             }
 
-            composed = continuationSaveOperation.TryComposeImage(
-                compatibility,
-                compatibilityV2,
-                sourceSession.Runtime.PoliticalWorldRevision,
-                ownerSectionsEncoded,
-                out image,
-                out _,
-                out result);
+            composed = continuationSaveOperation.CoreNpcOwnerSources != null
+                ? continuationSaveOperation.TryComposeCoreOwnedImage(
+                    compatibility,
+                    compatibilityV2,
+                    sourceSession.Runtime.PoliticalWorldRevision,
+                    ownerSectionsEncoded,
+                    out image,
+                    out _,
+                    out result)
+                : continuationSaveOperation.TryComposeImage(
+                    compatibility,
+                    compatibilityV2,
+                    sourceSession.Runtime.PoliticalWorldRevision,
+                    ownerSectionsEncoded,
+                    out image,
+                    out _,
+                    out result);
         }
         else
         {

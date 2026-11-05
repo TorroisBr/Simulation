@@ -625,6 +625,35 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
             out image, out manifest, out result);
     }
 
+    internal bool TryComposeCoreOwnedImage(
+        P12ACompatibilityDescriptor unityCompatibility,
+        P12ACompatibilityDescriptorV2 dotNetCompatibility,
+        long politicalWorldRevision,
+        IReadOnlyList<P12AOwnerSection> adapterEncodedOwnerSections,
+        out P12AContinuationImage image,
+        out P12ADailyV1SectionManifest manifest,
+        out P12AResult result)
+    {
+        DailyV1Application owner = Volatile.Read(ref application);
+        if (owner == null)
+        {
+            image = null;
+            manifest = null;
+            result = new P12AResult(P12AResultCode.CaptureRejected);
+            return false;
+        }
+
+        return owner.TryComposeCoreOwnedContinuationImage(
+            this,
+            unityCompatibility,
+            dotNetCompatibility,
+            politicalWorldRevision,
+            adapterEncodedOwnerSections,
+            out image,
+            out manifest,
+            out result);
+    }
+
     internal bool IsOwnedBy(DailyV1Application candidate) =>
         ReferenceEquals(Volatile.Read(ref application), candidate);
 

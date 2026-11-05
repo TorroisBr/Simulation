@@ -5316,6 +5316,8 @@ public sealed class SimulationRuntimeAdmissionTests
                 out DailyCaptureEligibilityFailure beginFailure), Is.True, beginFailure.ToString());
             using (operation)
             {
+                Assert.That(operation.CoreNpcOwnerSources, Is.Not.Null,
+                    "The selected Daily-v1 capture must bind the complete Core NPC owner vector.");
                 DailyV1P12GCoreBoundDemographicOwnerSources demographic =
                     operation.CoreDemographicOwnerSources;
                 Assert.That(demographic, Is.Not.Null);
