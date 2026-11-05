@@ -538,6 +538,81 @@ internal sealed class DailyV1Application
             definitions.Cities.Count,
             definitions.Npcs.Count);
     }
+
+    internal bool TryCreateInitialGenesisLogger(
+        DailyV1ApplicationStartAdmission admission,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ApplicationHost host,
+        out SimulationLogger logger,
+        out string diagnostic)
+    {
+        logger = null;
+        diagnostic = null;
+        if (!IsForInitialGenesisAdmission(admission))
+        {
+            diagnostic = "Core genesis logger creation requires this application's exact NoSave admission.";
+            return false;
+        }
+        if (definitions == null || host == null)
+        {
+            diagnostic = "The admitted definitions and explicit application host are required to create the Core logger.";
+            return false;
+        }
+
+        try
+        {
+            logger = CreateInitialLogger(definitions, host);
+            BeginInitialLogger(definitions, logger);
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            logger = null;
+            diagnostic = "Core could not initialize the admitted initial Daily-v1 logger: " + exception.Message;
+            return false;
+        }
+    }
+
+    internal bool TryPrepareInitialRestoreStart(
+        DailyV1ApplicationStartAdmission admission,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ApplicationHost host,
+        out DailyV1ApplicationStartPreparation preparation,
+        out string diagnostic)
+    {
+        preparation = null;
+        diagnostic = null;
+        if (admission == null
+            || !IsForInitialRestoreAdmission(admission, admission.RestoreImage))
+        {
+            diagnostic = "Core restore preparation requires this application's exact loaded-image admission.";
+            return false;
+        }
+        if (definitions == null || host == null)
+        {
+            diagnostic = "The admitted definitions and explicit application host are required to prepare the restore start.";
+            return false;
+        }
+
+        try
+        {
+            SimulationLogger restoreLogger = CreateInitialLogger(definitions, host);
+            preparation = new DailyV1ApplicationStartPreparation(
+                this, DailyV1ApplicationStartPreparationKind.RestoreRequired,
+                admission.RestoreImage, null, null, restoreLogger, admission, admission.PersistenceResult);
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            preparation = null;
+            diagnostic = "Core could not initialize the admitted restore session logger: " + exception.Message;
+            return false;
+        }
+    }
     /// <summary>
     /// Captures the selected bootstrap owner-thread identity once, inside the
     /// Core application that will own the resulting active session.

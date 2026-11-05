@@ -202,6 +202,7 @@ public class TesteSimulacao : MonoBehaviour
     private readonly DailyV1Application dailyV1Application = new DailyV1Application();
     private DailyV1ApplicationStartAdmission dailyV1StartAdmission;
     private DailyV1ApplicationStartPreparation dailyV1InitialStartPreparation;
+    private DailyV1ApplicationHost dailyV1InitialStartHost;
     private readonly DailyV1ApplicationSessionGate<SimulationActiveSession> compatibilitySessionGate =
         new DailyV1ApplicationSessionGate<SimulationActiveSession>(
             session => session.ExecutionBoundaryState);
@@ -374,11 +375,37 @@ public class TesteSimulacao : MonoBehaviour
             persistentDataPath, fileOperations, stageCompleted: null,
             logOutput: UnitySimulationLoggerAdapter.Write,
             unityV1Identity: compatibility);
-        if (!dailyV1Application.TryPrepareStartOnExistingApplication(
+        if (!dailyV1Application.TryAdmitInitialStart(
                 currentDefinitions, host,
-                out DailyV1ApplicationStartPreparation preparation,
+                out DailyV1ApplicationStartAdmission admission,
                 out P12AResult loadResult,
                 out string admissionDiagnostic)
+            || admission == null)
+        {
+            bootstrapFailed = true;
+            UnityEngine.Debug.LogError("P12-A continuation load failed; genesis was not started. "
+                + (loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString()));
+            return true;
+        }
+
+        dailyV1StartAdmission = admission;
+        selectedDefinitions = currentDefinitions;
+        selectedDefinitionBindings = currentBindings;
+        effectiveConfiguration = effective;
+        calendarDefinition = calendar;
+
+        if (admission.Kind == DailyV1ApplicationStartAdmissionKind.GenesisRequired)
+        {
+            dailyV1InitialStartHost = host;
+            return false;
+        }
+
+        if (admission.Kind != DailyV1ApplicationStartAdmissionKind.RestoreRequired
+            || admission.RestoreImage == null
+            || !dailyV1Application.TryPrepareInitialRestoreStart(
+                admission, currentDefinitions, host,
+                out DailyV1ApplicationStartPreparation preparation,
+                out admissionDiagnostic)
             || preparation == null)
         {
             bootstrapFailed = true;
@@ -388,14 +415,6 @@ public class TesteSimulacao : MonoBehaviour
         }
 
         dailyV1InitialStartPreparation = preparation;
-        dailyV1StartAdmission = preparation.StartAdmission;
-        selectedDefinitions = currentDefinitions;
-        selectedDefinitionBindings = currentBindings;
-        effectiveConfiguration = effective;
-        calendarDefinition = calendar;
-
-        if (preparation.Kind == DailyV1ApplicationStartPreparationKind.GenesisPrepared)
-            return false;
         if (preparation.Kind != DailyV1ApplicationStartPreparationKind.RestoreRequired
             || preparation.RestoreImage == null)
         {
@@ -677,6 +696,10 @@ public class TesteSimulacao : MonoBehaviour
                             DailyV1ApplicationStartPreparation coreStartPreparation =
                                 dailyV1InitialStartPreparation;
                             bool reusePreparedStart = coreStartPreparation != null;
+                            bool reuseAdmittedGenesis = !reusePreparedStart
+                                && dailyV1StartAdmission != null
+                                && dailyV1StartAdmission.Kind == DailyV1ApplicationStartAdmissionKind.GenesisRequired
+                                && dailyV1InitialStartHost != null;
                             if (reusePreparedStart)
                             {
                                 if (coreStartPreparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
@@ -685,6 +708,17 @@ public class TesteSimulacao : MonoBehaviour
                                     || coreStartPreparation.PersistenceResult?.Code != P12AResultCode.NoSave)
                                     throw new System.InvalidOperationException(
                                         "The prepared Core Daily-v1 genesis does not belong to this exact Unity application start.");
+                            }
+                            else if (reuseAdmittedGenesis)
+                            {
+                                if (!ReferenceEquals(dailyV1StartAdmission.Application, dailyV1Application)
+                                    || dailyV1StartAdmission.PersistenceResult?.Code != P12AResultCode.NoSave)
+                                    throw new System.InvalidOperationException(
+                                        "The admitted Core Daily-v1 genesis does not belong to this exact Unity application start.");
+                            }
+
+                            if (reusePreparedStart || reuseAdmittedGenesis)
+                            {
                                 stagedEffectiveConfiguration = effectiveConfiguration;
                                 stagedCalendarDefinition = calendarDefinition;
                                 stagedSelectedDefinitions = selectedDefinitions;
@@ -692,7 +726,7 @@ public class TesteSimulacao : MonoBehaviour
                                 if (stagedEffectiveConfiguration == null || stagedCalendarDefinition == null
                                     || stagedSelectedDefinitions == null || stagedSelectedDefinitionBindings == null)
                                     throw new System.InvalidOperationException(
-                                        "The prepared Core Daily-v1 start lost its admitted configuration or binding graph.");
+                                        "The admitted Core Daily-v1 start lost its effective configuration or binding graph.");
                             }
                             else
                             {
@@ -724,6 +758,16 @@ public class TesteSimulacao : MonoBehaviour
                             if (reusePreparedStart)
                             {
                                 logger = coreStartPreparation.Logger;
+                            }
+                            else if (reuseAdmittedGenesis)
+                            {
+                                if (!dailyV1Application.TryCreateInitialGenesisLogger(
+                                        dailyV1StartAdmission, stagedSelectedDefinitions, dailyV1InitialStartHost,
+                                        out logger, out string loggerDiagnostic)
+                                    || logger == null)
+                                    throw new System.InvalidOperationException(
+                                        "The Core Daily-v1 application could not create its admitted genesis logger: "
+                                        + (loggerDiagnostic ?? string.Empty));
                             }
                             else
                             {
@@ -765,6 +809,7 @@ public class TesteSimulacao : MonoBehaviour
                                     throw new System.InvalidOperationException(
                                         "The Core Daily-v1 application could not prepare its admitted genesis start: "
                                         + (coreGenesisDiagnostic ?? string.Empty));
+                                dailyV1InitialStartPreparation = coreStartPreparation;
                             }
                             selectedCoreGenesis = coreStartPreparation.GenesisComposition;
                             selectedCoreRuntimeSession = coreStartPreparation.CoreSession;
@@ -1038,6 +1083,7 @@ public class TesteSimulacao : MonoBehaviour
             if (!TryPublishInitialActiveSession(candidateSession))
                 throw new System.InvalidOperationException("A simulation session was already published for this bootstrap owner.");
             dailyV1InitialStartPreparation = null;
+            dailyV1InitialStartHost = null;
             ReleaseBootstrapAliases();
         }
         catch

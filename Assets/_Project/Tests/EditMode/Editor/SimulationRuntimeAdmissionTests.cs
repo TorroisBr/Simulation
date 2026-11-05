@@ -16294,21 +16294,61 @@ public sealed class SimulationRuntimeAdmissionTests
                 "The application, not Unity, must inspect the absent continuation slot.");
             Assert.That(ReadPrivateField<bool>(target, "bootstrapFailed"), Is.False);
             Assert.That(ReadPrivateField<SimulationActiveSession>(target, "activeSession"), Is.Null,
-                "The Core genesis candidate remains unpublished before Unity projects the admitted host session.");
+                "The Core genesis is not prepared or published before Unity enters the ordered Core start pipeline.");
             Assert.That(genesisIdentityAllocations, Is.Zero,
                 "The selected Core application owns world identity allocation; the Unity compatibility allocator is unused.");
 
             DailyV1Application application = ReadPrivateField<DailyV1Application>(target, "dailyV1Application");
             DailyV1ApplicationStartPreparation preparation =
                 ReadPrivateField<DailyV1ApplicationStartPreparation>(target, "dailyV1InitialStartPreparation");
-            Assert.That(preparation, Is.Not.Null);
-            Assert.That(preparation.Kind, Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
-            Assert.That(preparation.Application, Is.SameAs(application));
-            Assert.That(preparation.StartAdmission, Is.SameAs(
-                ReadPrivateField<DailyV1ApplicationStartAdmission>(target, "dailyV1StartAdmission")));
+            Assert.That(preparation, Is.Null,
+                "The exact NoSave admission is retained, while Core genesis waits for the ordered stage callback.");
+            DailyV1ApplicationStartAdmission admission =
+                ReadPrivateField<DailyV1ApplicationStartAdmission>(target, "dailyV1StartAdmission");
+            Assert.That(admission, Is.Not.Null);
+            Assert.That(admission.Kind, Is.EqualTo(DailyV1ApplicationStartAdmissionKind.GenesisRequired));
+            Assert.That(admission.Application, Is.SameAs(application));
+            Assert.That(admission.PersistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
             Assert.That(application.ActiveSession, Is.Null);
 
-            InvokeInitializeSimulation(target, null);
+            DailyV1EffectiveDefinitions definitions =
+                ReadPrivateField<DailyV1EffectiveDefinitions>(target, "selectedDefinitions");
+            List<string> completedStages = new List<string>();
+            List<bool> preparationWasPublishedAtStage = new List<bool>();
+            DailyV1ApplicationStartPreparation preparationAtPublicationHook = null;
+            InvokeInitializeSimulation(target, stageId =>
+            {
+                completedStages.Add(stageId);
+                DailyV1ApplicationStartPreparation currentPreparation =
+                    ReadPrivateField<DailyV1ApplicationStartPreparation>(
+                        target, "dailyV1InitialStartPreparation");
+                preparationWasPublishedAtStage.Add(currentPreparation != null);
+                if (string.Equals(stageId, "p9.genesis.publish/v1", StringComparison.Ordinal))
+                    preparationAtPublicationHook = currentPreparation;
+            });
+
+            CollectionAssert.AreEqual(definitions.StageOrder, completedStages,
+                "The host hook must preserve the exact Core/Unity genesis stage order.");
+            Assert.That(preparationWasPublishedAtStage.Count, Is.EqualTo(completedStages.Count));
+            int validationStageIndex = completedStages.IndexOf("p9.genesis.validate-profile/v1");
+            Assert.That(validationStageIndex, Is.GreaterThan(0));
+            for (int index = 0; index < validationStageIndex; index++)
+                Assert.That(preparationWasPublishedAtStage[index], Is.False,
+                    "Core's ordered content-stage hooks must run before Core genesis preparation completes.");
+            for (int index = validationStageIndex; index < completedStages.Count; index++)
+                Assert.That(preparationWasPublishedAtStage[index], Is.True,
+                    "The validation and publication hooks follow their admitted Core candidate and runtime-stage work.");
+
+            preparation = preparationAtPublicationHook;
+            Assert.That(preparation, Is.Not.Null);
+            Assert.That(ReadPrivateField<DailyV1ApplicationStartPreparation>(
+                target, "dailyV1InitialStartPreparation"), Is.Null,
+                "Successful publication releases the unpublished preparation handle.");
+            Assert.That(preparation.Kind, Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+            Assert.That(preparation.Application, Is.SameAs(application));
+            Assert.That(preparation.StartAdmission, Is.SameAs(admission));
+            Assert.That(application.ActiveSession, Is.SameAs(preparation.CoreSession),
+                "The Core application publishes the exact prepared session during bootstrap completion.");
 
             SimulationActiveSession published = ReadPrivateField<SimulationActiveSession>(target, "activeSession");
             Assert.That(published, Is.Not.Null);
