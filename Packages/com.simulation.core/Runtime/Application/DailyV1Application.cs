@@ -20,7 +20,8 @@ internal enum DailyV1RestoredImageCoreOwnerStageBoundary : byte
     RuntimeAuthorities = 2,
     P12EOwners = 3,
     P12FOwners = 4,
-    CoreSessionComposition = 5
+    CoreSessionComposition = 5,
+    P12CRootProjection = 6
 }
 
 internal enum DailyV1RestoredImageOwnerVectorStage : byte
@@ -4095,6 +4096,166 @@ internal sealed class DailyV1Application
             return candidateSession.TryBindSelectedRuntimeAdvanceHostPorts(hostPorts)
                 && candidateSession.ExecutionBoundaryState.TryBindApplicationAdvanceAuthority(
                     this, candidateSession);
+        }
+    }
+
+    /// <summary>
+    /// Owns the ordered Core portion of a restored-image transaction from
+    /// image admission through the private Core session composition. Host
+    /// callbacks may prepare and project compatibility values, but Core
+    /// controls when those callbacks run and advances the exact staged owner
+    /// token only after each Core stage succeeds.
+    /// </summary>
+    internal bool TryRunRestoredImageCoreOwnerTransaction(
+        P12AContinuationImage image,
+        P12ACompatibilityDescriptor unityV1Identity,
+        P12ACompatibilityDescriptorV2 dotNetV2Identity,
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        DailyV1ApplicationStartAdmission initialStartAdmission,
+        Func<SimulationLogger> createDiagnosticLogger,
+        long lastEconomySnapshotDay,
+        Action imageDecoded,
+        Action<string> stageCompleted,
+        Func<P12CStagedCoreContinuationRoot, string> projectCoreRoots,
+        Func<DailyV1RestoredImageCoreOwnerStages, string> prepareHostProjection,
+        Func<DailyV1RestoredImageCoreOwnerStages, DailyV1RestoredImageCoreOwnerStageBoundary, string> projectCompletedCoreOwnerStage,
+        Action<P12ECoreOwnerRestoreStep> p12EOwnerStageObserver,
+        Action<DailyV1P12FCoreOwnerRestoreStep> p12FOwnerStageObserver,
+        out bool admissionPassed,
+        out bool rootsPrepared,
+        out P12ADailyV1Census imageCensus,
+        out P12ADailyV1ImageOwnerSnapshots snapshots,
+        out DailyV1RestoredImageCoreOwnerStages stages,
+        out DailyV1RestoredImageCoreOwnerStageBoundary failedBoundary,
+        out P12AResult result,
+        out string diagnostic)
+    {
+        admissionPassed = false;
+        rootsPrepared = false;
+        imageCensus = null;
+        snapshots = null;
+        stages = null;
+        failedBoundary = DailyV1RestoredImageCoreOwnerStageBoundary.None;
+        result = new P12AResult(P12AResultCode.Busy);
+        diagnostic = null;
+
+        bool began = TryBeginRestoredImageCoreOwnerStages(
+            image,
+            unityV1Identity,
+            dotNetV2Identity,
+            selectedDefinitions,
+            bootstrapAdmissionContext,
+            expectedSession,
+            replacementOperation,
+            out admissionPassed,
+            out imageCensus,
+            out snapshots,
+            out P12CStagedCoreContinuationRoot coreRoots,
+            out stages,
+            out result,
+            imageDecoded,
+            stageCompleted,
+            initialStartAdmission);
+        if (!began)
+        {
+            diagnostic = "Core could not begin the exact private restored-image admission and root stage: "
+                + (result?.SectionCode ?? result?.Code.ToString() ?? "InvalidOwnerValue") + ".";
+            return false;
+        }
+
+        rootsPrepared = coreRoots != null && stages != null;
+        if (!admissionPassed || !rootsPrepared)
+        {
+            if (!rootsPrepared)
+                failedBoundary = DailyV1RestoredImageCoreOwnerStageBoundary.P12CRootProjection;
+            diagnostic = !admissionPassed
+                ? "The persisted Daily-v1 image did not pass Core host and census admission: "
+                    + (result?.SectionCode ?? result?.Code.ToString() ?? "InvalidOwnerValue") + "."
+                : "P12-C did not retain the exact private staged roots for the restored-image transaction.";
+            stages?.Fail();
+            return false;
+        }
+
+        DailyV1RestoredImageCoreOwnerStages stagedToken = stages;
+        SimulationLogger diagnosticLogger = null;
+        try
+        {
+            string projectionDiagnostic = projectCoreRoots?.Invoke(coreRoots);
+            if (!string.IsNullOrWhiteSpace(projectionDiagnostic))
+            {
+                failedBoundary = DailyV1RestoredImageCoreOwnerStageBoundary.P12CRootProjection;
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12.core.restored-image-root-projection");
+                diagnostic = projectionDiagnostic;
+                stages.Fail();
+                return false;
+            }
+
+            string preparationDiagnostic = prepareHostProjection?.Invoke(stages);
+            if (!string.IsNullOrWhiteSpace(preparationDiagnostic))
+            {
+                failedBoundary = DailyV1RestoredImageCoreOwnerStageBoundary.P12CRootProjection;
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12.core.restored-image-host-preparation");
+                diagnostic = preparationDiagnostic;
+                stages.Fail();
+                return false;
+            }
+
+            diagnosticLogger = createDiagnosticLogger?.Invoke();
+            if (diagnosticLogger == null)
+            {
+                failedBoundary = DailyV1RestoredImageCoreOwnerStageBoundary.P12CRootProjection;
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12.core.restored-image-host-logger");
+                diagnostic = "The host did not prepare the diagnostic logger required by the restored-image transaction.";
+                stages.Fail();
+                return false;
+            }
+
+            string completedStageProjectionDiagnostic = null;
+            bool staged = TryStageRestoredImageCoreOwnerStagesAndComposeSession(
+                stages,
+                diagnosticLogger,
+                lastEconomySnapshotDay,
+                boundary =>
+                {
+                    completedStageProjectionDiagnostic = projectCompletedCoreOwnerStage?.Invoke(stagedToken, boundary);
+                    return string.IsNullOrWhiteSpace(completedStageProjectionDiagnostic);
+                },
+                p12EOwnerStageObserver,
+                p12FOwnerStageObserver,
+                out failedBoundary,
+                out result,
+                out string stageDiagnostic);
+            if (!staged || !stages.IsComplete || stages.CoreSession == null
+                || stages.CoreCalendar == null)
+            {
+                diagnostic = !string.IsNullOrWhiteSpace(completedStageProjectionDiagnostic)
+                    ? completedStageProjectionDiagnostic
+                    : !string.IsNullOrWhiteSpace(stageDiagnostic)
+                        ? stageDiagnostic
+                        : "Core did not complete the ordered P12-C/D/E/F restored-image owner transaction.";
+                stages.Fail();
+                return false;
+            }
+
+            diagnostic = null;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException
+            || exception is NullReferenceException)
+        {
+            stages.Fail();
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12.core.restored-image-owner-transaction");
+            diagnostic = "The Core restored-image owner transaction failed before publication: "
+                + exception.Message;
+            return false;
         }
     }
 

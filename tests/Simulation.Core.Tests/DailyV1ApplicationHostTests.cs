@@ -105,28 +105,45 @@ public sealed class DailyV1ApplicationHostTests
     {
         int imageDecoded = 0;
         int stageCallbacks = 0;
-        bool accepted = application.TryBeginRestoredImageCoreOwnerStages(
+        int rootProjections = 0;
+        int hostPreparations = 0;
+        int ownerProjections = 0;
+        bool accepted = application.TryRunRestoredImageCoreOwnerTransaction(
             image, UnityIdentity(), null, definitions, bootstrapContext,
             expectedSession: null, replacementOperation: null,
-            out bool admissionPassed, out P12ADailyV1Census census,
+            initialStartAdmission: admission,
+            createDiagnosticLogger: () => new SimulationLogger(
+                new SimulationLogSettings(), "restore-admission-test", (_, __) => { }),
+            lastEconomySnapshotDay: 0,
+            imageDecoded: () => imageDecoded++,
+            stageCompleted: _ => stageCallbacks++,
+            projectCoreRoots: _ => { rootProjections++; return null; },
+            prepareHostProjection: _ => { hostPreparations++; return null; },
+            projectCompletedCoreOwnerStage: (_, __) => { ownerProjections++; return null; },
+            p12EOwnerStageObserver: null,
+            p12FOwnerStageObserver: null,
+            out bool admissionPassed, out bool rootsPrepared,
+            out P12ADailyV1Census census,
             out P12ADailyV1ImageOwnerSnapshots snapshots,
-            out P12CStagedCoreContinuationRoot roots,
             out DailyV1RestoredImageCoreOwnerStages stages,
+            out DailyV1RestoredImageCoreOwnerStageBoundary failedBoundary,
             out P12AResult result,
-            () => imageDecoded++,
-            _ => stageCallbacks++,
-            initialStartAdmission: admission);
+            out string diagnostic);
 
-        Assert.That(accepted, Is.False);
+        Assert.That(accepted, Is.False, diagnostic);
         Assert.That(admissionPassed, Is.False);
+        Assert.That(rootsPrepared, Is.False);
         Assert.That(census, Is.Null);
         Assert.That(snapshots, Is.Null);
-        Assert.That(roots, Is.Null);
         Assert.That(stages, Is.Null);
+        Assert.That(failedBoundary, Is.EqualTo(DailyV1RestoredImageCoreOwnerStageBoundary.None));
         Assert.That(result?.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
         Assert.That(result?.SectionCode, Is.EqualTo("p12.initial-start-admission"));
         Assert.That(imageDecoded, Is.Zero);
         Assert.That(stageCallbacks, Is.Zero);
+        Assert.That(rootProjections, Is.Zero);
+        Assert.That(hostPreparations, Is.Zero);
+        Assert.That(ownerProjections, Is.Zero);
         Assert.That(application.ActiveSession, Is.Null);
     }
 

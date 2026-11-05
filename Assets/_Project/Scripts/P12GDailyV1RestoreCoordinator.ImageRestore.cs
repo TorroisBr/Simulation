@@ -87,77 +87,21 @@ internal static partial class P12GDailyV1RestoreCoordinator
             P12AResult imageResult;
             P12CStagedContinuationRoot stagedC;
             DailyV1RestoredImageCoreOwnerStages stagedCoreOwnerStages = null;
+            CoreApplicationRestoreProjection coreProjection = null;
             if (application != null)
             {
-                Action<string> coreStageObserver = stageName =>
-                {
-                    if (!P12CContinuationRootStager.TryMapRestoreStageName(
-                            stageName, out P12GDailyV1RestoreStage stage))
-                        throw new InvalidOperationException(
-                            "Core P12-C staging emitted an unknown restore stage: " + stageName);
-                    stageObserver?.Invoke(stage);
-                };
+                if (!TryRunCoreApplicationRestoreTransaction(
+                        image, expectedCompatibilityV1, expectedCompatibilityV2,
+                        configuration, selectedDefinitions, bootstrapAdmissionContext,
+                        application, replacementOperation, initialStartAdmission,
+                        stageObserver, out coreProjection, out failure, out diagnostic))
+                    return false;
 
-                bool restoredRootsPrepared = application.TryBeginRestoredImageCoreOwnerStages(
-                    image,
-                    expectedCompatibilityV1,
-                    expectedCompatibilityV2,
-                    selectedDefinitions,
-                    bootstrapAdmissionContext,
-                    replacementOperation?.ExpectedSession,
-                    replacementOperation,
-                    out bool admissionPassed,
-                    out imageCensus,
-                    out decoded,
-                    out P12CStagedCoreContinuationRoot stagedCoreRoots,
-                    out stagedCoreOwnerStages,
-                    out imageResult,
-                    () => stageObserver?.Invoke(P12GDailyV1RestoreStage.SourceCaptured),
-                    coreStageObserver,
-                    initialStartAdmission);
-                if (!admissionPassed)
-                {
-                    bool hostIdentityRejected = imageResult?.Code == P12AResultCode.WrongThread
-                        || imageResult?.Code == P12AResultCode.IncompatibleContentOrConfiguration
-                        || imageResult?.Code == P12AResultCode.IncompatibleBuildOrRuntime;
-                    failure = hostIdentityRejected
-                        ? P12GDailyV1RestoreFailure.InvalidSourceSession
-                        : imageResult?.Code == P12AResultCode.Busy
-                            ? P12GDailyV1RestoreFailure.RootStageFailed
-                            : P12GDailyV1RestoreFailure.SourceCaptureFailed;
-                    diagnostic = imageResult?.Code == P12AResultCode.OwnerGraphRejected
-                        ? "The persisted image does not satisfy the current Daily-v1 owner manifest: "
-                            + (imageResult.SectionCode ?? imageResult.Code.ToString()) + "."
-                        : imageResult?.Code == P12AResultCode.Busy
-                            ? "The Core application no longer holds the exact restore staging authority."
-                            : "The persisted Daily-v1 image could not pass Core host and census admission: "
-                                + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "InvalidOwnerValue") + ".";
-                    return false;
-                }
-                if (decoded == null)
-                {
-                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
-                    diagnostic = "The persisted Daily-v1 typed owner image could not be decoded: "
-                        + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
-                    return false;
-                }
-                if (!restoredRootsPrepared || stagedCoreRoots == null)
-                {
-                    failure = P12GDailyV1RestoreFailure.RootStageFailed;
-                    diagnostic = "P12-C could not privately stage the persisted roots: "
-                        + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
-                    return false;
-                }
-                if (!P12ACausalRootImageAdapter.TryProject(
-                        stagedCoreRoots, out stagedC, out imageResult)
-                    || stagedC == null || !stagedC.IsDetached)
-                {
-                    failure = P12GDailyV1RestoreFailure.RootStageFailed;
-                    diagnostic = "P12-C could not create the Unity compatibility projection for the already staged Core roots: "
-                        + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
-                    return false;
-                }
-                stageObserver?.Invoke(P12GDailyV1RestoreStage.RootsStaged);
+                imageCensus = coreProjection.Census;
+                decoded = coreProjection.Snapshots;
+                imageResult = null;
+                stagedC = coreProjection.UnityRoots;
+                stagedCoreOwnerStages = coreProjection.Stages;
             }
             else
             {
@@ -201,12 +145,13 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 stageObserver?.Invoke(P12GDailyV1RestoreStage.RootsStaged);
             }
 
-            if (!TryBuildDailyV1Definitions(configuration,
-                    out List<CityData> cityDefinitions,
-                    out List<ItemData> itemDefinitions,
-                    out List<NpcData> npcDefinitions,
-                    out List<NpcStatusData> statusDefinitions,
-                    out string definitionDiagnostic))
+            List<CityData> cityDefinitions = coreProjection?.CityDefinitions;
+            List<ItemData> itemDefinitions = coreProjection?.ItemDefinitions;
+            List<NpcData> npcDefinitions = coreProjection?.NpcDefinitions;
+            List<NpcStatusData> statusDefinitions = coreProjection?.StatusDefinitions;
+            if (coreProjection == null && !TryBuildDailyV1Definitions(configuration,
+                    out cityDefinitions, out itemDefinitions, out npcDefinitions,
+                    out statusDefinitions, out string definitionDiagnostic))
             {
                 failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
                 diagnostic = "The current authored Daily-v1 definition catalog is incomplete or ambiguous: "
@@ -214,171 +159,37 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 return false;
             }
 
-            DailyV1P12DCoreRestoreOwnerStage stagedCoreDOwners = null;
-            RuntimeIdentityRegistry stagedIdentities = new RuntimeIdentityRegistry();
-            P12DDailyV1OwnerPackage stagedD = null;
-            SimulationTime stagedTime = stagedCoreOwnerStages?.StagedTime ?? new SimulationTime(image.Header.Day);
-            SimulationLogger logger = UnitySimulationLoggerAdapter.Create(configuration.LogSettings);
-            NpcDecisionStore decisions = null;
-            DailyV1DomainEventAuthority eventAuthority = null;
-            DomainEventRecorder eventRecorder = null;
-            NpcDecisionRecorder decisionRecorder = null;
-            EconomyTransactionService economyTransactions = null;
-            P12EDailyV1OwnerStagingContext eContext = null;
-            P12EDailyV1OwnerPackage stagedE = null;
-            P12FDailyV1OwnerPackage stagedF = null;
-            List<string> stagedPartyIds = decoded.TravelParties.Parties
-                .Select(party => party?.TravelPartyId).ToList();
+            DailyV1P12DCoreRestoreOwnerStage stagedCoreDOwners = coreProjection?.CoreDOwners;
+            RuntimeIdentityRegistry stagedIdentities = coreProjection?.Identities
+                ?? new RuntimeIdentityRegistry();
+            P12DDailyV1OwnerPackage stagedD = coreProjection?.D;
+            SimulationTime stagedTime = coreProjection?.Time
+                ?? stagedCoreOwnerStages?.StagedTime ?? new SimulationTime(image.Header.Day);
+            SimulationLogger logger = coreProjection?.Logger
+                ?? UnitySimulationLoggerAdapter.Create(configuration.LogSettings);
+            NpcDecisionStore decisions = coreProjection?.Decisions;
+            DailyV1DomainEventAuthority eventAuthority = coreProjection?.EventAuthority;
+            DomainEventRecorder eventRecorder = coreProjection?.EventRecorder;
+            NpcDecisionRecorder decisionRecorder = coreProjection?.DecisionRecorder;
+            EconomyTransactionService economyTransactions = coreProjection?.EconomyTransactions;
+            P12EDailyV1OwnerStagingContext eContext = coreProjection?.EContext;
+            P12EDailyV1OwnerPackage stagedE = coreProjection?.E;
+            P12FDailyV1OwnerPackage stagedF = coreProjection?.F;
+            List<string> stagedPartyIds = coreProjection?.TravelPartyIds
+                ?? decoded.TravelParties.Parties.Select(party => party?.TravelPartyId).ToList();
 
             if (application != null)
             {
-                if (stagedCoreOwnerStages == null)
-                {
-                    failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
-                    diagnostic = "The Core application did not retain the admitted P12-C owner-stage operation.";
-                    return false;
-                }
-
-                DailyV1RestoredImageCoreOwnerStageBoundary projectionFailureBoundary =
-                    DailyV1RestoredImageCoreOwnerStageBoundary.None;
-                P12GDailyV1RestoreFailure projectionFailure = P12GDailyV1RestoreFailure.None;
-                string projectionDiagnostic = null;
-
-                bool ProjectCompletedCoreOwnerStage(DailyV1RestoredImageCoreOwnerStageBoundary boundary)
-                {
-                    projectionFailureBoundary = boundary;
-                    switch (boundary)
-                    {
-                        case DailyV1RestoredImageCoreOwnerStageBoundary.P12DOwners:
-                            stagedCoreDOwners = stagedCoreOwnerStages.D;
-                            if (stagedCoreDOwners == null)
-                            {
-                                projectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
-                                projectionDiagnostic = "The Core application completed P12-D without its owner-stage value.";
-                                return false;
-                            }
-                            stagedIdentities = new RuntimeIdentityRegistry(null,
-                                stagedCoreDOwners.RuntimeIdentityIndex);
-                            if (!P12DDailyV1OwnerPackage.TryStageFromImage(
-                                    image.Sections, decoded.Cities, decoded.NpcDRows, decoded.NpcFRows,
-                                    decoded.SpatialNetwork, decoded.Persons, decoded.Genealogy, decoded.Sites,
-                                    stagedIdentities, stagedC.WorldIdentity, cityDefinitions, itemDefinitions,
-                                    npcDefinitions, configuration.Actions, statusDefinitions,
-                                    Array.Empty<DailyV1ExplorableSiteDefinition>(), stagedPartyIds,
-                                    out stagedD,
-                                    out P12DDailyV1OwnerPackageFailure dFailure,
-                                    selectedDefinitions,
-                                    application,
-                                    stagedC.CoreRoot,
-                                    replacementOperation?.ExpectedSession,
-                                    replacementOperation,
-                                    stagedCoreDOwners)
-                                || stagedD == null || stagedD.StagingAttempt != null)
-                            {
-                                projectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
-                                projectionDiagnostic = "P12-D could not project the completed Core owners: " + dFailure + ".";
-                                return false;
-                            }
-
-                            stageObserver?.Invoke(P12GDailyV1RestoreStage.DStaged);
-                            logger.BeginSimulation(configuration.simulationName, configuration.EnabledModules,
-                                configuration.Cities.Count, configuration.Npcs.Count);
-                            return true;
-
-                        case DailyV1RestoredImageCoreOwnerStageBoundary.P12EOwners:
-                            decisions = stagedCoreOwnerStages.DecisionStore;
-                            eventAuthority = stagedCoreOwnerStages.EventAuthority;
-                            if (!stagedCoreOwnerStages.HasRuntimeAuthorities(decisions, eventAuthority))
-                            {
-                                projectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
-                                projectionDiagnostic = "The Core application did not retain the exact restored record authorities.";
-                                return false;
-                            }
-                            eventRecorder = eventAuthority.Recorder;
-                            decisionRecorder = new NpcDecisionRecorder(
-                                eventAuthority.DecisionOccurrenceReceipts, logger);
-                            economyTransactions = new EconomyTransactionService();
-                            eContext = new P12EDailyV1OwnerStagingContext(
-                                null, stagedC, stagedD, stagedTime, configuration.freeStatus,
-                                configuration.wantedStatus, configuration.arrestedStatus,
-                                configuration.hiddenStatus, eventRecorder, logger,
-                                application, replacementOperation?.ExpectedSession, replacementOperation,
-                                null, stagedCoreOwnerStages);
-                            if (!P12EDailyV1OwnerPackage.TryStageFromImage(image, decoded, eContext,
-                                    out stagedE,
-                                    out P12EDailyV1OwnerPackageFailure eFailure)
-                                || stagedE == null || stagedE.StagingAttempt != null)
-                            {
-                                projectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
-                                projectionDiagnostic = "P12-E could not project the completed Core owners: " + eFailure + ".";
-                                return false;
-                            }
-
-                            stageObserver?.Invoke(P12GDailyV1RestoreStage.EStaged);
-                            return true;
-
-                        case DailyV1RestoredImageCoreOwnerStageBoundary.P12FOwners:
-                            if (eContext == null || stagedE == null)
-                            {
-                                projectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
-                                projectionDiagnostic = "P12-F projection requires the exact completed P12-E projection.";
-                                return false;
-                            }
-                            if (!P12FDailyV1OwnerPackage.TryStageFromImage(image, decoded, eContext,
-                                    stagedE, selectedDefinitions,
-                                    out stagedF,
-                                    out P12FDailyV1OwnerPackageFailure fFailure)
-                                || stagedF == null || stagedF.StagingAttempt != null)
-                            {
-                                projectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
-                                projectionDiagnostic = "P12-F could not project the completed Core owners: " + fFailure + ".";
-                                return false;
-                            }
-
-                            stageObserver?.Invoke(P12GDailyV1RestoreStage.FStaged);
-                            stageObserver?.Invoke(P12GDailyV1RestoreStage.OwnersStaged);
-                            return true;
-
-                        default:
-                            projectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
-                            projectionDiagnostic = "The Core application returned an unknown restored-image owner-stage boundary.";
-                            return false;
-                    }
-                }
-
-                if (!application.TryStageRestoredImageCoreOwnerStagesAndComposeSession(
-                        stagedCoreOwnerStages,
-                        logger,
-                        image.Header.LastEconomySnapshotDay,
-                        ProjectCompletedCoreOwnerStage,
-                        step => P12EDailyV1OwnerPackage.ObserveCoreOwnerRestoreStep(stageObserver, step),
-                        step => P12FDailyV1OwnerPackage.ObserveP12FCoreOwnerRestoreStep(stageObserver, step),
-                        out DailyV1RestoredImageCoreOwnerStageBoundary failedBoundary,
-                        out imageResult,
-                        out string coreStageDiagnostic)
+                if (coreProjection == null || stagedCoreOwnerStages == null
                     || !stagedCoreOwnerStages.IsComplete
                     || stagedCoreOwnerStages.CoreSession == null
-                    || stagedCoreOwnerStages.CoreCalendar == null)
+                    || stagedCoreOwnerStages.CoreCalendar == null
+                    || stagedD == null || stagedE == null || stagedF == null)
                 {
-                    bool compositionFailed = failedBoundary == DailyV1RestoredImageCoreOwnerStageBoundary.CoreSessionComposition;
-                    failure = projectionFailure != P12GDailyV1RestoreFailure.None
-                        ? projectionFailure
-                        : compositionFailed
-                            ? P12GDailyV1RestoreFailure.TargetCompositionFailed
-                            : P12GDailyV1RestoreFailure.OwnerStageFailed;
-                    diagnostic = !string.IsNullOrWhiteSpace(projectionDiagnostic)
-                        ? projectionDiagnostic
-                        : !string.IsNullOrWhiteSpace(coreStageDiagnostic)
-                            ? coreStageDiagnostic
-                            : "The Core application did not complete the exact ordered P12-C/D/E/F restore operation: "
-                                + (imageResult?.SectionCode ?? imageResult?.Code.ToString() ?? "OwnerGraphRejected") + ".";
+                    failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
+                    diagnostic = "The Core application did not complete the exact private restored-image transaction.";
                     return false;
                 }
-
-                stagedCoreDOwners = stagedCoreOwnerStages.D;
-                stagedTime = stagedCoreOwnerStages.StagedTime;
-                decisions = stagedCoreOwnerStages.DecisionStore;
-                eventAuthority = stagedCoreOwnerStages.EventAuthority;
             }
             else
             {
@@ -699,6 +510,314 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     ? P12GDailyV1RestoreFailure.TargetAdmissionFailed
                     : P12GDailyV1RestoreFailure.TargetAdmissionFailed;
 
+    private sealed class CoreApplicationRestoreProjection
+    {
+        internal P12ADailyV1Census Census;
+        internal P12ADailyV1ImageOwnerSnapshots Snapshots;
+        internal DailyV1RestoredImageCoreOwnerStages Stages;
+        internal P12CStagedContinuationRoot UnityRoots;
+        internal DailyV1P12DCoreRestoreOwnerStage CoreDOwners;
+        internal RuntimeIdentityRegistry Identities = new RuntimeIdentityRegistry();
+        internal P12DDailyV1OwnerPackage D;
+        internal SimulationTime Time;
+        internal SimulationLogger Logger;
+        internal NpcDecisionStore Decisions;
+        internal DailyV1DomainEventAuthority EventAuthority;
+        internal DomainEventRecorder EventRecorder;
+        internal NpcDecisionRecorder DecisionRecorder;
+        internal EconomyTransactionService EconomyTransactions;
+        internal P12EDailyV1OwnerStagingContext EContext;
+        internal P12EDailyV1OwnerPackage E;
+        internal P12FDailyV1OwnerPackage F;
+        internal List<CityData> CityDefinitions;
+        internal List<ItemData> ItemDefinitions;
+        internal List<NpcData> NpcDefinitions;
+        internal List<NpcStatusData> StatusDefinitions;
+        internal List<string> TravelPartyIds;
+        internal P12GDailyV1RestoreFailure ProjectionFailure;
+        internal string ProjectionDiagnostic;
+        internal bool HostPreparationFailed;
+        internal string HostPreparationDiagnostic;
+    }
+
+    private static bool TryRunCoreApplicationRestoreTransaction(
+        P12AContinuationImage image,
+        P12ACompatibilityDescriptor expectedCompatibilityV1,
+        P12ACompatibilityDescriptorV2 expectedCompatibilityV2,
+        SimulationConfigData configuration,
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
+        DailyV1Application application,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        DailyV1ApplicationStartAdmission initialStartAdmission,
+        Action<P12GDailyV1RestoreStage> stageObserver,
+        out CoreApplicationRestoreProjection projection,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        CoreApplicationRestoreProjection current = new CoreApplicationRestoreProjection();
+        projection = current;
+        failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
+        diagnostic = null;
+        DailyV1RestoredImageCoreOwnerStageBoundary failedBoundary =
+            DailyV1RestoredImageCoreOwnerStageBoundary.None;
+
+        Action<string> coreStageObserver = stageName =>
+        {
+            if (!P12CContinuationRootStager.TryMapRestoreStageName(
+                    stageName, out P12GDailyV1RestoreStage stage))
+                throw new InvalidOperationException(
+                    "Core P12-C staging emitted an unknown restore stage: " + stageName);
+            stageObserver?.Invoke(stage);
+        };
+
+        string ProjectCoreRoots(P12CStagedCoreContinuationRoot roots)
+        {
+            if (!P12ACausalRootImageAdapter.TryProject(
+                    roots, out current.UnityRoots, out P12AResult result)
+                || current.UnityRoots == null || !current.UnityRoots.IsDetached)
+                return "P12-C could not create the Unity compatibility projection for the already staged Core roots: "
+                    + (result?.SectionCode ?? result?.Code.ToString() ?? "OwnerGraphRejected") + ".";
+
+            stageObserver?.Invoke(P12GDailyV1RestoreStage.RootsStaged);
+            return null;
+        }
+
+        string PrepareHostProjection(DailyV1RestoredImageCoreOwnerStages stages)
+        {
+            current.Stages = stages;
+            current.Census = stages?.Census;
+            current.Snapshots = stages?.Snapshots;
+            current.Time = stages?.StagedTime;
+            if (current.Snapshots == null || current.Time == null)
+            {
+                current.HostPreparationFailed = true;
+                current.HostPreparationDiagnostic =
+                    "The admitted Core restore operation did not retain its exact image-owner snapshots and time.";
+                return current.HostPreparationDiagnostic;
+            }
+
+            if (!TryBuildDailyV1Definitions(configuration,
+                    out current.CityDefinitions,
+                    out current.ItemDefinitions,
+                    out current.NpcDefinitions,
+                    out current.StatusDefinitions,
+                    out string definitionDiagnostic))
+            {
+                current.HostPreparationFailed = true;
+                current.HostPreparationDiagnostic =
+                    "The current authored Daily-v1 definition catalog is incomplete or ambiguous: "
+                    + definitionDiagnostic;
+                return current.HostPreparationDiagnostic;
+            }
+
+            current.TravelPartyIds = current.Snapshots.TravelParties.Parties
+                .Select(party => party?.TravelPartyId).ToList();
+            return null;
+        }
+
+        SimulationLogger CreateDiagnosticLogger()
+        {
+            current.Logger = UnitySimulationLoggerAdapter.Create(configuration.LogSettings);
+            return current.Logger;
+        }
+
+        string ProjectCompletedCoreOwnerStage(
+            DailyV1RestoredImageCoreOwnerStages stages,
+            DailyV1RestoredImageCoreOwnerStageBoundary boundary)
+        {
+            switch (boundary)
+            {
+                case DailyV1RestoredImageCoreOwnerStageBoundary.P12DOwners:
+                    current.CoreDOwners = stages.D;
+                    if (current.CoreDOwners == null)
+                    {
+                        current.ProjectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
+                        current.ProjectionDiagnostic = "The Core application completed P12-D without its owner-stage value.";
+                        return current.ProjectionDiagnostic;
+                    }
+                    current.Identities = new RuntimeIdentityRegistry(null,
+                        current.CoreDOwners.RuntimeIdentityIndex);
+                    if (!P12DDailyV1OwnerPackage.TryStageFromImage(
+                            image.Sections, current.Snapshots.Cities, current.Snapshots.NpcDRows,
+                            current.Snapshots.NpcFRows, current.Snapshots.SpatialNetwork,
+                            current.Snapshots.Persons, current.Snapshots.Genealogy,
+                            current.Snapshots.Sites, current.Identities,
+                            current.UnityRoots.WorldIdentity, current.CityDefinitions,
+                            current.ItemDefinitions, current.NpcDefinitions, configuration.Actions,
+                            current.StatusDefinitions, Array.Empty<DailyV1ExplorableSiteDefinition>(),
+                            current.TravelPartyIds, out current.D,
+                            out P12DDailyV1OwnerPackageFailure dFailure, selectedDefinitions,
+                            application, current.UnityRoots.CoreRoot,
+                            replacementOperation?.ExpectedSession, replacementOperation,
+                            current.CoreDOwners)
+                        || current.D == null || current.D.StagingAttempt != null)
+                    {
+                        current.ProjectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
+                        current.ProjectionDiagnostic = "P12-D could not project the completed Core owners: "
+                            + dFailure + ".";
+                        return current.ProjectionDiagnostic;
+                    }
+
+                    stageObserver?.Invoke(P12GDailyV1RestoreStage.DStaged);
+                    current.Logger.BeginSimulation(configuration.simulationName,
+                        configuration.EnabledModules, configuration.Cities.Count,
+                        configuration.Npcs.Count);
+                    return null;
+
+                case DailyV1RestoredImageCoreOwnerStageBoundary.P12EOwners:
+                    current.Decisions = stages.DecisionStore;
+                    current.EventAuthority = stages.EventAuthority;
+                    if (!stages.HasRuntimeAuthorities(current.Decisions, current.EventAuthority))
+                    {
+                        current.ProjectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
+                        current.ProjectionDiagnostic = "The Core application did not retain the exact restored record authorities.";
+                        return current.ProjectionDiagnostic;
+                    }
+                    current.EventRecorder = current.EventAuthority.Recorder;
+                    current.DecisionRecorder = new NpcDecisionRecorder(
+                        current.EventAuthority.DecisionOccurrenceReceipts, current.Logger);
+                    current.EconomyTransactions = new EconomyTransactionService();
+                    current.EContext = new P12EDailyV1OwnerStagingContext(
+                        null, current.UnityRoots, current.D, current.Time,
+                        configuration.freeStatus, configuration.wantedStatus,
+                        configuration.arrestedStatus, configuration.hiddenStatus,
+                        current.EventRecorder, current.Logger, application,
+                        replacementOperation?.ExpectedSession, replacementOperation,
+                        null, stages);
+                    if (!P12EDailyV1OwnerPackage.TryStageFromImage(image,
+                            current.Snapshots, current.EContext,
+                            out current.E, out P12EDailyV1OwnerPackageFailure eFailure)
+                        || current.E == null || current.E.StagingAttempt != null)
+                    {
+                        current.ProjectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
+                        current.ProjectionDiagnostic = "P12-E could not project the completed Core owners: "
+                            + eFailure + ".";
+                        return current.ProjectionDiagnostic;
+                    }
+
+                    stageObserver?.Invoke(P12GDailyV1RestoreStage.EStaged);
+                    return null;
+
+                case DailyV1RestoredImageCoreOwnerStageBoundary.P12FOwners:
+                    if (current.EContext == null || current.E == null)
+                    {
+                        current.ProjectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
+                        current.ProjectionDiagnostic = "P12-F projection requires the exact completed P12-E projection.";
+                        return current.ProjectionDiagnostic;
+                    }
+                    if (!P12FDailyV1OwnerPackage.TryStageFromImage(image,
+                            current.Snapshots, current.EContext, current.E,
+                            selectedDefinitions, out current.F,
+                            out P12FDailyV1OwnerPackageFailure fFailure)
+                        || current.F == null || current.F.StagingAttempt != null)
+                    {
+                        current.ProjectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
+                        current.ProjectionDiagnostic = "P12-F could not project the completed Core owners: "
+                            + fFailure + ".";
+                        return current.ProjectionDiagnostic;
+                    }
+
+                    stageObserver?.Invoke(P12GDailyV1RestoreStage.FStaged);
+                    stageObserver?.Invoke(P12GDailyV1RestoreStage.OwnersStaged);
+                    return null;
+
+                default:
+                    current.ProjectionFailure = P12GDailyV1RestoreFailure.OwnerStageFailed;
+                    current.ProjectionDiagnostic = "The Core application returned an unknown restored-image owner-stage boundary.";
+                    return current.ProjectionDiagnostic;
+            }
+        }
+
+        bool accepted = application.TryRunRestoredImageCoreOwnerTransaction(
+            image, expectedCompatibilityV1, expectedCompatibilityV2, selectedDefinitions,
+            bootstrapAdmissionContext, replacementOperation?.ExpectedSession,
+            replacementOperation, initialStartAdmission, CreateDiagnosticLogger,
+            image.Header.LastEconomySnapshotDay,
+            () => stageObserver?.Invoke(P12GDailyV1RestoreStage.SourceCaptured),
+            coreStageObserver, ProjectCoreRoots, PrepareHostProjection,
+            ProjectCompletedCoreOwnerStage,
+            step => P12EDailyV1OwnerPackage.ObserveCoreOwnerRestoreStep(stageObserver, step),
+            step => P12FDailyV1OwnerPackage.ObserveP12FCoreOwnerRestoreStep(stageObserver, step),
+            out bool admissionPassed, out bool rootsPrepared,
+            out P12ADailyV1Census census,
+            out P12ADailyV1ImageOwnerSnapshots snapshots,
+            out DailyV1RestoredImageCoreOwnerStages stages,
+            out failedBoundary, out P12AResult result, out string coreDiagnostic);
+
+        current.Census = census;
+        current.Snapshots = snapshots;
+        current.Stages = stages;
+        if (!accepted)
+        {
+            if (!admissionPassed)
+            {
+                bool hostIdentityRejected = result?.Code == P12AResultCode.WrongThread
+                    || result?.Code == P12AResultCode.IncompatibleContentOrConfiguration
+                    || result?.Code == P12AResultCode.IncompatibleBuildOrRuntime;
+                failure = hostIdentityRejected
+                    ? P12GDailyV1RestoreFailure.InvalidSourceSession
+                    : result?.Code == P12AResultCode.Busy
+                        ? P12GDailyV1RestoreFailure.RootStageFailed
+                        : P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                diagnostic = result?.Code == P12AResultCode.OwnerGraphRejected
+                    ? "The persisted image does not satisfy the current Daily-v1 owner manifest: "
+                        + (result.SectionCode ?? result.Code.ToString()) + "."
+                    : result?.Code == P12AResultCode.Busy
+                        ? "The Core application no longer holds the exact restore staging authority."
+                        : "The persisted Daily-v1 image could not pass Core host and census admission: "
+                            + (result?.SectionCode ?? result?.Code.ToString() ?? "InvalidOwnerValue") + ".";
+                return false;
+            }
+
+            if (current.HostPreparationFailed)
+            {
+                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                diagnostic = current.HostPreparationDiagnostic;
+                return false;
+            }
+            if (current.ProjectionFailure != P12GDailyV1RestoreFailure.None)
+            {
+                failure = current.ProjectionFailure;
+                diagnostic = current.ProjectionDiagnostic;
+                return false;
+            }
+            if (!rootsPrepared || failedBoundary == DailyV1RestoredImageCoreOwnerStageBoundary.P12CRootProjection)
+            {
+                failure = P12GDailyV1RestoreFailure.RootStageFailed;
+                diagnostic = coreDiagnostic;
+                return false;
+            }
+            if (failedBoundary == DailyV1RestoredImageCoreOwnerStageBoundary.CoreSessionComposition)
+            {
+                failure = P12GDailyV1RestoreFailure.TargetCompositionFailed;
+                diagnostic = coreDiagnostic;
+                return false;
+            }
+
+            failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
+            diagnostic = coreDiagnostic;
+            return false;
+        }
+
+        current.CoreDOwners = stages.D;
+        current.Time = stages.StagedTime;
+        current.Decisions = stages.DecisionStore;
+        current.EventAuthority = stages.EventAuthority;
+        current.EventRecorder = stages.EventAuthority.Recorder;
+        current.DecisionRecorder = new NpcDecisionRecorder(
+            stages.EventAuthority.DecisionOccurrenceReceipts, current.Logger);
+        current.EconomyTransactions = new EconomyTransactionService();
+        current.EContext ??= new P12EDailyV1OwnerStagingContext(
+            null, current.UnityRoots, current.D, current.Time,
+            configuration.freeStatus, configuration.wantedStatus, configuration.arrestedStatus,
+            configuration.hiddenStatus, current.EventRecorder, current.Logger,
+            application, replacementOperation?.ExpectedSession, replacementOperation,
+            null, stages);
+        failure = P12GDailyV1RestoreFailure.None;
+        diagnostic = null;
+        return true;
+    }
 
     private static bool TryCreateRestoredCoreExecutionBoundary(
         DailyV1EffectiveDefinitions selectedDefinitions,
