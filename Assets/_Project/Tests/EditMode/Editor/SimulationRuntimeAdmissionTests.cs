@@ -16267,7 +16267,7 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
     [Test]
-    public void MissingDailyV1SaveIsAdmittedByCoreBeforeGenesis()
+    public void MissingDailyV1SavePreparesCoreGenesisForSameApplicationPublication()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
@@ -16289,13 +16289,34 @@ public sealed class SimulationRuntimeAdmissionTests
 
             Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(
                 storageRoot, loadFileOperations), Is.False,
-                "Core NoSave is the only initial-load result that falls through to genesis.");
+                "Core NoSave is the only initial-load result that falls through to the prepared genesis projection.");
             Assert.That(loadFileOperations.OpenReadCount, Is.GreaterThan(0),
                 "The application, not Unity, must inspect the absent continuation slot.");
             Assert.That(ReadPrivateField<bool>(target, "bootstrapFailed"), Is.False);
-            Assert.That(ReadPrivateField<SimulationActiveSession>(target, "activeSession"), Is.Null);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(target, "activeSession"), Is.Null,
+                "The Core genesis candidate remains unpublished before Unity projects the admitted host session.");
             Assert.That(genesisIdentityAllocations, Is.Zero,
-                "The Core-owned slot decision must not allocate a world identity before genesis.");
+                "The selected Core application owns world identity allocation; the Unity compatibility allocator is unused.");
+
+            DailyV1Application application = ReadPrivateField<DailyV1Application>(target, "dailyV1Application");
+            DailyV1ApplicationStartPreparation preparation =
+                ReadPrivateField<DailyV1ApplicationStartPreparation>(target, "dailyV1InitialStartPreparation");
+            Assert.That(preparation, Is.Not.Null);
+            Assert.That(preparation.Kind, Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+            Assert.That(preparation.Application, Is.SameAs(application));
+            Assert.That(preparation.StartAdmission, Is.SameAs(
+                ReadPrivateField<DailyV1ApplicationStartAdmission>(target, "dailyV1StartAdmission")));
+            Assert.That(application.ActiveSession, Is.Null);
+
+            InvokeInitializeSimulation(target, null);
+
+            SimulationActiveSession published = ReadPrivateField<SimulationActiveSession>(target, "activeSession");
+            Assert.That(published, Is.Not.Null);
+            Assert.That(published.CoreRuntimeSession, Is.SameAs(preparation.CoreSession));
+            Assert.That(application.ActiveSession, Is.SameAs(preparation.CoreSession),
+                "Unity must publish the exact Core-prepared session through the same application.");
+            Assert.That(ReadPrivateField<DailyV1ApplicationStartPreparation>(
+                target, "dailyV1InitialStartPreparation"), Is.Null);
         }
         finally
         {

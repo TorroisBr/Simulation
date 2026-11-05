@@ -201,6 +201,7 @@ public class TesteSimulacao : MonoBehaviour
     // legacy, unadmitted bootstrap sessions; both paths are mutually exclusive.
     private readonly DailyV1Application dailyV1Application = new DailyV1Application();
     private DailyV1ApplicationStartAdmission dailyV1StartAdmission;
+    private DailyV1ApplicationStartPreparation dailyV1InitialStartPreparation;
     private readonly DailyV1ApplicationSessionGate<SimulationActiveSession> compatibilitySessionGate =
         new DailyV1ApplicationSessionGate<SimulationActiveSession>(
             session => session.ExecutionBoundaryState);
@@ -331,7 +332,12 @@ public class TesteSimulacao : MonoBehaviour
         IAtomicFileSlotOperations fileOperations)
     {
         if (!TryCreateCurrentDailyV1CompatibilityDescriptor(
-                out P12ACompatibilityDescriptor compatibility, out string compatibilityDiagnostic))
+                out P12ACompatibilityDescriptor compatibility,
+                out EffectiveSimulationConfiguration effective,
+                out CalendarDefinition calendar,
+                out DailyV1EffectiveDefinitions currentDefinitions,
+                out DailyV1DefinitionAdapter.SelectedBindings currentBindings,
+                out string compatibilityDiagnostic))
         {
             bool inspected = dailyV1Application.TryInspectInitialContinuationSlotForStart(
                 persistentDataPath, fileOperations, out bool exists, out P12AResult slotResult);
@@ -363,12 +369,17 @@ public class TesteSimulacao : MonoBehaviour
             }
             return true;
         }
+
         DailyV1ApplicationHost host = new DailyV1ApplicationHost(
-            persistentDataPath, fileOperations, stageCompleted: null, logOutput: null,
+            persistentDataPath, fileOperations, stageCompleted: null,
+            logOutput: UnitySimulationLoggerAdapter.Write,
             unityV1Identity: compatibility);
-        if (!dailyV1Application.TryAdmitInitialStart(
-                null, host, out dailyV1StartAdmission,
-                out P12AResult loadResult, out string admissionDiagnostic))
+        if (!dailyV1Application.TryPrepareStartOnExistingApplication(
+                currentDefinitions, host,
+                out DailyV1ApplicationStartPreparation preparation,
+                out P12AResult loadResult,
+                out string admissionDiagnostic)
+            || preparation == null)
         {
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A continuation load failed; genesis was not started. "
@@ -376,43 +387,24 @@ public class TesteSimulacao : MonoBehaviour
             return true;
         }
 
-        if (dailyV1StartAdmission == null)
-        {
-            bootstrapFailed = true;
-            UnityEngine.Debug.LogError("P12-A continuation admission returned no Core start token; genesis was not started.");
-            return true;
-        }
-        if (dailyV1StartAdmission.Kind == DailyV1ApplicationStartAdmissionKind.GenesisRequired)
+        dailyV1InitialStartPreparation = preparation;
+        dailyV1StartAdmission = preparation.StartAdmission;
+        selectedDefinitions = currentDefinitions;
+        selectedDefinitionBindings = currentBindings;
+        effectiveConfiguration = effective;
+        calendarDefinition = calendar;
+
+        if (preparation.Kind == DailyV1ApplicationStartPreparationKind.GenesisPrepared)
             return false;
-        if (dailyV1StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.RestoreRequired
-            || dailyV1StartAdmission.RestoreImage == null)
+        if (preparation.Kind != DailyV1ApplicationStartPreparationKind.RestoreRequired
+            || preparation.RestoreImage == null)
         {
             bootstrapFailed = true;
-            UnityEngine.Debug.LogError("P12-A continuation admission returned an invalid restore token; genesis was not started.");
-            return true;
-        }
-        P12AContinuationImage image = dailyV1StartAdmission.RestoreImage;
-
-        EffectiveSimulationConfiguration effective;
-        CalendarDefinition calendar;
-        DailyV1EffectiveDefinitions currentDefinitions;
-        try
-        {
-            SimulationGenesisPipeline.ValidateProfile(simulationConfig);
-            ValidateP14SourceAdmission(simulationConfig, runtimeAdmissionContext);
-            effective = ResolveRuntimeConfiguration();
-            calendar = ResolveCalendarDefinition();
-            currentDefinitions = SimulationGenesisPipeline.CreateSelectedDefinitions(simulationConfig, effective, calendar);
-        }
-        catch (Exception exception) when (exception is ArgumentException
-            || exception is InvalidOperationException || exception is OverflowException)
-        {
-            bootstrapFailed = true;
-            UnityEngine.Debug.LogError("P12-A continuation host profile failed validation; genesis was not started. "
-                + exception.Message);
+            UnityEngine.Debug.LogError("P12-A continuation admission returned an invalid restore preparation; genesis was not started.");
             return true;
         }
 
+        P12AContinuationImage image = preparation.RestoreImage;
         if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
                 image, compatibility, simulationConfig, effective, calendar, currentDefinitions,
                 runtimeAdmissionContext, out SimulationActiveSession candidate,
@@ -433,11 +425,10 @@ public class TesteSimulacao : MonoBehaviour
             return true;
         }
 
+        dailyV1InitialStartPreparation = null;
         ReleaseBootstrapAliases();
-
         return true;
     }
-
     /// <summary>Saves the current completed Daily-v1 boundary to the single local continuation slot.</summary>
     public bool TrySaveDailyV1Continuation(out string resultCode)
         => TrySaveDailyV1ContinuationAtPath(UnityEngine.Application.persistentDataPath, out resultCode);
@@ -683,69 +674,107 @@ public class TesteSimulacao : MonoBehaviour
                         SimulationGenesisPipeline.ValidateProfile(simulationConfig);
                         if (selectedAdmissionProfile)
                         {
-                            // The typed graph is the selected profile's immutable definition input.
-                            // Build and fingerprint it before allocating WorldId, runtime IDs, RNG, or
-                            // mutable owners so an invalid graph cannot leave a partially admitted world.
-                            stagedEffectiveConfiguration = ResolveRuntimeConfiguration();
-                            stagedCalendarDefinition = ResolveCalendarDefinition();
-                            stagedSelectedDefinitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
-                                simulationConfig, stagedEffectiveConfiguration, stagedCalendarDefinition,
-                                out stagedSelectedDefinitionBindings);
-                            if (!SimulationGenesisPipeline.TryValidateSelectedDefinitionBindings(
-                                    stagedSelectedDefinitions, out string definitionBindingDiagnostic))
-                                throw new System.InvalidOperationException(
-                                    "The selected Daily-v1 definition graph is not closed: " + definitionBindingDiagnostic);
-                            profileFingerprint = DailyV1DefinitionIdentity.CreateP9Fingerprint(
-                                stagedSelectedDefinitions, out profileProvenanceRecords);
+                            DailyV1ApplicationStartPreparation coreStartPreparation =
+                                dailyV1InitialStartPreparation;
+                            bool reusePreparedStart = coreStartPreparation != null;
+                            if (reusePreparedStart)
+                            {
+                                if (coreStartPreparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                                    || !ReferenceEquals(coreStartPreparation.Application, dailyV1Application)
+                                    || !ReferenceEquals(coreStartPreparation.StartAdmission, dailyV1StartAdmission)
+                                    || coreStartPreparation.PersistenceResult?.Code != P12AResultCode.NoSave)
+                                    throw new System.InvalidOperationException(
+                                        "The prepared Core Daily-v1 genesis does not belong to this exact Unity application start.");
+                                stagedEffectiveConfiguration = effectiveConfiguration;
+                                stagedCalendarDefinition = calendarDefinition;
+                                stagedSelectedDefinitions = selectedDefinitions;
+                                stagedSelectedDefinitionBindings = selectedDefinitionBindings;
+                                if (stagedEffectiveConfiguration == null || stagedCalendarDefinition == null
+                                    || stagedSelectedDefinitions == null || stagedSelectedDefinitionBindings == null)
+                                    throw new System.InvalidOperationException(
+                                        "The prepared Core Daily-v1 start lost its admitted configuration or binding graph.");
+                            }
+                            else
+                            {
+                                // The typed graph is the selected profile's immutable definition input.
+                                // Build and fingerprint it before allocating WorldId, runtime IDs, RNG, or
+                                // mutable owners so an invalid graph cannot leave a partially admitted world.
+                                ValidateP14SourceAdmission(simulationConfig, runtimeAdmissionContext);
+                                SimulationGenesisPipeline.ValidateProfile(simulationConfig);
+                                stagedEffectiveConfiguration = ResolveRuntimeConfiguration();
+                                stagedCalendarDefinition = ResolveCalendarDefinition();
+                                stagedSelectedDefinitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+                                    simulationConfig, stagedEffectiveConfiguration, stagedCalendarDefinition,
+                                    out stagedSelectedDefinitionBindings);
+                                if (!SimulationGenesisPipeline.TryValidateSelectedDefinitionBindings(
+                                        stagedSelectedDefinitions, out string definitionBindingDiagnostic))
+                                    throw new System.InvalidOperationException(
+                                        "The selected Daily-v1 definition graph is not closed: " + definitionBindingDiagnostic);
+                            }
+
                             selectedDefinitions = stagedSelectedDefinitions;
                             selectedDefinitionBindings = stagedSelectedDefinitionBindings;
-                            selectedP9ProfileFingerprint = profileFingerprint;
-
                             effectiveConfiguration = stagedEffectiveConfiguration;
                             calendarDefinition = stagedCalendarDefinition;
                             lastEconomySnapshotDay = 0L;
-                            logger = UnitySimulationLoggerAdapter.CreateSelected(
-                                stagedSelectedDefinitions.Configuration.logSettings);
-                            List<SimulationModule> selectedModules = new List<SimulationModule>();
-                            foreach (DailyV1EnumValue module in stagedSelectedDefinitions.Configuration.enabledModules
-                                ?? System.Array.Empty<DailyV1EnumValue>())
-                                if (module != null) selectedModules.Add((SimulationModule)module.Value);
-                            logger.BeginSimulation(stagedSelectedDefinitions.Configuration.simulationName,
-                                selectedModules,
-                                stagedSelectedDefinitions.Configuration.cities?.Count ?? 0,
-                                stagedSelectedDefinitions.Configuration.npcs?.Count ?? 0);
+                            profileFingerprint = DailyV1DefinitionIdentity.CreateP9Fingerprint(
+                                stagedSelectedDefinitions, out profileProvenanceRecords);
+                            selectedP9ProfileFingerprint = profileFingerprint;
+
+                            if (reusePreparedStart)
+                            {
+                                logger = coreStartPreparation.Logger;
+                            }
+                            else
+                            {
+                                logger = UnitySimulationLoggerAdapter.CreateSelected(
+                                    stagedSelectedDefinitions.Configuration.logSettings);
+                                List<SimulationModule> selectedModules = new List<SimulationModule>();
+                                foreach (DailyV1EnumValue module in stagedSelectedDefinitions.Configuration.enabledModules
+                                    ?? System.Array.Empty<DailyV1EnumValue>())
+                                    if (module != null) selectedModules.Add((SimulationModule)module.Value);
+                                logger.BeginSimulation(stagedSelectedDefinitions.Configuration.simulationName,
+                                    selectedModules,
+                                    stagedSelectedDefinitions.Configuration.cities?.Count ?? 0,
+                                    stagedSelectedDefinitions.Configuration.npcs?.Count ?? 0);
+                            }
                             enabledModules = new SimulationModuleSet(
                                 stagedSelectedDefinitions.Configuration.enabledModules);
                             AppendScenarioDiagnostics(effectiveConfiguration);
 
-                            if (!dailyV1Application.TryPrepareInitialGenesisStart(
-                                    dailyV1StartAdmission,
-                                    stagedSelectedDefinitions,
-                                    logger,
-                                    completedStage =>
-                                    {
-                                        if (!coreGenesisCompletedStages.Add(completedStage))
-                                            throw new System.InvalidOperationException(
-                                                "Core Daily-v1 genesis completed a stage more than once.");
-                                        stageCompleted?.Invoke(completedStage);
-                                    },
-                                    out DailyV1ApplicationStartPreparation coreStartPreparation,
-                                    out string coreGenesisDiagnostic)
-                                || coreStartPreparation == null
-                                || coreStartPreparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
-                                || coreStartPreparation.PersistenceResult?.Code != P12AResultCode.NoSave)
-                                throw new System.InvalidOperationException(
-                                    "The Core Daily-v1 application could not prepare its admitted genesis start: "
-                                    + coreGenesisDiagnostic);
-
+                            if (!reusePreparedStart)
+                            {
+                                string coreGenesisDiagnostic;
+                                if (!dailyV1Application.TryPrepareInitialGenesisStart(
+                                        dailyV1StartAdmission,
+                                        stagedSelectedDefinitions,
+                                        logger,
+                                        completedStage =>
+                                        {
+                                            if (!coreGenesisCompletedStages.Add(completedStage))
+                                                throw new System.InvalidOperationException(
+                                                    "Core Daily-v1 genesis completed a stage more than once.");
+                                            stageCompleted?.Invoke(completedStage);
+                                        },
+                                        out coreStartPreparation,
+                                        out coreGenesisDiagnostic)
+                                    || coreStartPreparation == null
+                                    || coreStartPreparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                                    || !ReferenceEquals(coreStartPreparation.StartAdmission, dailyV1StartAdmission)
+                                    || coreStartPreparation.PersistenceResult?.Code != P12AResultCode.NoSave)
+                                    throw new System.InvalidOperationException(
+                                        "The Core Daily-v1 application could not prepare its admitted genesis start: "
+                                        + (coreGenesisDiagnostic ?? string.Empty));
+                            }
                             selectedCoreGenesis = coreStartPreparation.GenesisComposition;
                             selectedCoreRuntimeSession = coreStartPreparation.CoreSession;
-                            if (!ReferenceEquals(selectedCoreGenesis.AdmissionContext,
-                                    runtimeAdmissionContext)
+                            if (!ReferenceEquals(selectedCoreGenesis.Definitions, stagedSelectedDefinitions)
+                                || !ReferenceEquals(selectedCoreGenesis.AdmissionContext, runtimeAdmissionContext)
                                 || !ReferenceEquals(selectedCoreRuntimeSession.Definitions,
-                                    stagedSelectedDefinitions))
+                                    stagedSelectedDefinitions)
+                                || !ReferenceEquals(coreStartPreparation.Logger, logger))
                                 throw new System.InvalidOperationException(
-                                    "The Core application prepared genesis under a different admission context or definition graph.");
+                                    "The Core application prepared genesis under a different admission context, definition graph, or logger.");
 
                             profileFingerprint = selectedCoreGenesis.P9ProfileFingerprint;
                             selectedP9ProfileFingerprint = profileFingerprint;
@@ -1008,6 +1037,7 @@ public class TesteSimulacao : MonoBehaviour
             draftComposition = null;
             if (!TryPublishInitialActiveSession(candidateSession))
                 throw new System.InvalidOperationException("A simulation session was already published for this bootstrap owner.");
+            dailyV1InitialStartPreparation = null;
             ReleaseBootstrapAliases();
         }
         catch
@@ -2264,7 +2294,23 @@ public class TesteSimulacao : MonoBehaviour
     private bool TryCreateCurrentDailyV1CompatibilityDescriptor(
         out P12ACompatibilityDescriptor compatibility, out string diagnostic)
     {
+        return TryCreateCurrentDailyV1CompatibilityDescriptor(
+            out compatibility, out _, out _, out _, out _, out diagnostic);
+    }
+
+    private bool TryCreateCurrentDailyV1CompatibilityDescriptor(
+        out P12ACompatibilityDescriptor compatibility,
+        out EffectiveSimulationConfiguration effective,
+        out CalendarDefinition calendar,
+        out DailyV1EffectiveDefinitions selectedDefinitions,
+        out DailyV1DefinitionAdapter.SelectedBindings selectedBindings,
+        out string diagnostic)
+    {
         compatibility = null;
+        effective = null;
+        calendar = null;
+        selectedDefinitions = null;
+        selectedBindings = null;
         diagnostic = "The current host configuration is not an admitted Daily-v1 profile.";
         if (runtimeAdmissionProfile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || simulationConfig == null || !simulationConfig.useAuthoredGeographyProfile
@@ -2276,12 +2322,12 @@ public class TesteSimulacao : MonoBehaviour
         {
             SimulationGenesisPipeline.ValidateProfile(simulationConfig);
             ValidateP14SourceAdmission(simulationConfig, runtimeAdmissionContext);
-            CalendarDefinition calendar = ResolveCalendarDefinition();
-            EffectiveSimulationConfiguration effective = ResolveRuntimeConfiguration();
-            string profileFingerprint = SimulationGenesisPipeline.CreateFingerprint(
-                simulationConfig, effective, calendar,
-                out System.Collections.Generic.IReadOnlyList<string> provenance,
-                out DailyV1EffectiveDefinitions selectedDefinitions);
+            calendar = ResolveCalendarDefinition();
+            effective = ResolveRuntimeConfiguration();
+            selectedDefinitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+                simulationConfig, effective, calendar, out selectedBindings);
+            string profileFingerprint = DailyV1DefinitionIdentity.CreateP9Fingerprint(
+                selectedDefinitions, out System.Collections.Generic.IReadOnlyList<string> provenance);
             if (!SimulationGenesisPipeline.TryValidateSelectedDefinitionBindings(
                     selectedDefinitions, out string definitionBindingDiagnostic))
             {
@@ -2341,10 +2387,13 @@ public class TesteSimulacao : MonoBehaviour
         {
             diagnostic = "The current Daily-v1 compatibility inputs are invalid.";
             compatibility = null;
+            effective = null;
+            calendar = null;
+            selectedDefinitions = null;
+            selectedBindings = null;
             return false;
         }
     }
-
     private void SimulateWithSession(SimulationActiveSession expectedSession, int daysToSimulate)
     {
         for (int i = 0; i < daysToSimulate; i++)

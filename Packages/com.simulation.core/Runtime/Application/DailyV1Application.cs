@@ -306,6 +306,7 @@ internal sealed class DailyV1ApplicationStartPreparation
     internal DailyV1GenesisComposition GenesisComposition { get; }
     internal DailyV1ActiveRuntimeSession CoreSession { get; }
     internal SimulationLogger Logger { get; }
+    internal DailyV1ApplicationStartAdmission StartAdmission { get; }
     internal P12AResult PersistenceResult { get; }
 
     internal DailyV1ApplicationStartPreparation(
@@ -315,6 +316,7 @@ internal sealed class DailyV1ApplicationStartPreparation
         DailyV1GenesisComposition genesisComposition,
         DailyV1ActiveRuntimeSession coreSession,
         SimulationLogger logger,
+        DailyV1ApplicationStartAdmission startAdmission,
         P12AResult persistenceResult)
     {
         Application = application ?? throw new ArgumentNullException(nameof(application));
@@ -331,6 +333,15 @@ internal sealed class DailyV1ApplicationStartPreparation
         GenesisComposition = genesisComposition;
         CoreSession = coreSession;
         Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        StartAdmission = startAdmission ?? throw new ArgumentNullException(nameof(startAdmission));
+        if (!ReferenceEquals(StartAdmission.Application, Application)
+            || !ReferenceEquals(StartAdmission.PersistenceResult, persistenceResult)
+            || (Kind == DailyV1ApplicationStartPreparationKind.RestoreRequired
+                && (StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.RestoreRequired
+                    || !ReferenceEquals(StartAdmission.RestoreImage, RestoreImage)))
+            || (Kind == DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                && StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.GenesisRequired))
+            throw new ArgumentException("The start preparation does not retain its exact admission token.", nameof(startAdmission));
         PersistenceResult = persistenceResult ?? throw new ArgumentNullException(nameof(persistenceResult));
     }
 }
@@ -408,6 +419,17 @@ internal sealed class DailyV1Application
         out P12AResult persistenceResult,
         out string diagnostic)
     {
+        DailyV1Application application = new DailyV1Application();
+        return application.TryPrepareStartOnExistingApplication(
+            definitions, host, out preparation, out persistenceResult, out diagnostic);
+    }
+    internal bool TryPrepareStartOnExistingApplication(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ApplicationHost host,
+        out DailyV1ApplicationStartPreparation preparation,
+        out P12AResult persistenceResult,
+        out string diagnostic)
+    {
         preparation = null;
         persistenceResult = new P12AResult(P12AResultCode.InvalidOwnerValue);
         diagnostic = null;
@@ -417,8 +439,7 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        DailyV1Application application = new DailyV1Application();
-        if (!application.TryAdmitInitialStart(
+        if (!TryAdmitInitialStart(
                 definitions, host, out DailyV1ApplicationStartAdmission admission,
                 out persistenceResult, out diagnostic))
             return false;
@@ -429,8 +450,8 @@ internal sealed class DailyV1Application
             {
                 SimulationLogger restoreLogger = CreateInitialLogger(definitions, host);
                 preparation = new DailyV1ApplicationStartPreparation(
-                    application, DailyV1ApplicationStartPreparationKind.RestoreRequired,
-                    admission.RestoreImage, null, null, restoreLogger, admission.PersistenceResult);
+                    this, DailyV1ApplicationStartPreparationKind.RestoreRequired,
+                    admission.RestoreImage, null, null, restoreLogger, admission, admission.PersistenceResult);
                 return true;
             }
             catch (Exception exception) when (exception is ArgumentException
@@ -453,7 +474,7 @@ internal sealed class DailyV1Application
             SimulationLogger logger = CreateInitialLogger(definitions, host);
             BeginInitialLogger(definitions, logger);
 
-            if (!application.TryPrepareInitialGenesisStart(
+            if (!TryPrepareInitialGenesisStart(
                     admission, definitions, logger, host.StageCompleted,
                     out preparation, out diagnostic)
                 || preparation == null
@@ -461,7 +482,7 @@ internal sealed class DailyV1Application
                 || !ReferenceEquals(preparation.GenesisComposition.Definitions, definitions)
                 || !ReferenceEquals(preparation.CoreSession.Definitions, definitions)
                 || !ReferenceEquals(preparation.CoreSession.ExecutionBoundaryState.AdmissionContext,
-                    application.bootstrapAdmissionContext))
+                    bootstrapAdmissionContext))
             {
                 if (string.IsNullOrWhiteSpace(diagnostic))
                     diagnostic = "Core genesis did not retain the admitted definitions and bootstrap identity.";
@@ -724,43 +745,16 @@ internal sealed class DailyV1Application
             diagnostic = "Core genesis start preparation requires the exact NoSave admission owned by this application.";
             return false;
         }
-
-        if (!TryPrepareInitialGenesisStart(
-                definitions, diagnosticLogger, stageCompleted,
-                out preparation, out diagnostic))
-            return false;
-
-        if (preparation == null
-            || !ReferenceEquals(preparation.PersistenceResult, admission.PersistenceResult))
-        {
-            preparation = null;
-            diagnostic = "Core genesis start preparation changed the exact initial NoSave result.";
-            return false;
-        }
-        return true;
-    }
-    /// <summary>
-    /// Packages the already-admitted NoSave genesis candidate as one Core
-    /// start-preparation value for the host projection boundary.
-    /// </summary>
-    internal bool TryPrepareInitialGenesisStart(
-        DailyV1EffectiveDefinitions definitions,
-        SimulationLogger diagnosticLogger,
-        Action<string> stageCompleted,
-        out DailyV1ApplicationStartPreparation preparation,
-        out string diagnostic)
-    {
-        preparation = null;
-        diagnostic = null;
         if (definitions == null || diagnosticLogger == null)
         {
             diagnostic = "The admitted definitions and Core logger are required to prepare the genesis start.";
             return false;
         }
 
-        if (!TryGetInitialNoSaveAdmissionResult(out P12AResult admittedNoSaveResult))
+        if (!TryGetInitialNoSaveAdmissionResult(out P12AResult admittedNoSaveResult)
+            || !ReferenceEquals(admittedNoSaveResult, admission.PersistenceResult))
         {
-            diagnostic = "Core genesis start preparation requires the actual initial continuation admission result to be NoSave.";
+            diagnostic = "Core genesis start preparation requires the exact admitted NoSave result.";
             return false;
         }
 
@@ -795,10 +789,30 @@ internal sealed class DailyV1Application
         preparation = new DailyV1ApplicationStartPreparation(
             this, DailyV1ApplicationStartPreparationKind.GenesisPrepared,
             null, composition, candidate, diagnosticLogger,
-            admittedNoSaveResult);
+            admission, admittedNoSaveResult);
         return true;
     }
 
+    /// <summary>
+    /// Packages the already-admitted NoSave genesis candidate for callers
+    /// that have completed initial admission on this application instance.
+    /// </summary>
+    internal bool TryPrepareInitialGenesisStart(
+        DailyV1EffectiveDefinitions definitions,
+        SimulationLogger diagnosticLogger,
+        Action<string> stageCompleted,
+        out DailyV1ApplicationStartPreparation preparation,
+        out string diagnostic)
+    {
+        preparation = null;
+        diagnostic = null;
+        if (!TryCreateInitialStartAdmissionFromNoSave(
+                out DailyV1ApplicationStartAdmission admission, out diagnostic))
+            return false;
+        return TryPrepareInitialGenesisStart(
+            admission, definitions, diagnosticLogger, stageCompleted,
+            out preparation, out diagnostic);
+    }
     private bool TryGetInitialNoSaveAdmissionResult(out P12AResult result)
     {
         lock (activeSessionGate.SyncRoot)

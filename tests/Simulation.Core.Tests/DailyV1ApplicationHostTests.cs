@@ -448,6 +448,32 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
+    public void CoreStartPreparationOnExistingApplicationRetainsExactApplicationAndAdmission()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "start-existing-application-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, unityV1Identity: UnityIdentity());
+
+        Assert.That(application.TryPrepareStartOnExistingApplication(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult persistenceResult,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(preparation, Is.Not.Null);
+        Assert.That(preparation.Application, Is.SameAs(application));
+        Assert.That(preparation.StartAdmission.Application, Is.SameAs(application));
+        Assert.That(preparation.StartAdmission.Kind,
+            Is.EqualTo(DailyV1ApplicationStartAdmissionKind.GenesisRequired));
+        Assert.That(preparation.PersistenceResult, Is.SameAs(persistenceResult));
+        Assert.That(preparation.StartAdmission.PersistenceResult, Is.SameAs(persistenceResult));
+        Assert.That(preparation.CoreSession, Is.Not.Null);
+        Assert.That(application.ActiveSession, Is.Null,
+            "Preparing the existing application must not publish its unbound session.");
+    }
+    [Test]
     public void CoreStartPreparationOwnsNoSaveDecisionAndPreparesOneUnpublishedGenesis()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

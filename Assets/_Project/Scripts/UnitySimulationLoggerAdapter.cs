@@ -27,7 +27,7 @@ internal static class UnitySimulationLoggerAdapter
         });
     }
 
-    private static void Write(DailyV1LogSeverity severity, string message)
+    internal static void Write(DailyV1LogSeverity severity, string message)
     {
         switch (severity)
         {
