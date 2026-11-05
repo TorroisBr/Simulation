@@ -33,7 +33,7 @@ CoreValidation source/input digest: af9374c261a0f2a781284dc910280ad2f8ed1a0f5196
 The existing modified ProjectSettings/ProjectSettings.asset and protected
 untracked validation files were not changed or included in the candidate.
 The Unity input manifest records the ProjectSettings hash used by the run.
-All generated caches and private evidence remained under the E: worktree.
+The final valid E: CoreValidation and Unity runs kept their caches and private evidence on E:. A preliminary CoreValidation invocation was mistakenly started from the C: orchestration checkout while its ProjectRoot named E:. Relative project arguments selected the C: checkout, so its result is excluded; it may have generated or updated ignored C: Core bin/obj outputs. Any such outputs were left in place; no cleanup or use as candidate evidence was performed.
 
 ## Validation
 
@@ -86,3 +86,52 @@ checkout as the process working directory; relative project paths therefore
 did not validate this E: candidate. Those results are excluded. The final
 CoreValidation run above was launched from the E: candidate itself. The
 preliminary run artifacts were preserved and not used for any claim.
+
+
+## Independent review follow-up — isolated Unity validation
+
+The original EditMode PASS above came from the active implementation worktree.
+Independent review correctly required a separate disposable Unity worktree.
+That earlier run is retained as historical evidence, but the isolated runs
+below are the acceptance evidence for this candidate.
+
+- Validation checkout: detached at candidate 73ec1bde90604b19814e43ae27de80dcd646ff29;
+  committed tree 88c46e173801fbf9df1e4ef0b0c72f51ef290c20.
+- The existing local ProjectSettings/ProjectSettings.asset input was copied
+  into the disposable checkout for parity with the earlier run
+  (SHA-256 f0771a23c3ebcb50d651c13515ee66e6e56d321c6115f54a2193bf35dd994633);
+  the original worktree file was not modified.
+- The first cold full EditMode run passed 3,299/3,299 but reported an unstable
+  input snapshot because Unity normalized line endings in
+  ProjectSettings/EditorBuildSettings.asset and
+  ProjectSettings/ShaderGraphSettings.asset in the disposable checkout.
+  Its report and log remain private and are excluded. The later stable run
+  records the post-import settings snapshot; no production or test source changed.
+- After Unity initialization, a stable full EditMode rerun passed 3,299/3,299,
+  zero failed/skipped/inconclusive; run
+  314552bfc799491c9c114cf9bd63bb6f; input snapshot SHA-256
+  e18ed117f234e2780785a60f2ac7d7cdcf38eaf0a3f054a2026674e34bf4b88b.
+  Original XML SHA-256
+  596d533fbc2ad4c60987b0338c4a0e9b889b1ff585453cf9bdc7f58aad77d4e930b
+  and normalized XML SHA-256
+  729c4c39d939bd4ace175b3fc223c3e8ac75207ba9fb0b414a46fdbe4d5b734d.
+- Isolated official Smoke filter passed 5/5, run
+  aaacf0eca78b4a16bf2e99c7a5417326; isolated
+  SimulationRuntimeLongRunTests passed 7/7, run
+  61e5fee532234716b73fe4192e831e7a. Both snapshots were stable.
+  Every filtered case identity/result was found as Passed in the stable full
+  report. Their original XML and manifests remain in protected local evidence.
+  The closed public packager rejects filtered-only XML because its parent-suite
+  testcasecount describes the full assembly while the filtered descendant
+  subset is smaller; no filtered report was published. The complete unfiltered
+  report contains and packages all Smoke and LongRun cases.
+- The official evidence packager verified the full-run package as
+  VALID: runs=1 entries=1. Public manifest
+  Unity/coref-selected-execution-editmode-isolated-73ec.manifest.json,
+  SHA-256 951f366728fba643c3a1ef455947a7f8853974fbc7f1c3e26b12d4e7fbfbaa1c;
+  archive Unity/coref-selected-execution-editmode-isolated-73ec.zip,
+  SHA-256 860fa0fd8cb149c71251af56b57d7a6cd6db71d55c4f9bdc7f58aad77d4e930b,
+  175,550 bytes.
+- All Unity-generated state and private reports are confined to the disposable
+  E: validation worktree and protected E: evidence root. ProjectSettings and
+  protected evidence in the active implementation worktree remain untouched.
