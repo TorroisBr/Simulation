@@ -158,7 +158,6 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
 
         public DailyV1ExecutionBoundaryState ExecutionState => state;
-        public bool HasExactCoreOwnedSelectedCensusSources { get; set; } = true;
         public bool TryGetExactJusticeRecordsCensusProjectionIdentity(
             DailyV1JusticeRecordsOwner owner,
             out object projectionIdentity,
@@ -299,18 +298,7 @@ public sealed class DailyV1ApplicationSessionGateTests
                 onContinuationSaveEvidenceCapture?.Invoke(ContinuationSaveEvidenceCaptureCount);
             }
 
-            if (HasExactCoreOwnedSelectedCensusSources && admissionOwnerSections != null)
-            {
-                HashSet<string> coreP12FIds = new HashSet<string>(
-                    DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds,
-                    StringComparer.Ordinal);
-                ownerSections = Array.AsReadOnly(admissionOwnerSections
-                    .Where(section => !coreP12FIds.Contains(section.SectionId)).ToArray());
-            }
-            else
-            {
-                ownerSections = admissionOwnerSections;
-            }
+            ownerSections = admissionOwnerSections;
             mutationEpoch = admissionMutationEpoch;
             onOwnerSectionCensusCapture?.Invoke(allowedOuterScope);
             if (ReturnPartialOwnerEvidenceThenFail)
@@ -2431,10 +2419,11 @@ public sealed class DailyV1ApplicationSessionGateTests
             sessionReplacement: false,
             out IReadOnlyList<OwnerSectionCensusSnapshot> admittedSections,
             out _, out failure), Is.True);
-        Assert.That(hostPorts.LastCapturedOwnerSections, Has.Count.EqualTo(completeHostVector.Count - 5),
-            "The selected host port omits the five P12-F rows whose source is the Core owner graph.");
+        Assert.That(hostPorts.LastCapturedOwnerSections, Has.Count.EqualTo(completeHostVector.Count),
+            "The host port supplies the complete census; Core owns exact selected-source validation and filtering.");
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds.All(coreOwnedId =>
-                hostPorts.LastCapturedOwnerSections.All(section => section.SectionId != coreOwnedId)), Is.True);
+                hostPorts.LastCapturedOwnerSections.Any(section => section.SectionId == coreOwnedId)), Is.True,
+            "The Unity host cannot omit rows before Core checks the bound owner identities.");
         OwnerSectionCensusSnapshot genealogySection =
             admittedSections.Single(section => section.SectionId == GenealogyCensusProvider.SectionId);
         Assert.That(genealogySection.OwnerInstanceIdentity,

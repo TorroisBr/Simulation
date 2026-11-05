@@ -11463,9 +11463,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     DailyV1ExecutionBoundaryState IDailyV1SelectedRuntimeAdvanceHostPorts.ExecutionState =>
         dailyExecutionBoundary;
 
-    bool IDailyV1SelectedRuntimeAdvanceHostPorts.HasExactCoreOwnedSelectedCensusSources =>
-        HasExactCoreOwnedSelectedCensusSources();
-
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryGetExactJusticeRecordsCensusProjectionIdentity(
         DailyV1JusticeRecordsOwner owner,
         out object projectionIdentity,
@@ -11533,28 +11530,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        // Core owns the selected P12-F, allocator, and exact-roster NPC
-        // Exact selected NPC Inventory, MoneyAccount, and runtime-state rows.
-        // Keep the Unity protocol's full internal provider inventory for
-        // quiescence and operation baselines, but do not return those
-        // Core-owned values or identities across the selected host port.
-        // Mixed-roster NPC rows remain intact.
-        if (HasExactCoreOwnedSelectedCensusSources())
-        {
-            if (!TryCreateCoreOwnedSelectedRuntimeHostRemainder(
-                    completeHostSections,
-                    dailyExecutionBoundary.SelectedRuntimeOwnerGraph,
-                    out ownerSections))
-            {
-                mutationEpoch = 0L;
-                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-                return false;
-            }
-        }
-        else
-        {
-            ownerSections = completeHostSections;
-        }
+        // Return the complete witness vector to Core. Core alone validates
+        // exact selected-owner identities and derives the Core-owned remainder;
+        // Unity's internal census still owns quiescence and the shared epoch.
+        ownerSections = completeHostSections;
 
         failure = DailyCaptureEligibilityFailure.None;
         return true;
@@ -11580,198 +11559,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        if (HasExactCoreOwnedSelectedCensusSources())
-        {
-            if (!TryCreateCoreOwnedSelectedRuntimeHostRemainder(
-                    completeHostSections,
-                    dailyExecutionBoundary.SelectedRuntimeOwnerGraph,
-                    out ownerSections))
-            {
-                mutationEpoch = 0L;
-                diagnostic = "The selected Unity census could not produce the exact host remainder after omitting Core-owned P12-F and RuntimeIdAllocator rows.";
-                return false;
-            }
-        }
-        else
-        {
-            ownerSections = completeHostSections;
-        }
+        // Restoration uses the same complete-source contract as capture.
+        // Core binds the exact owner graph and performs the selected-row split.
+        ownerSections = completeHostSections;
         diagnostic = null;
         return true;
-    }
-
-    private bool TryCreateCoreOwnedSelectedRuntimeHostRemainder(
-        IReadOnlyList<OwnerSectionCensusSnapshot> completeOwnerSections,
-        DailyV1SelectedRuntimeOwnerGraph graph,
-        out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections)
-    {
-        hostOwnedSections = null;
-        if (!DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
-                completeOwnerSections)
-            || graph == null)
-            return false;
-
-        IReadOnlyList<string> coreOwnedP12FSectionIds =
-            DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds;
-        IReadOnlyList<string> coreOwnedRuntimeIdAllocatorSectionIds =
-            DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds;
-        if (coreOwnedP12FSectionIds == null
-            || coreOwnedP12FSectionIds.Count != 5
-            || coreOwnedRuntimeIdAllocatorSectionIds == null
-            || coreOwnedRuntimeIdAllocatorSectionIds.Count != 3)
-            return false;
-
-        HashSet<string> p12fIds =
-            new HashSet<string>(coreOwnedP12FSectionIds, StringComparer.Ordinal);
-        HashSet<string> runtimeIdAllocatorIds =
-            new HashSet<string>(coreOwnedRuntimeIdAllocatorSectionIds, StringComparer.Ordinal);
-        if (p12fIds.Count != coreOwnedP12FSectionIds.Count
-            || runtimeIdAllocatorIds.Count != coreOwnedRuntimeIdAllocatorSectionIds.Count
-            || runtimeIdAllocatorIds.Overlaps(p12fIds))
-            return false;
-
-        HashSet<string> coreOwnedIds = new HashSet<string>(p12fIds, StringComparer.Ordinal);
-        coreOwnedIds.UnionWith(runtimeIdAllocatorIds);
-        if (coreOwnedIds.Count != 8)
-            return false;
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource
-                .TryGetExactCoreOwnedNpcInventoryAndMoneyAccountSectionIds(
-                    completeOwnerSections,
-                    graph,
-                    out IReadOnlyList<string> exactNpcOwnerSectionIds,
-                    out _))
-            return false;
-        foreach (string sectionId in exactNpcOwnerSectionIds)
-            if (string.IsNullOrWhiteSpace(sectionId) || !coreOwnedIds.Add(sectionId))
-                return false;
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource
-                .TryGetExactCoreOwnedNpcRuntimeStateSectionIds(
-                    completeOwnerSections,
-                    graph,
-                    out IReadOnlyList<string> exactNpcRuntimeStateSectionIds,
-                    out _))
-            return false;
-        foreach (string sectionId in exactNpcRuntimeStateSectionIds)
-            if (string.IsNullOrWhiteSpace(sectionId) || !coreOwnedIds.Add(sectionId))
-                return false;
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource
-                .TryGetExactCoreOwnedNpcKnowledgeAndPlanSectionIds(
-                    completeOwnerSections,
-                    graph,
-                    out IReadOnlyList<string> exactNpcKnowledgeAndPlanSectionIds,
-                    out _))
-            return false;
-        foreach (string sectionId in exactNpcKnowledgeAndPlanSectionIds)
-            if (string.IsNullOrWhiteSpace(sectionId) || !coreOwnedIds.Add(sectionId))
-                return false;
-
-        DailyV1ExecutionBoundaryState boundaryState = dailyExecutionBoundary;
-        ActorChoiceStore actorChoiceStore = boundaryState?.SelectedActorChoiceStore;
-        if (actorChoiceStore == null)
-            return false;
-
-        // Recompose the complete vector through Core before filtering. This
-        // validates the exact allocator triplet and P12-F owner identities,
-        // cardinalities, schemas, and revisions against the bound owner graph.
-        List<OwnerSectionCensusSnapshot> withoutP12F =
-            new List<OwnerSectionCensusSnapshot>(completeOwnerSections.Count - p12fIds.Count);
-        foreach (OwnerSectionCensusSnapshot section in completeOwnerSections)
-            if (!p12fIds.Contains(section.SectionId))
-                withoutP12F.Add(section);
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                graph,
-                actorChoiceStore,
-                withoutP12F,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> coreComposedSections,
-                out _)
-            || coreComposedSections == null
-            || coreComposedSections.Count != completeOwnerSections.Count)
-            return false;
-
-        Dictionary<string, OwnerSectionCensusSnapshot> originalById =
-            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
-        foreach (OwnerSectionCensusSnapshot section in completeOwnerSections)
-            if (section == null || !originalById.TryAdd(section.SectionId, section))
-                return false;
-
-        foreach (OwnerSectionCensusSnapshot composed in coreComposedSections)
-        {
-            if (composed == null
-                || !originalById.TryGetValue(composed.SectionId,
-                    out OwnerSectionCensusSnapshot original)
-                || original.Role != composed.Role
-                || original.SchemaVersion != composed.SchemaVersion
-                || !ReferenceEquals(original.OwnerInstanceIdentity, composed.OwnerInstanceIdentity)
-                || original.Cardinality != composed.Cardinality
-                || original.Revision != composed.Revision)
-                return false;
-        }
-
-        HashSet<string> observedIds = new HashSet<string>(StringComparer.Ordinal);
-        List<OwnerSectionCensusSnapshot> remainder =
-            new List<OwnerSectionCensusSnapshot>(
-                completeOwnerSections.Count - coreOwnedIds.Count);
-        foreach (OwnerSectionCensusSnapshot section in completeOwnerSections)
-        {
-            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
-                || !observedIds.Add(section.SectionId))
-                return false;
-
-            if (coreOwnedIds.Remove(section.SectionId))
-                continue;
-
-            remainder.Add(section);
-        }
-
-        if (coreOwnedIds.Count != 0
-            || remainder.Count != completeOwnerSections.Count - 8
-                - exactNpcOwnerSectionIds.Count
-                - exactNpcRuntimeStateSectionIds.Count
-                - exactNpcKnowledgeAndPlanSectionIds.Count)
-            return false;
-
-        hostOwnedSections = Array.AsReadOnly(remainder.ToArray());
-        return true;
-    }
-
-    private bool HasExactCoreOwnedSelectedCensusSources()
-    {
-        DailyV1ExecutionBoundaryState state = dailyExecutionBoundary;
-        DailyV1SelectedRuntimeOwnerGraph graph = state?.SelectedRuntimeOwnerGraph;
-        return state != null
-            && state.SelectedRuntimeExecutionRootsBound
-            && graph != null
-            && graph.PersonStore != null
-            && graph.RuntimeIdentityIndex != null
-            && graph.SpatialNetwork != null
-            && graph.PersonSpatialPositionStore != null
-            && graph.LegacySpatialAnchors != null
-            && graph.TravelParties != null
-            && ReferenceEquals(graph.RuntimeIdAllocator, state.SelectedRuntimeIdAllocator)
-            && graph.Expeditions != null
-            && graph.ScheduledDirectives != null
-            && graph.PoliticalKnowledgeStore != null
-            && state.SelectedActorChoiceStore != null
-            && ReferenceEquals(state.SelectedActorChoiceStore, actorChoiceStore)
-            && ReferenceEquals(state.SelectedActorChoiceStore.PersonStore, graph.PersonStore)
-            && p12RuntimeIdentityRegistry != null
-            && ReferenceEquals(graph.RuntimeIdentityIndex, p12RuntimeIdentityRegistry.CoreIdentityIndex)
-            && p12SpatialNetworkRuntime != null
-            && ReferenceEquals(graph.SpatialNetwork, p12SpatialNetworkRuntime.SelectedOwner)
-            && personSpatialPositionStore != null
-            && ReferenceEquals(graph.PersonSpatialPositionStore, personSpatialPositionStore)
-            && ReferenceEquals(graph.PersonSpatialPositionStore.SpatialAuthorityStore, spatialAuthorityStore)
-            && legacySpatialAnchorBindingStore != null
-            && ReferenceEquals(graph.LegacySpatialAnchors, legacySpatialAnchorBindingStore)
-            && ReferenceEquals(graph.TravelParties, travelPartySystem?.Store)
-            && ReferenceEquals(graph.Expeditions, expeditionSystem?.Store)
-            && ReferenceEquals(graph.ScheduledDirectives, scheduledDirectiveSystem?.Store)
-            && ReferenceEquals(graph.PoliticalKnowledgeStore, politicalKnowledgeStore)
-            && ReferenceEquals(graph.PersonStore, personStore);
     }
 
     /// <summary>

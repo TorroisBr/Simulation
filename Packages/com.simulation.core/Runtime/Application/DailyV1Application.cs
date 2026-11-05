@@ -2803,15 +2803,6 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        if (!hostPorts.HasExactCoreOwnedSelectedCensusSources)
-        {
-            targetOwnerSections = null;
-            targetMutationEpoch = 0L;
-            failure = P12GDailyV1OwnerVectorFailure.MissingTargetVector;
-            diagnostic = "The restored image requires exact Core-owned selected census sources before composition.";
-            return false;
-        }
-
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 candidateSession.OwnerGraph,
                 candidateSession.ExecutionBoundaryState.SelectedActorChoiceStore,
@@ -2823,7 +2814,7 @@ internal sealed class DailyV1Application
             targetMutationEpoch = 0L;
             failure = P12GDailyV1OwnerVectorFailure.MissingTargetVector;
             if (string.IsNullOrWhiteSpace(diagnostic))
-                diagnostic = "The private target host remainder could not be completed from the exact Core-owned P12-F graph.";
+                diagnostic = "The private target census could not be completed from the exact Core-owned P12-F graph.";
             return false;
         }
 

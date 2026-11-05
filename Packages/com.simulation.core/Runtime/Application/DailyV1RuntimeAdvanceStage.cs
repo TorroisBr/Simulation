@@ -150,10 +150,9 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 
 /// <summary>
 /// Host-owned ports for the selected Daily-v1 session. Census capture returns
-/// the complete quiescent host vector and shared mutation epoch. The host also
-/// reports whether its migrated census sources are bound to the exact Core
-/// owner instances; Core validates that evidence, selects those rows, and
-/// recomposes them from the admitted owner graph. During restoration Core binds
+/// the complete quiescent host vector and shared mutation epoch. Core selects
+/// and validates source ownership against the admitted owner graph. During
+/// restoration Core binds
 /// its selected owner authorities before asking the host to bind runtime
 /// projections. Core owns the owner-thread check and runtime-operation
 /// quiescence through its operation registry. This intentionally excludes
@@ -162,7 +161,6 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
-    bool HasExactCoreOwnedSelectedCensusSources { get; }
     bool TryGetExactJusticeRecordsCensusProjectionIdentity(
         DailyV1JusticeRecordsOwner owner,
         out object projectionIdentity,
@@ -427,48 +425,40 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
-        if (hostPorts.HasExactCoreOwnedSelectedCensusSources)
+        DailyV1JusticeRecordsOwner justiceOwner =
+            executionState.SelectedRuntimeOwnerGraph?.JusticeRecordsOwner;
+        if (!hostPorts.TryGetExactJusticeRecordsCensusProjectionIdentity(
+                justiceOwner, out object justiceProjectionIdentity, out long p18ReceiptRevision)
+            || !DailyV1SelectedRuntimeOwnerCensusSource.TryValidateCoreOwnedJusticeSections(
+                executionState.SelectedRuntimeOwnerGraph, ownerSections, justiceProjectionIdentity,
+                p18ReceiptRevision, out _))
         {
-            DailyV1JusticeRecordsOwner justiceOwner =
-                executionState.SelectedRuntimeOwnerGraph?.JusticeRecordsOwner;
-            if (!hostPorts.TryGetExactJusticeRecordsCensusProjectionIdentity(
-                    justiceOwner, out object justiceProjectionIdentity, out long p18ReceiptRevision)
-                || !DailyV1SelectedRuntimeOwnerCensusSource.TryValidateCoreOwnedJusticeSections(
-                    executionState.SelectedRuntimeOwnerGraph, ownerSections, justiceProjectionIdentity,
-                    p18ReceiptRevision, out _))
-            {
-                ownerSections = null;
-                mutationEpoch = 0L;
-                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-                return false;
-            }
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
         }
 
-        if (hostPorts.HasExactCoreOwnedSelectedCensusSources)
+        // The host returns every witness. Core validates the exact selected
+        // owner graph and derives the remainder used by the common coverage gate.
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                executionState.SelectedRuntimeOwnerGraph,
+                executionState.SelectedActorChoiceStore,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreP12FSections,
+                out _)
+            || !DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                completeCoreP12FSections,
+                executionState.SelectedRuntimeOwnerGraph,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
+                out _))
         {
-            // The selected Unity port omits P12-F rows because their authority
-            // is the exact Core owner graph. Recompose them before the shared
-            // removal/coverage gate so only Core-derived facts can complete the
-            // full selected vector.
-            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                    executionState.SelectedRuntimeOwnerGraph,
-                    executionState.SelectedActorChoiceStore,
-                    ownerSections,
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreP12FSections,
-                    out _)
-                || !DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
-                    completeCoreP12FSections,
-                    executionState.SelectedRuntimeOwnerGraph,
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
-                    out _))
-            {
-                ownerSections = null;
-                mutationEpoch = 0L;
-                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-                return false;
-            }
-            ownerSections = hostOwnedSections;
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
         }
+        ownerSections = hostOwnedSections;
 
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
                 executionState.SelectedRuntimeOwnerGraph,
@@ -755,9 +745,9 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
 
     /// <summary>
     /// Fixed selected-profile rows whose live source is the exact Core session
-    /// graph. The Unity census protocol still tracks quiescence and mutation
-    /// epochs, but its host port must omit these rows from the vector returned
-    /// to Core so it cannot supply their owner identity or values.
+    /// graph. The Unity census protocol tracks quiescence and mutation epochs;
+    /// Core validates these rows against its graph before composing the selected
+    /// vector and never accepts host-provided owner identities for them.
     /// </summary>
     internal static IReadOnlyList<string> CoreOwnedP12FSectionIds { get; } =
         Array.AsReadOnly(CoreOwnedP12FSectionIdValues);
@@ -1832,10 +1822,9 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
 
         // Selected NPC Inventory, MoneyAccount, and runtime-state owners are
         // the exact Core authorities in the admitted graph. Rebuild their rows
-        // before the structural P12 gate so an exact host remainder need not
-        // return those owner values across the Unity boundary. When the host
-        // retains mixed-roster rows, the same helpers verify and preserve the
-        // complete compatibility vector.
+        // before the structural P12 gate. The host supplies its complete vector;
+        // Core validates rows whose source is already Core-owned and preserves
+        // mixed-roster compatibility rows.
         if (!TryRebindCoreOwnedNpcSections(
                 graph, hostOwnedSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> hostAndCoreNpcSections,
@@ -1861,18 +1850,29 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
 
         HashSet<string> hostSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, OwnerSectionCensusSnapshot> hostP12FSections =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
         List<OwnerSectionCensusSnapshot> composed =
             new List<OwnerSectionCensusSnapshot>(sectionsWithAllocatorRows.Count + CoreOwnedP12FSectionIdValues.Length);
         foreach (OwnerSectionCensusSnapshot section in sectionsWithAllocatorRows)
         {
             if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
-                || !hostSectionIds.Add(section.SectionId)
-                || Array.IndexOf(CoreOwnedP12FSectionIdValues, section.SectionId) >= 0)
+                || !hostSectionIds.Add(section.SectionId))
             {
-                diagnostic = "The host census remainder is invalid, duplicated, or contains a Core-owned P12-F section.";
+                diagnostic = "The complete host census is invalid or contains a duplicate section identity.";
                 return false;
             }
-            composed.Add(section);
+            if (Array.IndexOf(CoreOwnedP12FSectionIdValues, section.SectionId) >= 0)
+                hostP12FSections.Add(section.SectionId, section);
+            else
+                composed.Add(section);
+        }
+
+        if (hostP12FSections.Count != 0
+            && hostP12FSections.Count != CoreOwnedP12FSectionIdValues.Length)
+        {
+            diagnostic = "The host census partially omitted Core-owned P12-F sections.";
+            return false;
         }
 
         OwnerSectionCensusWitness[] witnesses;
@@ -1913,13 +1913,23 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 return false;
             }
 
-            composed.Add(new OwnerSectionCensusSnapshot(
+            OwnerSectionCensusSnapshot expected = new OwnerSectionCensusSnapshot(
                 witness.SectionId,
                 witness.SchemaVersion,
                 OwnerSectionRole.Required,
                 witness.OwnerInstanceIdentity,
                 witness.Cardinality,
-                witness.Revision));
+                witness.Revision);
+            if (hostP12FSections.TryGetValue(
+                    expected.SectionId, out OwnerSectionCensusSnapshot actual)
+                && !HasExactOwnerSectionFacts(actual, expected))
+            {
+                diagnostic = "The complete host census differs from the exact Core P12-F owner at "
+                    + expected.SectionId + ".";
+                return false;
+            }
+
+            composed.Add(expected);
         }
 
         if (capturedCoreSectionIds.Count != CoreOwnedP12FSectionIdValues.Length)
@@ -4732,51 +4742,45 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return false;
         }
 
-        if (hostPorts.HasExactCoreOwnedSelectedCensusSources)
+        DailyV1JusticeRecordsOwner justiceOwner = selectedRuntimeOwnerGraph?.JusticeRecordsOwner;
+        if (!hostPorts.TryGetExactJusticeRecordsCensusProjectionIdentity(
+                justiceOwner, out object justiceProjectionIdentity, out long p18ReceiptRevision)
+            || !DailyV1SelectedRuntimeOwnerCensusSource.TryValidateCoreOwnedJusticeSections(
+                selectedRuntimeOwnerGraph, ownerSections, justiceProjectionIdentity,
+                p18ReceiptRevision, out diagnostic))
         {
-            DailyV1JusticeRecordsOwner justiceOwner = selectedRuntimeOwnerGraph?.JusticeRecordsOwner;
-            if (!hostPorts.TryGetExactJusticeRecordsCensusProjectionIdentity(
-                    justiceOwner, out object justiceProjectionIdentity, out long p18ReceiptRevision)
-                || !DailyV1SelectedRuntimeOwnerCensusSource.TryValidateCoreOwnedJusticeSections(
-                    selectedRuntimeOwnerGraph, ownerSections, justiceProjectionIdentity,
-                    p18ReceiptRevision, out diagnostic))
-            {
-                ownerSections = null;
-                mutationEpoch = 0L;
-                if (string.IsNullOrWhiteSpace(diagnostic))
-                    diagnostic = "The Core restored boundary could not validate its exact Justice owner census.";
-                return false;
-            }
+            ownerSections = null;
+            mutationEpoch = 0L;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core restored boundary could not validate its exact Justice owner census.";
+            return false;
         }
 
-        if (hostPorts.HasExactCoreOwnedSelectedCensusSources)
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                selectedRuntimeOwnerGraph,
+                selectedActorChoiceStore,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreP12FSections,
+                out diagnostic))
         {
-            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                    selectedRuntimeOwnerGraph,
-                    selectedActorChoiceStore,
-                    ownerSections,
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreP12FSections,
-                    out diagnostic))
-            {
-                ownerSections = null;
-                mutationEpoch = 0L;
-                if (string.IsNullOrWhiteSpace(diagnostic))
-                    diagnostic = "The Core restored boundary could not compose its omitted P12-F owner rows.";
-                return false;
-            }
+            ownerSections = null;
+            mutationEpoch = 0L;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core restored boundary could not compose its P12-F owner rows.";
+            return false;
+        }
 
-            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
-                    completeCoreP12FSections,
-                    selectedRuntimeOwnerGraph,
-                    out ownerSections,
-                    out diagnostic))
-            {
-                ownerSections = null;
-                mutationEpoch = 0L;
-                if (string.IsNullOrWhiteSpace(diagnostic))
-                    diagnostic = "The Core restored boundary could not select its exact migrated owner census rows.";
-                return false;
-            }
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                completeCoreP12FSections,
+                selectedRuntimeOwnerGraph,
+                out ownerSections,
+                out diagnostic))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core restored boundary could not select its exact migrated owner census rows.";
+            return false;
         }
 
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(

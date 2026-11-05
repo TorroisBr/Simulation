@@ -3514,18 +3514,25 @@ public sealed class SimulationRuntimeAdmissionTests
                 (IDailyV1SelectedRuntimeAdvanceHostPorts)bootstrap.Runtime;
             Assert.That(preAdvanceHostPorts.TryCaptureOwnerSectionCensus(
                     DailyV1CaptureScopeAllowance.None,
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> initialHostOwnedSections,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> initialHostSections,
                     out _, out DailyCaptureEligibilityFailure initialHostCaptureFailure),
                 Is.True, "Initial host remainder capture: " + initialHostCaptureFailure);
-            Assert.That(initialHostOwnedSections, Is.Not.Null);
-            string[] initialKnowledgeAndPlanSectionIds = DailyV1NpcOwnerCensusProviders
+            Assert.That(initialHostSections, Is.Not.Null);
+            IOwnerSectionCensusProvider[] initialKnowledgeAndPlanProviders = DailyV1NpcOwnerCensusProviders
                 .CreateKnowledgeAndPlanProviders(selectedOwnerGraph)
-                .Select(provider => provider.GetCurrentCensus().SectionId).ToArray();
-            Assert.That(initialKnowledgeAndPlanSectionIds,
+                .ToArray();
+            Assert.That(initialKnowledgeAndPlanProviders,
                 Has.Length.EqualTo(selectedOwnerGraph.Npcs.Count * 9));
-            foreach (string sectionId in initialKnowledgeAndPlanSectionIds)
-                Assert.That(initialHostOwnedSections.Any(section => section.SectionId == sectionId),
-                    Is.False, "Core owns the exact selected Knowledge/Plan row " + sectionId);
+            foreach (IOwnerSectionCensusProvider provider in initialKnowledgeAndPlanProviders)
+            {
+                OwnerSectionCensusWitness expected = provider.GetCurrentCensus();
+                OwnerSectionCensusSnapshot captured = initialHostSections.Single(
+                    section => section.SectionId == expected.SectionId);
+                Assert.That(captured.OwnerInstanceIdentity, Is.SameAs(expected.OwnerInstanceIdentity),
+                    "The Unity census returns the source identity for Core to validate: " + expected.SectionId);
+                Assert.That(captured.Cardinality, Is.EqualTo(expected.Cardinality));
+                Assert.That(captured.Revision, Is.EqualTo(expected.Revision));
+            }
 
             bootstrap.Runtime.AdvanceDay();
             Assert.That(bootstrap.TryPublishRestoredSession(activeSession, activeSession), Is.False,
@@ -3551,7 +3558,8 @@ public sealed class SimulationRuntimeAdmissionTests
                         out string knowledgeAndPlanDiagnostic),
                 Is.True, knowledgeAndPlanDiagnostic);
             Assert.That(exactNpcKnowledgeAndPlanSectionIds,
-                Is.EquivalentTo(initialKnowledgeAndPlanSectionIds));
+                Is.EquivalentTo(initialKnowledgeAndPlanProviders.Select(
+                    provider => provider.GetCurrentCensus().SectionId)));
             string[] coreOwnedHostPortSectionIds =
                 DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds
                     .Concat(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds)
@@ -3573,29 +3581,25 @@ public sealed class SimulationRuntimeAdmissionTests
                 (IDailyV1SelectedRuntimeAdvanceHostPorts)bootstrap.Runtime;
             Assert.That(selectedHostPorts.TryCaptureOwnerSectionCensus(
                     DailyV1CaptureScopeAllowance.None,
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> hostCensus,
                     out long hostMutationEpoch,
                     out DailyCaptureEligibilityFailure hostCaptureFailure),
                 Is.True, hostCaptureFailure.ToString());
             Assert.That(hostMutationEpoch, Is.EqualTo(completedToken.MutationEpoch));
-            Assert.That(hostOwnedSections, Has.Count.EqualTo(
-                    completedToken.OwnerSections.Count - coreOwnedHostPortSectionIds.Length),
-                "The Unity host returns its remainder after Core recomposes P12-F, allocator, and exact selected NPC Inventory, MoneyAccount, runtime-state, Knowledge, and Plan rows.");
+            Assert.That(hostCensus, Has.Count.EqualTo(completedToken.OwnerSections.Count),
+                "Unity returns the complete census; Core validates and selects its own source rows.");
             foreach (string coreOwnedSectionId in coreOwnedHostPortSectionIds)
-                Assert.That(hostOwnedSections.Any(section => section.SectionId == coreOwnedSectionId),
-                    Is.False, coreOwnedSectionId);
+                Assert.That(hostCensus.Any(section => section.SectionId == coreOwnedSectionId),
+                    Is.True, "The host cannot omit Core-owned rows before Core validates their exact identities: " + coreOwnedSectionId);
             foreach (OwnerSectionCensusSnapshot original in completedToken.OwnerSections)
             {
-                if (coreOwnedHostPortSectionIdSet.Contains(original.SectionId))
-                    continue;
-
-                OwnerSectionCensusSnapshot hostOwned = hostOwnedSections.Single(section =>
+                OwnerSectionCensusSnapshot hostSection = hostCensus.Single(section =>
                     section.SectionId == original.SectionId);
-                Assert.That(hostOwned.Role, Is.EqualTo(original.Role), original.SectionId);
-                Assert.That(hostOwned.SchemaVersion, Is.EqualTo(original.SchemaVersion), original.SectionId);
-                Assert.That(hostOwned.OwnerInstanceIdentity, Is.SameAs(original.OwnerInstanceIdentity), original.SectionId);
-                Assert.That(hostOwned.Cardinality, Is.EqualTo(original.Cardinality), original.SectionId);
-                Assert.That(hostOwned.Revision, Is.EqualTo(original.Revision), original.SectionId);
+                Assert.That(hostSection.Role, Is.EqualTo(original.Role), original.SectionId);
+                Assert.That(hostSection.SchemaVersion, Is.EqualTo(original.SchemaVersion), original.SectionId);
+                Assert.That(hostSection.OwnerInstanceIdentity, Is.SameAs(original.OwnerInstanceIdentity), original.SectionId);
+                Assert.That(hostSection.Cardinality, Is.EqualTo(original.Cardinality), original.SectionId);
+                Assert.That(hostSection.Revision, Is.EqualTo(original.Revision), original.SectionId);
             }
             DailyV1NpcRuntimeOwners changedActionOwner = selectedOwnerGraph.Npcs.FirstOrDefault(owner =>
                 actionRevisionsBefore.TryGetValue(owner.RuntimeId, out long previousRevision)
