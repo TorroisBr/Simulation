@@ -3321,6 +3321,34 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(actual.Revision, Is.EqualTo(witness.Revision), witness.SectionId);
         }
 
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcInventoryAndMoneyAccountSectionIds(
+                    completeVector, graph,
+                    out IReadOnlyList<string> coreOwnedInventoryAndMoneyIds,
+                    out string inventoryDiagnostic),
+            Is.True, inventoryDiagnostic);
+        HashSet<string> completeCoreOwnedIds = new HashSet<string>(
+            DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds
+                .Concat(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds)
+                .Concat(coreOwnedInventoryAndMoneyIds)
+                .Concat(coreOwnedRuntimeStateIds),
+            StringComparer.Ordinal);
+        OwnerSectionCensusSnapshot[] exactCoreHostRemainder = completeVector
+            .Where(section => !completeCoreOwnedIds.Contains(section.SectionId)).ToArray();
+        ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                graph, actorChoices, exactCoreHostRemainder,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> p12Composed,
+                out string p12CompositionDiagnostic),
+            Is.True, p12CompositionDiagnostic);
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+            p12Composed), Is.True,
+            "Core must recompose NPC state before the P12 89-family completeness gate.");
+        Assert.That(p12Composed.Select(section => section.SectionId)
+                .OrderBy(sectionId => sectionId, StringComparer.Ordinal),
+            Is.EqualTo(completeVector.Select(section => section.SectionId)
+                .OrderBy(sectionId => sectionId, StringComparer.Ordinal)));
+
         string omittedRuntimeStateId = coreOwnedRuntimeStateIds[0];
         OwnerSectionCensusSnapshot[] partialHostVector = completeVector
             .Where(section => section.SectionId != omittedRuntimeStateId).ToArray();

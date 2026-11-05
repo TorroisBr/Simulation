@@ -1801,20 +1801,26 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
         }
 
-        // Selected NPC Inventory and MoneyAccount are already the exact
-        // Core-owned authorities in the admitted graph. Rebuild their rows
+        // Selected NPC Inventory, MoneyAccount, and runtime-state owners are
+        // the exact Core authorities in the admitted graph. Rebuild their rows
         // before the structural P12 gate so an exact host remainder need not
         // return those owner values across the Unity boundary. When the host
-        // retains mixed-roster rows, the same helper verifies and preserves
-        // that complete compatibility vector.
+        // retains mixed-roster rows, the same helpers verify and preserve the
+        // complete compatibility vector.
         if (!TryRebindCoreOwnedNpcSections(
                 graph, hostOwnedSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> hostAndCoreNpcSections,
                 out diagnostic))
             return false;
 
-        if (!TryComposeCoreOwnedRuntimeIdAllocatorSections(
+        if (!TryRebindCoreOwnedNpcRuntimeStateSections(
                 graph, hostAndCoreNpcSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> hostAndCoreRuntimeStateSections,
+                out diagnostic))
+            return false;
+
+        if (!TryComposeCoreOwnedRuntimeIdAllocatorSections(
+                graph, hostAndCoreRuntimeStateSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> sectionsWithAllocatorRows,
                 out diagnostic))
             return false;
