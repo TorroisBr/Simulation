@@ -45,7 +45,9 @@ public static class NpcPlanCensusProvider
                 ? planOwner is DailyV1NpcMerchantTradePlanOwner selectedPlan
                     ? selectedPlan.Revision
                     : ((MerchantTradePlanRuntime)planOwner).Revision
-                : ((NpcTravelPlanRuntime)planOwner).Revision;
+                : planOwner is DailyV1NpcTravelPlanOwner selectedTravelPlan
+                    ? selectedTravelPlan.Revision
+                    : ((NpcTravelPlanRuntime)planOwner).Revision;
             return new OwnerSectionCensusWitness(sectionId, SchemaVersion, planOwner, 1, revision);
         }
     }
@@ -78,11 +80,13 @@ public static class NpcPlanCensusProvider
             }
 
             object merchantPlan = npc.MerchantTradePlanAuthority;
-            NpcTravelPlanRuntime travelPlan = npc.ExistingTravelPlan;
-            if (merchantPlan == null || travelPlan == null)
+            NpcTravelPlanRuntime travelPlanProjection = npc.ExistingTravelPlan;
+            DailyV1NpcRuntimeOwners selectedOwners = npc.SelectedRuntimeOwners;
+            object travelPlanOwner = selectedOwners?.TravelPlan ?? (object)travelPlanProjection;
+            if (merchantPlan == null || travelPlanProjection == null || travelPlanOwner == null)
             {
                 throw new InvalidOperationException(
-                    "NPC plan census requires both embedded plan owners to be installed.");
+                    "NPC plan census requires both installed plan authorities and the travel-plan projection.");
             }
 
             ordered.Add(npc);
@@ -101,7 +105,7 @@ public static class NpcPlanCensusProvider
                 SectionIdFor(MerchantTradePlanKind, npc.RuntimeId));
             providers[index++] = new SectionProvider(
                 npc,
-                npc.ExistingTravelPlan,
+                npc.SelectedRuntimeOwners?.TravelPlan ?? (object)npc.ExistingTravelPlan,
                 TravelPlanKind,
                 SectionIdFor(TravelPlanKind, npc.RuntimeId));
         }

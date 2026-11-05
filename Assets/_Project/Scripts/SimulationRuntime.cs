@@ -5152,8 +5152,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     && provider.PlanOwner is NpcTravelPlanRuntime travelPlan
                     && ReferenceEquals(registeredNpc.ExistingTravelPlan, travelPlan))
                     AddP12NpcOwnerMutationSection(travelPlanBindings, travelPlan, witness.SectionId);
+                else if (provider.Kind == NpcPlanCensusProvider.TravelPlanKind
+                    && provider.PlanOwner is DailyV1NpcTravelPlanOwner selectedTravelPlan
+                    && ReferenceEquals(registeredNpc.SelectedRuntimeOwners?.TravelPlan,
+                        selectedTravelPlan)
+                    && registeredNpc.ExistingTravelPlan is NpcTravelPlanRuntime selectedTravelPlanProjection)
+                {
+                    if (witness.Revision != selectedTravelPlan.Revision)
+                        throw new InvalidOperationException(
+                            "Selected NPC TravelPlan census revision differs from its Core authority.");
+
+                    // The selected census row names the authoritative Core
+                    // TravelPlan. Preserve the Unity mutation-admission bridge
+                    // on its projection, which forwards to that same owner.
+                    AddP12NpcOwnerMutationSection(
+                        travelPlanBindings, selectedTravelPlanProjection, witness.SectionId);
+                }
                 else
-                    throw new InvalidOperationException("NPC plan owner does not match its exact embedded field.");
+                    throw new InvalidOperationException("NPC plan owner does not match its exact selected authority or compatibility projection.");
             }
             foreach (P12NpcOwnerMutationBinding binding in merchantPlanBindings)
                 if (binding.SectionIds.Length != 1)

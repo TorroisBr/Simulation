@@ -1618,6 +1618,13 @@ internal static class P12DNpcRootOwnerSnapshot
     {
         failure = P12DNpcRootOwnerSnapshotFailure.InvalidOwnerSection;
         object runtimeOwnerIdentity = npc.SelectedCensusOwnerIdentity;
+        DailyV1NpcTravelPlanOwner selectedTravelPlan = npc.SelectedRuntimeOwners?.TravelPlan;
+        if (travelPlan == null
+            || (selectedTravelPlan != null
+                && (!ReferenceEquals(travelPlan.SelectedOwner, selectedTravelPlan)
+                || !travelPlan.MatchesSelectedOwner()))
+            )
+            return false;
         if (!TryRequireSection(token, NpcLifecycleCensusProvider.SectionIdFor(npc.RuntimeId, false),
                 NpcLifecycleCensusProvider.SchemaVersion, OwnerSectionRole.Required,
                 runtimeOwnerIdentity, 1, npc.LifeStateRevision)
@@ -1643,7 +1650,8 @@ internal static class P12DNpcRootOwnerSnapshot
             || !TryRequireSection(token, NpcPlanCensusProvider.SectionIdFor(
                     NpcPlanCensusProvider.TravelPlanKind, npc.RuntimeId),
                 NpcPlanCensusProvider.SchemaVersion, OwnerSectionRole.Required,
-                travelPlan, 1, travelPlan.Revision))
+                selectedTravelPlan ?? (object)travelPlan, 1,
+                selectedTravelPlan?.Revision ?? travelPlan.Revision))
             return false;
 
         if (npc.BoundPersonRuntime == null)

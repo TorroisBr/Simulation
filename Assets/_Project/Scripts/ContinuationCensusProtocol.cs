@@ -987,7 +987,8 @@ public sealed class ContinuationCensusProtocol
                     sectionId, NpcPlanCensusProvider.SchemaVersion, OwnerSectionRole.Required);
                 object expectedOwner = planProvider.Kind == NpcPlanCensusProvider.MerchantTradePlanKind
                     ? planProvider.NpcOwner.MerchantTradePlanAuthority
-                    : planProvider.NpcOwner.ExistingTravelPlan;
+                    : planProvider.NpcOwner.SelectedRuntimeOwners?.TravelPlan
+                        ?? (object)planProvider.NpcOwner.ExistingTravelPlan;
                 if (string.IsNullOrWhiteSpace(planProvider.RuntimeId)
                     || planProvider.NpcOwner == null
                     || planProvider.PlanOwner == null

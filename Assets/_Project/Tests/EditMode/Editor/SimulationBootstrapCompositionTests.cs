@@ -3546,7 +3546,8 @@ public sealed class SimulationBootstrapCompositionTests
         foreach (NpcRuntime npc in roster)
         {
             object merchantPlan = npc.MerchantTradePlanAuthority;
-            object travelPlan = ReadNonPublicProperty(npc, "ExistingTravelPlan");
+            object travelPlan = npc.SelectedRuntimeOwners?.TravelPlan
+                ?? (object)ReadNonPublicProperty(npc, "ExistingTravelPlan");
             AssertNpcPlanWitness(
                 planProviders,
                 NpcPlanCensusProvider.MerchantTradePlanKind,
@@ -3893,7 +3894,8 @@ public sealed class SimulationBootstrapCompositionTests
             AddExpectedDailyV1OwnerIdentity(
                 expected,
                 NpcPlanCensusProvider.SectionIdFor(NpcPlanCensusProvider.TravelPlanKind, runtimeId),
-                ReadNonPublicProperty(npc, "ExistingTravelPlan"));
+                selectedOwners?.TravelPlan
+                    ?? (object)ReadNonPublicProperty(npc, "ExistingTravelPlan"));
             AddExpectedDailyV1OwnerIdentity(
                 expected, P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(runtimeId),
                 ReadNonPublicProperty(npc, "ExistingLocalKnowledgeObservationRuntime"));
