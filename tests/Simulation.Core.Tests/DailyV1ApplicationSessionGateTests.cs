@@ -11,6 +11,12 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
     }
 
+    private static P12ACompatibilityDescriptor UnityIdentity() =>
+        new P12ACompatibilityDescriptor(
+            "UnityBootstrap-Daily-v1", 1, "config", "6000.3.9f1", "WindowsEditor", "Mono",
+            "build", new[] { "00000000-0000-0000-0000-000000000001" }, "numeric", 1,
+            "content", "providers", "daily", 1, "calendar", "p9", "p8");
+
     private sealed class MissingContinuationSlotOperations : IAtomicFileSlotOperations
     {
         internal int OpenReadCount { get; private set; }
@@ -1782,6 +1788,62 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryGetPublishedHostProjection(candidate,
             out IDailyV1ApplicationHostProjection publishedProjection), Is.True);
         Assert.That(publishedProjection, Is.SameAs(projection));
+    }
+
+    [Test]
+    public void PreparedNoSaveGenesisPublishesExactSessionOnceAndRejectsForeignBoundaryAtomically()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "prepared-genesis-publication-root",
+            new MissingContinuationSlotOperations(),
+            stageCompleted: null,
+            logOutput: null,
+            unityV1Identity: UnityIdentity());
+
+        Assert.That(DailyV1Application.TryPrepareStart(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult persistenceResult,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(preparation.Kind,
+            Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+        Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+
+        DailyV1Application application = preparation.Application;
+        DailyV1ActiveRuntimeSession candidate = preparation.CoreSession;
+        Assert.That(application.ActiveSession, Is.Null);
+        EnsureRuntimeProtocolInventory(candidate.ExecutionBoundaryState);
+        TestHostProjection projection = new TestHostProjection();
+        ApplicationAdvanceBoundary foreignBoundary = new ApplicationAdvanceBoundary(
+            new DailyV1ExecutionBoundaryState(), null);
+
+        Assert.That(application.TryPublishPreparedInitialWithHostProjection(
+            preparation, projection, foreignBoundary, out diagnostic), Is.False);
+        Assert.That(application.ActiveSession, Is.Null,
+            "A host boundary bound to a different execution state must not publish the private genesis.");
+        Assert.That(application.TryGetPublishedHostProjection(candidate, out _), Is.False,
+            "A rejected bind must not leave a registered projection behind.");
+
+        ApplicationAdvanceBoundary exactBoundary = new ApplicationAdvanceBoundary(
+            candidate.ExecutionBoundaryState, null);
+        Assert.That(application.TryPublishPreparedInitialWithHostProjection(
+            preparation, projection, exactBoundary, out diagnostic), Is.True, diagnostic);
+        Assert.That(application.ActiveSession, Is.SameAs(candidate));
+        Assert.That(application.TryGetPublishedHostProjection(candidate,
+            out IDailyV1ApplicationHostProjection publishedProjection), Is.True);
+        Assert.That(publishedProjection, Is.SameAs(projection));
+
+        DailyV1Application otherApplication = new DailyV1Application();
+        Assert.That(otherApplication.TryPublishPreparedInitialWithHostProjection(
+            preparation, projection, exactBoundary, out diagnostic), Is.False,
+            "A NoSave preparation cannot publish through another application instance.");
+        Assert.That(application.TryPublishPreparedInitialWithHostProjection(
+            preparation, projection, exactBoundary, out diagnostic), Is.False,
+            "The exact start preparation can publish only once.");
+        Assert.That(application.ActiveSession, Is.SameAs(candidate),
+            "A duplicate publication attempt must preserve the already published Core session.");
     }
 
     [Test]

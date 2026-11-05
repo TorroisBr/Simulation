@@ -2041,6 +2041,61 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
+    /// Publishes the exact private genesis session produced by this
+    /// application's admitted NoSave start preparation together with its host
+    /// projection. The preparation token prevents a host from substituting a
+    /// separately composed session between Core's slot decision and the
+    /// single active-session publication.
+    /// </summary>
+    internal bool TryPublishPreparedInitialWithHostProjection(
+        DailyV1ApplicationStartPreparation preparation,
+        IDailyV1ApplicationHostProjection hostProjection,
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        lock (activeSessionGate.SyncRoot)
+        {
+            DailyV1ActiveRuntimeSession candidate = preparation?.CoreSession;
+            P12AResult admittedResult = preparation?.StartAdmission?.PersistenceResult;
+            if (preparation == null
+                || !ReferenceEquals(preparation.Application, this)
+                || preparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                || preparation.StartAdmission == null
+                || !ReferenceEquals(preparation.StartAdmission.Application, this)
+                || preparation.StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.GenesisRequired
+                || !ReferenceEquals(preparation.PersistenceResult, admittedResult)
+                || admittedResult == null
+                || admittedResult.Code != P12AResultCode.NoSave
+                || !initialContinuationLoadAttempted
+                || initialContinuationLoadBlocksGenesis
+                || !ReferenceEquals(initialContinuationLoadResult, admittedResult)
+                || !initialGenesisPreparationAttempted
+                || !ReferenceEquals(preparedInitialGenesis, preparation.GenesisComposition)
+                || !ReferenceEquals(preparedInitialSession, candidate)
+                || candidate == null
+                || !ReferenceEquals(candidate.GenesisComposition, preparation.GenesisComposition)
+                || !ReferenceEquals(candidate.Definitions, preparation.GenesisComposition?.Definitions)
+                || !ReferenceEquals(candidate.AdmissionContext, bootstrapAdmissionContext)
+                || candidate.AdmissionContext?.IsOwnedByCurrentThread() != true
+                || activeSessionGate.Current != null
+                || activeSessionGate.ActiveOperationCount != 0)
+            {
+                diagnostic = "Initial genesis publication requires this application's exact private NoSave preparation and unused session gate.";
+                return false;
+            }
+
+            if (!TryPublishInitialWithHostProjection(candidate, hostProjection, hostPorts))
+            {
+                diagnostic = "The exact prepared genesis could not bind its host boundary and publish atomically.";
+                return false;
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
     /// Binds and publishes the Core session and its opaque host projection as
     /// one application-owned transaction. The projection is not consulted for
     /// domain decisions; it exists only for a host such as Unity to expose its

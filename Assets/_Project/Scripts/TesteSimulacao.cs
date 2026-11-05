@@ -1211,8 +1211,15 @@ public class TesteSimulacao : MonoBehaviour
             DailyV1ActiveRuntimeSession coreSession = candidateSession.CoreRuntimeSession;
             if (coreSession == null)
                 return compatibilitySessionGate.TryPublishInitial(candidateSession);
-            return dailyV1Application.TryPublishInitialWithHostProjection(
-                coreSession, candidateSession, candidateSession.Runtime);
+
+            DailyV1ApplicationStartPreparation startPreparation = dailyV1InitialStartPreparation;
+            if (startPreparation == null
+                || startPreparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                || !ReferenceEquals(startPreparation.CoreSession, coreSession))
+                return false;
+
+            return dailyV1Application.TryPublishPreparedInitialWithHostProjection(
+                startPreparation, candidateSession, candidateSession.Runtime, out _);
         }
     }
 
