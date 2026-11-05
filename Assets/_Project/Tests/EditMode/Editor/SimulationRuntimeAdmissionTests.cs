@@ -3518,6 +3518,14 @@ public sealed class SimulationRuntimeAdmissionTests
                     out _, out DailyCaptureEligibilityFailure initialHostCaptureFailure),
                 Is.True, "Initial host remainder capture: " + initialHostCaptureFailure);
             Assert.That(initialHostOwnedSections, Is.Not.Null);
+            string[] initialKnowledgeAndPlanSectionIds = DailyV1NpcOwnerCensusProviders
+                .CreateKnowledgeAndPlanProviders(selectedOwnerGraph)
+                .Select(provider => provider.GetCurrentCensus().SectionId).ToArray();
+            Assert.That(initialKnowledgeAndPlanSectionIds,
+                Has.Length.EqualTo(selectedOwnerGraph.Npcs.Count * 9));
+            foreach (string sectionId in initialKnowledgeAndPlanSectionIds)
+                Assert.That(initialHostOwnedSections.Any(section => section.SectionId == sectionId),
+                    Is.False, "Core owns the exact selected Knowledge/Plan row " + sectionId);
 
             bootstrap.Runtime.AdvanceDay();
             Assert.That(bootstrap.TryPublishRestoredSession(activeSession, activeSession), Is.False,
@@ -3535,6 +3543,15 @@ public sealed class SimulationRuntimeAdmissionTests
                         out IReadOnlyList<string> exactRuntimeStateSectionIds,
                         out string runtimeStateDiagnostic),
                 Is.True, runtimeStateDiagnostic);
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                    .TryGetExactCoreOwnedNpcKnowledgeAndPlanSectionIds(
+                        completedToken.OwnerSections,
+                        selectedOwnerGraph,
+                        out IReadOnlyList<string> exactNpcKnowledgeAndPlanSectionIds,
+                        out string knowledgeAndPlanDiagnostic),
+                Is.True, knowledgeAndPlanDiagnostic);
+            Assert.That(exactNpcKnowledgeAndPlanSectionIds,
+                Is.EquivalentTo(initialKnowledgeAndPlanSectionIds));
             string[] coreOwnedHostPortSectionIds =
                 DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds
                     .Concat(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds)
@@ -3544,12 +3561,13 @@ public sealed class SimulationRuntimeAdmissionTests
                         DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + owner.RuntimeId
                     }))
                     .Concat(exactRuntimeStateSectionIds)
+                    .Concat(exactNpcKnowledgeAndPlanSectionIds)
                     .ToArray();
             HashSet<string> coreOwnedHostPortSectionIdSet = new HashSet<string>(
                 coreOwnedHostPortSectionIds, StringComparer.Ordinal);
             Assert.That(coreOwnedHostPortSectionIds,
                 Has.Length.EqualTo(8 + selectedOwnerGraph.Npcs.Count * 2
-                    + exactRuntimeStateSectionIds.Count));
+                    + exactRuntimeStateSectionIds.Count + exactNpcKnowledgeAndPlanSectionIds.Count));
             Assert.That(coreOwnedHostPortSectionIdSet, Has.Count.EqualTo(coreOwnedHostPortSectionIds.Length));
             IDailyV1SelectedRuntimeAdvanceHostPorts selectedHostPorts =
                 (IDailyV1SelectedRuntimeAdvanceHostPorts)bootstrap.Runtime;
@@ -3562,7 +3580,7 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(hostMutationEpoch, Is.EqualTo(completedToken.MutationEpoch));
             Assert.That(hostOwnedSections, Has.Count.EqualTo(
                     completedToken.OwnerSections.Count - coreOwnedHostPortSectionIds.Length),
-                "The Unity host returns its remainder after Core recomposes P12-F, allocator, and exact selected NPC Inventory, MoneyAccount, and runtime-state rows.");
+                "The Unity host returns its remainder after Core recomposes P12-F, allocator, and exact selected NPC Inventory, MoneyAccount, runtime-state, Knowledge, and Plan rows.");
             foreach (string coreOwnedSectionId in coreOwnedHostPortSectionIds)
                 Assert.That(hostOwnedSections.Any(section => section.SectionId == coreOwnedSectionId),
                     Is.False, coreOwnedSectionId);
@@ -4678,6 +4696,28 @@ public sealed class SimulationRuntimeAdmissionTests
                     StringComparison.Ordinal)),
             Is.EqualTo(runtime.NpcRuntimes.Count),
             "A mixed roster keeps every selected and compatibility MoneyAccount row in the whole-host vector.");
+        string[] knowledgeAndPlanPrefixes =
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcExplorableSiteKnowledgePrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyPlacesPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyConnectionsPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureOppositionPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureNotableItemsPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureCommonResourcesPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureAccessPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanPrefix
+        };
+        foreach (string prefix in knowledgeAndPlanPrefixes)
+        {
+            Assert.That(mixedRosterHostSections.Count(section =>
+                    section.SectionId.StartsWith(prefix, StringComparison.Ordinal)),
+                Is.EqualTo(runtime.NpcRuntimes.Count),
+                "A mixed roster keeps every selected and compatibility Knowledge/Plan row for " + prefix);
+            Assert.That(mixedRosterHostSections.Any(section =>
+                    section.SectionId == prefix + unselected.RuntimeId), Is.True,
+                "The whole-roster compatibility path retains the unselected member for " + prefix);
+        }
         Assert.That(mixedRosterHostSections.Any(section =>
                 section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix
                     + unselected.RuntimeId), Is.True);

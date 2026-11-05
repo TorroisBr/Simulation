@@ -737,6 +737,19 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId
     };
 
+    private static readonly string[] CoreOwnedNpcKnowledgeAndPlanSectionPrefixValues =
+    {
+        DailyV1SelectedOwnerSectionCensusContract.NpcExplorableSiteKnowledgePrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyPlacesPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyConnectionsPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcAdventureOppositionPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcAdventureNotableItemsPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcAdventureCommonResourcesPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcAdventureAccessPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix,
+        DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanPrefix
+    };
+
     internal static IReadOnlyList<string> CoreOwnedRuntimeIdAllocatorSectionIds { get; } =
         Array.AsReadOnly(CoreOwnedRuntimeIdAllocatorSectionIdValues);
 
@@ -1031,6 +1044,13 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             }
         }
 
+        if (!TryGetExactCoreOwnedNpcKnowledgeAndPlanSectionIds(
+                copiedHostSections,
+                graph,
+                out IReadOnlyList<string> exactNpcKnowledgeAndPlanSectionIds,
+                out diagnostic))
+            return false;
+
         List<string> coreSectionIds = new List<string>(CoreOwnedSelectedRuntimeSectionIdValues.Length);
         HashSet<string> uniqueSectionIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (string sectionId in CoreOwnedSelectedRuntimeSectionIdValues)
@@ -1050,6 +1070,15 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 diagnostic = "The selected Core City census contains a duplicate section identity.";
                 return false;
             }
+        }
+        foreach (string sectionId in exactNpcKnowledgeAndPlanSectionIds)
+        {
+            if (string.IsNullOrWhiteSpace(sectionId) || !uniqueSectionIds.Add(sectionId))
+            {
+                diagnostic = "The selected Core NPC Knowledge and Plan census contains a duplicate section identity.";
+                return false;
+            }
+            coreSectionIds.Add(sectionId);
         }
 
         OwnerSectionCensusWitness politicalKnowledgeWitness;
@@ -1819,8 +1848,14 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 out diagnostic))
             return false;
 
-        if (!TryComposeCoreOwnedRuntimeIdAllocatorSections(
+        if (!TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
                 graph, hostAndCoreRuntimeStateSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> hostAndCoreKnowledgeAndPlanSections,
+                out diagnostic))
+            return false;
+
+        if (!TryComposeCoreOwnedRuntimeIdAllocatorSections(
+                graph, hostAndCoreKnowledgeAndPlanSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> sectionsWithAllocatorRows,
                 out diagnostic))
             return false;
@@ -2510,7 +2545,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     {
         ownerSections = null;
         diagnostic = null;
-        if (graph == null || hostSections == null)
+        if (graph?.Npcs == null || hostSections == null)
         {
             diagnostic = "The selected Core NPC Knowledge and Plan census requires an owner graph and host census rows.";
             return false;
@@ -2539,25 +2574,35 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             diagnostic = "The complete host census has inconsistent NPC Inventory and MoneyAccount family cardinality.";
             return false;
         }
+        if (inventoryRows < graph.Npcs.Count)
+        {
+            diagnostic = "The host census does not cover every NPC in the selected Core graph.";
+            return false;
+        }
 
-        string[] requiredPrefixes =
+        string[] requiredPrefixes = CoreOwnedNpcKnowledgeAndPlanSectionPrefixValues;
+        int[] hostFamilyRows = new int[requiredPrefixes.Length];
+        bool allExactSelectedFamilyRowsOmitted = graph.Npcs.Count > 0
+            && inventoryRows == graph.Npcs.Count;
+        for (int i = 0; i < requiredPrefixes.Length; i++)
         {
-            DailyV1SelectedOwnerSectionCensusContract.NpcExplorableSiteKnowledgePrefix,
-            DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyPlacesPrefix,
-            DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyConnectionsPrefix,
-            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureOppositionPrefix,
-            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureNotableItemsPrefix,
-            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureCommonResourcesPrefix,
-            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureAccessPrefix,
-            DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix,
-            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanPrefix
-        };
-        foreach (string prefix in requiredPrefixes)
+            hostFamilyRows[i] = CountFamilyRows(copied, requiredPrefixes[i]);
+            if (hostFamilyRows[i] != 0)
+                allExactSelectedFamilyRowsOmitted = false;
+        }
+        if (inventoryRows > graph.Npcs.Count)
+            allExactSelectedFamilyRowsOmitted = false;
+
+        if (!allExactSelectedFamilyRowsOmitted)
         {
-            if (CountFamilyRows(copied, prefix) != inventoryRows)
+            for (int i = 0; i < requiredPrefixes.Length; i++)
             {
-                diagnostic = "The host census has incomplete selected NPC Knowledge and Plan family coverage for " + prefix;
-                return false;
+                if (hostFamilyRows[i] != inventoryRows)
+                {
+                    diagnostic = "The host census has incomplete selected NPC Knowledge and Plan family coverage for "
+                        + requiredPrefixes[i];
+                    return false;
+                }
             }
         }
 
@@ -2577,8 +2622,25 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
         }
 
+        int expectedWitnessCount;
+        try
+        {
+            expectedWitnessCount = checked(graph.Npcs.Count * requiredPrefixes.Length);
+        }
+        catch (OverflowException)
+        {
+            diagnostic = "The selected Core NPC Knowledge and Plan owner cardinality overflowed.";
+            return false;
+        }
+        if (providers == null || providers.Count != expectedWitnessCount)
+        {
+            diagnostic = "The selected Core NPC Knowledge and Plan provider set does not contain nine owners per NPC.";
+            return false;
+        }
+
         OwnerSectionCensusWitness[] witnesses = new OwnerSectionCensusWitness[providers.Count];
         HashSet<string> selectedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        int[] witnessFamilyRows = new int[requiredPrefixes.Length];
         for (int i = 0; i < providers.Count; i++)
         {
             try
@@ -2603,22 +2665,44 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 diagnostic = "A selected Core NPC Knowledge or Plan provider returned an invalid census witness.";
                 return false;
             }
-        }
 
-        if (inventoryRows < graph.Npcs.Count)
+            int matchingPrefix = -1;
+            for (int prefixIndex = 0; prefixIndex < requiredPrefixes.Length; prefixIndex++)
+            {
+                if (!witness.SectionId.StartsWith(requiredPrefixes[prefixIndex], StringComparison.Ordinal))
+                    continue;
+                if (matchingPrefix >= 0)
+                {
+                    diagnostic = "A selected Core NPC Knowledge and Plan witness matched multiple owner families.";
+                    return false;
+                }
+                matchingPrefix = prefixIndex;
+            }
+            if (matchingPrefix < 0)
+            {
+                diagnostic = "A selected Core NPC Knowledge or Plan provider returned a section outside the fixed owner families.";
+                return false;
+            }
+            witnessFamilyRows[matchingPrefix]++;
+        }
+        for (int i = 0; i < requiredPrefixes.Length; i++)
         {
-            diagnostic = "The host census does not cover every NPC in the selected Core graph.";
-            return false;
+            if (witnessFamilyRows[i] != graph.Npcs.Count)
+            {
+                diagnostic = "The selected Core Knowledge and Plan graph does not have exactly one owner per NPC for "
+                    + requiredPrefixes[i];
+                return false;
+            }
         }
 
         if (inventoryRows > graph.Npcs.Count)
         {
-            for (int i = 0; i < witnesses.Length; i++)
+            foreach (OwnerSectionCensusWitness witness in witnesses)
             {
-                if (!indexes.ContainsKey(witnesses[i].SectionId))
+                if (!indexes.ContainsKey(witness.SectionId))
                 {
                     diagnostic = "The mixed-roster host census is missing selected Core section "
-                        + witnesses[i].SectionId + ".";
+                        + witness.SectionId + ".";
                     return false;
                 }
             }
@@ -2629,10 +2713,36 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return true;
         }
 
-        if (inventoryRows != graph.Npcs.Count || witnesses.Length != graph.Npcs.Count * 9)
+        if (inventoryRows != graph.Npcs.Count)
         {
-            diagnostic = "The host census does not contain all nine selected NPC Knowledge and Plan sections per Core owner.";
+            diagnostic = "The host census does not contain the exact selected NPC Knowledge and Plan owner cardinality.";
             return false;
+        }
+
+        if (allExactSelectedFamilyRowsOmitted)
+        {
+            List<OwnerSectionCensusSnapshot> recomposed =
+                new List<OwnerSectionCensusSnapshot>(copied.Length + witnesses.Length);
+            recomposed.AddRange(copied);
+            foreach (OwnerSectionCensusWitness witness in witnesses)
+            {
+                if (indexes.ContainsKey(witness.SectionId))
+                {
+                    diagnostic = "The selected Core Knowledge and Plan omission overlaps a host owner-section identity.";
+                    return false;
+                }
+                recomposed.Add(new OwnerSectionCensusSnapshot(
+                    witness.SectionId,
+                    witness.SchemaVersion,
+                    OwnerSectionRole.Required,
+                    witness.OwnerInstanceIdentity,
+                    witness.Cardinality,
+                    witness.Revision));
+            }
+            recomposed.Sort((left, right) =>
+                StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+            ownerSections = Array.AsReadOnly(recomposed.ToArray());
+            return true;
         }
 
         int[] indexesByWitness = new int[witnesses.Length];
@@ -2677,6 +2787,167 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         }
 
         ownerSections = Array.AsReadOnly(copied);
+        return true;
+    }
+    /// <summary>
+    /// Returns exact selected NPC Knowledge and Plan rows that may be omitted
+    /// from the Unity remainder. Mixed-roster, stale, or substituted rows
+    /// remain host-owned for the existing P12 compatibility and stale checks.
+    /// </summary>
+    internal static bool TryGetExactCoreOwnedNpcKnowledgeAndPlanSectionIds(
+        IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IReadOnlyList<string> sectionIds,
+        out string diagnostic)
+    {
+        sectionIds = Array.Empty<string>();
+        diagnostic = null;
+        if (completeHostSections == null || graph?.Npcs == null
+            || !DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+                completeHostSections))
+        {
+            diagnostic = "Selected NPC Knowledge and Plan omission requires a structurally complete source census and exact graph.";
+            return false;
+        }
+        if (graph.Npcs.Count == 0)
+            return true;
+
+        int inventoryRows = CountFamilyRows(
+            completeHostSections, DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix);
+        int moneyAccountRows = CountFamilyRows(
+            completeHostSections, DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix);
+        if (inventoryRows != moneyAccountRows)
+        {
+            diagnostic = "The complete source census has inconsistent NPC Inventory and MoneyAccount cardinality.";
+            return false;
+        }
+        if (inventoryRows > graph.Npcs.Count)
+            return true;
+        if (inventoryRows != graph.Npcs.Count)
+        {
+            diagnostic = "The complete source census does not cover every selected NPC Knowledge and Plan owner.";
+            return false;
+        }
+
+        if (!TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+                graph, completeHostSections, out _, out diagnostic))
+            return false;
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers;
+        try
+        {
+            providers = DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph);
+        }
+        catch (ArgumentException)
+        {
+            diagnostic = "The selected Core NPC Knowledge and Plan providers could not bind to the owner graph.";
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            diagnostic = "The selected Core NPC Knowledge and Plan providers could not bind to the owner graph.";
+            return false;
+        }
+
+        int expectedWitnessCount;
+        try
+        {
+            expectedWitnessCount = checked(graph.Npcs.Count * CoreOwnedNpcKnowledgeAndPlanSectionPrefixValues.Length);
+        }
+        catch (OverflowException)
+        {
+            diagnostic = "The selected Core NPC Knowledge and Plan owner cardinality overflowed.";
+            return false;
+        }
+        if (providers == null || providers.Count != expectedWitnessCount)
+        {
+            diagnostic = "The selected Core NPC Knowledge and Plan provider set does not contain nine owners per NPC.";
+            return false;
+        }
+
+        Dictionary<string, OwnerSectionCensusSnapshot> hostById =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot section in completeHostSections)
+        {
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !hostById.TryAdd(section.SectionId, section))
+            {
+                diagnostic = "The complete source census has a missing or duplicate owner-section identity.";
+                return false;
+            }
+        }
+
+        List<string> exactIds = new List<string>(providers.Count);
+        HashSet<string> observedIds = new HashSet<string>(StringComparer.Ordinal);
+        int[] witnessFamilyRows = new int[CoreOwnedNpcKnowledgeAndPlanSectionPrefixValues.Length];
+        foreach (IOwnerSectionCensusProvider provider in providers)
+        {
+            OwnerSectionCensusWitness witness;
+            try
+            {
+                witness = provider?.GetCurrentCensus();
+            }
+            catch (InvalidOperationException)
+            {
+                diagnostic = "A selected Core NPC Knowledge or Plan provider failed to read its owner.";
+                return false;
+            }
+
+            if (witness == null
+                || string.IsNullOrWhiteSpace(witness.SectionId)
+                || witness.OwnerInstanceIdentity == null
+                || witness.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+                || witness.Cardinality < 0
+                || witness.Revision < 0L
+                || !observedIds.Add(witness.SectionId))
+            {
+                diagnostic = "A selected Core NPC Knowledge or Plan provider returned an invalid census witness.";
+                return false;
+            }
+
+            int matchingPrefix = -1;
+            for (int i = 0; i < CoreOwnedNpcKnowledgeAndPlanSectionPrefixValues.Length; i++)
+            {
+                if (!witness.SectionId.StartsWith(
+                        CoreOwnedNpcKnowledgeAndPlanSectionPrefixValues[i], StringComparison.Ordinal))
+                    continue;
+                if (matchingPrefix >= 0)
+                {
+                    diagnostic = "A selected Core NPC Knowledge and Plan witness matched multiple owner families.";
+                    return false;
+                }
+                matchingPrefix = i;
+            }
+            if (matchingPrefix < 0)
+            {
+                diagnostic = "A selected Core NPC Knowledge and Plan provider returned a section outside the fixed owner families.";
+                return false;
+            }
+            witnessFamilyRows[matchingPrefix]++;
+
+            if (!hostById.TryGetValue(witness.SectionId, out OwnerSectionCensusSnapshot actual))
+                return true;
+            if (actual.Role != OwnerSectionRole.Required
+                || actual.SchemaVersion != witness.SchemaVersion
+                || !ReferenceEquals(actual.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+                || actual.Cardinality != witness.Cardinality
+                || actual.Revision != witness.Revision)
+                return true;
+
+            exactIds.Add(witness.SectionId);
+        }
+
+        for (int i = 0; i < witnessFamilyRows.Length; i++)
+        {
+            if (witnessFamilyRows[i] != graph.Npcs.Count)
+            {
+                diagnostic = "The selected Core Knowledge and Plan graph does not have exactly one owner per NPC for "
+                    + CoreOwnedNpcKnowledgeAndPlanSectionPrefixValues[i];
+                return false;
+            }
+        }
+
+        sectionIds = Array.AsReadOnly(exactIds.ToArray());
         return true;
     }
     internal static bool TryRebindCoreOwnedNpcRuntimeStateSections(

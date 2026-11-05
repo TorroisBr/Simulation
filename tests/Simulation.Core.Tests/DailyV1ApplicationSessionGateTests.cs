@@ -2700,6 +2700,12 @@ public sealed class DailyV1ApplicationSessionGateTests
         OwnerSectionCensusSnapshot[] completeHostVector =
             CreateCoreBoundCompleteOwnerSectionVector(session);
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcKnowledgeAndPlanSectionIds(
+                    completeHostVector, graph,
+                    out IReadOnlyList<string> exactNpcKnowledgeAndPlanIds,
+                    out string knowledgeAndPlanDiagnostic),
+            Is.True, knowledgeAndPlanDiagnostic);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedIdentitySpatialCensusSections(
                 graph, out IReadOnlyList<OwnerSectionCensusSnapshot> activeIdentitySpatialRows,
                 out string activeIdentitySpatialDiagnostic), Is.True, activeIdentitySpatialDiagnostic);
@@ -2720,6 +2726,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(hostRemainder.Count,
             Is.EqualTo(completeHostVector.Length
                 - coreOwnedNonIdentitySpatialCount
+                - exactNpcKnowledgeAndPlanIds.Count
                 - graph.Cities.Count * 4));
         foreach (string sectionId in DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds)
         {
@@ -2730,6 +2737,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(hostRemainder.Any(section => section.SectionId == sectionId),
                 Is.EqualTo(hostRetainsUnavailableCoreSource), sectionId);
         }
+        foreach (string sectionId in exactNpcKnowledgeAndPlanIds)
+            Assert.That(hostRemainder.Any(section => section.SectionId == sectionId), Is.False, sectionId);
         foreach (DailyV1CityRuntimeOwners city in graph.Cities)
         foreach (string sectionId in new[]
         {
@@ -2975,7 +2984,8 @@ public sealed class DailyV1ApplicationSessionGateTests
                 out diagnostic), Is.True, diagnostic);
         Assert.That(mixedCityComposed.Count,
             Is.EqualTo(mixedCityHostVector.Length
-                - coreOwnedNonIdentitySpatialCount),
+                - coreOwnedNonIdentitySpatialCount
+                - exactNpcKnowledgeAndPlanIds.Count),
             "A mixed City roster keeps the complete host vector after the unrelated Core rows are removed.");
 
         OwnerSectionCensusSnapshot actorChoice = completeHostVector.Single(section =>
@@ -3283,6 +3293,19 @@ public sealed class DailyV1ApplicationSessionGateTests
             CreateCoreBoundCompleteOwnerSectionVector(session);
         Assert.That(graph.Npcs.Count, Is.GreaterThan(0));
 
+        IOwnerSectionCensusProvider[] knowledgeAndPlanProviders = DailyV1NpcOwnerCensusProviders
+            .CreateKnowledgeAndPlanProviders(graph).ToArray();
+        Assert.That(knowledgeAndPlanProviders, Has.Length.EqualTo(graph.Npcs.Count * 9));
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcKnowledgeAndPlanSectionIds(
+                    completeVector, graph,
+                    out IReadOnlyList<string> coreOwnedKnowledgeAndPlanIds,
+                    out string knowledgeAndPlanDiagnostic),
+            Is.True, knowledgeAndPlanDiagnostic);
+        Assert.That(coreOwnedKnowledgeAndPlanIds, Has.Count.EqualTo(knowledgeAndPlanProviders.Length));
+        Assert.That(coreOwnedKnowledgeAndPlanIds.ToHashSet(StringComparer.Ordinal),
+            Is.EquivalentTo(knowledgeAndPlanProviders.Select(provider => provider.GetCurrentCensus().SectionId)));
+
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
                 .TryGetExactCoreOwnedNpcRuntimeStateSectionIds(
                     completeVector, graph,
@@ -3331,7 +3354,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds
                 .Concat(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds)
                 .Concat(coreOwnedInventoryAndMoneyIds)
-                .Concat(coreOwnedRuntimeStateIds),
+                .Concat(coreOwnedRuntimeStateIds)
+                .Concat(coreOwnedKnowledgeAndPlanIds),
             StringComparer.Ordinal);
         OwnerSectionCensusSnapshot[] exactCoreHostRemainder = completeVector
             .Where(section => !completeCoreOwnedIds.Contains(section.SectionId)).ToArray();
@@ -3410,6 +3434,100 @@ public sealed class DailyV1ApplicationSessionGateTests
                     section.SectionId == compatibilityRow.SectionId),
                 Is.SameAs(compatibilityRow),
                 "Mixed-roster capture preserves every host-owned selected/compatibility census fact.");
+
+        string omittedKnowledgeAndPlanId = coreOwnedKnowledgeAndPlanIds[0];
+        OwnerSectionCensusSnapshot[] partialKnowledgeAndPlanVector = completeVector
+            .Where(section => section.SectionId != omittedKnowledgeAndPlanId).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+                    graph, partialKnowledgeAndPlanVector, out _, out _),
+            Is.False, "A partial Knowledge/Plan family omission cannot pass as an exact owner vector.");
+
+        OwnerSectionCensusSnapshot selectedKnowledgeAndPlanRow = completeVector.Single(section =>
+            section.SectionId == omittedKnowledgeAndPlanId);
+        OwnerSectionCensusSnapshot substitutedKnowledgeAndPlanRow = new OwnerSectionCensusSnapshot(
+            selectedKnowledgeAndPlanRow.SectionId, selectedKnowledgeAndPlanRow.SchemaVersion,
+            selectedKnowledgeAndPlanRow.Role, new object(), selectedKnowledgeAndPlanRow.Cardinality,
+            selectedKnowledgeAndPlanRow.Revision);
+        OwnerSectionCensusSnapshot[] substitutedKnowledgeAndPlanVector = completeVector.Select(section =>
+            section.SectionId == omittedKnowledgeAndPlanId ? substitutedKnowledgeAndPlanRow : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+                    graph, substitutedKnowledgeAndPlanVector,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> substitutedResult,
+                    out string substitutedDiagnostic),
+            Is.True, substitutedDiagnostic);
+        Assert.That(substitutedResult.Single(section =>
+                section.SectionId == omittedKnowledgeAndPlanId),
+            Is.SameAs(substitutedKnowledgeAndPlanRow),
+            "A substituted source owner remains available for the existing P12 stale-token rejection.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcKnowledgeAndPlanSectionIds(
+                    substitutedKnowledgeAndPlanVector, graph,
+                    out IReadOnlyList<string> substitutedOmissionIds, out _),
+            Is.True);
+        Assert.That(substitutedOmissionIds, Is.Empty,
+            "A substituted source owner cannot be omitted from the Unity host remainder.");
+
+        OwnerSectionCensusSnapshot staleKnowledgeAndPlanRow = new OwnerSectionCensusSnapshot(
+            selectedKnowledgeAndPlanRow.SectionId, selectedKnowledgeAndPlanRow.SchemaVersion,
+            selectedKnowledgeAndPlanRow.Role, selectedKnowledgeAndPlanRow.OwnerInstanceIdentity,
+            selectedKnowledgeAndPlanRow.Cardinality, checked(selectedKnowledgeAndPlanRow.Revision + 1L));
+        OwnerSectionCensusSnapshot[] staleKnowledgeAndPlanVector = completeVector.Select(section =>
+            section.SectionId == omittedKnowledgeAndPlanId ? staleKnowledgeAndPlanRow : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+                    graph, staleKnowledgeAndPlanVector,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> staleKnowledgeAndPlanResult,
+                    out string staleKnowledgeAndPlanDiagnostic),
+            Is.True, staleKnowledgeAndPlanDiagnostic);
+        Assert.That(staleKnowledgeAndPlanResult.Single(section =>
+                section.SectionId == omittedKnowledgeAndPlanId),
+            Is.SameAs(staleKnowledgeAndPlanRow),
+            "A stale source revision remains visible to the existing P12 token checks.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcKnowledgeAndPlanSectionIds(
+                    staleKnowledgeAndPlanVector, graph,
+                    out IReadOnlyList<string> staleOmissionIds, out _),
+            Is.True);
+        Assert.That(staleOmissionIds, Is.Empty,
+            "A stale source revision cannot be omitted from the Unity host remainder.");
+
+        string[] compatibilityKnowledgeAndPlanPrefixes =
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcExplorableSiteKnowledgePrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyPlacesPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyConnectionsPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureOppositionPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureNotableItemsPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureCommonResourcesPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureAccessPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanPrefix
+        };
+        OwnerSectionCensusSnapshot[] compatibilityKnowledgeAndPlanRows =
+            compatibilityKnowledgeAndPlanPrefixes.Select(prefix => new OwnerSectionCensusSnapshot(
+                prefix + compatibilityRuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, new object(), 1, 0L)).ToArray();
+        OwnerSectionCensusSnapshot[] mixedKnowledgeAndPlanVector = completeVector
+            .Concat(compatibilityRows.Where(row =>
+                row.SectionId.StartsWith(DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix,
+                    StringComparison.Ordinal)
+                || row.SectionId.StartsWith(DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
+                    StringComparison.Ordinal)))
+            .Concat(compatibilityKnowledgeAndPlanRows).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+                    graph, mixedKnowledgeAndPlanVector,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> mixedKnowledgeAndPlanResult,
+                    out string mixedKnowledgeAndPlanDiagnostic),
+            Is.True, mixedKnowledgeAndPlanDiagnostic);
+        foreach (OwnerSectionCensusSnapshot compatibilityRow in compatibilityKnowledgeAndPlanRows)
+            Assert.That(mixedKnowledgeAndPlanResult.Single(section =>
+                    section.SectionId == compatibilityRow.SectionId),
+                Is.SameAs(compatibilityRow),
+                "Mixed-roster composition preserves every host-owned Knowledge/Plan compatibility owner.");
     }
 
     [Test]

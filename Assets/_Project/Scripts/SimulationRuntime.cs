@@ -11641,6 +11641,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             if (string.IsNullOrWhiteSpace(sectionId) || !coreOwnedIds.Add(sectionId))
                 return false;
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcKnowledgeAndPlanSectionIds(
+                    completeOwnerSections,
+                    graph,
+                    out IReadOnlyList<string> exactNpcKnowledgeAndPlanSectionIds,
+                    out _))
+            return false;
+        foreach (string sectionId in exactNpcKnowledgeAndPlanSectionIds)
+            if (string.IsNullOrWhiteSpace(sectionId) || !coreOwnedIds.Add(sectionId))
+                return false;
+
         DailyV1ExecutionBoundaryState boundaryState = dailyExecutionBoundary;
         ActorChoiceStore actorChoiceStore = boundaryState?.SelectedActorChoiceStore;
         if (actorChoiceStore == null)
@@ -11701,7 +11712,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         }
 
         if (coreOwnedIds.Count != 0
-            || remainder.Count != completeOwnerSections.Count - exactNpcOwnerSectionIds.Count - exactNpcRuntimeStateSectionIds.Count - 8)
+            || remainder.Count != completeOwnerSections.Count - 8
+                - exactNpcOwnerSectionIds.Count
+                - exactNpcRuntimeStateSectionIds.Count
+                - exactNpcKnowledgeAndPlanSectionIds.Count)
             return false;
 
         hostOwnedSections = Array.AsReadOnly(remainder.ToArray());
