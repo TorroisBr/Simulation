@@ -4782,6 +4782,47 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(fProjection.Rows, Has.Count.EqualTo(runtime.NpcRuntimes.Count));
             Assert.That(dProjection.Rows.Single(row => row.RuntimeId == unselected.RuntimeId), Is.Not.Null,
                 "The established compatibility path must capture the unselected member in the same whole roster.");
+
+            List<P12AOwnerSection> adapterNpcSections = new List<P12AOwnerSection>();
+            foreach (P12DNpcDRow dRow in dProjection.Rows)
+            {
+                P12DNpcFRow fRow = fProjection.Rows.Single(row => row.RuntimeId == dRow.RuntimeId);
+                Assert.That(P12ANpcOwnerCodec.TryEncode(dRow, fRow,
+                        operation.SourceWitness.TokenOwnerSections,
+                        out IReadOnlyList<P12AOwnerSection> encodedNpcSections,
+                        out P12AResult npcEncodingResult), Is.True,
+                    npcEncodingResult?.SectionCode ?? npcEncodingResult?.Code.ToString());
+                adapterNpcSections.AddRange(encodedNpcSections);
+            }
+            Assert.That(adapterNpcSections.Any(section =>
+                    section.Id == DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix
+                        + unselected.RuntimeId), Is.True,
+                "The adapter provides a serialized Inventory row for the unselected compatibility NPC.");
+
+            Assert.That(operation.TryEncodeCoreP12EOwnerSections(token.AbsoluteDay,
+                    out IReadOnlyList<P12AOwnerSection> coreP12ESections,
+                    out P12AResult coreP12EEncodingResult), Is.True,
+                coreP12EEncodingResult?.SectionCode ?? coreP12EEncodingResult?.Code.ToString());
+            Assert.That(operation.TryEncodeCoreP12FOwnerSections(
+                    out IReadOnlyList<P12AOwnerSection> coreP12FSections,
+                    out P12AResult coreP12FEncodingResult), Is.True,
+                coreP12FEncodingResult?.SectionCode ?? coreP12FEncodingResult?.Code.ToString());
+            Assert.That(DailyV1Application.TryMergeCoreOwnedContinuationSections(
+                    coreBoundSections, coreP12ESections, coreP12FSections, adapterNpcSections,
+                    out IReadOnlyList<P12AOwnerSection> mergedSections,
+                    out P12AResult mergeResult), Is.True,
+                mergeResult?.SectionCode ?? mergeResult?.Code.ToString());
+            Assert.That(mergedSections.Select(section => section.Id).Distinct(StringComparer.Ordinal).Count(),
+                Is.EqualTo(mergedSections.Count),
+                "The mixed Core/adapter image section set has exactly one section for each identity.");
+            foreach (P12AOwnerSection adapterNpcSection in adapterNpcSections)
+                Assert.That(mergedSections.Any(section => section.Id == adapterNpcSection.Id), Is.True,
+                    "Core section composition retains each complete whole-roster adapter NPC section.");
+            foreach (P12AOwnerSection coreSection in coreBoundSections
+                         .Concat(coreP12ESections).Concat(coreP12FSections))
+                Assert.That(mergedSections.Any(section => ReferenceEquals(section, coreSection)), Is.True,
+                    "The merged image retains each authoritative operation-bound Core section.");
+
             Assert.That(operation.TryRevalidate(out DailyCaptureEligibilityFailure revalidationFailure), Is.True,
                 revalidationFailure.ToString());
             Assert.That(application.ActiveSession, Is.SameAs(coreSession));

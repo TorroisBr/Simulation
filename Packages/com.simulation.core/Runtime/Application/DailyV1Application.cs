@@ -1694,7 +1694,9 @@ internal sealed class DailyV1Application
     /// <summary>
     /// Seals a completed P12 image using exact operation-bound Core sections.
     /// Unity may provide compatibility sections for owners that have not yet
-    /// migrated; overlapping Core sections are checked and replaced by Core.
+    /// migrated. Core-owned City, demographic, spatial, and available NPC
+    /// sections are checked and replaced by Core; a mixed roster keeps its
+    /// complete Unity NPC row projection for the members not present in Core.
     /// </summary>
     internal bool TryComposeCoreOwnedContinuationImage(
         DailyV1P12GContinuationSaveOperation operation,
@@ -1710,7 +1712,6 @@ internal sealed class DailyV1Application
         manifest = null;
         result = new P12AResult(P12AResultCode.CaptureRejected);
         if (operation == null || !operation.IsActive || !operation.IsOwnedBy(this)
-            || operation.CoreNpcOwnerSources == null
             || !ReferenceEquals(activeSessionGate.Current, operation.Session)
             || adapterEncodedOwnerSections == null)
         {
@@ -1724,10 +1725,10 @@ internal sealed class DailyV1Application
                 out bool includesNpcOwnerSections,
                 out result))
             return false;
-        if (!includesNpcOwnerSections)
+        if (includesNpcOwnerSections != (operation.CoreNpcOwnerSources != null))
         {
             result = new P12AResult(P12AResultCode.OwnerGraphRejected,
-                "p12d.core-selected-npc-sources");
+                "p12d.core-npc-source-coverage");
             return false;
         }
 
@@ -1747,18 +1748,57 @@ internal sealed class DailyV1Application
                 out result))
             return false;
 
+        if (!TryMergeCoreOwnedContinuationSections(
+                p12DOwnerSections,
+                p12EOwnerSections,
+                p12FOwnerSections,
+                adapterEncodedOwnerSections,
+                out IReadOnlyList<P12AOwnerSection> encodedOwnerSections,
+                out result))
+            return false;
+
+        return TryComposeContinuationImage(
+            operation,
+            unityCompatibility,
+            dotNetCompatibility,
+            politicalWorldRevision,
+            encodedOwnerSections,
+            out image,
+            out manifest,
+            out result);
+    }
+
+    /// <summary>
+    /// Combines operation-bound Core sections with adapter sections for owners
+    /// that remain outside the selected Core graph. Equivalent overlap is
+    /// accepted only after exact metadata, row, revision, and payload checks.
+    /// </summary>
+    internal static bool TryMergeCoreOwnedContinuationSections(
+        IReadOnlyList<P12AOwnerSection> coreP12DOwnerSections,
+        IReadOnlyList<P12AOwnerSection> coreP12EOwnerSections,
+        IReadOnlyList<P12AOwnerSection> coreP12FOwnerSections,
+        IReadOnlyList<P12AOwnerSection> adapterEncodedOwnerSections,
+        out IReadOnlyList<P12AOwnerSection> encodedOwnerSections,
+        out P12AResult result)
+    {
+        encodedOwnerSections = null;
+        result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        if (coreP12DOwnerSections == null || coreP12EOwnerSections == null
+            || coreP12FOwnerSections == null || adapterEncodedOwnerSections == null)
+            return false;
+
         Dictionary<string, P12AOwnerSection> coreSections =
             new Dictionary<string, P12AOwnerSection>(StringComparer.Ordinal);
-        if (!TryAddCoreSections(coreSections, p12DOwnerSections)
-            || !TryAddCoreSections(coreSections, p12EOwnerSections)
-            || !TryAddCoreSections(coreSections, p12FOwnerSections))
+        if (!TryAddCoreSections(coreSections, coreP12DOwnerSections)
+            || !TryAddCoreSections(coreSections, coreP12EOwnerSections)
+            || !TryAddCoreSections(coreSections, coreP12FOwnerSections))
         {
             result = new P12AResult(P12AResultCode.OwnerGraphRejected,
                 "p12a.core-owner-section-identity");
             return false;
         }
 
-        List<P12AOwnerSection> encodedOwnerSections =
+        List<P12AOwnerSection> merged =
             new List<P12AOwnerSection>(adapterEncodedOwnerSections.Count + coreSections.Count);
         HashSet<string> adapterSectionIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (P12AOwnerSection adapterSection in adapterEncodedOwnerSections)
@@ -1782,21 +1822,15 @@ internal sealed class DailyV1Application
                 continue;
             }
 
-            encodedOwnerSections.Add(adapterSection);
+            merged.Add(adapterSection);
         }
 
         foreach (KeyValuePair<string, P12AOwnerSection> coreSection in coreSections)
-            encodedOwnerSections.Add(coreSection.Value);
+            merged.Add(coreSection.Value);
 
-        return TryComposeContinuationImage(
-            operation,
-            unityCompatibility,
-            dotNetCompatibility,
-            politicalWorldRevision,
-            encodedOwnerSections,
-            out image,
-            out manifest,
-            out result);
+        encodedOwnerSections = merged.AsReadOnly();
+        result = null;
+        return true;
     }
 
     private static bool TryAddCoreSections(

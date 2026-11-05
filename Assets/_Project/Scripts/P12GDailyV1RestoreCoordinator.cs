@@ -1023,23 +1023,19 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 return false;
             }
 
-            composed = continuationSaveOperation.CoreNpcOwnerSources != null
-                ? continuationSaveOperation.TryComposeCoreOwnedImage(
-                    compatibility,
-                    compatibilityV2,
-                    sourceSession.Runtime.PoliticalWorldRevision,
-                    ownerSectionsEncoded,
-                    out image,
-                    out _,
-                    out result)
-                : continuationSaveOperation.TryComposeImage(
-                    compatibility,
-                    compatibilityV2,
-                    sourceSession.Runtime.PoliticalWorldRevision,
-                    ownerSectionsEncoded,
-                    out image,
-                    out _,
-                    out result);
+            // The Core application always composes its bound P12-D/E/F owners.
+            // When its NPC graph is partial, its P12-D encoder deliberately
+            // omits NPC rows; the complete adapter projection above remains
+            // available for those mixed-roster rows and is checked against
+            // every Core-owned overlapping section by the application.
+            composed = continuationSaveOperation.TryComposeCoreOwnedImage(
+                compatibility,
+                compatibilityV2,
+                sourceSession.Runtime.PoliticalWorldRevision,
+                ownerSectionsEncoded,
+                out image,
+                out _,
+                out result);
         }
         else
         {
