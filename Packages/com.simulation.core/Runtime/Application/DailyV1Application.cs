@@ -4272,8 +4272,7 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        if (expectedSession == null
-            && (!initialRestoreAdmissionVerified || !hostProjectionTransaction))
+        if (expectedSession == null && !initialRestoreAdmissionVerified)
         {
             diagnostic = "Initial Core restore publication requires the exact initial slot admission.";
             return false;
@@ -4353,6 +4352,86 @@ internal sealed class DailyV1Application
             }
 
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Verifies the exact initial-slot restore admission while holding the same
+    /// gate used to publish the reconstructed Core session and host projection.
+    /// </summary>
+    /// <summary>
+    /// Commits an admitted initial restore into the Core application without
+    /// requiring a host projection. The host boundary still supplies its exact
+    /// runtime execution ports; the active session and completed-boundary
+    /// admission are published by Core under the same session gate.
+    /// </summary>
+    internal bool TryCommitInitialRestoredCoreCandidate(
+        DailyV1ApplicationStartAdmission initialStartAdmission,
+        P12AContinuationImage image,
+        DailyV1ActiveRuntimeSession candidate,
+        IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (!IsForInitialRestoreAdmission(initialStartAdmission, image))
+            {
+                diagnostic = "Initial Core restore publication requires this application's exact admitted image token.";
+                return false;
+            }
+
+            if (candidate == null
+                || !candidate.TryGetInitialRestoreCommitProof(
+                    image, out DailyV1InitialRestoredImageCommitProof proof)
+                || candidateHostPorts == null
+                || !ReferenceEquals(candidate.ExecutionBoundaryState,
+                    candidateHostPorts.ExecutionState))
+            {
+                diagnostic = "Initial Core restore publication requires the exact private candidate, image proof, and host boundary.";
+                return false;
+            }
+
+            bool finalized;
+            DailyV1RestoredBoundaryFinalizationFailure finalizationFailure;
+            try
+            {
+                finalized = TryFinalizeRestoredCandidateBoundary(
+                    candidate,
+                    candidateHostPorts,
+                    proof.WorldId,
+                    proof.AbsoluteDay,
+                    proof.CompletedCoreSequence,
+                    proof.TargetOwnerSections,
+                    proof.TargetMutationEpoch,
+                    expectedSession: null,
+                    replacementOperation: null,
+                    proof.StageObserver,
+                    out _,
+                    out _,
+                    out finalizationFailure,
+                    out diagnostic);
+            }
+            catch (Exception exception) when (exception is ArgumentException
+                || exception is InvalidOperationException || exception is OverflowException
+                || exception is NullReferenceException)
+            {
+                diagnostic = "The Core application could not finalize the private restored boundary: "
+                    + exception.Message;
+                return false;
+            }
+
+            if (!finalized)
+            {
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "The Core application rejected initial restored-boundary finalization: "
+                        + finalizationFailure + ".";
+                return false;
+            }
+
+            bool committed = TryCommitRestoredCandidateCore(null, candidate, null, hostProjectionTransaction: false, initialRestoreAdmissionVerified: true, out diagnostic);
+            if (committed) candidate.ClearInitialRestoreCommitProof(proof);
+            return committed;
         }
     }
 

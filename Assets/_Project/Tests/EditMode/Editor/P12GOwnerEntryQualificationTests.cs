@@ -200,10 +200,16 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             Is.SameAs(candidateBoundaryBeforeAdmissionCommit),
             "Rejected admission must not bind or replace the candidate's runtime boundary.");
 
-        Assert.That(restoreApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+        Assert.That(restoreApplication.TryCommitInitialRestoredCoreCandidate(
                 initialStartAdmission, image, restored.CoreRuntimeSession,
-                restored, restored.Runtime, out string publishDiagnostic),
+                restored.Runtime, out string publishDiagnostic),
             Is.True, publishDiagnostic);
+        Assert.That(restoreApplication.ActiveSession,
+            Is.SameAs(restored.CoreRuntimeSession),
+            "The initial restore publishes the authoritative Core session directly.");
+        Assert.That(restoreApplication.TryGetPublishedHostProjection(
+                restored.CoreRuntimeSession, out _), Is.False,
+            "A Core-owned session does not require a Unity projection to become active.");
         Assert.That(restoreStages.Count(stage =>
                 stage == P12GDailyV1RestoreStage.CandidateGuardBound), Is.EqualTo(1));
         Assert.That(restoreStages.Count(stage =>
