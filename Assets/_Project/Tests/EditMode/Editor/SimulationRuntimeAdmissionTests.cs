@@ -3510,6 +3510,15 @@ public sealed class SimulationRuntimeAdmissionTests
                 owner => owner.ActionSlot.Revision,
                 StringComparer.Ordinal);
 
+            IDailyV1SelectedRuntimeAdvanceHostPorts preAdvanceHostPorts =
+                (IDailyV1SelectedRuntimeAdvanceHostPorts)bootstrap.Runtime;
+            Assert.That(preAdvanceHostPorts.TryCaptureOwnerSectionCensus(
+                    DailyV1CaptureScopeAllowance.None,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> initialHostOwnedSections,
+                    out _, out DailyCaptureEligibilityFailure initialHostCaptureFailure),
+                Is.True, "Initial host remainder capture: " + initialHostCaptureFailure);
+            Assert.That(initialHostOwnedSections, Is.Not.Null);
+
             bootstrap.Runtime.AdvanceDay();
             Assert.That(bootstrap.TryPublishRestoredSession(activeSession, activeSession), Is.False,
                 "A normal completed advance cannot be relabeled as restored-continuation admission.");

@@ -11701,7 +11701,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         }
 
         if (coreOwnedIds.Count != 0
-            || remainder.Count != completeOwnerSections.Count - exactNpcOwnerSectionIds.Count - 8)
+            || remainder.Count != completeOwnerSections.Count - exactNpcOwnerSectionIds.Count - exactNpcRuntimeStateSectionIds.Count - 8)
             return false;
 
         hostOwnedSections = Array.AsReadOnly(remainder.ToArray());
