@@ -1,6 +1,44 @@
 using System;
 using System.Collections.Generic;
 
+/// <summary>
+/// Builds the site-free selected Daily-v1 chronicle projection from the same
+/// Core definition and owner graph used by runtime execution and P12 restore.
+/// Legacy and site-bearing profiles retain their host-specific formatter.
+/// </summary>
+internal static class DailyV1SelectedNpcChronicleFormatter
+{
+    internal static NpcChronicleFormatter Create(DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph == null) throw new ArgumentNullException(nameof(graph));
+        DailyV1EffectiveDefinitions definitions = graph.Definitions;
+        return new NpcChronicleFormatter(
+            runtimeId => graph.TryGetNpcOwner(runtimeId, out DailyV1NpcRuntimeOwners npc)
+                ? npc.Definition.Values.name
+                : null,
+            runtimeId => ResolveCityName(graph, runtimeId),
+            definitionId => definitions.Items.TryGetValue(
+                definitionId ?? string.Empty, out DailyV1ItemDefinition item)
+                    ? item.Values.itemName
+                    : null,
+            definitionId => definitions.Actions.TryGetValue(
+                definitionId ?? string.Empty, out DailyV1ActionDefinition action)
+                    ? action.Values.actionName
+                    : null);
+    }
+
+    private static string ResolveCityName(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string locationRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(locationRuntimeId)) return null;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            if (string.Equals(city.LocationRuntimeId, locationRuntimeId, StringComparison.Ordinal))
+                return city.Definition.Values.cityName;
+        return null;
+    }
+}
+
 public enum NpcChronicleEntryType
 {
     Decision,

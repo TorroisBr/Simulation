@@ -1839,14 +1839,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             p12CrimeSocialAppraisalWorldState: stagedE.CrimeSocialAppraisal);
 
         NpcChronicleService chronicles = new NpcChronicleService(decisions, eventStore);
-        NpcChronicleFormatter formatter = TesteSimulacao.CreateNpcChronicleFormatter(
-            stagedD.RuntimeIdentities,
-            stagedD.SpatialNetwork,
-            cityByLocation,
-            stagedD.EmptyExplorableSites,
-            stagedD.Cities,
-            config,
-            selectedDefinitions);
+        NpcChronicleFormatter formatter = DailyV1SelectedNpcChronicleFormatter.Create(
+            runtime.SelectedRuntimeOwnerGraph);
         SimulationBootstrapComposition composition = new SimulationBootstrapComposition(
             stagedC.WorldIdentity,
             stagedC.GenesisManifest,

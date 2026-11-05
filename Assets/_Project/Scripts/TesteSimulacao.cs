@@ -1013,7 +1013,11 @@ public class TesteSimulacao : MonoBehaviour
                             throw new System.InvalidOperationException("P10-B atomic topology publication failed: " + p10BCommitDiagnostic);
                         if (p10BPreparedRuin != null)
                             AddExplorableSiteRuntimeByDefinition(p10BPreparedRuin.Site.DefinitionId, p10BPreparedRuin.Site);
-                        npcChronicleFormatter = CreateNpcChronicleFormatter(
+                        npcChronicleFormatter = selectedCoreGenesis != null
+                            && !includeP10RuinLocalTopology
+                            && !includeP10BGeneratedRuin
+                            ? DailyV1SelectedNpcChronicleFormatter.Create(selectedCoreGenesis.OwnerGraph)
+                            : CreateNpcChronicleFormatter(
                             runtimeIdentityRegistry,
                             spatialNetwork,
                             cityRuntimeByLocation,

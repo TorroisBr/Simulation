@@ -939,7 +939,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             requireP12RuntimeIdentitySpatialCensusOwners: true,
             p12CrimeSocialAppraisalWorldState: stagedE.CrimeSocialAppraisal);
 
-        NpcChronicleFormatter formatter = TesteSimulacao.CreateNpcChronicleFormatter(
+        NpcChronicleFormatter unityProjectionFormatter = TesteSimulacao.CreateNpcChronicleFormatter(
             stagedD.RuntimeIdentities,
             stagedD.SpatialNetwork,
             cityByLocation,
@@ -947,6 +947,41 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             stagedD.Cities,
             config,
             anchor.Composition.SelectedDefinitions);
+        DailyV1SelectedRuntimeOwnerGraph formatterGraph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(formatterGraph, Is.Not.Null, "The restored runtime must retain its exact selected owner graph.");
+        DailyV1NpcRuntimeOwners formatterNpc = formatterGraph.Npcs.FirstOrDefault();
+        DailyV1CityRuntimeOwners formatterCity = formatterGraph.Cities.FirstOrDefault();
+        DailyV1ItemDefinition formatterItem = formatterGraph.Definitions.Items.Values.FirstOrDefault();
+        DailyV1ActionDefinition formatterAction = formatterGraph.Definitions.Actions.Values.FirstOrDefault();
+        Assert.That(formatterNpc, Is.Not.Null);
+        Assert.That(formatterCity, Is.Not.Null);
+        Assert.That(formatterItem, Is.Not.Null);
+        Assert.That(formatterAction, Is.Not.Null);
+
+        NpcChronicleFormatter formatter = DailyV1SelectedNpcChronicleFormatter.Create(formatterGraph);
+        NpcDecisionRecord formatterActionDecision = new NpcDecisionRecord(
+            "p12g-formatter-action-parity", 1L, 1L, formatterNpc.RuntimeId,
+            NpcDecisionType.Action, NpcDecisionOrigin.Autonomous,
+            formatterAction.DefinitionId, null, null, null);
+        NpcChronicleEntry formatterActionEntry = NpcChronicleEntry.FromDecision(
+            formatterActionDecision, NpcChronicleRelation.SelfDecision);
+        Assert.That(formatter.Format(formatterActionEntry, formatterNpc.RuntimeId),
+            Is.EqualTo(unityProjectionFormatter.Format(formatterActionEntry, formatterNpc.RuntimeId)),
+            "Core formatting must preserve actor and action names from the exact selected graph.");
+
+        CommercialDecisionEvidence formatterTradeEvidence = new CommercialDecisionEvidence(
+            formatterItem.DefinitionId, formatterCity.LocationRuntimeId,
+            formatterCity.LocationRuntimeId, formatterCity.LocationRuntimeId,
+            null, null, null, 1, 1f, 1f, 0f, 0f, 0f, 0f);
+        NpcDecisionRecord formatterTradeDecision = new NpcDecisionRecord(
+            "p12g-formatter-trade-parity", 1L, 2L, formatterNpc.RuntimeId,
+            NpcDecisionType.TradePurchase, NpcDecisionOrigin.Autonomous,
+            null, null, null, formatterTradeEvidence);
+        NpcChronicleEntry formatterTradeEntry = NpcChronicleEntry.FromDecision(
+            formatterTradeDecision, NpcChronicleRelation.SelfDecision);
+        Assert.That(formatter.Format(formatterTradeEntry, formatterNpc.RuntimeId),
+            Is.EqualTo(unityProjectionFormatter.Format(formatterTradeEntry, formatterNpc.RuntimeId)),
+            "Core formatting must preserve item and City names from the exact selected graph.");
         TravelPartySystem exactGroupTravel = travelParties;
         SimulationBootstrapComposition composition = new SimulationBootstrapComposition(
             stagedC.WorldIdentity,
