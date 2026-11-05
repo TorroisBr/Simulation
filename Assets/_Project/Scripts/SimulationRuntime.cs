@@ -11517,10 +11517,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        // Core owns these P12-F and runtime-allocator rows. Keep the Unity
-        // protocol's full internal provider inventory for quiescence and
-        // operation baselines, but do not return Core-owned values or
-        // identities across the selected host port.
+        // Core owns the selected P12-F, allocator, and exact-roster NPC
+        // Inventory/MoneyAccount rows. Keep the Unity protocol's full
+        // internal provider inventory for quiescence and operation baselines,
+        // but do not return those Core-owned values or identities across the
+        // selected host port. Mixed-roster NPC rows remain intact.
         if (HasExactCoreOwnedSelectedCensusSources())
         {
             if (!TryCreateCoreOwnedSelectedRuntimeHostRemainder(
@@ -11617,6 +11618,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         if (coreOwnedIds.Count != 8)
             return false;
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcInventoryAndMoneyAccountSectionIds(
+                    completeOwnerSections,
+                    graph,
+                    out IReadOnlyList<string> exactNpcOwnerSectionIds,
+                    out _))
+            return false;
+        foreach (string sectionId in exactNpcOwnerSectionIds)
+            if (string.IsNullOrWhiteSpace(sectionId) || !coreOwnedIds.Add(sectionId))
+                return false;
+
         DailyV1ExecutionBoundaryState boundaryState = dailyExecutionBoundary;
         ActorChoiceStore actorChoiceStore = boundaryState?.SelectedActorChoiceStore;
         if (actorChoiceStore == null)
@@ -11677,7 +11689,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         }
 
         if (coreOwnedIds.Count != 0
-            || remainder.Count != completeOwnerSections.Count - 8)
+            || remainder.Count != completeOwnerSections.Count - exactNpcOwnerSectionIds.Count - 8)
             return false;
 
         hostOwnedSections = Array.AsReadOnly(remainder.ToArray());

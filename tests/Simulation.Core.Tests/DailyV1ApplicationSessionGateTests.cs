@@ -3121,7 +3121,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void CoreP12FCensusAcceptsItsExactP12FAndAllocatorHostOmissionAndReadsLiveOwners()
+    public void CoreP12FCensusRecomposesExactSelectedNpcInventoryAndMoneyAccountHostOmission()
     {
         CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session,
@@ -3130,17 +3130,33 @@ public sealed class DailyV1ApplicationSessionGateTests
         ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
         OwnerSectionCensusSnapshot[] completeVector =
             CreateCoreBoundCompleteOwnerSectionVector(session);
+        Assert.That(graph.Npcs.Count, Is.GreaterThan(0));
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcInventoryAndMoneyAccountSectionIds(
+                    completeVector, graph,
+                    out IReadOnlyList<string> coreOwnedNpcSectionIds,
+                    out string npcOmissionDiagnostic),
+            Is.True, npcOmissionDiagnostic);
+        Assert.That(coreOwnedNpcSectionIds, Has.Count.EqualTo(graph.Npcs.Count * 2));
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            Assert.That(coreOwnedNpcSectionIds, Does.Contain(
+                DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + npc.RuntimeId));
+            Assert.That(coreOwnedNpcSectionIds, Does.Contain(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + npc.RuntimeId));
+        }
         string[] coreOwnedIds = DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds
             .Concat(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds)
+            .Concat(coreOwnedNpcSectionIds)
             .ToArray();
         HashSet<string> coreOwnedIdSet = new HashSet<string>(coreOwnedIds, StringComparer.Ordinal);
-        Assert.That(coreOwnedIds, Has.Length.EqualTo(8));
-        Assert.That(coreOwnedIdSet, Has.Count.EqualTo(8),
-            "The five Core P12-F rows and three allocator rows have disjoint exact identities.");
+        Assert.That(coreOwnedIds, Has.Length.EqualTo(8 + graph.Npcs.Count * 2));
+        Assert.That(coreOwnedIdSet, Has.Count.EqualTo(coreOwnedIds.Length),
+            "Core-owned P12-F, allocator, Inventory, and MoneyAccount rows have disjoint exact identities.");
 
         OwnerSectionCensusSnapshot[] hostRemainder = completeVector
             .Where(section => !coreOwnedIdSet.Contains(section.SectionId)).ToArray();
-        Assert.That(hostRemainder, Has.Length.EqualTo(completeVector.Length - 8));
+        Assert.That(hostRemainder, Has.Length.EqualTo(completeVector.Length - coreOwnedIds.Length));
         Assert.That(hostRemainder.Any(section => coreOwnedIdSet.Contains(section.SectionId)), Is.False);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 graph, actorChoices, hostRemainder,
@@ -3169,6 +3185,41 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(actual.Cardinality, Is.EqualTo(witness.Cardinality), witness.SectionId);
             Assert.That(actual.Revision, Is.EqualTo(witness.Revision), witness.SectionId);
         }
+
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            OwnerSectionCensusWitness inventory = DailyV1NpcOwnerCensusProviders
+                .CreateInventoryProviders(new[] { npc }).Single().GetCurrentCensus();
+            OwnerSectionCensusWitness moneyAccount = DailyV1NpcOwnerCensusProviders
+                .CreateMoneyAccountProviders(new[] { npc }).Single().GetCurrentCensus();
+            foreach (OwnerSectionCensusWitness witness in new[] { inventory, moneyAccount })
+            {
+                OwnerSectionCensusSnapshot actual = composed.Single(section =>
+                    section.SectionId == witness.SectionId);
+                Assert.That(actual.Role, Is.EqualTo(OwnerSectionRole.Required), witness.SectionId);
+                Assert.That(actual.SchemaVersion, Is.EqualTo(witness.SchemaVersion), witness.SectionId);
+                Assert.That(actual.OwnerInstanceIdentity, Is.SameAs(witness.OwnerInstanceIdentity), witness.SectionId);
+                Assert.That(actual.Cardinality, Is.EqualTo(witness.Cardinality), witness.SectionId);
+                Assert.That(actual.Revision, Is.EqualTo(witness.Revision), witness.SectionId);
+            }
+        }
+
+        OwnerSectionCensusSnapshot staleNpcInventory = completeVector
+            .Where(section => section.SectionId == coreOwnedNpcSectionIds[0])
+            .Select(section => new OwnerSectionCensusSnapshot(
+                section.SectionId, section.SchemaVersion, section.Role,
+                section.OwnerInstanceIdentity, section.Cardinality, section.Revision + 1L))
+            .Single();
+        OwnerSectionCensusSnapshot[] staleNpcVector = completeVector.Select(section =>
+            section.SectionId == staleNpcInventory.SectionId ? staleNpcInventory : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcInventoryAndMoneyAccountSectionIds(
+                    staleNpcVector, graph,
+                    out IReadOnlyList<string> staleNpcOmissionIds,
+                    out string staleNpcDiagnostic),
+            Is.True, staleNpcDiagnostic);
+        Assert.That(staleNpcOmissionIds, Is.Empty,
+            "Stale owner evidence must stay in the host vector for the established P12 boundary checks.");
 
         foreach (string coreOwnedId in coreOwnedIds)
         {

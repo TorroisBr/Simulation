@@ -3522,11 +3522,17 @@ public sealed class SimulationRuntimeAdmissionTests
             string[] coreOwnedHostPortSectionIds =
                 DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds
                     .Concat(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds)
+                    .Concat(selectedOwnerGraph.Npcs.SelectMany(owner => new[]
+                    {
+                        DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + owner.RuntimeId,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + owner.RuntimeId
+                    }))
                     .ToArray();
             HashSet<string> coreOwnedHostPortSectionIdSet = new HashSet<string>(
                 coreOwnedHostPortSectionIds, StringComparer.Ordinal);
-            Assert.That(coreOwnedHostPortSectionIds, Has.Length.EqualTo(8));
-            Assert.That(coreOwnedHostPortSectionIdSet, Has.Count.EqualTo(8));
+            Assert.That(coreOwnedHostPortSectionIds,
+                Has.Length.EqualTo(8 + selectedOwnerGraph.Npcs.Count * 2));
+            Assert.That(coreOwnedHostPortSectionIdSet, Has.Count.EqualTo(coreOwnedHostPortSectionIds.Length));
             IDailyV1SelectedRuntimeAdvanceHostPorts selectedHostPorts =
                 (IDailyV1SelectedRuntimeAdvanceHostPorts)bootstrap.Runtime;
             Assert.That(selectedHostPorts.TryCaptureOwnerSectionCensus(
@@ -3536,8 +3542,9 @@ public sealed class SimulationRuntimeAdmissionTests
                     out DailyCaptureEligibilityFailure hostCaptureFailure),
                 Is.True, hostCaptureFailure.ToString());
             Assert.That(hostMutationEpoch, Is.EqualTo(completedToken.MutationEpoch));
-            Assert.That(hostOwnedSections, Has.Count.EqualTo(completedToken.OwnerSections.Count - 8),
-                "The Unity host returns its remainder after Core recomposes the exact five P12-F and three allocator rows.");
+            Assert.That(hostOwnedSections, Has.Count.EqualTo(
+                    completedToken.OwnerSections.Count - coreOwnedHostPortSectionIds.Length),
+                "The Unity host returns its remainder after Core recomposes P12-F, allocator, and exact selected NPC Inventory/MoneyAccount rows.");
             foreach (string coreOwnedSectionId in coreOwnedHostPortSectionIds)
                 Assert.That(hostOwnedSections.Any(section => section.SectionId == coreOwnedSectionId),
                     Is.False, coreOwnedSectionId);
@@ -4632,6 +4639,33 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(epochAfter, Is.GreaterThan(epochBefore));
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalCensusFailure), Is.True,
             finalCensusFailure.ToString());
+
+        IDailyV1SelectedRuntimeAdvanceHostPorts selectedRuntimeHostPorts =
+            (IDailyV1SelectedRuntimeAdvanceHostPorts)runtime;
+        Assert.That(selectedRuntimeHostPorts.TryCaptureOwnerSectionCensus(
+                DailyV1CaptureScopeAllowance.None,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> mixedRosterHostSections,
+                out _,
+                out DailyCaptureEligibilityFailure mixedRosterCaptureFailure),
+            Is.True, mixedRosterCaptureFailure.ToString());
+        Assert.That(mixedRosterHostSections.Count(section =>
+                section.SectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix,
+                    StringComparison.Ordinal)),
+            Is.EqualTo(runtime.NpcRuntimes.Count),
+            "A mixed roster keeps every selected and compatibility Inventory row in the whole-host vector.");
+        Assert.That(mixedRosterHostSections.Count(section =>
+                section.SectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
+                    StringComparison.Ordinal)),
+            Is.EqualTo(runtime.NpcRuntimes.Count),
+            "A mixed roster keeps every selected and compatibility MoneyAccount row in the whole-host vector.");
+        Assert.That(mixedRosterHostSections.Any(section =>
+                section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix
+                    + unselected.RuntimeId), Is.True);
+        Assert.That(mixedRosterHostSections.Any(section =>
+                section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix
+                    + unselected.RuntimeId), Is.True);
 
         DailyV1Application application = ReadPrivateField<DailyV1Application>(host, "dailyV1Application");
         DailyV1ActiveRuntimeSession coreSession = session.CoreRuntimeSession;
