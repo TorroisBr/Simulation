@@ -2037,55 +2037,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         IReadOnlyList<OwnerSectionCensusSnapshot> sections,
         out string diagnostic)
     {
-        diagnostic = null;
-        if (composition?.Expeditions == null || sections == null)
-        {
-            diagnostic = "The selected profile's Expedition owner or census is unavailable.";
-            return false;
-        }
-
-        OwnerSectionCensusWitness witness;
-        try
-        {
-            witness = new ExpeditionCensusProvider(composition.Expeditions).GetCurrentCensus();
-        }
-        catch (InvalidOperationException exception)
-        {
-            diagnostic = "The selected profile's Expedition census is inconsistent: " + exception.Message;
-            return false;
-        }
-
-        OwnerSectionCensusSnapshot match = null;
-        foreach (OwnerSectionCensusSnapshot section in sections)
-        {
-            if (!string.Equals(section?.SectionId, ExpeditionCensusProvider.SectionId, StringComparison.Ordinal))
-                continue;
-            if (match != null)
-            {
-                diagnostic = "The owner vector duplicates the selected profile's Expedition section.";
-                return false;
-            }
-            match = section;
-        }
-
-        if (witness == null
-            || witness.SchemaVersion != ExpeditionCensusProvider.SchemaVersion
-            || witness.Cardinality != 0
-            || witness.Revision < 0L
-            || !ReferenceEquals(witness.OwnerInstanceIdentity, composition.Expeditions)
-            || match == null
-            || match.Role != OwnerSectionRole.Required
-            || match.SchemaVersion != witness.SchemaVersion
-            || match.Cardinality != 0
-            || match.Revision < 0L
-            || match.Revision != witness.Revision
-            || !ReferenceEquals(match.OwnerInstanceIdentity, witness.OwnerInstanceIdentity))
-        {
-            diagnostic = "The required p12f.expeditions row must identify the exact live ExpeditionStore at a matching revision and cardinality zero.";
-            return false;
-        }
-
-        return true;
+        return DailyV1Application.TryValidateRestoredExpeditionExactZero(
+            composition?.Expeditions, sections, out diagnostic);
     }
 
     internal static bool TryValidateAllocatorHighWater(
@@ -2108,6 +2061,9 @@ internal static partial class P12GDailyV1RestoreCoordinator
             diagnostic = "A complete staged composition is required for allocator high-water validation.";
             return false;
         }
+        if (candidate.CoreRuntimeSession != null)
+            return DailyV1Application.TryValidateAllocatorHighWater(
+                candidate.CoreRuntimeSession, out diagnostic);
 
         RuntimeIdAllocatorSnapshot allocator = candidate.Composition.RuntimeIdAllocator.CaptureSnapshot();
         List<KeyValuePair<string, string>> allocatedIdentityValues = new List<KeyValuePair<string, string>>();
@@ -2136,7 +2092,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         foreach (ExpeditionRuntime expedition in candidate.Composition.Expeditions.ActiveExpeditions)
             retainedDecisionReferences.Add(expedition?.OriginDecisionId);
 
-        return TryValidateAllocatorHighWater(
+        return DailyV1Application.TryValidateAllocatorHighWater(
             allocator, allocatedIdentityValues, retainedDecisionReferences, out diagnostic);
     }
 
@@ -2145,8 +2101,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         IReadOnlyList<KeyValuePair<string, string>> allocatedIdentityValues,
         out string diagnostic)
     {
-        return TryValidateAllocatorHighWater(
-            allocator, allocatedIdentityValues, Array.Empty<string>(), out diagnostic);
+        return DailyV1Application.TryValidateAllocatorHighWater(
+            allocator, allocatedIdentityValues, out diagnostic);
     }
 
     internal static bool TryValidateAllocatorHighWater(
@@ -2155,73 +2111,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         IReadOnlyList<string> retainedDecisionReferences,
         out string diagnostic)
     {
-        diagnostic = null;
-        if (allocator?.Counters == null || allocatedIdentityValues == null || retainedDecisionReferences == null)
-        {
-            diagnostic = "A staged RuntimeIdAllocator and retained identity inventory are required.";
-            return false;
-        }
-        Dictionary<string, long> nextSequenceByFamily = new Dictionary<string, long>(StringComparer.Ordinal);
-        foreach (RuntimeIdAllocatorCounterSnapshot counter in allocator.Counters)
-        {
-            if (counter == null || string.IsNullOrWhiteSpace(counter.FamilyId)
-                || counter.NextSequence <= 0L
-                || !nextSequenceByFamily.TryAdd(counter.FamilyId, counter.NextSequence))
-            {
-                diagnostic = "The staged RuntimeIdAllocator continuation counters contain an invalid or duplicate family.";
-                return false;
-            }
-        }
-
-        HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (KeyValuePair<string, string> identity in allocatedIdentityValues)
-        {
-            string expectedPrefix = identity.Key + "-";
-            if (string.IsNullOrWhiteSpace(identity.Value)
-                || !nextSequenceByFamily.TryGetValue(identity.Key, out long nextSequence)
-                || !identity.Value.StartsWith(expectedPrefix, StringComparison.Ordinal)
-                || !long.TryParse(identity.Value.Substring(expectedPrefix.Length), NumberStyles.None,
-                    CultureInfo.InvariantCulture, out long allocatedSequence)
-                || allocatedSequence <= 0L
-                || allocatedSequence >= nextSequence
-                || !seen.Add(identity.Key + ":" + identity.Value))
-            {
-                diagnostic = "The staged RuntimeIdAllocator next/high-water mark does not continue past every retained "
-                    + identity.Key + " identity ('" + identity.Value + "').";
-                return false;
-            }
-        }
-
-        const string decisionPrefix = "decision-";
-        foreach (string decisionReference in retainedDecisionReferences)
-        {
-            // These are retained opaque facts, not lookup keys. Only exact values the
-            // allocator can emit contribute a high-water requirement; do not resolve
-            // them through the intentionally omitted NpcDecisionStore.
-            if (string.IsNullOrWhiteSpace(decisionReference)
-                || !decisionReference.StartsWith(decisionPrefix, StringComparison.Ordinal)
-                || !long.TryParse(
-                    decisionReference.Substring(decisionPrefix.Length),
-                    NumberStyles.None,
-                    CultureInfo.InvariantCulture,
-                    out long allocatedSequence)
-                || allocatedSequence <= 0L
-                || !string.Equals(
-                    decisionReference,
-                    decisionPrefix + allocatedSequence.ToString("D6", CultureInfo.InvariantCulture),
-                    StringComparison.Ordinal))
-                continue;
-
-            if (!nextSequenceByFamily.TryGetValue("decision", out long nextSequence)
-                || allocatedSequence >= nextSequence)
-            {
-                diagnostic = "The staged RuntimeIdAllocator next/high-water mark does not continue past a retained opaque decision reference ('"
-                    + decisionReference + "').";
-                return false;
-            }
-        }
-
-        return true;
+        return DailyV1Application.TryValidateAllocatorHighWater(
+            allocator, allocatedIdentityValues, retainedDecisionReferences, out diagnostic);
     }
 
     private static bool TryValidateActorChoiceTemporalZeroWitness(

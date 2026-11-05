@@ -330,9 +330,10 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 }
             }
 
-            if (!TryValidateDailyV1ExpeditionExactZero(candidate.Composition, targetSections,
-                    out diagnostic)
-                || !TryValidateAllocatorHighWater(candidate, out diagnostic)
+            if ((application == null
+                    && (!TryValidateDailyV1ExpeditionExactZero(candidate.Composition, targetSections,
+                            out diagnostic)
+                        || !TryValidateAllocatorHighWater(candidate, out diagnostic)))
                 || !TryValidateTargetSentinels(candidate.Composition, targetSections, out diagnostic)
                 || !TryValidatePoliticalKnowledgeBindings(
                     stagedE.UnresolvedPoliticalKnowledgeBindings, targetRuntime, out diagnostic))

@@ -16,7 +16,8 @@ internal enum P12GDailyV1OwnerVectorFailure
     InvalidEmptyDisposition,
     OwnerAliasMismatch,
     OwnerVectorChanged,
-    MutationEpochChanged
+    MutationEpochChanged,
+    CoreTargetInvariantFailure
 }
 
 /// <summary>

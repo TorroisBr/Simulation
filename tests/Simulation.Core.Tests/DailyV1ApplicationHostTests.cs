@@ -491,6 +491,59 @@ public sealed class DailyV1ApplicationHostTests
             "Preparing the existing application must not publish its unbound session.");
     }
     [Test]
+    public void CoreRestoredTargetInvariantGateUsesExactCoreExpeditionOwnerAndAllocator()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "restore-target-invariant-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, unityV1Identity: UnityIdentity());
+        Assert.That(DailyV1Application.TryPrepareStart(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out _, out string startDiagnostic), Is.True, startDiagnostic);
+
+        DailyV1ActiveRuntimeSession session = preparation.CoreSession;
+        OwnerSectionCensusWitness witness = new ExpeditionCensusProvider(
+            session.OwnerGraph.Expeditions).GetCurrentCensus();
+        OwnerSectionCensusSnapshot expedition = new OwnerSectionCensusSnapshot(
+            witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+            witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision);
+
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session, new[] { expedition }, out string diagnostic), Is.True, diagnostic);
+
+        OwnerSectionCensusSnapshot invalidExpedition = new OwnerSectionCensusSnapshot(
+            expedition.SectionId, expedition.SchemaVersion, expedition.Role,
+            expedition.OwnerInstanceIdentity, expedition.Cardinality + 1, expedition.Revision);
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session, new[] { invalidExpedition }, out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain("cardinality zero"));
+    }
+
+    [Test]
+    public void CoreAllocatorHighWaterRejectsASequenceThatWouldReuseRetainedIdentity()
+    {
+        RuntimeIdAllocatorSnapshot stale = new RuntimeIdAllocatorSnapshot(
+            RuntimeIdAllocatorSnapshot.CurrentSchemaId,
+            RuntimeIdAllocatorSnapshot.CurrentSchemaVersion,
+            new[] { new RuntimeIdAllocatorCounterSnapshot("npc", 1L) });
+
+        Assert.That(DailyV1Application.TryValidateAllocatorHighWater(
+            stale,
+            new[] { new KeyValuePair<string, string>("npc", "npc-000001") },
+            Array.Empty<string>(), out string diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain("does not continue past"));
+
+        RuntimeIdAllocatorSnapshot current = new RuntimeIdAllocatorSnapshot(
+            RuntimeIdAllocatorSnapshot.CurrentSchemaId,
+            RuntimeIdAllocatorSnapshot.CurrentSchemaVersion,
+            new[] { new RuntimeIdAllocatorCounterSnapshot("npc", 2L) });
+        Assert.That(DailyV1Application.TryValidateAllocatorHighWater(
+            current,
+            new[] { new KeyValuePair<string, string>("npc", "npc-000001") },
+            Array.Empty<string>(), out diagnostic), Is.True, diagnostic);
+    }
+    [Test]
     public void CoreStartPreparationOwnsNoSaveDecisionAndPreparesOneUnpublishedGenesis()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
