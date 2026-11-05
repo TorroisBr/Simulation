@@ -2780,6 +2780,8 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        if (!graph.TryValidateRestoredPersonNpcGenealogyBindings(out diagnostic))
+            return false;
         if (!graph.TryValidateRestoredTravelPartyBindings(out diagnostic))
             return false;
         if (!TryValidateAllocatorHighWater(candidateSession, out diagnostic))

@@ -521,6 +521,21 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
+    public void RestoredCoreOwnerGraphRejectsGenealogyEndpointsOutsidePersonStore()
+    {
+        PersonStore people = new PersonStore();
+        GenealogyStore genealogy = new GenealogyStore();
+        Assert.That(genealogy.TryAddParentage(
+            new PersonId("missing-parent"), new PersonId("missing-child"), out _), Is.True);
+
+        Assert.That(
+            DailyV1SelectedRuntimeOwnerGraph.TryValidateRestoredPersonNpcGenealogyBindings(
+                people, Array.Empty<DailyV1NpcRuntimeOwners>(), genealogy, out string diagnostic),
+            Is.False);
+        Assert.That(diagnostic, Does.Contain("Genealogy"));
+    }
+
+    [Test]
     public void CoreAllocatorHighWaterRejectsASequenceThatWouldReuseRetainedIdentity()
     {
         RuntimeIdAllocatorSnapshot stale = new RuntimeIdAllocatorSnapshot(

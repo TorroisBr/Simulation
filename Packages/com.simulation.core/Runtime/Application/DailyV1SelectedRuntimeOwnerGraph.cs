@@ -1299,6 +1299,91 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     }
 
     /// <summary>
+    /// Validates the exact Core PersonStore/NPC-owner/Genealogy relationships
+    /// retained by a restored selected owner graph. Unity validates its
+    /// projection references separately.
+    /// </summary>
+    internal bool TryValidateRestoredPersonNpcGenealogyBindings(out string diagnostic)
+    {
+        return TryValidateRestoredPersonNpcGenealogyBindings(
+            PersonStore, npcs, GenealogyStore, out diagnostic);
+    }
+
+    internal static bool TryValidateRestoredPersonNpcGenealogyBindings(
+        PersonStore people,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcOwners,
+        GenealogyStore genealogy,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (people == null || npcOwners == null || genealogy == null)
+        {
+            diagnostic = "The Core PersonStore, NPC owner roster, and Genealogy owner are required.";
+            return false;
+        }
+
+        HashSet<string> npcRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1NpcRuntimeOwners npc in npcOwners)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || !npcRuntimeIds.Add(npc.RuntimeId))
+            {
+                diagnostic = "The Core NPC owner roster has a missing or duplicate RuntimeId.";
+                return false;
+            }
+        }
+
+        HashSet<string> personIds = new HashSet<string>(StringComparer.Ordinal);
+        int materializedBindingCount = 0;
+        foreach (PersonRuntime person in people.Persons)
+        {
+            string personId = person?.PersonId?.Value;
+            if (string.IsNullOrWhiteSpace(personId) || !personIds.Add(personId))
+            {
+                diagnostic = "The Core PersonStore has a missing or duplicate PersonId.";
+                return false;
+            }
+
+            string npcRuntimeId = person.MaterializedNpcRuntimeId;
+            if (npcRuntimeId == null)
+                continue;
+
+            if (string.IsNullOrWhiteSpace(npcRuntimeId)
+                || !npcRuntimeIds.Contains(npcRuntimeId)
+                || !people.TryGetByMaterializedNpcRuntimeId(
+                    npcRuntimeId, out PersonRuntime indexedPerson)
+                || !ReferenceEquals(person, indexedPerson))
+            {
+                diagnostic = "A Core Person materialized-NPC binding does not resolve to the exact selected NPC owner.";
+                return false;
+            }
+
+            materializedBindingCount++;
+        }
+
+        if (materializedBindingCount != people.MaterializedBindingCount)
+        {
+            diagnostic = "The Core PersonStore materialized-NPC index does not match its exact owner rows.";
+            return false;
+        }
+
+        foreach (ParentageRecord edge in genealogy.Records)
+        {
+            if (edge?.ParentId == null || edge.ChildId == null
+                || string.IsNullOrWhiteSpace(edge.ParentId.Value)
+                || string.IsNullOrWhiteSpace(edge.ChildId.Value)
+                || !personIds.Contains(edge.ParentId.Value)
+                || !personIds.Contains(edge.ChildId.Value))
+            {
+                diagnostic = "A Core Genealogy edge endpoint does not resolve to a Person in the restored owner graph.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Validates the restored P8 TravelParty authority against this exact
     /// selected Core owner graph. Unity projection references are checked by
     /// the host adapter after this domain binding check succeeds.
