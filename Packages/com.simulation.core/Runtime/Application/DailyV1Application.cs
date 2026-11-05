@@ -4356,10 +4356,6 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
-    /// Verifies the exact initial-slot restore admission while holding the same
-    /// gate used to publish the reconstructed Core session and host projection.
-    /// </summary>
-    /// <summary>
     /// Commits an admitted initial restore into the Core application without
     /// requiring a host projection. The host boundary still supplies its exact
     /// runtime execution ports; the active session and completed-boundary
@@ -4429,7 +4425,7 @@ internal sealed class DailyV1Application
                 return false;
             }
 
-            bool committed = TryCommitRestoredCandidateCore(null, candidate, null, hostProjectionTransaction: false, initialRestoreAdmissionVerified: true, out diagnostic);
+            bool committed = TryCommitRestoredCandidateCore(null, candidate, null, false, true, out diagnostic);
             if (committed) candidate.ClearInitialRestoreCommitProof(proof);
             return committed;
         }

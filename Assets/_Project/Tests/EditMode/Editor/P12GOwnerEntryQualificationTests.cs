@@ -191,6 +191,25 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 restored, restored.Runtime, out string substitutedImageDiagnostic),
             Is.False, "An equivalent but separately decoded image cannot substitute for the admitted source object.");
         Assert.That(substitutedImageDiagnostic, Does.Contain("exact admitted image token"));
+
+        Assert.That(restoreApplication.TryCommitInitialRestoredCoreCandidate(
+                null, image, restored.CoreRuntimeSession, restored.Runtime,
+                out string missingCoreAdmissionDiagnostic),
+            Is.False, "The projection-free Core route must require its exact initial-slot admission.");
+        Assert.That(missingCoreAdmissionDiagnostic, Does.Contain("exact admitted image token"));
+        Assert.That(restoreApplication.TryCommitInitialRestoredCoreCandidate(
+                foreignStartAdmission, foreignStartAdmission.RestoreImage,
+                restored.CoreRuntimeSession, restored.Runtime,
+                out string foreignCoreAdmissionDiagnostic),
+            Is.False, "A foreign application's admission cannot publish this Core candidate.");
+        Assert.That(foreignCoreAdmissionDiagnostic, Does.Contain("exact admitted image token"));
+        Assert.That(restoreApplication.TryCommitInitialRestoredCoreCandidate(
+                initialStartAdmission, sameBytesDifferentImage,
+                restored.CoreRuntimeSession, restored.Runtime,
+                out string substitutedCoreImageDiagnostic),
+            Is.False, "The projection-free route cannot substitute an equivalent separately decoded image.");
+        Assert.That(substitutedCoreImageDiagnostic, Does.Contain("exact admitted image token"));
+
         Assert.That(restoreApplication.ActiveSession, Is.Null,
             "Rejected initial admission must leave the Core session unpublished.");
         Assert.That(restoreApplication.TryGetPublishedHostProjection(
