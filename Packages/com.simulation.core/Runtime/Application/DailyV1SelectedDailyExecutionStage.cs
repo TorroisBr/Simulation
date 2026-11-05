@@ -149,6 +149,13 @@ internal sealed class DailyV1CoreSelectedDailyExecutionBoundary
         && graph.Definitions?.EffectiveConfiguration != null
         && executionState.SimulationTime != null;
 
+    internal bool IsBoundTo(
+        DailyV1ExecutionBoundaryState candidateState,
+        DailyV1SelectedRuntimeOwnerGraph candidateGraph) =>
+        ReferenceEquals(executionState, candidateState)
+        && ReferenceEquals(ownerGraph, candidateGraph)
+        && IsBoundTo(candidateGraph);
+
     private void EnsureBoundTo(DailyV1SelectedRuntimeOwnerGraph graph)
     {
         if (!IsBoundTo(graph))

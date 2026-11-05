@@ -205,6 +205,8 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
 {
     private readonly DailyV1ExecutionBoundaryState executionState;
     private readonly IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts;
+    private DailyV1SelectedRuntimeOwnerGraph selectedDailyExecutionOwnerGraph;
+    private IDailyV1SelectedDailyExecutionBoundary selectedDailyExecutionBoundary;
 
     internal DailyV1CoreSelectedRuntimeAdvanceBoundary(
         DailyV1ExecutionBoundaryState executionState,
@@ -288,15 +290,35 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
     public bool TryCreateSelectedDailyExecutionBoundary(
         out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
     {
-        executionBoundary = null;
         DailyV1SelectedRuntimeOwnerGraph graph = executionState.SelectedRuntimeOwnerGraph;
+        if (selectedDailyExecutionBoundary != null)
+        {
+            if (ReferenceEquals(selectedDailyExecutionOwnerGraph, graph)
+                && selectedDailyExecutionBoundary is DailyV1CoreSelectedDailyExecutionBoundary coreBoundary
+                && coreBoundary.IsBoundTo(executionState, graph))
+            {
+                executionBoundary = selectedDailyExecutionBoundary;
+                return true;
+            }
+
+            // An admitted roster transition may replace the exact owner graph.
+            // Never reuse an adapter from that prior graph; bind a fresh one.
+            selectedDailyExecutionOwnerGraph = null;
+            selectedDailyExecutionBoundary = null;
+        }
+
+        executionBoundary = null;
         if (!hostPorts.TryCreateSelectedDailyExecutionHostPorts(
                 graph, out IDailyV1SelectedDailyExecutionHostPorts hostExecutionPorts)
             || hostExecutionPorts == null
             || !DailyV1CoreSelectedDailyExecutionBoundary.TryCreate(
-                executionState, graph, hostExecutionPorts, out executionBoundary))
+                executionState, graph, hostExecutionPorts,
+                out IDailyV1SelectedDailyExecutionBoundary createdBoundary))
             return false;
 
+        selectedDailyExecutionOwnerGraph = graph;
+        selectedDailyExecutionBoundary = createdBoundary;
+        executionBoundary = createdBoundary;
         return true;
     }
 

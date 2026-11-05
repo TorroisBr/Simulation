@@ -45,6 +45,38 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
     }
 
+    private sealed class SelectedDailyExecutionHostPorts : IDailyV1SelectedDailyExecutionHostPorts
+    {
+        public void BeginLoggerDay(long absoluteDay) { }
+        public bool HasExactCrimeJusticeProjectionOwnerBindings(DailyV1SelectedRuntimeOwnerGraph graph) => true;
+        public bool TryCreateSelectedDemographyHostPorts(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedDemographyHostPorts hostPorts)
+        {
+            hostPorts = null;
+            return false;
+        }
+        public void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result) { }
+        public void BeginSimulationDay() { }
+        public void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph) { }
+        public void LogSelectedDailyEconomy(
+            DailyV1CityRuntimeOwners owner, SimulationLogCategory category, string message) { }
+        public void EnsureSelectedLocalKnowledgeCanRun(DailyV1SelectedRuntimeOwnerGraph graph) { }
+        public bool TryCreateSelectedActorTurnHostPorts(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedActorTurnHostPorts hostPorts)
+        {
+            hostPorts = null;
+            return false;
+        }
+        public bool TryCreateSelectedTravelDayHostPorts(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedTravelDayHostPorts hostPorts)
+        {
+            hostPorts = null;
+            return false;
+        }
+    }
     private sealed class ApplicationAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary,
         IDailyV1SelectedRuntimeAdvanceHostPorts
     {
@@ -74,6 +106,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         internal bool OperationEntered { get; private set; }
         internal int ActiveOperationCountAtStageCreation { get; private set; }
         internal bool SelectedBoundaryRequested { get; private set; }
+        internal bool ReturnSelectedExecutionHostPorts { get; set; }
+        internal int SelectedExecutionHostPortCreationCount { get; private set; }
         internal int LegacyAdvanceInvocationCount { get; private set; }
         internal bool Faulted { get; private set; }
         internal string RequestedRuntimeProtocolOperationId { get; private set; }
@@ -188,10 +222,12 @@ public sealed class DailyV1ApplicationSessionGateTests
                 DailyV1RuntimeProtocolOperationContracts.DailyAdvance;
             onOperationEntry?.Invoke();
             SelectedBoundaryRequested = true;
-            hostPorts = null;
-            return false;
+            SelectedExecutionHostPortCreationCount++;
+            hostPorts = ReturnSelectedExecutionHostPorts
+                ? new SelectedDailyExecutionHostPorts()
+                : null;
+            return hostPorts != null;
         }
-
         public bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
         {
             LegacyAdvanceInvocationCount++;
@@ -1997,6 +2033,25 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.ActiveSession, Is.Null,
             "A callback failure before application publication must leave the active session empty.");
         Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void CoreSelectedDailyExecutionAdapterIsCreatedOnceAndRetainedByItsSession()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary hostPorts);
+        hostPorts.ReturnSelectedExecutionHostPorts = true;
+
+        Assert.That(session.RuntimeAdvanceBoundary.TryCreateSelectedDailyExecutionBoundary(
+            out IDailyV1SelectedDailyExecutionBoundary first), Is.True);
+        Assert.That(session.RuntimeAdvanceBoundary.TryCreateSelectedDailyExecutionBoundary(
+            out IDailyV1SelectedDailyExecutionBoundary second), Is.True);
+
+        Assert.That(second, Is.SameAs(first),
+            "The exact session retains one Core-created execution adapter rather than rebuilding host authority for each day.");
+        Assert.That(hostPorts.SelectedExecutionHostPortCreationCount, Is.EqualTo(1),
+            "The host adapter factory is consulted once for the admitted session.");
     }
 
     [Test]
