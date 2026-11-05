@@ -11518,10 +11518,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         }
 
         // Core owns the selected P12-F, allocator, and exact-roster NPC
-        // Inventory/MoneyAccount rows. Keep the Unity protocol's full
-        // internal provider inventory for quiescence and operation baselines,
-        // but do not return those Core-owned values or identities across the
-        // selected host port. Mixed-roster NPC rows remain intact.
+        // Exact selected NPC Inventory, MoneyAccount, and runtime-state rows.
+        // Keep the Unity protocol's full internal provider inventory for
+        // quiescence and operation baselines, but do not return those
+        // Core-owned values or identities across the selected host port.
+        // Mixed-roster NPC rows remain intact.
         if (HasExactCoreOwnedSelectedCensusSources())
         {
             if (!TryCreateCoreOwnedSelectedRuntimeHostRemainder(
@@ -11626,6 +11627,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     out _))
             return false;
         foreach (string sectionId in exactNpcOwnerSectionIds)
+            if (string.IsNullOrWhiteSpace(sectionId) || !coreOwnedIds.Add(sectionId))
+                return false;
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcRuntimeStateSectionIds(
+                    completeOwnerSections,
+                    graph,
+                    out IReadOnlyList<string> exactNpcRuntimeStateSectionIds,
+                    out _))
+            return false;
+        foreach (string sectionId in exactNpcRuntimeStateSectionIds)
             if (string.IsNullOrWhiteSpace(sectionId) || !coreOwnedIds.Add(sectionId))
                 return false;
 

@@ -3273,6 +3273,118 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void CoreP12RecomposesExactSelectedNpcRuntimeStateRowsFromOwnerGraph()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out _);
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        OwnerSectionCensusSnapshot[] completeVector =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        Assert.That(graph.Npcs.Count, Is.GreaterThan(0));
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcRuntimeStateSectionIds(
+                    completeVector, graph,
+                    out IReadOnlyList<string> coreOwnedRuntimeStateIds,
+                    out string omissionDiagnostic),
+            Is.True, omissionDiagnostic);
+        IOwnerSectionCensusProvider[] providers = DailyV1NpcOwnerCensusProviders
+            .CreateRuntimeAuthorityProviders(graph).ToArray();
+        Assert.That(coreOwnedRuntimeStateIds, Has.Count.EqualTo(providers.Length));
+        Assert.That(coreOwnedRuntimeStateIds.ToHashSet(StringComparer.Ordinal),
+            Is.EquivalentTo(providers.Select(provider => provider.GetCurrentCensus().SectionId)));
+
+        HashSet<string> omittedIds = new HashSet<string>(
+            coreOwnedRuntimeStateIds, StringComparer.Ordinal);
+        OwnerSectionCensusSnapshot[] hostRemainder = completeVector
+            .Where(section => !omittedIds.Contains(section.SectionId)).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryRebindCoreOwnedNpcRuntimeStateSections(
+                    graph, hostRemainder,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> recomposed,
+                    out string recomposeDiagnostic),
+            Is.True, recomposeDiagnostic);
+        Assert.That(recomposed.Select(section => section.SectionId)
+                .OrderBy(sectionId => sectionId, StringComparer.Ordinal),
+            Is.EqualTo(completeVector.Select(section => section.SectionId)
+                .OrderBy(sectionId => sectionId, StringComparer.Ordinal)));
+        foreach (IOwnerSectionCensusProvider provider in providers)
+        {
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            OwnerSectionCensusSnapshot actual = recomposed.Single(section =>
+                section.SectionId == witness.SectionId);
+            Assert.That(actual.Role, Is.EqualTo(OwnerSectionRole.Required), witness.SectionId);
+            Assert.That(actual.SchemaVersion, Is.EqualTo(witness.SchemaVersion), witness.SectionId);
+            Assert.That(actual.OwnerInstanceIdentity, Is.SameAs(witness.OwnerInstanceIdentity), witness.SectionId);
+            Assert.That(actual.Cardinality, Is.EqualTo(witness.Cardinality), witness.SectionId);
+            Assert.That(actual.Revision, Is.EqualTo(witness.Revision), witness.SectionId);
+        }
+
+        string omittedRuntimeStateId = coreOwnedRuntimeStateIds[0];
+        OwnerSectionCensusSnapshot[] partialHostVector = completeVector
+            .Where(section => section.SectionId != omittedRuntimeStateId).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryRebindCoreOwnedNpcRuntimeStateSections(
+                    graph, partialHostVector, out _, out _),
+            Is.False, "Partial omission must not silently combine host and Core rows for one alias family.");
+
+        OwnerSectionCensusSnapshot selectedHostRow = completeVector.Single(section =>
+            section.SectionId == omittedRuntimeStateId);
+        OwnerSectionCensusSnapshot substituted = new OwnerSectionCensusSnapshot(
+            selectedHostRow.SectionId, selectedHostRow.SchemaVersion, selectedHostRow.Role,
+            new object(), selectedHostRow.Cardinality, selectedHostRow.Revision);
+        OwnerSectionCensusSnapshot[] substitutedVector = completeVector.Select(section =>
+            section.SectionId == omittedRuntimeStateId ? substituted : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryRebindCoreOwnedNpcRuntimeStateSections(
+                    graph, substitutedVector, out _, out _),
+            Is.False, "A host row cannot substitute another instance for a selected Core owner.");
+
+        OwnerSectionCensusSnapshot stale = new OwnerSectionCensusSnapshot(
+            selectedHostRow.SectionId, selectedHostRow.SchemaVersion, selectedHostRow.Role,
+            selectedHostRow.OwnerInstanceIdentity, selectedHostRow.Cardinality,
+            checked(selectedHostRow.Revision + 1L));
+        OwnerSectionCensusSnapshot[] staleVector = completeVector.Select(section =>
+            section.SectionId == omittedRuntimeStateId ? stale : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryRebindCoreOwnedNpcRuntimeStateSections(
+                    graph, staleVector, out _, out _),
+            Is.False, "A stale revision remains on the host path and cannot be rebound as current Core state.");
+
+        const string compatibilityRuntimeId = "npc-census-compatibility-runtime-state";
+        string[] compatibilityPrefixes =
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcLifeStatePrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix
+        };
+        OwnerSectionCensusSnapshot[] compatibilityRows = compatibilityPrefixes
+            .Select(prefix => new OwnerSectionCensusSnapshot(
+                prefix + compatibilityRuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                OwnerSectionRole.Required, new object(), 1, 0L))
+            .ToArray();
+        OwnerSectionCensusSnapshot[] mixedHostVector = completeVector
+            .Concat(compatibilityRows).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryRebindCoreOwnedNpcRuntimeStateSections(
+                    graph, mixedHostVector,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> mixedResult,
+                    out string mixedDiagnostic),
+            Is.True, mixedDiagnostic);
+        foreach (OwnerSectionCensusSnapshot compatibilityRow in compatibilityRows)
+            Assert.That(mixedResult.Single(section =>
+                    section.SectionId == compatibilityRow.SectionId),
+                Is.SameAs(compatibilityRow),
+                "Mixed-roster capture preserves every host-owned selected/compatibility census fact.");
+    }
+
+    [Test]
     public void CoreDropsCensusEvidenceWhenHostFailsOrScopeChangesDuringCapture()
     {
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(

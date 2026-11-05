@@ -2350,6 +2350,152 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         return true;
     }
 
+    /// <summary>
+    /// Identifies exact-roster NPC state rows whose authority already lives in
+    /// the selected Core owner graph. Mixed rosters and stale or substituted
+    /// host rows stay on the complete Unity compatibility path.
+    /// </summary>
+    internal static bool TryGetExactCoreOwnedNpcRuntimeStateSectionIds(
+        IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IReadOnlyList<string> sectionIds,
+        out string diagnostic)
+    {
+        sectionIds = Array.Empty<string>();
+        diagnostic = null;
+        if (completeHostSections == null || graph?.Npcs == null
+            || !DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+                completeHostSections))
+        {
+            diagnostic = "Selected NPC runtime-state omission requires a structurally complete source census and exact graph.";
+            return false;
+        }
+
+        if (graph.Npcs.Count == 0 || graph.PersonStore == null)
+            return true;
+
+        int inventoryRows = CountFamilyRows(
+            completeHostSections, DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix);
+        int moneyAccountRows = CountFamilyRows(
+            completeHostSections, DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix);
+        if (inventoryRows != moneyAccountRows)
+        {
+            diagnostic = "The complete source census has inconsistent NPC Inventory and MoneyAccount cardinality.";
+            return false;
+        }
+
+        // Preserve all rows for additional compatibility NPCs. The complete
+        // vector is still validated by the Core runtime-state rebind below.
+        if (inventoryRows > graph.Npcs.Count)
+            return true;
+        if (inventoryRows != graph.Npcs.Count)
+        {
+            diagnostic = "The complete source census does not cover every selected NPC runtime-state owner.";
+            return false;
+        }
+
+        if (!TryRebindCoreOwnedNpcRuntimeStateSections(
+                graph, completeHostSections,
+                out _, out diagnostic))
+            return false;
+
+        HashSet<string> expected = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || !expected.Add(DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix + npc.RuntimeId)
+                || !expected.Add(DailyV1SelectedOwnerSectionCensusContract.NpcLifeStatePrefix + npc.RuntimeId)
+                || !expected.Add(DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(npc.RuntimeId))
+                || !expected.Add(DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix + npc.RuntimeId))
+            {
+                diagnostic = "The selected NPC runtime-state graph contains a missing or duplicate identity.";
+                return false;
+            }
+
+            if (!graph.PersonStore.TryGetByMaterializedNpcRuntimeId(
+                    npc.RuntimeId, out PersonRuntime person))
+            {
+                if (!expected.Add(
+                        DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(npc.RuntimeId)))
+                {
+                    diagnostic = "The selected NPC residence graph contains a duplicate identity.";
+                    return false;
+                }
+            }
+            else if (person == null
+                || !string.Equals(person.MaterializedNpcRuntimeId, npc.RuntimeId,
+                    StringComparison.Ordinal))
+            {
+                diagnostic = "The Core PersonStore returned an inconsistent NPC materialization binding.";
+                return false;
+            }
+        }
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers;
+        try
+        {
+            providers = DailyV1NpcOwnerCensusProviders.CreateRuntimeAuthorityProviders(graph);
+        }
+        catch (ArgumentException)
+        {
+            diagnostic = "The selected Core NPC runtime-state providers could not bind to the owner graph.";
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            diagnostic = "The selected Core NPC runtime-state providers could not bind to the owner graph.";
+            return false;
+        }
+
+        Dictionary<string, OwnerSectionCensusSnapshot> hostById =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot section in completeHostSections)
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !hostById.TryAdd(section.SectionId, section))
+            {
+                diagnostic = "The complete source census has a missing or duplicate owner-section identity.";
+                return false;
+            }
+
+        List<string> exactIds = new List<string>(providers.Count);
+        foreach (IOwnerSectionCensusProvider provider in providers)
+        {
+            OwnerSectionCensusWitness witness;
+            try { witness = provider?.GetCurrentCensus(); }
+            catch (InvalidOperationException)
+            {
+                diagnostic = "A selected Core NPC runtime-state provider failed to read its owner.";
+                return false;
+            }
+
+            if (witness == null || string.IsNullOrWhiteSpace(witness.SectionId)
+                || !expected.Remove(witness.SectionId)
+                || !hostById.TryGetValue(witness.SectionId,
+                    out OwnerSectionCensusSnapshot actual)
+                || actual.Role != OwnerSectionRole.Required
+                || actual.SchemaVersion != witness.SchemaVersion
+                || !ReferenceEquals(actual.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+                || actual.Cardinality != witness.Cardinality
+                || actual.Revision != witness.Revision)
+            {
+                diagnostic = "The complete source census differs from an exact Core-owned NPC runtime-state witness.";
+                return false;
+            }
+
+            exactIds.Add(witness.SectionId);
+        }
+
+        if (expected.Count != 0)
+        {
+            diagnostic = "The selected Core NPC runtime-state witness set is incomplete.";
+            return false;
+        }
+
+        sectionIds = Array.AsReadOnly(exactIds.ToArray());
+        diagnostic = null;
+        return true;
+    }
+
     internal static bool TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
         DailyV1SelectedRuntimeOwnerGraph graph,
         IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
@@ -2627,6 +2773,11 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix,
             DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix
         };
+        bool hostOmittedExactCoreRuntimeStateRows = !mixedRoster && graph.Npcs.Count > 0;
+        foreach (string prefix in statePrefixes)
+            if (CountFamilyRows(copied, prefix) != 0)
+                hostOmittedExactCoreRuntimeStateRows = false;
+
         foreach (string prefix in statePrefixes)
         {
             int expectedRows = 0;
@@ -2635,6 +2786,8 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                     expectedRows++;
 
             int actualRows = CountFamilyRows(copied, prefix);
+            if (hostOmittedExactCoreRuntimeStateRows && actualRows == 0)
+                continue;
             bool residenceFamily = string.Equals(
                 prefix, DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix,
                 StringComparison.Ordinal);
@@ -2656,6 +2809,11 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             OwnerSectionCensusWitness witness = witnesses[i];
             if (!indexes.TryGetValue(witness.SectionId, out int index))
             {
+                if (hostOmittedExactCoreRuntimeStateRows)
+                {
+                    witnessIndexes[i] = -1;
+                    continue;
+                }
                 diagnostic = "The host census is missing selected Core NPC runtime-state section " + witness.SectionId + ".";
                 return false;
             }
@@ -2676,6 +2834,26 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         if (mixedRoster)
         {
             ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+
+        if (hostOmittedExactCoreRuntimeStateRows)
+        {
+            List<OwnerSectionCensusSnapshot> recomposed =
+                new List<OwnerSectionCensusSnapshot>(copied.Length + witnesses.Length);
+            recomposed.AddRange(copied);
+            foreach (OwnerSectionCensusWitness witness in witnesses)
+                recomposed.Add(new OwnerSectionCensusSnapshot(
+                    witness.SectionId,
+                    witness.SchemaVersion,
+                    OwnerSectionRole.Required,
+                    witness.OwnerInstanceIdentity,
+                    witness.Cardinality,
+                    witness.Revision));
+            recomposed.Sort((left, right) =>
+                StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+            ownerSections = Array.AsReadOnly(recomposed.ToArray());
+            diagnostic = null;
             return true;
         }
 

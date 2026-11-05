@@ -3519,6 +3519,13 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
                 completedToken.OwnerSections), Is.True,
                 "The completed Core boundary still publishes the structurally complete selected owner vector.");
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                    .TryGetExactCoreOwnedNpcRuntimeStateSectionIds(
+                        completedToken.OwnerSections,
+                        selectedOwnerGraph,
+                        out IReadOnlyList<string> exactRuntimeStateSectionIds,
+                        out string runtimeStateDiagnostic),
+                Is.True, runtimeStateDiagnostic);
             string[] coreOwnedHostPortSectionIds =
                 DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds
                     .Concat(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds)
@@ -3527,11 +3534,13 @@ public sealed class SimulationRuntimeAdmissionTests
                         DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + owner.RuntimeId,
                         DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + owner.RuntimeId
                     }))
+                    .Concat(exactRuntimeStateSectionIds)
                     .ToArray();
             HashSet<string> coreOwnedHostPortSectionIdSet = new HashSet<string>(
                 coreOwnedHostPortSectionIds, StringComparer.Ordinal);
             Assert.That(coreOwnedHostPortSectionIds,
-                Has.Length.EqualTo(8 + selectedOwnerGraph.Npcs.Count * 2));
+                Has.Length.EqualTo(8 + selectedOwnerGraph.Npcs.Count * 2
+                    + exactRuntimeStateSectionIds.Count));
             Assert.That(coreOwnedHostPortSectionIdSet, Has.Count.EqualTo(coreOwnedHostPortSectionIds.Length));
             IDailyV1SelectedRuntimeAdvanceHostPorts selectedHostPorts =
                 (IDailyV1SelectedRuntimeAdvanceHostPorts)bootstrap.Runtime;
@@ -3544,7 +3553,7 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(hostMutationEpoch, Is.EqualTo(completedToken.MutationEpoch));
             Assert.That(hostOwnedSections, Has.Count.EqualTo(
                     completedToken.OwnerSections.Count - coreOwnedHostPortSectionIds.Length),
-                "The Unity host returns its remainder after Core recomposes P12-F, allocator, and exact selected NPC Inventory/MoneyAccount rows.");
+                "The Unity host returns its remainder after Core recomposes P12-F, allocator, and exact selected NPC Inventory, MoneyAccount, and runtime-state rows.");
             foreach (string coreOwnedSectionId in coreOwnedHostPortSectionIds)
                 Assert.That(hostOwnedSections.Any(section => section.SectionId == coreOwnedSectionId),
                     Is.False, coreOwnedSectionId);
@@ -4666,6 +4675,29 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(mixedRosterHostSections.Any(section =>
                 section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix
                     + unselected.RuntimeId), Is.True);
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            Assert.That(mixedRosterHostSections.Any(section =>
+                    section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+                        + npc.RuntimeId), Is.True,
+                "A mixed roster keeps the current-action census row for every selected and compatibility NPC.");
+            Assert.That(mixedRosterHostSections.Any(section =>
+                    section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcLifeStatePrefix
+                        + npc.RuntimeId), Is.True,
+                "A mixed roster keeps the life-state census row for every selected and compatibility NPC.");
+            Assert.That(mixedRosterHostSections.Any(section =>
+                    section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(
+                        npc.RuntimeId)), Is.True,
+                "A mixed roster keeps the crime-state census row for every selected and compatibility NPC.");
+            Assert.That(mixedRosterHostSections.Any(section =>
+                    section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix
+                        + npc.RuntimeId), Is.True,
+                "A mixed roster keeps the travel-state census row for every selected and compatibility NPC.");
+        }
+        Assert.That(mixedRosterHostSections.Any(section =>
+                section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(
+                    unselected.RuntimeId)), Is.True,
+            "The nonmaterialized compatibility NPC retains its Residence census row in the whole-host vector.");
 
         DailyV1Application application = ReadPrivateField<DailyV1Application>(host, "dailyV1Application");
         DailyV1ActiveRuntimeSession coreSession = session.CoreRuntimeSession;
