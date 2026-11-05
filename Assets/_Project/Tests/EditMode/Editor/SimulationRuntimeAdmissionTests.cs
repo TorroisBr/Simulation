@@ -3516,6 +3516,44 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(bootstrap.Runtime.TryGetCompletedDailyCaptureToken(
                 out DailyCaptureEligibilityToken completedToken,
                 out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
+            Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+                completedToken.OwnerSections), Is.True,
+                "The completed Core boundary still publishes the structurally complete selected owner vector.");
+            string[] coreOwnedHostPortSectionIds =
+                DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds
+                    .Concat(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds)
+                    .ToArray();
+            HashSet<string> coreOwnedHostPortSectionIdSet = new HashSet<string>(
+                coreOwnedHostPortSectionIds, StringComparer.Ordinal);
+            Assert.That(coreOwnedHostPortSectionIds, Has.Length.EqualTo(8));
+            Assert.That(coreOwnedHostPortSectionIdSet, Has.Count.EqualTo(8));
+            IDailyV1SelectedRuntimeAdvanceHostPorts selectedHostPorts =
+                (IDailyV1SelectedRuntimeAdvanceHostPorts)bootstrap.Runtime;
+            Assert.That(selectedHostPorts.TryCaptureOwnerSectionCensus(
+                    DailyV1CaptureScopeAllowance.None,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
+                    out long hostMutationEpoch,
+                    out DailyCaptureEligibilityFailure hostCaptureFailure),
+                Is.True, hostCaptureFailure.ToString());
+            Assert.That(hostMutationEpoch, Is.EqualTo(completedToken.MutationEpoch));
+            Assert.That(hostOwnedSections, Has.Count.EqualTo(completedToken.OwnerSections.Count - 8),
+                "The Unity host returns its remainder after Core recomposes the exact five P12-F and three allocator rows.");
+            foreach (string coreOwnedSectionId in coreOwnedHostPortSectionIds)
+                Assert.That(hostOwnedSections.Any(section => section.SectionId == coreOwnedSectionId),
+                    Is.False, coreOwnedSectionId);
+            foreach (OwnerSectionCensusSnapshot original in completedToken.OwnerSections)
+            {
+                if (coreOwnedHostPortSectionIdSet.Contains(original.SectionId))
+                    continue;
+
+                OwnerSectionCensusSnapshot hostOwned = hostOwnedSections.Single(section =>
+                    section.SectionId == original.SectionId);
+                Assert.That(hostOwned.Role, Is.EqualTo(original.Role), original.SectionId);
+                Assert.That(hostOwned.SchemaVersion, Is.EqualTo(original.SchemaVersion), original.SectionId);
+                Assert.That(hostOwned.OwnerInstanceIdentity, Is.SameAs(original.OwnerInstanceIdentity), original.SectionId);
+                Assert.That(hostOwned.Cardinality, Is.EqualTo(original.Cardinality), original.SectionId);
+                Assert.That(hostOwned.Revision, Is.EqualTo(original.Revision), original.SectionId);
+            }
             DailyV1NpcRuntimeOwners changedActionOwner = selectedOwnerGraph.Npcs.FirstOrDefault(owner =>
                 actionRevisionsBefore.TryGetValue(owner.RuntimeId, out long previousRevision)
                 && owner.ActionSlot.Revision > previousRevision);

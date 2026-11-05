@@ -11517,13 +11517,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        // Core owns these five rows. Keep the Unity protocol's full internal
-        // provider inventory for its operation baselines, but never return its
-        // P12-F values or identities across the selected host port.
+        // Core owns these P12-F and runtime-allocator rows. Keep the Unity
+        // protocol's full internal provider inventory for quiescence and
+        // operation baselines, but do not return Core-owned values or
+        // identities across the selected host port.
         if (HasExactCoreOwnedSelectedCensusSources())
         {
-            if (!TryCreateCoreOwnedP12FHostRemainder(
+            if (!TryCreateCoreOwnedSelectedRuntimeHostRemainder(
                     completeHostSections,
+                    dailyExecutionBoundary.SelectedRuntimeOwnerGraph,
                     out ownerSections))
             {
                 mutationEpoch = 0L;
@@ -11562,12 +11564,13 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
         if (HasExactCoreOwnedSelectedCensusSources())
         {
-            if (!TryCreateCoreOwnedP12FHostRemainder(
+            if (!TryCreateCoreOwnedSelectedRuntimeHostRemainder(
                     completeHostSections,
+                    dailyExecutionBoundary.SelectedRuntimeOwnerGraph,
                     out ownerSections))
             {
                 mutationEpoch = 0L;
-                diagnostic = "The selected Unity census could not produce the exact host remainder after omitting Core-owned P12-F rows.";
+                diagnostic = "The selected Unity census could not produce the exact host remainder after omitting Core-owned P12-F and RuntimeIdAllocator rows.";
                 return false;
             }
         }
@@ -11579,42 +11582,102 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         return true;
     }
 
-    private static bool TryCreateCoreOwnedP12FHostRemainder(
+    private bool TryCreateCoreOwnedSelectedRuntimeHostRemainder(
         IReadOnlyList<OwnerSectionCensusSnapshot> completeOwnerSections,
+        DailyV1SelectedRuntimeOwnerGraph graph,
         out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections)
     {
         hostOwnedSections = null;
         if (!DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
-                completeOwnerSections))
+                completeOwnerSections)
+            || graph == null)
             return false;
 
         IReadOnlyList<string> coreOwnedP12FSectionIds =
             DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds;
-        if (coreOwnedP12FSectionIds == null || coreOwnedP12FSectionIds.Count != 5)
+        IReadOnlyList<string> coreOwnedRuntimeIdAllocatorSectionIds =
+            DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds;
+        if (coreOwnedP12FSectionIds == null
+            || coreOwnedP12FSectionIds.Count != 5
+            || coreOwnedRuntimeIdAllocatorSectionIds == null
+            || coreOwnedRuntimeIdAllocatorSectionIds.Count != 3)
             return false;
 
-        HashSet<string> remainingCoreOwnedIds =
+        HashSet<string> p12fIds =
             new HashSet<string>(coreOwnedP12FSectionIds, StringComparer.Ordinal);
-        if (remainingCoreOwnedIds.Count != coreOwnedP12FSectionIds.Count)
+        HashSet<string> runtimeIdAllocatorIds =
+            new HashSet<string>(coreOwnedRuntimeIdAllocatorSectionIds, StringComparer.Ordinal);
+        if (p12fIds.Count != coreOwnedP12FSectionIds.Count
+            || runtimeIdAllocatorIds.Count != coreOwnedRuntimeIdAllocatorSectionIds.Count
+            || runtimeIdAllocatorIds.Overlaps(p12fIds))
             return false;
+
+        HashSet<string> coreOwnedIds = new HashSet<string>(p12fIds, StringComparer.Ordinal);
+        coreOwnedIds.UnionWith(runtimeIdAllocatorIds);
+        if (coreOwnedIds.Count != 8)
+            return false;
+
+        DailyV1ExecutionBoundaryState boundaryState = dailyExecutionBoundary;
+        ActorChoiceStore actorChoiceStore = boundaryState?.SelectedActorChoiceStore;
+        if (actorChoiceStore == null)
+            return false;
+
+        // Recompose the complete vector through Core before filtering. This
+        // validates the exact allocator triplet and P12-F owner identities,
+        // cardinalities, schemas, and revisions against the bound owner graph.
+        List<OwnerSectionCensusSnapshot> withoutP12F =
+            new List<OwnerSectionCensusSnapshot>(completeOwnerSections.Count - p12fIds.Count);
+        foreach (OwnerSectionCensusSnapshot section in completeOwnerSections)
+            if (!p12fIds.Contains(section.SectionId))
+                withoutP12F.Add(section);
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                graph,
+                actorChoiceStore,
+                withoutP12F,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> coreComposedSections,
+                out _)
+            || coreComposedSections == null
+            || coreComposedSections.Count != completeOwnerSections.Count)
+            return false;
+
+        Dictionary<string, OwnerSectionCensusSnapshot> originalById =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot section in completeOwnerSections)
+            if (section == null || !originalById.TryAdd(section.SectionId, section))
+                return false;
+
+        foreach (OwnerSectionCensusSnapshot composed in coreComposedSections)
+        {
+            if (composed == null
+                || !originalById.TryGetValue(composed.SectionId,
+                    out OwnerSectionCensusSnapshot original)
+                || original.Role != composed.Role
+                || original.SchemaVersion != composed.SchemaVersion
+                || !ReferenceEquals(original.OwnerInstanceIdentity, composed.OwnerInstanceIdentity)
+                || original.Cardinality != composed.Cardinality
+                || original.Revision != composed.Revision)
+                return false;
+        }
 
         HashSet<string> observedIds = new HashSet<string>(StringComparer.Ordinal);
         List<OwnerSectionCensusSnapshot> remainder =
             new List<OwnerSectionCensusSnapshot>(
-                completeOwnerSections.Count - coreOwnedP12FSectionIds.Count);
+                completeOwnerSections.Count - coreOwnedIds.Count);
         foreach (OwnerSectionCensusSnapshot section in completeOwnerSections)
         {
             if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
                 || !observedIds.Add(section.SectionId))
                 return false;
 
-            if (remainingCoreOwnedIds.Remove(section.SectionId))
+            if (coreOwnedIds.Remove(section.SectionId))
                 continue;
 
             remainder.Add(section);
         }
 
-        if (remainingCoreOwnedIds.Count != 0)
+        if (coreOwnedIds.Count != 0
+            || remainder.Count != completeOwnerSections.Count - 8)
             return false;
 
         hostOwnedSections = Array.AsReadOnly(remainder.ToArray());

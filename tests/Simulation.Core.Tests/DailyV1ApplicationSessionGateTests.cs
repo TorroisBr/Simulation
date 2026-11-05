@@ -3066,7 +3066,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void CoreP12FCensusAcceptsOnlyItsExactHostOmissionAndReadsLiveOwners()
+    public void CoreP12FCensusAcceptsItsExactP12FAndAllocatorHostOmissionAndReadsLiveOwners()
     {
         CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session,
@@ -3075,14 +3075,17 @@ public sealed class DailyV1ApplicationSessionGateTests
         ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
         OwnerSectionCensusSnapshot[] completeVector =
             CreateCoreBoundCompleteOwnerSectionVector(session);
-        IReadOnlyList<string> coreOwnedIds =
-            DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds;
+        string[] coreOwnedIds = DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds
+            .Concat(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds)
+            .ToArray();
         HashSet<string> coreOwnedIdSet = new HashSet<string>(coreOwnedIds, StringComparer.Ordinal);
-        Assert.That(coreOwnedIds, Has.Count.EqualTo(5));
+        Assert.That(coreOwnedIds, Has.Length.EqualTo(8));
+        Assert.That(coreOwnedIdSet, Has.Count.EqualTo(8),
+            "The five Core P12-F rows and three allocator rows have disjoint exact identities.");
 
         OwnerSectionCensusSnapshot[] hostRemainder = completeVector
             .Where(section => !coreOwnedIdSet.Contains(section.SectionId)).ToArray();
-        Assert.That(hostRemainder, Has.Length.EqualTo(completeVector.Length - 5));
+        Assert.That(hostRemainder, Has.Length.EqualTo(completeVector.Length - 8));
         Assert.That(hostRemainder.Any(section => coreOwnedIdSet.Contains(section.SectionId)), Is.False);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 graph, actorChoices, hostRemainder,
