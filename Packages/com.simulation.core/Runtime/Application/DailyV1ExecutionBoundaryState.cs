@@ -171,12 +171,16 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         internal readonly HashSet<string> AllowedSectionIds;
         internal readonly HashSet<string> ChangedSectionIds =
             new HashSet<string>(StringComparer.Ordinal);
+        internal int CoreTravelPartyCardinality;
+        internal long CoreTravelPartyRevision;
         internal IDisposable RuntimeProtocolScope;
 
         internal SelectedP12TravelPartyAdvanceContext(
             DailyV1SelectedRuntimeOwnerGraph graph,
             IDailyV1SelectedP12TravelPartyAdvanceProtocol protocol,
             IEnumerable<string> sectionIds,
+            int travelPartyCardinality,
+            long travelPartyRevision,
             IDisposable runtimeProtocolScope)
         {
             Graph = graph;
@@ -184,6 +188,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             OwnerThread = Thread.CurrentThread;
             OwnerManagedThreadId = OwnerThread.ManagedThreadId;
             AllowedSectionIds = new HashSet<string>(sectionIds, StringComparer.Ordinal);
+            CoreTravelPartyCardinality = travelPartyCardinality;
+            CoreTravelPartyRevision = travelPartyRevision;
             RuntimeProtocolScope = runtimeProtocolScope;
         }
 
@@ -1152,8 +1158,16 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
             try
             {
-                if (!protocol.TryValidateOwnerSections(graph, sectionIds)
+                if (!TryCaptureTravelPartyStoreFacts(
+                        graph, out int travelPartyCardinalityBefore,
+                        out long travelPartyRevisionBefore)
+                    || !protocol.TryValidateOwnerSections(graph, sectionIds)
                     || !protocol.TryValidateUnchangedSections(sectionIds)
+                    || !TryCaptureTravelPartyStoreFacts(
+                        graph, out int travelPartyCardinalityAfter,
+                        out long travelPartyRevisionAfter)
+                    || travelPartyCardinalityAfter != travelPartyCardinalityBefore
+                    || travelPartyRevisionAfter != travelPartyRevisionBefore
                     || !TryBeginRuntimeProtocolOperation(
                         DailyV1RuntimeProtocolOperationContracts.TravelPartyAdvance))
                 {
@@ -1164,7 +1178,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 runtimeProtocolScope = new SelectedP12TravelPartyRuntimeProtocolScope(
                     this, protocol);
                 context = new SelectedP12TravelPartyAdvanceContext(
-                    graph, protocol, sectionIds, runtimeProtocolScope);
+                    graph, protocol, sectionIds,
+                    travelPartyCardinalityAfter, travelPartyRevisionAfter,
+                    runtimeProtocolScope);
                 selectedP12TravelPartyAdvanceContext = context;
             }
             catch
@@ -1516,6 +1532,23 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 return false;
             }
 
+            if (requested.Contains(TravelPartyCensusProvider.SectionId))
+            {
+                if (!TryCaptureTravelPartyStoreFacts(
+                        context.Graph, out int currentCardinality,
+                        out long currentRevision)
+                    || currentCardinality != context.CoreTravelPartyCardinality
+                    || currentRevision != context.CoreTravelPartyRevision)
+                {
+                    FaultSelectedTravelPartyAdvance(context.Protocol);
+                    return false;
+                }
+
+                // The Core graph owns this exact store and can validate its
+                // local census directly. The host still validates every
+                // selected NPC/city row and compatibility-roster section.
+                requested.Remove(TravelPartyCensusProvider.SectionId);
+            }
             requested.RemoveWhere(context.ChangedSectionIds.Contains);
             if (requested.Count == 0) return true;
             string[] ordered = ToOrderedSectionArray(requested);
@@ -1539,6 +1572,27 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             {
                 FaultSelectedTravelPartyAdvance(context.Protocol);
                 return false;
+            }
+
+            if (changed.Contains(TravelPartyCensusProvider.SectionId))
+            {
+                if (!TryCaptureTravelPartyStoreFacts(
+                        context.Graph, out int committedCardinality,
+                        out long committedRevision)
+                    || context.CoreTravelPartyRevision == long.MaxValue
+                    || committedRevision != context.CoreTravelPartyRevision + 1L
+                    || context.CoreTravelPartyCardinality <= 0
+                    || committedCardinality != context.CoreTravelPartyCardinality - 1)
+                {
+                    FaultSelectedTravelPartyAdvance(context.Protocol);
+                    return false;
+                }
+
+                // AdvanceParties completes exactly one active party for each
+                // committed TravelParty section mutation. Keep the Core
+                // baseline current for later completions in this same batch.
+                context.CoreTravelPartyCardinality = committedCardinality;
+                context.CoreTravelPartyRevision = committedRevision;
             }
 
             context.ChangedSectionIds.UnionWith(changed);
@@ -1748,6 +1802,33 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         if (new HashSet<string>(sectionIds, StringComparer.Ordinal).Count != sectionIds.Count)
             throw new InvalidOperationException("The selected TravelParty P12 section inventory contains duplicate identities.");
         return Array.AsReadOnly(sectionIds.ToArray());
+    }
+
+    private static bool TryCaptureTravelPartyStoreFacts(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out int cardinality,
+        out long revision)
+    {
+        cardinality = 0;
+        revision = 0L;
+        TravelPartyStore store = graph?.TravelParties;
+        if (store == null) return false;
+
+        try
+        {
+            using (store.EnterReadWindow())
+            {
+                return store.ValidateCensus(out cardinality, out revision)
+                    && cardinality >= 0
+                    && revision >= 0L;
+            }
+        }
+        catch
+        {
+            cardinality = 0;
+            revision = 0L;
+            return false;
+        }
     }
 
     private void ExitSelectedP12TravelPartyAdvance(

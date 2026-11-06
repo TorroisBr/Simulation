@@ -312,6 +312,101 @@ public sealed class DomainEventAuthorityCoreTests
     }
 
     [Test]
+    public void TravelPartyAdvanceUsesCoreStoreBaselineAndTracksOneCompletionPerCommit()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        Assert.That(graph.Npcs, Is.Not.Empty);
+        string memberRuntimeId = graph.Npcs[0].RuntimeId;
+        TravelPartyRuntime party = new TravelPartyRuntime(
+            "core-travel-party-baseline",
+            "origin-location",
+            "destination-location",
+            "route",
+            new[] { memberRuntimeId },
+            System.Array.Empty<string>(),
+            2,
+            null,
+            new[] { new TravelPartyMemberCost(memberRuntimeId, 0f) });
+        Assert.That(graph.TravelParties.Add(party), Is.True);
+        Assert.That(graph.TravelParties.Revision, Is.EqualTo(1L));
+
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        System.Collections.Generic.IReadOnlyList<string> operationContractIds =
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                hasRuntimeAdmission: true,
+                hasTravelPartySystem: true,
+                hasTravelSystem: false);
+        foreach (string operationContractId in operationContractIds)
+            Assert.That(state.TryRegisterRuntimeProtocolOperationContract(operationContractId), Is.True,
+                operationContractId);
+        Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+
+        bool dailyAdvanceStarted = false;
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+        try
+        {
+            dailyAdvanceStarted = state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance);
+            Assert.That(dailyAdvanceStarted, Is.True);
+
+            bool operationResult = state.ExecuteSelectedP12TravelPartyAdvance(
+                graph,
+                protocol,
+                () =>
+                {
+                    string[] travelPartySection = { TravelPartyCensusProvider.SectionId };
+                    Assert.That(state.TryCanCommitSelectedP12TravelPartyMutation(
+                        travelPartySection, out bool admissionHandled), Is.True);
+                    Assert.That(admissionHandled, Is.True);
+
+                    Assert.That(graph.TravelParties.Complete(party.TravelPartyId), Is.True);
+                    Assert.That(state.TryRecordSelectedP12TravelPartyMutation(
+                        travelPartySection, out bool commitHandled), Is.True);
+                    Assert.That(commitHandled, Is.True);
+
+                    // A later admission in this same batch observes the
+                    // updated Core baseline without another host owner check.
+                    Assert.That(state.TryCanCommitSelectedP12TravelPartyMutation(
+                        travelPartySection, out admissionHandled), Is.True);
+                    Assert.That(admissionHandled, Is.True);
+                    return true;
+                });
+
+            Assert.That(operationResult, Is.True);
+        }
+        finally
+        {
+            try
+            {
+                if (dailyAdvanceStarted)
+                    Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
+        }
+
+        Assert.That(graph.TravelParties.ActiveParties, Is.Empty);
+        Assert.That(graph.TravelParties.Revision, Is.EqualTo(2L));
+        Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1),
+            "Only the initial full-vector baseline should be validated through the host protocol.");
+        Assert.That(protocol.LastNotifiedMutationSectionIds,
+            Does.Contain(TravelPartyCensusProvider.SectionId));
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.True);
+    }
+
+    [Test]
     public void TravelPartyAdvanceRejectsWhenCoreOperationInventoryIsNotSealed()
     {
         DailyV1EffectiveDefinitions definitions =
@@ -512,16 +607,27 @@ public sealed class DomainEventAuthorityCoreTests
     private sealed class NoOpTravelPartyAdvanceProtocol
         : IDailyV1SelectedP12TravelPartyAdvanceProtocol
     {
+        internal int UnchangedSectionValidationCalls { get; private set; }
+        internal string[] LastNotifiedMutationSectionIds { get; private set; }
+
         public bool TryValidateOwnerSections(
             DailyV1SelectedRuntimeOwnerGraph graph,
             System.Collections.Generic.IReadOnlyList<string> expectedSectionIds) =>
             graph != null && expectedSectionIds != null;
 
         public bool TryValidateUnchangedSections(
-            System.Collections.Generic.IReadOnlyList<string> sectionIds) => sectionIds != null;
+            System.Collections.Generic.IReadOnlyList<string> sectionIds)
+        {
+            UnchangedSectionValidationCalls++;
+            return sectionIds != null;
+        }
 
         public bool NotifyCommittedMutations(
-            System.Collections.Generic.IReadOnlyCollection<string> sectionIds) => sectionIds != null;
+            System.Collections.Generic.IReadOnlyCollection<string> sectionIds)
+        {
+            LastNotifiedMutationSectionIds = sectionIds?.ToArray();
+            return sectionIds != null;
+        }
 
         public int FaultClosedCalls { get; private set; }
         public void FaultClosed() => FaultClosedCalls++;
