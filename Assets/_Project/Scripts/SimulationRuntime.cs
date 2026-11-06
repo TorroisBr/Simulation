@@ -4024,6 +4024,33 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 npcRosterCensusProtocol = null;
             }
         }
+
+        if (runtimeAdmissionContext != null)
+        {
+            bool protocolBoundToExactExecutionState = protocol.IsBoundTo(dailyExecutionBoundary);
+            bool censusSourceBound = protocolBoundToExactExecutionState
+                && dailyExecutionBoundary.TryBindSelectedRuntimeOwnerCensusSource(
+                    protocol,
+                    allowedOuterScope =>
+                    {
+                        if (!protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+                                allowedOuterScope,
+                                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+                                out long mutationEpoch,
+                                out ContinuationCensusFailure censusFailure))
+                            return DailyV1OwnerSectionCensusCaptureResult.Rejected(
+                                MapDailyCaptureFailure(censusFailure), censusFailure.ToString());
+                        return DailyV1OwnerSectionCensusCaptureResult.Captured(ownerSections, mutationEpoch);
+                    });
+            if (!censusSourceBound)
+            {
+                npcRosterCensusProtocolInitializationFailure = !protocolBoundToExactExecutionState
+                    ? "the registered P12 census belongs to a different Core execution state"
+                    : "the selected Core execution boundary was not ready to bind its census source";
+                protocol.FaultClosed();
+                npcRosterCensusProtocol = null;
+            }
+        }
     }
 
     private bool TryRegisterInstitutionOfficeCensusProviders(ContinuationCensusProtocol protocol)

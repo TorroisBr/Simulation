@@ -33,6 +33,45 @@ internal enum DailyV1CaptureScopeAllowance : byte
     SessionReplacementValidation = 3
 }
 
+/// <summary>
+/// Result returned by the composition-bound owner census source. The Core
+/// execution state selects the only permitted capture scope and validates that
+/// the returned epoch still matches its own mutation authority.
+/// </summary>
+internal sealed class DailyV1OwnerSectionCensusCaptureResult
+{
+    internal IReadOnlyList<OwnerSectionCensusSnapshot> OwnerSections { get; }
+    internal long MutationEpoch { get; }
+    internal DailyCaptureEligibilityFailure Failure { get; }
+    internal string Diagnostic { get; }
+    internal bool Succeeded => Failure == DailyCaptureEligibilityFailure.None && OwnerSections != null;
+
+    private DailyV1OwnerSectionCensusCaptureResult(
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        long mutationEpoch,
+        DailyCaptureEligibilityFailure failure,
+        string diagnostic)
+    {
+        OwnerSections = ownerSections;
+        MutationEpoch = mutationEpoch;
+        Failure = failure;
+        Diagnostic = diagnostic;
+    }
+
+    internal static DailyV1OwnerSectionCensusCaptureResult Captured(
+        IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections, long mutationEpoch) =>
+        new DailyV1OwnerSectionCensusCaptureResult(
+            ownerSections, mutationEpoch, DailyCaptureEligibilityFailure.None, null);
+
+    internal static DailyV1OwnerSectionCensusCaptureResult Rejected(
+        DailyCaptureEligibilityFailure failure, string diagnostic) =>
+        new DailyV1OwnerSectionCensusCaptureResult(null, 0L,
+            failure == DailyCaptureEligibilityFailure.None
+                ? DailyCaptureEligibilityFailure.RuntimeFaulted
+                : failure,
+            diagnostic);
+}
+
 internal enum DailyV1RestoredBoundaryFinalizationStage : byte
 {
     MutationGuardBound = 1,
@@ -103,6 +142,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private DailyCaptureEligibilityToken currentCaptureToken;
     private bool selectedRuntimeOwnerGraphBound;
     private DailyV1SelectedRuntimeOwnerGraph selectedRuntimeOwnerGraph;
+    private object selectedRuntimeOwnerCensusSourceIdentity;
+    private Func<DailyV1CaptureScopeAllowance, DailyV1OwnerSectionCensusCaptureResult> selectedRuntimeOwnerCensusSource;
     private IReadOnlyList<DailyV1ActorTurnRosterProjection> selectedRuntimeActorRoster;
     private bool selectedRuntimeExecutionRootsBound;
     private RuntimeIdAllocator selectedRuntimeIdAllocator;
@@ -955,6 +996,122 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     /// </summary>
     internal DailyV1MutationEpochState MutationEpochState => mutationEpochState;
     internal DailyV1SelectedRuntimeOwnerGraph SelectedRuntimeOwnerGraph => selectedRuntimeOwnerGraph;
+    internal object SelectedRuntimeOwnerCensusSourceIdentity
+    {
+        get { lock (operationSyncRoot) return selectedRuntimeOwnerCensusSourceIdentity; }
+    }
+
+    /// <summary>
+    /// Binds the selected profile's exact census source to this Core execution
+    /// state. The source supplies the existing registered owner readers; Core
+    /// owns the serialized invocation, allowed outer scope, and epoch check.
+    /// </summary>
+    internal bool TryBindSelectedRuntimeOwnerCensusSource(
+        object sourceIdentity,
+        Func<DailyV1CaptureScopeAllowance, DailyV1OwnerSectionCensusCaptureResult> captureSource)
+    {
+        if (sourceIdentity == null || captureSource == null
+            || AdmissionContext?.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !runtimeIdentityBound || !runtimeConfigurationBound)
+            return false;
+
+        lock (operationSyncRoot)
+        {
+            if (activeOperationScopes.Count != 0 || advanceLease != null || currentCaptureToken != null)
+                return false;
+            if (selectedRuntimeOwnerCensusSourceIdentity != null)
+                return ReferenceEquals(selectedRuntimeOwnerCensusSourceIdentity, sourceIdentity)
+                    && Equals(selectedRuntimeOwnerCensusSource, captureSource);
+            selectedRuntimeOwnerCensusSourceIdentity = sourceIdentity;
+            selectedRuntimeOwnerCensusSource = captureSource;
+            return true;
+        }
+    }
+
+    internal bool TryCaptureBoundOwnerSectionCensus(
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts,
+        DailyV1CaptureScopeAllowance allowedOuterScope,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        ownerSections = null;
+        mutationEpoch = 0L;
+        failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+        Func<DailyV1CaptureScopeAllowance, DailyV1OwnerSectionCensusCaptureResult> captureSource;
+        lock (operationSyncRoot)
+        {
+            if (selectedRuntimeOwnerCensusSourceIdentity == null
+                || selectedRuntimeOwnerCensusSource == null)
+            {
+                if (hostPorts == null) return false;
+                return hostPorts.TryCaptureOwnerSectionCensus(
+                    allowedOuterScope, out ownerSections, out mutationEpoch, out failure);
+            }
+            captureSource = selectedRuntimeOwnerCensusSource;
+        }
+
+        DailyV1OwnerSectionCensusCaptureResult result = captureSource(allowedOuterScope);
+        if (result == null || !result.Succeeded)
+        {
+            failure = result?.Failure ?? DailyCaptureEligibilityFailure.RuntimeFaulted;
+            return false;
+        }
+        if (result.MutationEpoch != mutationEpochState.CurrentEpoch)
+        {
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        ownerSections = result.OwnerSections;
+        mutationEpoch = result.MutationEpoch;
+        failure = DailyCaptureEligibilityFailure.None;
+        return true;
+    }
+
+    internal bool TryCaptureUnadmittedRestoredOwnerSectionCensus(
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out long mutationEpoch,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        mutationEpoch = 0L;
+        diagnostic = null;
+        Func<DailyV1CaptureScopeAllowance, DailyV1OwnerSectionCensusCaptureResult> captureSource;
+        lock (operationSyncRoot)
+        {
+            if (selectedRuntimeOwnerCensusSourceIdentity == null
+                || selectedRuntimeOwnerCensusSource == null)
+            {
+                if (hostPorts == null)
+                {
+                    diagnostic = "The exact Core execution state has no bound selected-owner census source.";
+                    return false;
+                }
+                return hostPorts.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                    out ownerSections, out mutationEpoch, out diagnostic);
+            }
+            captureSource = selectedRuntimeOwnerCensusSource;
+        }
+
+        DailyV1OwnerSectionCensusCaptureResult result = captureSource(DailyV1CaptureScopeAllowance.None);
+        if (result == null || !result.Succeeded)
+        {
+            diagnostic = result?.Diagnostic ?? result?.Failure.ToString()
+                ?? DailyCaptureEligibilityFailure.RuntimeFaulted.ToString();
+            return false;
+        }
+        if (result.MutationEpoch != mutationEpochState.CurrentEpoch)
+        {
+            diagnostic = DailyCaptureEligibilityFailure.OperationInProgress.ToString();
+            return false;
+        }
+
+        ownerSections = result.OwnerSections;
+        mutationEpoch = result.MutationEpoch;
+        return true;
+    }
 
     /// <summary>
     /// Executes the P12 TravelParty batch using section identities derived

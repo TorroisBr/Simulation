@@ -3187,8 +3187,8 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        if (!hostPorts.TryCaptureUnadmittedRestoredDailyOwnerVector(
-                out targetOwnerSections, out targetMutationEpoch, out diagnostic)
+        if (!candidateSession.ExecutionBoundaryState.TryCaptureUnadmittedRestoredOwnerSectionCensus(
+                hostPorts, out targetOwnerSections, out targetMutationEpoch, out diagnostic)
             || targetOwnerSections == null)
         {
             targetOwnerSections = null;

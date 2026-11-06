@@ -402,7 +402,8 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
-        bool captured = hostPorts.TryCaptureOwnerSectionCensus(
+        bool captured = executionState.TryCaptureBoundOwnerSectionCensus(
+            hostPorts,
             allowedOuterScope,
             out ownerSections,
             out mutationEpoch,
@@ -4734,8 +4735,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         ownerSections = null;
         mutationEpoch = 0L;
         diagnostic = null;
-        if (!hostPorts.TryCaptureUnadmittedRestoredDailyOwnerVector(
-                out ownerSections, out mutationEpoch, out string captureDiagnostic))
+        if (!TryCaptureUnadmittedRestoredOwnerSectionCensus(
+                hostPorts, out ownerSections, out mutationEpoch, out string captureDiagnostic))
         {
             diagnostic = "The private target did not produce a complete quiescent owner vector: "
                 + (string.IsNullOrWhiteSpace(captureDiagnostic) ? "OwnerCoverageIncomplete" : captureDiagnostic) + ".";

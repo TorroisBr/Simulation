@@ -309,6 +309,9 @@ public sealed class ContinuationCensusProtocol
             RefreshExpectedSectionProjectionFromCore();
     }
 
+    internal bool IsBoundTo(DailyV1ExecutionBoundaryState executionState) =>
+        executionState != null && ReferenceEquals(sharedExecutionState, executionState);
+
     /// <summary>
     /// Declares one logical section requirement. This is generic protocol input;
     /// callers must not seal a selected-profile inventory until that inventory

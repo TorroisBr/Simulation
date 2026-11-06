@@ -680,6 +680,11 @@ public sealed class SimulationRuntimeAdmissionTests
     public void UnadmittedRestoredOwnerVectorCaptureIsReadOnlyAndQuiescent()
     {
         SimulationRuntime runtime = CreateUnpublishedDailyCaptureRuntime(new SimulationTime(8L));
+        DailyV1ExecutionBoundaryState executionState = runtime.ExecutionBoundaryState;
+        ContinuationCensusProtocol registeredProtocol =
+            ReadPrivateField<ContinuationCensusProtocol>(runtime, "npcRosterCensusProtocol");
+        Assert.That(executionState.SelectedRuntimeOwnerCensusSourceIdentity, Is.SameAs(registeredProtocol));
+        Assert.That(registeredProtocol.IsBoundTo(executionState), Is.True);
 
         Assert.That(runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
             out IReadOnlyList<OwnerSectionCensusSnapshot> first,
