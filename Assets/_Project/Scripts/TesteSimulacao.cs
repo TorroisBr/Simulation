@@ -317,7 +317,10 @@ public class TesteSimulacao : MonoBehaviour
     }
 
     private bool TryLoadSavedDailyV1BeforeGenesis()
-        => TryLoadSavedDailyV1BeforeGenesis(UnityEngine.Application.persistentDataPath);
+        => TryLoadSavedDailyV1BeforeGenesis(
+            UnityEngine.Application.persistentDataPath,
+            SystemAtomicFileSlotOperations.Instance,
+            prepareNoSaveGenesisBeforeUnityProjection: true);
 
     internal bool TryLoadSavedDailyV1ContinuationFromPathForTest(string persistentDataPath)
         => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath);
@@ -326,11 +329,23 @@ public class TesteSimulacao : MonoBehaviour
         IAtomicFileSlotOperations fileOperations)
         => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath, fileOperations);
 
+    internal bool TryLoadSavedDailyV1ContinuationFromPathForTest(string persistentDataPath,
+        IAtomicFileSlotOperations fileOperations,
+        bool prepareNoSaveGenesisBeforeUnityProjection)
+        => TryLoadSavedDailyV1BeforeGenesis(
+            persistentDataPath, fileOperations, prepareNoSaveGenesisBeforeUnityProjection);
+
     private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath)
         => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath, SystemAtomicFileSlotOperations.Instance);
 
     private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath,
         IAtomicFileSlotOperations fileOperations)
+        => TryLoadSavedDailyV1BeforeGenesis(
+            persistentDataPath, fileOperations, prepareNoSaveGenesisBeforeUnityProjection: false);
+
+    private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath,
+        IAtomicFileSlotOperations fileOperations,
+        bool prepareNoSaveGenesisBeforeUnityProjection)
     {
         if (!TryCreateCurrentDailyV1CompatibilityDescriptor(
                 out P12ACompatibilityDescriptor compatibility,
@@ -375,16 +390,39 @@ public class TesteSimulacao : MonoBehaviour
             persistentDataPath, fileOperations, stageCompleted: null,
             logOutput: UnitySimulationLoggerAdapter.Write,
             unityV1Identity: compatibility);
-        if (!dailyV1Application.TryAdmitInitialStart(
+        DailyV1ApplicationStartAdmission admission = null;
+        DailyV1ApplicationStartPreparation preparation = null;
+        P12AResult loadResult = null;
+        string admissionDiagnostic = null;
+        bool admitted;
+        if (prepareNoSaveGenesisBeforeUnityProjection)
+        {
+            admitted = dailyV1Application.TryPrepareStartOnExistingApplication(
                 currentDefinitions, host,
-                out DailyV1ApplicationStartAdmission admission,
-                out P12AResult loadResult,
-                out string admissionDiagnostic)
-            || admission == null)
+                out preparation, out loadResult, out admissionDiagnostic);
+            admission = preparation?.StartAdmission;
+        }
+        else
+        {
+            admitted = dailyV1Application.TryAdmitInitialStart(
+                currentDefinitions, host,
+                out admission, out loadResult, out admissionDiagnostic);
+        }
+
+        if (!admitted || admission == null)
         {
             bootstrapFailed = true;
-            UnityEngine.Debug.LogError("P12-A continuation load failed; genesis was not started. "
-                + (loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString()));
+            if (prepareNoSaveGenesisBeforeUnityProjection)
+            {
+                UnityEngine.Debug.LogError("P12-A initial start preparation failed; genesis was not started. "
+                    + (loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString())
+                    + (string.IsNullOrWhiteSpace(admissionDiagnostic) ? string.Empty : ": " + admissionDiagnostic));
+            }
+            else
+            {
+                UnityEngine.Debug.LogError("P12-A continuation load failed; genesis was not started. "
+                    + (loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString()));
+            }
             return true;
         }
 
@@ -397,16 +435,38 @@ public class TesteSimulacao : MonoBehaviour
         if (admission.Kind == DailyV1ApplicationStartAdmissionKind.GenesisRequired)
         {
             dailyV1InitialStartHost = host;
+            if (prepareNoSaveGenesisBeforeUnityProjection)
+            {
+                if (preparation == null
+                    || preparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                    || !ReferenceEquals(preparation.Application, dailyV1Application)
+                    || !ReferenceEquals(preparation.StartAdmission, admission)
+                    || !ReferenceEquals(preparation.GenesisComposition?.Definitions, currentDefinitions)
+                    || !ReferenceEquals(preparation.CoreSession?.Definitions, currentDefinitions))
+                {
+                    bootstrapFailed = true;
+                    UnityEngine.Debug.LogError(
+                        "P12-A NoSave admission did not prepare the exact Core genesis for Unity projection.");
+                    return true;
+                }
+                dailyV1InitialStartPreparation = preparation;
+            }
             return false;
         }
 
         if (admission.Kind != DailyV1ApplicationStartAdmissionKind.RestoreRequired
-            || admission.RestoreImage == null
-            || !dailyV1Application.TryPrepareInitialRestoreStart(
+            || admission.RestoreImage == null)
+        {
+            bootstrapFailed = true;
+            UnityEngine.Debug.LogError("P12-A continuation load failed; genesis was not started. "
+                + (loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString()));
+            return true;
+        }
+
+        if (preparation == null
+            && !dailyV1Application.TryPrepareInitialRestoreStart(
                 admission, currentDefinitions, host,
-                out DailyV1ApplicationStartPreparation preparation,
-                out admissionDiagnostic)
-            || preparation == null)
+                out preparation, out admissionDiagnostic))
         {
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A continuation load failed; genesis was not started. "

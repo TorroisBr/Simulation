@@ -16339,7 +16339,10 @@ public sealed class SimulationRuntimeAdmissionTests
                 genesisIdentityAllocations++;
                 return new WorldId(Guid.NewGuid());
             }));
-            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(storageRoot), Is.True);
+            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(
+                storageRoot, SystemAtomicFileSlotOperations.Instance,
+                prepareNoSaveGenesisBeforeUnityProjection: true), Is.True,
+                "The selected Start path must admit and prepare restoration on the same Core application before Unity projects it.");
             Assert.That(genesisIdentityAllocations, Is.Zero,
                 "Loading a persisted boundary must publish before and bypass genesis identity allocation.");
 
@@ -16557,6 +16560,70 @@ public sealed class SimulationRuntimeAdmissionTests
                 "Unity must publish the exact Core-prepared session through the same application.");
             Assert.That(ReadPrivateField<DailyV1ApplicationStartPreparation>(
                 target, "dailyV1InitialStartPreparation"), Is.Null);
+        }
+        finally
+        {
+            if (System.IO.Directory.Exists(storageRoot)) System.IO.Directory.Delete(storageRoot, true);
+            UnityEngine.Object.DestroyImmediate(targetObject);
+        }
+    }
+
+    [Test]
+    public void SelectedDailyV1StartPreparesNoSaveGenesisOnTheAdmittingCoreApplication()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject targetObject = new GameObject("P12-A selected Start joins NoSave admission and Core genesis");
+        string storageRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "P12AJoinedStart", System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            TesteSimulacao target = targetObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(target, config);
+            CountingReadFileOperations loadFileOperations = new CountingReadFileOperations();
+
+            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(
+                storageRoot, loadFileOperations, prepareNoSaveGenesisBeforeUnityProjection: true), Is.False,
+                "A successfully prepared NoSave candidate continues only into Unity's projection pipeline.");
+            Assert.That(loadFileOperations.OpenReadCount, Is.GreaterThan(0));
+            Assert.That(ReadPrivateField<bool>(target, "bootstrapFailed"), Is.False);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(target, "activeSession"), Is.Null,
+                "The Core candidate remains unpublished until its exact Unity projection is ready.");
+
+            DailyV1Application application = ReadPrivateField<DailyV1Application>(target, "dailyV1Application");
+            DailyV1ApplicationStartAdmission admission =
+                ReadPrivateField<DailyV1ApplicationStartAdmission>(target, "dailyV1StartAdmission");
+            DailyV1ApplicationStartPreparation preparation =
+                ReadPrivateField<DailyV1ApplicationStartPreparation>(target, "dailyV1InitialStartPreparation");
+            DailyV1EffectiveDefinitions definitions =
+                ReadPrivateField<DailyV1EffectiveDefinitions>(target, "selectedDefinitions");
+            Assert.That(admission, Is.Not.Null);
+            Assert.That(admission.Application, Is.SameAs(application));
+            Assert.That(admission.Kind, Is.EqualTo(DailyV1ApplicationStartAdmissionKind.GenesisRequired));
+            Assert.That(admission.PersistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+            Assert.That(preparation, Is.Not.Null);
+            Assert.That(preparation.Kind, Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+            Assert.That(preparation.Application, Is.SameAs(application));
+            Assert.That(preparation.StartAdmission, Is.SameAs(admission));
+            Assert.That(preparation.GenesisComposition.Definitions, Is.SameAs(definitions));
+            Assert.That(preparation.CoreSession.Definitions, Is.SameAs(definitions));
+            Assert.That(application.ActiveSession, Is.Null,
+                "Start preparation owns the exact candidate but cannot publish it before host projection.");
+
+            List<string> projectedStageOrder = new List<string>();
+            InvokeInitializeSimulation(target, projectedStageOrder.Add);
+
+            CollectionAssert.AreEqual(definitions.StageOrder, projectedStageOrder,
+                "The Unity projection preserves the admitted stage order.");
+            SimulationActiveSession published = ReadPrivateField<SimulationActiveSession>(target, "activeSession");
+            Assert.That(published, Is.Not.Null);
+            Assert.That(published.CoreRuntimeSession, Is.SameAs(preparation.CoreSession));
+            Assert.That(application.ActiveSession, Is.SameAs(preparation.CoreSession),
+                "Publication binds the exact same Core application and session that admitted NoSave.");
+            Assert.That(ReadPrivateField<DailyV1ApplicationStartPreparation>(
+                target, "dailyV1InitialStartPreparation"), Is.Null,
+                "Successful publication releases the private preparation handle.");
         }
         finally
         {
