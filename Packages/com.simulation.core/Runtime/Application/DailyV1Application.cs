@@ -2275,6 +2275,63 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
+    /// Completes one initial start using the exact preparation selected by this
+    /// application. Core chooses the genesis or restored commit path from that
+    /// preparation; the host supplies only the matching projection and runtime
+    /// boundary after constructing its view of the exact Core candidate.
+    /// </summary>
+    internal bool TryCommitInitialStartWithHostProjection(
+        DailyV1ApplicationStartPreparation preparation,
+        DailyV1ActiveRuntimeSession candidate,
+        IDailyV1ApplicationHostProjection hostProjection,
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (preparation == null
+            || !ReferenceEquals(preparation.Application, this)
+            || preparation.StartAdmission == null
+            || !ReferenceEquals(preparation.StartAdmission.Application, this)
+            || !ReferenceEquals(preparation.StartAdmission.PersistenceResult, preparation.PersistenceResult)
+            || candidate == null
+            || hostProjection == null
+            || hostPorts == null)
+        {
+            diagnostic = "Initial start commit requires this application's exact preparation, candidate, host projection, and runtime boundary.";
+            return false;
+        }
+
+        switch (preparation.Kind)
+        {
+            case DailyV1ApplicationStartPreparationKind.GenesisPrepared:
+                if (preparation.StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.GenesisRequired
+                    || !ReferenceEquals(preparation.CoreSession, candidate))
+                {
+                    diagnostic = "Initial genesis commit requires the exact Core session retained by its preparation.";
+                    return false;
+                }
+                return TryPublishPreparedInitialWithHostProjection(
+                    preparation, hostProjection, hostPorts, out diagnostic);
+
+            case DailyV1ApplicationStartPreparationKind.RestoreRequired:
+                if (preparation.StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.RestoreRequired
+                    || preparation.RestoreImage == null
+                    || candidate.AdmissionContext?.IsRestoredContinuation != true)
+                {
+                    diagnostic = "Initial restore commit requires the exact admitted image and a restored Core candidate.";
+                    return false;
+                }
+                return TryCommitInitialRestoredCandidateWithHostProjection(
+                    preparation.StartAdmission, preparation.RestoreImage, candidate,
+                    hostProjection, hostPorts, out diagnostic);
+
+            default:
+                diagnostic = "Initial start preparation selected an unsupported commit path.";
+                return false;
+        }
+    }
+
+    /// <summary>
     /// Binds and publishes the Core session and its opaque host projection as
     /// one application-owned transaction. The projection is not consulted for
     /// domain decisions; it exists only for a host such as Unity to expose its

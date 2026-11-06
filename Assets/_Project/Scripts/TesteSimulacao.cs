@@ -1282,8 +1282,8 @@ public class TesteSimulacao : MonoBehaviour
                 || !ReferenceEquals(startPreparation.CoreSession, coreSession))
                 return false;
 
-            return dailyV1Application.TryPublishPreparedInitialWithHostProjection(
-                startPreparation, candidateSession, candidateSession.Runtime, out _);
+            return dailyV1Application.TryCommitInitialStartWithHostProjection(
+                startPreparation, coreSession, candidateSession, candidateSession.Runtime, out _);
         }
     }
 
@@ -1405,6 +1405,14 @@ public class TesteSimulacao : MonoBehaviour
                 || exclusiveOperation != null || initialStartAdmission == null
                 || initialRestoreImage == null)
                 return false;
+            DailyV1ApplicationStartPreparation initialPreparation = dailyV1InitialStartPreparation;
+            if (initialPreparation != null
+                && ReferenceEquals(initialPreparation.StartAdmission, initialStartAdmission)
+                && ReferenceEquals(initialPreparation.RestoreImage, initialRestoreImage))
+                return dailyV1Application.TryCommitInitialStartWithHostProjection(
+                    initialPreparation, candidateCoreSession,
+                    candidateProjection, candidateProjection.Runtime, out _);
+
             return dailyV1Application.TryCommitInitialRestoredCandidateWithHostProjection(
                 initialStartAdmission, initialRestoreImage, candidateCoreSession,
                 candidateProjection, candidateProjection.Runtime, out _);

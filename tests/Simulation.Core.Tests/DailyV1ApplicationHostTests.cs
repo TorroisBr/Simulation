@@ -40,6 +40,8 @@ public sealed class DailyV1ApplicationHostTests
         public void Delete(string path) => throw new NotSupportedException();
     }
 
+    private sealed class TestHostProjection : IDailyV1ApplicationHostProjection { }
+
     private sealed class ReentrantMissingSlotOperations : IAtomicFileSlotOperations
     {
         private readonly DailyV1Application application;
@@ -803,6 +805,45 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(preparation.Logger.FullLog, Does.Contain(definitions.Configuration.simulationName));
         Assert.That(preparation.Logger.FullLog, Does.Not.Contain("start-preparation-root"),
             "The private storage root must not be emitted through the host log sink.");
+    }
+
+    [Test]
+    public void InitialStartCommitSelectsOnlyTheExactPreparedGenesisAndKeepsPublicationFailClosed()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "start-transaction-root", new MissingSlotOperations(), null, null,
+            unityV1Identity: UnityIdentity());
+
+        Assert.That(DailyV1Application.TryPrepareStart(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult persistenceResult,
+            out string prepareDiagnostic), Is.True, prepareDiagnostic);
+        Assert.That(preparation.Kind, Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+        Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+
+        Assert.That(DailyV1Application.TryPrepareStart(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation foreignPreparation,
+            out _, out string foreignDiagnostic), Is.True, foreignDiagnostic);
+        Assert.That(foreignPreparation.Kind, Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+
+        var foreignPorts = new MinimalSelectedRuntimeAdvanceHostPorts(
+            foreignPreparation.CoreSession.ExecutionBoundaryState);
+        Assert.That(preparation.Application.TryCommitInitialStartWithHostProjection(
+            preparation, foreignPreparation.CoreSession,
+            new TestHostProjection(), foreignPorts, out string foreignCommitDiagnostic), Is.False);
+        Assert.That(foreignCommitDiagnostic, Does.Contain("exact Core session"));
+        Assert.That(preparation.Application.ActiveSession, Is.Null);
+
+        var exactPorts = new MinimalSelectedRuntimeAdvanceHostPorts(
+            preparation.CoreSession.ExecutionBoundaryState);
+        Assert.That(preparation.Application.TryCommitInitialStartWithHostProjection(
+            preparation, preparation.CoreSession,
+            new TestHostProjection(), exactPorts, out string commitDiagnostic), Is.True, commitDiagnostic);
+        Assert.That(preparation.Application.ActiveSession, Is.SameAs(preparation.CoreSession),
+            "The selected application transaction must publish the exact prepared Core genesis.");
     }
 
     [Test]
