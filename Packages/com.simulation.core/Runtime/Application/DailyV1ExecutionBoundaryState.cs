@@ -222,6 +222,31 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    private sealed class SelectedCityPresenceCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly DailyV1CityNpcPresenceOwner owner;
+
+        internal SelectedCityPresenceCensusProvider(DailyV1CityNpcPresenceOwner owner)
+        {
+            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            if (string.IsNullOrWhiteSpace(owner.CityRuntimeId)
+                || owner.OrderedNpcRuntimeIds == null
+                || owner.Revision < 0L)
+                throw new InvalidOperationException("The selected City presence owner has no valid census state.");
+
+            return new OwnerSectionCensusWitness(
+                DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(owner.CityRuntimeId),
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                owner,
+                owner.OrderedNpcRuntimeIds.Count,
+                owner.Revision);
+        }
+    }
+
     private sealed class SelectedP12TravelPartyRuntimeProtocolScope : IDisposable
     {
         private readonly DailyV1ExecutionBoundaryState executionState;
@@ -1610,9 +1635,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 }
 
                 // The Core graph owns this exact store and can validate its
-                // local census directly. Core also validates its selected
-                // travel/spatial rows below; City and compatibility-roster
-                // rows remain under the host's exact live census protocol.
+                // local census directly. Core validates its selected
+                // travel/spatial and City presence rows below. Compatibility-roster
+                // and other rows remain under the host's exact live census protocol.
                 requested.Remove(TravelPartyCensusProvider.SectionId);
             }
             if (!TryValidateSelectedP12CoreOwnerRowsUnchanged(
@@ -1835,7 +1860,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         out Dictionary<string, SelectedP12OwnerSectionBaseline> baselines)
     {
         baselines = null;
-        if (graph == null || graph.Npcs == null || allowedSectionIds == null) return false;
+        if (graph == null || graph.Npcs == null || graph.Cities == null || allowedSectionIds == null) return false;
         try
         {
             HashSet<string> allowed = new HashSet<string>(allowedSectionIds, StringComparer.Ordinal);
@@ -1854,6 +1879,18 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                         npc.SpatialKnowledge))
                     return false;
             }
+            foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            {
+                if (city == null || !graph.ContainsExactCityOwner(city)
+                    || string.IsNullOrWhiteSpace(city.RuntimeId)
+                    || city.NpcPresence == null
+                    || !string.Equals(city.NpcPresence.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+                    || !expectedOwners.TryAdd(
+                        DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId),
+                        city.NpcPresence))
+                    return false;
+            }
+
             foreach (string sectionId in expectedOwners.Keys)
                 if (!allowed.Contains(sectionId)) return false;
 
@@ -1870,6 +1907,11 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                         provider, expectedOwners, captured))
                     return false;
 
+            foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+                if (!TryCaptureSelectedTravelPartyCoreOwnerSectionBaseline(
+                        new SelectedCityPresenceCensusProvider(city.NpcPresence),
+                        expectedOwners, captured))
+                    return false;
             if (captured.Count != expectedOwners.Count) return false;
             baselines = captured;
             return true;
@@ -2073,7 +2115,11 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         if (witness == null
             || !expectedOwners.TryGetValue(witness.SectionId, out object expectedOwner)
             || !ReferenceEquals(witness.OwnerInstanceIdentity, expectedOwner)
-            || witness.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+            || witness.SchemaVersion != (witness.SectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
+                    StringComparison.Ordinal)
+                ? DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion
+                : DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion)
             || witness.Cardinality < 0
             || witness.Revision < 0L
             || destination.ContainsKey(witness.SectionId))
@@ -2157,6 +2203,13 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 continue;
             }
 
+            if (sectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
+                    StringComparison.Ordinal)
+                && !TryGetSelectedTravelPartyCityPresenceOwner(
+                    context.Graph, sectionId, baseline.Owner, out _))
+                return false;
+
             if (!TryCaptureSelectedP12OwnerSectionWitness(
                     sectionId, baseline, out OwnerSectionCensusWitness current)
                 || current.Cardinality != baseline.Cardinality
@@ -2208,6 +2261,29 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             }
 
             if (sectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
+                    StringComparison.Ordinal))
+            {
+                if (!TryGetSelectedTravelPartyCityPresenceOwner(
+                        context.Graph, sectionId, baseline.Owner, out _)
+                    || baseline.Revision == long.MaxValue
+                    || !TryCaptureSelectedP12OwnerSectionWitness(
+                        sectionId, baseline, out OwnerSectionCensusWitness presence))
+                    return false;
+
+                bool addedMember = baseline.Cardinality < int.MaxValue
+                    && presence.Cardinality == baseline.Cardinality + 1;
+                bool removedMember = baseline.Cardinality > 0
+                    && presence.Cardinality == baseline.Cardinality - 1;
+                if (presence.Revision != baseline.Revision + 1L
+                    || (!addedMember && !removedMember))
+                    return false;
+
+                committedWitnesses.Add(sectionId, presence);
+                continue;
+            }
+
+            if (sectionId.StartsWith(
                     DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix,
                     StringComparison.Ordinal))
             {
@@ -2222,6 +2298,39 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             }
         }
         return true;
+    }
+
+    private static bool TryGetSelectedTravelPartyCityPresenceOwner(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string sectionId,
+        object expectedOwner,
+        out DailyV1CityNpcPresenceOwner presenceOwner)
+    {
+        presenceOwner = null;
+        if (graph?.Cities == null || expectedOwner == null
+            || string.IsNullOrWhiteSpace(sectionId)
+            || !sectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
+                StringComparison.Ordinal))
+            return false;
+
+        string cityRuntimeId = sectionId.Substring(
+            DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix.Length);
+        if (string.IsNullOrWhiteSpace(cityRuntimeId)) return false;
+
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            if (city == null || !graph.ContainsExactCityOwner(city)
+                || string.IsNullOrWhiteSpace(city.RuntimeId)
+                || city.NpcPresence == null
+                || !string.Equals(city.NpcPresence.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+                return false;
+            if (!string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal)) continue;
+            if (presenceOwner != null || !ReferenceEquals(city.NpcPresence, expectedOwner))
+                return false;
+            presenceOwner = city.NpcPresence;
+        }
+        return presenceOwner != null;
     }
 
     private static bool TryGetSpatialKnowledgeSectionPair(

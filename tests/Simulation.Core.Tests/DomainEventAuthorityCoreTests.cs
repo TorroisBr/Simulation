@@ -510,6 +510,219 @@ public sealed class DomainEventAuthorityCoreTests
     }
 
     [Test]
+    public void TravelPartyAdvanceUsesCoreCityPresenceBaselineAndTracksMembershipReceipts()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        DailyV1CityRuntimeOwners city = FindCityWithMember(graph, npc.RuntimeId);
+        Assert.That(city, Is.Not.Null);
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        RegisterTravelPartyAdvanceOperations(state);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+        bool dailyAdvanceStarted = false;
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+        string sectionId =
+            DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId);
+        int initialCardinality = city.NpcPresence.OrderedNpcRuntimeIds.Count;
+        long initialRevision = city.NpcPresence.Revision;
+
+        try
+        {
+            dailyAdvanceStarted = state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance);
+            Assert.That(dailyAdvanceStarted, Is.True);
+
+            bool operationResult = state.ExecuteSelectedP12TravelPartyAdvance(
+                graph,
+                protocol,
+                () =>
+                {
+                    Assert.That(state.TryCanCommitSelectedP12TravelPartyMutation(
+                        new[] { sectionId }, out bool handled), Is.True);
+                    Assert.That(handled, Is.True);
+                    Assert.That(city.NpcPresence.TryRemove(npc.RuntimeId), Is.True);
+                    Assert.That(state.TryRecordSelectedP12TravelPartyMutation(
+                        new[] { sectionId }, out handled), Is.True);
+                    Assert.That(handled, Is.True);
+
+                    // A second membership receipt in the same serialized
+                    // operation validates against the baseline just advanced.
+                    Assert.That(state.TryCanCommitSelectedP12TravelPartyMutation(
+                        new[] { sectionId }, out handled), Is.True);
+                    Assert.That(city.NpcPresence.TryAdd(npc.RuntimeId), Is.True);
+                    Assert.That(state.TryRecordSelectedP12TravelPartyMutation(
+                        new[] { sectionId }, out handled), Is.True);
+                    Assert.That(handled, Is.True);
+                    Assert.That(state.TryCanCommitSelectedP12TravelPartyMutation(
+                        new[] { sectionId }, out handled), Is.True);
+                    Assert.That(handled, Is.True);
+                    return true;
+                });
+
+            Assert.That(operationResult, Is.True);
+        }
+        finally
+        {
+            try
+            {
+                if (dailyAdvanceStarted)
+                    Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
+        }
+
+        Assert.That(city.NpcPresence.OrderedNpcRuntimeIds.Count, Is.EqualTo(initialCardinality));
+        Assert.That(city.NpcPresence.Revision, Is.EqualTo(initialRevision + 2L));
+        Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1),
+            "The complete host vector is validated at operation entry; selected City presence receipts are checked by Core.");
+        Assert.That(protocol.LastNotifiedMutationSectionIds, Does.Contain(sectionId));
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void TravelPartyAdvanceRejectsUnrecordedSelectedCityPresenceDrift()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        DailyV1CityRuntimeOwners city = FindCityWithMember(graph, npc.RuntimeId);
+        Assert.That(city, Is.Not.Null);
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        RegisterTravelPartyAdvanceOperations(state);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+        bool dailyAdvanceStarted = false;
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+        string sectionId =
+            DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId);
+        bool admissionAllowed = true;
+        bool admissionHandled = false;
+
+        try
+        {
+            dailyAdvanceStarted = state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance);
+            Assert.That(dailyAdvanceStarted, Is.True);
+
+            bool operationResult = state.ExecuteSelectedP12TravelPartyAdvance(
+                graph,
+                protocol,
+                () =>
+                {
+                    Assert.That(city.NpcPresence.TryRemove(npc.RuntimeId), Is.True);
+                    admissionAllowed = state.TryCanCommitSelectedP12TravelPartyMutation(
+                        new[] { sectionId }, out admissionHandled);
+                    return admissionAllowed;
+                });
+
+            Assert.That(operationResult, Is.False);
+        }
+        finally
+        {
+            try
+            {
+                if (dailyAdvanceStarted)
+                    Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
+        }
+
+        Assert.That(admissionHandled, Is.True);
+        Assert.That(admissionAllowed, Is.False);
+        Assert.That(protocol.FaultClosedCalls, Is.EqualTo(1));
+        Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1),
+            "Core rejects changed selected City presence before delegating to the host's unchanged-row check.");
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void TravelPartyAdvanceRejectsCityPresenceReceiptWithMultipleMembershipRevisions()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        DailyV1CityRuntimeOwners city = FindCityWithMember(graph, npc.RuntimeId);
+        Assert.That(city, Is.Not.Null);
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        RegisterTravelPartyAdvanceOperations(state);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+        bool dailyAdvanceStarted = false;
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+        string sectionId =
+            DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId);
+        bool receiptRecorded = true;
+        bool receiptHandled = false;
+
+        try
+        {
+            dailyAdvanceStarted = state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance);
+            Assert.That(dailyAdvanceStarted, Is.True);
+
+            bool operationResult = state.ExecuteSelectedP12TravelPartyAdvance(
+                graph,
+                protocol,
+                () =>
+                {
+                    Assert.That(state.TryCanCommitSelectedP12TravelPartyMutation(
+                        new[] { sectionId }, out bool handled), Is.True);
+                    Assert.That(city.NpcPresence.TryRemove(npc.RuntimeId), Is.True);
+                    Assert.That(city.NpcPresence.TryAdd(npc.RuntimeId), Is.True);
+                    receiptRecorded = state.TryRecordSelectedP12TravelPartyMutation(
+                        new[] { sectionId }, out receiptHandled);
+                    return receiptRecorded;
+                });
+
+            Assert.That(operationResult, Is.False);
+        }
+        finally
+        {
+            try
+            {
+                if (dailyAdvanceStarted)
+                    Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
+        }
+
+        Assert.That(receiptHandled, Is.True);
+        Assert.That(receiptRecorded, Is.False);
+        Assert.That(protocol.FaultClosedCalls, Is.EqualTo(1));
+        Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1));
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+    }
+
+    [Test]
     public void TravelPartyAdvanceRejectsUnrecordedSelectedNpcTravelBaselineDrift()
     {
         DailyV1EffectiveDefinitions definitions =
@@ -877,6 +1090,17 @@ public sealed class DomainEventAuthorityCoreTests
         Assert.That(graph.TravelParties.Revision, Is.EqualTo(4L));
         Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
         Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.True);
+    }
+
+    private static DailyV1CityRuntimeOwners FindCityWithMember(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string npcRuntimeId)
+    {
+        if (graph?.Cities == null || string.IsNullOrWhiteSpace(npcRuntimeId)) return null;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            if (city?.NpcPresence != null && city.NpcPresence.Contains(npcRuntimeId))
+                return city;
+        return null;
     }
 
     private static void RegisterTravelPartyAdvanceOperations(
