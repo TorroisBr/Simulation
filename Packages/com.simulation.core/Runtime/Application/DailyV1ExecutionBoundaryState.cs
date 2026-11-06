@@ -247,6 +247,61 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    private sealed class SelectedEventCounterCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly RuntimeIdAllocator allocator;
+        private readonly IOwnerSectionCensusProvider provider;
+
+        internal SelectedEventCounterCensusProvider(RuntimeIdAllocator allocator)
+        {
+            this.allocator = allocator ?? throw new ArgumentNullException(nameof(allocator));
+            provider = RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(allocator);
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            if (witness == null
+                || !string.Equals(witness.SectionId, RuntimeIdAllocatorCensusProvider.EventsSectionId,
+                    StringComparison.Ordinal)
+                || witness.SchemaVersion != RuntimeIdAllocatorCensusProvider.SchemaVersion
+                || witness.Cardinality != 1
+                || witness.Revision < 0L
+                || !RuntimeIdAllocatorOwnerBridge.TryMatchCurrentCensus(
+                    allocator, RuntimeIdAllocatorCensusCounter.Events,
+                    witness.OwnerInstanceIdentity, witness.Revision, out _))
+                throw new InvalidOperationException("The selected event-counter census does not match its exact allocator owner.");
+            return witness;
+        }
+    }
+
+    private sealed class SelectedRecordSequenceCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly SimulationRecordSequence sequence;
+        private readonly IOwnerSectionCensusProvider provider;
+
+        internal SelectedRecordSequenceCensusProvider(SimulationRecordSequence sequence)
+        {
+            this.sequence = sequence ?? throw new ArgumentNullException(nameof(sequence));
+            provider = new SimulationRecordSequenceCensusProvider(sequence);
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            if (witness == null
+                || !string.Equals(witness.SectionId, SimulationRecordSequenceCensusProvider.SectionId,
+                    StringComparison.Ordinal)
+                || witness.SchemaVersion != SimulationRecordSequenceCensusProvider.SchemaVersion
+                || witness.Cardinality != 1
+                || witness.Revision < 0L
+                || !SimulationRecordSequenceOwnerBridge.TryMatchCurrentCensus(
+                    sequence, witness.OwnerInstanceIdentity, witness.Revision, out _))
+                throw new InvalidOperationException("The selected record-sequence census does not match its exact owner.");
+            return witness;
+        }
+    }
+
     private sealed class SelectedP12TravelPartyRuntimeProtocolScope : IDisposable
     {
         private readonly DailyV1ExecutionBoundaryState executionState;
@@ -1215,14 +1270,16 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                         graph, out int travelPartyCardinalityBefore,
                         out long travelPartyRevisionBefore)
                     || !TryCaptureSelectedTravelPartyCoreOwnerSectionBaselines(
-                        graph, sectionIds, out Dictionary<string, SelectedP12OwnerSectionBaseline> coreBaselinesBefore)
+                        graph, sectionIds, selectedRuntimeIdAllocator, selectedRecordSequence,
+                        out Dictionary<string, SelectedP12OwnerSectionBaseline> coreBaselinesBefore)
                     || !protocol.TryValidateOwnerSections(graph, sectionIds)
                     || !protocol.TryValidateUnchangedSections(sectionIds)
                     || !TryCaptureTravelPartyStoreFacts(
                         graph, out int travelPartyCardinalityAfter,
                         out long travelPartyRevisionAfter)
                     || !TryCaptureSelectedTravelPartyCoreOwnerSectionBaselines(
-                        graph, sectionIds, out Dictionary<string, SelectedP12OwnerSectionBaseline> coreBaselinesAfter)
+                        graph, sectionIds, selectedRuntimeIdAllocator, selectedRecordSequence,
+                        out Dictionary<string, SelectedP12OwnerSectionBaseline> coreBaselinesAfter)
                     || travelPartyCardinalityAfter != travelPartyCardinalityBefore
                     || travelPartyRevisionAfter != travelPartyRevisionBefore
                     || !HaveSameSelectedP12OwnerSectionBaselines(
@@ -1857,10 +1914,15 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private static bool TryCaptureSelectedTravelPartyCoreOwnerSectionBaselines(
         DailyV1SelectedRuntimeOwnerGraph graph,
         IEnumerable<string> allowedSectionIds,
+        RuntimeIdAllocator selectedAllocator,
+        SimulationRecordSequence selectedRecordSequence,
         out Dictionary<string, SelectedP12OwnerSectionBaseline> baselines)
     {
         baselines = null;
-        if (graph == null || graph.Npcs == null || graph.Cities == null || allowedSectionIds == null) return false;
+        if (graph == null || graph.Npcs == null || graph.Cities == null || allowedSectionIds == null
+            || selectedAllocator == null || !ReferenceEquals(graph.RuntimeIdAllocator, selectedAllocator)
+            || selectedRecordSequence == null)
+            return false;
         try
         {
             HashSet<string> allowed = new HashSet<string>(allowedSectionIds, StringComparer.Ordinal);
@@ -1891,6 +1953,17 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     return false;
             }
 
+            IOwnerSectionCensusProvider eventCounterProvider =
+                new SelectedEventCounterCensusProvider(selectedAllocator);
+            OwnerSectionCensusWitness eventCounter = eventCounterProvider.GetCurrentCensus();
+            if (!expectedOwners.TryAdd(eventCounter.SectionId, eventCounter.OwnerInstanceIdentity))
+                return false;
+            IOwnerSectionCensusProvider recordSequenceProvider =
+                new SelectedRecordSequenceCensusProvider(selectedRecordSequence);
+            OwnerSectionCensusWitness recordSequence = recordSequenceProvider.GetCurrentCensus();
+            if (!expectedOwners.TryAdd(recordSequence.SectionId, recordSequence.OwnerInstanceIdentity))
+                return false;
+
             foreach (string sectionId in expectedOwners.Keys)
                 if (!allowed.Contains(sectionId)) return false;
 
@@ -1912,6 +1985,11 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                         new SelectedCityPresenceCensusProvider(city.NpcPresence),
                         expectedOwners, captured))
                     return false;
+            if (!TryCaptureSelectedTravelPartyCoreOwnerSectionBaseline(
+                    eventCounterProvider, expectedOwners, captured)
+                || !TryCaptureSelectedTravelPartyCoreOwnerSectionBaseline(
+                    recordSequenceProvider, expectedOwners, captured))
+                return false;
             if (captured.Count != expectedOwners.Count) return false;
             baselines = captured;
             return true;
@@ -2112,14 +2190,22 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         OwnerSectionCensusWitness witness;
         try { witness = provider.GetCurrentCensus(); }
         catch { return false; }
+        int expectedSchemaVersion = witness == null ? 0
+            : string.Equals(witness.SectionId,
+                RuntimeIdAllocatorCensusProvider.EventsSectionId, StringComparison.Ordinal)
+                ? RuntimeIdAllocatorCensusProvider.SchemaVersion
+                : string.Equals(witness.SectionId,
+                    SimulationRecordSequenceCensusProvider.SectionId, StringComparison.Ordinal)
+                    ? SimulationRecordSequenceCensusProvider.SchemaVersion
+                    : witness.SectionId.StartsWith(
+                        DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
+                        StringComparison.Ordinal)
+                        ? DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion
+                        : DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
         if (witness == null
             || !expectedOwners.TryGetValue(witness.SectionId, out object expectedOwner)
             || !ReferenceEquals(witness.OwnerInstanceIdentity, expectedOwner)
-            || witness.SchemaVersion != (witness.SectionId.StartsWith(
-                    DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
-                    StringComparison.Ordinal)
-                ? DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion
-                : DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion)
+            || witness.SchemaVersion != expectedSchemaVersion
             || witness.Cardinality < 0
             || witness.Revision < 0L
             || destination.ContainsKey(witness.SectionId))
@@ -2257,6 +2343,22 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     return false;
                 committedWitnesses.Add(locationsId, locations);
                 committedWitnesses.Add(routesId, routes);
+                continue;
+            }
+
+            if (string.Equals(sectionId, RuntimeIdAllocatorCensusProvider.EventsSectionId,
+                    StringComparison.Ordinal)
+                || string.Equals(sectionId, SimulationRecordSequenceCensusProvider.SectionId,
+                    StringComparison.Ordinal))
+            {
+                if (baseline.Cardinality != 1
+                    || baseline.Revision == long.MaxValue
+                    || !TryCaptureSelectedP12OwnerSectionWitness(
+                        sectionId, baseline, out OwnerSectionCensusWitness sequenceOwner)
+                    || sequenceOwner.Cardinality != 1
+                    || sequenceOwner.Revision != baseline.Revision + 1L)
+                    return false;
+                committedWitnesses.Add(sectionId, sequenceOwner);
                 continue;
             }
 

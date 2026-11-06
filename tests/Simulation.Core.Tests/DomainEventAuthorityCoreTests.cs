@@ -723,6 +723,151 @@ public sealed class DomainEventAuthorityCoreTests
     }
 
     [Test]
+    public void TravelPartyAdvanceUsesCoreEventAndRecordSequenceReceipts()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        RuntimeIdAllocator allocator = graph.RuntimeIdAllocator;
+        SimulationRecordSequence sequence = state.SelectedRecordSequence;
+        Assert.That(allocator, Is.Not.Null);
+        Assert.That(sequence, Is.Not.Null);
+        string eventSection = RuntimeIdAllocatorCensusProvider.EventsSectionId;
+        string sequenceSection = SimulationRecordSequenceCensusProvider.SectionId;
+        long initialEventRevision = RuntimeIdAllocatorCensusProvider
+            .CreateEventCounterProvider(allocator).GetCurrentCensus().Revision;
+        long initialSequenceRevision = new SimulationRecordSequenceCensusProvider(sequence)
+            .GetCurrentCensus().Revision;
+
+        RuntimeIdAllocatorOwnerBridge.BindP12EventIdMutationBoundary(
+            allocator,
+            () => TryAdmitSelectedTravelPartyMutation(state, eventSection),
+            () => RecordSelectedTravelPartyMutation(state, eventSection));
+        SimulationRecordSequenceOwnerBridge.BindP12MutationBoundary(
+            sequence,
+            () => TryAdmitSelectedTravelPartyMutation(state, sequenceSection),
+            () => RecordSelectedTravelPartyMutation(state, sequenceSection));
+
+        var eventStore = new DomainEventStore(new HistoryStore(), new HistoryPolicy());
+        var recorder = new DomainEventRecorder(
+            allocator, state.SimulationTime, sequence, eventStore);
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+        bool recorded = ExecuteTravelPartyAdvanceForTest(
+            state, graph, protocol,
+            () => recorder.Record((eventId, day, record) => new TravelPartyArrivedEvent(
+                eventId, day, record, "travel-party-test", "origin", "destination", "route", 1,
+                new[] { graph.Npcs[0].RuntimeId }, System.Array.Empty<string>())));
+
+        Assert.That(recorded, Is.True);
+        Assert.That(eventStore.Events.Count, Is.EqualTo(1));
+        Assert.That(eventStore.Events[0], Is.TypeOf<TravelPartyArrivedEvent>());
+        Assert.That(RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(allocator)
+            .GetCurrentCensus().Revision, Is.EqualTo(initialEventRevision + 1L));
+        Assert.That(new SimulationRecordSequenceCensusProvider(sequence)
+            .GetCurrentCensus().Revision, Is.EqualTo(initialSequenceRevision + 1L));
+        Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1));
+        Assert.That(protocol.LastNotifiedMutationSectionIds, Does.Contain(eventSection));
+        Assert.That(protocol.LastNotifiedMutationSectionIds, Does.Contain(sequenceSection));
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+    }
+
+    [TestCase("event")]
+    [TestCase("record-sequence")]
+    public void TravelPartyAdvanceRejectsUnreceiptedEventIdentityOwnerDrift(string ownerKind)
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        RuntimeIdAllocator allocator = graph.RuntimeIdAllocator;
+        SimulationRecordSequence sequence = state.SelectedRecordSequence;
+        string sectionId = ownerKind == "event"
+            ? RuntimeIdAllocatorCensusProvider.EventsSectionId
+            : SimulationRecordSequenceCensusProvider.SectionId;
+        bool admissionAllowed = true;
+        bool admissionHandled = false;
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+
+        bool result = ExecuteTravelPartyAdvanceForTest(
+            state, graph, protocol,
+            () =>
+            {
+                MutateSelectedTravelPartyIdentityOwnerForTest(
+                    ownerKind, allocator, sequence);
+                admissionAllowed = state.TryCanCommitSelectedP12TravelPartyMutation(
+                    new[] { sectionId }, out admissionHandled);
+                return admissionAllowed;
+            });
+
+        Assert.That(result, Is.False);
+        Assert.That(admissionHandled, Is.True);
+        Assert.That(admissionAllowed, Is.False);
+        Assert.That(protocol.FaultClosedCalls, Is.EqualTo(1));
+        Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1));
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+    }
+
+    [TestCase("event")]
+    [TestCase("record-sequence")]
+    public void TravelPartyAdvanceRejectsIdentityOwnerReceiptWithMultipleRevisions(string ownerKind)
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        RuntimeIdAllocator allocator = graph.RuntimeIdAllocator;
+        SimulationRecordSequence sequence = state.SelectedRecordSequence;
+        string sectionId = ownerKind == "event"
+            ? RuntimeIdAllocatorCensusProvider.EventsSectionId
+            : SimulationRecordSequenceCensusProvider.SectionId;
+        bool receiptAllowed = true;
+        bool receiptHandled = false;
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+
+        bool result = ExecuteTravelPartyAdvanceForTest(
+            state, graph, protocol,
+            () =>
+            {
+                Assert.That(state.TryCanCommitSelectedP12TravelPartyMutation(
+                    new[] { sectionId }, out bool admissionHandled), Is.True);
+                Assert.That(admissionHandled, Is.True);
+                MutateSelectedTravelPartyIdentityOwnerForTest(
+                    ownerKind, allocator, sequence);
+                MutateSelectedTravelPartyIdentityOwnerForTest(
+                    ownerKind, allocator, sequence);
+                receiptAllowed = state.TryRecordSelectedP12TravelPartyMutation(
+                    new[] { sectionId }, out receiptHandled);
+                return receiptAllowed;
+            });
+
+        Assert.That(result, Is.False);
+        Assert.That(receiptHandled, Is.True);
+        Assert.That(receiptAllowed, Is.False);
+        Assert.That(protocol.FaultClosedCalls, Is.EqualTo(1));
+        Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1));
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+    }
+
+    [Test]
     public void TravelPartyAdvanceRejectsUnrecordedSelectedNpcTravelBaselineDrift()
     {
         DailyV1EffectiveDefinitions definitions =
@@ -1115,6 +1260,74 @@ public sealed class DomainEventAuthorityCoreTests
             Assert.That(state.TryRegisterRuntimeProtocolOperationContract(operationContractId), Is.True,
                 operationContractId);
         Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
+    }
+
+    private static bool ExecuteTravelPartyAdvanceForTest(
+        DailyV1ExecutionBoundaryState state,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        NoOpTravelPartyAdvanceProtocol protocol,
+        System.Func<bool> operation)
+    {
+        RegisterTravelPartyAdvanceOperations(state);
+        if (!state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease)) return false;
+        bool dailyAdvanceStarted = false;
+        bool operationResult = false;
+        bool dailyAdvanceEnded = true;
+        try
+        {
+            dailyAdvanceStarted = state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance);
+            if (dailyAdvanceStarted)
+                operationResult = state.ExecuteSelectedP12TravelPartyAdvance(
+                    graph, protocol, operation);
+        }
+        finally
+        {
+            try
+            {
+                if (dailyAdvanceStarted)
+                    dailyAdvanceEnded = state.TryEndRuntimeProtocolOperation();
+            }
+            finally
+            {
+                lease.Dispose();
+            }
+        }
+        return dailyAdvanceStarted && operationResult && dailyAdvanceEnded;
+    }
+
+    private static bool TryAdmitSelectedTravelPartyMutation(
+        DailyV1ExecutionBoundaryState state,
+        string sectionId)
+    {
+        bool handled;
+        return state.TryCanCommitSelectedP12TravelPartyMutation(
+                new[] { sectionId }, out handled)
+            && handled;
+    }
+
+    private static void RecordSelectedTravelPartyMutation(
+        DailyV1ExecutionBoundaryState state,
+        string sectionId)
+    {
+        if (!state.TryRecordSelectedP12TravelPartyMutation(
+                new[] { sectionId }, out bool handled)
+            || !handled)
+            throw new System.InvalidOperationException(
+                "The Core TravelParty mutation receipt was rejected.");
+    }
+
+    private static void MutateSelectedTravelPartyIdentityOwnerForTest(
+        string ownerKind,
+        RuntimeIdAllocator allocator,
+        SimulationRecordSequence sequence)
+    {
+        if (ownerKind == "event")
+        {
+            allocator.AllocateEventId();
+            return;
+        }
+        sequence.Allocate();
     }
 
     [Test]
