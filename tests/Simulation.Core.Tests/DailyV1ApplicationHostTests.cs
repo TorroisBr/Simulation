@@ -562,6 +562,173 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(diagnostic, Does.Contain("Required P11 ActorChoice owner"));
     }
 
+    private static OwnerSectionCensusSnapshot ToExplicitlyEmptySnapshot(
+        OwnerSectionCensusWitness witness)
+    {
+        return new OwnerSectionCensusSnapshot(
+            witness.SectionId,
+            witness.SchemaVersion,
+            OwnerSectionRole.ExplicitlyEmpty,
+            witness.OwnerInstanceIdentity,
+            witness.Cardinality,
+            witness.Revision);
+    }
+
+    [Test]
+    public void CoreRestoredTargetInvariantGateRequiresExactZeroRowsForBoundP8Owners()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "restore-p8-target-invariant-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, unityV1Identity: UnityIdentity());
+        Assert.That(DailyV1Application.TryPrepareStart(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out _, out string startDiagnostic), Is.True, startDiagnostic);
+
+        DailyV1ActiveRuntimeSession session = preparation.CoreSession;
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        SpatialAuthorityStore spatial = new SpatialAuthorityStore();
+        PersonSpatialPositionStore positions = new PersonSpatialPositionStore(
+            graph.PersonStore,
+            spatial,
+            new SpatialPassageTraversalOptionResolver(spatial.PassageAuthority));
+        LegacySpatialAnchorBindingStore anchors = new LegacySpatialAnchorBindingStore(spatial);
+        Assert.That(graph.TryBindPersonSpatialPositionStore(positions), Is.True);
+        Assert.That(graph.TryBindLegacySpatialAnchorBindingStore(anchors), Is.True);
+
+        OwnerSectionCensusWitness expedition = new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus();
+        ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
+        OwnerSectionCensusWitness p11 = new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus();
+        OwnerSectionCensusWitness position = new PersonSpatialPositionCensusProvider(positions).GetCurrentCensus();
+        OwnerSectionCensusWitness anchor = new LegacySpatialAnchorBindingCensusProvider(anchors).GetCurrentCensus();
+        List<OwnerSectionCensusSnapshot> exactEmptyTarget = new List<OwnerSectionCensusSnapshot>
+        {
+            ToRequiredSnapshot(expedition),
+            ToRequiredSnapshot(p11),
+            ToExplicitlyEmptySnapshot(position),
+            ToExplicitlyEmptySnapshot(anchor)
+        };
+
+        Assert.That(position.Cardinality, Is.Zero);
+        Assert.That(anchor.Cardinality, Is.Zero);
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session, exactEmptyTarget, out string diagnostic), Is.True, diagnostic);
+
+        List<OwnerSectionCensusSnapshot> missingPosition =
+            new List<OwnerSectionCensusSnapshot>
+            {
+                ToRequiredSnapshot(expedition),
+                ToRequiredSnapshot(p11),
+                ToExplicitlyEmptySnapshot(anchor)
+            };
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session, missingPosition, out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain(PersonSpatialPositionCensusProvider.SectionId));
+
+        List<OwnerSectionCensusSnapshot> nonzeroPosition =
+            new List<OwnerSectionCensusSnapshot>(exactEmptyTarget);
+        nonzeroPosition[2] = new OwnerSectionCensusSnapshot(
+            position.SectionId, position.SchemaVersion, OwnerSectionRole.ExplicitlyEmpty,
+            position.OwnerInstanceIdentity, 1, position.Revision);
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session, nonzeroPosition, out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain(PersonSpatialPositionCensusProvider.SectionId));
+
+        List<OwnerSectionCensusSnapshot> wrongPositionIdentity =
+            new List<OwnerSectionCensusSnapshot>(exactEmptyTarget);
+        wrongPositionIdentity[2] = new OwnerSectionCensusSnapshot(
+            position.SectionId, position.SchemaVersion, OwnerSectionRole.ExplicitlyEmpty,
+            new object(), position.Cardinality, position.Revision);
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session, wrongPositionIdentity, out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain(PersonSpatialPositionCensusProvider.SectionId));
+
+        List<OwnerSectionCensusSnapshot> missingAnchor =
+            new List<OwnerSectionCensusSnapshot>
+            {
+                ToRequiredSnapshot(expedition),
+                ToRequiredSnapshot(p11),
+                ToExplicitlyEmptySnapshot(position)
+            };
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session, missingAnchor, out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain(LegacySpatialAnchorBindingCensusProvider.SectionId));
+
+        List<OwnerSectionCensusSnapshot> nonzeroAnchor =
+            new List<OwnerSectionCensusSnapshot>(exactEmptyTarget);
+        nonzeroAnchor[3] = new OwnerSectionCensusSnapshot(
+            anchor.SectionId, anchor.SchemaVersion, OwnerSectionRole.ExplicitlyEmpty,
+            anchor.OwnerInstanceIdentity, 1, anchor.Revision);
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session, nonzeroAnchor, out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain(LegacySpatialAnchorBindingCensusProvider.SectionId));
+
+        List<OwnerSectionCensusSnapshot> wrongAnchorRole =
+            new List<OwnerSectionCensusSnapshot>(exactEmptyTarget);
+        wrongAnchorRole[3] = new OwnerSectionCensusSnapshot(
+            anchor.SectionId, anchor.SchemaVersion, OwnerSectionRole.Required,
+            anchor.OwnerInstanceIdentity, anchor.Cardinality, anchor.Revision);
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session, wrongAnchorRole, out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain(LegacySpatialAnchorBindingCensusProvider.SectionId));
+    }
+
+    [Test]
+    public void CoreRestoredTargetInvariantGateAcceptsPopulatedRequiredP11Owner()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession session, out string startDiagnostic),
+            Is.True, startDiagnostic);
+
+        MinimalSelectedRuntimeAdvanceHostPorts hostPorts =
+            new MinimalSelectedRuntimeAdvanceHostPorts(session.ExecutionBoundaryState);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, hostPorts), Is.True);
+        Assert.That(application.TryPublishInitial(session), Is.True);
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        ActorChoiceStore actorChoices = state.SelectedActorChoiceStore;
+        PersonRuntime person = new PersonRuntime(new PersonId("restore-populated-p11-person"));
+        Assert.That(application.TryBeginOperation(session, DailyV1OperationScopeKind.Application, out DailyV1ActiveRuntimeSession operationSession), Is.True);
+        Assert.That(operationSession, Is.SameAs(session));
+        try
+        {
+            Assert.That(session.OwnerGraph.PersonStore.TryRegister(
+                person, out PersonStoreFailure personFailure), Is.True, personFailure.ToString());
+            Assert.That(actorChoices.TryCapture(
+                "restore-populated-p11-command",
+                person.PersonId,
+                "restore-populated-p11-action",
+                WorldCommandOrigin.LocalPlayer,
+                WorldCommandAuthorityMode.Request,
+                0L,
+                out ActorChoiceInput captured,
+                out ActorChoiceStoreFailureCode failure), Is.True, failure.ToString());
+            Assert.That(captured.Status, Is.EqualTo(ActorChoiceInputStatus.Pending));
+        }
+        finally
+        {
+            application.EndOperation(DailyV1OperationScopeKind.Application);
+        }
+
+        OwnerSectionCensusWitness expedition = new ExpeditionCensusProvider(
+            session.OwnerGraph.Expeditions).GetCurrentCensus();
+        OwnerSectionCensusWitness p11 = new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus();
+        Assert.That(p11.Cardinality, Is.EqualTo(1));
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session,
+            new List<OwnerSectionCensusSnapshot>
+            {
+                ToRequiredSnapshot(expedition),
+                ToRequiredSnapshot(p11)
+            },
+            out string diagnostic), Is.True, diagnostic);
+    }
+
     [Test]
     public void RestoredCoreOwnerGraphRejectsGenealogyEndpointsOutsidePersonStore()
     {
@@ -732,6 +899,62 @@ public sealed class DailyV1ApplicationHostTests
             new[] { new P12AAssemblyIdentityV2("Simulation.Core", "1.0.0.0",
                 "00000000-0000-0000-0000-000000000001") }, "numeric", 1);
 
+    private sealed class MinimalSelectedRuntimeAdvanceHostPorts : IDailyV1SelectedRuntimeAdvanceHostPorts
+    {
+        internal MinimalSelectedRuntimeAdvanceHostPorts(DailyV1ExecutionBoundaryState state)
+        {
+            ExecutionState = state ?? throw new ArgumentNullException(nameof(state));
+        }
+
+        public DailyV1ExecutionBoundaryState ExecutionState { get; }
+
+        public bool TryGetExactJusticeRecordsCensusProjectionIdentity(
+            DailyV1JusticeRecordsOwner owner,
+            out object projectionIdentity,
+            out long p18ReceiptRevision)
+        {
+            projectionIdentity = null;
+            p18ReceiptRevision = 0L;
+            return false;
+        }
+
+        public bool TryCreateSelectedDailyExecutionHostPorts(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedDailyExecutionHostPorts hostPorts)
+        {
+            hostPorts = null;
+            return false;
+        }
+
+        public bool TryCaptureOwnerSectionCensus(
+            DailyV1CaptureScopeAllowance allowedOuterScope,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        public bool TryBindRestoredCandidateMutationGuard(out string diagnostic)
+        {
+            diagnostic = "This fixture does not publish a restored candidate.";
+            return false;
+        }
+
+        public bool TryCaptureUnadmittedRestoredDailyOwnerVector(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out string diagnostic)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            diagnostic = "This fixture does not capture a restored target vector.";
+            return false;
+        }
+    }
     private static P12ACompatibilityDescriptor UnityIdentity() =>
         new P12ACompatibilityDescriptor(
             "UnityBootstrap-Daily-v1", 1, "config", "6000.3.9f1", "WindowsEditor", "Mono",
