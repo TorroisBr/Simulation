@@ -407,6 +407,178 @@ public sealed class DomainEventAuthorityCoreTests
     }
 
     [Test]
+    public void TravelPartyAdvanceRejectsUnrecordedCoreStoreBaselineDrift()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        Assert.That(graph.Npcs, Is.Not.Empty);
+        string memberRuntimeId = graph.Npcs[0].RuntimeId;
+        TravelPartyRuntime unrecordedParty = new TravelPartyRuntime(
+            "unrecorded-travel-party-drift",
+            "origin-location",
+            "destination-location",
+            "route",
+            new[] { memberRuntimeId },
+            System.Array.Empty<string>(),
+            2,
+            null,
+            new[] { new TravelPartyMemberCost(memberRuntimeId, 0f) });
+
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        RegisterTravelPartyAdvanceOperations(state);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+        bool dailyAdvanceStarted = false;
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+        bool admissionAllowed = true;
+        bool admissionHandled = false;
+        try
+        {
+            dailyAdvanceStarted = state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance);
+            Assert.That(dailyAdvanceStarted, Is.True);
+
+            bool operationResult = state.ExecuteSelectedP12TravelPartyAdvance(
+                graph,
+                protocol,
+                () =>
+                {
+                    // Simulate a store write whose commit notification did
+                    // not reach this Core transaction. The next P12 admission
+                    // must detect that drift before accepting another write.
+                    Assert.That(graph.TravelParties.Add(unrecordedParty), Is.True);
+                    admissionAllowed = state.TryCanCommitSelectedP12TravelPartyMutation(
+                        new[] { TravelPartyCensusProvider.SectionId }, out admissionHandled);
+                    return admissionAllowed;
+                });
+
+            Assert.That(operationResult, Is.False);
+        }
+        finally
+        {
+            try
+            {
+                if (dailyAdvanceStarted)
+                    Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
+        }
+
+        Assert.That(admissionHandled, Is.True);
+        Assert.That(admissionAllowed, Is.False);
+        Assert.That(protocol.FaultClosedCalls, Is.EqualTo(1));
+        Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1),
+            "The stale Core-owned row must be rejected locally after initial full-vector validation.");
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.True);
+    }
+
+    [Test]
+    public void TravelPartyAdvanceFaultsWhenOneCommitReceiptHidesMultipleCompletions()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        Assert.That(graph.Npcs.Count, Is.GreaterThanOrEqualTo(2));
+        string firstMemberRuntimeId = graph.Npcs[0].RuntimeId;
+        string secondMemberRuntimeId = graph.Npcs[1].RuntimeId;
+        TravelPartyRuntime firstParty = new TravelPartyRuntime(
+            "travel-party-double-completion-a", "origin-a", "destination-a", "route-a",
+            new[] { firstMemberRuntimeId }, System.Array.Empty<string>(), 2, null,
+            new[] { new TravelPartyMemberCost(firstMemberRuntimeId, 0f) });
+        TravelPartyRuntime secondParty = new TravelPartyRuntime(
+            "travel-party-double-completion-b", "origin-b", "destination-b", "route-b",
+            new[] { secondMemberRuntimeId }, System.Array.Empty<string>(), 2, null,
+            new[] { new TravelPartyMemberCost(secondMemberRuntimeId, 0f) });
+        Assert.That(graph.TravelParties.Add(firstParty), Is.True);
+        Assert.That(graph.TravelParties.Add(secondParty), Is.True);
+
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        RegisterTravelPartyAdvanceOperations(state);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+        bool dailyAdvanceStarted = false;
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+        bool commitRecorded = true;
+        bool commitHandled = false;
+        try
+        {
+            dailyAdvanceStarted = state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance);
+            Assert.That(dailyAdvanceStarted, Is.True);
+
+            bool operationResult = state.ExecuteSelectedP12TravelPartyAdvance(
+                graph,
+                protocol,
+                () =>
+                {
+                    string[] travelPartySection = { TravelPartyCensusProvider.SectionId };
+                    Assert.That(state.TryCanCommitSelectedP12TravelPartyMutation(
+                        travelPartySection, out bool admissionHandled), Is.True);
+                    Assert.That(admissionHandled, Is.True);
+
+                    // Two owner revisions are deliberately presented as one
+                    // committed-section receipt. Core must fail closed.
+                    Assert.That(graph.TravelParties.Complete(firstParty.TravelPartyId), Is.True);
+                    Assert.That(graph.TravelParties.Complete(secondParty.TravelPartyId), Is.True);
+                    commitRecorded = state.TryRecordSelectedP12TravelPartyMutation(
+                        travelPartySection, out commitHandled);
+                    return commitRecorded;
+                });
+
+            Assert.That(operationResult, Is.False);
+        }
+        finally
+        {
+            try
+            {
+                if (dailyAdvanceStarted)
+                    Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
+        }
+
+        Assert.That(commitHandled, Is.True);
+        Assert.That(commitRecorded, Is.False);
+        Assert.That(protocol.FaultClosedCalls, Is.EqualTo(1));
+        Assert.That(graph.TravelParties.ActiveParties, Is.Empty);
+        Assert.That(graph.TravelParties.Revision, Is.EqualTo(4L));
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.True);
+    }
+
+    private static void RegisterTravelPartyAdvanceOperations(
+        DailyV1ExecutionBoundaryState state)
+    {
+        System.Collections.Generic.IReadOnlyList<string> operationContractIds =
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                hasRuntimeAdmission: true,
+                hasTravelPartySystem: true,
+                hasTravelSystem: false);
+        foreach (string operationContractId in operationContractIds)
+            Assert.That(state.TryRegisterRuntimeProtocolOperationContract(operationContractId), Is.True,
+                operationContractId);
+        Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
+    }
+
+    [Test]
     public void TravelPartyAdvanceRejectsWhenCoreOperationInventoryIsNotSealed()
     {
         DailyV1EffectiveDefinitions definitions =
