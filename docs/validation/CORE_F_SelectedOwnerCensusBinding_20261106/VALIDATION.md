@@ -31,3 +31,7 @@ The original CoreValidation manifest and cold/warm TRX files remain in protected
 ## Evidence boundary
 
 The tests establish the selected source identity binding and Core-mediated capture boundary for this candidate. The provider registrations and 89-family capture implementation remain in the existing Unity source adapter. This checkpoint does not establish a detached .NET host, complete owner-source extraction, all-profile census support, or full CORE-F completion.
+
+## Independent review
+
+Exact-tip independent review **PASS** for implementation commit `a2f0ec2291921c343958ffd60770766c08998e1a`. The review confirmed the bound source identity, fail-closed initialization, Unity-profile owner-thread/quiescence checks, and post-capture epoch comparison. No actionable defects were reported. The existing unbound host-port fallback does not receive the new Core epoch comparison and remains outside this checkpoint's guarantee.
