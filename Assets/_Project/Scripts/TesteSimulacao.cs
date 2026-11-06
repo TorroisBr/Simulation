@@ -203,6 +203,8 @@ public class TesteSimulacao : MonoBehaviour
     private DailyV1ApplicationStartAdmission dailyV1StartAdmission;
     private DailyV1ApplicationStartPreparation dailyV1InitialStartPreparation;
     private DailyV1ApplicationHost dailyV1InitialStartHost;
+    private bool buildInitialStartHostProjection;
+    private SimulationActiveSession pendingInitialStartHostProjection;
     private readonly DailyV1ApplicationSessionGate<SimulationActiveSession> compatibilitySessionGate =
         new DailyV1ApplicationSessionGate<SimulationActiveSession>(
             session => session.ExecutionBoundaryState);
@@ -320,7 +322,7 @@ public class TesteSimulacao : MonoBehaviour
         => TryLoadSavedDailyV1BeforeGenesis(
             UnityEngine.Application.persistentDataPath,
             SystemAtomicFileSlotOperations.Instance,
-            prepareNoSaveGenesisBeforeUnityProjection: true);
+            executeInitialStartTransaction: true);
 
     internal bool TryLoadSavedDailyV1ContinuationFromPathForTest(string persistentDataPath)
         => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath);
@@ -331,9 +333,9 @@ public class TesteSimulacao : MonoBehaviour
 
     internal bool TryLoadSavedDailyV1ContinuationFromPathForTest(string persistentDataPath,
         IAtomicFileSlotOperations fileOperations,
-        bool prepareNoSaveGenesisBeforeUnityProjection)
+        bool executeInitialStartTransaction)
         => TryLoadSavedDailyV1BeforeGenesis(
-            persistentDataPath, fileOperations, prepareNoSaveGenesisBeforeUnityProjection);
+            persistentDataPath, fileOperations, executeInitialStartTransaction);
 
     private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath)
         => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath, SystemAtomicFileSlotOperations.Instance);
@@ -341,11 +343,11 @@ public class TesteSimulacao : MonoBehaviour
     private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath,
         IAtomicFileSlotOperations fileOperations)
         => TryLoadSavedDailyV1BeforeGenesis(
-            persistentDataPath, fileOperations, prepareNoSaveGenesisBeforeUnityProjection: false);
+            persistentDataPath, fileOperations, executeInitialStartTransaction: false);
 
     private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath,
         IAtomicFileSlotOperations fileOperations,
-        bool prepareNoSaveGenesisBeforeUnityProjection)
+        bool executeInitialStartTransaction)
     {
         if (!TryCreateCurrentDailyV1CompatibilityDescriptor(
                 out P12ACompatibilityDescriptor compatibility,
@@ -390,29 +392,60 @@ public class TesteSimulacao : MonoBehaviour
             persistentDataPath, fileOperations, stageCompleted: null,
             logOutput: UnitySimulationLoggerAdapter.Write,
             unityV1Identity: compatibility);
+
+        if (executeInitialStartTransaction)
+        {
+            bool started = dailyV1Application.TryStartOnExistingApplication(
+                currentDefinitions, host,
+                (DailyV1ApplicationStartPreparation preparation, out DailyV1ActiveRuntimeSession candidateCoreSession,
+                    out IDailyV1ApplicationHostProjection candidateProjection,
+                    out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+                    out string hostDiagnostic) => TryBuildInitialStartHostProjection(
+                        preparation, host, compatibility, effective, calendar,
+                        currentDefinitions, currentBindings,
+                        out candidateCoreSession, out candidateProjection,
+                        out candidateHostPorts, out hostDiagnostic),
+                out DailyV1ApplicationStartPreparation completedPreparation,
+                out P12AResult startResult,
+                out string startDiagnostic);
+            if (!started
+                || completedPreparation == null
+                || !ReferenceEquals(completedPreparation.Application, dailyV1Application)
+                || dailyV1Application.ActiveSession == null
+                || !dailyV1Application.TryGetPublishedHostProjection(
+                    dailyV1Application.ActiveSession,
+                    out IDailyV1ApplicationHostProjection publishedProjection)
+                || !(publishedProjection is SimulationActiveSession publishedSession)
+                || !ReferenceEquals(publishedSession.CoreRuntimeSession,
+                    dailyV1Application.ActiveSession))
+            {
+                bootstrapFailed = true;
+                pendingInitialStartHostProjection = null;
+                UnityEngine.Debug.LogError("P12-A Core initial-start transaction failed before publishing its exact host session. "
+                    + (startResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString())
+                    + (string.IsNullOrWhiteSpace(startDiagnostic) ? string.Empty : ": " + startDiagnostic));
+                return true;
+            }
+
+            dailyV1InitialStartPreparation = null;
+            dailyV1InitialStartHost = null;
+            pendingInitialStartHostProjection = null;
+            ReleaseBootstrapAliases();
+            return true;
+        }
+
         DailyV1ApplicationStartAdmission admission = null;
         DailyV1ApplicationStartPreparation preparation = null;
         P12AResult loadResult = null;
         string admissionDiagnostic = null;
-        bool admitted;
-        if (prepareNoSaveGenesisBeforeUnityProjection)
-        {
-            admitted = dailyV1Application.TryPrepareStartOnExistingApplication(
-                currentDefinitions, host,
-                out preparation, out loadResult, out admissionDiagnostic);
-            admission = preparation?.StartAdmission;
-        }
-        else
-        {
-            admitted = dailyV1Application.TryAdmitInitialStart(
-                currentDefinitions, host,
-                out admission, out loadResult, out admissionDiagnostic);
-        }
+        bool admitted = dailyV1Application.TryAdmitInitialStart(
+            currentDefinitions, host,
+            out admission, out loadResult, out admissionDiagnostic);
 
         if (!admitted || admission == null)
         {
             bootstrapFailed = true;
-            if (prepareNoSaveGenesisBeforeUnityProjection)
+            if (executeInitialStartTransaction)
             {
                 UnityEngine.Debug.LogError("P12-A initial start preparation failed; genesis was not started. "
                     + (loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString())
@@ -435,22 +468,6 @@ public class TesteSimulacao : MonoBehaviour
         if (admission.Kind == DailyV1ApplicationStartAdmissionKind.GenesisRequired)
         {
             dailyV1InitialStartHost = host;
-            if (prepareNoSaveGenesisBeforeUnityProjection)
-            {
-                if (preparation == null
-                    || preparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
-                    || !ReferenceEquals(preparation.Application, dailyV1Application)
-                    || !ReferenceEquals(preparation.StartAdmission, admission)
-                    || !ReferenceEquals(preparation.GenesisComposition?.Definitions, currentDefinitions)
-                    || !ReferenceEquals(preparation.CoreSession?.Definitions, currentDefinitions))
-                {
-                    bootstrapFailed = true;
-                    UnityEngine.Debug.LogError(
-                        "P12-A NoSave admission did not prepare the exact Core genesis for Unity projection.");
-                    return true;
-                }
-                dailyV1InitialStartPreparation = preparation;
-            }
             return false;
         }
 
@@ -508,6 +525,122 @@ public class TesteSimulacao : MonoBehaviour
         ReleaseBootstrapAliases();
         return true;
     }
+
+    private bool TryBuildInitialStartHostProjection(
+        DailyV1ApplicationStartPreparation preparation,
+        DailyV1ApplicationHost host,
+        P12ACompatibilityDescriptor compatibility,
+        EffectiveSimulationConfiguration effective,
+        CalendarDefinition calendar,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings,
+        out DailyV1ActiveRuntimeSession candidateCoreSession,
+        out IDailyV1ApplicationHostProjection candidateProjection,
+        out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+        out string diagnostic)
+    {
+        candidateCoreSession = null;
+        candidateProjection = null;
+        candidateHostPorts = null;
+        diagnostic = null;
+        if (preparation == null
+            || !ReferenceEquals(preparation.Application, dailyV1Application)
+            || !ReferenceEquals(preparation.StartAdmission?.Application, dailyV1Application)
+            || !ReferenceEquals(preparation.StartAdmission.PersistenceResult, preparation.PersistenceResult)
+            || host == null || compatibility == null || effective == null
+            || calendar == null || definitions == null || bindings == null)
+        {
+            diagnostic = "The Unity start adapter received an incomplete or foreign Core preparation.";
+            return false;
+        }
+
+        dailyV1StartAdmission = preparation.StartAdmission;
+        dailyV1InitialStartPreparation = preparation;
+        dailyV1InitialStartHost = host;
+        selectedDefinitions = definitions;
+        selectedDefinitionBindings = bindings;
+        effectiveConfiguration = effective;
+        calendarDefinition = calendar;
+        lastEconomySnapshotDay = 0L;
+
+        if (preparation.Kind == DailyV1ApplicationStartPreparationKind.GenesisPrepared)
+        {
+            if (preparation.StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.GenesisRequired
+                || preparation.PersistenceResult?.Code != P12AResultCode.NoSave
+                || preparation.GenesisComposition == null
+                || preparation.CoreSession == null
+                || !ReferenceEquals(preparation.GenesisComposition.Definitions, definitions)
+                || !ReferenceEquals(preparation.CoreSession.Definitions, definitions))
+            {
+                diagnostic = "The NoSave host projection does not match the exact prepared Core genesis.";
+                return false;
+            }
+
+            pendingInitialStartHostProjection = null;
+            buildInitialStartHostProjection = true;
+            try
+            {
+                InitializeSimulation();
+            }
+            catch (Exception exception)
+            {
+                diagnostic = "Unity could not construct the host projection for the admitted Core genesis: "
+                    + exception.Message;
+                return false;
+            }
+            finally
+            {
+                buildInitialStartHostProjection = false;
+            }
+
+            SimulationActiveSession genesisProjection = pendingInitialStartHostProjection;
+            if (genesisProjection == null
+                || !ReferenceEquals(genesisProjection.CoreRuntimeSession, preparation.CoreSession)
+                || !ReferenceEquals(genesisProjection.Configuration, simulationConfig)
+                || genesisProjection.Runtime == null)
+            {
+                pendingInitialStartHostProjection = null;
+                diagnostic = "Unity did not return the projection bound to the exact prepared Core genesis.";
+                return false;
+            }
+
+            candidateCoreSession = preparation.CoreSession;
+            candidateProjection = genesisProjection;
+            candidateHostPorts = genesisProjection.Runtime;
+            return true;
+        }
+
+        if (preparation.Kind != DailyV1ApplicationStartPreparationKind.RestoreRequired
+            || preparation.StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.RestoreRequired
+            || preparation.RestoreImage == null
+            || !ReferenceEquals(preparation.RestoreImage, preparation.StartAdmission.RestoreImage))
+        {
+            diagnostic = "The Core start preparation did not select an exact supported initial restore image.";
+            return false;
+        }
+
+        if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+                preparation.RestoreImage, compatibility, simulationConfig, effective, calendar,
+                definitions, runtimeAdmissionContext,
+                out SimulationActiveSession restoredProjection,
+                out P12GDailyV1RestoreFailure restoreFailure,
+                out string restoreDiagnostic,
+                application: dailyV1Application,
+                initialStartAdmission: preparation.StartAdmission)
+            || restoredProjection?.CoreRuntimeSession == null
+            || restoredProjection.Runtime == null)
+        {
+            diagnostic = "P12-A detached continuation restoration failed: "
+                + restoreFailure + ": " + (restoreDiagnostic ?? string.Empty);
+            return false;
+        }
+
+        candidateCoreSession = restoredProjection.CoreRuntimeSession;
+        candidateProjection = restoredProjection;
+        candidateHostPorts = restoredProjection.Runtime;
+        return true;
+    }
+
     /// <summary>Saves the current completed Daily-v1 boundary to the single local continuation slot.</summary>
     public bool TrySaveDailyV1Continuation(out string resultCode)
         => TrySaveDailyV1ContinuationAtPath(UnityEngine.Application.persistentDataPath, out resultCode);
@@ -1144,6 +1277,12 @@ public class TesteSimulacao : MonoBehaviour
 
             unpublishedWorldId = null;
             draftComposition = null;
+            if (buildInitialStartHostProjection)
+            {
+                pendingInitialStartHostProjection = candidateSession;
+                return;
+            }
+
             if (!TryPublishInitialActiveSession(candidateSession))
                 throw new System.InvalidOperationException("A simulation session was already published for this bootstrap owner.");
             dailyV1InitialStartPreparation = null;

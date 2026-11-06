@@ -492,6 +492,94 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(application.ActiveSession, Is.Null,
             "Preparing the existing application must not publish its unbound session.");
     }
+    [Test]
+    public void CoreStartOnExistingApplicationCommitsExactSessionAfterHostProjection()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "start-existing-application-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, unityV1Identity: UnityIdentity());
+        TestHostProjection projection = new TestHostProjection();
+        int factoryCalls = 0;
+        DailyV1ApplicationStartPreparation factoryPreparation = null;
+
+        bool ProjectExactPreparation(
+            DailyV1ApplicationStartPreparation candidatePreparation,
+            out DailyV1ActiveRuntimeSession candidateSession,
+            out IDailyV1ApplicationHostProjection candidateProjection,
+            out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+            out string diagnostic)
+        {
+            factoryCalls++;
+            factoryPreparation = candidatePreparation;
+            candidateSession = candidatePreparation.CoreSession;
+            candidateProjection = projection;
+            candidateHostPorts = new MinimalSelectedRuntimeAdvanceHostPorts(
+                candidateSession.ExecutionBoundaryState);
+            diagnostic = null;
+            return true;
+        }
+
+        Assert.That(application.TryStartOnExistingApplication(
+            definitions, host, ProjectExactPreparation,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult persistenceResult,
+            out string startDiagnostic), Is.True, startDiagnostic);
+
+        Assert.That(factoryCalls, Is.EqualTo(1));
+        Assert.That(preparation, Is.Not.Null);
+        Assert.That(factoryPreparation, Is.SameAs(preparation));
+        Assert.That(preparation.Application, Is.SameAs(application));
+        Assert.That(preparation.StartAdmission.Kind,
+            Is.EqualTo(DailyV1ApplicationStartAdmissionKind.GenesisRequired));
+        Assert.That(preparation.Kind, Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+        Assert.That(preparation.PersistenceResult, Is.SameAs(persistenceResult));
+        Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(preparation.CoreSession.Definitions, Is.SameAs(definitions));
+        Assert.That(application.ActiveSession, Is.SameAs(preparation.CoreSession));
+        Assert.That(application.TryGetPublishedHostProjection(
+            preparation.CoreSession, out IDailyV1ApplicationHostProjection publishedProjection), Is.True);
+        Assert.That(publishedProjection, Is.SameAs(projection));
+    }
+
+    [Test]
+    public void CoreStartOnExistingApplicationLeavesSessionUnpublishedWhenHostProjectionFails()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "start-existing-application-failure-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, unityV1Identity: UnityIdentity());
+
+        bool RejectProjection(
+            DailyV1ApplicationStartPreparation preparation,
+            out DailyV1ActiveRuntimeSession candidateSession,
+            out IDailyV1ApplicationHostProjection candidateProjection,
+            out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+            out string diagnostic)
+        {
+            candidateSession = preparation.CoreSession;
+            candidateProjection = null;
+            candidateHostPorts = null;
+            diagnostic = "Unity rejected the exact host projection.";
+            return false;
+        }
+
+        Assert.That(application.TryStartOnExistingApplication(
+            definitions, host, RejectProjection,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult persistenceResult,
+            out string startDiagnostic), Is.False);
+        Assert.That(startDiagnostic, Does.Contain("Unity rejected"));
+        Assert.That(preparation, Is.Not.Null);
+        Assert.That(preparation.Application, Is.SameAs(application));
+        Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(application.ActiveSession, Is.Null,
+            "A failed Unity projection must not publish the prepared Core session.");
+        Assert.That(application.TryGetPublishedHostProjection(
+            preparation.CoreSession, out _), Is.False);
+    }
     private static OwnerSectionCensusSnapshot ToRequiredSnapshot(
         OwnerSectionCensusWitness witness)
     {

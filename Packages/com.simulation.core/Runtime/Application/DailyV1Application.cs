@@ -386,6 +386,13 @@ internal sealed class DailyV1ApplicationStartAdmission
     }
 }
 
+internal delegate bool DailyV1ApplicationInitialStartHostProjectionFactory(
+    DailyV1ApplicationStartPreparation preparation,
+    out DailyV1ActiveRuntimeSession candidateSession,
+    out IDailyV1ApplicationHostProjection candidateHostProjection,
+    out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+    out string diagnostic);
+
 internal sealed class DailyV1Application
 {
     private readonly DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession> activeSessionGate =
@@ -500,6 +507,64 @@ internal sealed class DailyV1Application
             diagnostic = "Core could not prepare the admitted initial Daily-v1 genesis: " + exception.Message;
             return false;
         }
+    }
+
+    /// <summary>
+    /// Runs the selected initial-start transaction on this application:
+    /// Core admits and prepares exactly one NoSave or Restore path, asks the
+    /// host to build only the matching projection and boundary, then commits
+    /// that exact candidate through the Core session gate.
+    /// </summary>
+    internal bool TryStartOnExistingApplication(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ApplicationHost host,
+        DailyV1ApplicationInitialStartHostProjectionFactory hostProjectionFactory,
+        out DailyV1ApplicationStartPreparation preparation,
+        out P12AResult persistenceResult,
+        out string diagnostic)
+    {
+        preparation = null;
+        persistenceResult = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        diagnostic = null;
+        if (hostProjectionFactory == null)
+        {
+            diagnostic = "The initial Daily-v1 start requires an explicit host projection factory.";
+            return false;
+        }
+
+        if (!TryPrepareStartOnExistingApplication(
+                definitions, host, out preparation, out persistenceResult, out diagnostic))
+            return false;
+
+        DailyV1ActiveRuntimeSession candidateSession = null;
+        IDailyV1ApplicationHostProjection candidateHostProjection = null;
+        IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts = null;
+        bool hostReady;
+        try
+        {
+            hostReady = hostProjectionFactory(
+                preparation, out candidateSession, out candidateHostProjection,
+                out candidateHostPorts, out diagnostic);
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException
+            || exception is NullReferenceException)
+        {
+            diagnostic = "The initial-start host projection failed before Core publication: "
+                + exception.Message;
+            return false;
+        }
+
+        if (!hostReady)
+        {
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The initial-start host could not project the exact admitted Core candidate.";
+            return false;
+        }
+
+        return TryCommitInitialStartWithHostProjection(
+            preparation, candidateSession, candidateHostProjection,
+            candidateHostPorts, out diagnostic);
     }
 
     private static SimulationLogger CreateInitialLogger(
