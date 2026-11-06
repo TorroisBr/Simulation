@@ -2786,8 +2786,175 @@ internal sealed class DailyV1Application
             return false;
         if (!TryValidateAllocatorHighWater(candidateSession, out diagnostic))
             return false;
-        return TryValidateRestoredExpeditionExactZero(graph.Expeditions,
-            targetOwnerSections, out diagnostic);
+        if (!TryValidateRestoredExpeditionExactZero(
+                graph.Expeditions, targetOwnerSections, out diagnostic))
+            return false;
+        return TryValidateRestoredCoreOwnerSentinels(
+            candidateSession, targetOwnerSections, out diagnostic);
+    }
+
+    private static bool TryValidateRestoredCoreOwnerSentinels(
+        DailyV1ActiveRuntimeSession candidateSession,
+        IReadOnlyList<OwnerSectionCensusSnapshot> targetOwnerSections,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = candidateSession?.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = candidateSession?.ExecutionBoundaryState;
+        ActorChoiceStore actorChoices = state?.SelectedActorChoiceStore;
+        if (graph == null || actorChoices == null || targetOwnerSections == null)
+        {
+            diagnostic = "The restored Core target is missing its exact owner graph, P11 authority, or owner vector.";
+            return false;
+        }
+
+        // P8 position and anchor rows remain host-owned unless their exact
+        // instances have been installed in the selected Core graph. Validate
+        // them here only when Core owns those instances; the complete P12 owner
+        // vector validates the host-owned rows on the existing adapter path.
+        if ((graph.PersonSpatialPositionStore != null
+                && !TryValidateRestoredCoreCurrentRevisionWitness(
+                    targetOwnerSections,
+                    new PersonSpatialPositionCensusProvider(graph.PersonSpatialPositionStore).GetCurrentCensus(),
+                    0,
+                    OwnerSectionRole.ExplicitlyEmpty,
+                    out diagnostic))
+            || (graph.LegacySpatialAnchors != null
+                && !TryValidateRestoredCoreCurrentRevisionWitness(
+                    targetOwnerSections,
+                    new LegacySpatialAnchorBindingCensusProvider(graph.LegacySpatialAnchors).GetCurrentCensus(),
+                    0,
+                    OwnerSectionRole.ExplicitlyEmpty,
+                    out diagnostic)))
+            return false;
+
+        OwnerSectionCensusWitness p11 = new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus();
+        OwnerSectionCensusWitness temporal =
+            new ActorChoiceTemporalCensusProvider(actorChoices).GetCurrentCensus();
+        OwnerSectionCensusSnapshot p11Section = null;
+        foreach (OwnerSectionCensusSnapshot section in targetOwnerSections)
+        {
+            if (section == null)
+            {
+                diagnostic = "The restored owner vector contains a missing Core target section.";
+                return false;
+            }
+
+            if (!string.Equals(
+                    section.SectionId,
+                    ActorChoiceP11CensusProvider.SectionId,
+                    StringComparison.Ordinal))
+                continue;
+
+            if (p11Section != null)
+            {
+                diagnostic = "The restored owner vector duplicates the P11 ActorChoice section.";
+                return false;
+            }
+            p11Section = section;
+        }
+
+        if (p11 == null
+            || !string.Equals(p11.SectionId, ActorChoiceP11CensusProvider.SectionId, StringComparison.Ordinal)
+            || p11.SchemaVersion != ActorChoiceP11CensusProvider.SchemaVersion
+            || p11.Cardinality < 0
+            || p11.Revision < 0L
+            || !ReferenceEquals(p11.OwnerInstanceIdentity, actorChoices.CensusOwnerIdentity)
+            || p11Section == null
+            || p11Section.Role != OwnerSectionRole.Required
+            || p11Section.SchemaVersion != p11.SchemaVersion
+            || !ReferenceEquals(p11Section.OwnerInstanceIdentity, p11.OwnerInstanceIdentity)
+            || p11Section.Cardinality != p11.Cardinality
+            || p11Section.Revision != p11.Revision)
+        {
+            diagnostic = "The restored owner vector does not identify the exact current Required P11 ActorChoice owner.";
+            return false;
+        }
+
+        if (temporal == null
+            || !string.Equals(temporal.SectionId,
+                ActorChoiceTemporalCensusProvider.SectionId, StringComparison.Ordinal)
+            || temporal.SchemaVersion != ActorChoiceTemporalCensusProvider.SchemaVersion
+            || temporal.Cardinality != 0
+            || temporal.Revision < 0L
+            || !ReferenceEquals(temporal.OwnerInstanceIdentity, actorChoices.CensusOwnerIdentity)
+            || temporal.Revision != p11.Revision)
+        {
+            diagnostic = "The excluded P18 ActorChoice temporal input count must be zero at the exact P11 owner revision.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryValidateRestoredCoreCurrentRevisionWitness(
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+        OwnerSectionCensusWitness witness,
+        int expectedCardinality,
+        OwnerSectionRole expectedRole,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (witness == null || witness.Revision < 0L)
+        {
+            diagnostic = "A current Core target census witness with a non-negative local revision is required.";
+            return false;
+        }
+
+        return TryValidateRestoredCoreWitness(
+            sections, witness, expectedCardinality, witness.Revision, expectedRole, out diagnostic);
+    }
+
+    private static bool TryValidateRestoredCoreWitness(
+        IReadOnlyList<OwnerSectionCensusSnapshot> sections,
+        OwnerSectionCensusWitness witness,
+        int expectedCardinality,
+        long expectedRevision,
+        OwnerSectionRole expectedRole,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (witness == null || sections == null)
+        {
+            diagnostic = "An exact Core target census witness or owner vector is missing.";
+            return false;
+        }
+
+        OwnerSectionCensusSnapshot match = null;
+        foreach (OwnerSectionCensusSnapshot section in sections)
+        {
+            if (section == null)
+            {
+                diagnostic = "The restored owner vector contains a missing Core target section.";
+                return false;
+            }
+
+            if (!string.Equals(section.SectionId, witness.SectionId, StringComparison.Ordinal))
+                continue;
+            if (match != null)
+            {
+                diagnostic = "The restored owner vector duplicates Core target section '"
+                    + witness.SectionId + "'.";
+                return false;
+            }
+            match = section;
+        }
+
+        if (match == null
+            || match.SchemaVersion != witness.SchemaVersion
+            || match.Role != expectedRole
+            || !ReferenceEquals(match.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+            || match.Cardinality != expectedCardinality
+            || match.Revision != expectedRevision
+            || witness.Cardinality != expectedCardinality
+            || witness.Revision != expectedRevision)
+        {
+            diagnostic = "The restored owner vector does not identify the exact Core owner section '"
+                + witness.SectionId + "'.";
+            return false;
+        }
+
+        return true;
     }
 
     internal static bool TryValidateAllocatorHighWater(

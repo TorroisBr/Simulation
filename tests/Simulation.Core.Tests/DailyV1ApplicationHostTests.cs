@@ -490,6 +490,18 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(application.ActiveSession, Is.Null,
             "Preparing the existing application must not publish its unbound session.");
     }
+    private static OwnerSectionCensusSnapshot ToRequiredSnapshot(
+        OwnerSectionCensusWitness witness)
+    {
+        return new OwnerSectionCensusSnapshot(
+            witness.SectionId,
+            witness.SchemaVersion,
+            OwnerSectionRole.Required,
+            witness.OwnerInstanceIdentity,
+            witness.Cardinality,
+            witness.Revision);
+    }
+
     [Test]
     public void CoreRestoredTargetInvariantGateUsesExactCoreExpeditionOwnerAndAllocator()
     {
@@ -503,21 +515,51 @@ public sealed class DailyV1ApplicationHostTests
             out _, out string startDiagnostic), Is.True, startDiagnostic);
 
         DailyV1ActiveRuntimeSession session = preparation.CoreSession;
-        OwnerSectionCensusWitness witness = new ExpeditionCensusProvider(
+        OwnerSectionCensusWitness expeditionWitness = new ExpeditionCensusProvider(
             session.OwnerGraph.Expeditions).GetCurrentCensus();
-        OwnerSectionCensusSnapshot expedition = new OwnerSectionCensusSnapshot(
-            witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
-            witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision);
+        ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
+        OwnerSectionCensusWitness p11Witness = new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus();
+        List<OwnerSectionCensusSnapshot> targetSections = new List<OwnerSectionCensusSnapshot>
+        {
+            ToRequiredSnapshot(expeditionWitness),
+            ToRequiredSnapshot(p11Witness)
+        };
 
         Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
-            session, new[] { expedition }, out string diagnostic), Is.True, diagnostic);
+            session, targetSections, out string diagnostic), Is.True, diagnostic);
 
-        OwnerSectionCensusSnapshot invalidExpedition = new OwnerSectionCensusSnapshot(
-            expedition.SectionId, expedition.SchemaVersion, expedition.Role,
-            expedition.OwnerInstanceIdentity, expedition.Cardinality + 1, expedition.Revision);
+        List<OwnerSectionCensusSnapshot> invalidExpeditionSections =
+            new List<OwnerSectionCensusSnapshot>(targetSections);
+        invalidExpeditionSections[0] = new OwnerSectionCensusSnapshot(
+            expeditionWitness.SectionId, expeditionWitness.SchemaVersion, OwnerSectionRole.Required,
+            expeditionWitness.OwnerInstanceIdentity, expeditionWitness.Cardinality + 1, expeditionWitness.Revision);
         Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
-            session, new[] { invalidExpedition }, out diagnostic), Is.False);
+            session, invalidExpeditionSections, out diagnostic), Is.False);
         Assert.That(diagnostic, Does.Contain("cardinality zero"));
+
+        List<OwnerSectionCensusSnapshot> invalidP11RoleSections =
+            new List<OwnerSectionCensusSnapshot>(targetSections);
+        invalidP11RoleSections[1] = new OwnerSectionCensusSnapshot(
+            p11Witness.SectionId, p11Witness.SchemaVersion, OwnerSectionRole.ExplicitlyEmpty,
+            p11Witness.OwnerInstanceIdentity, p11Witness.Cardinality, p11Witness.Revision);
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session, invalidP11RoleSections, out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain("Required P11 ActorChoice owner"));
+
+        List<OwnerSectionCensusSnapshot> invalidP11IdentitySections =
+            new List<OwnerSectionCensusSnapshot>(targetSections);
+        invalidP11IdentitySections[1] = new OwnerSectionCensusSnapshot(
+            p11Witness.SectionId, p11Witness.SchemaVersion, OwnerSectionRole.Required,
+            new object(), p11Witness.Cardinality, p11Witness.Revision);
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session, invalidP11IdentitySections, out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain("Required P11 ActorChoice owner"));
+
+        List<OwnerSectionCensusSnapshot> missingP11Sections =
+            new List<OwnerSectionCensusSnapshot> { ToRequiredSnapshot(expeditionWitness) };
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session, missingP11Sections, out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain("Required P11 ActorChoice owner"));
     }
 
     [Test]
