@@ -407,6 +407,321 @@ public sealed class DomainEventAuthorityCoreTests
     }
 
     [Test]
+    public void TravelPartyAdvanceUsesCoreSelectedNpcTravelAndSpatialBaselines()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        RegisterTravelPartyAdvanceOperations(state);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+        bool dailyAdvanceStarted = false;
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+        long initialTravelRevision = npc.Travel.Revision;
+        long initialSpatialRevision = npc.SpatialKnowledge.Revision;
+        int initialLocationCount = npc.SpatialKnowledge.KnownLocationRuntimeIds.Count;
+        int initialRouteCount = npc.SpatialKnowledge.KnownRouteRuntimeIds.Count;
+        string travelSection = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(
+            12, npc.RuntimeId);
+        string locationsSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + npc.RuntimeId;
+        string routesSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + npc.RuntimeId;
+
+        try
+        {
+            dailyAdvanceStarted = state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance);
+            Assert.That(dailyAdvanceStarted, Is.True);
+
+            bool operationResult = state.ExecuteSelectedP12TravelPartyAdvance(
+                graph,
+                protocol,
+                () =>
+                {
+                    string[] travelMutation = { travelSection };
+                    Assert.That(state.TryCanCommitSelectedP12TravelPartyMutation(
+                        travelMutation, out bool handled), Is.True);
+                    Assert.That(handled, Is.True);
+                    Assert.That(AdvanceTravelOwnerRevisionForP12Test(npc.Travel), Is.True);
+                    Assert.That(state.TryRecordSelectedP12TravelPartyMutation(
+                        travelMutation, out handled), Is.True);
+                    Assert.That(handled, Is.True);
+
+                    // The same selected owner can commit multiple transitions
+                    // inside one serialized party batch. Each accepted receipt
+                    // advances its local Core baseline for the next member step.
+                    Assert.That(state.TryCanCommitSelectedP12TravelPartyMutation(
+                        travelMutation, out handled), Is.True);
+                    Assert.That(AdvanceTravelOwnerRevisionForP12Test(npc.Travel), Is.True);
+                    Assert.That(state.TryRecordSelectedP12TravelPartyMutation(
+                        travelMutation, out handled), Is.True);
+                    Assert.That(handled, Is.True);
+
+                    string[] spatialMutation = { locationsSection, routesSection };
+                    Assert.That(state.TryCanCommitSelectedP12TravelPartyMutation(
+                        spatialMutation, out handled), Is.True);
+                    Assert.That(handled, Is.True);
+                    Assert.That(npc.SpatialKnowledge.DiscoverLocation(
+                        "core-travel-party-p12-spatial"), Is.True);
+                    Assert.That(state.TryRecordSelectedP12TravelPartyMutation(
+                        spatialMutation, out handled), Is.True);
+                    Assert.That(handled, Is.True);
+
+                    // The paired census rows share one revision and remain
+                    // admitted from the newly acknowledged Core baseline.
+                    Assert.That(state.TryCanCommitSelectedP12TravelPartyMutation(
+                        spatialMutation, out handled), Is.True);
+                    Assert.That(handled, Is.True);
+                    return true;
+                });
+
+            Assert.That(operationResult, Is.True);
+        }
+        finally
+        {
+            try
+            {
+                if (dailyAdvanceStarted)
+                    Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
+        }
+
+        Assert.That(npc.Travel.Revision, Is.EqualTo(initialTravelRevision + 2L));
+        Assert.That(npc.SpatialKnowledge.Revision, Is.EqualTo(initialSpatialRevision + 1L));
+        Assert.That(npc.SpatialKnowledge.KnownLocationRuntimeIds.Count, Is.EqualTo(initialLocationCount + 1));
+        Assert.That(npc.SpatialKnowledge.KnownRouteRuntimeIds.Count, Is.EqualTo(initialRouteCount));
+        Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1),
+            "Only the initial complete owner-vector validation should use the host unchanged-row protocol.");
+        Assert.That(protocol.LastNotifiedMutationSectionIds, Does.Contain(travelSection));
+        Assert.That(protocol.LastNotifiedMutationSectionIds, Does.Contain(locationsSection));
+        Assert.That(protocol.LastNotifiedMutationSectionIds, Does.Contain(routesSection));
+    }
+
+    [Test]
+    public void TravelPartyAdvanceRejectsUnrecordedSelectedNpcTravelBaselineDrift()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        RegisterTravelPartyAdvanceOperations(state);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+        bool dailyAdvanceStarted = false;
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+        string travelSection = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(
+            12, npc.RuntimeId);
+        bool admissionAllowed = true;
+        bool admissionHandled = false;
+        try
+        {
+            dailyAdvanceStarted = state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance);
+            Assert.That(dailyAdvanceStarted, Is.True);
+
+            bool operationResult = state.ExecuteSelectedP12TravelPartyAdvance(
+                graph,
+                protocol,
+                () =>
+                {
+                    // Simulate a revision write that escaped the scoped P12
+                    // receipt. Core must reject it locally before another
+                    // host unchanged-row check can accept the stale baseline.
+                    Assert.That(AdvanceTravelOwnerRevisionForP12Test(npc.Travel), Is.True);
+                    admissionAllowed = state.TryCanCommitSelectedP12TravelPartyMutation(
+                        new[] { travelSection }, out admissionHandled);
+                    return admissionAllowed;
+                });
+
+            Assert.That(operationResult, Is.False);
+        }
+        finally
+        {
+            try
+            {
+                if (dailyAdvanceStarted)
+                    Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
+        }
+
+        Assert.That(admissionHandled, Is.True);
+        Assert.That(admissionAllowed, Is.False);
+        Assert.That(protocol.FaultClosedCalls, Is.EqualTo(1));
+        Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1),
+            "After the initial complete vector, Core must detect its selected travel owner drift locally.");
+    }
+
+    [Test]
+    public void TravelPartyAdvanceRejectsUnrecordedSelectedSpatialBaselineDrift()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        RegisterTravelPartyAdvanceOperations(state);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+        bool dailyAdvanceStarted = false;
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+        string locationsSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + npc.RuntimeId;
+        string routesSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + npc.RuntimeId;
+        bool admissionAllowed = true;
+        bool admissionHandled = false;
+        try
+        {
+            dailyAdvanceStarted = state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance);
+            Assert.That(dailyAdvanceStarted, Is.True);
+
+            bool operationResult = state.ExecuteSelectedP12TravelPartyAdvance(
+                graph,
+                protocol,
+                () =>
+                {
+                    // A spatial discovery changes a shared revision represented
+                    // by both P12 rows. Without its receipt, the next admission
+                    // must reject both rows from Core's prior exact baseline.
+                    Assert.That(npc.SpatialKnowledge.DiscoverLocation(
+                        "unrecorded-core-spatial-drift"), Is.True);
+                    admissionAllowed = state.TryCanCommitSelectedP12TravelPartyMutation(
+                        new[] { locationsSection, routesSection }, out admissionHandled);
+                    return admissionAllowed;
+                });
+
+            Assert.That(operationResult, Is.False);
+        }
+        finally
+        {
+            try
+            {
+                if (dailyAdvanceStarted)
+                    Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
+        }
+
+        Assert.That(admissionHandled, Is.True);
+        Assert.That(admissionAllowed, Is.False);
+        Assert.That(protocol.FaultClosedCalls, Is.EqualTo(1));
+        Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1),
+            "After initial complete-vector validation, Core must detect its selected spatial owner drift locally.");
+    }
+
+    [Test]
+    public void TravelPartyAdvanceRejectsSpatialMutationReceiptMissingPairedRow()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        RegisterTravelPartyAdvanceOperations(state);
+        Assert.That(state.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+        bool dailyAdvanceStarted = false;
+        var protocol = new NoOpTravelPartyAdvanceProtocol();
+        string locationsSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + npc.RuntimeId;
+        string routesSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + npc.RuntimeId;
+        bool receiptRecorded = true;
+        bool receiptHandled = false;
+        try
+        {
+            dailyAdvanceStarted = state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance);
+            Assert.That(dailyAdvanceStarted, Is.True);
+
+            bool operationResult = state.ExecuteSelectedP12TravelPartyAdvance(
+                graph,
+                protocol,
+                () =>
+                {
+                    Assert.That(state.TryCanCommitSelectedP12TravelPartyMutation(
+                        new[] { locationsSection, routesSection }, out bool handled), Is.True);
+                    Assert.That(handled, Is.True);
+                    Assert.That(npc.SpatialKnowledge.DiscoverLocation(
+                        "core-spatial-partial-receipt"), Is.True);
+                    receiptRecorded = state.TryRecordSelectedP12TravelPartyMutation(
+                        new[] { locationsSection }, out receiptHandled);
+                    return receiptRecorded;
+                });
+
+            Assert.That(operationResult, Is.False);
+        }
+        finally
+        {
+            try
+            {
+                if (dailyAdvanceStarted)
+                    Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            finally
+            {
+                lease.Dispose();
+            }
+        }
+
+        Assert.That(receiptHandled, Is.True);
+        Assert.That(receiptRecorded, Is.False);
+        Assert.That(protocol.FaultClosedCalls, Is.EqualTo(1));
+        Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1));
+    }
+
+    private static bool AdvanceTravelOwnerRevisionForP12Test(DailyV1NpcTravelOwner travel) =>
+        travel != null
+        && travel.TryCommitState(
+            travel.CurrentLocationRuntimeId,
+            travel.CurrentCityRuntimeId,
+            travel.DestinationLocationRuntimeId,
+            travel.DestinationCityRuntimeId,
+            travel.TravelDaysRemaining,
+            travel.TravelDaysTotal,
+            travel.TravelRouteRuntimeId,
+            !travel.TravelStartedToday,
+            travel.TravelOriginDecisionId,
+            travel.ActiveTravelPartyId,
+            travelStateChanged: true);
+
+    [Test]
     public void TravelPartyAdvanceRejectsUnrecordedCoreStoreBaselineDrift()
     {
         DailyV1EffectiveDefinitions definitions =

@@ -541,6 +541,20 @@ internal static class DailyV1NpcOwnerCensusProviders
         return providers.AsReadOnly();
     }
 
+    internal static IReadOnlyList<IOwnerSectionCensusProvider> CreateTravelStateProviders(
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph == null) throw new ArgumentNullException(nameof(graph));
+        ValidateRoster(graph.Npcs);
+        List<DailyV1NpcRuntimeOwners> ordered = OrderByRuntimeId(graph.Npcs);
+        IOwnerSectionCensusProvider[] providers =
+            new IOwnerSectionCensusProvider[ordered.Count];
+        for (int i = 0; i < ordered.Count; i++)
+            providers[i] = new RuntimeAuthoritySectionProvider(
+                ordered[i], RuntimeAuthoritySection.TravelState);
+        return Array.AsReadOnly(providers);
+    }
+
     internal static IReadOnlyList<IOwnerSectionCensusProvider> CreateInventoryProviders(
         IReadOnlyList<DailyV1NpcRuntimeOwners> roster)
     {
