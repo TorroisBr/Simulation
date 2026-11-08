@@ -171,7 +171,35 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
         }
 
         float travelCost = preparation.Costs[0].Amount;
-        EconomyTransactionResult groupCharge = transactionService.TryChargeTravelGroup(preparation.Members, travelCost);
+        EconomyTransactionResult groupCharge;
+        bool allMembersUseSelectedCoreOwners = true;
+        foreach (NpcRuntime member in preparation.Members)
+            if (member == null || member.SelectedRuntimeOwners == null)
+            {
+                allMembersUseSelectedCoreOwners = false;
+                break;
+            }
+
+        if (allMembersUseSelectedCoreOwners)
+        {
+            if (!TryResolveExactSelectedCoreMembers(
+                    preparation.Members,
+                    out DailyV1SelectedRuntimeOwnerGraph selectedGraph,
+                    out List<DailyV1NpcRuntimeOwners> selectedMembers))
+            {
+                Rollback(startedMembers, paidCosts, preparation.OriginLocation, preparation.OriginCity);
+                return false;
+            }
+
+            groupCharge = DailyV1SelectedTravelPartyChargeExecution.TryCharge(
+                selectedGraph, selectedMembers, travelCost);
+        }
+        else
+        {
+            // Preserve the existing Unity-authoritative compatibility path for
+            // rosters that are not wholly selected into the Core owner graph.
+            groupCharge = transactionService.TryChargeTravelGroup(preparation.Members, travelCost);
+        }
 
         if (groupCharge.Success == false)
         {
@@ -499,6 +527,39 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
         {
             throw new InvalidOperationException("A faulted SimulationRuntime cannot advance travel parties.");
         }
+    }
+
+
+    private static bool TryResolveExactSelectedCoreMembers(
+        IReadOnlyList<NpcRuntime> members,
+        out DailyV1SelectedRuntimeOwnerGraph graph,
+        out List<DailyV1NpcRuntimeOwners> selectedOwners)
+    {
+        graph = null;
+        selectedOwners = null;
+        if (members == null || members.Count == 0) return false;
+
+        graph = members[0]?.SelectedRuntimeOwnerGraph;
+        if (graph == null) return false;
+
+        List<DailyV1NpcRuntimeOwners> resolved =
+            new List<DailyV1NpcRuntimeOwners>(members.Count);
+        HashSet<string> runtimeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (NpcRuntime member in members)
+        {
+            DailyV1NpcRuntimeOwners bound = member?.SelectedRuntimeOwners;
+            if (member == null
+                || bound == null
+                || !ReferenceEquals(member.SelectedRuntimeOwnerGraph, graph)
+                || !runtimeIds.Add(member.RuntimeId)
+                || !graph.TryGetNpcOwner(member.RuntimeId, out DailyV1NpcRuntimeOwners exact)
+                || !ReferenceEquals(exact, bound))
+                return false;
+            resolved.Add(bound);
+        }
+
+        selectedOwners = resolved;
+        return true;
     }
 
     private bool TryPrepareTravel(

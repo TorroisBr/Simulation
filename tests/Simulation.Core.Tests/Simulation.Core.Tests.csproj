@@ -60,6 +60,7 @@
     <Compile Include="P12FScheduledDirectiveOwnerSnapshotCoreTests.cs" Link="Persistence/P12FScheduledDirectiveOwnerSnapshotCoreTests.cs" />
     <Compile Include="DailyV1PopulationConsumptionOperationTests.cs" />
     <Compile Include="DailyV1SelectedTravelTransitionPlanTests.cs" />
+    <Compile Include="DailyV1SelectedTravelPartyChargeExecutionTests.cs" />
     <Compile Include="DailyV1SelectedOpenMarketSaleTests.cs" />
     <Compile Include="DailyV1SelectedOpenMarketActionExecutionTests.cs" />
     <Compile Include="DailyV1SelectedNpcTradeExecutionTests.cs" />
