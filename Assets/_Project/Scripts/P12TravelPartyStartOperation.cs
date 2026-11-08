@@ -15,17 +15,56 @@ public sealed partial class SimulationRuntime
         public readonly Thread OwnerThread;
         public readonly int OwnerManagedThreadId;
         public readonly HashSet<string> ChangedSectionIds = new HashSet<string>(StringComparer.Ordinal);
-        public SimulationOperationScope ProtocolScope;
+        public readonly bool CoreOwnsProtocolScope;
+        public IDisposable ProtocolScope;
 
-        public P12TravelPartyStartOperationContext(Thread ownerThread, SimulationOperationScope protocolScope)
+        public P12TravelPartyStartOperationContext(
+            Thread ownerThread,
+            IDisposable protocolScope,
+            bool coreOwnsProtocolScope)
         {
             OwnerThread = ownerThread ?? throw new ArgumentNullException(nameof(ownerThread));
             OwnerManagedThreadId = ownerThread.ManagedThreadId;
             ProtocolScope = protocolScope ?? throw new ArgumentNullException(nameof(protocolScope));
+            CoreOwnsProtocolScope = coreOwnsProtocolScope;
         }
 
         public bool IsOwnedByCurrentThread() => ReferenceEquals(OwnerThread, Thread.CurrentThread)
             && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
+
+    private sealed class SelectedTravelPartyStartProtocolAdapter :
+        IDailyV1SelectedP12TravelPartyStartProtocol
+    {
+        private readonly SimulationRuntime runtime;
+
+        internal SelectedTravelPartyStartProtocolAdapter(SimulationRuntime runtime)
+        {
+            this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        }
+
+        public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
+            runtime.npcRosterCensusProtocol != null
+            && runtime.npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _);
+
+        public bool TryValidateMutationEpochCapacity() =>
+            runtime.npcRosterCensusProtocol != null
+            && runtime.npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _);
+
+        public bool TryEnterOperation(out IDisposable operationScope)
+        {
+            operationScope = null;
+            return runtime.TryEnterRuntimeAdmissionOperation(
+                DailyV1RuntimeProtocolOperationContracts.TravelPartyStart,
+                out SimulationOperationScope scope)
+                && (operationScope = scope) != null;
+        }
+
+        public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) =>
+            runtime.npcRosterCensusProtocol != null
+            && runtime.npcRosterCensusProtocol.NotifyCommittedMutations(sectionIds, out _);
+
+        public void FaultClosed() => runtime.FaultRuntimeAdmission();
     }
 
     private bool TryRegisterRuntimeIdAllocatorTravelPartyCounterCensusProvider(
@@ -377,15 +416,31 @@ public sealed partial class SimulationRuntime
                     throw new InvalidOperationException();
             }
 
-            if (!npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
-                || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
-                || !TryEnterRuntimeAdmissionOperation(
-                    DailyV1RuntimeProtocolOperationContracts.TravelPartyStart,
-                    out SimulationOperationScope protocolScope))
-                throw new InvalidOperationException();
+            IDisposable operationScope = null;
+            bool coreOwnsScope = anyCoreMember && allCoreMembers
+                && (preparation.OriginCity == null || selectedOriginCity != null);
+            if (coreOwnsScope)
+            {
+                if (!dailyExecutionBoundary.TryBeginSelectedP12TravelPartyStart(
+                        selectedGraph, selectedMembers, selectedOriginCity, sectionIds,
+                        new SelectedTravelPartyStartProtocolAdapter(this), out operationScope))
+                    throw new InvalidOperationException();
+            }
+            else
+            {
+                if (!npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)
+                    || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _)
+                    || !TryEnterRuntimeAdmissionOperation(
+                        DailyV1RuntimeProtocolOperationContracts.TravelPartyStart,
+                        out SimulationOperationScope protocolScope))
+                    throw new InvalidOperationException();
+                operationScope = protocolScope;
+            }
 
+            if (operationScope == null) throw new InvalidOperationException();
             activeP12TravelPartyStartOperationContext =
-                new P12TravelPartyStartOperationContext(Thread.CurrentThread, protocolScope);
+                new P12TravelPartyStartOperationContext(
+                    Thread.CurrentThread, operationScope, coreOwnsScope);
             return true;
         }
         catch
@@ -473,7 +528,7 @@ public sealed partial class SimulationRuntime
                 return;
             }
 
-            if (context.ChangedSectionIds.Count != 0
+            if (!context.CoreOwnsProtocolScope && context.ChangedSectionIds.Count != 0
                 && !npcRosterCensusProtocol.NotifyCommittedMutations(context.ChangedSectionIds, out _))
                 FaultRuntimeAdmission();
         }
@@ -485,7 +540,7 @@ public sealed partial class SimulationRuntime
         {
             if (ReferenceEquals(activeP12TravelPartyStartOperationContext, context))
                 activeP12TravelPartyStartOperationContext = null;
-            SimulationOperationScope operation = context.ProtocolScope;
+            IDisposable operation = context.ProtocolScope;
             context.ProtocolScope = null;
             operation?.Dispose();
         }

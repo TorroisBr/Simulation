@@ -105,6 +105,20 @@ internal interface IDailyV1SelectedP12SoloTravelStartProtocol
 }
 
 /// <summary>
+/// Live continuation-census operations required by one selected TravelParty
+/// start. Core owns the selected owner cut and serialized operation lifetime;
+/// the host binds these calls to its already-registered census protocol.
+/// </summary>
+internal interface IDailyV1SelectedP12TravelPartyStartProtocol
+{
+    bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
+    bool TryValidateMutationEpochCapacity();
+    bool TryEnterOperation(out IDisposable operationScope);
+    bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds);
+    void FaultClosed();
+}
+
+/// <summary>
 /// Owns the per-runtime single-writer advance lease and completed Daily-v1
 /// core sequence. This is execution state, not a thread lock or persisted data.
 /// </summary>
@@ -158,6 +172,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private DailyV1P12CrimeJusticeMutationCoordinator selectedP12CrimeJusticeMutationCoordinator;
     private IDailyV1P12CrimeJusticeMutationProtocol selectedP12CrimeJusticeMutationProtocol;
     private SelectedP12TravelPartyAdvanceContext selectedP12TravelPartyAdvanceContext;
+    private SelectedP12TravelPartyStartContext selectedP12TravelPartyStartContext;
     private SelectedP12SoloTravelStartContext selectedP12SoloTravelStartContext;
     private DailyV1Application applicationAdvanceAuthority;
     private DailyV1ActiveRuntimeSession applicationAdvanceSession;
@@ -275,6 +290,35 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    private sealed class SelectedTravelPartyCounterCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly RuntimeIdAllocator allocator;
+        private readonly IOwnerSectionCensusProvider provider;
+
+        internal SelectedTravelPartyCounterCensusProvider(RuntimeIdAllocator allocator)
+        {
+            this.allocator = allocator ?? throw new ArgumentNullException(nameof(allocator));
+            provider = RuntimeIdAllocatorCensusProvider.CreateTravelPartyCounterProvider(allocator);
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            if (witness == null
+                || !string.Equals(witness.SectionId,
+                    RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId, StringComparison.Ordinal)
+                || witness.SchemaVersion != RuntimeIdAllocatorCensusProvider.SchemaVersion
+                || witness.Cardinality != 1
+                || witness.Revision < 0L
+                || !RuntimeIdAllocatorOwnerBridge.TryMatchCurrentCensus(
+                    allocator, RuntimeIdAllocatorCensusCounter.TravelParties,
+                    witness.OwnerInstanceIdentity, witness.Revision, out _))
+                throw new InvalidOperationException(
+                    "The selected TravelParty-counter census does not match its exact allocator owner.");
+            return witness;
+        }
+    }
+
     private sealed class SelectedRecordSequenceCensusProvider : IOwnerSectionCensusProvider
     {
         private readonly SimulationRecordSequence sequence;
@@ -383,6 +427,69 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         {
             DailyV1ExecutionBoundaryState current = Interlocked.Exchange(ref owner, null);
             current?.ExitSelectedP12SoloTravelStart(context);
+        }
+    }
+
+    private sealed class SelectedP12TravelPartyStartContext
+    {
+        internal readonly DailyV1SelectedRuntimeOwnerGraph Graph;
+        internal readonly SimulationRecordSequence RecordSequence;
+        internal readonly HashSet<string> MemberRuntimeIds;
+        internal readonly IDailyV1SelectedP12TravelPartyStartProtocol Protocol;
+        internal readonly Thread OwnerThread;
+        internal readonly int OwnerManagedThreadId;
+        internal readonly HashSet<string> AllowedSectionIds;
+        internal readonly Dictionary<string, SelectedP12OwnerSectionBaseline> CoreOwnerSectionBaselines;
+        internal readonly HashSet<string> ChangedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        internal IDisposable ProtocolScope;
+
+        internal SelectedP12TravelPartyStartContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            IEnumerable<DailyV1NpcRuntimeOwners> members,
+            SimulationRecordSequence recordSequence,
+            IDailyV1SelectedP12TravelPartyStartProtocol protocol,
+            IEnumerable<string> sectionIds,
+            Dictionary<string, SelectedP12OwnerSectionBaseline> coreOwnerSectionBaselines,
+            IDisposable protocolScope)
+        {
+            Graph = graph ?? throw new ArgumentNullException(nameof(graph));
+            RecordSequence = recordSequence ?? throw new ArgumentNullException(nameof(recordSequence));
+            MemberRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (DailyV1NpcRuntimeOwners member in members ?? throw new ArgumentNullException(nameof(members)))
+                if (member == null || string.IsNullOrWhiteSpace(member.RuntimeId)
+                    || !MemberRuntimeIds.Add(member.RuntimeId))
+                    throw new ArgumentException("TravelParty members must have unique exact runtime identities.", nameof(members));
+            Protocol = protocol ?? throw new ArgumentNullException(nameof(protocol));
+            OwnerThread = Thread.CurrentThread;
+            OwnerManagedThreadId = OwnerThread.ManagedThreadId;
+            AllowedSectionIds = new HashSet<string>(sectionIds ?? throw new ArgumentNullException(nameof(sectionIds)), StringComparer.Ordinal);
+            CoreOwnerSectionBaselines = coreOwnerSectionBaselines
+                ?? throw new ArgumentNullException(nameof(coreOwnerSectionBaselines));
+            ProtocolScope = protocolScope ?? throw new ArgumentNullException(nameof(protocolScope));
+        }
+
+        internal bool IsOwnedByCurrentThread() =>
+            ReferenceEquals(OwnerThread, Thread.CurrentThread)
+            && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
+
+    private sealed class SelectedP12TravelPartyStartScope : IDisposable
+    {
+        private DailyV1ExecutionBoundaryState owner;
+        private readonly SelectedP12TravelPartyStartContext context;
+
+        internal SelectedP12TravelPartyStartScope(
+            DailyV1ExecutionBoundaryState owner,
+            SelectedP12TravelPartyStartContext context)
+        {
+            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            this.context = context ?? throw new ArgumentNullException(nameof(context));
+        }
+
+        public void Dispose()
+        {
+            DailyV1ExecutionBoundaryState current = Interlocked.Exchange(ref owner, null);
+            current?.ExitSelectedP12TravelPartyStart(context);
         }
     }
 
@@ -1592,6 +1699,225 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         return true;
     }
 
+    /// <summary>
+    /// Opens the Core-owned selected TravelParty-start P12 transaction. Core
+    /// derives and verifies the complete owner-section cut, captures exact
+    /// selected-owner baselines, serializes the operation, and owns committed
+    /// section receipts through scope disposal.
+    /// </summary>
+    internal bool TryBeginSelectedP12TravelPartyStart(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> members,
+        DailyV1CityRuntimeOwners originCity,
+        IReadOnlyList<string> hostPreflightSectionIds,
+        IDailyV1SelectedP12TravelPartyStartProtocol protocol,
+        out IDisposable operationScope)
+    {
+        operationScope = null;
+        if (graph == null || members == null || hostPreflightSectionIds == null || protocol == null)
+            return false;
+
+        if (!TryCreateSelectedP12TravelPartyStartSectionIds(
+                graph, members, originCity, out IReadOnlyList<string> expectedSectionIds)
+            || !HaveExactSelectedP12SectionSet(expectedSectionIds, hostPreflightSectionIds))
+        {
+            FaultSelectedTravelPartyStart(protocol);
+            return false;
+        }
+
+        IDisposable protocolScope = null;
+        SelectedP12TravelPartyStartContext context = null;
+        lock (operationSyncRoot)
+        {
+            if (!HasAdmittedSelectedDailyExecution
+                || AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+                || selectedP12TravelPartyStartContext != null
+                || selectedP12TravelPartyAdvanceContext != null
+                || selectedP12SoloTravelStartContext != null
+                || mutationEpochState.HasActiveReservation
+                || !AreRequiredSelectedP12Sections(expectedSectionIds))
+            {
+                FaultSelectedTravelPartyStart(protocol);
+                return false;
+            }
+
+            try
+            {
+                if (!TryCaptureSelectedTravelPartyStartCoreOwnerSectionBaselines(
+                        graph, members, originCity, selectedRuntimeIdAllocator, selectedRecordSequence,
+                        expectedSectionIds,
+                        out Dictionary<string, SelectedP12OwnerSectionBaseline> coreBaselinesBefore)
+                    || !protocol.TryValidateUnchangedSections(expectedSectionIds)
+                    || !protocol.TryValidateMutationEpochCapacity()
+                    || !TryCaptureSelectedTravelPartyStartCoreOwnerSectionBaselines(
+                        graph, members, originCity, selectedRuntimeIdAllocator, selectedRecordSequence,
+                        expectedSectionIds,
+                        out Dictionary<string, SelectedP12OwnerSectionBaseline> coreBaselinesAfter)
+                    || !HaveSameSelectedP12OwnerSectionBaselines(
+                        coreBaselinesBefore, coreBaselinesAfter)
+                    || !protocol.TryEnterOperation(out protocolScope)
+                    || protocolScope == null)
+                {
+                    FaultSelectedTravelPartyStart(protocol);
+                    IDisposable rejectedScope = protocolScope;
+                    protocolScope = null;
+                    try { rejectedScope?.Dispose(); }
+                    catch { FaultSelectedTravelPartyStart(protocol); }
+                    return false;
+                }
+
+                context = new SelectedP12TravelPartyStartContext(
+                    graph, members, selectedRecordSequence, protocol,
+                    expectedSectionIds, coreBaselinesAfter, protocolScope);
+                selectedP12TravelPartyStartContext = context;
+            }
+            catch
+            {
+                FaultSelectedTravelPartyStart(protocol);
+                IDisposable failedScope = protocolScope;
+                protocolScope = null;
+                try { failedScope?.Dispose(); }
+                catch { FaultSelectedTravelPartyStart(protocol); }
+                return false;
+            }
+        }
+
+        operationScope = new SelectedP12TravelPartyStartScope(this, context);
+        return true;
+    }
+
+    internal bool TryCanCommitSelectedP12TravelPartyStartMutation(
+        IEnumerable<string> sectionIds,
+        out bool handled)
+    {
+        lock (operationSyncRoot)
+        {
+            SelectedP12TravelPartyStartContext context = selectedP12TravelPartyStartContext;
+            handled = context != null;
+            if (context == null) return true;
+            if (!IsCurrentSelectedTravelPartyStartContext(context)
+                || !TryGetRequestedTravelPartyStartSections(context, sectionIds,
+                    out HashSet<string> requested)
+                || !TryValidateSelectedTravelPartyStartCoreOwnerRowsUnchanged(
+                    context, requested, out HashSet<string> coreOwnedRows))
+            {
+                FaultSelectedTravelPartyStart(context.Protocol);
+                return false;
+            }
+
+            requested.ExceptWith(coreOwnedRows);
+            requested.RemoveWhere(context.ChangedSectionIds.Contains);
+            if (requested.Count == 0) return true;
+            try
+            {
+                if (context.Protocol.TryValidateUnchangedSections(ToOrderedSectionArray(requested)))
+                    return true;
+            }
+            catch { }
+            FaultSelectedTravelPartyStart(context.Protocol);
+            return false;
+        }
+    }
+
+    internal bool TryRecordSelectedP12TravelPartyStartMutation(
+        IEnumerable<string> sectionIds,
+        out bool handled)
+    {
+        lock (operationSyncRoot)
+        {
+            SelectedP12TravelPartyStartContext context = selectedP12TravelPartyStartContext;
+            handled = context != null;
+            if (context == null) return true;
+            if (!IsCurrentSelectedTravelPartyStartContext(context)
+                || !TryGetRequestedTravelPartyStartSections(context, sectionIds,
+                    out HashSet<string> changed)
+                || !TryCaptureSelectedTravelPartyStartCoreOwnerMutationBaselines(
+                    context, changed,
+                    out Dictionary<string, OwnerSectionCensusWitness> committedWitnesses))
+            {
+                FaultSelectedTravelPartyStart(context.Protocol);
+                return false;
+            }
+
+            foreach (KeyValuePair<string, OwnerSectionCensusWitness> pair in committedWitnesses)
+            {
+                SelectedP12OwnerSectionBaseline baseline = context.CoreOwnerSectionBaselines[pair.Key];
+                baseline.Cardinality = pair.Value.Cardinality;
+                baseline.Revision = pair.Value.Revision;
+            }
+            context.ChangedSectionIds.UnionWith(changed);
+            return true;
+        }
+    }
+
+    private bool IsCurrentSelectedTravelPartyStartContext(
+        SelectedP12TravelPartyStartContext context) =>
+        context != null
+        && ReferenceEquals(selectedP12TravelPartyStartContext, context)
+        && context.IsOwnedByCurrentThread()
+        && HasAdmittedSelectedDailyExecution
+        && AdmissionContext != null
+        && AdmissionContext.IsOwnedByCurrentThread()
+        && ReferenceEquals(selectedRuntimeOwnerGraph, context.Graph)
+        && ReferenceEquals(selectedRecordSequence, context.RecordSequence)
+        && context.MemberRuntimeIds.Count > 0;
+
+    private static bool TryGetRequestedTravelPartyStartSections(
+        SelectedP12TravelPartyStartContext context,
+        IEnumerable<string> sectionIds,
+        out HashSet<string> requested)
+    {
+        requested = new HashSet<string>(StringComparer.Ordinal);
+        if (context == null || sectionIds == null) return false;
+        try
+        {
+            foreach (string sectionId in sectionIds)
+                if (string.IsNullOrWhiteSpace(sectionId)
+                    || !requested.Add(sectionId)
+                    || !context.AllowedSectionIds.Contains(sectionId))
+                    return false;
+        }
+        catch { return false; }
+        return requested.Count != 0;
+    }
+
+    private void ExitSelectedP12TravelPartyStart(
+        SelectedP12TravelPartyStartContext context)
+    {
+        lock (operationSyncRoot)
+        {
+            try
+            {
+                if (!IsCurrentSelectedTravelPartyStartContext(context)
+                    || !TryValidateSelectedTravelPartyStartAllOwnerBaselines(context))
+                    FaultSelectedTravelPartyStart(context?.Protocol);
+                else if (context.ChangedSectionIds.Count != 0
+                    && !context.Protocol.NotifyCommittedMutations(
+                        ToOrderedSectionArray(context.ChangedSectionIds)))
+                    FaultSelectedTravelPartyStart(context.Protocol);
+            }
+            catch { FaultSelectedTravelPartyStart(context?.Protocol); }
+            finally
+            {
+                if (ReferenceEquals(selectedP12TravelPartyStartContext, context))
+                    selectedP12TravelPartyStartContext = null;
+                IDisposable protocolScope = context?.ProtocolScope;
+                if (context != null) context.ProtocolScope = null;
+                try { protocolScope?.Dispose(); }
+                catch { FaultSelectedTravelPartyStart(context?.Protocol); }
+            }
+        }
+    }
+
+    private static void FaultSelectedTravelPartyStart(
+        IDailyV1SelectedP12TravelPartyStartProtocol protocol)
+    {
+        try { protocol?.FaultClosed(); }
+        catch { }
+    }
+
     private bool AreRequiredSelectedP12Sections(IReadOnlyList<string> sectionIds)
     {
         if (sectionIds == null || !expectedOwnerSectionContractInventorySealed)
@@ -2523,8 +2849,14 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 RuntimeIdAllocatorCensusProvider.EventsSectionId, StringComparison.Ordinal)
                 ? RuntimeIdAllocatorCensusProvider.SchemaVersion
                 : string.Equals(witness.SectionId,
+                    RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId, StringComparison.Ordinal)
+                    ? RuntimeIdAllocatorCensusProvider.SchemaVersion
+                : string.Equals(witness.SectionId,
                     SimulationRecordSequenceCensusProvider.SectionId, StringComparison.Ordinal)
                     ? SimulationRecordSequenceCensusProvider.SchemaVersion
+                    : string.Equals(witness.SectionId,
+                        TravelPartyCensusProvider.SectionId, StringComparison.Ordinal)
+                        ? TravelPartyCensusProvider.SchemaVersion
                     : witness.SectionId.StartsWith(
                         DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
                         StringComparison.Ordinal)
@@ -2541,6 +2873,435 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
         destination.Add(witness.SectionId,
             new SelectedP12OwnerSectionBaseline(provider, witness));
+        return true;
+    }
+
+    private static bool HaveExactSelectedP12SectionSet(
+        IReadOnlyList<string> expectedSectionIds,
+        IReadOnlyList<string> suppliedSectionIds)
+    {
+        if (expectedSectionIds == null || suppliedSectionIds == null
+            || expectedSectionIds.Count != suppliedSectionIds.Count)
+            return false;
+        HashSet<string> expected = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> supplied = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in expectedSectionIds)
+            if (string.IsNullOrWhiteSpace(sectionId) || !expected.Add(sectionId)) return false;
+        foreach (string sectionId in suppliedSectionIds)
+            if (string.IsNullOrWhiteSpace(sectionId) || !supplied.Add(sectionId)) return false;
+        return expected.SetEquals(supplied);
+    }
+
+    private static bool TryCaptureSelectedTravelPartyStartCoreOwnerSectionBaselines(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> members,
+        DailyV1CityRuntimeOwners originCity,
+        RuntimeIdAllocator allocator,
+        SimulationRecordSequence recordSequence,
+        IEnumerable<string> allowedSectionIds,
+        out Dictionary<string, SelectedP12OwnerSectionBaseline> baselines)
+    {
+        baselines = null;
+        if (graph?.Npcs == null || graph.Cities == null || graph.TravelParties == null
+            || members == null || members.Count == 0 || allowedSectionIds == null
+            || allocator == null || !ReferenceEquals(graph.RuntimeIdAllocator, allocator)
+            || recordSequence == null || (originCity != null && !graph.ContainsExactCityOwner(originCity)))
+            return false;
+
+        try
+        {
+            Dictionary<string, object> expectedOwners = new Dictionary<string, object>(StringComparer.Ordinal);
+            if (!TryAddSelectedTravelPartyStartExpectedOwner(
+                    expectedOwners, TravelPartyCensusProvider.SectionId, graph.TravelParties))
+                return false;
+
+            HashSet<string> memberIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (DailyV1NpcRuntimeOwners member in members)
+            {
+                if (member == null || !graph.ContainsExactNpcOwner(member)
+                    || !ReferenceEquals(member.Definitions, graph.Definitions)
+                    || string.IsNullOrWhiteSpace(member.RuntimeId)
+                    || !memberIds.Add(member.RuntimeId)
+                    || member.MoneyAccount == null || member.Travel == null
+                    || member.SpatialKnowledge == null
+                    || !TryAddSelectedTravelPartyStartExpectedOwner(
+                        expectedOwners,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + member.RuntimeId,
+                        member.MoneyAccount)
+                    || !TryAddSelectedTravelPartyStartExpectedOwner(
+                        expectedOwners,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix + member.RuntimeId,
+                        member)
+                    || !TryAddSelectedTravelPartyStartExpectedOwner(
+                        expectedOwners,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + member.RuntimeId,
+                        member.SpatialKnowledge)
+                    || !TryAddSelectedTravelPartyStartExpectedOwner(
+                        expectedOwners,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + member.RuntimeId,
+                        member.SpatialKnowledge))
+                    return false;
+            }
+
+            foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            {
+                if (city == null || !graph.ContainsExactCityOwner(city)
+                    || string.IsNullOrWhiteSpace(city.RuntimeId) || city.NpcPresence == null
+                    || !string.Equals(city.NpcPresence.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+                    return false;
+                bool touched = ReferenceEquals(city, originCity);
+                if (!touched)
+                    foreach (DailyV1NpcRuntimeOwners member in members)
+                        if (city.NpcPresence.Contains(member.RuntimeId))
+                        {
+                            touched = true;
+                            break;
+                        }
+                if (touched && !TryAddSelectedTravelPartyStartExpectedOwner(
+                        expectedOwners,
+                        DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId),
+                        city.NpcPresence))
+                    return false;
+            }
+
+            SelectedTravelPartyCounterCensusProvider partyCounterProvider =
+                new SelectedTravelPartyCounterCensusProvider(allocator);
+            SelectedEventCounterCensusProvider eventCounterProvider =
+                new SelectedEventCounterCensusProvider(allocator);
+            SelectedRecordSequenceCensusProvider sequenceProvider =
+                new SelectedRecordSequenceCensusProvider(recordSequence);
+            OwnerSectionCensusWitness partyCounter = partyCounterProvider.GetCurrentCensus();
+            OwnerSectionCensusWitness eventCounter = eventCounterProvider.GetCurrentCensus();
+            OwnerSectionCensusWitness sequence = sequenceProvider.GetCurrentCensus();
+            if (!TryAddSelectedTravelPartyStartExpectedOwner(
+                    expectedOwners, partyCounter.SectionId, partyCounter.OwnerInstanceIdentity)
+                || !TryAddSelectedTravelPartyStartExpectedOwner(
+                    expectedOwners, eventCounter.SectionId, eventCounter.OwnerInstanceIdentity)
+                || !TryAddSelectedTravelPartyStartExpectedOwner(
+                    expectedOwners, sequence.SectionId, sequence.OwnerInstanceIdentity))
+                return false;
+
+            HashSet<string> allowed = new HashSet<string>(StringComparer.Ordinal);
+            int suppliedCount = 0;
+            foreach (string sectionId in allowedSectionIds)
+            {
+                suppliedCount++;
+                if (string.IsNullOrWhiteSpace(sectionId) || !allowed.Add(sectionId)) return false;
+            }
+            if (allowed.Count != suppliedCount || !allowed.SetEquals(expectedOwners.Keys)) return false;
+
+            List<IOwnerSectionCensusProvider> providers = new List<IOwnerSectionCensusProvider>
+            {
+                new TravelPartyCensusProvider(graph.TravelParties),
+                partyCounterProvider,
+                eventCounterProvider,
+                sequenceProvider
+            };
+            providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateMoneyAccountProviders(graph.Npcs));
+            providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateTravelStateProviders(graph));
+            providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateSpatialKnowledgeProviders(graph.Npcs));
+            foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            {
+                string citySectionId = DailyV1SelectedOwnerSectionCensusContract
+                    .CityImportantNpcSectionIdFor(city.RuntimeId);
+                if (expectedOwners.ContainsKey(citySectionId))
+                    providers.Add(new SelectedCityPresenceCensusProvider(city.NpcPresence));
+            }
+
+            Dictionary<string, SelectedP12OwnerSectionBaseline> captured =
+                new Dictionary<string, SelectedP12OwnerSectionBaseline>(StringComparer.Ordinal);
+            foreach (IOwnerSectionCensusProvider provider in providers)
+            {
+                OwnerSectionCensusWitness witness;
+                try { witness = provider?.GetCurrentCensus(); }
+                catch { return false; }
+                if (witness != null && expectedOwners.ContainsKey(witness.SectionId)
+                    && !TryCaptureSelectedTravelPartyCoreOwnerSectionBaseline(
+                        provider, witness, expectedOwners, captured))
+                    return false;
+            }
+            if (captured.Count != expectedOwners.Count) return false;
+
+            OwnerSectionCensusWitness storeWitness = captured[TravelPartyCensusProvider.SectionId]
+                .Provider.GetCurrentCensus();
+            if (storeWitness.Cardinality != graph.TravelParties.ActiveParties.Count)
+                return false;
+            foreach (DailyV1NpcRuntimeOwners member in members)
+            {
+                string moneyId = DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + member.RuntimeId;
+                string travelId = DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix + member.RuntimeId;
+                string locationsId = DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + member.RuntimeId;
+                string routesId = DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + member.RuntimeId;
+                if (captured[moneyId].Cardinality != 1 || captured[travelId].Cardinality != 1
+                    || !ReferenceEquals(captured[locationsId].Owner, member.SpatialKnowledge)
+                    || !ReferenceEquals(captured[routesId].Owner, member.SpatialKnowledge)
+                    || captured[locationsId].Revision != captured[routesId].Revision)
+                    return false;
+            }
+            if (captured[partyCounter.SectionId].Cardinality != 1
+                || captured[eventCounter.SectionId].Cardinality != 1
+                || captured[sequence.SectionId].Cardinality != 1)
+                return false;
+
+            baselines = captured;
+            return true;
+        }
+        catch
+        {
+            baselines = null;
+            return false;
+        }
+    }
+
+    private static bool TryAddSelectedTravelPartyStartExpectedOwner(
+        IDictionary<string, object> expectedOwners,
+        string sectionId,
+        object owner)
+    {
+        if (expectedOwners == null || string.IsNullOrWhiteSpace(sectionId) || owner == null
+            || expectedOwners.ContainsKey(sectionId))
+            return false;
+        expectedOwners.Add(sectionId, owner);
+        return true;
+    }
+
+    private static bool TryCaptureSelectedTravelPartyCoreOwnerSectionBaseline(
+        IOwnerSectionCensusProvider provider,
+        OwnerSectionCensusWitness witness,
+        IReadOnlyDictionary<string, object> expectedOwners,
+        IDictionary<string, SelectedP12OwnerSectionBaseline> destination)
+    {
+        if (provider == null || witness == null || expectedOwners == null || destination == null)
+            return false;
+        int expectedSchemaVersion = string.Equals(witness.SectionId,
+                RuntimeIdAllocatorCensusProvider.EventsSectionId, StringComparison.Ordinal)
+                || string.Equals(witness.SectionId,
+                    RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId, StringComparison.Ordinal)
+            ? RuntimeIdAllocatorCensusProvider.SchemaVersion
+            : string.Equals(witness.SectionId,
+                SimulationRecordSequenceCensusProvider.SectionId, StringComparison.Ordinal)
+                ? SimulationRecordSequenceCensusProvider.SchemaVersion
+                : string.Equals(witness.SectionId,
+                    TravelPartyCensusProvider.SectionId, StringComparison.Ordinal)
+                    ? TravelPartyCensusProvider.SchemaVersion
+                    : witness.SectionId.StartsWith(
+                        DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
+                        StringComparison.Ordinal)
+                        ? DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion
+                        : DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
+        if (!expectedOwners.TryGetValue(witness.SectionId, out object expectedOwner)
+            || !ReferenceEquals(witness.OwnerInstanceIdentity, expectedOwner)
+            || witness.SchemaVersion != expectedSchemaVersion
+            || witness.Cardinality < 0 || witness.Revision < 0L
+            || destination.ContainsKey(witness.SectionId))
+            return false;
+        destination.Add(witness.SectionId,
+            new SelectedP12OwnerSectionBaseline(provider, witness));
+        return true;
+    }
+
+    private static bool TryValidateSelectedTravelPartyStartCoreOwnerRowsUnchanged(
+        SelectedP12TravelPartyStartContext context,
+        HashSet<string> requested,
+        out HashSet<string> coreOwnedRows)
+    {
+        coreOwnedRows = new HashSet<string>(StringComparer.Ordinal);
+        if (context == null || requested == null) return false;
+        HashSet<string> checkedSpatialOwners = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in requested)
+        {
+            if (!context.CoreOwnerSectionBaselines.TryGetValue(
+                    sectionId, out SelectedP12OwnerSectionBaseline baseline)
+                || !IsExactSelectedTravelPartyStartOwner(context, sectionId, baseline))
+                return false;
+
+            if (TryGetSpatialKnowledgeSectionPair(
+                    sectionId, out string runtimeId, out string locationsId, out string routesId))
+            {
+                if (!context.MemberRuntimeIds.Contains(runtimeId)
+                    || !requested.Contains(locationsId) || !requested.Contains(routesId))
+                    return false;
+                if (!checkedSpatialOwners.Add(runtimeId)) continue;
+                DailyV1NpcRuntimeOwners member = context.Graph.TryGetNpcOwner(runtimeId,
+                    out DailyV1NpcRuntimeOwners exactMember) ? exactMember : null;
+                if (member == null || !context.MemberRuntimeIds.Contains(member.RuntimeId)
+                    || !context.CoreOwnerSectionBaselines.TryGetValue(
+                        locationsId, out SelectedP12OwnerSectionBaseline locationsBaseline)
+                    || !context.CoreOwnerSectionBaselines.TryGetValue(
+                        routesId, out SelectedP12OwnerSectionBaseline routesBaseline)
+                    || !ReferenceEquals(locationsBaseline.Owner, member.SpatialKnowledge)
+                    || !ReferenceEquals(routesBaseline.Owner, member.SpatialKnowledge)
+                    || locationsBaseline.Revision != routesBaseline.Revision
+                    || !TryCaptureSelectedP12OwnerSectionWitness(
+                        locationsId, locationsBaseline, out OwnerSectionCensusWitness locations)
+                    || !TryCaptureSelectedP12OwnerSectionWitness(
+                        routesId, routesBaseline, out OwnerSectionCensusWitness routes)
+                    || locations.Revision != locationsBaseline.Revision
+                    || locations.Cardinality != locationsBaseline.Cardinality
+                    || routes.Revision != routesBaseline.Revision
+                    || routes.Cardinality != routesBaseline.Cardinality
+                    || locations.Revision != routes.Revision)
+                    return false;
+                coreOwnedRows.Add(locationsId);
+                coreOwnedRows.Add(routesId);
+                continue;
+            }
+
+            if (!TryCaptureSelectedP12OwnerSectionWitness(
+                    sectionId, baseline, out OwnerSectionCensusWitness current)
+                || current.Cardinality != baseline.Cardinality
+                || current.Revision != baseline.Revision)
+                return false;
+            coreOwnedRows.Add(sectionId);
+        }
+        return true;
+    }
+
+    private static bool IsExactSelectedTravelPartyStartOwner(
+        SelectedP12TravelPartyStartContext context,
+        string sectionId,
+        SelectedP12OwnerSectionBaseline baseline)
+    {
+        if (context == null || string.IsNullOrWhiteSpace(sectionId) || baseline == null)
+            return false;
+        if (string.Equals(sectionId, TravelPartyCensusProvider.SectionId, StringComparison.Ordinal))
+            return ReferenceEquals(baseline.Owner, context.Graph.TravelParties);
+        if (string.Equals(sectionId,
+                RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId, StringComparison.Ordinal))
+            return context.Graph.RuntimeIdAllocator != null
+                && ReferenceEquals(baseline.Owner,
+                    context.Graph.RuntimeIdAllocator.CensusOwnerIdentity);
+        if (string.Equals(sectionId,
+                RuntimeIdAllocatorCensusProvider.EventsSectionId, StringComparison.Ordinal))
+            return context.Graph.RuntimeIdAllocator != null
+                && ReferenceEquals(baseline.Owner,
+                    context.Graph.RuntimeIdAllocator.CensusOwnerIdentity);
+        if (string.Equals(sectionId, SimulationRecordSequenceCensusProvider.SectionId,
+                StringComparison.Ordinal))
+            return ReferenceEquals(baseline.Owner, context.RecordSequence.CensusOwnerIdentity);
+
+        string moneyPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix;
+        if (sectionId.StartsWith(moneyPrefix, StringComparison.Ordinal))
+        {
+            string runtimeId = sectionId.Substring(moneyPrefix.Length);
+            return context.MemberRuntimeIds.Contains(runtimeId)
+                && context.Graph.TryGetNpcOwner(runtimeId, out DailyV1NpcRuntimeOwners member)
+                && ReferenceEquals(baseline.Owner, member.MoneyAccount);
+        }
+
+        string travelPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix;
+        if (sectionId.StartsWith(travelPrefix, StringComparison.Ordinal))
+        {
+            string runtimeId = sectionId.Substring(travelPrefix.Length);
+            return context.MemberRuntimeIds.Contains(runtimeId)
+                && context.Graph.TryGetNpcOwner(runtimeId, out DailyV1NpcRuntimeOwners member)
+                && ReferenceEquals(baseline.Owner, member);
+        }
+
+        if (sectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
+                StringComparison.Ordinal))
+            return TryGetSelectedTravelPartyCityPresenceOwner(
+                context.Graph, sectionId, baseline.Owner, out _);
+
+        return TryGetSpatialKnowledgeSectionPair(
+                sectionId, out string spatialRuntimeId, out _, out _)
+            && context.MemberRuntimeIds.Contains(spatialRuntimeId)
+            && context.Graph.TryGetNpcOwner(spatialRuntimeId, out DailyV1NpcRuntimeOwners spatialMember)
+            && ReferenceEquals(baseline.Owner, spatialMember.SpatialKnowledge);
+    }
+
+    private static bool TryCaptureSelectedTravelPartyStartCoreOwnerMutationBaselines(
+        SelectedP12TravelPartyStartContext context,
+        HashSet<string> changed,
+        out Dictionary<string, OwnerSectionCensusWitness> committedWitnesses)
+    {
+        committedWitnesses = new Dictionary<string, OwnerSectionCensusWitness>(StringComparer.Ordinal);
+        if (context == null || changed == null || changed.Count == 0) return false;
+        HashSet<string> checkedSpatialOwners = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in changed)
+        {
+            if (!context.CoreOwnerSectionBaselines.TryGetValue(
+                    sectionId, out SelectedP12OwnerSectionBaseline baseline)
+                || !IsExactSelectedTravelPartyStartOwner(context, sectionId, baseline))
+                return false;
+
+            if (TryGetSpatialKnowledgeSectionPair(
+                    sectionId, out string runtimeId, out string locationsId, out string routesId))
+            {
+                if (!context.MemberRuntimeIds.Contains(runtimeId)
+                    || !changed.Contains(locationsId) || !changed.Contains(routesId))
+                    return false;
+                if (!checkedSpatialOwners.Add(runtimeId)) continue;
+                if (!context.CoreOwnerSectionBaselines.TryGetValue(
+                        locationsId, out SelectedP12OwnerSectionBaseline locationsBaseline)
+                    || !context.CoreOwnerSectionBaselines.TryGetValue(
+                        routesId, out SelectedP12OwnerSectionBaseline routesBaseline)
+                    || locationsBaseline.Revision != routesBaseline.Revision
+                    || locationsBaseline.Revision == long.MaxValue
+                    || !TryCaptureSelectedP12OwnerSectionWitness(
+                        locationsId, locationsBaseline, out OwnerSectionCensusWitness locations)
+                    || !TryCaptureSelectedP12OwnerSectionWitness(
+                        routesId, routesBaseline, out OwnerSectionCensusWitness routes))
+                    return false;
+
+                int locationDelta = locations.Cardinality - locationsBaseline.Cardinality;
+                int routeDelta = routes.Cardinality - routesBaseline.Cardinality;
+                if (locations.Revision != locationsBaseline.Revision + 1L
+                    || routes.Revision != locations.Revision
+                    || (locationDelta != 0 && locationDelta != 1)
+                    || (routeDelta != 0 && routeDelta != 1)
+                    || locationDelta + routeDelta == 0)
+                    return false;
+                committedWitnesses.Add(locationsId, locations);
+                committedWitnesses.Add(routesId, routes);
+                continue;
+            }
+
+            if (baseline.Revision == long.MaxValue
+                || !TryCaptureSelectedP12OwnerSectionWitness(
+                    sectionId, baseline, out OwnerSectionCensusWitness current)
+                || current.Revision != baseline.Revision + 1L)
+                return false;
+
+            if (string.Equals(sectionId, TravelPartyCensusProvider.SectionId, StringComparison.Ordinal))
+            {
+                if (baseline.Cardinality == int.MaxValue
+                    || current.Cardinality != baseline.Cardinality + 1)
+                    return false;
+            }
+            else if (sectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
+                StringComparison.Ordinal))
+            {
+                bool added = baseline.Cardinality < int.MaxValue
+                    && current.Cardinality == baseline.Cardinality + 1;
+                bool removed = baseline.Cardinality > 0
+                    && current.Cardinality == baseline.Cardinality - 1;
+                if (!added && !removed) return false;
+            }
+            else if (current.Cardinality != 1)
+                return false;
+
+            committedWitnesses.Add(sectionId, current);
+        }
+        return true;
+    }
+
+    private static bool TryValidateSelectedTravelPartyStartAllOwnerBaselines(
+        SelectedP12TravelPartyStartContext context)
+    {
+        if (context?.CoreOwnerSectionBaselines == null) return false;
+        foreach (KeyValuePair<string, SelectedP12OwnerSectionBaseline> pair
+            in context.CoreOwnerSectionBaselines)
+        {
+            if (!IsExactSelectedTravelPartyStartOwner(context, pair.Key, pair.Value)
+                || !TryCaptureSelectedP12OwnerSectionWitness(
+                    pair.Key, pair.Value, out OwnerSectionCensusWitness current)
+                || current.Cardinality != pair.Value.Cardinality
+                || current.Revision != pair.Value.Revision)
+                return false;
+        }
         return true;
     }
 

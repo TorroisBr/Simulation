@@ -5642,6 +5642,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return coreHandled;
         }
 
+        coreHandled = dailyExecutionBoundary.TryCanCommitSelectedP12TravelPartyStartMutation(
+            requested, out bool handledByCoreTravelPartyStart);
+        if (handledByCoreTravelPartyStart)
+        {
+            if (!coreHandled) FaultRuntimeAdmission();
+            return coreHandled;
+        }
+
         P12TravelPartyAdvanceOperationContext travelContext =
             activeP12TravelPartyAdvanceOperationContext;
         P12MerchantOperationContext merchantContext = activeP12MerchantOperationContext;
@@ -5759,6 +5767,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         coreRecorded = dailyExecutionBoundary.TryRecordSelectedP12SoloTravelStartMutation(
             changed, out bool recordedByCoreSoloTravelStart);
         if (recordedByCoreSoloTravelStart)
+        {
+            if (!coreRecorded) FaultRuntimeAdmission();
+            return coreRecorded;
+        }
+
+        coreRecorded = dailyExecutionBoundary.TryRecordSelectedP12TravelPartyStartMutation(
+            changed, out bool recordedByCoreTravelPartyStart);
+        if (recordedByCoreTravelPartyStart)
         {
             if (!coreRecorded) FaultRuntimeAdmission();
             return coreRecorded;

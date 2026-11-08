@@ -91,6 +91,114 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
     }
 
     [Test]
+    public void CoreOwnsSelectedTravelPartyStartScopeAndCommittedTravelReceipt()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1CityRuntimeOwners originCity = graph.Cities[0];
+        DailyV1NpcRuntimeOwners[] members = graph.Npcs
+            .Where(member => originCity.NpcPresence.Contains(member.RuntimeId))
+            .Take(2).ToArray();
+        Assert.That(members, Has.Length.EqualTo(2));
+        Assert.That(state.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, members, originCity, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        TestProtocol protocol = new TestProtocol();
+        string changed = DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix
+            + members[0].RuntimeId;
+        string partyCounterSection = RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId;
+
+        IDisposable scope = null;
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12TravelPartyStart(
+                graph, members, originCity, sectionIds, protocol, out scope), Is.True);
+            Assert.That(scope, Is.Not.Null);
+            Assert.That(protocol.ValidationCalls, Is.EqualTo(1));
+            Assert.That(protocol.CapacityChecks, Is.EqualTo(1));
+            Assert.That(protocol.EnterCalls, Is.EqualTo(1));
+
+            Assert.That(state.TryCanCommitSelectedP12TravelPartyStartMutation(
+                new[] { changed }, out bool commitHandled), Is.True);
+            Assert.That(commitHandled, Is.True);
+            DailyV1NpcRuntimeOwners member = members[0];
+            Assert.That(member.Travel.TryCommitState(
+                member.Travel.CurrentLocationRuntimeId,
+                member.Travel.CurrentCityRuntimeId,
+                "location/party-start-scope", "city/party-start-scope",
+                3, 3, "route/party-start-scope", true,
+                "decision/party-start-scope", null, true), Is.True);
+            Assert.That(state.TryRecordSelectedP12TravelPartyStartMutation(
+                new[] { changed }, out bool recordHandled), Is.True);
+            Assert.That(recordHandled, Is.True);
+            Assert.That(state.TryCanCommitSelectedP12TravelPartyStartMutation(
+                new[] { changed }, out commitHandled), Is.True);
+            Assert.That(commitHandled, Is.True);
+
+            Assert.That(state.TryCanCommitSelectedP12TravelPartyStartMutation(
+                new[] { partyCounterSection }, out commitHandled), Is.True);
+            Assert.That(commitHandled, Is.True);
+            Assert.That(graph.RuntimeIdAllocator.AllocateTravelPartyId(), Is.Not.Empty);
+            Assert.That(state.TryRecordSelectedP12TravelPartyStartMutation(
+                new[] { partyCounterSection }, out recordHandled), Is.True);
+            Assert.That(recordHandled, Is.True);
+
+            scope.Dispose();
+            scope.Dispose();
+            string[] expectedNotified = { changed, partyCounterSection };
+            Array.Sort(expectedNotified, StringComparer.Ordinal);
+            Assert.That(protocol.NotifiedSections, Is.EqualTo(expectedNotified));
+            Assert.That(protocol.ScopeDisposed, Is.True);
+            Assert.That(protocol.Faulted, Is.False);
+        }
+        finally
+        {
+            scope?.Dispose();
+        }
+    }
+
+    [Test]
+    public void CoreRejectsSelectedTravelPartyStartOwnerDriftWithoutACommitReceipt()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1CityRuntimeOwners originCity = graph.Cities[0];
+        DailyV1NpcRuntimeOwners[] members = graph.Npcs
+            .Where(member => originCity.NpcPresence.Contains(member.RuntimeId))
+            .Take(2).ToArray();
+        Assert.That(members, Has.Length.EqualTo(2));
+        Assert.That(state.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, members, originCity, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        TestProtocol protocol = new TestProtocol();
+        IDisposable scope = null;
+        string changed = DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix
+            + members[0].RuntimeId;
+
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12TravelPartyStart(
+                graph, members, originCity, sectionIds, protocol, out scope), Is.True);
+            Assert.That(members[0].Travel.TryCommitState(
+                members[0].Travel.CurrentLocationRuntimeId,
+                members[0].Travel.CurrentCityRuntimeId,
+                "location/party-start-unreceipted", "city/party-start-unreceipted",
+                4, 4, "route/party-start-unreceipted", true,
+                "decision/party-start-unreceipted", null, true), Is.True);
+            Assert.That(state.TryCanCommitSelectedP12TravelPartyStartMutation(
+                new[] { changed }, out bool handled), Is.False);
+            Assert.That(handled, Is.True);
+            Assert.That(protocol.Faulted, Is.True);
+        }
+        finally
+        {
+            scope?.Dispose();
+        }
+    }
+
+    [Test]
     public void CoreIncludesCityPresenceSectionOnlyWhenActorIsInThatOwner()
     {
         DailyV1GenesisComposition composition = Compose();
@@ -741,7 +849,9 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
         Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.True);
     }
 
-    private sealed class TestProtocol : IDailyV1SelectedP12SoloTravelStartProtocol
+    private sealed class TestProtocol :
+        IDailyV1SelectedP12SoloTravelStartProtocol,
+        IDailyV1SelectedP12TravelPartyStartProtocol
     {
         private sealed class Scope : IDisposable
         {
