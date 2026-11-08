@@ -430,6 +430,13 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    private enum SelectedP12TravelPartyStoreReceipt
+    {
+        None,
+        Added,
+        CompensatingRemoval
+    }
+
     private sealed class SelectedP12TravelPartyStartContext
     {
         internal readonly DailyV1SelectedRuntimeOwnerGraph Graph;
@@ -441,6 +448,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         internal readonly HashSet<string> AllowedSectionIds;
         internal readonly Dictionary<string, SelectedP12OwnerSectionBaseline> CoreOwnerSectionBaselines;
         internal readonly HashSet<string> ChangedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        internal readonly int InitialTravelPartyStoreCardinality;
+        internal bool TravelPartyStoreAdditionReceipted;
+        internal bool TravelPartyStoreCompensationReceipted;
         internal IDisposable ProtocolScope;
 
         internal SelectedP12TravelPartyStartContext(
@@ -465,6 +475,14 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             AllowedSectionIds = new HashSet<string>(sectionIds ?? throw new ArgumentNullException(nameof(sectionIds)), StringComparer.Ordinal);
             CoreOwnerSectionBaselines = coreOwnerSectionBaselines
                 ?? throw new ArgumentNullException(nameof(coreOwnerSectionBaselines));
+            if (!CoreOwnerSectionBaselines.TryGetValue(
+                    TravelPartyCensusProvider.SectionId,
+                    out SelectedP12OwnerSectionBaseline partyStoreBaseline)
+                || partyStoreBaseline.Cardinality < 0)
+                throw new ArgumentException(
+                    "TravelParty start requires its exact initial Core store baseline.",
+                    nameof(coreOwnerSectionBaselines));
+            InitialTravelPartyStoreCardinality = partyStoreBaseline.Cardinality;
             ProtocolScope = protocolScope ?? throw new ArgumentNullException(nameof(protocolScope));
         }
 
@@ -1835,7 +1853,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     out HashSet<string> changed)
                 || !TryCaptureSelectedTravelPartyStartCoreOwnerMutationBaselines(
                     context, changed,
-                    out Dictionary<string, OwnerSectionCensusWitness> committedWitnesses))
+                    out Dictionary<string, OwnerSectionCensusWitness> committedWitnesses,
+                    out SelectedP12TravelPartyStoreReceipt travelPartyStoreReceipt))
             {
                 FaultSelectedTravelPartyStart(context.Protocol);
                 return false;
@@ -1847,6 +1866,10 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 baseline.Cardinality = pair.Value.Cardinality;
                 baseline.Revision = pair.Value.Revision;
             }
+            if (travelPartyStoreReceipt == SelectedP12TravelPartyStoreReceipt.Added)
+                context.TravelPartyStoreAdditionReceipted = true;
+            else if (travelPartyStoreReceipt == SelectedP12TravelPartyStoreReceipt.CompensatingRemoval)
+                context.TravelPartyStoreCompensationReceipted = true;
             context.ChangedSectionIds.UnionWith(changed);
             return true;
         }
@@ -3214,9 +3237,11 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private static bool TryCaptureSelectedTravelPartyStartCoreOwnerMutationBaselines(
         SelectedP12TravelPartyStartContext context,
         HashSet<string> changed,
-        out Dictionary<string, OwnerSectionCensusWitness> committedWitnesses)
+        out Dictionary<string, OwnerSectionCensusWitness> committedWitnesses,
+        out SelectedP12TravelPartyStoreReceipt travelPartyStoreReceipt)
     {
         committedWitnesses = new Dictionary<string, OwnerSectionCensusWitness>(StringComparer.Ordinal);
+        travelPartyStoreReceipt = SelectedP12TravelPartyStoreReceipt.None;
         if (context == null || changed == null || changed.Count == 0) return false;
         HashSet<string> checkedSpatialOwners = new HashSet<string>(StringComparer.Ordinal);
         foreach (string sectionId in changed)
@@ -3266,9 +3291,20 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
             if (string.Equals(sectionId, TravelPartyCensusProvider.SectionId, StringComparison.Ordinal))
             {
-                if (baseline.Cardinality == int.MaxValue
-                    || current.Cardinality != baseline.Cardinality + 1)
+                bool added = baseline.Cardinality < int.MaxValue
+                    && current.Cardinality == baseline.Cardinality + 1
+                    && !context.TravelPartyStoreAdditionReceipted
+                    && !context.TravelPartyStoreCompensationReceipted;
+                bool compensatedRemoval = baseline.Cardinality > 0
+                    && current.Cardinality == baseline.Cardinality - 1
+                    && context.TravelPartyStoreAdditionReceipted
+                    && !context.TravelPartyStoreCompensationReceipted
+                    && current.Cardinality == context.InitialTravelPartyStoreCardinality;
+                if (!added && !compensatedRemoval)
                     return false;
+                travelPartyStoreReceipt = added
+                    ? SelectedP12TravelPartyStoreReceipt.Added
+                    : SelectedP12TravelPartyStoreReceipt.CompensatingRemoval;
             }
             else if (sectionId.StartsWith(
                 DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,

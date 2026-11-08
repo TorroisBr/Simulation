@@ -159,6 +159,72 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
     }
 
     [Test]
+    public void CoreAcceptsTravelPartyStoreRemovalThatCompensatesItsReceiptedStartAddition()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1CityRuntimeOwners originCity = graph.Cities[0];
+        DailyV1NpcRuntimeOwners[] members = graph.Npcs
+            .Where(member => originCity.NpcPresence.Contains(member.RuntimeId))
+            .Take(2).ToArray();
+        Assert.That(members, Has.Length.EqualTo(2));
+        Assert.That(state.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, members, originCity, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+
+        string storeSection = TravelPartyCensusProvider.SectionId;
+        int initialCardinality = graph.TravelParties.ActiveParties.Count;
+        long initialRevision = graph.TravelParties.Revision;
+        TravelPartyRuntime party = new TravelPartyRuntime(
+            "party/compensated-start",
+            "location/compensated-start-origin",
+            "location/compensated-start-destination",
+            "route/compensated-start",
+            members.Select(member => member.RuntimeId),
+            System.Array.Empty<string>(),
+            1,
+            "decision/compensated-start",
+            members.Select(member => new TravelPartyMemberCost(member.RuntimeId, 0f)));
+        TestProtocol protocol = new TestProtocol();
+        IDisposable scope = null;
+
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12TravelPartyStart(
+                graph, members, originCity, sectionIds, protocol, out scope), Is.True);
+
+            Assert.That(state.TryCanCommitSelectedP12TravelPartyStartMutation(
+                new[] { storeSection }, out bool addHandled), Is.True);
+            Assert.That(addHandled, Is.True);
+            Assert.That(graph.TravelParties.Add(party), Is.True);
+            Assert.That(state.TryRecordSelectedP12TravelPartyStartMutation(
+                new[] { storeSection }, out bool addRecorded), Is.True);
+            Assert.That(addRecorded, Is.True);
+
+            Assert.That(state.TryCanCommitSelectedP12TravelPartyStartMutation(
+                new[] { storeSection }, out bool removeHandled), Is.True);
+            Assert.That(removeHandled, Is.True);
+            Assert.That(graph.TravelParties.Remove(party.TravelPartyId), Is.True);
+            Assert.That(state.TryRecordSelectedP12TravelPartyStartMutation(
+                new[] { storeSection }, out bool removalRecorded), Is.True);
+            Assert.That(removalRecorded, Is.True);
+
+            scope.Dispose();
+            scope = null;
+            Assert.That(graph.TravelParties.ActiveParties.Count, Is.EqualTo(initialCardinality));
+            Assert.That(graph.TravelParties.Revision, Is.EqualTo(initialRevision + 2));
+            Assert.That(protocol.NotifiedSections, Is.EqualTo(new[] { storeSection }));
+            Assert.That(protocol.ScopeDisposed, Is.True);
+            Assert.That(protocol.Faulted, Is.False);
+        }
+        finally
+        {
+            scope?.Dispose();
+        }
+    }
+
+    [Test]
     public void CoreRejectsSelectedTravelPartyStartOwnerDriftWithoutACommitReceipt()
     {
         DailyV1GenesisComposition composition = Compose();
