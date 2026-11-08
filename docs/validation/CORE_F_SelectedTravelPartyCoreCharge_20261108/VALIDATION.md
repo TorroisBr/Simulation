@@ -1,6 +1,6 @@
 # CORE-F selected TravelParty Core charge
 
-**Status:** validated candidate milestone; independent exact-tip review pending. This is not Core-canonical and does not complete CORE-F.
+**Status:** validated review-fix candidate; independent exact-tip re-review pending. This is not Core-canonical and does not complete CORE-F.
 
 ## Candidate identity
 
@@ -32,10 +32,33 @@ This checkpoint does not move the complete TravelParty stage, action dispatch, d
 | Unity TravelPartyCensusTests | 10/10 PASS | a8a7895b0427440dbebcf8d0c8ca243b |
 | Official Unity Smoke | 5/5 PASS | 46c674c1df554915b256fa99fe745fad |
 | git diff --check | PASS | implementation commit |
+| Unity P12TravelPartyStartOperationTests (review-fix source) | 18/18 PASS | d8f9a18ff7e048b4b16606aa644d7c04 |
 
 CoreValidation working input digest: 9928f9a90a200c79be0755a6a6120e33ad4c7e8af1e426d22580a593fd4301a5. Its committed base was 7c3c0050cf7f7fc9dc4a7b454c7be29fd2298bcb. The exact hashes of the added Core operation, its test, and both project-file registrations match the validated inputs and implementation commit. CoreValidation reported worktreeLibraryAbsent=False; this evidence makes no Library-independent .NET claim.
 
 Unity validation inputs had stable digest 48bb0a305e2b323cf86cee0f18677901a2c515825c9af79b2d1d56cd5379afba across the runs. The protected original XML, logs, and run manifests remain in private evidence retention, keyed by the run IDs above. No full Unity EditMode suite or full CORE-F validation is claimed.
+
+## Independent review finding resolution
+
+The first exact-tip review of the implementation requested end-to-end coverage through `SimulationRuntime.TryStartTravelParty` for an all-selected roster and an explicit mixed selected/unselected fallback case. The new tests now use the real authored `UnityBootstrap-Daily-v1` bootstrap, exact selected runtime owner graph, registered travel route, and P12 runtime. The all-selected test reaches the selected Core charge path and verifies account-owner revisions and one admitted P12 epoch. The mixed test registers a compatibility NPC through `TryRegisterNpc`, installs its reciprocal City presence through `SetCurrentPresence`, then verifies the mixed roster starts through the retained transaction path with one P12 epoch and a valid final census.
+
+### Focused validation recovery
+
+| Run | Result | Disposition |
+|---|---|---|
+| `acbe261137394870b2fc3bf16ff98cb5` | 16/18 PASS; 2 failed | Superseded synthetic-profile fixture: it did not provide selected NPC owners. Failures were test setup, not production behavior. |
+| `0edba563c87242c388957ec1cfbe5d53` | NoResultXml | Superseded compile failure: the test used a nonexistent lookup name; corrected to `TryGetNpcRuntime`. |
+| `d8f9a18ff7e048b4b16606aa644d7c04` | 18/18 PASS; 0 failed/skipped/inconclusive | Final official focused result after using the authored bootstrap fixture. |
+
+Final-run input was stable. The original manifest, XML, and log are preserved in private validation storage, unchanged. The final run reports both new test identities as Passed.
+
+| Artifact | SHA-256 |
+|---|---|
+| Final run manifest | d815f038145a3af40db2f7f56f00357d60fef9cd4ce4b3a68acbb7f330b1777e |
+| Original XML | 6e9a61beb892319a209a5bdf975e759f628c91d5deb4cf585a42c265e37d5b73 |
+| Original log | 6bfd325ec80a321653b9f139bb91e000cccd5e85991d71122485a613a2ac5d6f |
+| Test source SHA-256 for the final run | acb26b26a0add588e84fb5b1b7e5dbfca697cafaaa9bdb35594fb3f2f0d6a3ba |
+| Test source Git blob for the final run | be0c4b9c313e05d996bd74cd4bc54a31e2add28d |
 
 ## Evidence integrity
 
