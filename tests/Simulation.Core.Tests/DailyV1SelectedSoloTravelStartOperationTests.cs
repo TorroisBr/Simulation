@@ -6,6 +6,169 @@ using NUnit.Framework;
 public sealed class DailyV1SelectedSoloTravelStartOperationTests
 {
     [Test]
+    public void CoreTravelPartyChargeReservesRevisionHeadroomForPossibleRefund()
+    {
+        Assert.That(MoneyAccountRuntime.TryCreateFromOwnerSnapshot(
+            10f, long.MaxValue - 2L, out MoneyAccountRuntime refundable), Is.True);
+        Assert.That(DailyV1SelectedTravelPartyStartExecution
+            .CanReserveChargeAndRefundRevisionCapacity(refundable, 1f), Is.True);
+
+        Assert.That(MoneyAccountRuntime.TryCreateFromOwnerSnapshot(
+            10f, long.MaxValue - 1L, out MoneyAccountRuntime noRefundCapacity), Is.True);
+        Assert.That(DailyV1SelectedTravelPartyStartExecution
+            .CanReserveChargeAndRefundRevisionCapacity(noRefundCapacity, 1f), Is.False);
+        Assert.That(DailyV1SelectedTravelPartyStartExecution
+            .CanReserveChargeAndRefundRevisionCapacity(noRefundCapacity, 0f), Is.True);
+    }
+
+    [Test]
+    public void CoreExecutesSelectedTravelPartyStartAgainstTheExactOwnerGraph()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        SpatialRouteRuntime selectedRoute = null;
+        DailyV1CityRuntimeOwners originCity = null;
+        List<DailyV1NpcRuntimeOwners> members = null;
+        foreach (SpatialRouteRuntime route in graph.SpatialNetwork.Routes)
+        {
+            DailyV1CityRuntimeOwners city = graph.Cities.SingleOrDefault(candidate =>
+                string.Equals(candidate.LocationRuntimeId, route.Origin.RuntimeId, StringComparison.Ordinal));
+            if (city == null) continue;
+            List<DailyV1NpcRuntimeOwners> atOrigin = graph.Npcs
+                .Where(member => city.NpcPresence.Contains(member.RuntimeId)
+                    && string.Equals(member.Travel.CurrentLocationRuntimeId,
+                        route.Origin.RuntimeId, StringComparison.Ordinal))
+                .Take(2).ToList();
+            float cost = route.TravelDays
+                * (graph.Definitions.EffectiveConfiguration?.Travel?.TravelCostPerDay ?? 0f);
+            if (atOrigin.Count == 2 && atOrigin.All(member => member.MoneyAccount.CanDebit(cost)))
+            {
+                selectedRoute = route;
+                originCity = city;
+                members = atOrigin;
+                break;
+            }
+        }
+
+        Assert.That(selectedRoute, Is.Not.Null, "The selected fixture requires a two-member eligible route.");
+        DailyV1CityRuntimeOwners destinationCity = graph.Cities.SingleOrDefault(candidate =>
+            string.Equals(candidate.LocationRuntimeId, selectedRoute.Destination.RuntimeId, StringComparison.Ordinal));
+        float costPerMember = selectedRoute.TravelDays
+            * (graph.Definitions.EffectiveConfiguration?.Travel?.TravelCostPerDay ?? 0f);
+        List<TravelPartyMemberCost> costs = members.Select(member =>
+            new TravelPartyMemberCost(member.RuntimeId, costPerMember)).ToList();
+        long initialStoreRevision = graph.TravelParties.Revision;
+        long initialCityRevision = originCity.NpcPresence.Revision;
+        long[] initialTravelRevisions = members.Select(member => member.Travel.Revision).ToArray();
+        float[] initialBalances = members.Select(member => member.MoneyAccount.Balance).ToArray();
+
+        Assert.That(DailyV1SelectedTravelPartyStartExecution.TryStart(
+            graph,
+            members,
+            members,
+            Array.Empty<DailyV1NpcRuntimeOwners>(),
+            selectedRoute.Origin.RuntimeId,
+            originCity,
+            selectedRoute.Destination.RuntimeId,
+            destinationCity,
+            selectedRoute.RuntimeId,
+            selectedRoute.TravelDays,
+            "decision/core-party-start",
+            costs,
+            null,
+            (_, _, _) => true,
+            (_, _, _) => { },
+            out TravelPartyRuntime party), Is.True);
+
+        Assert.That(party, Is.Not.Null);
+        Assert.That(graph.TravelParties.GetById(party.TravelPartyId), Is.SameAs(party));
+        Assert.That(party.MemberRuntimeIds, Is.EqualTo(members.Select(member => member.RuntimeId)));
+        Assert.That(graph.TravelParties.Revision, Is.EqualTo(initialStoreRevision + 1));
+        Assert.That(originCity.NpcPresence.Revision, Is.EqualTo(initialCityRevision + 2));
+        for (int index = 0; index < members.Count; index++)
+        {
+            Assert.That(members[index].Travel.Revision, Is.EqualTo(initialTravelRevisions[index] + 2));
+            Assert.That(members[index].Travel.ActiveTravelPartyId, Is.EqualTo(party.TravelPartyId));
+            Assert.That(members[index].Travel.DestinationLocationRuntimeId,
+                Is.EqualTo(selectedRoute.Destination.RuntimeId));
+            Assert.That(members[index].MoneyAccount.Balance, Is.EqualTo(initialBalances[index] - costPerMember));
+            Assert.That(members[index].SpatialKnowledge.KnowsLocation(selectedRoute.Origin.RuntimeId), Is.True);
+            Assert.That(members[index].SpatialKnowledge.KnowsRoute(selectedRoute.RuntimeId), Is.True);
+        }
+    }
+
+    [Test]
+    public void CoreRejectsStartWhenProjectionAdmissionRejectsWithoutStartingTravel()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        SpatialRouteRuntime selectedRoute = null;
+        DailyV1CityRuntimeOwners originCity = null;
+        List<DailyV1NpcRuntimeOwners> members = null;
+        foreach (SpatialRouteRuntime route in graph.SpatialNetwork.Routes)
+        {
+            DailyV1CityRuntimeOwners city = graph.Cities.SingleOrDefault(candidate =>
+                string.Equals(candidate.LocationRuntimeId, route.Origin.RuntimeId, StringComparison.Ordinal));
+            if (city == null) continue;
+            List<DailyV1NpcRuntimeOwners> atOrigin = graph.Npcs
+                .Where(member => city.NpcPresence.Contains(member.RuntimeId)
+                    && string.Equals(member.Travel.CurrentLocationRuntimeId,
+                        route.Origin.RuntimeId, StringComparison.Ordinal))
+                .Take(2).ToList();
+            if (atOrigin.Count == 2)
+            {
+                selectedRoute = route;
+                originCity = city;
+                members = atOrigin;
+                break;
+            }
+        }
+
+        Assert.That(selectedRoute, Is.Not.Null);
+        DailyV1CityRuntimeOwners destinationCity = graph.Cities.SingleOrDefault(candidate =>
+            string.Equals(candidate.LocationRuntimeId, selectedRoute.Destination.RuntimeId, StringComparison.Ordinal));
+        float costPerMember = selectedRoute.TravelDays
+            * (graph.Definitions.EffectiveConfiguration?.Travel?.TravelCostPerDay ?? 0f);
+        List<TravelPartyMemberCost> costs = members.Select(member =>
+            new TravelPartyMemberCost(member.RuntimeId, costPerMember)).ToList();
+        long initialStoreRevision = graph.TravelParties.Revision;
+        long initialCityRevision = originCity.NpcPresence.Revision;
+        string[] initialLocations = members.Select(member => member.Travel.CurrentLocationRuntimeId).ToArray();
+        long[] initialTravelRevisions = members.Select(member => member.Travel.Revision).ToArray();
+        float[] initialBalances = members.Select(member => member.MoneyAccount.Balance).ToArray();
+
+        Assert.That(DailyV1SelectedTravelPartyStartExecution.TryStart(
+            graph,
+            members,
+            members,
+            Array.Empty<DailyV1NpcRuntimeOwners>(),
+            selectedRoute.Origin.RuntimeId,
+            originCity,
+            selectedRoute.Destination.RuntimeId,
+            destinationCity,
+            selectedRoute.RuntimeId,
+            selectedRoute.TravelDays,
+            "decision/rejected-core-party-start",
+            costs,
+            null,
+            (_, _, _) => false,
+            (_, _, _) => { },
+            out TravelPartyRuntime party), Is.False);
+
+        Assert.That(party, Is.Null);
+        Assert.That(graph.TravelParties.Revision, Is.EqualTo(initialStoreRevision));
+        Assert.That(graph.TravelParties.ActiveParties, Is.Empty);
+        Assert.That(originCity.NpcPresence.Revision, Is.EqualTo(initialCityRevision));
+        for (int index = 0; index < members.Count; index++)
+        {
+            Assert.That(members[index].Travel.CurrentLocationRuntimeId, Is.EqualTo(initialLocations[index]));
+            Assert.That(members[index].Travel.IsTraveling, Is.False);
+            Assert.That(members[index].Travel.Revision, Is.EqualTo(initialTravelRevisions[index]));
+            Assert.That(members[index].MoneyAccount.Balance, Is.EqualTo(initialBalances[index]));
+        }
+    }
+
+    [Test]
     public void CoreDerivesExactSoloTravelStartOwnerSectionsFromItsSelectedGraph()
     {
         DailyV1GenesisComposition composition = Compose();

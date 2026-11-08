@@ -201,6 +201,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelTransitionPlan.cs" Link="City/DailyV1SelectedTravelTransitionPlan.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedSoloTravelExecution.cs" Link="City/DailyV1SelectedSoloTravelExecution.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelPartyChargeExecution.cs" Link="City/DailyV1SelectedTravelPartyChargeExecution.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelPartyStartExecution.cs" Link="City/DailyV1SelectedTravelPartyStartExecution.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedRuntimeOwnerGraph.cs" Link="Application/DailyV1SelectedRuntimeOwnerGraph.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedLocalKnowledgeOwnerBinding.cs" Link="Application/DailyV1SelectedLocalKnowledgeOwnerBinding.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedActionExecutionStage.cs" Link="Application/DailyV1SelectedActionExecutionStage.cs" />
