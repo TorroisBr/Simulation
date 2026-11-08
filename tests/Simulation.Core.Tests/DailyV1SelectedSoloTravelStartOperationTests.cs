@@ -310,6 +310,231 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
     }
 
     [Test]
+    public void CoreReceiptsMoneyTravelPlanCityPresenceAndRealEventAllocations()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(candidate =>
+            string.Equals(candidate.RuntimeId, actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        Assert.That(actor.TravelPlan.TryCommit(
+            "location/solo-plan-target", "city/solo-plan-target", NpcTravelReason.Trade,
+            1f, 1f, "decision/solo-plan"), Is.True);
+
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        string moneyId = DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + actor.RuntimeId;
+        string planId = DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId);
+        string cityId = DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId);
+        string eventsId = RuntimeIdAllocatorCensusProvider.EventsSectionId;
+        string sequenceId = SimulationRecordSequenceCensusProvider.SectionId;
+        TestProtocol protocol = new TestProtocol();
+        bool CanCommit(string sectionId) =>
+            state.TryCanCommitSelectedP12SoloTravelStartMutation(new[] { sectionId }, out bool handled)
+            && handled;
+        void Record(string sectionId)
+        {
+            if (!state.TryRecordSelectedP12SoloTravelStartMutation(
+                    new[] { sectionId }, out bool handled) || !handled)
+                throw new InvalidOperationException("Core rejected a committed selected travel-start receipt.");
+        }
+        RuntimeIdAllocatorOwnerBridge.BindP12EventIdMutationBoundary(
+            composition.RuntimeIdAllocator, () => CanCommit(eventsId), () => Record(eventsId));
+        SimulationRecordSequenceOwnerBridge.BindP12MutationBoundary(
+            composition.RecordSequence, () => CanCommit(sequenceId), () => Record(sequenceId));
+
+        long moneyRevision = actor.MoneyAccount.Revision;
+        long planRevision = actor.TravelPlan.Revision;
+        long cityRevision = city.NpcPresence.Revision;
+        int cityCardinality = city.NpcPresence.OrderedNpcRuntimeIds.Count;
+        long eventRevision = RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(
+            composition.RuntimeIdAllocator).GetCurrentCensus().Revision;
+        long sequenceRevision = new SimulationRecordSequenceCensusProvider(
+            composition.RecordSequence).GetCurrentCensus().Revision;
+        IDisposable scope = null;
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out scope), Is.True);
+
+            Assert.That(CanCommit(moneyId), Is.True);
+            Assert.That(actor.MoneyAccount.TryCredit(0.25f), Is.True);
+            Record(moneyId);
+
+            Assert.That(CanCommit(planId), Is.True);
+            Assert.That(actor.TravelPlan.TryCommit(
+                null, null, NpcTravelReason.None, 0f, 0f, null), Is.True);
+            Record(planId);
+
+            Assert.That(CanCommit(cityId), Is.True);
+            Assert.That(city.NpcPresence.TryRemove(actor.RuntimeId), Is.True);
+            Record(cityId);
+
+            Assert.That(composition.EventAuthority.Recorder.Record(
+                (eventId, absoluteDay, recordSequence) => new NpcTravelStartedEvent(
+                    eventId, absoluteDay, recordSequence, actor.RuntimeId,
+                    "location/solo-event-origin", "location/solo-event-destination",
+                    "route/solo-event-route", "decision/solo-event")), Is.True);
+
+            Assert.That(protocol.ValidationCalls, Is.EqualTo(1),
+                "The Core receipt cut owns all selected rows for this operation after the single host-vector preflight.");
+            scope.Dispose();
+            scope = null;
+        }
+        finally
+        {
+            scope?.Dispose();
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+
+        Assert.That(actor.MoneyAccount.Revision, Is.EqualTo(moneyRevision + 1L));
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(planRevision + 1L));
+        Assert.That(city.NpcPresence.Revision, Is.EqualTo(cityRevision + 1L));
+        Assert.That(city.NpcPresence.OrderedNpcRuntimeIds.Count, Is.EqualTo(cityCardinality - 1));
+        Assert.That(city.NpcPresence.Contains(actor.RuntimeId), Is.False);
+        Assert.That(RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(
+            composition.RuntimeIdAllocator).GetCurrentCensus().Revision, Is.EqualTo(eventRevision + 1L));
+        Assert.That(new SimulationRecordSequenceCensusProvider(
+            composition.RecordSequence).GetCurrentCensus().Revision, Is.EqualTo(sequenceRevision + 1L));
+        Assert.That(protocol.NotifiedSections, Is.EquivalentTo(
+            new[] { moneyId, planId, cityId, eventsId, sequenceId }));
+        Assert.That(protocol.Faulted, Is.False);
+    }
+
+    [TestCase("money")]
+    [TestCase("travel-plan")]
+    [TestCase("city-presence")]
+    [TestCase("event-counter")]
+    [TestCase("record-sequence")]
+    public void CoreRejectsUnreceiptedSelectedTravelStartOwnerDrift(string ownerKind)
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(candidate =>
+            string.Equals(candidate.RuntimeId, actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        Assert.That(actor.TravelPlan.TryCommit(
+            "location/solo-plan-target", "city/solo-plan-target", NpcTravelReason.Trade,
+            1f, 1f, "decision/solo-plan"), Is.True);
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        string sectionId = ownerKind switch
+        {
+            "money" => DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + actor.RuntimeId,
+            "travel-plan" => DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId),
+            "city-presence" => DailyV1SelectedOwnerSectionCensusContract
+                .CityImportantNpcSectionIdFor(city.RuntimeId),
+            "event-counter" => RuntimeIdAllocatorCensusProvider.EventsSectionId,
+            "record-sequence" => SimulationRecordSequenceCensusProvider.SectionId,
+            _ => throw new ArgumentOutOfRangeException(nameof(ownerKind))
+        };
+        TestProtocol protocol = new TestProtocol();
+        IDisposable scope = null;
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out scope), Is.True);
+            switch (ownerKind)
+            {
+                case "money": Assert.That(actor.MoneyAccount.TryCredit(0.25f), Is.True); break;
+                case "travel-plan": Assert.That(actor.TravelPlan.TryCommit(
+                    null, null, NpcTravelReason.None, 0f, 0f, null), Is.True); break;
+                case "city-presence": Assert.That(city.NpcPresence.TryRemove(actor.RuntimeId), Is.True); break;
+                case "event-counter": composition.RuntimeIdAllocator.AllocateEventId(); break;
+                case "record-sequence": composition.RecordSequence.Allocate(); break;
+            }
+
+            Assert.That(state.TryCanCommitSelectedP12SoloTravelStartMutation(
+                new[] { sectionId }, out bool handled), Is.False);
+            Assert.That(handled, Is.True);
+            Assert.That(protocol.Faulted, Is.True);
+        }
+        finally
+        {
+            scope?.Dispose();
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+    }
+
+    [TestCase("money")]
+    [TestCase("travel-plan")]
+    [TestCase("event-counter")]
+    [TestCase("record-sequence")]
+    public void CoreRejectsMultiRevisionSelectedTravelStartReceipts(string ownerKind)
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        Assert.That(actor.TravelPlan.TryCommit(
+            "location/solo-plan-target", "city/solo-plan-target", NpcTravelReason.Trade,
+            1f, 1f, "decision/solo-plan"), Is.True);
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        string sectionId = ownerKind switch
+        {
+            "money" => DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + actor.RuntimeId,
+            "travel-plan" => DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId),
+            "event-counter" => RuntimeIdAllocatorCensusProvider.EventsSectionId,
+            "record-sequence" => SimulationRecordSequenceCensusProvider.SectionId,
+            _ => throw new ArgumentOutOfRangeException(nameof(ownerKind))
+        };
+        TestProtocol protocol = new TestProtocol();
+        IDisposable scope = null;
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out scope), Is.True);
+            switch (ownerKind)
+            {
+                case "money":
+                    Assert.That(actor.MoneyAccount.TryCredit(0.25f), Is.True);
+                    Assert.That(actor.MoneyAccount.TryCredit(0.25f), Is.True);
+                    break;
+                case "travel-plan":
+                    Assert.That(actor.TravelPlan.TryCommit(
+                        null, null, NpcTravelReason.None, 0f, 0f, null), Is.True);
+                    Assert.That(actor.TravelPlan.TryCommit(
+                        "location/solo-plan-target-2", "city/solo-plan-target-2",
+                        NpcTravelReason.Trade, 1f, 1f, "decision/solo-plan-2"), Is.True);
+                    break;
+                case "event-counter":
+                    composition.RuntimeIdAllocator.AllocateEventId();
+                    composition.RuntimeIdAllocator.AllocateEventId();
+                    break;
+                case "record-sequence":
+                    composition.RecordSequence.Allocate();
+                    composition.RecordSequence.Allocate();
+                    break;
+            }
+
+            Assert.That(state.TryRecordSelectedP12SoloTravelStartMutation(
+                new[] { sectionId }, out bool handled), Is.False);
+            Assert.That(handled, Is.True);
+            Assert.That(protocol.Faulted, Is.True);
+        }
+        finally
+        {
+            scope?.Dispose();
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+    }
+
+    [Test]
     public void CoreRejectsPartialOrMultiRevisionSpatialKnowledgeReceipts()
     {
         DailyV1GenesisComposition composition = Compose();
