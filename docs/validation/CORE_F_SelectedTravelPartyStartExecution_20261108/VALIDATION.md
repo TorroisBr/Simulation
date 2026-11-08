@@ -1,6 +1,6 @@
 # CORE-F Selected TravelParty Start Execution — Validation
 
-Status: validated implementation candidate; this record does not claim CORE-F completion or Core-canonical promotion.
+Status: validated and independently reviewed implementation candidate; this record does not claim CORE-F completion or Core-canonical promotion.
 
 ## Scope
 
@@ -25,6 +25,6 @@ CoreValidation source identity is bound by protected manifest run `ed2ffc1364834
 
 The separately filtered Smoke report is retained in protected local evidence and is not included in the result-only archive: the packager correctly rejects the filtered report's inconsistent enclosing-suite counts. All five Smoke identities also appear as passing cases in the packaged complete EditMode report. The protected original XML reports and raw logs remain unchanged. The .NET TRX files and complete private CoreValidation manifest remain in protected local retention; no public .NET package is claimed because the approved TRX adapter is still marked not delivered in the validation evidence policy.
 
-## Review and promotion boundary
+## Independent review
 
-Independent exact-tip implementation review is pending for the final candidate commit. This checkpoint does not promote Core canonical, close CORE-F, or claim the detached .NET host, shared application, or full CORE-F contract is complete.
+Independent exact-tip implementation review passed. See [`CORE_F_SELECTED_TRAVEL_PARTY_START_EXECUTION_REVIEW_D916BBBB.md`](../../design/CORE_F_SELECTED_TRAVEL_PARTY_START_EXECUTION_REVIEW_D916BBBB.md) for the exact reviewed commit/tree, scope, and evidence verdict. The review does not claim full TravelParty completion, P12 completion, or CORE-F acceptance.
