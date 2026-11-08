@@ -33,6 +33,64 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
     }
 
     [Test]
+    public void CoreDerivesTravelPartyStartFootprintForEveryExactSelectedMember()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1CityRuntimeOwners originCity = graph.Cities[0];
+        DailyV1NpcRuntimeOwners[] members = graph.Npcs
+            .Where(member => originCity.NpcPresence.Contains(member.RuntimeId))
+            .Take(2).ToArray();
+
+        Assert.That(members, Has.Length.EqualTo(2));
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        Assert.That(state.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, members, originCity, out IReadOnlyList<string> sectionIds), Is.True);
+        Assert.That(sectionIds, Does.Contain(TravelPartyCensusProvider.SectionId));
+        Assert.That(sectionIds, Does.Contain(RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId));
+        Assert.That(sectionIds, Does.Contain(RuntimeIdAllocatorCensusProvider.EventsSectionId));
+        Assert.That(sectionIds, Does.Contain(SimulationRecordSequenceCensusProvider.SectionId));
+        Assert.That(sectionIds, Does.Contain(DailyV1SelectedOwnerSectionCensusContract
+            .CityImportantNpcSectionIdFor(originCity.RuntimeId)));
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            if (members.Any(member => city.NpcPresence.Contains(member.RuntimeId)))
+                Assert.That(sectionIds, Does.Contain(DailyV1SelectedOwnerSectionCensusContract
+                    .CityImportantNpcSectionIdFor(city.RuntimeId)));
+        }
+        foreach (DailyV1NpcRuntimeOwners member in members)
+        {
+            Assert.That(sectionIds, Does.Contain(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + member.RuntimeId));
+            Assert.That(sectionIds, Does.Contain(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix + member.RuntimeId));
+            Assert.That(sectionIds, Does.Contain(
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + member.RuntimeId));
+            Assert.That(sectionIds, Does.Contain(
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + member.RuntimeId));
+        }
+        Assert.That(sectionIds.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(sectionIds.Count));
+        Assert.That(sectionIds, Is.Ordered.Using<string>(StringComparer.Ordinal));
+    }
+
+    [Test]
+    public void CoreRejectsDuplicateOrForeignTravelPartyMemberOwners()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1GenesisComposition foreign = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners first = graph.Npcs[0];
+        DailyV1NpcRuntimeOwners second = graph.Npcs[1];
+
+        Assert.That(composition.ExecutionBoundaryState.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, new[] { first, first }, graph.Cities[0], out _), Is.False);
+        Assert.That(composition.ExecutionBoundaryState.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, new[] { first, foreign.OwnerGraph.Npcs[1] }, graph.Cities[0], out _), Is.False);
+        Assert.That(composition.ExecutionBoundaryState.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, new[] { first, second }, foreign.OwnerGraph.Cities[0], out _), Is.False);
+    }
+
+    [Test]
     public void CoreIncludesCityPresenceSectionOnlyWhenActorIsInThatOwner()
     {
         DailyV1GenesisComposition composition = Compose();

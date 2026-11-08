@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 
 public sealed partial class SimulationRuntime
@@ -333,6 +334,47 @@ public sealed partial class SimulationRuntime
                         StringComparison.Ordinal))
                     throw new InvalidOperationException();
                 AddP12TravelPartyStartSection(sectionIds, distinctSectionIds, citySectionId);
+            }
+
+            DailyV1SelectedRuntimeOwnerGraph selectedGraph =
+                dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
+            bool anyCoreMember = false;
+            bool allCoreMembers = selectedGraph != null && preparation.Members.Count > 0;
+            List<DailyV1NpcRuntimeOwners> selectedMembers =
+                new List<DailyV1NpcRuntimeOwners>(preparation.Members.Count);
+            foreach (NpcRuntime member in preparation.Members)
+            {
+                DailyV1NpcRuntimeOwners selectedOwner = member?.SelectedRuntimeOwners;
+                if (selectedOwner == null)
+                {
+                    allCoreMembers = false;
+                    continue;
+                }
+
+                anyCoreMember = true;
+                if (selectedGraph == null || !selectedGraph.ContainsExactNpcOwner(selectedOwner))
+                    throw new InvalidOperationException();
+                selectedMembers.Add(selectedOwner);
+            }
+
+            DailyV1CityRuntimeOwners selectedOriginCity =
+                preparation.OriginCity?.SelectedRuntimeOwners;
+            if (selectedOriginCity != null
+                && (selectedGraph == null || !selectedGraph.ContainsExactCityOwner(selectedOriginCity)))
+                throw new InvalidOperationException();
+
+            // Core derives the exact footprint for a fully selected party.
+            // An admitted mixed roster keeps the existing whole-host P12
+            // compatibility path, but any non-null foreign Core binding faults.
+            if (anyCoreMember && allCoreMembers
+                && (preparation.OriginCity == null || selectedOriginCity != null))
+            {
+                if (!dailyExecutionBoundary.TryCreateSelectedP12TravelPartyStartSectionIds(
+                        selectedGraph, selectedMembers, selectedOriginCity,
+                        out IReadOnlyList<string> selectedOwnerSectionIds)
+                    || selectedOwnerSectionIds.Count != distinctSectionIds.Count
+                    || selectedOwnerSectionIds.Any(sectionId => !distinctSectionIds.Contains(sectionId)))
+                    throw new InvalidOperationException();
             }
 
             if (!npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _)

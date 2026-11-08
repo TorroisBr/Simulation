@@ -1499,6 +1499,99 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         return true;
     }
 
+    /// <summary>
+    /// Core derives the exact P12 owner footprint for a selected TravelParty
+    /// start. The Unity path compares its existing prepared roster against this
+    /// set; mixed or unselected rosters retain the established compatibility path.
+    /// </summary>
+    internal bool TryCreateSelectedP12TravelPartyStartSectionIds(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> members,
+        DailyV1CityRuntimeOwners originCity,
+        out IReadOnlyList<string> sectionIds)
+    {
+        sectionIds = null;
+        if (graph == null || members == null || members.Count == 0
+            || !HasAdmittedSelectedDailyExecution
+            || AdmissionContext == null || !AdmissionContext.IsOwnedByCurrentThread()
+            || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+            || graph.Npcs == null || graph.Cities == null || graph.TravelParties == null
+            || !ReferenceEquals(graph.RuntimeIdAllocator, selectedRuntimeIdAllocator)
+            || selectedRuntimeIdAllocator == null || selectedRecordSequence == null
+            || selectedRuntimeActorRoster == null
+            || (originCity != null && (!graph.ContainsExactCityOwner(originCity)
+                || originCity.NpcPresence == null)))
+            return false;
+
+        List<string> ids = new List<string>
+        {
+            TravelPartyCensusProvider.SectionId,
+            RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId,
+            RuntimeIdAllocatorCensusProvider.EventsSectionId,
+            SimulationRecordSequenceCensusProvider.SectionId
+        };
+        HashSet<string> memberIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<string> cityPresenceSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<DailyV1NpcRuntimeOwners> memberOwners = new HashSet<DailyV1NpcRuntimeOwners>();
+        foreach (DailyV1NpcRuntimeOwners member in members)
+        {
+            if (member == null || !graph.ContainsExactNpcOwner(member)
+                || !ReferenceEquals(member.Definitions, graph.Definitions)
+                || string.IsNullOrWhiteSpace(member.RuntimeId)
+                || !memberIds.Add(member.RuntimeId) || !memberOwners.Add(member)
+                || member.MoneyAccount == null || member.Travel == null
+                || member.SpatialKnowledge == null)
+                return false;
+
+            int matchingRosterEntries = 0;
+            foreach (DailyV1ActorTurnRosterProjection entry in selectedRuntimeActorRoster)
+                if (entry != null && string.Equals(
+                        entry.RuntimeId, member.RuntimeId, StringComparison.Ordinal))
+                    matchingRosterEntries++;
+            if (matchingRosterEntries != 1) return false;
+
+            ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + member.RuntimeId);
+            ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix + member.RuntimeId);
+
+            ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + member.RuntimeId);
+            ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + member.RuntimeId);
+
+            int currentCityMatches = 0;
+            foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            {
+                if (city == null || !graph.ContainsExactCityOwner(city)
+                    || city.NpcPresence == null
+                    || !string.Equals(city.NpcPresence.CityRuntimeId,
+                        city.RuntimeId, StringComparison.Ordinal))
+                    return false;
+                if (!city.NpcPresence.Contains(member.RuntimeId)) continue;
+                currentCityMatches++;
+                string cityPresenceSectionId = DailyV1SelectedOwnerSectionCensusContract
+                    .CityImportantNpcSectionIdFor(city.RuntimeId);
+                if (cityPresenceSectionIds.Add(cityPresenceSectionId))
+                    ids.Add(cityPresenceSectionId);
+            }
+            if (currentCityMatches > 1) return false;
+        }
+
+        // The existing start transaction includes the prepared origin City
+        // presence row even when no member currently has a residence there.
+        if (originCity != null)
+        {
+            string originPresenceSectionId = DailyV1SelectedOwnerSectionCensusContract
+                .CityImportantNpcSectionIdFor(originCity.RuntimeId);
+            if (cityPresenceSectionIds.Add(originPresenceSectionId))
+                ids.Add(originPresenceSectionId);
+        }
+
+        HashSet<string> unique = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string id in ids)
+            if (string.IsNullOrWhiteSpace(id) || !unique.Add(id)) return false;
+        ids.Sort(StringComparer.Ordinal);
+        sectionIds = Array.AsReadOnly(ids.ToArray());
+        return true;
+    }
+
     private bool AreRequiredSelectedP12Sections(IReadOnlyList<string> sectionIds)
     {
         if (sectionIds == null || !expectedOwnerSectionContractInventorySealed)
