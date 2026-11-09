@@ -2554,6 +2554,95 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     }
 
     /// <summary>
+    /// Produces the host-owned remainder after removing selected NPC census
+    /// rows and allocator counters only when their live values match the exact
+    /// Core owner graph. Mixed or stale NPC rows and nonmatching allocator
+    /// triplets remain available to the existing P12 validation path.
+    /// </summary>
+    internal static bool TryCreateHostOwnedCensusRemainder(
+        IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
+        out string diagnostic)
+    {
+        hostOwnedSections = null;
+        diagnostic = null;
+        if (completeHostSections == null || graph == null)
+        {
+            diagnostic = "The selected Core census remainder requires its complete source vector and owner graph.";
+            return false;
+        }
+
+        if (!TryGetExactCoreOwnedNpcCensusFragmentSectionIds(
+                completeHostSections, graph,
+                out IReadOnlyList<string> exactNpcSectionIds,
+                out diagnostic))
+            return false;
+
+        Dictionary<string, OwnerSectionCensusSnapshot> sourceById =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot section in completeHostSections)
+        {
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !sourceById.TryAdd(section.SectionId, section))
+            {
+                diagnostic = "The complete selected owner census contains an invalid or duplicate section.";
+                return false;
+            }
+        }
+
+        HashSet<string> coreOwnedIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in exactNpcSectionIds)
+        {
+            if (string.IsNullOrWhiteSpace(sectionId)
+                || !sourceById.ContainsKey(sectionId)
+                || !coreOwnedIds.Add(sectionId))
+            {
+                diagnostic = "The exact Core NPC census fragment does not match unique source rows.";
+                return false;
+            }
+        }
+
+        // Runtime allocator counters are a fixed three-row set. Omit the set
+        // only when every row matches its Core witness; stale or partial sets
+        // stay intact for the later P12 composition and admission gates.
+        if (TryCreateCoreOwnedRuntimeIdAllocatorCensusSections(
+                graph, out IReadOnlyList<OwnerSectionCensusSnapshot> allocatorRows, out _)
+            && allocatorRows.Count == CoreOwnedRuntimeIdAllocatorSectionIdValues.Length)
+        {
+            bool exactAllocatorTriplet = true;
+            foreach (OwnerSectionCensusSnapshot expected in allocatorRows)
+            {
+                if (!sourceById.TryGetValue(expected.SectionId, out OwnerSectionCensusSnapshot actual)
+                    || !HasExactOwnerSectionFacts(actual, expected))
+                {
+                    exactAllocatorTriplet = false;
+                    break;
+                }
+            }
+
+            if (exactAllocatorTriplet)
+                foreach (OwnerSectionCensusSnapshot allocatorRow in allocatorRows)
+                    if (!coreOwnedIds.Add(allocatorRow.SectionId))
+                    {
+                        diagnostic = "Core NPC and RuntimeIdAllocator census identities overlap.";
+                        return false;
+                    }
+        }
+
+        List<OwnerSectionCensusSnapshot> remainder =
+            new List<OwnerSectionCensusSnapshot>(completeHostSections.Count - coreOwnedIds.Count);
+        foreach (OwnerSectionCensusSnapshot section in completeHostSections)
+            if (!coreOwnedIds.Contains(section.SectionId))
+                remainder.Add(section);
+
+        hostOwnedSections = Array.AsReadOnly(remainder.ToArray());
+        return true;
+    }
+
+    /// <summary>
+    /// Identifies exact selected Inventory and MoneyAccount rows that may be
+    /// omitted from the Unity remainder. Mixed rosters, stale facts, or
     /// Identifies exact selected Inventory and MoneyAccount rows that may be
     /// omitted from the Unity remainder. Mixed rosters, stale facts, or
     /// substituted rows remain on the complete host path for P12 to validate.

@@ -3279,6 +3279,99 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void CoreHostCensusRemainderOmitsOnlyExactNpcAndAllocatorRows()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session, out _);
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        OwnerSectionCensusSnapshot[] completeVector =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+            completeVector), Is.True);
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryGetExactCoreOwnedNpcCensusFragmentSectionIds(
+                completeVector, graph, out IReadOnlyList<string> exactNpcSectionIds, out string diagnostic),
+            Is.True, diagnostic);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedRuntimeIdAllocatorCensusSections(
+                graph, out IReadOnlyList<OwnerSectionCensusSnapshot> allocatorRows, out diagnostic),
+            Is.True, diagnostic);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateHostOwnedCensusRemainder(
+                completeVector, graph, out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedRemainder,
+                out diagnostic),
+            Is.True, diagnostic);
+
+        HashSet<string> exactCoreIds = new HashSet<string>(exactNpcSectionIds, StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot allocatorRow in allocatorRows)
+            Assert.That(exactCoreIds.Add(allocatorRow.SectionId), Is.True, allocatorRow.SectionId);
+        OwnerSectionCensusSnapshot[] expectedRemainder = completeVector
+            .Where(section => !exactCoreIds.Contains(section.SectionId)).ToArray();
+        Assert.That(hostOwnedRemainder.Select(section => section.SectionId),
+            Is.EqualTo(expectedRemainder.Select(section => section.SectionId)));
+        for (int index = 0; index < expectedRemainder.Length; index++)
+            Assert.That(hostOwnedRemainder[index], Is.SameAs(expectedRemainder[index]));
+
+        string staleInventoryId = DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix
+            + graph.Npcs[0].RuntimeId;
+        OwnerSectionCensusSnapshot staleInventory = completeVector.Single(section =>
+            section.SectionId == staleInventoryId);
+        OwnerSectionCensusSnapshot staleVectorEntry = new OwnerSectionCensusSnapshot(
+            staleInventory.SectionId, staleInventory.SchemaVersion, staleInventory.Role,
+            staleInventory.OwnerInstanceIdentity, staleInventory.Cardinality, staleInventory.Revision + 1L);
+        OwnerSectionCensusSnapshot[] staleVector = completeVector.Select(section =>
+            section.SectionId == staleInventoryId ? staleVectorEntry : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateHostOwnedCensusRemainder(
+                staleVector, graph, out IReadOnlyList<OwnerSectionCensusSnapshot> staleHostRemainder,
+                out diagnostic),
+            Is.True, diagnostic);
+        Assert.That(staleHostRemainder.Single(section => section.SectionId == staleInventoryId),
+            Is.SameAs(staleVectorEntry),
+            "Stale NPC facts remain host-owned for the established P12 validation path.");
+
+        OwnerSectionCensusSnapshot staleAllocator = allocatorRows[0];
+        OwnerSectionCensusSnapshot staleAllocatorEntry = new OwnerSectionCensusSnapshot(
+            staleAllocator.SectionId, staleAllocator.SchemaVersion, staleAllocator.Role,
+            staleAllocator.OwnerInstanceIdentity, staleAllocator.Cardinality, staleAllocator.Revision + 1L);
+        OwnerSectionCensusSnapshot[] staleAllocatorVector = completeVector.Select(section =>
+            section.SectionId == staleAllocator.SectionId ? staleAllocatorEntry : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateHostOwnedCensusRemainder(
+                staleAllocatorVector, graph, out IReadOnlyList<OwnerSectionCensusSnapshot> staleAllocatorRemainder,
+                out diagnostic),
+            Is.True, diagnostic);
+        foreach (OwnerSectionCensusSnapshot allocatorRow in allocatorRows)
+            Assert.That(staleAllocatorRemainder.Single(section =>
+                section.SectionId == allocatorRow.SectionId), Is.Not.Null, allocatorRow.SectionId);
+
+        OwnerSectionCensusSnapshot compatibilityInventory = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "compatibility-npc",
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required, new object(), 0, 0L);
+        OwnerSectionCensusSnapshot compatibilityMoneyAccount = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + "compatibility-npc",
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required, new object(), 1, 0L);
+        OwnerSectionCensusSnapshot[] mixedRosterVector = completeVector.Concat(new[]
+        {
+            compatibilityInventory,
+            compatibilityMoneyAccount
+        }).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateHostOwnedCensusRemainder(
+                mixedRosterVector, graph, out IReadOnlyList<OwnerSectionCensusSnapshot> mixedRosterRemainder,
+                out diagnostic),
+            Is.True, diagnostic);
+        Assert.That(mixedRosterRemainder.Any(section =>
+                ReferenceEquals(section, compatibilityInventory)), Is.True);
+        Assert.That(mixedRosterRemainder.Any(section =>
+                ReferenceEquals(section, compatibilityMoneyAccount)), Is.True);
+        foreach (OwnerSectionCensusSnapshot coreNpcRow in completeVector.Where(section =>
+            section.SectionId.StartsWith(DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix,
+                StringComparison.Ordinal)
+            || section.SectionId.StartsWith(DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
+                StringComparison.Ordinal)))
+            Assert.That(mixedRosterRemainder.Any(section => ReferenceEquals(section, coreNpcRow)), Is.True,
+                "A mixed roster keeps every host NPC row on the compatibility path.");
+    }
+
+    [Test]
     public void CoreRecomposesTheWholeSelectedNpcCensusFragmentFromItsExactOwnerGraph()
     {
         CreateApplicationWithAdvanceBoundary(
