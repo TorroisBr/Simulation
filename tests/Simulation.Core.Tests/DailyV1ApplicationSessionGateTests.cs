@@ -3372,6 +3372,74 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void CoreBoundCensusCaptureOwnsHostRemainderSelectionAfterEpochValidation()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session, out _);
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        OwnerSectionCensusSnapshot[] completeHostVector =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryGetExactCoreOwnedNpcCensusFragmentSectionIds(
+                completeHostVector, graph, out IReadOnlyList<string> exactNpcIds, out string diagnostic),
+            Is.True, diagnostic);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedRuntimeIdAllocatorCensusSections(
+                graph, out IReadOnlyList<OwnerSectionCensusSnapshot> allocatorRows, out diagnostic),
+            Is.True, diagnostic);
+
+        HashSet<string> exactCoreIds = new HashSet<string>(exactNpcIds, StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot allocatorRow in allocatorRows)
+            Assert.That(exactCoreIds.Add(allocatorRow.SectionId), Is.True, allocatorRow.SectionId);
+        OwnerSectionCensusSnapshot[] expectedHostRemainder = completeHostVector
+            .Where(section => !exactCoreIds.Contains(section.SectionId)).ToArray();
+
+        bool sourceCalled = false;
+        long currentEpoch = state.MutationEpochState.CurrentEpoch;
+        Assert.That(state.TryBindSelectedRuntimeOwnerCensusSource(new object(), allowedOuterScope =>
+        {
+            sourceCalled = true;
+            Assert.That(allowedOuterScope, Is.EqualTo(DailyV1CaptureScopeAllowance.None));
+            return DailyV1OwnerSectionCensusCaptureResult.Captured(
+                Array.AsReadOnly(completeHostVector), currentEpoch);
+        }), Is.True);
+
+        Assert.That(state.TryCaptureBoundOwnerSectionCensus(
+                null, DailyV1CaptureScopeAllowance.None,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> hostRemainder,
+                out long capturedEpoch, out DailyCaptureEligibilityFailure failure),
+            Is.True, failure.ToString());
+        Assert.That(sourceCalled, Is.True);
+        Assert.That(capturedEpoch, Is.EqualTo(currentEpoch));
+        Assert.That(hostRemainder.Select(section => section.SectionId),
+            Is.EqualTo(expectedHostRemainder.Select(section => section.SectionId)));
+        for (int index = 0; index < expectedHostRemainder.Length; index++)
+            Assert.That(hostRemainder[index], Is.SameAs(expectedHostRemainder[index]));
+    }
+
+    [Test]
+    public void CoreBoundCensusCaptureRejectsEpochDriftBeforeRemainderProjection()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session, out _);
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        OwnerSectionCensusSnapshot[] completeHostVector =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        long wrongEpoch = checked(state.MutationEpochState.CurrentEpoch + 1L);
+        Assert.That(state.TryBindSelectedRuntimeOwnerCensusSource(new object(), _ =>
+            DailyV1OwnerSectionCensusCaptureResult.Captured(
+                Array.AsReadOnly(completeHostVector), wrongEpoch)), Is.True);
+
+        Assert.That(state.TryCaptureBoundOwnerSectionCensus(
+                null, DailyV1CaptureScopeAllowance.None,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> hostRemainder,
+                out long capturedEpoch, out DailyCaptureEligibilityFailure failure),
+            Is.False);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
+        Assert.That(hostRemainder, Is.Null);
+        Assert.That(capturedEpoch, Is.EqualTo(0L));
+    }
+
+    [Test]
     public void CoreRecomposesTheWholeSelectedNpcCensusFragmentFromItsExactOwnerGraph()
     {
         CreateApplicationWithAdvanceBoundary(

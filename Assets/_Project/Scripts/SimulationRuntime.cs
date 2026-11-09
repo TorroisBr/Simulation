@@ -4040,22 +4040,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                                 out ContinuationCensusFailure censusFailure))
                             return DailyV1OwnerSectionCensusCaptureResult.Rejected(
                                 MapDailyCaptureFailure(censusFailure), censusFailure.ToString());
-                        DailyV1SelectedRuntimeOwnerGraph selectedGraph =
-                            dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
-                        if (selectedGraph != null)
-                        {
-                            if (!DailyV1SelectedRuntimeOwnerCensusSource
-                                    .TryCreateHostOwnedCensusRemainder(
-                                        ownerSections, selectedGraph,
-                                        out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedRemainder,
-                                        out string remainderDiagnostic))
-                                return DailyV1OwnerSectionCensusCaptureResult.Rejected(
-                                    DailyCaptureEligibilityFailure.OwnerCoverageIncomplete,
-                                    remainderDiagnostic);
-
-                            ownerSections = hostOwnedRemainder;
-                        }
-
                         return DailyV1OwnerSectionCensusCaptureResult.Captured(ownerSections, mutationEpoch);
                     });
             if (!censusSourceBound)
