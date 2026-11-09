@@ -357,6 +357,65 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             "Rejecting a private target mutation must preserve the source image exactly.");
     }
 
+    [Test]
+    public void CoreImageRestoreRejectsDanglingGenealogyBeforeTargetOwnerVectorCapture()
+    {
+        AnchorFixture anchor = CreateAnchorFixture("P12-G Core graph binding anchor");
+        SyntheticSession source = CreateSyntheticSession(anchor, "P12-G Core graph binding source");
+        Assert.That(source.Session.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+            Is.True, sourceAdvance.ToString());
+
+        byte[] sourceImageBytes = EncodeCompletedImage(source.Session, anchor.NormalContext);
+        P12AContinuationImage image = DecodeCompletedImage(
+            sourceImageBytes, source.Session, anchor.NormalContext);
+        DailyV1Application restoreApplication = new DailyV1Application();
+        Assert.That(restoreApplication.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext restoreBootstrapContext), Is.True);
+        DailyV1ApplicationStartAdmission initialStartAdmission = AdmitInitialRestore(
+            restoreApplication, sourceImageBytes, image.Header.Compatibility);
+        image = initialStartAdmission.RestoreImage;
+
+        SimulationActiveSession privateCandidate = null;
+        bool corruptionApplied = false;
+        List<P12GDailyV1RestoreStage> stages = new List<P12GDailyV1RestoreStage>();
+        bool restored = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+            image,
+            image.Header.Compatibility,
+            anchor.Configuration,
+            anchor.Runtime.Configuration,
+            anchor.Composition.Calendar,
+            anchor.Composition.SelectedDefinitions,
+            restoreBootstrapContext,
+            out SimulationActiveSession rejected,
+            out P12GDailyV1RestoreFailure failure,
+            out string diagnostic,
+            stageObserver: stages.Add,
+            application: restoreApplication,
+            initialStartAdmission: initialStartAdmission,
+            privateCandidateObserverForTest: candidate =>
+            {
+                privateCandidate = candidate;
+                Assert.That(candidate.CoreRuntimeSession, Is.Not.Null);
+                Assert.That(candidate.CoreRuntimeSession.OwnerGraph.GenealogyStore.TryAddParentage(
+                    new PersonId("unresolved-parent"), new PersonId("unresolved-child"),
+                    out GenealogyFailure addFailure), Is.True, addFailure.ToString());
+                corruptionApplied = true;
+            });
+
+        Assert.That(corruptionApplied, Is.True);
+        Assert.That(restored, Is.False);
+        Assert.That(rejected, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.BindingValidationFailed));
+        Assert.That(diagnostic, Does.Contain("Genealogy"));
+        Assert.That(stages, Does.Contain(P12GDailyV1RestoreStage.CandidateComposed));
+        Assert.That(stages.Contains(P12GDailyV1RestoreStage.TargetOwnerVectorCaptured), Is.False,
+            "A rejected Core binding must stop before the host target census is requested.");
+        Assert.That(restoreApplication.ActiveSession, Is.Null,
+            "The invalid private target must not be published into the application.");
+        Assert.That(EncodeCompletedImage(source.Session, anchor.NormalContext), Is.EqualTo(sourceImageBytes),
+            "Rejecting the private Core target must leave the source image unchanged.");
+    }
+
     [TestCase(QualificationImageCorruption.MissingForceReference)]
     [TestCase(QualificationImageCorruption.SplitForceOwnerAlias)]
     public void IntegratedOwnerImageRejectionIsAtomicAndValidImageCanBeRetried(

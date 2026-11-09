@@ -694,7 +694,7 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
-    public void CoreRestoredGraphBindingGateRejectsDanglingGenealogyBeforeTargetCensus()
+    public void CoreRestoredGraphBindingGateRejectsDanglingGenealogy()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1ApplicationHost host = new DailyV1ApplicationHost(
