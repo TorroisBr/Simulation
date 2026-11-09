@@ -25,3 +25,15 @@ The runs were performed in the candidate worktree based at commit 9768ad27b2a236
 The full EditMode package contains the focused owner-closure case and all five Smoke identities. The official packager rejected a public package for the filtered one-test XML because its parent suite testcasecount did not match the filtered descendants. That was an evidence-package shape rejection, not a test failure. The original focused XML and logs remain unchanged in protected local retention; the complete report containing that test was packaged and verified successfully.
 
 The protected original CoreValidation reports, Unity XML, logs, and run manifests remain in local owner-only retention. Public Unity evidence contains normalized XML only; no raw logs are included.
+
+## Candidate checkpoint and integration boundary
+
+- Base commit: 9768ad27b2a2362064a33d701752056075317fc7.
+- Implementation commit: e1629cad26addf64d6b149dd474de313316eee79.
+- Implementation tree: eeb99ea6579eb7725b75c6686636ec42ac56d548.
+- The tested dirty-source input digest above binds the exact implementation and test bytes; the three code/test files were committed unchanged after validation.
+- Changed implementation/test files: SimulationRuntime.cs; DailyV1RuntimeAdvanceStage.cs; DailyV1ApplicationSessionGateTests.cs.
+
+The change transfers census-fragment reconstruction for the selected NPC owners into Core. It preserves section IDs, roles, schemas, exact owner-instance identities, cardinalities, revisions, the completed-vector contract, and the mutation epoch supplied by the existing Unity continuation protocol. It does not alter daily execution, RNG, operation ordering, owner writers, or persistence encoding. Mixed rosters and stale/substituted host rows retain the whole host vector for existing P12 validation.
+
+The complete ContinuationCensusProtocol, quiescence admission, and epoch publication remain host-owned. P12-D receipt owners remain host residual rows. This checkpoint does not establish the full 89-family protocol as Core-owned, detached restoration readiness, or CORE-F completion. Next integration work must move the remaining capture/restoration authority without duplicating the protocol or weakening the current boundary.
