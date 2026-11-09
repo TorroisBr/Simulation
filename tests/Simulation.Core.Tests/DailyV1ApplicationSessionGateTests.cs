@@ -2498,7 +2498,39 @@ public sealed class DailyV1ApplicationSessionGateTests
             section.SectionId, DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId, StringComparison.Ordinal));
         OwnerSectionCensusSnapshot baselineReceipts = baseline.Single(section => string.Equals(
             section.SectionId, DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId, StringComparison.Ordinal));
+        object hostNeutralProjectionIdentity = new object();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedJusticeSections(
+                session.OwnerGraph, hostNeutralProjectionIdentity, baselineReceipts.Revision,
+                out IReadOnlyList<OwnerSectionCensusWitness> coreJusticeWitnesses, out string witnessDiagnostic),
+            Is.True, witnessDiagnostic);
+        Assert.That(coreJusticeWitnesses, Has.Count.EqualTo(2));
+        int baselineRecordsIndex = Array.FindIndex(baseline, section => string.Equals(
+            section.SectionId, DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId, StringComparison.Ordinal));
+        int baselineReceiptsIndex = Array.FindIndex(baseline, section => string.Equals(
+            section.SectionId, DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId, StringComparison.Ordinal));
+        Assert.That(baselineRecordsIndex, Is.GreaterThanOrEqualTo(0));
+        Assert.That(baselineReceiptsIndex, Is.GreaterThanOrEqualTo(0));
+        baseline[baselineRecordsIndex] = new OwnerSectionCensusSnapshot(
+            coreJusticeWitnesses[0].SectionId,
+            coreJusticeWitnesses[0].SchemaVersion,
+            OwnerSectionRole.Required,
+            coreJusticeWitnesses[0].OwnerInstanceIdentity,
+            coreJusticeWitnesses[0].Cardinality,
+            coreJusticeWitnesses[0].Revision);
+        baseline[baselineReceiptsIndex] = new OwnerSectionCensusSnapshot(
+            coreJusticeWitnesses[1].SectionId,
+            coreJusticeWitnesses[1].SchemaVersion,
+            OwnerSectionRole.Required,
+            coreJusticeWitnesses[1].OwnerInstanceIdentity,
+            coreJusticeWitnesses[1].Cardinality,
+            coreJusticeWitnesses[1].Revision);
+        baselineRecords = baseline[baselineRecordsIndex];
+        baselineReceipts = baseline[baselineReceiptsIndex];
         Assert.That(baselineRecords.OwnerInstanceIdentity, Is.SameAs(baselineReceipts.OwnerInstanceIdentity));
+        Assert.That(baselineRecords.OwnerInstanceIdentity, Is.SameAs(hostNeutralProjectionIdentity));
+        Assert.That(baselineRecords.OwnerInstanceIdentity,
+            Is.Not.SameAs(session.OwnerGraph.JusticeRecordsOwner),
+            "The Core validator accepts one host-local opaque identity while deriving owner facts from the exact Core owner.");
         hostPorts.SetAdmissionEvidence(baseline, mutationEpoch: 73L);
 
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(false,

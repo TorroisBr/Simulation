@@ -1455,8 +1455,71 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             out diagnostic);
 
     /// <summary>
+    /// Creates the two shared-identity Justice census rows for a host projection.
+    /// Unity may pass its exact JusticeSystem projection identity; a detached host
+    /// may pass its own opaque identity. In both cases Core derives record facts
+    /// from the exact selected owner and the fixed P18 receipt revision remains a
+    /// host-supplied witness. The identity is ephemeral and is not serialized.
+    /// </summary>
+    internal static bool TryCreateCoreOwnedJusticeSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        object projectionIdentity,
+        long expectedP18ReceiptRevision,
+        out IReadOnlyList<OwnerSectionCensusWitness> witnesses,
+        out string diagnostic)
+    {
+        witnesses = null;
+        diagnostic = null;
+        DailyV1JusticeRecordsOwner owner = graph?.JusticeRecordsOwner;
+        if (owner == null || projectionIdentity == null || expectedP18ReceiptRevision < 0L)
+        {
+            diagnostic = "The exact selected Justice owner or its host census identity is unavailable.";
+            return false;
+        }
+
+        try
+        {
+            IReadOnlyList<DailyV1JusticeWantedRecordOwner> wanted = owner.WantedRecords;
+            IReadOnlyList<DailyV1JusticeSentenceOwner> sentences = owner.Sentences;
+            long revision = owner.Revision;
+            if (wanted == null || sentences == null || revision < 0L)
+            {
+                diagnostic = "The selected Core Justice owner returned invalid census facts.";
+                return false;
+            }
+
+            int recordCardinality = checked(wanted.Count + sentences.Count);
+            witnesses = new OwnerSectionCensusWitness[]
+            {
+                new OwnerSectionCensusWitness(
+                    DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                    projectionIdentity,
+                    recordCardinality,
+                    revision),
+                new OwnerSectionCensusWitness(
+                    DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                    projectionIdentity,
+                    1,
+                    expectedP18ReceiptRevision)
+            };
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            witnesses = null;
+            diagnostic = "The selected Core Justice owner could not provide a valid census witness.";
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Checks the host-projected Justice census against the exact selected Core owner.
-    /// The host supplies only the Unity projection identity and its receipt revision;
+    /// The host supplies one shared projection identity and its receipt revision;
     /// Core derives record cardinality and revision from the authoritative owner.
     /// </summary>
     internal static bool TryValidateCoreOwnedJusticeSections(
@@ -1467,22 +1530,21 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         out string diagnostic)
     {
         diagnostic = null;
-        DailyV1JusticeRecordsOwner owner = graph?.JusticeRecordsOwner;
-        if (owner == null || sections == null || projectionIdentity == null
+        if (graph?.JusticeRecordsOwner == null || sections == null || projectionIdentity == null
             || expectedP18ReceiptRevision < 0L)
         {
             diagnostic = "The exact selected Justice owner or its census projection is unavailable.";
             return false;
         }
 
-        int expectedRecordCardinality;
-        try
+        if (!TryCreateCoreOwnedJusticeSections(
+                graph, projectionIdentity, expectedP18ReceiptRevision,
+                out IReadOnlyList<OwnerSectionCensusWitness> expectedWitnesses,
+                out diagnostic)
+            || expectedWitnesses == null || expectedWitnesses.Count != 2)
         {
-            expectedRecordCardinality = checked(owner.WantedRecords.Count + owner.Sentences.Count);
-        }
-        catch (OverflowException)
-        {
-            diagnostic = "The selected Justice owner cardinality exceeds the census representation.";
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The exact Core Justice census witnesses could not be composed.";
             return false;
         }
 
@@ -1513,21 +1575,23 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             }
         }
 
+        OwnerSectionCensusWitness expectedRecords = expectedWitnesses[0];
+        OwnerSectionCensusWitness expectedReceipts = expectedWitnesses[1];
         bool recordsMatch = records != null
-            && records.SchemaVersion == DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+            && records.SchemaVersion == expectedRecords.SchemaVersion
             && records.Role == OwnerSectionRole.Required
-            && ReferenceEquals(records.OwnerInstanceIdentity, projectionIdentity)
-            && records.Cardinality == expectedRecordCardinality
-            && records.Revision == owner.Revision;
+            && ReferenceEquals(records.OwnerInstanceIdentity, expectedRecords.OwnerInstanceIdentity)
+            && records.Cardinality == expectedRecords.Cardinality
+            && records.Revision == expectedRecords.Revision;
         bool receiptsMatch = receipts != null
-            && receipts.SchemaVersion == DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+            && receipts.SchemaVersion == expectedReceipts.SchemaVersion
             && receipts.Role == OwnerSectionRole.Required
-            && ReferenceEquals(receipts.OwnerInstanceIdentity, projectionIdentity)
-            && receipts.Cardinality == 1
-            && receipts.Revision == expectedP18ReceiptRevision;
+            && ReferenceEquals(receipts.OwnerInstanceIdentity, expectedReceipts.OwnerInstanceIdentity)
+            && receipts.Cardinality == expectedReceipts.Cardinality
+            && receipts.Revision == expectedReceipts.Revision;
         if (!recordsMatch || !receiptsMatch)
         {
-            diagnostic = "The Justice census does not match its exact Core owner and Unity projection.";
+            diagnostic = "The Justice census does not match its exact Core owner and host projection.";
             return false;
         }
 
