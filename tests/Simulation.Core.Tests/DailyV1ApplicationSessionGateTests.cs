@@ -3279,7 +3279,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void CoreHostCensusRemainderOmitsOnlyExactNpcAndAllocatorRows()
+    public void CoreHostCensusRemainderOmitsOnlyExactNpcCityAndAllocatorRows()
     {
         CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session, out _);
@@ -3295,6 +3295,13 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedRuntimeIdAllocatorCensusSections(
                 graph, out IReadOnlyList<OwnerSectionCensusSnapshot> allocatorRows, out diagnostic),
             Is.True, diagnostic);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
+                graph, Array.Empty<OwnerSectionCensusSnapshot>(),
+                out IReadOnlyList<OwnerSectionCensusSnapshot> coreCityRows, out diagnostic),
+            Is.True, diagnostic);
+        Assert.That(graph.Cities, Is.Not.Empty);
+        Assert.That(coreCityRows.Count, Is.EqualTo(graph.Cities.Count * 4),
+            "The selected City census comprises all four bound owner families per City.");
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateHostOwnedCensusRemainder(
                 completeVector, graph, out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedRemainder,
                 out diagnostic),
@@ -3303,6 +3310,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         HashSet<string> exactCoreIds = new HashSet<string>(exactNpcSectionIds, StringComparer.Ordinal);
         foreach (OwnerSectionCensusSnapshot allocatorRow in allocatorRows)
             Assert.That(exactCoreIds.Add(allocatorRow.SectionId), Is.True, allocatorRow.SectionId);
+        foreach (OwnerSectionCensusSnapshot cityRow in coreCityRows)
+            Assert.That(exactCoreIds.Add(cityRow.SectionId), Is.True, cityRow.SectionId);
         OwnerSectionCensusSnapshot[] expectedRemainder = completeVector
             .Where(section => !exactCoreIds.Contains(section.SectionId)).ToArray();
         Assert.That(hostOwnedRemainder.Select(section => section.SectionId),
@@ -3369,6 +3378,58 @@ public sealed class DailyV1ApplicationSessionGateTests
                 StringComparison.Ordinal)))
             Assert.That(mixedRosterRemainder.Any(section => ReferenceEquals(section, coreNpcRow)), Is.True,
                 "A mixed roster keeps every host NPC row on the compatibility path.");
+
+        OwnerSectionCensusSnapshot staleCityRow = coreCityRows[0];
+        OwnerSectionCensusSnapshot staleCityEntry = new OwnerSectionCensusSnapshot(
+            staleCityRow.SectionId, staleCityRow.SchemaVersion, staleCityRow.Role,
+            staleCityRow.OwnerInstanceIdentity, staleCityRow.Cardinality, staleCityRow.Revision + 1L);
+        OwnerSectionCensusSnapshot[] staleCityVector = completeVector.Select(section =>
+            section.SectionId == staleCityRow.SectionId ? staleCityEntry : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateHostOwnedCensusRemainder(
+                staleCityVector, graph, out IReadOnlyList<OwnerSectionCensusSnapshot> staleCityRemainder,
+                out diagnostic),
+            Is.True, diagnostic);
+        foreach (OwnerSectionCensusSnapshot cityRow in staleCityVector.Where(section =>
+            DailyV1SelectedOwnerSectionCensusContract.CityPrefixes.Any(prefix =>
+                section.SectionId.StartsWith(prefix, StringComparison.Ordinal))))
+            Assert.That(staleCityRemainder.Single(section => section.SectionId == cityRow.SectionId),
+                Is.SameAs(cityRow),
+                "A stale selected City witness keeps every City row on the established P12 validation path.");
+
+        const string compatibilityCityId = "compatibility-city";
+        string compatibilityCityKey =
+            P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(compatibilityCityId);
+        object compatibilityPopulationOwner = new object();
+        OwnerSectionCensusSnapshot[] compatibilityCityRows =
+        {
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(compatibilityCityId),
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                OwnerSectionRole.Required, new object(), 0, 0L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix + compatibilityCityKey,
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                OwnerSectionRole.Required, new object(), 0, 0L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix + compatibilityCityKey,
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                OwnerSectionRole.Required, compatibilityPopulationOwner, 0, 0L),
+            new OwnerSectionCensusSnapshot(
+                DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix + compatibilityCityKey,
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                OwnerSectionRole.Required, compatibilityPopulationOwner, 0, 0L)
+        };
+        OwnerSectionCensusSnapshot[] mixedCityVector = completeVector.Concat(compatibilityCityRows).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateHostOwnedCensusRemainder(
+                mixedCityVector, graph, out IReadOnlyList<OwnerSectionCensusSnapshot> mixedCityRemainder,
+                out diagnostic),
+            Is.True, diagnostic);
+        foreach (OwnerSectionCensusSnapshot cityRow in mixedCityVector.Where(section =>
+            DailyV1SelectedOwnerSectionCensusContract.CityPrefixes.Any(prefix =>
+                section.SectionId.StartsWith(prefix, StringComparison.Ordinal))))
+            Assert.That(mixedCityRemainder.Single(section => section.SectionId == cityRow.SectionId),
+                Is.SameAs(cityRow),
+                "An additional City roster preserves every selected and compatibility City witness.");
     }
 
     [Test]
@@ -3386,10 +3447,16 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedRuntimeIdAllocatorCensusSections(
                 graph, out IReadOnlyList<OwnerSectionCensusSnapshot> allocatorRows, out diagnostic),
             Is.True, diagnostic);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
+                graph, Array.Empty<OwnerSectionCensusSnapshot>(),
+                out IReadOnlyList<OwnerSectionCensusSnapshot> coreCityRows, out diagnostic),
+            Is.True, diagnostic);
 
         HashSet<string> exactCoreIds = new HashSet<string>(exactNpcIds, StringComparer.Ordinal);
         foreach (OwnerSectionCensusSnapshot allocatorRow in allocatorRows)
             Assert.That(exactCoreIds.Add(allocatorRow.SectionId), Is.True, allocatorRow.SectionId);
+        foreach (OwnerSectionCensusSnapshot cityRow in coreCityRows)
+            Assert.That(exactCoreIds.Add(cityRow.SectionId), Is.True, cityRow.SectionId);
         OwnerSectionCensusSnapshot[] expectedHostRemainder = completeHostVector
             .Where(section => !exactCoreIds.Contains(section.SectionId)).ToArray();
 

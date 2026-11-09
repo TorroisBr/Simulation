@@ -440,12 +440,18 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
-        // The host returns every witness. Core validates the exact selected
-        // owner graph and derives the remainder used by the common coverage gate.
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+        // Exact selected City rows may be absent from the host remainder.
+        // Restore those Core witnesses before P12-F requires the complete vector;
+        // stale or mixed-roster City rows remain on the established host path.
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
+                executionState.SelectedRuntimeOwnerGraph,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionsWithCity,
+                out _)
+            || !DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 executionState.SelectedRuntimeOwnerGraph,
                 executionState.SelectedActorChoiceStore,
-                ownerSections,
+                ownerSectionsWithCity,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreP12FSections,
                 out _)
             || !DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
@@ -2554,9 +2560,9 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     }
 
     /// <summary>
-    /// Produces the host-owned remainder after removing selected NPC census
-    /// rows and allocator counters only when their live values match the exact
-    /// Core owner graph. Mixed or stale NPC rows and nonmatching allocator
+    /// Produces the host-owned remainder after removing selected NPC and City
+    /// census rows and allocator counters only when their live values match the
+    /// exact Core owner graph. Mixed or stale rows and nonmatching allocator
     /// triplets remain available to the existing P12 validation path.
     /// </summary>
     internal static bool TryCreateHostOwnedCensusRemainder(
@@ -2600,6 +2606,48 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             {
                 diagnostic = "The exact Core NPC census fragment does not match unique source rows.";
                 return false;
+            }
+        }
+
+        // Omit selected City rows only as one complete exact set. A stale row,
+        // partial vector, or additional City roster keeps every City row on the
+        // host path so existing P12 compatibility and rejection remain intact.
+        if (TryCreateCoreOwnedCityCensusWitnesses(
+                graph, out IReadOnlyList<OwnerSectionCensusWitness> cityWitnesses, out _))
+        {
+            int capturedCityRowCount = 0;
+            foreach (OwnerSectionCensusSnapshot section in completeHostSections)
+            {
+                foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.CityPrefixes)
+                    if (section.SectionId.StartsWith(prefix, StringComparison.Ordinal))
+                    {
+                        capturedCityRowCount++;
+                        break;
+                    }
+            }
+            if (capturedCityRowCount == cityWitnesses.Count)
+            {
+                List<string> exactCitySectionIds = new List<string>(cityWitnesses.Count);
+                bool exactCityWitnessSet = true;
+                foreach (OwnerSectionCensusWitness expected in cityWitnesses)
+                {
+                    if (!sourceById.TryGetValue(expected.SectionId, out OwnerSectionCensusSnapshot actual)
+                        || !HasExactOwnerSectionFacts(
+                            actual, ToOwnerSectionSnapshot(expected, OwnerSectionRole.Required)))
+                    {
+                        exactCityWitnessSet = false;
+                        break;
+                    }
+                    exactCitySectionIds.Add(expected.SectionId);
+                }
+
+                if (exactCityWitnessSet)
+                    foreach (string sectionId in exactCitySectionIds)
+                        if (!coreOwnedIds.Add(sectionId))
+                        {
+                            diagnostic = "Core NPC, City, and RuntimeIdAllocator census identities overlap.";
+                            return false;
+                        }
             }
         }
 
