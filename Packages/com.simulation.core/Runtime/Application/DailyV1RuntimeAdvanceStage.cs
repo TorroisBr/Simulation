@@ -972,12 +972,31 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     internal static bool TryRemoveCoreOwnedSelectedRuntimeSections(
         IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
         out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
-        out string diagnostic) =>
-        TryRemoveCoreOwnedSections(completeHostSections,
+        out string diagnostic)
+    {
+        hostOwnedSections = null;
+        diagnostic = null;
+        if (completeHostSections != null)
+        {
+            foreach (OwnerSectionCensusSnapshot section in completeHostSections)
+            {
+                if (section != null
+                    && string.Equals(section.SectionId,
+                        PoliticalDecisionStoreCensusProvider.SectionId,
+                        StringComparison.Ordinal))
+                {
+                    diagnostic = "Removing the Core PoliticalDecision census row requires its exact owner graph.";
+                    return false;
+                }
+            }
+        }
+
+        return TryRemoveCoreOwnedSections(completeHostSections,
             CoreOwnedSelectedRuntimeSectionIdValues,
             "selected Core-runtime",
             out hostOwnedSections,
             out diagnostic);
+    }
 
     /// <summary>
     /// Removes selected Core-owned P12-F and City census rows only after Core

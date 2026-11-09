@@ -2752,6 +2752,10 @@ public sealed class DailyV1ApplicationSessionGateTests
         OwnerSectionCensusSnapshot[] completeHostVector =
             CreateCoreBoundCompleteOwnerSectionVector(session);
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+                completeHostVector, out _, out string noGraphDiagnostic), Is.False,
+            "The legacy no-graph remover cannot discard a PoliticalDecision row without validating the exact owner.");
+        Assert.That(noGraphDiagnostic, Does.Contain("exact owner graph"));
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
                 .TryGetExactCoreOwnedNpcKnowledgeAndPlanSectionIds(
                     completeHostVector, graph,
