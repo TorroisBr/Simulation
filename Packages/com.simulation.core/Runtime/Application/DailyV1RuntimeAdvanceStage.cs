@@ -1798,6 +1798,58 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         && ReferenceEquals(materializationBinding.OwnerInstanceIdentity, personStore)
         && membership.Revision == materializationBinding.Revision;
 
+    /// <summary>
+    /// Reconstructs the selected NPC owner census fragment from Core owner
+    /// instances. Exact omissions are recomposed; mixed rosters and stale
+    /// captured rows retain their established host facts for P12 validation.
+    /// P12-D receipt sections remain host-owned and are never removed here.
+    /// </summary>
+    internal static bool TryComposeCoreOwnedNpcOwnerCensusFragment(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        diagnostic = null;
+        if (graph?.Npcs == null || hostSections == null)
+        {
+            diagnostic = "The Core NPC census fragment requires its selected graph and host remainder.";
+            return false;
+        }
+
+        if (!TryRebindCoreOwnedNpcSections(
+                graph, hostSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> inventoryAndMoney,
+                out diagnostic))
+            return false;
+
+        IReadOnlyList<OwnerSectionCensusSnapshot> runtimeState = inventoryAndMoney;
+        if (graph.PersonStore != null
+            && !TryRebindCoreOwnedNpcRuntimeStateSections(
+                graph, inventoryAndMoney, out runtimeState, out diagnostic))
+            return false;
+
+        if (!TryRebindCoreOwnedCommercialKnowledgeSections(
+                graph, runtimeState,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> commercialKnowledge,
+                out diagnostic))
+            return false;
+
+        if (!TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+                graph, commercialKnowledge,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> knowledgeAndPlan,
+                out diagnostic))
+            return false;
+
+        if (!TryRebindCoreSpatialKnowledgeSections(
+                graph, knowledgeAndPlan,
+                out ownerSections, out diagnostic))
+            return false;
+
+        return true;
+    }
+
     internal static bool TryComposeCoreOwnedP12FSections(
         DailyV1SelectedRuntimeOwnerGraph graph,
         ActorChoiceStore actorChoiceStore,
@@ -1821,31 +1873,18 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
         }
 
-        // Selected NPC Inventory, MoneyAccount, and runtime-state owners are
-        // the exact Core authorities in the admitted graph. Rebuild their rows
-        // before the structural P12 gate. The host supplies its complete vector;
-        // Core validates rows whose source is already Core-owned and preserves
-        // mixed-roster compatibility rows.
-        if (!TryRebindCoreOwnedNpcSections(
+        // Core reconstructs the complete selected NPC owner fragment from the
+        // exact admitted graph. Unity supplies only residual profile rows when
+        // the selected roster is exact; mixed compatibility rosters keep their
+        // complete host rows through the existing per-family fallback.
+        if (!TryComposeCoreOwnedNpcOwnerCensusFragment(
                 graph, hostOwnedSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> hostAndCoreNpcSections,
                 out diagnostic))
             return false;
 
-        if (!TryRebindCoreOwnedNpcRuntimeStateSections(
-                graph, hostAndCoreNpcSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> hostAndCoreRuntimeStateSections,
-                out diagnostic))
-            return false;
-
-        if (!TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
-                graph, hostAndCoreRuntimeStateSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> hostAndCoreKnowledgeAndPlanSections,
-                out diagnostic))
-            return false;
-
         if (!TryComposeCoreOwnedRuntimeIdAllocatorSections(
-                graph, hostAndCoreKnowledgeAndPlanSections,
+                graph, hostAndCoreNpcSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> sectionsWithAllocatorRows,
                 out diagnostic))
             return false;
@@ -2333,10 +2372,191 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     }
 
     /// <summary>
-    /// Identifies dynamic NPC owner rows that may be omitted from the Unity
-    /// host remainder. Omission is allowed only for a complete exact-roster
-    /// witness; mixed rosters, stale facts, or substituted rows remain on the
-    /// established whole-host path for Core/P12 to validate.
+    /// Selects the complete dynamic NPC owner fragment that Core can source
+    /// from the admitted graph. Omission is allowed only when every selected
+    /// family row is present and exactly matches its Core owner witness. A
+    /// mixed roster, stale row, or substituted owner keeps the full host vector.
+    /// The P12-D receipt families intentionally remain in the host remainder.
+    /// </summary>
+    internal static bool TryGetExactCoreOwnedNpcCensusFragmentSectionIds(
+        IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IReadOnlyList<string> sectionIds,
+        out string diagnostic)
+    {
+        sectionIds = Array.Empty<string>();
+        diagnostic = null;
+        if (completeHostSections == null || graph?.Npcs == null)
+        {
+            diagnostic = "The selected Core NPC census fragment requires the complete host vector and exact owner graph.";
+            return false;
+        }
+
+        if (graph.Npcs.Count == 0 || graph.PersonStore == null) return true;
+
+        Dictionary<string, OwnerSectionCensusSnapshot> hostById =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot section in completeHostSections)
+        {
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !hostById.TryAdd(section.SectionId, section))
+            {
+                diagnostic = "The complete host census contains a missing or duplicate owner-section identity.";
+                return false;
+            }
+        }
+
+        int selectedNpcCount = graph.Npcs.Count;
+        int inventoryRows = CountFamilyRows(
+            completeHostSections, DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix);
+        int moneyAccountRows = CountFamilyRows(
+            completeHostSections, DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix);
+        if (inventoryRows > selectedNpcCount || moneyAccountRows > selectedNpcCount)
+            return true;
+        if (inventoryRows != selectedNpcCount || moneyAccountRows != selectedNpcCount)
+        {
+            diagnostic = "The host census does not cover every selected NPC Inventory and MoneyAccount owner.";
+            return false;
+        }
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers;
+        try
+        {
+            List<IOwnerSectionCensusProvider> selected =
+                new List<IOwnerSectionCensusProvider>();
+            selected.AddRange(DailyV1NpcOwnerCensusProviders.CreateInventoryProviders(graph.Npcs));
+            selected.AddRange(DailyV1NpcOwnerCensusProviders.CreateMoneyAccountProviders(graph.Npcs));
+            selected.AddRange(DailyV1NpcOwnerCensusProviders.CreateRuntimeAuthorityProviders(graph));
+            selected.AddRange(DailyV1NpcOwnerCensusProviders.CreateCommercialKnowledgeProviders(graph.Npcs));
+            selected.AddRange(DailyV1NpcOwnerCensusProviders.CreateSpatialKnowledgeProviders(graph.Npcs));
+            selected.AddRange(DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph));
+            providers = selected.AsReadOnly();
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            diagnostic = "The selected Core NPC census providers could not bind to the exact owner graph.";
+            return false;
+        }
+
+        List<string> familyPrefixes = new List<string>
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcLifeStatePrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix
+        };
+        familyPrefixes.AddRange(CoreOwnedNpcKnowledgeAndPlanSectionPrefixValues);
+
+        Dictionary<string, int> expectedRowsByPrefix =
+            new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (string prefix in familyPrefixes)
+            if (string.IsNullOrWhiteSpace(prefix)
+                || !expectedRowsByPrefix.TryAdd(prefix, 0))
+            {
+                diagnostic = "The selected Core NPC census family inventory is invalid or duplicated.";
+                return false;
+            }
+
+        OwnerSectionCensusWitness[] witnesses =
+            new OwnerSectionCensusWitness[providers.Count];
+        HashSet<string> selectedIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int index = 0; index < providers.Count; index++)
+        {
+            OwnerSectionCensusWitness witness;
+            try { witness = providers[index]?.GetCurrentCensus(); }
+            catch (Exception exception) when (
+                exception is ArgumentException
+                || exception is InvalidOperationException
+                || exception is OverflowException)
+            {
+                diagnostic = "A selected Core NPC census provider failed to read its exact owner.";
+                return false;
+            }
+
+            if (witness == null
+                || string.IsNullOrWhiteSpace(witness.SectionId)
+                || witness.OwnerInstanceIdentity == null
+                || witness.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+                || witness.Cardinality < 0
+                || witness.Revision < 0L
+                || !selectedIds.Add(witness.SectionId))
+            {
+                diagnostic = "A selected Core NPC census provider returned an invalid or duplicate witness.";
+                return false;
+            }
+
+            string matchedPrefix = null;
+            foreach (string prefix in familyPrefixes)
+            {
+                if (!witness.SectionId.StartsWith(prefix, StringComparison.Ordinal)) continue;
+                if (matchedPrefix != null)
+                {
+                    diagnostic = "A selected Core NPC census witness matched more than one owner family.";
+                    return false;
+                }
+                matchedPrefix = prefix;
+            }
+            if (matchedPrefix == null)
+            {
+                diagnostic = "A selected Core NPC census provider returned a section outside the admitted owner families.";
+                return false;
+            }
+            expectedRowsByPrefix[matchedPrefix]++;
+            witnesses[index] = witness;
+        }
+
+        foreach (string prefix in familyPrefixes)
+        {
+            int expectedRows = expectedRowsByPrefix[prefix];
+            int actualRows = CountFamilyRows(completeHostSections, prefix);
+            if (actualRows > expectedRows)
+                return true;
+            if (actualRows < expectedRows)
+            {
+                diagnostic = "The host census is missing selected Core NPC rows for " + prefix;
+                return false;
+            }
+        }
+
+        List<string> exactIds = new List<string>(witnesses.Length);
+        foreach (OwnerSectionCensusWitness witness in witnesses)
+        {
+            if (!hostById.TryGetValue(witness.SectionId, out OwnerSectionCensusSnapshot actual))
+            {
+                diagnostic = "The host census is missing selected Core NPC section " + witness.SectionId + ".";
+                return false;
+            }
+
+            if (actual.Role != OwnerSectionRole.Required
+                || actual.SchemaVersion != witness.SchemaVersion
+                || !ReferenceEquals(actual.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+                || actual.Cardinality != witness.Cardinality
+                || actual.Revision != witness.Revision)
+                return true;
+
+            exactIds.Add(witness.SectionId);
+        }
+
+        exactIds.Sort(StringComparer.Ordinal);
+        sectionIds = Array.AsReadOnly(exactIds.ToArray());
+        return true;
+    }
+
+    /// <summary>
+    /// Identifies exact selected Inventory and MoneyAccount rows that may be
+    /// omitted from the Unity remainder. Mixed rosters, stale facts, or
+    /// substituted rows remain on the complete host path for P12 to validate.
     /// </summary>
     internal static bool TryGetExactCoreOwnedNpcInventoryAndMoneyAccountSectionIds(
         IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
@@ -3200,10 +3420,22 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             copied, DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix);
         int receiptRows = CountFamilyRows(
             copied, DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix);
+        bool selectedCommercialRowsOmitted = graph.Npcs.Count > 0
+            && inventoryRows == graph.Npcs.Count
+            && marketRows == 0
+            && liquidityRows == 0
+            && receiptRows == 0;
         if (inventoryRows != moneyAccountRows
-            || inventoryRows != marketRows
-            || inventoryRows != liquidityRows
-            || inventoryRows != receiptRows)
+            || inventoryRows < graph.Npcs.Count
+            || (inventoryRows > graph.Npcs.Count
+                && (inventoryRows != marketRows
+                    || inventoryRows != liquidityRows
+                    || inventoryRows != receiptRows))
+            || (inventoryRows == graph.Npcs.Count
+                && !selectedCommercialRowsOmitted
+                && (inventoryRows != marketRows
+                    || inventoryRows != liquidityRows
+                    || inventoryRows != receiptRows)))
         {
             diagnostic = "The complete host census has inconsistent NPC owner-family cardinality.";
             return false;
@@ -3250,6 +3482,28 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 diagnostic = "A selected Core CommercialKnowledge provider returned an invalid census witness.";
                 return false;
             }
+        }
+
+        if (selectedCommercialRowsOmitted)
+        {
+            List<OwnerSectionCensusSnapshot> recomposed =
+                new List<OwnerSectionCensusSnapshot>(copied.Length + witnesses.Length);
+            recomposed.AddRange(copied);
+            foreach (OwnerSectionCensusWitness witness in witnesses)
+            {
+                if (indexes.ContainsKey(witness.SectionId))
+                {
+                    diagnostic = "The selected Core CommercialKnowledge omission overlaps a host owner-section identity.";
+                    return false;
+                }
+                recomposed.Add(new OwnerSectionCensusSnapshot(
+                    witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+                    witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision));
+            }
+            recomposed.Sort((left, right) =>
+                StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+            ownerSections = Array.AsReadOnly(recomposed.ToArray());
+            return true;
         }
 
         if (inventoryRows > graph.Npcs.Count)
@@ -3621,6 +3875,16 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
         }
 
+        int spatialLocationRows = CountFamilyRows(copied,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix);
+        int spatialRouteRows = CountFamilyRows(copied,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix);
+        bool selectedSpatialRowsOmitted = graph.Npcs.Count > 0
+            && inventoryRows == graph.Npcs.Count
+            && spatialLocationRows == 0
+            && spatialRouteRows == 0;
+
+
         if (inventoryRows > graph.Npcs.Count)
         {
             HashSet<string> selectedSectionIds = new HashSet<string>(StringComparer.Ordinal);
@@ -3654,10 +3918,9 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return true;
         }
 
-        if (CountFamilyRows(copied,
-                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix) != graph.Npcs.Count
-            || CountFamilyRows(copied,
-                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix) != graph.Npcs.Count)
+        if (!selectedSpatialRowsOmitted
+            && (spatialLocationRows != graph.Npcs.Count
+                || spatialRouteRows != graph.Npcs.Count))
         {
             diagnostic = "The host census does not contain one selected SpatialKnowledge locations/routes pair per Core NPC.";
             return false;
@@ -3666,6 +3929,37 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         HashSet<string> selectedSectionIdsForCore = new HashSet<string>(StringComparer.Ordinal);
         List<OwnerSectionCensusWitness> witnesses =
             new List<OwnerSectionCensusWitness>(providers.Count);
+        if (selectedSpatialRowsOmitted)
+        {
+            List<OwnerSectionCensusSnapshot> recomposed =
+                new List<OwnerSectionCensusSnapshot>(copied.Length + providers.Count);
+            recomposed.AddRange(copied);
+            foreach (IOwnerSectionCensusProvider provider in providers)
+            {
+                OwnerSectionCensusWitness witness;
+                try { witness = provider?.GetCurrentCensus(); }
+                catch (InvalidOperationException)
+                {
+                    diagnostic = "A selected Core SpatialKnowledge census provider failed to read its owner.";
+                    return false;
+                }
+                if (witness == null || indexes.ContainsKey(witness.SectionId))
+                {
+                    diagnostic = witness == null
+                        ? "A selected Core SpatialKnowledge census provider returned no witness."
+                        : "The selected Core SpatialKnowledge omission overlaps a host owner-section identity.";
+                    return false;
+                }
+                recomposed.Add(new OwnerSectionCensusSnapshot(
+                    witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+                    witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision));
+            }
+            recomposed.Sort((left, right) =>
+                StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+            ownerSections = Array.AsReadOnly(recomposed.ToArray());
+            return true;
+        }
+
         int[] indexesByWitness = new int[providers.Count];
         bool matchesCoreOwners = true;
         for (int i = 0; i < providers.Count; i++)

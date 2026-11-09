@@ -4040,6 +4040,38 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                                 out ContinuationCensusFailure censusFailure))
                             return DailyV1OwnerSectionCensusCaptureResult.Rejected(
                                 MapDailyCaptureFailure(censusFailure), censusFailure.ToString());
+                        DailyV1SelectedRuntimeOwnerGraph selectedGraph =
+                            dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
+                        if (selectedGraph != null)
+                        {
+                            if (!DailyV1SelectedRuntimeOwnerCensusSource
+                                    .TryGetExactCoreOwnedNpcCensusFragmentSectionIds(
+                                        ownerSections, selectedGraph,
+                                        out IReadOnlyList<string> coreNpcSectionIds,
+                                        out string fragmentDiagnostic))
+                                return DailyV1OwnerSectionCensusCaptureResult.Rejected(
+                                    DailyCaptureEligibilityFailure.OwnerCoverageIncomplete,
+                                    fragmentDiagnostic);
+
+                            if (coreNpcSectionIds.Count > 0)
+                            {
+                                HashSet<string> omittedIds =
+                                    new HashSet<string>(coreNpcSectionIds, StringComparer.Ordinal);
+                                List<OwnerSectionCensusSnapshot> hostRemainder =
+                                    new List<OwnerSectionCensusSnapshot>(
+                                        ownerSections.Count - coreNpcSectionIds.Count);
+                                foreach (OwnerSectionCensusSnapshot section in ownerSections)
+                                    if (!omittedIds.Contains(section.SectionId))
+                                        hostRemainder.Add(section);
+                                if (hostRemainder.Count
+                                    != ownerSections.Count - coreNpcSectionIds.Count)
+                                    return DailyV1OwnerSectionCensusCaptureResult.Rejected(
+                                        DailyCaptureEligibilityFailure.OwnerCoverageIncomplete,
+                                        "The exact Core NPC census fragment could not be separated from the host remainder.");
+                                ownerSections = Array.AsReadOnly(hostRemainder.ToArray());
+                            }
+                        }
+
                         return DailyV1OwnerSectionCensusCaptureResult.Captured(ownerSections, mutationEpoch);
                     });
             if (!censusSourceBound)

@@ -3279,6 +3279,130 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void CoreRecomposesTheWholeSelectedNpcCensusFragmentFromItsExactOwnerGraph()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session,
+            out _);
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        OwnerSectionCensusSnapshot[] completeVector =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+            completeVector), Is.True);
+
+        List<IOwnerSectionCensusProvider> providers =
+            new List<IOwnerSectionCensusProvider>();
+        providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateInventoryProviders(graph.Npcs));
+        providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateMoneyAccountProviders(graph.Npcs));
+        providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateRuntimeAuthorityProviders(graph));
+        providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateCommercialKnowledgeProviders(graph.Npcs));
+        providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateSpatialKnowledgeProviders(graph.Npcs));
+        providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph));
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcCensusFragmentSectionIds(
+                    completeVector, graph,
+                    out IReadOnlyList<string> coreNpcSectionIds,
+                    out string omissionDiagnostic),
+            Is.True, omissionDiagnostic);
+        Assert.That(coreNpcSectionIds, Has.Count.EqualTo(providers.Count));
+        Assert.That(coreNpcSectionIds.ToHashSet(StringComparer.Ordinal),
+            Is.EquivalentTo(providers.Select(provider =>
+                provider.GetCurrentCensus().SectionId)));
+
+        foreach (IOwnerSectionCensusProvider provider in providers)
+        {
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            OwnerSectionCensusSnapshot captured = completeVector.Single(section =>
+                section.SectionId == witness.SectionId);
+            Assert.That(captured.Role, Is.EqualTo(OwnerSectionRole.Required), witness.SectionId);
+            Assert.That(captured.SchemaVersion, Is.EqualTo(witness.SchemaVersion), witness.SectionId);
+            Assert.That(captured.OwnerInstanceIdentity, Is.SameAs(witness.OwnerInstanceIdentity), witness.SectionId);
+            Assert.That(captured.Cardinality, Is.EqualTo(witness.Cardinality), witness.SectionId);
+            Assert.That(captured.Revision, Is.EqualTo(witness.Revision), witness.SectionId);
+        }
+
+        DailyV1NpcRuntimeOwners selectedNpc = graph.Npcs[0];
+        OwnerSectionCensusSnapshot topologyPlaces = completeVector.Single(section =>
+            section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyPlacesPrefix
+                + selectedNpc.RuntimeId);
+        Assert.That(topologyPlaces.OwnerInstanceIdentity,
+            Is.SameAs(selectedNpc.LocalTopologyKnowledgeEmptyOwner));
+        Assert.That(topologyPlaces.Cardinality, Is.Zero);
+        Assert.That(topologyPlaces.Revision, Is.Zero);
+        Assert.That(coreNpcSectionIds.Any(sectionId =>
+            sectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
+                StringComparison.Ordinal)), Is.False);
+        Assert.That(coreNpcSectionIds.Any(sectionId =>
+            sectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
+                StringComparison.Ordinal)), Is.False,
+            "P12-D receipt owners remain in the Unity residual source.");
+
+        HashSet<string> omittedIds = new HashSet<string>(
+            coreNpcSectionIds, StringComparer.Ordinal);
+        OwnerSectionCensusSnapshot[] hostRemainder = completeVector
+            .Where(section => !omittedIds.Contains(section.SectionId))
+            .ToArray();
+        Assert.That(hostRemainder.Any(section => omittedIds.Contains(section.SectionId)), Is.False);
+
+        ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+                graph, actorChoices, hostRemainder,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> recomposed,
+                out string composeDiagnostic),
+            Is.True, composeDiagnostic);
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+            recomposed), Is.True);
+        Assert.That(recomposed.Count, Is.EqualTo(completeVector.Length));
+        foreach (OwnerSectionCensusSnapshot original in completeVector)
+        {
+            OwnerSectionCensusSnapshot rebuilt = recomposed.Single(section =>
+                section.SectionId == original.SectionId);
+            Assert.That(rebuilt.Role, Is.EqualTo(original.Role), original.SectionId);
+            Assert.That(rebuilt.SchemaVersion, Is.EqualTo(original.SchemaVersion), original.SectionId);
+            Assert.That(rebuilt.OwnerInstanceIdentity, Is.SameAs(original.OwnerInstanceIdentity), original.SectionId);
+            Assert.That(rebuilt.Cardinality, Is.EqualTo(original.Cardinality), original.SectionId);
+            Assert.That(rebuilt.Revision, Is.EqualTo(original.Revision), original.SectionId);
+        }
+
+        OwnerSectionCensusSnapshot compatibilityInventory = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "compatibility-npc",
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required, new object(), 0, 0L);
+        OwnerSectionCensusSnapshot compatibilityMoney = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + "compatibility-npc",
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required, new object(), 1, 0L);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcCensusFragmentSectionIds(
+                    completeVector.Concat(new[] { compatibilityInventory, compatibilityMoney }).ToArray(),
+                    graph, out IReadOnlyList<string> mixedOmissionIds,
+                    out string mixedDiagnostic),
+            Is.True, mixedDiagnostic);
+        Assert.That(mixedOmissionIds, Is.Empty,
+            "A mixed roster keeps the full host census for compatibility validation.");
+
+        string staleId = coreNpcSectionIds[0];
+        OwnerSectionCensusSnapshot staleSection = completeVector.Single(section =>
+            section.SectionId == staleId);
+        OwnerSectionCensusSnapshot staleRevision = new OwnerSectionCensusSnapshot(
+            staleSection.SectionId, staleSection.SchemaVersion, staleSection.Role,
+            staleSection.OwnerInstanceIdentity, staleSection.Cardinality,
+            checked(staleSection.Revision + 1L));
+        OwnerSectionCensusSnapshot[] staleVector = completeVector.Select(section =>
+            section.SectionId == staleId ? staleRevision : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryGetExactCoreOwnedNpcCensusFragmentSectionIds(
+                    staleVector, graph, out IReadOnlyList<string> staleOmissionIds,
+                    out string staleDiagnostic),
+            Is.True, staleDiagnostic);
+        Assert.That(staleOmissionIds, Is.Empty,
+            "Stale evidence remains intact for the established P12 token classification.");
+    }
+
+    [Test]
     public void CoreP12RecomposesExactSelectedNpcRuntimeStateRowsFromOwnerGraph()
     {
         CreateApplicationWithAdvanceBoundary(
