@@ -590,9 +590,23 @@ public sealed class DailyV1ApplicationHostTests
             preparation.CoreSession, out _), Is.False);
     }
     [Test]
-    public void CoreRejectsUnadmittedRestoreCensusBeforeCallingHostWhenTargetIsNotRestored()
+    public void CoreRejectsBootstrapCensusBeforeCallingHostWhenTargetIsNotRestored()
     {
-        DailyV1ExecutionBoundaryState executionState = new DailyV1ExecutionBoundaryState();
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "bootstrap-census-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, unityV1Identity: UnityIdentity());
+        Assert.That(DailyV1Application.TryPrepareStart(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out _, out string startDiagnostic), Is.True, startDiagnostic);
+        Assert.That(preparation.Kind,
+            Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+
+        DailyV1ExecutionBoundaryState executionState =
+            preparation.CoreSession.ExecutionBoundaryState;
+        Assert.That(executionState.HasAdmittedSelectedDailyExecution, Is.True);
+        Assert.That(executionState.AdmissionContext.IsRestoredContinuation, Is.False);
         MinimalSelectedRuntimeAdvanceHostPorts hostPorts =
             new MinimalSelectedRuntimeAdvanceHostPorts(executionState);
 
@@ -603,8 +617,8 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(ownerSections, Is.Null);
         Assert.That(mutationEpoch, Is.Zero);
         Assert.That(hostPorts.RestoredVectorCaptureCalls, Is.Zero,
-            "Core must reject an unadmitted target before invoking host census capture.");
-        Assert.That(diagnostic, Does.Contain("restored Daily-v1 owner thread and graph"));
+            "Core must reject an admitted bootstrap target before invoking host census capture.");
+        Assert.That(diagnostic, Does.Contain("exact restored Daily-v1 owner thread and graph"));
     }
 
     private static OwnerSectionCensusSnapshot ToRequiredSnapshot(
