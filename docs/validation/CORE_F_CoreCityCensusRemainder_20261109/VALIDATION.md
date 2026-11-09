@@ -24,22 +24,23 @@ Unity still supplies the complete quiescent source vector and epoch.
 
 - Candidate branch: codex/core/CORE-F-restore-stage-transaction
 - Base: 6ea144c9544c7bc0aaf964f86e1edc09dd38f6f1
-- Implementation commit: fb837410fa742d4b8d5290ec2c4b0739c26df512
-- Implementation tree: c0b5049559472a553d14bb2ce03c5f3fbfa8596d
+- Production implementation commit: fb837410fa742d4b8d5290ec2c4b0739c26df512
+- Review-driven test-only follow-up: ace43a3a41d8b8aebdb318ba383e17d4f84c9c0e
+- Candidate tree after test follow-up: be2db1166b3df84bd34b8ec90348f1aef7240df9
 - DailyV1RuntimeAdvanceStage.cs SHA-256: ee40b068026c82157afca2491e0f05344035517ae21a1200416a718db1e3780a
-- DailyV1ApplicationSessionGateTests.cs SHA-256: bd0b4de865668a9a68d339b4641b3378a802a04c6de782bfa4862ac52ac92501
+- DailyV1ApplicationSessionGateTests.cs SHA-256: 1daaeb6a15514d23af608bb214376ac42056acc854f6f785fcf4375f90f16ab3
 
-The source and test hashes were recomputed after the implementation commit and
-match the files used by the final validation runs. No source or test changes
-were made after those runs.
+The source and test hashes were recomputed after their commits. The production
+source did not change for the test-only follow-up.
 
 ## Validation
 
-- Official CoreValidation run fee6a20c435643ccb2c7e72f28532459: PASS,
-  1,076/1,076 cold and 1,076/1,076 warm. Discovery count 1,076; stable input
-  digest 61807a5b1c8ff6731c46de0f0d579af3a32edffdea3abb39281d20c5287cf853.
-  Cold TRX SHA-256 6a4c0eee8372f5eeb4e646281d68361651ffc66db0b319267f690a66add924c0;
-  warm TRX SHA-256 88cda6054cf043367fb099bc88e69efaed4742462acdde8398c5a8fea66e4409.
+- Official CoreValidation run 89e1be289d8f413195571e6dbfe90c9e: PASS,
+  1,076/1,076 cold and 1,076/1,076 warm after the partial-City regression.
+  Discovery count 1,076; stable input digest
+  13efe1eab5236f0d563ca91392ec7844e0536914ea057c8ffdd3a3bfbd579f71.
+  Cold TRX SHA-256 f9d2d158fd10a2db380cfaa088afc514de7dff79209453db9ae15e7c56ee4d43;
+  warm TRX SHA-256 5851bc9f36bcb647440dbafcb3267bdfff45e4dce880b011bb54b9d8c3f29c28.
   The runner also completed its demo and Lab build/test gates. This worktree
   contained a Unity Library, so this run makes no Library-independence claim.
 - Official full Unity EditMode run e4d3b22fa4e848f58ebae68bab4b3034: PASS,
@@ -63,6 +64,14 @@ final validation.
 
 ## Review and integration boundary
 
-Independent exact-tip implementation review is pending. No canonical
-promotion has occurred. The candidate is a recoverable partial CORE-F
-integration only.
+The first independent exact-tip review found no production defect and requested
+a direct partial-City vector regression. Follow-up commit ace43a3 adds that
+assertion: the remainder keeps each captured City row by reference and the
+next City-composition gate rejects the partial set. CoreValidation was rerun
+after the test-only change. The full Unity input manifest contains no
+Simulation.Core.Tests source; its Unity source snapshot and production code
+hash remain unchanged, so the exact EditMode and Smoke evidence above still
+applies. Independent review of the updated exact tip is pending.
+
+No canonical promotion has occurred. The candidate is a recoverable partial
+CORE-F integration only.
