@@ -78,6 +78,14 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(rebound[0].Cardinality, Is.EqualTo(owner.Count));
         Assert.That(rebound[0].Revision, Is.EqualTo(owner.Revision));
 
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
+            graph, Array.Empty<OwnerSectionCensusSnapshot>(),
+            out IReadOnlyList<OwnerSectionCensusSnapshot> composed, out diagnostic), Is.True, diagnostic);
+        Assert.That(composed, Has.Count.EqualTo(1));
+        Assert.That(composed[0].OwnerInstanceIdentity, Is.SameAs(owner));
+        Assert.That(composed[0].Cardinality, Is.EqualTo(owner.Count));
+        Assert.That(composed[0].Revision, Is.EqualTo(owner.Revision));
+
         OwnerSectionCensusSnapshot wrongIdentity = new OwnerSectionCensusSnapshot(
             witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
             new PoliticalDecisionStore(), witness.Cardinality, witness.Revision);
@@ -91,6 +99,9 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             graph, new[] { wrongRevision }, out _, out _), Is.False);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedPoliticalDecisionSection(
             graph, Array.Empty<OwnerSectionCensusSnapshot>(), out _, out _), Is.False);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
+            graph, new[] { wrongRevision }, out _, out _), Is.False,
+            "Core composition rejects a host-supplied stale PoliticalDecision row.");
     }
 
     [Test]

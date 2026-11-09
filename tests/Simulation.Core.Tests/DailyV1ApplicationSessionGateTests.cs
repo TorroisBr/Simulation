@@ -2829,6 +2829,26 @@ public sealed class DailyV1ApplicationSessionGateTests
                 stalePoliticalKnowledgeRevision, graph, out _, out _), Is.False,
             "The Core census transfer rejects a stale PoliticalKnowledge revision.");
 
+        OwnerSectionCensusSnapshot politicalDecision = completeHostVector.Single(section =>
+            section.SectionId == PoliticalDecisionStoreCensusProvider.SectionId);
+        Assert.That(politicalDecision.OwnerInstanceIdentity, Is.SameAs(graph.PoliticalDecisionStore));
+        OwnerSectionCensusSnapshot[] wrongDecisionIdentity = completeHostVector.Select(section =>
+            section.SectionId == PoliticalDecisionStoreCensusProvider.SectionId
+                ? new OwnerSectionCensusSnapshot(section.SectionId, section.SchemaVersion,
+                    section.Role, new object(), section.Cardinality, section.Revision)
+                : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+            wrongDecisionIdentity, graph, out _, out _), Is.False,
+            "The Core census transfer rejects a substitute PoliticalDecision owner.");
+        OwnerSectionCensusSnapshot[] staleDecisionRevision = completeHostVector.Select(section =>
+            section.SectionId == PoliticalDecisionStoreCensusProvider.SectionId
+                ? new OwnerSectionCensusSnapshot(section.SectionId, section.SchemaVersion,
+                    section.Role, section.OwnerInstanceIdentity, section.Cardinality, section.Revision + 1L)
+                : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
+            staleDecisionRevision, graph, out _, out _), Is.False,
+            "The Core census transfer rejects a stale PoliticalDecision revision.");
+
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
                 graph, hostRemainder,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> personComposed,
@@ -2845,8 +2865,12 @@ public sealed class DailyV1ApplicationSessionGateTests
                 graph, identitySpatialComposed,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> cityComposed,
                 out diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
+                graph, cityComposed,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> decisionComposed,
+                out diagnostic), Is.True, diagnostic);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                graph, actorChoices, cityComposed,
+                graph, actorChoices, decisionComposed,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> p12fComposed,
                 out diagnostic), Is.True, diagnostic);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedCitySections(
@@ -3369,12 +3393,25 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(exactCoreIds.Add(allocatorRow.SectionId), Is.True, allocatorRow.SectionId);
         foreach (OwnerSectionCensusSnapshot cityRow in coreCityRows)
             Assert.That(exactCoreIds.Add(cityRow.SectionId), Is.True, cityRow.SectionId);
+        OwnerSectionCensusSnapshot politicalDecisionRow = completeVector.Single(section =>
+            section.SectionId == PoliticalDecisionStoreCensusProvider.SectionId);
+        Assert.That(exactCoreIds.Add(politicalDecisionRow.SectionId), Is.True);
         foreach (string p12fSectionId in DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds)
             Assert.That(exactCoreIds.Add(p12fSectionId), Is.True, p12fSectionId);
         OwnerSectionCensusSnapshot[] expectedRemainder = completeVector
             .Where(section => !exactCoreIds.Contains(section.SectionId)).ToArray();
         Assert.That(hostOwnedRemainder.Select(section => section.SectionId),
             Is.EqualTo(expectedRemainder.Select(section => section.SectionId)));
+        Assert.That(hostOwnedRemainder.Any(section =>
+            section.SectionId == PoliticalDecisionStoreCensusProvider.SectionId), Is.False);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
+            graph, hostOwnedRemainder, out IReadOnlyList<OwnerSectionCensusSnapshot> recomposedDecision,
+            out diagnostic), Is.True, diagnostic);
+        OwnerSectionCensusSnapshot recomposedDecisionRow = recomposedDecision.Single(section =>
+            section.SectionId == PoliticalDecisionStoreCensusProvider.SectionId);
+        Assert.That(recomposedDecisionRow.OwnerInstanceIdentity, Is.SameAs(graph.PoliticalDecisionStore));
+        Assert.That(recomposedDecisionRow.Cardinality, Is.EqualTo(graph.PoliticalDecisionStore.Count));
+        Assert.That(recomposedDecisionRow.Revision, Is.EqualTo(graph.PoliticalDecisionStore.Revision));
         for (int index = 0; index < expectedRemainder.Length; index++)
             Assert.That(hostOwnedRemainder[index], Is.SameAs(expectedRemainder[index]));
 
@@ -3408,6 +3445,22 @@ public sealed class DailyV1ApplicationSessionGateTests
         foreach (OwnerSectionCensusSnapshot allocatorRow in allocatorRows)
             Assert.That(staleAllocatorRemainder.Single(section =>
                 section.SectionId == allocatorRow.SectionId), Is.Not.Null, allocatorRow.SectionId);
+
+        OwnerSectionCensusSnapshot staleDecisionRow = new OwnerSectionCensusSnapshot(
+            politicalDecisionRow.SectionId, politicalDecisionRow.SchemaVersion, politicalDecisionRow.Role,
+            politicalDecisionRow.OwnerInstanceIdentity, politicalDecisionRow.Cardinality,
+            politicalDecisionRow.Revision + 1L);
+        OwnerSectionCensusSnapshot[] staleDecisionVector = completeVector.Select(section =>
+            section.SectionId == politicalDecisionRow.SectionId ? staleDecisionRow : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateHostOwnedCensusRemainder(
+            staleDecisionVector, graph, actorChoiceStore,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> staleDecisionRemainder, out diagnostic),
+            Is.True, diagnostic);
+        Assert.That(staleDecisionRemainder.Single(section =>
+            section.SectionId == politicalDecisionRow.SectionId), Is.SameAs(staleDecisionRow));
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
+            graph, staleDecisionRemainder, out _, out _), Is.False,
+            "A stale host row cannot be replaced by the Core owner witness.");
 
         OwnerSectionCensusSnapshot compatibilityInventory = new OwnerSectionCensusSnapshot(
             DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "compatibility-npc",
@@ -3544,8 +3597,13 @@ public sealed class DailyV1ApplicationSessionGateTests
                 out diagnostic),
             Is.True, diagnostic);
 
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
+                graph, remainderWithCities,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> remainderWithPoliticalDecision,
+                out diagnostic), Is.True, diagnostic);
+
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                graph, actorChoiceStore, remainderWithCities,
+                graph, actorChoiceStore, remainderWithPoliticalDecision,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> composed, out diagnostic),
             Is.True, diagnostic);
         OwnerSectionCensusSnapshot recomposedActorChoice = composed.Single(section =>
@@ -3581,8 +3639,12 @@ public sealed class DailyV1ApplicationSessionGateTests
             section.SectionId != p12fRows[0].SectionId))
             Assert.That(partialRemainder.Single(section => section.SectionId == row.SectionId),
                 Is.SameAs(row));
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
+                graph, partialRemainder,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> partialWithPoliticalDecision,
+                out diagnostic), Is.True, diagnostic);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                graph, actorChoiceStore, partialRemainder, out _, out diagnostic),
+                graph, actorChoiceStore, partialWithPoliticalDecision, out _, out diagnostic),
             Is.False, diagnostic,
             "The existing composition gate rejects a partial P12-F set.");
 
@@ -3608,8 +3670,12 @@ public sealed class DailyV1ApplicationSessionGateTests
             DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds.Contains(section.SectionId)))
             Assert.That(staleRemainder.Single(section => section.SectionId == row.SectionId),
                 Is.SameAs(row));
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
+                graph, staleRemainder,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> staleWithPoliticalDecision,
+                out diagnostic), Is.True, diagnostic);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                graph, actorChoiceStore, staleRemainder, out _, out diagnostic),
+                graph, actorChoiceStore, staleWithPoliticalDecision, out _, out diagnostic),
             Is.False, diagnostic,
             "The existing exact-witness gate rejects a stale P12-F revision.");
 
@@ -3628,8 +3694,12 @@ public sealed class DailyV1ApplicationSessionGateTests
             DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds.Contains(section.SectionId)))
             Assert.That(foreignRemainder.Single(section => section.SectionId == row.SectionId),
                 Is.SameAs(row));
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
+                graph, foreignRemainder,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> foreignWithPoliticalDecision,
+                out diagnostic), Is.True, diagnostic);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                graph, actorChoiceStore, foreignRemainder, out _, out diagnostic),
+                graph, actorChoiceStore, foreignWithPoliticalDecision, out _, out diagnostic),
             Is.False, diagnostic,
             "The existing exact-witness gate rejects a foreign P12-F owner identity.");
     }
@@ -3658,6 +3728,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(exactCoreIds.Add(allocatorRow.SectionId), Is.True, allocatorRow.SectionId);
         foreach (OwnerSectionCensusSnapshot cityRow in coreCityRows)
             Assert.That(exactCoreIds.Add(cityRow.SectionId), Is.True, cityRow.SectionId);
+        Assert.That(exactCoreIds.Add(PoliticalDecisionStoreCensusProvider.SectionId), Is.True);
         foreach (string p12fSectionId in DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds)
             Assert.That(exactCoreIds.Add(p12fSectionId), Is.True, p12fSectionId);
         OwnerSectionCensusSnapshot[] expectedHostRemainder = completeHostVector

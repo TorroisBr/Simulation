@@ -440,18 +440,24 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
-        // Exact selected City rows may be absent from the host remainder.
-        // Restore those Core witnesses before P12-F requires the complete vector;
-        // stale or mixed-roster City rows remain on the established host path.
+        // Exact selected City and PoliticalDecision rows may be absent from the
+        // host remainder. Restore those Core witnesses before P12-F requires
+        // the complete vector; stale City or PoliticalDecision facts remain on
+        // the established host path and fail the exact composition gate.
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
                 executionState.SelectedRuntimeOwnerGraph,
                 ownerSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionsWithCity,
                 out _)
+            || !DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
+                executionState.SelectedRuntimeOwnerGraph,
+                ownerSectionsWithCity,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionsWithPoliticalDecision,
+                out _)
             || !DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 executionState.SelectedRuntimeOwnerGraph,
                 executionState.SelectedActorChoiceStore,
-                ownerSectionsWithCity,
+                ownerSectionsWithPoliticalDecision,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreP12FSections,
                 out _)
             || !DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
@@ -491,7 +497,7 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         }
         ownerSections = coreOwnedGenealogySections;
 
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedPoliticalDecisionSection(
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
                 executionState.SelectedRuntimeOwnerGraph,
                 ownerSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedPoliticalDecisionSections,
@@ -801,6 +807,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         TravelPartyCensusProvider.SectionId,
         ExpeditionCensusProvider.SectionId,
         PoliticalKnowledgeStoreCensusProvider.SectionId,
+        PoliticalDecisionStoreCensusProvider.SectionId,
         RuntimeIdAllocatorCensusProvider.EventsSectionId,
         RuntimeIdAllocatorCensusProvider.DecisionsSectionId,
         RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId
@@ -993,10 +1000,12 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
         }
         if (graph.PersonStore == null
+            || graph.PoliticalDecisionStore == null
+            || !graph.PoliticalDecisionStore.IsBoundToPersonStore(graph.PersonStore)
             || graph.PoliticalKnowledgeStore == null
             || !graph.PoliticalKnowledgeStore.IsBoundToPersonStore(graph.PersonStore))
         {
-            diagnostic = "The selected Core census requires its exact PersonStore and PoliticalKnowledge owners.";
+            diagnostic = "The selected Core census requires its exact PersonStore, PoliticalKnowledge, and PoliticalDecision owners.";
             return false;
         }
         if (!DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(completeHostSections))
@@ -1016,6 +1025,20 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
         foreach (OwnerSectionCensusSnapshot section in copiedHostSections)
             hostBySectionId.Add(section.SectionId, section);
+
+        if (!TryCreateCoreOwnedPoliticalDecisionSection(
+                graph,
+                out OwnerSectionCensusSnapshot politicalDecisionSection,
+                out diagnostic)
+            || !hostBySectionId.TryGetValue(
+                PoliticalDecisionStoreCensusProvider.SectionId,
+                out OwnerSectionCensusSnapshot hostPoliticalDecisionSection)
+            || !HasExactOwnerSectionFacts(hostPoliticalDecisionSection, politicalDecisionSection))
+        {
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The host census differs from the exact Core PoliticalDecision owner.";
+            return false;
+        }
 
         if (!TryCreateCoreOwnedRuntimeIdAllocatorCensusSections(
                 graph, out IReadOnlyList<OwnerSectionCensusSnapshot> allocatorRows, out diagnostic))
@@ -2279,6 +2302,105 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         return true;
     }
 
+    internal static bool TryCreateCoreOwnedPoliticalDecisionSection(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out OwnerSectionCensusSnapshot section,
+        out string diagnostic)
+    {
+        section = null;
+        diagnostic = null;
+        PoliticalDecisionStore owner = graph?.PoliticalDecisionStore;
+        PersonStore personStore = graph?.PersonStore;
+        if (owner == null || personStore == null || !owner.IsBoundToPersonStore(personStore))
+        {
+            diagnostic = "The selected Core census requires its exact P12-E decision owner bound to the selected PersonStore.";
+            return false;
+        }
+
+        OwnerSectionCensusWitness witness;
+        try
+        {
+            witness = new PoliticalDecisionStoreCensusProvider(owner).GetCurrentCensus();
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            diagnostic = "The Core PoliticalDecision census provider could not read its exact owner.";
+            return false;
+        }
+
+        if (witness == null
+            || !string.Equals(witness.SectionId, PoliticalDecisionStoreCensusProvider.SectionId, StringComparison.Ordinal)
+            || witness.SchemaVersion != PoliticalDecisionStoreCensusProvider.SchemaVersion
+            || !ReferenceEquals(witness.OwnerInstanceIdentity, owner)
+            || witness.Cardinality < 0
+            || witness.Revision < 0L)
+        {
+            diagnostic = "The Core PoliticalDecision census provider returned an invalid owner witness.";
+            return false;
+        }
+
+        section = new OwnerSectionCensusSnapshot(
+            witness.SectionId,
+            witness.SchemaVersion,
+            OwnerSectionRole.Required,
+            owner,
+            witness.Cardinality,
+            witness.Revision);
+        return true;
+    }
+
+    internal static bool TryComposeCoreOwnedPoliticalDecisionSection(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        diagnostic = null;
+        if (hostSections == null
+            || !TryCreateCoreOwnedPoliticalDecisionSection(
+                graph, out OwnerSectionCensusSnapshot expected, out diagnostic))
+        {
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core PoliticalDecision census requires its owner graph and host remainder.";
+            return false;
+        }
+
+        List<OwnerSectionCensusSnapshot> copied = new List<OwnerSectionCensusSnapshot>(hostSections.Count + 1);
+        Dictionary<string, int> indexes = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < hostSections.Count; i++)
+        {
+            OwnerSectionCensusSnapshot hostSection = hostSections[i];
+            if (hostSection == null || string.IsNullOrWhiteSpace(hostSection.SectionId)
+                || !indexes.TryAdd(hostSection.SectionId, i))
+            {
+                diagnostic = "The host census contains a missing or duplicate owner-section identity.";
+                return false;
+            }
+            copied.Add(hostSection);
+        }
+
+        if (indexes.TryGetValue(expected.SectionId, out int index))
+        {
+            if (!HasExactOwnerSectionFacts(copied[index], expected))
+            {
+                diagnostic = "The host census differs from the exact Core PoliticalDecision owner.";
+                return false;
+            }
+            copied[index] = expected;
+        }
+        else
+        {
+            copied.Add(expected);
+        }
+
+        ownerSections = Array.AsReadOnly(copied.ToArray());
+        return true;
+    }
+
     internal static bool TryRebindCoreOwnedPoliticalDecisionSection(
         DailyV1SelectedRuntimeOwnerGraph graph,
         IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
@@ -2316,30 +2438,18 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
         }
 
-        OwnerSectionCensusWitness witness =
-            new PoliticalDecisionStoreCensusProvider(owner).GetCurrentCensus();
+        if (!TryCreateCoreOwnedPoliticalDecisionSection(
+                graph, out OwnerSectionCensusSnapshot expected, out diagnostic))
+            return false;
+
         OwnerSectionCensusSnapshot hostSection = copied[index];
-        if (witness == null
-            || !string.Equals(witness.SectionId, PoliticalDecisionStoreCensusProvider.SectionId, StringComparison.Ordinal)
-            || hostSection.Role != OwnerSectionRole.Required
-            || hostSection.SchemaVersion != PoliticalDecisionStoreCensusProvider.SchemaVersion
-            || hostSection.SchemaVersion != witness.SchemaVersion
-            || !ReferenceEquals(hostSection.OwnerInstanceIdentity, owner)
-            || !ReferenceEquals(hostSection.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
-            || hostSection.Cardinality != witness.Cardinality
-            || hostSection.Revision != witness.Revision)
+        if (!HasExactOwnerSectionFacts(hostSection, expected))
         {
             diagnostic = "The host census differs from the exact selected Core PoliticalDecision owner.";
             return false;
         }
 
-        copied[index] = new OwnerSectionCensusSnapshot(
-            witness.SectionId,
-            witness.SchemaVersion,
-            OwnerSectionRole.Required,
-            owner,
-            witness.Cardinality,
-            witness.Revision);
+        copied[index] = expected;
         ownerSections = Array.AsReadOnly(copied);
         return true;
     }
@@ -2743,10 +2853,10 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     }
 
     /// <summary>
-    /// Produces the host-owned remainder after removing selected NPC, City, and
-    /// P12-F census rows and allocator counters only when their live values
-    /// match the exact Core owner graph. Mixed, partial, stale, or substituted
-    /// rows remain available to the existing P12 validation path.
+    /// Produces the host-owned remainder after removing selected NPC, City,
+    /// PoliticalDecision, P12-F, and allocator census rows only when their live
+    /// values match the exact Core owner graph. Mixed, partial, stale, or
+    /// substituted rows remain available to the existing P12 validation path.
     /// </summary>
     internal static bool TryCreateHostOwnedCensusRemainder(
         IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
@@ -2800,6 +2910,23 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 diagnostic = "The exact Core NPC census fragment does not match unique source rows.";
                 return false;
             }
+        }
+
+        if (!TryCreateCoreOwnedPoliticalDecisionSection(
+                graph, out OwnerSectionCensusSnapshot politicalDecisionWitness, out diagnostic)
+            || !sourceById.TryGetValue(
+                PoliticalDecisionStoreCensusProvider.SectionId,
+                out OwnerSectionCensusSnapshot sourcePoliticalDecision))
+        {
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The complete source census omitted the required Core PoliticalDecision owner row.";
+            return false;
+        }
+        if (HasExactOwnerSectionFacts(sourcePoliticalDecision, politicalDecisionWitness)
+            && !coreOwnedIds.Add(politicalDecisionWitness.SectionId))
+        {
+            diagnostic = "Core NPC and PoliticalDecision census identities overlap.";
+            return false;
         }
 
         // Omit selected City rows only as one complete exact set. A stale row,
@@ -5445,7 +5572,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return false;
         }
 
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedPoliticalDecisionSection(
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
                 selectedRuntimeOwnerGraph,
                 ownerSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> politicalDecisionSections,

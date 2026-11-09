@@ -3443,6 +3443,21 @@ internal sealed class DailyV1Application
         }
         targetOwnerSections = hostOwnedSections;
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
+                candidateSession.OwnerGraph,
+                targetOwnerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> politicalDecisionSections,
+                out diagnostic))
+        {
+            targetOwnerSections = null;
+            targetMutationEpoch = 0L;
+            failure = P12GDailyV1OwnerVectorFailure.MissingTargetVector;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The private target could not compose its exact Core-owned PoliticalDecision census row.";
+            return false;
+        }
+        targetOwnerSections = politicalDecisionSections;
+
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
                 candidateSession.OwnerGraph, targetOwnerSections, out diagnostic))
         {
