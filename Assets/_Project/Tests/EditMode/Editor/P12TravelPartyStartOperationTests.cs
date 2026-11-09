@@ -425,7 +425,22 @@ public sealed class P12TravelPartyStartOperationTests
         float[] balancesBefore = members.Select(member => member.MoneyAccount.Balance).ToArray();
         long[] accountRevisionsBefore = members.Select(member => member.MoneyAccount.Revision).ToArray();
 
-        Assert.That(runtime.TryStartTravelParty(context), Is.True);
+        Assert.That(DailyV1SelectedTravelPartyStartPlan.TryCreate(
+            graph, context, out DailyV1SelectedTravelPartyStartPlan corePlan), Is.True,
+            "The Core plan must accept the same exact selected participants and route admitted by the Unity fixture.");
+        Assert.That(corePlan.Members.Select(owner => owner.RuntimeId),
+            Is.EqualTo(members.Select(member => member.RuntimeId)));
+
+        Assert.That(runtime.ExecutionBoundaryState.TryGetApplicationAdvanceAuthority(
+            out DailyV1Application application, out DailyV1ActiveRuntimeSession session), Is.True);
+        Assert.That(application.TryGetPublishedHostProjection(session,
+            out IDailyV1ApplicationHostProjection _), Is.True);
+
+        bool started = runtime.TryStartTravelParty(context);
+        bool censusHealthy = runtime.TryAssessNpcRosterCensus(
+            out ContinuationCensusFailure startFailure);
+        Assert.That(started, Is.True,
+            $"P12 census healthy={censusHealthy}, failure={startFailure}.");
         Assert.That(fixture.Simulation.TravelParties.ActiveParties, Has.Count.EqualTo(1));
         TravelPartyRuntime party = fixture.Simulation.TravelParties.ActiveParties[0];
         Assert.That(party.MemberRuntimeIds, Is.EqualTo(members.Select(member => member.RuntimeId)));

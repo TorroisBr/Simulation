@@ -129,7 +129,28 @@ public sealed partial class SimulationRuntime
         p12TravelPartyStartRequestThread = Thread.CurrentThread;
         try
         {
-            return travelPartySystem != null && travelPartySystem.TryStartTravelParty(context);
+            if (travelPartySystem == null || context == null) return false;
+            bool mixedOrUnselectedRoster = false;
+            foreach (ActionExecutionParticipant participant in context.Participants)
+            {
+                if (participant == null
+                    || !npcRegistryById.TryGetValue(participant.RuntimeId, out NpcRuntime member)
+                    || member == null)
+                    return false;
+                if (member.SelectedRuntimeOwners == null)
+                    mixedOrUnselectedRoster = true;
+            }
+
+            // Preserve the established whole-roster Unity compatibility path
+            // only when at least one genuine unselected member is present.
+            if (mixedOrUnselectedRoster)
+                return travelPartySystem.TryStartTravelParty(context);
+
+            if (!dailyExecutionBoundary.TryGetApplicationAdvanceAuthority(
+                    out DailyV1Application application,
+                    out DailyV1ActiveRuntimeSession session))
+                return false;
+            return application.TryStartTravelParty(session, context);
         }
         finally
         {

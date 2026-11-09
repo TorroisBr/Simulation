@@ -1579,7 +1579,57 @@ internal sealed class DailyV1Application
         DailyV1OperationScopeKind scopeKind,
         out DailyV1ActiveRuntimeSession session) =>
         activeSessionGate.TryBeginOperation(expectedSession, scopeKind, out session);
+    /// <summary>
+    /// Plans and commits a selected group-travel start against the exact active
+    /// Core session. The registered host projection can admit the existing P12
+    /// boundary and publish Unity views, but Core owns planning and mutation.
+    /// </summary>
+    internal bool TryStartTravelParty(
+        DailyV1ActiveRuntimeSession expectedSession,
+        ActionExecutionContext context)
+    {
+        if (expectedSession == null
+            || !expectedSession.ExecutionBoundaryState.IsHealthyDailyOwnerThreadBoundary())
+            return false;
 
+        if (!activeSessionGate.TryBeginOperation(
+                expectedSession, DailyV1OperationScopeKind.Application,
+                out DailyV1ActiveRuntimeSession session))
+            return false;
+
+        if (!ReferenceEquals(session, expectedSession)
+            || !ReferenceEquals(session.ExecutionBoundaryState,
+                expectedSession.ExecutionBoundaryState)
+            || session.ExecutionBoundaryState.ActiveOperationCount != 1)
+        {
+            activeSessionGate.EndOperation(DailyV1OperationScopeKind.Application);
+            return false;
+        }
+
+        try
+        {
+            DailyV1ExecutionBoundaryState executionState = session.ExecutionBoundaryState;
+            if (!executionState.AdmissionContext.IsOwnedByCurrentThread()
+                || executionState.AdvanceLeaseHeld
+                || !executionState.MutationGuard.CanMutate
+                || !DailyV1SelectedTravelPartyStartPlan.TryCreate(
+                    session.OwnerGraph, context,
+                    out DailyV1SelectedTravelPartyStartPlan plan)
+                || !TryGetPublishedHostProjection(session,
+                    out IDailyV1ApplicationHostProjection hostProjection)
+                || !hostProjection.TryCreateSelectedTravelPartyStartHostOperation(
+                    plan, out IDailyV1SelectedTravelPartyStartHostOperation hostOperation)
+                || hostOperation == null)
+                return false;
+
+            return DailyV1SelectedTravelPartyStartExecution.TryStart(
+                plan, session.EventAuthority.Recorder, hostOperation, out _);
+        }
+        finally
+        {
+            activeSessionGate.EndOperation(DailyV1OperationScopeKind.Application);
+        }
+    }
     /// <summary>
     /// Starts the single Core-owned P12-G save operation and captures the
     /// exact current completed-boundary witness before detached staging. The

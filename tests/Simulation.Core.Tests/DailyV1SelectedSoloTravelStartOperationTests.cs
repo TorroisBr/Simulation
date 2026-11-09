@@ -6,6 +6,73 @@ using NUnit.Framework;
 public sealed class DailyV1SelectedSoloTravelStartOperationTests
 {
     [Test]
+    public void CoreTravelPartyPlanResolvesExactOwnersAndPreservesParticipantOrder()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        Assert.That(TryFindPartyStartFixture(graph, out SpatialRouteRuntime route,
+            out DailyV1CityRuntimeOwners originCity, out List<DailyV1NpcRuntimeOwners> members), Is.True);
+
+        ActionExecutionContext context = new ActionExecutionContext("travel/joint-civil",
+            new[]
+            {
+                new ActionExecutionParticipant(members[1].RuntimeId, ActionExecutionParticipantRole.Performer),
+                new ActionExecutionParticipant(members[0].RuntimeId, ActionExecutionParticipantRole.Support)
+            }, route.Destination.RuntimeId, route.RuntimeId, "decision/core-party-plan");
+
+        Assert.That(DailyV1SelectedTravelPartyStartPlan.TryCreate(
+            graph, context, out DailyV1SelectedTravelPartyStartPlan plan), Is.True);
+        Assert.That(plan, Is.Not.Null);
+        Assert.That(plan.Graph, Is.SameAs(graph));
+        Assert.That(plan.Members, Is.EqualTo(new[] { members[1], members[0] }));
+        Assert.That(plan.Travelers, Is.EqualTo(new[] { members[1] }));
+        Assert.That(plan.Escorts, Is.EqualTo(new[] { members[0] }));
+        Assert.That(plan.OriginLocation, Is.SameAs(route.Origin));
+        Assert.That(plan.OriginCity, Is.SameAs(originCity));
+        Assert.That(plan.DestinationLocation, Is.SameAs(route.Destination));
+        Assert.That(plan.Route, Is.SameAs(route));
+        Assert.That(plan.TravelDays, Is.EqualTo(route.TravelDays));
+        Assert.That(plan.OriginDecisionId, Is.EqualTo("decision/core-party-plan"));
+        Assert.That(plan.Costs.Select(cost => cost.RuntimeId),
+            Is.EqualTo(new[] { members[1].RuntimeId, members[0].RuntimeId }));
+        Assert.That(plan.Costs.All(cost => cost.Amount >= 0f), Is.True);
+    }
+
+    [Test]
+    public void CoreTravelPartyPlanRejectsDuplicateRolesAndUnsupportedTargets()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        Assert.That(TryFindPartyStartFixture(graph, out SpatialRouteRuntime route,
+            out _, out List<DailyV1NpcRuntimeOwners> members), Is.True);
+
+        ActionExecutionContext duplicateMember = new ActionExecutionContext("travel/joint-civil",
+            new[]
+            {
+                new ActionExecutionParticipant(members[0].RuntimeId, ActionExecutionParticipantRole.Performer),
+                new ActionExecutionParticipant(members[0].RuntimeId, ActionExecutionParticipantRole.Support)
+            }, route.Destination.RuntimeId, route.RuntimeId, "decision/duplicate-member");
+        Assert.That(DailyV1SelectedTravelPartyStartPlan.TryCreate(
+            graph, duplicateMember, out _), Is.False);
+
+        ActionExecutionContext targetParticipant = new ActionExecutionContext("travel/joint-civil",
+            new[]
+            {
+                new ActionExecutionParticipant(members[0].RuntimeId, ActionExecutionParticipantRole.Performer),
+                new ActionExecutionParticipant(members[1].RuntimeId, ActionExecutionParticipantRole.Target)
+            }, route.Destination.RuntimeId, route.RuntimeId, "decision/unsupported-target");
+        Assert.That(DailyV1SelectedTravelPartyStartPlan.TryCreate(
+            graph, targetParticipant, out _), Is.False);
+
+        ActionExecutionContext unknownOwner = new ActionExecutionContext("travel/joint-civil",
+            new[]
+            {
+                new ActionExecutionParticipant("npc:not-in-selected-graph", ActionExecutionParticipantRole.Performer)
+            }, route.Destination.RuntimeId, route.RuntimeId, "decision/unknown-owner");
+        Assert.That(DailyV1SelectedTravelPartyStartPlan.TryCreate(
+            graph, unknownOwner, out _), Is.False);
+    }
+    [Test]
     public void CoreTravelPartyChargeReservesRevisionHeadroomForPossibleRefund()
     {
         Assert.That(MoneyAccountRuntime.TryCreateFromOwnerSnapshot(
@@ -1056,6 +1123,49 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
         }
     }
 
+    private static bool TryFindPartyStartFixture(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out SpatialRouteRuntime selectedRoute,
+        out DailyV1CityRuntimeOwners originCity,
+        out List<DailyV1NpcRuntimeOwners> members)
+    {
+        selectedRoute = null;
+        originCity = null;
+        members = null;
+        foreach (SpatialRouteRuntime route in graph.SpatialNetwork.Routes)
+        {
+            if (!graph.SpatialNetwork.TryGetSingleDirectRoute(route.Origin,
+                    route.Destination, out SpatialRouteRuntime uniqueRoute, out _)
+                || !ReferenceEquals(route, uniqueRoute)
+                || !graph.TryGetUniqueCityOwnerForLocation(route.Origin.RuntimeId,
+                    out DailyV1CityRuntimeOwners city)
+                || city == null
+                || !graph.TryGetMerchantTradeTravelCost(route, out float cost))
+                continue;
+
+            List<DailyV1NpcRuntimeOwners> atOrigin = graph.Npcs
+                .Where(member => city.NpcPresence.Contains(member.RuntimeId)
+                    && member.Lifecycle?.LifeState == NpcLifeState.Alive
+                    && !member.Travel.IsTraveling
+                    && string.IsNullOrWhiteSpace(member.Travel.ActiveTravelPartyId)
+                    && string.Equals(member.Travel.CurrentLocationRuntimeId,
+                        route.Origin.RuntimeId, StringComparison.Ordinal)
+                    && string.Equals(member.Travel.CurrentCityRuntimeId,
+                        city.RuntimeId, StringComparison.Ordinal)
+                    && member.Travel.CanAdvanceRevision(4)
+                    && member.MoneyAccount.CanDebit(cost)
+                    && (graph.Expeditions == null
+                        || !graph.Expeditions.IsNpcOnActiveExpedition(member.RuntimeId)))
+                .Take(2).ToList();
+            if (atOrigin.Count != 2) continue;
+
+            selectedRoute = route;
+            originCity = city;
+            members = atOrigin;
+            return true;
+        }
+        return false;
+    }
     private static DailyV1GenesisComposition Compose()
     {
         DailyV1EffectiveDefinitions definitions =

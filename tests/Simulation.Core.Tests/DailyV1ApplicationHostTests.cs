@@ -40,7 +40,16 @@ public sealed class DailyV1ApplicationHostTests
         public void Delete(string path) => throw new NotSupportedException();
     }
 
-    private sealed class TestHostProjection : IDailyV1ApplicationHostProjection { }
+    private sealed class TestHostProjection : IDailyV1ApplicationHostProjection
+    {
+        public bool TryCreateSelectedTravelPartyStartHostOperation(
+            DailyV1SelectedTravelPartyStartPlan plan,
+            out IDailyV1SelectedTravelPartyStartHostOperation operation)
+        {
+            operation = null;
+            return false;
+        }
+    }
 
     private sealed class ReentrantMissingSlotOperations : IAtomicFileSlotOperations
     {

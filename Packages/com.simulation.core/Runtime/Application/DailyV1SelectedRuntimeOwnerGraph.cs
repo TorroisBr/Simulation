@@ -1207,6 +1207,26 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         return true;
     }
 
+    /// <summary>
+    /// Resolves the unique selected City authority for a spatial Location.
+    /// A Location may have no City, but duplicate City ownership is ambiguous
+    /// and fails closed.
+    /// </summary>
+    internal bool TryGetUniqueCityOwnerForLocation(
+        string locationRuntimeId,
+        out DailyV1CityRuntimeOwners city)
+    {
+        city = null;
+        if (string.IsNullOrWhiteSpace(locationRuntimeId)) return false;
+        foreach (DailyV1CityRuntimeOwners candidate in cities)
+        {
+            if (!string.Equals(candidate?.LocationRuntimeId,
+                    locationRuntimeId, StringComparison.Ordinal)) continue;
+            if (city != null) { city = null; return false; }
+            city = candidate;
+        }
+        return true;
+    }
     internal bool ContainsExactCityOwner(DailyV1CityRuntimeOwners candidate)
     {
         if (candidate == null || !ReferenceEquals(candidate.Definitions, Definitions)) return false;

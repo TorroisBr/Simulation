@@ -305,6 +305,119 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    internal bool TryCreateSelectedCoreTravelPartyStartHostOperation(
+        DailyV1SelectedTravelPartyStartPlan plan,
+        out IDailyV1SelectedTravelPartyStartHostOperation hostOperation)
+    {
+        hostOperation = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = plan?.Graph;
+        if (plan == null || graph == null
+            || !ReferenceEquals(graph.TravelParties, partyStore)
+            || !ReferenceEquals(graph.RuntimeIdAllocator, idAllocator)
+            || graph.SpatialNetwork == null
+            || identityRegistry == null || travelSystem == null
+            || !graph.SpatialNetwork.TryGetLocation(plan.OriginLocation.RuntimeId,
+                out SpatialLocationRuntime coreOrigin)
+            || !ReferenceEquals(coreOrigin, plan.OriginLocation)
+            || !graph.SpatialNetwork.TryGetLocation(plan.DestinationLocation.RuntimeId,
+                out SpatialLocationRuntime coreDestination)
+            || !ReferenceEquals(coreDestination, plan.DestinationLocation)
+            || !identityRegistry.TryGetLocation(plan.OriginLocation.RuntimeId,
+                out SpatialLocationRuntime originLocation)
+            || !identityRegistry.TryGetLocation(plan.DestinationLocation.RuntimeId,
+                out SpatialLocationRuntime destinationLocation)
+            || !travelSystem.TryGetDirectRoute(originLocation, destinationLocation,
+                out SpatialRouteRuntime projectedRoute)
+            || !string.Equals(projectedRoute.RuntimeId, plan.Route.RuntimeId,
+                StringComparison.Ordinal)
+            || !string.Equals(projectedRoute.Origin.RuntimeId,
+                plan.OriginLocation.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(projectedRoute.Destination.RuntimeId,
+                plan.DestinationLocation.RuntimeId, StringComparison.Ordinal)
+            || projectedRoute.TravelDays != plan.TravelDays)
+            return false;
+
+        CityRuntime originCity = travelSystem.GetCityRuntime(originLocation);
+        CityRuntime destinationCity = travelSystem.GetCityRuntime(destinationLocation);
+        if (!MatchesSelectedCityProjection(plan.OriginCity, originCity, originLocation.RuntimeId)
+            || !MatchesSelectedCityProjection(
+                plan.DestinationCity, destinationCity, destinationLocation.RuntimeId)
+            || plan.Costs.Count != plan.Members.Count
+            || plan.Costs.Count == 0)
+            return false;
+        Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime> adapters =
+            new Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime>();
+        Dictionary<string, NpcRuntime> adaptersById =
+            new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        List<NpcRuntime> members = new List<NpcRuntime>(plan.Members.Count);
+        List<NpcRuntime> travelers = new List<NpcRuntime>(plan.Travelers.Count);
+        List<NpcRuntime> escorts = new List<NpcRuntime>(plan.Escorts.Count);
+        Dictionary<string, NpcRuntime> memberById =
+            new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        foreach (DailyV1NpcRuntimeOwners owner in plan.Members)
+        {
+            if (owner == null
+                || !identityRegistry.TryGetNpc(owner.RuntimeId, out NpcRuntime adapter)
+                || adapter == null
+                || !ReferenceEquals(adapter.SelectedRuntimeOwnerGraph, graph)
+                || !ReferenceEquals(adapter.SelectedRuntimeOwners, owner)
+                || adapters.ContainsKey(owner)
+                || adaptersById.ContainsKey(owner.RuntimeId))
+                return false;
+            adapters.Add(owner, adapter);
+            adaptersById.Add(owner.RuntimeId, adapter);
+            memberById.Add(owner.RuntimeId, adapter);
+            members.Add(adapter);
+        }
+        foreach (DailyV1NpcRuntimeOwners owner in plan.Travelers)
+        {
+            if (owner == null || !adapters.TryGetValue(owner, out NpcRuntime adapter)) return false;
+            travelers.Add(adapter);
+        }
+        foreach (DailyV1NpcRuntimeOwners owner in plan.Escorts)
+        {
+            if (owner == null || !adapters.TryGetValue(owner, out NpcRuntime adapter)) return false;
+            escorts.Add(adapter);
+        }
+
+        TravelPreparation preparation = new TravelPreparation(
+            originLocation, originCity, destinationLocation, destinationCity, projectedRoute,
+            travelers, escorts, members, memberById,
+            new List<TravelPartyMemberCost>(plan.Costs));
+        TravelPartyStartPreparation p12Preparation = new TravelPartyStartPreparation(
+            originLocation, originCity, projectedRoute, members, preparation.Costs);
+        if (p12StartOperationAdmission == null)
+            return false;
+        try
+        {
+            if (!p12StartOperationAdmission(p12Preparation)) return false;
+        }
+        catch
+        {
+            return false;
+        }
+
+        CityRuntime[] projectionCandidates = originCity == null
+            ? (destinationCity == null ? Array.Empty<CityRuntime>() : new[] { destinationCity })
+            : (destinationCity == null ? new[] { originCity } : new[] { originCity, destinationCity });
+        hostOperation = new SelectedCoreTravelPartyStartHostOperation(
+            this, preparation, adapters, projectionCandidates);
+        return true;
+    }
+
+    private static bool MatchesSelectedCityProjection(
+        DailyV1CityRuntimeOwners owner,
+        CityRuntime projection,
+        string locationRuntimeId)
+    {
+        if (owner == null) return projection == null;
+        return projection != null
+            && ReferenceEquals(projection.SelectedRuntimeOwners, owner)
+            && string.Equals(projection.RuntimeId, owner.RuntimeId, StringComparison.Ordinal)
+            && string.Equals(owner.LocationRuntimeId, locationRuntimeId, StringComparison.Ordinal)
+            && string.Equals(projection.Location?.RuntimeId,
+                locationRuntimeId, StringComparison.Ordinal);
+    }
     private bool TryStartSelectedCoreTravelParty(
         DailyV1SelectedRuntimeOwnerGraph graph,
         TravelPreparation preparation,
@@ -1071,6 +1184,68 @@ public sealed class TravelPartySystem : IAuthoritativeMutationGuardBindable
         }
     }
 
+    private sealed class SelectedCoreTravelPartyStartHostOperation :
+        IDailyV1SelectedTravelPartyStartHostOperation
+    {
+        private readonly TravelPartySystem owner;
+        private readonly TravelPreparation preparation;
+        private readonly IReadOnlyDictionary<DailyV1NpcRuntimeOwners, NpcRuntime> adapters;
+        private readonly CityRuntime[] projectionCandidates;
+        private readonly Dictionary<DailyV1SelectedTravelTransitionPlan, CityRuntime[]> changedCitiesByPlan =
+            new Dictionary<DailyV1SelectedTravelTransitionPlan, CityRuntime[]>();
+
+        internal SelectedCoreTravelPartyStartHostOperation(
+            TravelPartySystem owner,
+            TravelPreparation preparation,
+            IReadOnlyDictionary<DailyV1NpcRuntimeOwners, NpcRuntime> adapters,
+            CityRuntime[] projectionCandidates)
+        {
+            this.owner = owner;
+            this.preparation = preparation;
+            this.adapters = adapters;
+            this.projectionCandidates = projectionCandidates;
+        }
+
+        public bool TryPrepareAndAdmitProjection(
+            DailyV1NpcRuntimeOwners owner,
+            DailyV1SelectedTravelTransitionPlan plan,
+            DailyV1SelectedTravelPartyProjectionTarget target)
+        {
+            if (!adapters.TryGetValue(owner, out NpcRuntime adapter)
+                || changedCitiesByPlan.ContainsKey(plan)
+                || !adapter.CanPrepareSelectedTravelProjection(
+                    plan, projectionCandidates, out CityRuntime[] changedCities)
+                || !adapter.CanAdmitPreparedSelectedTravelDay(plan, changedCities))
+                return false;
+            changedCitiesByPlan.Add(plan, changedCities);
+            return true;
+        }
+
+        public void PublishProjection(
+            DailyV1NpcRuntimeOwners owner,
+            DailyV1SelectedTravelTransitionPlan plan,
+            DailyV1SelectedTravelPartyProjectionTarget target)
+        {
+            if (!adapters.TryGetValue(owner, out NpcRuntime adapter))
+                throw new InvalidOperationException(
+                    "A committed Core TravelParty transition lost its exact Unity adapter.");
+            if (!changedCitiesByPlan.TryGetValue(plan, out CityRuntime[] changedCities))
+                throw new InvalidOperationException(
+                    "A committed Core TravelParty transition has no prepared projection receipt.");
+            if (!this.owner.TryResolveSelectedProjectionTarget(
+                    target, preparation, out SpatialLocationRuntime currentLocation,
+                    out CityRuntime currentCity, out SpatialLocationRuntime destinationLocation,
+                    out CityRuntime destinationCity))
+                throw new InvalidOperationException(
+                    "A committed Core TravelParty transition lost its prepared projection targets.");
+            if (!adapter.TryProjectCommittedSelectedTravelTransition(
+                    plan, changedCities, currentLocation, currentCity,
+                    destinationLocation, destinationCity))
+                throw new InvalidOperationException(
+                    "A committed Core TravelParty transition could not publish its Unity projection.");
+            adapter.RecordSelectedTravelOwnerMutationCommitted(plan, changedCities);
+        }
+    }
     private sealed class TravelPreparation
     {
         public SpatialLocationRuntime OriginLocation { get; }

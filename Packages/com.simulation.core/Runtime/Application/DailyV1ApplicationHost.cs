@@ -12,6 +12,9 @@ using System.Text;
 /// </summary>
 internal interface IDailyV1ApplicationHostProjection
 {
+    bool TryCreateSelectedTravelPartyStartHostOperation(
+        DailyV1SelectedTravelPartyStartPlan plan,
+        out IDailyV1SelectedTravelPartyStartHostOperation operation);
 }
 
 public enum DailyV1LogSeverity : byte

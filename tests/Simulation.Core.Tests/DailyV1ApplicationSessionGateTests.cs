@@ -9,6 +9,13 @@ public sealed class DailyV1ApplicationSessionGateTests
 {
     private sealed class TestHostProjection : IDailyV1ApplicationHostProjection
     {
+        public bool TryCreateSelectedTravelPartyStartHostOperation(
+            DailyV1SelectedTravelPartyStartPlan plan,
+            out IDailyV1SelectedTravelPartyStartHostOperation operation)
+        {
+            operation = null;
+            return false;
+        }
     }
 
     private static P12ACompatibilityDescriptor UnityIdentity() =>

@@ -117,6 +117,18 @@ internal sealed class SimulationActiveSession : IDailyV1ApplicationHostProjectio
         return cityRuntimeByLocation.TryGetValue(location, out city);
     }
 
+    public bool TryCreateSelectedTravelPartyStartHostOperation(
+        DailyV1SelectedTravelPartyStartPlan plan,
+        out IDailyV1SelectedTravelPartyStartHostOperation operation)
+    {
+        operation = null;
+        return CoreRuntimeSession != null
+            && plan != null
+            && ReferenceEquals(plan.Graph, CoreRuntimeSession.OwnerGraph)
+            && Composition.GroupTravel != null
+            && Composition.GroupTravel.TryCreateSelectedCoreTravelPartyStartHostOperation(
+                plan, out operation);
+    }
     public bool IsProfileCompatibleWith(SimulationActiveSession candidate)
     {
         return candidate != null

@@ -2,6 +2,166 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
+/// Immutable request resolved entirely from the admitted Core owner graph.
+/// The Unity host may admit P12 and project mutations, but cannot choose the
+/// participating owners, route, roles, or charge values.
+/// </summary>
+internal sealed class DailyV1SelectedTravelPartyStartPlan
+{
+    private static readonly ActionParticipationRequirements Requirements =
+        new ActionParticipationRequirements(
+            minPerformers: 1,
+            maxPerformers: ActionParticipationRequirements.Unlimited,
+            minSupports: 0,
+            maxSupports: ActionParticipationRequirements.Unlimited,
+            minTargets: 0,
+            maxTargets: 0);
+
+    private readonly IReadOnlyList<DailyV1NpcRuntimeOwners> members;
+    private readonly IReadOnlyList<DailyV1NpcRuntimeOwners> travelers;
+    private readonly IReadOnlyList<DailyV1NpcRuntimeOwners> escorts;
+    private readonly IReadOnlyList<TravelPartyMemberCost> costs;
+
+    internal DailyV1SelectedRuntimeOwnerGraph Graph { get; }
+    internal IReadOnlyList<DailyV1NpcRuntimeOwners> Members => members;
+    internal IReadOnlyList<DailyV1NpcRuntimeOwners> Travelers => travelers;
+    internal IReadOnlyList<DailyV1NpcRuntimeOwners> Escorts => escorts;
+    internal SpatialLocationRuntime OriginLocation { get; }
+    internal DailyV1CityRuntimeOwners OriginCity { get; }
+    internal SpatialLocationRuntime DestinationLocation { get; }
+    internal DailyV1CityRuntimeOwners DestinationCity { get; }
+    internal SpatialRouteRuntime Route { get; }
+    internal int TravelDays => Route.TravelDays;
+    internal string OriginDecisionId { get; }
+    internal IReadOnlyList<TravelPartyMemberCost> Costs => costs;
+
+    private DailyV1SelectedTravelPartyStartPlan(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> members,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> travelers,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> escorts,
+        SpatialLocationRuntime originLocation,
+        DailyV1CityRuntimeOwners originCity,
+        SpatialLocationRuntime destinationLocation,
+        DailyV1CityRuntimeOwners destinationCity,
+        SpatialRouteRuntime route,
+        string originDecisionId,
+        IReadOnlyList<TravelPartyMemberCost> costs)
+    {
+        Graph = graph;
+        this.members = Array.AsReadOnly(Copy(members));
+        this.travelers = Array.AsReadOnly(Copy(travelers));
+        this.escorts = Array.AsReadOnly(Copy(escorts));
+        OriginLocation = originLocation;
+        OriginCity = originCity;
+        DestinationLocation = destinationLocation;
+        DestinationCity = destinationCity;
+        Route = route;
+        OriginDecisionId = originDecisionId;
+        this.costs = Array.AsReadOnly(Copy(costs));
+    }
+
+    internal static bool TryCreate(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        ActionExecutionContext context,
+        out DailyV1SelectedTravelPartyStartPlan plan)
+    {
+        plan = null;
+        if (graph == null || context == null || graph.SpatialNetwork == null
+            || !ActionExecutionValidator.TryValidate(context, Requirements, out _))
+            return false;
+
+        List<DailyV1NpcRuntimeOwners> members = new List<DailyV1NpcRuntimeOwners>();
+        List<DailyV1NpcRuntimeOwners> travelers = new List<DailyV1NpcRuntimeOwners>();
+        List<DailyV1NpcRuntimeOwners> escorts = new List<DailyV1NpcRuntimeOwners>();
+        HashSet<string> memberIds = new HashSet<string>(StringComparer.Ordinal);
+        string originLocationId = null;
+        foreach (ActionExecutionParticipant participant in context.Participants)
+        {
+            if (participant == null
+                || (participant.Role != ActionExecutionParticipantRole.Performer
+                    && participant.Role != ActionExecutionParticipantRole.Support)
+                || !memberIds.Add(participant.RuntimeId)
+                || !graph.TryGetNpcOwner(participant.RuntimeId,
+                    out DailyV1NpcRuntimeOwners member)
+                || member == null || !graph.ContainsExactNpcOwner(member)
+                || (graph.Expeditions != null
+                    && graph.Expeditions.IsNpcOnActiveExpedition(member.RuntimeId)))
+                return false;
+
+            if (originLocationId == null)
+                originLocationId = member.Travel?.CurrentLocationRuntimeId;
+            if (string.IsNullOrWhiteSpace(originLocationId)
+                || !string.Equals(originLocationId,
+                    member.Travel?.CurrentLocationRuntimeId, StringComparison.Ordinal))
+                return false;
+
+            members.Add(member);
+            if (participant.Role == ActionExecutionParticipantRole.Performer)
+                travelers.Add(member);
+            else
+                escorts.Add(member);
+        }
+
+        if (members.Count == 0 || travelers.Count == 0
+            || !graph.SpatialNetwork.TryGetLocation(originLocationId,
+                out SpatialLocationRuntime originLocation)
+            || string.IsNullOrWhiteSpace(context.TargetLocationRuntimeId)
+            || !graph.SpatialNetwork.TryGetLocation(context.TargetLocationRuntimeId,
+                out SpatialLocationRuntime destinationLocation)
+            || ReferenceEquals(originLocation, destinationLocation)
+            || string.IsNullOrWhiteSpace(context.TargetRouteRuntimeId)
+            || !graph.SpatialNetwork.TryGetRoute(context.TargetRouteRuntimeId,
+                out SpatialRouteRuntime route)
+            || !ReferenceEquals(route.Origin, originLocation)
+            || !ReferenceEquals(route.Destination, destinationLocation)
+            || route.TravelDays <= 0
+            || !graph.SpatialNetwork.TryGetSingleDirectRoute(originLocation,
+                destinationLocation, out SpatialRouteRuntime uniqueRoute, out _)
+            || !ReferenceEquals(uniqueRoute, route)
+            || !graph.TryGetUniqueCityOwnerForLocation(originLocation.RuntimeId,
+                out DailyV1CityRuntimeOwners originCity)
+            || !graph.TryGetUniqueCityOwnerForLocation(destinationLocation.RuntimeId,
+                out DailyV1CityRuntimeOwners destinationCity)
+            || !graph.TryGetMerchantTradeTravelCost(route, out float costPerMember))
+            return false;
+
+        List<TravelPartyMemberCost> costs = new List<TravelPartyMemberCost>(members.Count);
+        foreach (DailyV1NpcRuntimeOwners member in members)
+            costs.Add(new TravelPartyMemberCost(member.RuntimeId, costPerMember));
+
+        if (!DailyV1SelectedTravelPartyStartExecution.TryValidateRequest(
+                graph, members, travelers, escorts, originLocation.RuntimeId,
+                originCity, destinationLocation.RuntimeId, destinationCity,
+                route.RuntimeId, route.TravelDays, costs, out _))
+            return false;
+
+        plan = new DailyV1SelectedTravelPartyStartPlan(
+            graph, members, travelers, escorts, originLocation, originCity,
+            destinationLocation, destinationCity, route, context.OriginDecisionId, costs);
+        return true;
+    }
+
+    private static T[] Copy<T>(IReadOnlyList<T> source)
+    {
+        T[] copy = new T[source.Count];
+        for (int index = 0; index < copy.Length; index++) copy[index] = source[index];
+        return copy;
+    }
+}
+
+internal interface IDailyV1SelectedTravelPartyStartHostOperation
+{
+    bool TryPrepareAndAdmitProjection(
+        DailyV1NpcRuntimeOwners owner,
+        DailyV1SelectedTravelTransitionPlan plan,
+        DailyV1SelectedTravelPartyProjectionTarget target);
+    void PublishProjection(
+        DailyV1NpcRuntimeOwners owner,
+        DailyV1SelectedTravelTransitionPlan plan,
+        DailyV1SelectedTravelPartyProjectionTarget target);
+}
+/// <summary>
 /// Describes the compatibility projection that must follow one committed Core
 /// travel-party transition. The owner graph remains the source of truth.
 /// </summary>
@@ -34,6 +194,24 @@ internal sealed class DailyV1SelectedTravelPartyProjectionTarget
 internal static class DailyV1SelectedTravelPartyStartExecution
 {
     internal static bool TryStart(
+        DailyV1SelectedTravelPartyStartPlan plan,
+        DomainEventRecorder eventRecorder,
+        IDailyV1SelectedTravelPartyStartHostOperation hostOperation,
+        out TravelPartyRuntime party)
+    {
+        party = null;
+
+        if (plan == null || hostOperation == null) return false;
+        return TryStart(
+            plan.Graph, plan.Members, plan.Travelers, plan.Escorts,
+            plan.OriginLocation.RuntimeId, plan.OriginCity,
+            plan.DestinationLocation.RuntimeId, plan.DestinationCity,
+            plan.Route.RuntimeId, plan.TravelDays, plan.OriginDecisionId,
+            plan.Costs, eventRecorder,
+            hostOperation.TryPrepareAndAdmitProjection,
+            hostOperation.PublishProjection, out party);
+    }
+    internal static bool TryStart(
         DailyV1SelectedRuntimeOwnerGraph graph,
         IReadOnlyList<DailyV1NpcRuntimeOwners> members,
         IReadOnlyList<DailyV1NpcRuntimeOwners> travelers,
@@ -54,10 +232,11 @@ internal static class DailyV1SelectedTravelPartyStartExecution
         out TravelPartyRuntime party)
     {
         party = null;
+        if (prepareAndAdmitProjection == null || publishProjection == null) return false;
         if (!TryValidateRequest(graph, members, travelers, escorts,
                 originLocationRuntimeId, originCity, destinationLocationRuntimeId,
                 destinationCity, routeRuntimeId, travelDays, costs,
-                prepareAndAdmitProjection, publishProjection, out float costPerMember))
+                out float costPerMember))
             return false;
 
         using (graph.TravelParties.EnterMutationWindow())
@@ -183,7 +362,7 @@ internal static class DailyV1SelectedTravelPartyStartExecution
         }
     }
 
-    private static bool TryValidateRequest(
+    internal static bool TryValidateRequest(
         DailyV1SelectedRuntimeOwnerGraph graph,
         IReadOnlyList<DailyV1NpcRuntimeOwners> members,
         IReadOnlyList<DailyV1NpcRuntimeOwners> travelers,
@@ -195,10 +374,6 @@ internal static class DailyV1SelectedTravelPartyStartExecution
         string routeRuntimeId,
         int travelDays,
         IReadOnlyList<TravelPartyMemberCost> costs,
-        Func<DailyV1NpcRuntimeOwners, DailyV1SelectedTravelTransitionPlan,
-            DailyV1SelectedTravelPartyProjectionTarget, bool> prepareAndAdmitProjection,
-        Action<DailyV1NpcRuntimeOwners, DailyV1SelectedTravelTransitionPlan,
-            DailyV1SelectedTravelPartyProjectionTarget> publishProjection,
         out float costPerMember)
     {
         costPerMember = -1f;
@@ -210,7 +385,6 @@ internal static class DailyV1SelectedTravelPartyStartExecution
             || string.IsNullOrWhiteSpace(destinationLocationRuntimeId)
             || string.Equals(originLocationRuntimeId, destinationLocationRuntimeId, StringComparison.Ordinal)
             || string.IsNullOrWhiteSpace(routeRuntimeId)
-            || prepareAndAdmitProjection == null || publishProjection == null
             || (originCity != null && (!graph.ContainsExactCityOwner(originCity)
                 || !string.Equals(originCity.LocationRuntimeId, originLocationRuntimeId, StringComparison.Ordinal)))
             || (destinationCity != null && (!graph.ContainsExactCityOwner(destinationCity)
