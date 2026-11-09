@@ -1559,9 +1559,21 @@ internal sealed class DailyV1Application
             out diagnostic))
             return false;
 
-        if (candidate == null
-            || !candidate.OwnerGraph.TryBindExplorableSiteStore(stagedD.EmptyExplorableSites)
-            || !candidate.OwnerGraph.TryBindPoliticalKnowledgeStore(stagedF.PoliticalKnowledge))
+        if (candidate == null)
+        {
+            calendar = null;
+            return false;
+        }
+
+        if (!candidate.OwnerGraph.TryBindExplorableSiteStore(stagedD.EmptyExplorableSites))
+        {
+            candidate = null;
+            calendar = null;
+            diagnostic = "The restored Core owner graph could not bind the exact empty P12-D ExplorableSite owner.";
+            return false;
+        }
+
+        if (!candidate.OwnerGraph.TryBindPoliticalKnowledgeStore(stagedF.PoliticalKnowledge))
         {
             candidate = null;
             calendar = null;
