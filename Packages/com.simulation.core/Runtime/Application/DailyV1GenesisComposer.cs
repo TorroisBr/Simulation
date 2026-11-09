@@ -22,6 +22,7 @@ internal sealed class DailyV1GenesisComposition
     internal ActorChoiceStore ActorChoiceStore { get; }
     internal TravelPartyStore TravelPartyStore { get; }
     internal ExpeditionStore Expeditions { get; }
+    internal ExplorableSiteStore ExplorableSites { get; }
     internal SimulationRuntimeAdmissionContext AdmissionContext { get; }
     internal EffectiveSimulationConfiguration EffectiveConfiguration { get; }
     internal SimulationCalendar Calendar { get; }
@@ -46,6 +47,7 @@ internal sealed class DailyV1GenesisComposition
         ActorChoiceStore actorChoiceStore,
         TravelPartyStore travelPartyStore,
         ExpeditionStore expeditions,
+        ExplorableSiteStore explorableSites,
         SimulationRuntimeAdmissionContext admissionContext,
         EffectiveSimulationConfiguration effectiveConfiguration,
         SimulationCalendar calendar,
@@ -73,6 +75,12 @@ internal sealed class DailyV1GenesisComposition
         ActorChoiceStore = actorChoiceStore ?? throw new ArgumentNullException(nameof(actorChoiceStore));
         TravelPartyStore = travelPartyStore ?? throw new ArgumentNullException(nameof(travelPartyStore));
         Expeditions = expeditions ?? throw new ArgumentNullException(nameof(expeditions));
+        ExplorableSites = explorableSites ?? throw new ArgumentNullException(nameof(explorableSites));
+        if (ExplorableSites.Count != 0 || ExplorableSites.Revision != 0L
+            || !ReferenceEquals(ownerGraph?.ExplorableSites, ExplorableSites))
+            throw new ArgumentException(
+                "The selected Daily-v1 genesis graph must retain its exact empty ExplorableSite owner.",
+                nameof(explorableSites));
         AdmissionContext = admissionContext ?? throw new ArgumentNullException(nameof(admissionContext));
         EffectiveConfiguration = effectiveConfiguration ?? throw new ArgumentNullException(nameof(effectiveConfiguration));
         Calendar = calendar ?? throw new ArgumentNullException(nameof(calendar));
@@ -191,6 +199,7 @@ internal static class DailyV1GenesisComposer
         ScheduledDirectiveStore directives = new ScheduledDirectiveStore(time);
         TravelPartyStore travelParties = new TravelPartyStore();
         ExpeditionStore expeditions = new ExpeditionStore();
+        ExplorableSiteStore explorableSites = new ExplorableSiteStore();
         DailyV1JusticeRecordsOwner justice = new DailyV1JusticeRecordsOwner();
         DailyV1SelectedRuntimeOwnerGraphBuilder builder =
             new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
@@ -266,7 +275,8 @@ internal static class DailyV1GenesisComposer
                     if (!builder.TryBuild(justice, travelParties, directives, expeditions,
                             out DailyV1SelectedRuntimeOwnerGraph graph))
                         return Fail("Core selected owner graph failed exact genesis admission.", out diagnostic);
-                    if (!graph.TryBindPersonStore(personStore)
+                    if (!graph.TryBindExplorableSiteStore(explorableSites)
+                        || !graph.TryBindPersonStore(personStore)
                         || !graph.TryBindGenealogyStore(genealogyStore)
                         || !ReferenceEquals(actorChoiceStore.PersonStore, personStore)
                         || !executionBoundaryState.TryBindSelectedRuntimeOwnerGraph(graph)
@@ -282,6 +292,7 @@ internal static class DailyV1GenesisComposer
                         definitions, p9ProfileFingerprint, p9ProvenanceRecords, p9ManifestSnapshot,
                         worldId, runtimeIds, time, randomSource, recordSequence,
                         decisionStore, personStore, actorChoiceStore, travelParties, expeditions,
+                        explorableSites,
                         admissionContext, definitions.EffectiveConfiguration,
                         calendar, executionBoundaryState, spatialAuthority, eventAuthority,
                         anchorBindings, graph);

@@ -36,6 +36,32 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
     }
 
     [Test]
+    public void SelectedGraphBindsOnlyOneExactEmptyExplorableSiteStore()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        ExplorableSiteStore populated = new ExplorableSiteStore();
+        DailyV1ExplorableSiteDefinition siteDefinition = new DailyV1ExplorableSiteDefinition(
+            "ExplorableSiteData", "site-definition/outside-daily-v1",
+            new DailyV1ExplorableSiteData("site-definition/outside-daily-v1",
+                "Outside Daily-v1", new DailyV1EnumValue(0, "Ruin")));
+        Assert.That(populated.Add(new ExplorableSiteRuntime(
+            "site-runtime/outside-daily-v1", siteDefinition,
+            graph.SpatialNetwork.Locations.First())), Is.True);
+        Assert.That(graph.TryBindExplorableSiteStore(populated), Is.False,
+            "A populated P10 site owner cannot be admitted into the selected Daily-v1 graph.");
+        Assert.That(graph.ExplorableSites, Is.Null);
+
+        ExplorableSiteStore exactEmpty = new ExplorableSiteStore();
+        Assert.That(graph.TryBindExplorableSiteStore(exactEmpty), Is.True);
+        Assert.That(graph.ExplorableSites, Is.SameAs(exactEmpty));
+        Assert.That(graph.TryBindExplorableSiteStore(new ExplorableSiteStore()), Is.False,
+            "An empty site-store substitute cannot replace the admitted graph owner.");
+    }
+
+    [Test]
     public void SelectedGraphTransitReadUsesItsExactCorePersonPositionOwner()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

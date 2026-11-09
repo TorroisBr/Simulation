@@ -32,6 +32,11 @@ public sealed class DailyV1GenesisComposerTests
             "The selected Core genesis graph cannot replace its exact empty GenealogyStore.");
         Assert.That(composition.OwnerGraph.Expeditions, Is.SameAs(composition.Expeditions),
             "The Core graph must retain the exact ExpeditionStore created by genesis.");
+        Assert.That(composition.ExplorableSites, Is.Not.Null);
+        Assert.That(composition.ExplorableSites.Count, Is.Zero);
+        Assert.That(composition.ExplorableSites.Revision, Is.Zero);
+        Assert.That(composition.OwnerGraph.ExplorableSites, Is.SameAs(composition.ExplorableSites),
+            "Core genesis must retain the exact empty site owner in the selected graph.");
         Assert.That(composition.OwnerGraph.TryBindExpeditionStore(new ExpeditionStore()), Is.False,
             "A different ExpeditionStore cannot replace the genesis owner identity.");
         Assert.That(composition.P9ManifestSnapshot, Is.Not.Null,

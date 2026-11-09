@@ -220,6 +220,7 @@ internal sealed class DailyV1RestoredImageCoreOwnerStages
 
         if (graph == null
             || !ReferenceEquals(graph.Definitions, definitions)
+            || !ReferenceEquals(graph.ExplorableSites, D.EmptyExplorableSites)
             || !ReferenceEquals(graph.SpatialNetwork, D.SpatialNetwork)
             || !ReferenceEquals(graph.RuntimeIdentityIndex, D.RuntimeIdentityIndex)
             || !ReferenceEquals(graph.PersonStore, D.Persons)
@@ -1559,6 +1560,7 @@ internal sealed class DailyV1Application
             return false;
 
         if (candidate == null
+            || !candidate.OwnerGraph.TryBindExplorableSiteStore(stagedD.EmptyExplorableSites)
             || !candidate.OwnerGraph.TryBindPoliticalKnowledgeStore(stagedF.PoliticalKnowledge))
         {
             candidate = null;

@@ -10805,6 +10805,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         if (!graph.TryBindPersonSpatialPositionStore(personSpatialPositionStore)
             || !graph.TryBindLegacySpatialAnchorBindingStore(legacySpatialAnchorBindingStore))
             return false;
+        if (!graph.TryBindExplorableSiteStore(explorableSiteStore)
+            || !ReferenceEquals(graph.ExplorableSites, explorableSiteStore))
+            return false;
         if (current.Expeditions != null && !graph.TryBindExpeditionStore(current.Expeditions))
             return false;
 

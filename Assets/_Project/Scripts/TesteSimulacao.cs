@@ -3167,6 +3167,8 @@ public class TesteSimulacao : MonoBehaviour
         if (graph == null || !ReferenceEquals(graph.Definitions, selectedDefinitions)
             || graph.PersonStore == null
             || !ReferenceEquals(graph.PersonStore, composition.PersonStore)
+            || !ReferenceEquals(graph.ExplorableSites, composition.ExplorableSites)
+            || graph.ExplorableSites.Count != 0 || graph.ExplorableSites.Revision != 0L
             || !ReferenceEquals(graph.ScheduledDirectives, composition.OwnerGraph.ScheduledDirectives)
             || !ReferenceEquals(graph.TravelParties, composition.TravelPartyStore))
             throw new System.InvalidOperationException(
@@ -3196,7 +3198,7 @@ public class TesteSimulacao : MonoBehaviour
         decisionRecorder = new NpcDecisionRecorder(
             eventAuthority.DecisionOccurrenceReceipts, logger);
         npcChronicleService = new NpcChronicleService(decisionStore, domainEventStore);
-        explorableSiteStore = new ExplorableSiteStore();
+        explorableSiteStore = composition.ExplorableSites;
         explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
         expeditionStore = composition.Expeditions;
         economyTransactionService = new EconomyTransactionService();

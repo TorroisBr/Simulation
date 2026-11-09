@@ -20,6 +20,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal TravelPartyStore TravelParties { get; }
     internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex { get; }
     internal ExpeditionStore Expeditions { get; private set; }
+    internal ExplorableSiteStore ExplorableSites { get; private set; }
     internal PersonStore PersonStore { get; private set; }
     internal GenealogyStore GenealogyStore { get; private set; }
     internal PersonSpatialPositionStore PersonSpatialPositionStore { get; private set; }
@@ -209,6 +210,19 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     }
 
     /// <summary>
+    /// Binds the exact selected Daily-v1 ExplorableSite owner. This profile
+    /// deliberately admits an empty site store; retaining its identity prevents
+    /// Unity from creating a parallel P10 authority beside the Core graph.
+    /// </summary>
+    internal bool TryBindExplorableSiteStore(ExplorableSiteStore store)
+    {
+        if (store == null || store.Count != 0 || store.Revision != 0L) return false;
+        if (ExplorableSites != null) return ReferenceEquals(ExplorableSites, store);
+        ExplorableSites = store;
+        return true;
+    }
+
+    /// <summary>
     /// Preflights the mutation guard against the exact mutable Core roots in
     /// this selected graph. Unity projections may bind their host adapters to
     /// the same guard afterward, but cannot choose or bind these Core owners.
@@ -281,7 +295,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             || !AddMutationGuardAuthorityIfPresent(authorities, PersonSpatialPositionStore)
             || !AddMutationGuardAuthorityIfPresent(
                 authorities, PersonSpatialPositionStore?.SpatialAuthorityStore)
-            || !AddMutationGuardAuthorityIfPresent(authorities, LegacySpatialAnchors))
+            || !AddMutationGuardAuthorityIfPresent(authorities, LegacySpatialAnchors)
+            || !AddMutationGuardAuthorityIfPresent(authorities, ExplorableSites))
             return null;
         return authorities;
     }
