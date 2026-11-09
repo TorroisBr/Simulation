@@ -1308,6 +1308,36 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         return true;
     }
 
+    private bool IsEligibleForUnadmittedRestoredOwnerCensus(out string diagnostic)
+    {
+        diagnostic = null;
+        if (!HasAdmittedSelectedDailyExecution
+            || !selectedRuntimeOwnerGraphBound
+            || selectedRuntimeOwnerGraph == null
+            || AdmissionContext == null
+            || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !AdmissionContext.IsRestoredContinuation
+            || !AdmissionContext.IsOwnedByCurrentThread())
+        {
+            diagnostic = "Core restored owner-census capture requires the exact restored Daily-v1 owner thread and graph.";
+            return false;
+        }
+
+        if (advanceLease != null
+            || ActiveOperationCount != 0
+            || factualReadWorldPublished
+            || currentCaptureToken != null
+            || completedCoreSequence != 0L
+            || mutationEpochState.HasActiveReservation
+            || !mutationGuard.CanMutate)
+        {
+            diagnostic = "Core restored owner-census capture requires an unpublished, idle, quiescent private target boundary.";
+            return false;
+        }
+
+        return true;
+    }
+
     internal bool TryCaptureUnadmittedRestoredOwnerSectionCensus(
         IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts,
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
@@ -1320,6 +1350,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         Func<DailyV1CaptureScopeAllowance, DailyV1OwnerSectionCensusCaptureResult> captureSource;
         lock (operationSyncRoot)
         {
+            if (!IsEligibleForUnadmittedRestoredOwnerCensus(out diagnostic))
+                return false;
+
             if (selectedRuntimeOwnerCensusSourceIdentity == null
                 || selectedRuntimeOwnerCensusSource == null)
             {
@@ -1328,8 +1361,19 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     diagnostic = "The exact Core execution state has no bound selected-owner census source.";
                     return false;
                 }
-                return hostPorts.TryCaptureUnadmittedRestoredDailyOwnerVector(
-                    out ownerSections, out mutationEpoch, out diagnostic);
+                if (!hostPorts.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                        out ownerSections, out mutationEpoch, out diagnostic))
+                    return false;
+                if (!IsEligibleForUnadmittedRestoredOwnerCensus(out diagnostic)
+                    || mutationEpoch != mutationEpochState.CurrentEpoch)
+                {
+                    ownerSections = null;
+                    mutationEpoch = 0L;
+                    if (string.IsNullOrWhiteSpace(diagnostic))
+                        diagnostic = DailyCaptureEligibilityFailure.OperationInProgress.ToString();
+                    return false;
+                }
+                return true;
             }
             captureSource = selectedRuntimeOwnerCensusSource;
         }
@@ -1341,10 +1385,15 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 ?? DailyCaptureEligibilityFailure.RuntimeFaulted.ToString();
             return false;
         }
-        if (result.MutationEpoch != mutationEpochState.CurrentEpoch)
+        lock (operationSyncRoot)
         {
-            diagnostic = DailyCaptureEligibilityFailure.OperationInProgress.ToString();
-            return false;
+            if (!IsEligibleForUnadmittedRestoredOwnerCensus(out diagnostic)
+                || result.MutationEpoch != mutationEpochState.CurrentEpoch)
+            {
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = DailyCaptureEligibilityFailure.OperationInProgress.ToString();
+                return false;
+            }
         }
 
         ownerSections = result.OwnerSections;

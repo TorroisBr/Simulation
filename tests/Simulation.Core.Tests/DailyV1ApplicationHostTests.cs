@@ -589,6 +589,24 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(application.TryGetPublishedHostProjection(
             preparation.CoreSession, out _), Is.False);
     }
+    [Test]
+    public void CoreRejectsUnadmittedRestoreCensusBeforeCallingHostWhenTargetIsNotRestored()
+    {
+        DailyV1ExecutionBoundaryState executionState = new DailyV1ExecutionBoundaryState();
+        MinimalSelectedRuntimeAdvanceHostPorts hostPorts =
+            new MinimalSelectedRuntimeAdvanceHostPorts(executionState);
+
+        Assert.That(executionState.TryCaptureUnadmittedRestoredOwnerSectionCensus(
+            hostPorts, out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch, out string diagnostic), Is.False);
+
+        Assert.That(ownerSections, Is.Null);
+        Assert.That(mutationEpoch, Is.Zero);
+        Assert.That(hostPorts.RestoredVectorCaptureCalls, Is.Zero,
+            "Core must reject an unadmitted target before invoking host census capture.");
+        Assert.That(diagnostic, Does.Contain("restored Daily-v1 owner thread and graph"));
+    }
+
     private static OwnerSectionCensusSnapshot ToRequiredSnapshot(
         OwnerSectionCensusWitness witness)
     {
@@ -1045,6 +1063,7 @@ public sealed class DailyV1ApplicationHostTests
         }
 
         public DailyV1ExecutionBoundaryState ExecutionState { get; }
+        internal int RestoredVectorCaptureCalls { get; private set; }
 
         public bool TryGetExactJusticeRecordsCensusProjectionIdentity(
             DailyV1JusticeRecordsOwner owner,
@@ -1089,6 +1108,7 @@ public sealed class DailyV1ApplicationHostTests
         {
             ownerSections = null;
             mutationEpoch = 0L;
+            RestoredVectorCaptureCalls++;
             diagnostic = "This fixture does not capture a restored target vector.";
             return false;
         }
