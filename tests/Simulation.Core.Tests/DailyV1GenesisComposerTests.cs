@@ -233,7 +233,8 @@ public sealed class DailyV1GenesisComposerTests
             source.ActorChoiceStore,
             out DailyV1ExecutionBoundaryState restoredBoundary,
             out SimulationCalendar restoredCalendar,
-            out string diagnostic), Is.True, diagnostic);
+            out string diagnostic,
+            source.OwnerGraph.PoliticalDecisionStore), Is.True, diagnostic);
 
         Assert.That(restoredCalendar.SemanticVersion, Is.EqualTo(source.Calendar.SemanticVersion));
         Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph, Is.Not.SameAs(source.OwnerGraph));
@@ -253,6 +254,89 @@ public sealed class DailyV1GenesisComposerTests
             source.RuntimeIdAllocator,
             source.RecordSequence,
             source.DecisionStore), Is.True);
+    }
+
+    [Test]
+    public void RestoredExecutionBoundaryRequiresExactPoliticalDecisionOwner()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition source,
+            out string sourceDiagnostic), Is.True, sourceDiagnostic);
+
+        SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
+        CalendarDefinition calendarDefinition = new CalendarDefinition(
+            definitions.Calendar.monthsPerYear,
+            definitions.Calendar.weeksPerMonth,
+            definitions.Calendar.daysPerWeek);
+        ScheduledDirectiveStore directives = new ScheduledDirectiveStore(restoredTime);
+        SimulationRuntimeAdmissionContext restoredAdmission =
+            source.AdmissionContext.CreateRestoredContinuationContext();
+
+        Assert.That(DailyV1RestoredExecutionBoundaryComposer.TryCreate(
+            definitions,
+            source.EffectiveConfiguration,
+            calendarDefinition,
+            restoredTime,
+            restoredAdmission,
+            source.WorldId,
+            source.OwnerGraph.Cities,
+            source.OwnerGraph.Npcs,
+            source.OwnerGraph.SpatialNetwork,
+            source.OwnerGraph.JusticeRecordsOwner,
+            source.TravelPartyStore,
+            source.OwnerGraph.RuntimeIdentityIndex,
+            source.PersonStore,
+            source.OwnerGraph.GenealogyStore,
+            directives,
+            source.Expeditions,
+            source.RuntimeIdAllocator,
+            source.RandomSource,
+            source.RecordSequence,
+            source.DecisionStore,
+            source.ActorChoiceStore,
+            out DailyV1ExecutionBoundaryState missingOwnerBoundary,
+            out SimulationCalendar missingOwnerCalendar,
+            out string missingOwnerDiagnostic,
+            null), Is.False);
+        Assert.That(missingOwnerBoundary, Is.Null);
+        Assert.That(missingOwnerCalendar, Is.Null);
+        Assert.That(missingOwnerDiagnostic, Does.Contain("P12-E PoliticalDecision owner"));
+
+        Assert.That(DailyV1P12DSelectedOwnerGraphStager.TryCreate(
+            definitions,
+            source.OwnerGraph.Cities,
+            source.OwnerGraph.Npcs,
+            source.OwnerGraph.SpatialNetwork,
+            source.OwnerGraph.JusticeRecordsOwner,
+            new TravelPartyStore(),
+            source.OwnerGraph.RuntimeIdentityIndex,
+            new PersonStore(),
+            new ScheduledDirectiveStore(restoredTime),
+            new ExpeditionStore(),
+            out DailyV1SelectedRuntimeOwnerGraph p12dOnlyGraph,
+            out DailyV1P12DSelectedOwnerGraphFailure graphFailure), Is.True, graphFailure.ToString());
+
+        ActorChoiceStore actorChoices = new ActorChoiceStore(p12dOnlyGraph.PersonStore);
+        Assert.That(DailyV1RestoredExecutionBoundaryComposer.TryCreate(
+            definitions,
+            source.EffectiveConfiguration,
+            source.Calendar,
+            restoredTime,
+            restoredAdmission,
+            source.WorldId,
+            p12dOnlyGraph,
+            source.RuntimeIdAllocator,
+            source.RandomSource,
+            source.RecordSequence,
+            source.DecisionStore,
+            actorChoices,
+            out DailyV1ExecutionBoundaryState p12dOnlyBoundary,
+            out string p12dOnlyDiagnostic), Is.False);
+        Assert.That(p12dOnlyBoundary, Is.Null);
+        Assert.That(p12dOnlyDiagnostic, Does.Contain("P12-E PoliticalDecision owner"));
     }
 
     [Test]
@@ -321,6 +405,8 @@ public sealed class DailyV1GenesisComposerTests
         SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
         SimulationRuntimeAdmissionContext restoredAdmission =
             bootstrapAdmission.CreateRestoredContinuationContext();
+        DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
+            source.RuntimeIdAllocator, restoredTime, source.RecordSequence, source.DecisionStore);
         CalendarDefinition calendarDefinition = definitions.Calendar.monthLengths != null
             && definitions.Calendar.monthLengths.Count > 0
             ? new CalendarDefinition(new List<int>(definitions.Calendar.monthLengths),
@@ -331,6 +417,7 @@ public sealed class DailyV1GenesisComposerTests
 
         Assert.That(application.TryCreateRestoredActiveRuntimeSession(
             definitions,
+            null,
             source.EffectiveConfiguration,
             calendarDefinition,
             restoredTime,
@@ -343,8 +430,11 @@ public sealed class DailyV1GenesisComposerTests
             source.TravelPartyStore,
             source.OwnerGraph.RuntimeIdentityIndex,
             source.PersonStore,
+            source.OwnerGraph.GenealogyStore,
             directives,
             source.Expeditions,
+            null,
+            eventAuthority,
             source.RuntimeIdAllocator,
             source.RandomSource,
             source.RecordSequence,
@@ -354,7 +444,8 @@ public sealed class DailyV1GenesisComposerTests
             replacementOperation: null,
             out DailyV1ActiveRuntimeSession candidate,
             out SimulationCalendar restoredCalendar,
-            out string diagnostic), Is.True, diagnostic);
+            out string diagnostic,
+            source.OwnerGraph.PoliticalDecisionStore), Is.True, diagnostic);
 
         Assert.That(candidate, Is.Not.Null);
         Assert.That(candidate.Definitions, Is.SameAs(definitions));

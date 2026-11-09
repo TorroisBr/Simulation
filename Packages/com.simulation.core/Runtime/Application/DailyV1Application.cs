@@ -1379,7 +1379,8 @@ internal sealed class DailyV1Application
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
         out DailyV1ActiveRuntimeSession candidate,
         out SimulationCalendar calendar,
-        out string diagnostic)
+        out string diagnostic,
+        PoliticalDecisionStore politicalDecisions = null)
     {
         candidate = null;
         calendar = null;
@@ -1417,7 +1418,8 @@ internal sealed class DailyV1Application
                 actorChoiceStore,
                 out DailyV1ExecutionBoundaryState executionBoundaryState,
                 out SimulationCalendar candidateCalendar,
-                out diagnostic))
+                out diagnostic,
+                politicalDecisions))
             return false;
 
         if (!TryCreateRestoredActiveRuntimeSession(
@@ -1491,9 +1493,11 @@ internal sealed class DailyV1Application
         }
         if (stagedE == null || stagedE.Persons == null
             || !ReferenceEquals(stagedE.Persons, stagedD.Persons)
-            || stagedE.JusticeRecords == null)
+            || stagedE.JusticeRecords == null
+            || stagedE.PoliticalDecisions == null
+            || !stagedE.PoliticalDecisions.IsCompatibleWithPersonStore(stagedD.Persons))
         {
-            diagnostic = "Core restore composition requires P12-E owners bound to the exact P12-D PersonStore.";
+            diagnostic = "Core restore composition requires P12-E owners bound to the exact P12-D PersonStore, including PoliticalDecision history.";
             return false;
         }
         if (stagedF == null || stagedF.PoliticalKnowledge == null
@@ -1556,7 +1560,8 @@ internal sealed class DailyV1Application
             replacementOperation,
             out candidate,
             out calendar,
-            out diagnostic))
+            out diagnostic,
+            stagedE.PoliticalDecisions))
             return false;
 
         if (candidate == null)
@@ -1578,6 +1583,14 @@ internal sealed class DailyV1Application
             candidate = null;
             calendar = null;
             diagnostic = "The restored Core owner graph could not bind the exact P12-F PoliticalKnowledge owner to its P12-D PersonStore.";
+            return false;
+        }
+
+        if (!candidate.OwnerGraph.TryBindPoliticalDecisionStore(stagedE.PoliticalDecisions))
+        {
+            candidate = null;
+            calendar = null;
+            diagnostic = "The restored Core owner graph could not bind the exact P12-E PoliticalDecision owner to its P12-D PersonStore.";
             return false;
         }
 
@@ -5057,18 +5070,45 @@ internal sealed class DailyV1Application
             }
 
             SimulationRuntimeAdmissionContext candidateAdmission = candidate.AdmissionContext;
-            if (bootstrapAdmissionContext == null
-                || !bootstrapAdmissionContext.IsOwnedByCurrentThread()
-                || candidateAdmission == null
-                || !candidateAdmission.IsRestoredContinuation
-                || !candidateAdmission.IsOwnedByCurrentThread()
-                || !IsBootstrapOrRestoredDescendant(candidateAdmission)
-                || !candidate.ExecutionBoundaryState.IsHealthyDailyOwnerThreadBoundary()
-                || !candidate.ExecutionBoundaryState.HasValidRestoredDailyBoundaryAdmission(
-                    candidate.RuntimeAdvanceBoundary)
-                || candidate.ExecutionBoundaryState.ActiveOperationCount != 0)
+            if (bootstrapAdmissionContext == null)
             {
-                diagnostic = "The restored candidate is not a healthy, idle, exact Core continuation admitted on this application's owner thread.";
+                diagnostic = "Restored candidate publication requires this application's captured bootstrap admission.";
+                return false;
+            }
+            if (!bootstrapAdmissionContext.IsOwnedByCurrentThread())
+            {
+                diagnostic = "Restored candidate publication must run on this application's bootstrap owner thread.";
+                return false;
+            }
+            if (candidateAdmission == null || !candidateAdmission.IsRestoredContinuation)
+            {
+                diagnostic = "Restored candidate publication requires its restored-continuation admission.";
+                return false;
+            }
+            if (!candidateAdmission.IsOwnedByCurrentThread())
+            {
+                diagnostic = "Restored candidate admission belongs to another owner thread.";
+                return false;
+            }
+            if (!IsBootstrapOrRestoredDescendant(candidateAdmission))
+            {
+                diagnostic = "Restored candidate admission is outside this application's bootstrap lineage.";
+                return false;
+            }
+            if (!candidate.ExecutionBoundaryState.IsHealthyDailyOwnerThreadBoundary())
+            {
+                diagnostic = "The restored candidate execution boundary is unhealthy or not idle on its owner thread.";
+                return false;
+            }
+            if (!candidate.ExecutionBoundaryState.HasValidRestoredDailyBoundaryAdmission(
+                    candidate.RuntimeAdvanceBoundary))
+            {
+                diagnostic = "The restored candidate's capture token no longer matches its exact Core owner census and mutation epoch.";
+                return false;
+            }
+            if (candidate.ExecutionBoundaryState.ActiveOperationCount != 0)
+            {
+                diagnostic = "The restored candidate still has an active Core operation.";
                 return false;
             }
 

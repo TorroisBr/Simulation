@@ -860,7 +860,9 @@ internal static partial class P12GDailyV1RestoreCoordinator
         if (selectedDefinitions == null || stagedC == null || stagedD == null
             || stagedE == null || stagedF == null || stagedD.SpatialNetwork == null
             || stagedD.RuntimeIdentities == null || stagedD.Persons == null
-            || stagedE.Justice == null || stagedF.TravelParties == null
+            || stagedE.Justice == null || stagedE.PoliticalDecisions == null
+            || !stagedE.PoliticalDecisions.IsCompatibleWithPersonStore(stagedD.Persons)
+            || stagedF.TravelParties == null
             || stagedF.ScheduledDirectives == null || stagedF.Expeditions == null
             || stagedF.ActorChoices == null)
         {
@@ -878,7 +880,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 stagedF.ScheduledDirectives, stagedF.Expeditions,
                 stagedC.RuntimeIdAllocator, stagedC.DeterministicRandom,
                 stagedC.RecordSequence, decisionStore, stagedF.ActorChoices,
-                out executionBoundaryState, out selectedCalendar, out diagnostic))
+                out executionBoundaryState, out selectedCalendar, out diagnostic,
+                stagedE.PoliticalDecisions))
             return false;
 
         return true;

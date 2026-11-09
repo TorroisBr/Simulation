@@ -491,6 +491,19 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
         }
         ownerSections = coreOwnedGenealogySections;
 
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedPoliticalDecisionSection(
+                executionState.SelectedRuntimeOwnerGraph,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedPoliticalDecisionSections,
+                out _))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        ownerSections = coreOwnedPoliticalDecisionSections;
+
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
                 executionState.SelectedRuntimeOwnerGraph,
                 ownerSections,
@@ -2263,6 +2276,71 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             witness.Revision);
         ownerSections = Array.AsReadOnly(copied);
         diagnostic = null;
+        return true;
+    }
+
+    internal static bool TryRebindCoreOwnedPoliticalDecisionSection(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        diagnostic = null;
+        PoliticalDecisionStore owner = graph?.PoliticalDecisionStore;
+        if (owner == null || graph.PersonStore == null
+            || !owner.IsBoundToPersonStore(graph.PersonStore)
+            || hostSections == null)
+        {
+            diagnostic = "The selected Core census requires its exact P12-E decision owner bound to the selected PersonStore and host census rows.";
+            return false;
+        }
+
+        OwnerSectionCensusSnapshot[] copied = new OwnerSectionCensusSnapshot[hostSections.Count];
+        Dictionary<string, int> indexes = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int i = 0; i < hostSections.Count; i++)
+        {
+            OwnerSectionCensusSnapshot section = hostSections[i];
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !indexes.TryAdd(section.SectionId, i))
+            {
+                diagnostic = "The host census contains a missing or duplicate owner-section identity.";
+                return false;
+            }
+            copied[i] = section;
+        }
+
+        if (!indexes.TryGetValue(PoliticalDecisionStoreCensusProvider.SectionId, out int index))
+        {
+            diagnostic = "The host census is missing the fixed required PoliticalDecision owner section.";
+            return false;
+        }
+
+        OwnerSectionCensusWitness witness =
+            new PoliticalDecisionStoreCensusProvider(owner).GetCurrentCensus();
+        OwnerSectionCensusSnapshot hostSection = copied[index];
+        if (witness == null
+            || !string.Equals(witness.SectionId, PoliticalDecisionStoreCensusProvider.SectionId, StringComparison.Ordinal)
+            || hostSection.Role != OwnerSectionRole.Required
+            || hostSection.SchemaVersion != PoliticalDecisionStoreCensusProvider.SchemaVersion
+            || hostSection.SchemaVersion != witness.SchemaVersion
+            || !ReferenceEquals(hostSection.OwnerInstanceIdentity, owner)
+            || !ReferenceEquals(hostSection.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+            || hostSection.Cardinality != witness.Cardinality
+            || hostSection.Revision != witness.Revision)
+        {
+            diagnostic = "The host census differs from the exact selected Core PoliticalDecision owner.";
+            return false;
+        }
+
+        copied[index] = new OwnerSectionCensusSnapshot(
+            witness.SectionId,
+            witness.SchemaVersion,
+            OwnerSectionRole.Required,
+            owner,
+            witness.Cardinality,
+            witness.Revision);
+        ownerSections = Array.AsReadOnly(copied);
         return true;
     }
 
@@ -5366,6 +5444,20 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 diagnostic = "The Core restored boundary could not validate its exact-empty NPC receipt rows.";
             return false;
         }
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedPoliticalDecisionSection(
+                selectedRuntimeOwnerGraph,
+                ownerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> politicalDecisionSections,
+                out diagnostic))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core restored boundary could not bind its exact P12-E PoliticalDecision owner.";
+            return false;
+        }
+        ownerSections = politicalDecisionSections;
 
         if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
                 selectedRuntimeOwnerGraph,

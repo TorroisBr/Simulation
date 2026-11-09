@@ -19,6 +19,9 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
         Assert.That(graph.Npcs, Is.Not.Empty);
         Assert.That(graph.JusticeRecordsOwner, Is.Not.Null);
         Assert.That(graph.JusticeRecordsOwner.WantedRecords, Is.Empty);
+        Assert.That(graph.PoliticalDecisionStore, Is.Not.Null);
+        Assert.That(graph.PoliticalDecisionStore.Count, Is.Zero);
+        Assert.That(graph.PoliticalDecisionStore.Revision, Is.Zero);
         Assert.That(definitions.Configuration.explorableSites, Is.Empty,
             "The selected Daily-v1 owner composition has no P10 site/topology input.");
         Assert.That(graph.Npcs.Any(npc => npc.CommercialKnowledge.Observations.Count > 0), Is.True,
@@ -33,6 +36,61 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             Assert.That(npc.SpatialKnowledge.KnownLocationRuntimeIds,
                 Does.Contain(npc.Travel.CurrentLocationRuntimeId));
         }
+    }
+
+    [Test]
+    public void SelectedGraphBindsExactPoliticalDecisionOwnerToTheSelectedPersonStore()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        PoliticalDecisionStore exactDecisions = graph.PoliticalDecisionStore;
+        PersonStore persons = new PersonStore();
+
+        Assert.That(graph.TryBindPersonStore(persons), Is.True);
+        Assert.That(graph.TryBindPoliticalDecisionStore(exactDecisions), Is.True);
+        Assert.That(graph.PoliticalDecisionStore, Is.SameAs(exactDecisions));
+        Assert.That(exactDecisions.IsBoundToPersonStore(persons), Is.True);
+        Assert.That(graph.TryBindPoliticalDecisionStore(new PoliticalDecisionStore()), Is.False,
+            "A second empty P12-E owner cannot replace the exact graph owner.");
+    }
+
+    [Test]
+    public void PoliticalDecisionCensusRebindRequiresTheExactOwnerIdentityAndFacts()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        PersonStore persons = new PersonStore();
+        Assert.That(graph.TryBindPersonStore(persons), Is.True);
+        PoliticalDecisionStore owner = graph.PoliticalDecisionStore;
+        OwnerSectionCensusWitness witness =
+            new PoliticalDecisionStoreCensusProvider(owner).GetCurrentCensus();
+        OwnerSectionCensusSnapshot exact = new OwnerSectionCensusSnapshot(
+            witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+            witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision);
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedPoliticalDecisionSection(
+            graph, new[] { exact }, out IReadOnlyList<OwnerSectionCensusSnapshot> rebound,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(rebound, Has.Count.EqualTo(1));
+        Assert.That(rebound[0].OwnerInstanceIdentity, Is.SameAs(owner));
+        Assert.That(rebound[0].Cardinality, Is.EqualTo(owner.Count));
+        Assert.That(rebound[0].Revision, Is.EqualTo(owner.Revision));
+
+        OwnerSectionCensusSnapshot wrongIdentity = new OwnerSectionCensusSnapshot(
+            witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+            new PoliticalDecisionStore(), witness.Cardinality, witness.Revision);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedPoliticalDecisionSection(
+            graph, new[] { wrongIdentity }, out _, out _), Is.False);
+
+        OwnerSectionCensusSnapshot wrongRevision = new OwnerSectionCensusSnapshot(
+            witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+            witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision + 1L);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedPoliticalDecisionSection(
+            graph, new[] { wrongRevision }, out _, out _), Is.False);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedPoliticalDecisionSection(
+            graph, Array.Empty<OwnerSectionCensusSnapshot>(), out _, out _), Is.False);
     }
 
     [Test]

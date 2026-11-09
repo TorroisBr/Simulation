@@ -277,6 +277,7 @@ internal static class DailyV1GenesisComposer
                         return Fail("Core selected owner graph failed exact genesis admission.", out diagnostic);
                     if (!graph.TryBindExplorableSiteStore(explorableSites)
                         || !graph.TryBindPersonStore(personStore)
+                        || !graph.TryBindPoliticalDecisionStore(new PoliticalDecisionStore())
                         || !graph.TryBindGenealogyStore(genealogyStore)
                         || !ReferenceEquals(actorChoiceStore.PersonStore, personStore)
                         || !executionBoundaryState.TryBindSelectedRuntimeOwnerGraph(graph)

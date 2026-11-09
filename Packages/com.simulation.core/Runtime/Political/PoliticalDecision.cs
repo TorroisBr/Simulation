@@ -475,6 +475,11 @@ public sealed class PoliticalDecisionStore : IAuthoritativeMutationGuardBindable
             && (boundPersonStore == null || ReferenceEquals(boundPersonStore, personStore));
     }
 
+    internal bool IsBoundToPersonStore(PersonStore personStore)
+    {
+        return personStore != null && ReferenceEquals(boundPersonStore, personStore);
+    }
+
     public IReadOnlyList<PoliticalDecisionRecord> Records
     {
         get

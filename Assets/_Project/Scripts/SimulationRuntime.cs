@@ -2933,8 +2933,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         this.politicalWorldRevision = initialPoliticalWorldRevision;
         lastPoliticalTruthFingerprint = ComputePoliticalTruthFingerprint();
         hasPoliticalTruthFingerprint = true;
+        PoliticalDecisionStore coreStagedPoliticalDecisions = selectedExecutionBoundaryState?
+            .SelectedRuntimeOwnerGraph?.PoliticalDecisionStore;
+        if (coreStagedPoliticalDecisions != null
+            && politicalDecisionStore != null
+            && !ReferenceEquals(coreStagedPoliticalDecisions, politicalDecisionStore))
+            throw new ArgumentException(
+                "The Unity runtime must project the exact PoliticalDecisionStore admitted by its Core execution boundary.",
+                nameof(politicalDecisionStore));
         this.politicalDecisionStore = ClonePoliticalDecisionStore(
-            politicalDecisionStore,
+            coreStagedPoliticalDecisions ?? politicalDecisionStore,
             this.politicalKnowledgeStore,
             simulationTime.AbsoluteDay,
             this.personStore,
@@ -2942,7 +2950,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             this.officeStore,
             this.politicalClaimStore,
             initialPoliticalWorldRevision,
-            this.politicalKnowledgeStore.Revision);
+            this.politicalKnowledgeStore.Revision,
+            preserveSourceIdentity: coreStagedPoliticalDecisions != null);
         if (p12CrimeSocialAppraisalWorldState != null)
         {
             if (runtimeAdmissionContext == null)
@@ -3068,6 +3077,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         if (selectedOwnerGraph != null && this.expeditionSystem != null
             && !selectedOwnerGraph.TryBindExpeditionStore(this.expeditionSystem.Store))
             throw new InvalidOperationException("The selected runtime owner graph could not bind the exact ExpeditionStore.");
+        if (selectedOwnerGraph != null
+            && !selectedOwnerGraph.TryBindPoliticalDecisionStore(this.politicalDecisionStore))
+            throw new InvalidOperationException(
+                "The selected runtime owner graph could not bind the exact PoliticalDecisionStore installed by this runtime.");
         DailyV1SelectedRuntimeOwnerGraph preboundSelectedOwnerGraph =
             dailyExecutionBoundary.SelectedRuntimeOwnerGraph;
         if (preboundSelectedOwnerGraph != null)
@@ -3090,6 +3103,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 throw new InvalidOperationException("The Core-prebound selected graph has a different PersonStore.");
             if (!ReferenceEquals(preboundSelectedOwnerGraph.Expeditions, selectedOwnerGraph.Expeditions))
                 throw new InvalidOperationException("The Core-prebound selected graph has a different ExpeditionStore.");
+            if (!ReferenceEquals(preboundSelectedOwnerGraph.PoliticalDecisionStore,
+                    selectedOwnerGraph.PoliticalDecisionStore))
+                throw new InvalidOperationException("The Core-prebound selected graph has a different PoliticalDecisionStore.");
             if (!preboundSelectedOwnerGraph.MatchesExactOwnerInstances(
                     this.cities.Select(city => city?.SelectedRuntimeOwners),
                     this.npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners).Where(owner => owner != null)))
@@ -10791,6 +10807,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 travelPartySystem?.Store ?? travelSystem?.SelectedTravelPartyStore)
             || !ReferenceEquals(graph.ScheduledDirectives,
                 scheduledDirectiveSystem?.Store)
+            || (graph.PoliticalDecisionStore != null
+                && !ReferenceEquals(graph.PoliticalDecisionStore, politicalDecisionStore))
             || !ReferenceEquals(current.RuntimeIdentityIndex,
                 p12RuntimeIdentityRegistry?.CoreIdentityIndex)
             || !ReferenceEquals(graph.RuntimeIdentityIndex, current.RuntimeIdentityIndex)
@@ -10801,6 +10819,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
 
         if (!graph.TryBindPersonStore(personStore))
+            return false;
+        if (!graph.TryBindPoliticalDecisionStore(politicalDecisionStore))
+            return false;
+        if (!graph.TryBindMutationGuard(dailyExecutionBoundary.MutationGuard))
             return false;
         if (!graph.TryBindPersonSpatialPositionStore(personSpatialPositionStore)
             || !graph.TryBindLegacySpatialAnchorBindingStore(legacySpatialAnchorBindingStore))
@@ -14771,7 +14793,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         OfficeStore officeStore,
         PoliticalClaimStore politicalClaimStore,
         long currentWorldRevision,
-        long currentKnowledgeRevision)
+        long currentKnowledgeRevision,
+        bool preserveSourceIdentity = false)
     {
         PoliticalDecisionStore copy = new PoliticalDecisionStore();
         if (source == null)
@@ -14830,7 +14853,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 nameof(source));
         }
 
-        return copy;
+        return preserveSourceIdentity ? source : copy;
     }
 
     private static bool HasUnregisteredPoliticalDecisionReference(

@@ -577,6 +577,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             new GenealogyCensusProvider(graph.GenealogyStore).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new PoliticalKnowledgeStoreCensusProvider(politicalKnowledge).GetCurrentCensus());
+        Assert.That(graph.PoliticalDecisionStore, Is.Not.Null);
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            new PoliticalDecisionStoreCensusProvider(graph.PoliticalDecisionStore).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
@@ -672,6 +675,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             new GenealogyCensusProvider(graph.GenealogyStore).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new PoliticalKnowledgeStoreCensusProvider(politicalKnowledge).GetCurrentCensus());
+        Assert.That(graph.PoliticalDecisionStore, Is.Not.Null);
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            new PoliticalDecisionStoreCensusProvider(graph.PoliticalDecisionStore).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
@@ -1697,6 +1703,10 @@ public sealed class DailyV1ApplicationSessionGateTests
             OwnerSectionCensusSnapshot[] candidateOwners =
             CreateCoreBoundCompleteOwnerSectionVector(
                 candidateComposition.OwnerGraph, candidateComposition.ActorChoiceStore);
+            Assert.That(candidateOwners.First(section => section.SectionId
+                == PoliticalDecisionStoreCensusProvider.SectionId).OwnerInstanceIdentity,
+                Is.SameAs(candidateComposition.OwnerGraph.PoliticalDecisionStore),
+                "The restored token fixture starts with the exact P12-E Core owner identity.");
             const long candidateEpoch = 31L;
             Assert.That(candidateState.TryCreateRestoredContinuationToken(
                 candidateAdmission,
@@ -1716,6 +1726,15 @@ public sealed class DailyV1ApplicationSessionGateTests
                 out DailyV1ActiveRuntimeSession candidate, out diagnostic), Is.True, diagnostic);
             ApplicationAdvanceBoundary candidateBoundary = new ApplicationAdvanceBoundary(
                 candidateState, null, candidateOwners, candidateEpoch);
+            Assert.That(bootstrapAdmission.IsOwnedByCurrentThread(), Is.True,
+                "The restore commit runs on the application's bootstrap owner thread.");
+            Assert.That(candidateAdmission.IsOwnedByCurrentThread(), Is.True,
+                "The restored continuation admission belongs to the current owner thread.");
+            Assert.That(candidateState.IsHealthyDailyOwnerThreadBoundary(), Is.True,
+                "The candidate is healthy and idle before replacement validation.");
+            Assert.That(candidateState.HasValidRestoredDailyBoundaryAdmission(candidateBoundary), Is.True,
+                "The exact restored continuation token still matches the candidate's owner census.");
+            Assert.That(candidateState.ActiveOperationCount, Is.EqualTo(0));
             TestHostProjection candidateProjection = new TestHostProjection();
 
             List<OwnerSectionCensusSnapshot> staleSourceOwners = new List<OwnerSectionCensusSnapshot>(sourceOwners);
@@ -1735,6 +1754,11 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(application.TryGetPublishedHostProjection(candidate, out _), Is.False);
 
             sourceBoundary.SetAdmissionEvidence(sourceOwners, sourceEpoch);
+            Assert.That(candidateState.IsHealthyDailyOwnerThreadBoundary(), Is.True,
+                "Rejecting stale source evidence must leave the private candidate healthy and idle.");
+            Assert.That(candidateState.HasValidRestoredDailyBoundaryAdmission(candidateBoundary), Is.True,
+                "Rejecting stale source evidence must leave the candidate continuation token and census unchanged.");
+            Assert.That(candidateState.ActiveOperationCount, Is.EqualTo(0));
             Assert.That(application.TryCommitRestoredCandidateWithHostProjection(
                 sourceSession, candidate, sourceProjection, candidateProjection,
                 candidateBoundary, replacementOperation, out diagnostic), Is.True, diagnostic);

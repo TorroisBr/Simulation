@@ -27,6 +27,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal LegacySpatialAnchorBindingStore LegacySpatialAnchors { get; private set; }
     internal ScheduledDirectiveStore ScheduledDirectives { get; private set; }
     internal PoliticalKnowledgeStore PoliticalKnowledgeStore { get; private set; }
+    internal PoliticalDecisionStore PoliticalDecisionStore { get; private set; }
     internal RuntimeIdAllocator RuntimeIdAllocator { get; private set; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
@@ -60,6 +61,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         if (personStore == null) return false;
         if (PersonStore != null) return ReferenceEquals(PersonStore, personStore);
         if (!MatchesPersonStore(personStore, npcs)) return false;
+        if (PoliticalDecisionStore != null
+            && (!PoliticalDecisionStore.IsCompatibleWithPersonStore(personStore)
+                || !PoliticalDecisionStore.TryBindToPersonStore(personStore))) return false;
         PersonStore = personStore;
         return true;
     }
@@ -89,6 +93,26 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         if (PoliticalKnowledgeStore != null)
             return ReferenceEquals(PoliticalKnowledgeStore, store);
         PoliticalKnowledgeStore = store;
+        return true;
+    }
+
+    /// <summary>
+    /// Binds the exact P12-E decision-history owner. A configured genesis
+    /// graph may stage only an empty unbound store before its PersonStore is
+    /// installed; once bound, decisions must retain that exact PersonStore.
+    /// </summary>
+    internal bool TryBindPoliticalDecisionStore(PoliticalDecisionStore store)
+    {
+        if (store == null) return false;
+        if (PoliticalDecisionStore != null && !ReferenceEquals(PoliticalDecisionStore, store))
+            return false;
+        if (PersonStore == null)
+        {
+            if (store.Count != 0 || store.Revision != 0L) return false;
+        }
+        else if (!store.IsCompatibleWithPersonStore(PersonStore)
+            || !store.TryBindToPersonStore(PersonStore)) return false;
+        PoliticalDecisionStore = store;
         return true;
     }
 
@@ -292,6 +316,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             return null;
 
         if (!AddMutationGuardAuthorityIfPresent(authorities, PoliticalKnowledgeStore)
+            || !AddMutationGuardAuthorityIfPresent(authorities, PoliticalDecisionStore)
             || !AddMutationGuardAuthorityIfPresent(authorities, PersonSpatialPositionStore)
             || !AddMutationGuardAuthorityIfPresent(
                 authorities, PersonSpatialPositionStore?.SpatialAuthorityStore)
@@ -1156,6 +1181,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         if ((GenealogyStore != null && !graph.TryBindGenealogyStore(GenealogyStore))
             || (PoliticalKnowledgeStore != null
                 && !graph.TryBindPoliticalKnowledgeStore(PoliticalKnowledgeStore))
+            || (PoliticalDecisionStore != null
+                && !graph.TryBindPoliticalDecisionStore(PoliticalDecisionStore))
             || (ScheduledDirectives != null && !graph.TryBindScheduledDirectives(ScheduledDirectives))
             || (Expeditions != null && !graph.TryBindExpeditionStore(Expeditions)))
         {
@@ -2148,14 +2175,21 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraphBuilder
         SimulationTime simulationTime = new SimulationTime();
         ScheduledDirectiveStore scheduledDirectives = new ScheduledDirectiveStore(simulationTime);
         DailyV1JusticeRecordsOwner justice = new DailyV1JusticeRecordsOwner();
-        return builder.TryCreateConfiguredCities(runtimeIds)
-            && builder.TryCreateConfiguredCityRoutes(runtimeIds)
-            && builder.TryCreateConfiguredNpcs(runtimeIds, null)
-            && builder.TryCreateConfiguredScheduledDirectives(runtimeIds, scheduledDirectives)
-            && builder.TryBootstrapInitialSpatialKnowledge()
-            && builder.TryBootstrapInitialCommercialKnowledge(0L)
-            && builder.TryCreateConfiguredInitialJusticeState(justice)
-            && builder.TryBuild(justice, null, scheduledDirectives, out graph);
+        if (!builder.TryCreateConfiguredCities(runtimeIds)
+            || !builder.TryCreateConfiguredCityRoutes(runtimeIds)
+            || !builder.TryCreateConfiguredNpcs(runtimeIds, null)
+            || !builder.TryCreateConfiguredScheduledDirectives(runtimeIds, scheduledDirectives)
+            || !builder.TryBootstrapInitialSpatialKnowledge()
+            || !builder.TryBootstrapInitialCommercialKnowledge(0L)
+            || !builder.TryCreateConfiguredInitialJusticeState(justice)
+            || !builder.TryBuild(justice, null, scheduledDirectives, out graph))
+            return false;
+        if (!graph.TryBindPoliticalDecisionStore(new PoliticalDecisionStore()))
+        {
+            graph = null;
+            return false;
+        }
+        return true;
     }
 
     /// <summary>

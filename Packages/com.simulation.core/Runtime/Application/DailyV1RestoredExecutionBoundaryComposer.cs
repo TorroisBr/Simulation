@@ -40,7 +40,8 @@ internal static class DailyV1RestoredExecutionBoundaryComposer
         ActorChoiceStore actorChoiceStore,
         out DailyV1ExecutionBoundaryState executionBoundaryState,
         out SimulationCalendar calendar,
-        out string diagnostic)
+        out string diagnostic,
+        PoliticalDecisionStore politicalDecisions = null)
     {
         executionBoundaryState = null;
         calendar = null;
@@ -74,6 +75,14 @@ internal static class DailyV1RestoredExecutionBoundaryComposer
         if (genealogyStore != null && !ownerGraph.TryBindGenealogyStore(genealogyStore))
         {
             diagnostic = "Core rejected the exact staged P12-D Genealogy owner.";
+            return false;
+        }
+
+        if (politicalDecisions == null
+            || !ownerGraph.TryBindPoliticalDecisionStore(politicalDecisions)
+            || !politicalDecisions.IsBoundToPersonStore(ownerGraph.PersonStore))
+        {
+            diagnostic = "Core rejected the exact staged P12-E PoliticalDecision owner.";
             return false;
         }
 
@@ -118,6 +127,15 @@ internal static class DailyV1RestoredExecutionBoundaryComposer
     {
         executionBoundaryState = null;
         diagnostic = null;
+        if (ownerGraph != null
+            && (ownerGraph.PoliticalDecisionStore == null
+                || ownerGraph.PersonStore == null
+                || !ownerGraph.PoliticalDecisionStore.IsBoundToPersonStore(ownerGraph.PersonStore)))
+        {
+            diagnostic = "Core rejected the restored graph without its exact P12-E PoliticalDecision owner.";
+            return false;
+        }
+
         if (definitions == null
             || effectiveConfiguration == null
             || !ReferenceEquals(definitions.EffectiveConfiguration, effectiveConfiguration)
