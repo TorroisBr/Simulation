@@ -2643,8 +2643,6 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     /// <summary>
     /// Identifies exact selected Inventory and MoneyAccount rows that may be
     /// omitted from the Unity remainder. Mixed rosters, stale facts, or
-    /// Identifies exact selected Inventory and MoneyAccount rows that may be
-    /// omitted from the Unity remainder. Mixed rosters, stale facts, or
     /// substituted rows remain on the complete host path for P12 to validate.
     /// </summary>
     internal static bool TryGetExactCoreOwnedNpcInventoryAndMoneyAccountSectionIds(
