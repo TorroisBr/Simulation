@@ -37,3 +37,11 @@ This preserves the accepted Daily-v1 exact-empty site profile. It does not add P
 - Focused and Smoke originals remain in protected E: evidence; the full EditMode package contains the full regression result. No original XML or raw log is committed.
 
 `git diff --check` passed on the implementation changes before packaging. It is rerun at candidate commit preparation. This checkpoint is not a canonical promotion; exact-tip independent review and subsequent CORE-F integration remain required.
+
+## Independent-review follow-up and exact-tip Core validation
+
+- Initial candidate commit: `96e597c82fab11ce117a59f7b98959672f295937`. Independent exact-tip review returned `NEEDS_CHANGES` for one diagnostic that mislabeled an ExplorableSite bind failure as a PoliticalKnowledge failure; it found no other actionable issue.
+- Follow-up code commit: `12b6b8c3dbb6c209a70cca4697703b796f8165da`. The P12-D ExplorableSite and P12-F PoliticalKnowledge binds now have separate failure diagnostics; state transition and admission behavior are unchanged.
+- Official CoreValidation was rerun against exact code commit `12b6b8c3dbb6c209a70cca4697703b796f8165da`: cold and warm each 1,070/1,070 PASS, zero failures, stable input digest `fc3c3b37bb337694f479292dbeed372bd6eabca1ca8db34a4098a963b083171c`. The `DailyV1Application.cs` SHA-256 in the run manifest matches the committed source. Original TRX/logs remain protected; they are not included here.
+- The official Unity full EditMode/Smoke runs above were captured before the diagnostic-only follow-up, at the preceding source snapshot. They are not represented as exact-byte validation of `12b6b8c3`; the post-fix CoreValidation compiled and tested the changed source. The correction changes only failure text and does not alter the successful restoration path.
+- `git diff --check` passes after the follow-up. The exact-tip re-review of `12b6b8c3` is pending. Core canonical remains unchanged.
