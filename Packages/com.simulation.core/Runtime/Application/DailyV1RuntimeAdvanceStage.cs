@@ -1856,6 +1856,74 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         return true;
     }
 
+    internal static bool TryCreateCoreOwnedP12FSectionWitnesses(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        ActorChoiceStore actorChoiceStore,
+        out OwnerSectionCensusWitness[] witnesses,
+        out string diagnostic)
+    {
+        witnesses = null;
+        diagnostic = null;
+        if (graph?.ScheduledDirectives == null
+            || graph.TravelParties == null
+            || graph.Expeditions == null
+            || graph.PersonStore == null
+            || graph.PoliticalKnowledgeStore == null
+            || !graph.PoliticalKnowledgeStore.IsBoundToPersonStore(graph.PersonStore)
+            || actorChoiceStore == null
+            || !ReferenceEquals(actorChoiceStore.PersonStore, graph.PersonStore))
+        {
+            diagnostic = "The Core P12-F census requires the exact actor-choice, directive, travel-party, expedition, and PersonStore owners.";
+            return false;
+        }
+
+        try
+        {
+            witnesses = new OwnerSectionCensusWitness[]
+            {
+                new ActorChoiceP11CensusProvider(actorChoiceStore).GetCurrentCensus(),
+                new ScheduledDirectiveCensusProvider(graph.ScheduledDirectives).GetCurrentCensus(),
+                new TravelPartyCensusProvider(graph.TravelParties).GetCurrentCensus(),
+                new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus(),
+                new PoliticalKnowledgeStoreCensusProvider(graph.PoliticalKnowledgeStore).GetCurrentCensus()
+            };
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            diagnostic = "A Core P12-F provider could not read its exact owner.";
+            return false;
+        }
+
+        HashSet<string> sectionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusWitness witness in witnesses)
+            if (witness == null
+                || string.IsNullOrWhiteSpace(witness.SectionId)
+                || witness.OwnerInstanceIdentity == null
+                || witness.SchemaVersion <= 0
+                || witness.Cardinality < 0
+                || witness.Revision < 0L
+                || !sectionIds.Add(witness.SectionId)
+                || !Array.Exists(CoreOwnedP12FSectionIdValues,
+                    sectionId => string.Equals(sectionId, witness.SectionId, StringComparison.Ordinal)))
+            {
+                diagnostic = "A Core P12-F provider returned a witness outside the fixed selected owner inventory.";
+                witnesses = null;
+                return false;
+            }
+
+        if (witnesses.Length != CoreOwnedP12FSectionIdValues.Length
+            || sectionIds.Count != CoreOwnedP12FSectionIdValues.Length)
+        {
+            diagnostic = "The Core P12-F provider set is incomplete.";
+            witnesses = null;
+            return false;
+        }
+
+        return true;
+    }
     internal static bool TryComposeCoreOwnedP12FSections(
         DailyV1SelectedRuntimeOwnerGraph graph,
         ActorChoiceStore actorChoiceStore,
@@ -1921,26 +1989,11 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
         }
 
-        OwnerSectionCensusWitness[] witnesses;
-        try
-        {
-            witnesses = new OwnerSectionCensusWitness[]
-            {
-                new ActorChoiceP11CensusProvider(actorChoiceStore).GetCurrentCensus(),
-                new ScheduledDirectiveCensusProvider(graph.ScheduledDirectives).GetCurrentCensus(),
-                new TravelPartyCensusProvider(graph.TravelParties).GetCurrentCensus(),
-                new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus(),
-                new PoliticalKnowledgeStoreCensusProvider(graph.PoliticalKnowledgeStore).GetCurrentCensus()
-            };
-        }
-        catch (Exception exception) when (
-            exception is ArgumentException
-            || exception is InvalidOperationException
-            || exception is OverflowException)
-        {
-            diagnostic = "A Core P12-F provider could not read its exact owner.";
+        if (!TryCreateCoreOwnedP12FSectionWitnesses(
+                graph, actorChoiceStore,
+                out OwnerSectionCensusWitness[] witnesses,
+                out diagnostic))
             return false;
-        }
 
         HashSet<string> capturedCoreSectionIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (OwnerSectionCensusWitness witness in witnesses)
@@ -2037,23 +2090,11 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             copied[i] = section;
         }
 
-        OwnerSectionCensusWitness[] witnesses;
-        try
-        {
-            witnesses = new OwnerSectionCensusWitness[]
-            {
-                new ActorChoiceP11CensusProvider(actorChoiceStore).GetCurrentCensus(),
-                new ScheduledDirectiveCensusProvider(graph.ScheduledDirectives).GetCurrentCensus(),
-                new TravelPartyCensusProvider(graph.TravelParties).GetCurrentCensus(),
-                new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus(),
-                new PoliticalKnowledgeStoreCensusProvider(graph.PoliticalKnowledgeStore).GetCurrentCensus()
-            };
-        }
-        catch (InvalidOperationException)
-        {
-            diagnostic = "A Core P12-F census provider could not read its exact owner.";
+        if (!TryCreateCoreOwnedP12FSectionWitnesses(
+                graph, actorChoiceStore,
+                out OwnerSectionCensusWitness[] witnesses,
+                out diagnostic))
             return false;
-        }
 
         HashSet<string> witnessSectionIds = new HashSet<string>(StringComparer.Ordinal);
         for (int i = 0; i < witnesses.Length; i++)
@@ -2560,14 +2601,15 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     }
 
     /// <summary>
-    /// Produces the host-owned remainder after removing selected NPC and City
-    /// census rows and allocator counters only when their live values match the
-    /// exact Core owner graph. Mixed or stale rows and nonmatching allocator
-    /// triplets remain available to the existing P12 validation path.
+    /// Produces the host-owned remainder after removing selected NPC, City, and
+    /// P12-F census rows and allocator counters only when their live values
+    /// match the exact Core owner graph. Mixed, partial, stale, or substituted
+    /// rows remain available to the existing P12 validation path.
     /// </summary>
     internal static bool TryCreateHostOwnedCensusRemainder(
         IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
         DailyV1SelectedRuntimeOwnerGraph graph,
+        ActorChoiceStore actorChoiceStore,
         out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
         out string diagnostic)
     {
@@ -2597,6 +2639,15 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             }
         }
 
+        int capturedCoreP12FRowCount = 0;
+        foreach (OwnerSectionCensusSnapshot section in completeHostSections)
+            if (Array.IndexOf(CoreOwnedP12FSectionIdValues, section.SectionId) >= 0)
+                capturedCoreP12FRowCount++;
+        if (capturedCoreP12FRowCount == 0)
+        {
+            diagnostic = "The source census omitted every Core-owned P12-F row before projection.";
+            return false;
+        }
         HashSet<string> coreOwnedIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (string sectionId in exactNpcSectionIds)
         {
@@ -2651,6 +2702,35 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             }
         }
 
+        // Core owns the fixed P12-F census rows only as one exact complete set.
+        // Partial, stale, or foreign rows stay in the host remainder so the
+        // established P12-F composition gate rejects them without reclassification.
+        if (capturedCoreP12FRowCount == CoreOwnedP12FSectionIdValues.Length)
+        {
+            if (!TryCreateCoreOwnedP12FSectionWitnesses(
+                    graph, actorChoiceStore,
+                    out OwnerSectionCensusWitness[] p12fWitnesses,
+                    out diagnostic))
+                return false;
+
+            bool exactP12FSet = true;
+            foreach (OwnerSectionCensusWitness expected in p12fWitnesses)
+                if (!sourceById.TryGetValue(expected.SectionId, out OwnerSectionCensusSnapshot actual)
+                    || !HasExactOwnerSectionFacts(
+                        actual, ToOwnerSectionSnapshot(expected, OwnerSectionRole.Required)))
+                {
+                    exactP12FSet = false;
+                    break;
+                }
+
+            if (exactP12FSet)
+                foreach (OwnerSectionCensusWitness witness in p12fWitnesses)
+                    if (!coreOwnedIds.Add(witness.SectionId))
+                    {
+                        diagnostic = "Core NPC, City, P12-F, and RuntimeIdAllocator census identities overlap.";
+                        return false;
+                    }
+        }
         // Runtime allocator counters are a fixed three-row set. Omit the set
         // only when every row matches its Core witness; stale or partial sets
         // stay intact for the later P12 composition and admission gates.

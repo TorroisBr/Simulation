@@ -1279,6 +1279,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
         Func<DailyV1CaptureScopeAllowance, DailyV1OwnerSectionCensusCaptureResult> captureSource;
         DailyV1SelectedRuntimeOwnerGraph captureOwnerGraph;
+        ActorChoiceStore captureActorChoiceStore;
         lock (operationSyncRoot)
         {
             if (selectedRuntimeOwnerCensusSourceIdentity == null
@@ -1290,6 +1291,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             }
             captureSource = selectedRuntimeOwnerCensusSource;
             captureOwnerGraph = selectedRuntimeOwnerGraph;
+            captureActorChoiceStore = selectedActorChoiceStore;
         }
 
         DailyV1OwnerSectionCensusCaptureResult result = captureSource(allowedOuterScope);
@@ -1308,7 +1310,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         if (captureOwnerGraph != null)
         {
             if (!DailyV1SelectedRuntimeOwnerCensusSource.TryCreateHostOwnedCensusRemainder(
-                    capturedSections, captureOwnerGraph,
+                    capturedSections, captureOwnerGraph, captureActorChoiceStore,
                     out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections, out _))
             {
                 failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
