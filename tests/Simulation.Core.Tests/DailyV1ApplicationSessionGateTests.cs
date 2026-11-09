@@ -3379,6 +3379,24 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(mixedRosterRemainder.Any(section => ReferenceEquals(section, coreNpcRow)), Is.True,
                 "A mixed roster keeps every host NPC row on the compatibility path.");
 
+        OwnerSectionCensusSnapshot missingCityRow = coreCityRows[0];
+        OwnerSectionCensusSnapshot[] partialCityVector = completeVector
+            .Where(section => section.SectionId != missingCityRow.SectionId).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateHostOwnedCensusRemainder(
+                partialCityVector, graph, out IReadOnlyList<OwnerSectionCensusSnapshot> partialCityRemainder,
+                out diagnostic),
+            Is.True, diagnostic);
+        foreach (OwnerSectionCensusSnapshot cityRow in partialCityVector.Where(section =>
+            DailyV1SelectedOwnerSectionCensusContract.CityPrefixes.Any(prefix =>
+                section.SectionId.StartsWith(prefix, StringComparison.Ordinal))))
+            Assert.That(partialCityRemainder.Single(section => section.SectionId == cityRow.SectionId),
+                Is.SameAs(cityRow),
+                "A partial selected City vector retains each captured City row for downstream P12 classification.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
+                graph, partialCityRemainder, out _, out diagnostic),
+            Is.False, diagnostic,
+            "The next composition gate rejects a partial selected City owner set.");
+
         OwnerSectionCensusSnapshot staleCityRow = coreCityRows[0];
         OwnerSectionCensusSnapshot staleCityEntry = new OwnerSectionCensusSnapshot(
             staleCityRow.SectionId, staleCityRow.SchemaVersion, staleCityRow.Role,
