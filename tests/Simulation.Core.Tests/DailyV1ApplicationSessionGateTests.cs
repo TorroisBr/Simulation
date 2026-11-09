@@ -3424,11 +3424,15 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
         OwnerSectionCensusSnapshot[] completeHostVector =
             CreateCoreBoundCompleteOwnerSectionVector(session);
+        OwnerSectionCensusSnapshot[] duplicateHostVector = completeHostVector
+            .Concat(new[] { completeHostVector[0] }).ToArray();
         long wrongEpoch = checked(state.MutationEpochState.CurrentEpoch + 1L);
         Assert.That(state.TryBindSelectedRuntimeOwnerCensusSource(new object(), _ =>
             DailyV1OwnerSectionCensusCaptureResult.Captured(
-                Array.AsReadOnly(completeHostVector), wrongEpoch)), Is.True);
+                Array.AsReadOnly(duplicateHostVector), wrongEpoch)), Is.True);
 
+        // The duplicate row makes remainder projection fail with OwnerCoverageIncomplete.
+        // The epoch mismatch must be classified first as OperationInProgress.
         Assert.That(state.TryCaptureBoundOwnerSectionCensus(
                 null, DailyV1CaptureScopeAllowance.None,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> hostRemainder,
