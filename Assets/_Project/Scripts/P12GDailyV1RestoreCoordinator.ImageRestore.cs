@@ -281,6 +281,17 @@ internal static partial class P12GDailyV1RestoreCoordinator
             privateCandidateObserverForTest?.Invoke(candidate);
 
             SimulationRuntime targetRuntime = candidate.Runtime;
+            if (application != null
+                && (candidate.CoreRuntimeSession == null
+                    || !DailyV1Application.TryValidateRestoredCoreGraphBindings(
+                        candidate.CoreRuntimeSession, out diagnostic)))
+            {
+                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "The private Core target failed its Person/NPC/Genealogy or TravelParty owner bindings.";
+                return false;
+            }
+
             if (!TryValidatePersonNpcGenealogyBindings(targetRuntime, out diagnostic))
             {
                 failure = P12GDailyV1RestoreFailure.BindingValidationFailed;

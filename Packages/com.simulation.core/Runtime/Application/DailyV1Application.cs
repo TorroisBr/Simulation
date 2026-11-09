@@ -2949,6 +2949,30 @@ internal sealed class DailyV1Application
         out string diagnostic)
     {
         diagnostic = null;
+        if (!TryValidateRestoredCoreGraphBindings(candidateSession, out diagnostic))
+            return false;
+
+        DailyV1ExecutionBoundaryState state = candidateSession?.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = candidateSession?.OwnerGraph;
+        if (!TryValidateAllocatorHighWater(candidateSession, out diagnostic))
+            return false;
+        if (!TryValidateRestoredExpeditionExactZero(
+                graph.Expeditions, targetOwnerSections, out diagnostic))
+            return false;
+        return TryValidateRestoredCoreOwnerSentinels(
+            candidateSession, targetOwnerSections, out diagnostic);
+    }
+
+    /// <summary>
+    /// Validates restored identity and cross-owner relationships from the exact
+    /// Core session graph before the host captures or projects its target
+    /// census. Unity performs its compatibility-projection checks separately.
+    /// </summary>
+    internal static bool TryValidateRestoredCoreGraphBindings(
+        DailyV1ActiveRuntimeSession candidateSession,
+        out string diagnostic)
+    {
+        diagnostic = null;
         DailyV1ExecutionBoundaryState state = candidateSession?.ExecutionBoundaryState;
         DailyV1SelectedRuntimeOwnerGraph graph = candidateSession?.OwnerGraph;
         DailyV1DomainEventAuthority eventAuthority = candidateSession?.EventAuthority;
@@ -2966,17 +2990,8 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        if (!graph.TryValidateRestoredPersonNpcGenealogyBindings(out diagnostic))
-            return false;
-        if (!graph.TryValidateRestoredTravelPartyBindings(out diagnostic))
-            return false;
-        if (!TryValidateAllocatorHighWater(candidateSession, out diagnostic))
-            return false;
-        if (!TryValidateRestoredExpeditionExactZero(
-                graph.Expeditions, targetOwnerSections, out diagnostic))
-            return false;
-        return TryValidateRestoredCoreOwnerSentinels(
-            candidateSession, targetOwnerSections, out diagnostic);
+        return graph.TryValidateRestoredPersonNpcGenealogyBindings(out diagnostic)
+            && graph.TryValidateRestoredTravelPartyBindings(out diagnostic);
     }
 
     private static bool TryValidateRestoredCoreOwnerSentinels(

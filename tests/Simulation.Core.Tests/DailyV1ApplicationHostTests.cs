@@ -693,6 +693,30 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(diagnostic, Does.Contain("Required P11 ActorChoice owner"));
     }
 
+    [Test]
+    public void CoreRestoredGraphBindingGateRejectsDanglingGenealogyBeforeTargetCensus()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "restore-core-graph-bindings-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, unityV1Identity: UnityIdentity());
+        Assert.That(DailyV1Application.TryPrepareStart(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out _, out string startDiagnostic), Is.True, startDiagnostic);
+
+        DailyV1ActiveRuntimeSession session = preparation.CoreSession;
+        Assert.That(DailyV1Application.TryValidateRestoredCoreGraphBindings(
+            session, out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(session.OwnerGraph.GenealogyStore.TryAddParentage(
+            new PersonId("unresolved-parent"), new PersonId("unresolved-child"),
+            out GenealogyFailure addFailure), Is.True, addFailure.ToString());
+        Assert.That(DailyV1Application.TryValidateRestoredCoreGraphBindings(
+            session, out diagnostic), Is.False);
+        Assert.That(diagnostic, Does.Contain("Genealogy"));
+    }
+
     private static OwnerSectionCensusSnapshot ToExplicitlyEmptySnapshot(
         OwnerSectionCensusWitness witness)
     {
