@@ -16146,6 +16146,7 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(config, Is.Not.Null);
         GameObject sourceObject = new GameObject("P12-A persisted source");
         GameObject controlObject = new GameObject("P12-A uninterrupted control");
+        GameObject failedStartObject = new GameObject("P12-A restore projection rejection");
         GameObject targetObject = new GameObject("P12-A detached target");
         GameObject idleObject = new GameObject("P12-A idle replacement target");
         string storageRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
@@ -16336,6 +16337,105 @@ public sealed class SimulationRuntimeAdmissionTests
             source = null;
             sourceSession = null;
 
+            TesteSimulacao failedStartTarget = failedStartObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(failedStartTarget, config);
+            MethodInfo compatibilityFactory = typeof(TesteSimulacao).GetMethods(
+                    BindingFlags.Instance | BindingFlags.NonPublic)
+                .Single(method => method.Name == "TryCreateCurrentDailyV1CompatibilityDescriptor"
+                    && method.GetParameters().Length == 6);
+            object[] compatibilityArguments = new object[6];
+            Assert.That(compatibilityFactory.Invoke(failedStartTarget, compatibilityArguments), Is.EqualTo(true),
+                compatibilityArguments[5] as string);
+            P12ACompatibilityDescriptor failedStartCompatibility =
+                (P12ACompatibilityDescriptor)compatibilityArguments[0];
+            EffectiveSimulationConfiguration failedStartEffective =
+                (EffectiveSimulationConfiguration)compatibilityArguments[1];
+            CalendarDefinition failedStartCalendar = (CalendarDefinition)compatibilityArguments[2];
+            DailyV1EffectiveDefinitions failedStartDefinitions =
+                (DailyV1EffectiveDefinitions)compatibilityArguments[3];
+            DailyV1Application failedStartApplication =
+                ReadPrivateField<DailyV1Application>(failedStartTarget, "dailyV1Application");
+            SimulationRuntimeAdmissionContext failedStartAdmissionContext =
+                ReadPrivateField<SimulationRuntimeAdmissionContext>(failedStartTarget, "runtimeAdmissionContext");
+            DailyV1ApplicationHost failedStartHost = new DailyV1ApplicationHost(
+                storageRoot, SystemAtomicFileSlotOperations.Instance, null, null,
+                unityV1Identity: failedStartCompatibility);
+            DailyV1ApplicationStartPreparation failedRestorePreparation = null;
+            SimulationActiveSession rejectedRestoredProjection = null;
+            DailyV1InitialRestoredImageCommitProof rejectedRestoreProof = null;
+
+            bool RestoreThenRejectProjection(
+                DailyV1ApplicationStartPreparation preparation,
+                out IDailyV1ApplicationHostProjection candidateProjection,
+                out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+                out string hostDiagnostic)
+            {
+                candidateProjection = null;
+                candidateHostPorts = null;
+                hostDiagnostic = null;
+                failedRestorePreparation = preparation;
+                Assert.That(preparation.Kind,
+                    Is.EqualTo(DailyV1ApplicationStartPreparationKind.RestoreRequired));
+                Assert.That(preparation.StartAdmission.Application, Is.SameAs(failedStartApplication));
+                Assert.That(preparation.RestoreImage,
+                    Is.SameAs(preparation.StartAdmission.RestoreImage));
+
+                bool restoredOk = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+                    preparation.RestoreImage, failedStartCompatibility, config,
+                    failedStartEffective, failedStartCalendar, failedStartDefinitions,
+                    failedStartAdmissionContext,
+                    out SimulationActiveSession restoredProjection,
+                    out P12GDailyV1RestoreFailure restoreFailure,
+                    out string restoreDiagnostic,
+                    application: failedStartApplication,
+                    initialStartAdmission: preparation.StartAdmission);
+                Assert.That(restoredOk, Is.True,
+                    restoreFailure + ": " + (restoreDiagnostic ?? string.Empty));
+                Assert.That(restoredProjection?.CoreRuntimeSession, Is.Not.Null);
+                Assert.That(restoredProjection.Runtime, Is.Not.Null);
+                Assert.That(restoredProjection.CoreRuntimeSession.TryGetInitialRestoreCommitProof(
+                    preparation.RestoreImage, out rejectedRestoreProof), Is.True,
+                    "The production restore coordinator must bind the exact image's one-use commit proof before projection can fail.");
+                Assert.That(rejectedRestoreProof, Is.Not.Null);
+
+                FieldInfo preparedImageField = typeof(DailyV1Application).GetField(
+                    "preparedInitialRestoredImage", BindingFlags.Instance | BindingFlags.NonPublic);
+                FieldInfo preparedSessionField = typeof(DailyV1Application).GetField(
+                    "preparedInitialRestoredSession", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(preparedImageField?.GetValue(failedStartApplication),
+                    Is.SameAs(preparation.RestoreImage));
+                Assert.That(preparedSessionField?.GetValue(failedStartApplication),
+                    Is.SameAs(restoredProjection.CoreRuntimeSession));
+
+                rejectedRestoredProjection = restoredProjection;
+                candidateProjection = restoredProjection;
+                candidateHostPorts = restoredProjection.Runtime;
+                hostDiagnostic = "The test rejects the valid restored Unity projection before Core publication.";
+                return false;
+            }
+
+            Assert.That(failedStartApplication.TryStartOnExistingApplication(
+                failedStartDefinitions, failedStartHost, RestoreThenRejectProjection,
+                out _, out P12AResult failedStartPersistenceResult,
+                out string failedStartDiagnostic), Is.False);
+            Assert.That(failedStartPersistenceResult.Code, Is.EqualTo(P12AResultCode.Loaded));
+            Assert.That(failedStartDiagnostic, Does.Contain("test rejects"));
+            Assert.That(failedRestorePreparation, Is.Not.Null);
+            Assert.That(rejectedRestoredProjection, Is.Not.Null);
+            Assert.That(failedStartApplication.ActiveSession, Is.Null,
+                "A host rejection after real detached restoration must leave the Core session unpublished.");
+            Assert.That(failedStartApplication.TryGetPublishedHostProjection(
+                rejectedRestoredProjection.CoreRuntimeSession, out _), Is.False);
+            Assert.That(typeof(DailyV1Application).GetField(
+                    "preparedInitialRestoredImage", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.GetValue(failedStartApplication), Is.Null);
+            Assert.That(typeof(DailyV1Application).GetField(
+                    "preparedInitialRestoredSession", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.GetValue(failedStartApplication), Is.Null);
+            Assert.That(rejectedRestoredProjection.CoreRuntimeSession.TryGetInitialRestoreCommitProof(
+                failedRestorePreparation.RestoreImage, out _), Is.False,
+                "The failed production start transaction must revoke the exact restored image's one-use proof.");
+
             TesteSimulacao target = targetObject.AddComponent<TesteSimulacao>();
             ConfigureSelectedBootstrap(target, config);
             int genesisIdentityAllocations = 0;
@@ -16470,6 +16570,7 @@ public sealed class SimulationRuntimeAdmissionTests
             if (System.IO.Directory.Exists(storageRoot)) System.IO.Directory.Delete(storageRoot, true);
             if (sourceObject != null) UnityEngine.Object.DestroyImmediate(sourceObject);
             UnityEngine.Object.DestroyImmediate(controlObject);
+            UnityEngine.Object.DestroyImmediate(failedStartObject);
             UnityEngine.Object.DestroyImmediate(targetObject);
             UnityEngine.Object.DestroyImmediate(idleObject);
         }
