@@ -1337,19 +1337,28 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         ActorChoiceStore captureActorChoiceStore;
         lock (operationSyncRoot)
         {
-            if (selectedRuntimeOwnerCensusSourceIdentity == null
-                || selectedRuntimeOwnerCensusSource == null)
-            {
-                if (hostPorts == null) return false;
-                return hostPorts.TryCaptureOwnerSectionCensus(
-                    allowedOuterScope, out ownerSections, out mutationEpoch, out failure);
-            }
             captureSource = selectedRuntimeOwnerCensusSource;
             captureOwnerGraph = selectedRuntimeOwnerGraph;
             captureActorChoiceStore = selectedActorChoiceStore;
         }
 
-        DailyV1OwnerSectionCensusCaptureResult result = captureSource(allowedOuterScope);
+        DailyV1OwnerSectionCensusCaptureResult result;
+        if (captureSource == null)
+        {
+            if (hostPorts == null
+                || !hostPorts.TryCaptureOwnerSectionCensus(
+                    allowedOuterScope,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+                    out long hostMutationEpoch,
+                    out failure))
+                return false;
+            result = DailyV1OwnerSectionCensusCaptureResult.Captured(hostSections, hostMutationEpoch);
+        }
+        else
+        {
+            result = captureSource(allowedOuterScope);
+        }
+
         if (result == null || !result.Succeeded)
         {
             failure = result?.Failure ?? DailyCaptureEligibilityFailure.RuntimeFaulted;

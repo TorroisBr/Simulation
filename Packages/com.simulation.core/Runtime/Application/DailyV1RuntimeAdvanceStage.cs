@@ -150,13 +150,13 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 
 /// <summary>
 /// Host-owned ports for the selected Daily-v1 session. Census capture returns
-/// the complete quiescent host vector and shared mutation epoch. Core selects
-/// and validates source ownership against the admitted owner graph. During
-/// restoration Core binds
-/// its selected owner authorities before asking the host to bind runtime
-/// projections. Core owns the owner-thread check and runtime-operation
-/// quiescence through its operation registry. This intentionally excludes
-/// clocks, whole-day advancement, and intraday timeline selection.
+/// the complete quiescent source vector and shared mutation epoch unchanged;
+/// Core validates and classifies selected owner rows against its admitted
+/// owner graph. During restoration Core binds its selected owner authorities
+/// before asking the host to bind runtime projections. Core owns the
+/// owner-thread check and runtime-operation quiescence through its operation
+/// registry. This intentionally excludes clocks, whole-day advancement, and
+/// intraday timeline selection.
 /// </summary>
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
@@ -171,11 +171,9 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedDailyExecutionHostPorts hostPorts);
     /// <summary>
-    /// Captures the full quiescent source internally. For an exact selected
-    /// roster, the returned handoff may omit the whole NPC CurrentAction
-    /// family only after it has been verified against the Core owner graph;
-    /// Core reconstructs those rows before the P12 complete-vector gate.
-    /// Mixed rosters retain every compatibility row.
+    /// Captures the full quiescent source vector and shared mutation epoch.
+    /// The host must return the source rows unchanged; Core alone decides which
+    /// exact rows bind to its selected owner graph and composes the P12 vector.
     /// </summary>
     bool TryCaptureOwnerSectionCensus(
         DailyV1CaptureScopeAllowance allowedOuterScope,
@@ -184,9 +182,9 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
         out DailyCaptureEligibilityFailure failure);
     bool TryBindRestoredCandidateMutationGuard(out string diagnostic);
     /// <summary>
-    /// The detached-target capture follows the same exact selected-roster
-    /// omission rule as live capture; Core reconstructs the CurrentAction
-    /// family before validating the full P12 target vector.
+    /// Captures the complete private target source vector and shared mutation
+    /// epoch unchanged. Core composes the exact selected owner graph before
+    /// validating the full P12 target vector.
     /// </summary>
     bool TryCaptureUnadmittedRestoredDailyOwnerVector(
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,

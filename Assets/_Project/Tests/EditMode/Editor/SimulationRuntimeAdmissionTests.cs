@@ -3769,33 +3769,6 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(exactNpcKnowledgeAndPlanSectionIds,
                 Is.EquivalentTo(initialKnowledgeAndPlanProviders.Select(
                     provider => provider.GetCurrentCensus().SectionId)));
-            string[] coreOwnedHostPortSectionIds =
-                DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds
-                    .Concat(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedRuntimeIdAllocatorSectionIds)
-                    .Concat(selectedOwnerGraph.Npcs.SelectMany(owner => new[]
-                    {
-                        DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + owner.RuntimeId,
-                        DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + owner.RuntimeId
-                    }))
-                    .Concat(exactRuntimeStateSectionIds)
-                    .Concat(exactNpcKnowledgeAndPlanSectionIds)
-                    .ToArray();
-            string currentActionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix;
-            string[] coreOwnedCurrentActionSectionIds = coreOwnedHostPortSectionIds
-                .Where(sectionId => sectionId.StartsWith(currentActionPrefix, StringComparison.Ordinal))
-                .ToArray();
-            Assert.That(coreOwnedCurrentActionSectionIds,
-                Has.Length.EqualTo(selectedOwnerGraph.Npcs.Count));
-            HashSet<string> coreOwnedHostReturnedSectionIds = new HashSet<string>(
-                coreOwnedHostPortSectionIds.Where(sectionId =>
-                    !sectionId.StartsWith(currentActionPrefix, StringComparison.Ordinal)),
-                StringComparer.Ordinal);
-            HashSet<string> coreOwnedHostPortSectionIdSet = new HashSet<string>(
-                coreOwnedHostPortSectionIds, StringComparer.Ordinal);
-            Assert.That(coreOwnedHostPortSectionIds,
-                Has.Length.EqualTo(8 + selectedOwnerGraph.Npcs.Count * 2
-                    + exactRuntimeStateSectionIds.Count + exactNpcKnowledgeAndPlanSectionIds.Count));
-            Assert.That(coreOwnedHostPortSectionIdSet, Has.Count.EqualTo(coreOwnedHostPortSectionIds.Length));
             IDailyV1SelectedRuntimeAdvanceHostPorts selectedHostPorts =
                 (IDailyV1SelectedRuntimeAdvanceHostPorts)bootstrap.Runtime;
             Assert.That(selectedHostPorts.TryCaptureOwnerSectionCensus(
@@ -3805,25 +3778,20 @@ public sealed class SimulationRuntimeAdmissionTests
                     out DailyCaptureEligibilityFailure hostCaptureFailure),
                 Is.True, hostCaptureFailure.ToString());
             Assert.That(hostMutationEpoch, Is.EqualTo(completedToken.MutationEpoch));
-            Assert.That(hostCensus, Has.Count.EqualTo(
-                    completedToken.OwnerSections.Count - selectedOwnerGraph.Npcs.Count),
-                "The quiescent Unity protocol captures the full census, then the host-to-Core vector omits only exact selected CurrentAction projections.");
-            Assert.That(hostCensus.Any(section =>
+            Assert.That(hostCensus, Has.Count.EqualTo(completedToken.OwnerSections.Count),
+                "The Unity host returns the complete source vector unchanged; Core owns selected-row classification.");
+            string currentActionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix;
+            Assert.That(hostCensus.Count(section =>
                     section.SectionId.StartsWith(currentActionPrefix, StringComparison.Ordinal)),
-                Is.False,
-                "Core owns the selected CurrentAction rows in the vector used for final owner composition.");
-            foreach (string coreOwnedSectionId in coreOwnedHostReturnedSectionIds)
-                Assert.That(hostCensus.Any(section => section.SectionId == coreOwnedSectionId),
-                    Is.True, "The host retains other Core census witnesses for exact validation: " + coreOwnedSectionId);
-            foreach (string coreOwnedSectionId in coreOwnedCurrentActionSectionIds)
-                Assert.That(hostCensus.Any(section => section.SectionId == coreOwnedSectionId),
-                    Is.False, "Selected Core ActionSlot rows are omitted from the host remainder: " + coreOwnedSectionId);
+                Is.EqualTo(selectedOwnerGraph.Npcs.Count),
+                "The raw Unity census retains all source CurrentAction rows for Core to validate.");
+            Dictionary<string, OwnerSectionCensusSnapshot> hostRowsById = hostCensus.ToDictionary(
+                section => section.SectionId, StringComparer.Ordinal);
+            Assert.That(hostRowsById, Has.Count.EqualTo(hostCensus.Count));
             foreach (OwnerSectionCensusSnapshot original in completedToken.OwnerSections)
             {
-                if (original.SectionId.StartsWith(currentActionPrefix, StringComparison.Ordinal))
-                    continue;
-                OwnerSectionCensusSnapshot hostSection = hostCensus.Single(section =>
-                    section.SectionId == original.SectionId);
+                Assert.That(hostRowsById.TryGetValue(original.SectionId, out OwnerSectionCensusSnapshot hostSection),
+                    Is.True, "The full host source vector retains " + original.SectionId);
                 Assert.That(hostSection.Role, Is.EqualTo(original.Role), original.SectionId);
                 Assert.That(hostSection.SchemaVersion, Is.EqualTo(original.SchemaVersion), original.SectionId);
                 Assert.That(hostSection.OwnerInstanceIdentity, Is.SameAs(original.OwnerInstanceIdentity), original.SectionId);
