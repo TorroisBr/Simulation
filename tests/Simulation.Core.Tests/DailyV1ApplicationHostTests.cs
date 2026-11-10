@@ -586,6 +586,43 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
+    public void CoreGenesisStartRejectsRestoreCandidateFromUnityProjectionCallback()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "start-existing-application-substitute-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, unityV1Identity: UnityIdentity());
+
+        bool SupplyRestoreOnlyCandidate(
+            DailyV1ApplicationStartPreparation preparation,
+            out DailyV1ActiveRuntimeSession restoredCandidateSession,
+            out IDailyV1ApplicationHostProjection candidateProjection,
+            out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+            out string diagnostic)
+        {
+            restoredCandidateSession = preparation.CoreSession;
+            candidateProjection = new TestHostProjection();
+            candidateHostPorts = new MinimalSelectedRuntimeAdvanceHostPorts(
+                preparation.CoreSession.ExecutionBoundaryState);
+            diagnostic = null;
+            return true;
+        }
+
+        Assert.That(application.TryStartOnExistingApplication(
+            definitions, host, SupplyRestoreOnlyCandidate,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult persistenceResult,
+            out string startDiagnostic), Is.False);
+        Assert.That(startDiagnostic, Does.Contain("cannot substitute a session"));
+        Assert.That(preparation.Kind,
+            Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+        Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(application.ActiveSession, Is.Null,
+            "A Genesis projection callback cannot choose the Core session that will be published.");
+    }
+
+    [Test]
     public void CoreStartOnExistingApplicationLeavesSessionUnpublishedWhenHostProjectionFails()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
