@@ -181,10 +181,10 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 }
 
 /// <summary>
-/// Optional exact-identity assertion for host adapters whose census source is
-/// bound separately during runtime composition. Core checks that the source
-/// attached to the execution state is the same object this host adapter will
-/// use for live and restored owner vectors before binding the runtime boundary.
+/// Exact census source identity for one runtime host adapter. A compatibility
+/// host may bind its source during runtime initialization; a host composed by
+/// Core may bind through this port during boundary setup. Core requires the
+/// same source identity for live and restored owner vectors in either case.
 /// </summary>
 internal interface IDailyV1SelectedRuntimeOwnerCensusIdentityHostPorts
 {

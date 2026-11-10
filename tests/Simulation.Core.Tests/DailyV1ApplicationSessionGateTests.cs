@@ -2296,6 +2296,33 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void ApplicationBindsTheExactHostCensusSourceDuringRuntimeComposition()
+    {
+        DailyV1Application application = new DailyV1Application();
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);
+
+        object censusSourceIdentity = new object();
+        CensusIdentityApplicationAdvanceBoundary hostPorts =
+            new CensusIdentityApplicationAdvanceBoundary(
+                session.ExecutionBoundaryState, censusSourceIdentity);
+
+        Assert.That(session.ExecutionBoundaryState.SelectedRuntimeOwnerCensusSourceIdentity, Is.Null,
+            "The candidate is not pre-bound by a host during runtime initialization.");
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, hostPorts), Is.True);
+        Assert.That(session.ExecutionBoundaryState.SelectedRuntimeOwnerCensusSourceIdentity,
+            Is.SameAs(censusSourceIdentity),
+            "The Core application binds the exact host census source while composing the session boundary.");
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, hostPorts), Is.True,
+            "Retrying the same boundary retains the original exact census-source binding.");
+    }
+
+    [Test]
     public void CoreOwnedDailyAdvanceProtocolScopeClosesIdempotently()
     {
         CreateApplicationWithAdvanceBoundary(

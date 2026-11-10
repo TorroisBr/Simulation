@@ -4773,32 +4773,61 @@ internal sealed class DailyV1Application
             || !ReferenceEquals(hostPorts.ExecutionState,
                 candidateSession.ExecutionBoundaryState))
             return false;
-        if (hostPorts is IDailyV1SelectedRuntimeOwnerCensusIdentityHostPorts censusIdentityHostPorts)
-        {
-            object censusSourceIdentity = censusIdentityHostPorts.SelectedRuntimeOwnerCensusSourceIdentity;
-            if (censusSourceIdentity == null
-                || !ReferenceEquals(
-                    candidateSession.ExecutionBoundaryState.SelectedRuntimeOwnerCensusSourceIdentity,
-                    censusSourceIdentity))
-                return false;
-        }
         lock (activeSessionGate.SyncRoot)
         {
             DailyV1ActiveRuntimeSession current = activeSessionGate.Current;
-            if (ReferenceEquals(current, candidateSession))
+            bool isCurrent = ReferenceEquals(current, candidateSession);
+            if (!isCurrent
+                && (!IsBootstrapOrRestoredDescendant(candidateSession.AdmissionContext)
+                    || activeSessionGate.ActiveOperationCount != 0
+                    || (current != null && !current.IsProfileCompatibleWith(candidateSession))))
+                return false;
+
+            if (!TryBindSelectedRuntimeOwnerCensusSource(candidateSession, hostPorts))
+                return false;
+
+            if (isCurrent)
             {
                 return candidateSession.TryBindSelectedRuntimeAdvanceHostPorts(hostPorts)
                     && candidateSession.ExecutionBoundaryState.TryBindApplicationAdvanceAuthority(
                         this, candidateSession);
             }
-            if (!IsBootstrapOrRestoredDescendant(candidateSession.AdmissionContext)
-                || activeSessionGate.ActiveOperationCount != 0
-                || (current != null && !current.IsProfileCompatibleWith(candidateSession)))
-                return false;
             return candidateSession.TryBindSelectedRuntimeAdvanceHostPorts(hostPorts)
                 && candidateSession.ExecutionBoundaryState.TryBindApplicationAdvanceAuthority(
                     this, candidateSession);
         }
+    }
+
+    private static bool TryBindSelectedRuntimeOwnerCensusSource(
+        DailyV1ActiveRuntimeSession candidateSession,
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts)
+    {
+        if (!(hostPorts is IDailyV1SelectedRuntimeOwnerCensusIdentityHostPorts censusIdentityHostPorts))
+            return true;
+
+        object censusSourceIdentity = censusIdentityHostPorts.SelectedRuntimeOwnerCensusSourceIdentity;
+        DailyV1ExecutionBoundaryState executionState = candidateSession.ExecutionBoundaryState;
+        if (censusSourceIdentity == null) return false;
+
+        object boundCensusSourceIdentity = executionState.SelectedRuntimeOwnerCensusSourceIdentity;
+        if (boundCensusSourceIdentity != null)
+            return ReferenceEquals(boundCensusSourceIdentity, censusSourceIdentity);
+
+        return executionState.TryBindSelectedRuntimeOwnerCensusSource(
+            censusSourceIdentity,
+            allowedOuterScope =>
+            {
+                if (hostPorts.TryCaptureOwnerSectionCensus(
+                        allowedOuterScope,
+                        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+                        out long mutationEpoch,
+                        out DailyCaptureEligibilityFailure failure))
+                    return DailyV1OwnerSectionCensusCaptureResult.Captured(
+                        ownerSections, mutationEpoch);
+
+                return DailyV1OwnerSectionCensusCaptureResult.Rejected(
+                    failure, "The exact runtime host census source rejected capture.");
+            });
     }
 
     /// <summary>
