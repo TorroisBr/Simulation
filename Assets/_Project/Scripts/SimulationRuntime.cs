@@ -12877,26 +12877,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         public bool OwnsSelectedActionSlotP12Mutation =>
             runtime.ExecutionBoundaryState.AdmissionContext != null;
 
-        public bool CanCommitSelectedActionSlotP12Mutation(
+        public IDailyV1SelectedP12NpcActionOwnerMutationProtocol ActionSlotP12MutationProtocol =>
+            selectedActionSlotP12MutationProtocol;
+
+        public bool IsSelectedActionSlotProjectionPrepared(
             DailyV1SelectedRuntimeOwnerGraph candidateGraph,
             DailyV1NpcRuntimeOwners actor) =>
             ReferenceEquals(candidateGraph, graph)
             && (ReferenceEquals(preparedActionActor, actor)
                 && preparedActionPayload != null
                 || ReferenceEquals(preparedClearActionActor, actor)
-                    && preparedClearActionPayload != null)
-            && runtime.ExecutionBoundaryState.TryCanCommitSelectedNpcActionSlotMutation(
-                graph, actor, selectedActionSlotP12MutationProtocol);
-
-        public bool NotifySelectedActionSlotP12MutationCommitted(
-            DailyV1SelectedRuntimeOwnerGraph candidateGraph,
-            DailyV1NpcRuntimeOwners actor,
-            string sectionId,
-            long revision) =>
-            ReferenceEquals(candidateGraph, graph)
-            && runtime.ExecutionBoundaryState.TryRecordSelectedNpcActionSlotMutation(
-                graph, actor, sectionId, revision,
-                selectedActionSlotP12MutationProtocol);
+                    && preparedClearActionPayload != null);
 
         public bool TryPublishSelectedActionProjection(
             DailyV1NpcRuntimeOwners actor,

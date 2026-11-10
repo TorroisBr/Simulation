@@ -583,6 +583,15 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
         DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        // This focused fixture declares only the section exercised below; production
+        // admission separately seals the complete selected-profile census inventory.
+        string actionSlotSectionId = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+            + graph.Npcs[0].RuntimeId;
+        Assert.That(state.TryRegisterExpectedOwnerSectionContract(
+            actionSlotSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required), Is.True);
+        Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.True);
         long initialDay = state.SimulationTime.AbsoluteDay;
         FakeBoundary dailyBoundary = new FakeBoundary(
             composition.RuntimeIdAllocator, composition.RandomSource,
@@ -609,6 +618,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(((IDailyV1SelectedActorActionExecutionBoundary)context.Boundary)
             .UsesSelectedDailyV1ActionExecution(graph.Npcs[0]), Is.True,
             "Core derives selected-action eligibility from the exact admitted graph and roster.");
+        Assert.That(typeof(IDailyV1SelectedActorTurnHostPorts)
+            .GetMethod("CanCommitSelectedActionSlotP12Mutation"), Is.Null,
+            "The Unity host port no longer owns selected action-slot P12 admission.");
+        Assert.That(typeof(IDailyV1SelectedActorTurnHostPorts)
+            .GetMethod("NotifySelectedActionSlotP12MutationCommitted"), Is.Null,
+            "The Unity host port no longer publishes the Core action-slot mutation.");
         Assert.That(context.Boundary, Is.Not.InstanceOf<IDailyV1SelectedActorTurnHostPorts>(),
             "The effect bundle cannot be used as the actor-turn policy boundary.");
         Assert.That(typeof(IDailyV1SelectedActorTurnHostPorts).GetMethod("TryProcessActorChoice"), Is.Null);
@@ -616,6 +631,30 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(typeof(IDailyV1SelectedActorTurnHostPorts).GetProperty("RandomSource"), Is.Null,
             "Unity effect ports expose neither actor-turn policy nor session decision/random roots.");
         Assert.That(dailyBoundary.Calls, Is.EqualTo(new[] { "actor-host-ports" }));
+        DailyV1CoreSelectedActorTurnExecutionBoundary coreBoundary =
+            (DailyV1CoreSelectedActorTurnExecutionBoundary)context.Boundary;
+        Assert.That(coreBoundary.OwnsSelectedActionSlotP12Mutation, Is.True);
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
+        try
+        {
+            dailyBoundary.RejectActionSlotOwnerValidation = true;
+            Assert.That(coreBoundary.CanCommitSelectedActionSlotP12Mutation(
+                graph, graph.Npcs[0]), Is.False,
+                "Core asks the census protocol before admitting the owner-slot commit.");
+            dailyBoundary.RejectActionSlotOwnerValidation = false;
+            Assert.That(coreBoundary.CanCommitSelectedActionSlotP12Mutation(
+                graph, graph.Npcs[0]), Is.True);
+            Assert.That(dailyBoundary.ActionSlotOwnerValidationCount, Is.EqualTo(2));
+            Assert.That(dailyBoundary.ActionSlotUnchangedValidationCount, Is.EqualTo(1));
+            Assert.That(dailyBoundary.LastActionSlotSectionId,
+                Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+                    + graph.Npcs[0].RuntimeId));
+        }
+        finally
+        {
+            Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+        }
         Assert.That(state.SimulationTime.AbsoluteDay, Is.EqualTo(initialDay));
     }
 
@@ -625,6 +664,15 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
         DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        // This focused fixture declares only the section exercised below; production
+        // admission separately seals the complete selected-profile census inventory.
+        string actionSlotSectionId = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+            + graph.Npcs[0].RuntimeId;
+        Assert.That(state.TryRegisterExpectedOwnerSectionContract(
+            actionSlotSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required), Is.True);
+        Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.True);
         long initialDay = state.SimulationTime.AbsoluteDay;
         long initialJusticeRevision = graph.JusticeRecordsOwner.Revision;
         FakeBoundary dailyBoundary = new FakeBoundary(
@@ -1254,6 +1302,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool? ActorChoiceSelectedActionExecutionOverride { get; set; }
         internal bool FailDecisionRecordOwnerResolution { get; set; }
         internal IDailyV1SelectedActorTurnHostPorts LastActorTurnHostPorts { get; private set; }
+        internal bool RejectActionSlotOwnerValidation { get; set; }
+        internal int ActionSlotOwnerValidationCount { get; set; }
+        internal int ActionSlotUnchangedValidationCount { get; set; }
+        internal string LastActionSlotSectionId { get; set; }
         internal int DecisionOwnerLookupCount { get; private set; }
         internal int SelectedActionDispatchLookupCount { get; private set; }
         internal int LegacyActorChoiceCallbackCount { get; set; }
@@ -1636,6 +1688,41 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public void LogTrade(string message) { }
         }
 
+        private sealed class FakeActionSlotP12Protocol
+            : IDailyV1SelectedP12NpcActionOwnerMutationProtocol
+        {
+            private readonly FakeBoundary owner;
+
+            internal FakeActionSlotP12Protocol(FakeBoundary owner) =>
+                this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+
+            public bool TryValidateOwnerSection(
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                DailyV1NpcRuntimeOwners actor,
+                string sectionId)
+            {
+                owner.ActionSlotOwnerValidationCount++;
+                owner.LastActionSlotSectionId = sectionId;
+                return !owner.RejectActionSlotOwnerValidation
+                    && graph != null && graph.ContainsExactNpcOwner(actor)
+                    && string.Equals(sectionId,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+                            + actor.RuntimeId,
+                        StringComparison.Ordinal);
+            }
+
+            public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds)
+            {
+                owner.ActionSlotUnchangedValidationCount++;
+                return sectionIds != null && sectionIds.Count == 1;
+            }
+
+            public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) =>
+                sectionIds != null && sectionIds.Count == 1;
+
+            public void FaultClosed() { }
+        }
+
         private sealed class FakeActorTurnBoundary : IDailyV1ActorTurnExecutionBoundary,
             IDailyV1SelectedActorChoiceExecutionContext,
             IDailyV1CoreActorChoiceExecutionBoundary,
@@ -1647,12 +1734,14 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             private readonly bool? selectedActionExecution;
             private readonly PermissiveCrimeJusticeMutationProtocol crimeJusticeProtocol =
                 new PermissiveCrimeJusticeMutationProtocol(null);
+            private readonly FakeActionSlotP12Protocol actionSlotP12Protocol;
             internal FakeActorTurnBoundary(
                 FakeBoundary owner,
                 bool? selectedActionExecution = null)
             {
                 this.owner = owner;
                 this.selectedActionExecution = selectedActionExecution;
+                actionSlotP12Protocol = new FakeActionSlotP12Protocol(owner);
                 crimeJusticeProtocol.Owner = owner;
             }
             public bool IsReservedToday(DailyV1NpcRuntimeOwners actor) => false;
@@ -1737,15 +1826,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public bool ExecuteWithinSelectedMerchantDailyOperation(
                 DailyV1NpcRuntimeOwners actor,
                 Func<bool> operation) => operation != null && operation();
-            public bool OwnsSelectedActionSlotP12Mutation => false;
-            public bool CanCommitSelectedActionSlotP12Mutation(
+            public IDailyV1SelectedP12NpcActionOwnerMutationProtocol ActionSlotP12MutationProtocol =>
+                actionSlotP12Protocol;
+            public bool IsSelectedActionSlotProjectionPrepared(
                 DailyV1SelectedRuntimeOwnerGraph graph,
-                DailyV1NpcRuntimeOwners actor) => true;
-            public bool NotifySelectedActionSlotP12MutationCommitted(
-                DailyV1SelectedRuntimeOwnerGraph graph,
-                DailyV1NpcRuntimeOwners actor,
-                string sectionId,
-                long revision) => true;
+                DailyV1NpcRuntimeOwners actor) =>
+                graph != null && graph.ContainsExactNpcOwner(actor);
 
             private FakeDayStartOperationBoundary DayStartBoundary =>
                 new FakeDayStartOperationBoundary(owner, owner.CurrentGraph);

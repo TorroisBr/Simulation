@@ -179,19 +179,24 @@ internal interface IDailyV1SelectedActorChoiceHostPorts
 }
 
 /// <summary>
-/// The admitted Unity host supplies only effects around the selected actor
-/// operations. The Core factory consumes this bundle to construct its own
-/// policy boundary, binding roots, roster and exact owners from session state.
+/// Host-side effect and census ports for the admitted actor-turn stage. Core
+/// owns the action-slot P12 admission and mutation publication; the host
+/// supplies its census protocol and confirms that a required Unity projection
+/// has been prepared before the Core owner is committed.
 /// </summary>
 internal interface IDailyV1SelectedActorTurnHostPorts
     : IDailyV1SelectedActorActionHostPorts,
       IDailyV1SelectedActorChoiceHostPorts,
       IDailyV1SelectedMerchantTradeStateP12HostPorts,
       IDailyV1SelectedMerchantTradeStateAdmissionBoundary,
-      IDailyV1SelectedActionSlotP12MutationBoundary,
       IDailyV1SelectedCrimeJusticeDailyProjectionPorts,
       IDailyV1SelectedCrimeJusticeDailyMutationHostPort
 {
+    IDailyV1SelectedP12NpcActionOwnerMutationProtocol ActionSlotP12MutationProtocol { get; }
+
+    bool IsSelectedActionSlotProjectionPrepared(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor);
 }
 
 /// <summary>
@@ -258,6 +263,7 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
     private readonly DailyV1ActorTurnCoreRoots coreRoots;
     private readonly IReadOnlyCollection<DailyV1NpcRuntimeOwners> exactRosterOwners;
     private readonly IDailyV1SelectedActorTurnHostPorts hostPorts;
+    private readonly IDailyV1SelectedP12NpcActionOwnerMutationProtocol actionSlotP12MutationProtocol;
     private IDailyV1SelectedMerchantTradeStateBoundary merchantBoundary;
 
     private DailyV1CoreSelectedActorTurnExecutionBoundary(
@@ -267,7 +273,8 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         ActorChoiceStore actorChoiceStore,
         DailyV1ActorTurnCoreRoots coreRoots,
         IReadOnlyCollection<DailyV1NpcRuntimeOwners> exactRosterOwners,
-        IDailyV1SelectedActorTurnHostPorts hostPorts)
+        IDailyV1SelectedActorTurnHostPorts hostPorts,
+        IDailyV1SelectedP12NpcActionOwnerMutationProtocol actionSlotP12MutationProtocol)
     {
         this.executionState = executionState;
         this.graph = graph;
@@ -276,6 +283,7 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         this.coreRoots = coreRoots;
         this.exactRosterOwners = exactRosterOwners;
         this.hostPorts = hostPorts;
+        this.actionSlotP12MutationProtocol = actionSlotP12MutationProtocol;
     }
 
     internal static bool TryCreate(
@@ -288,8 +296,12 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         out DailyV1CoreSelectedActorTurnExecutionBoundary boundary)
     {
         boundary = null;
-        if (executionState == null || graph == null || personStore == null
-            || actorChoiceStore == null || coreRoots == null || hostPorts == null
+        if (hostPorts == null) return false;
+        IDailyV1SelectedP12NpcActionOwnerMutationProtocol actionSlotP12MutationProtocol =
+            hostPorts.ActionSlotP12MutationProtocol;
+        if (actionSlotP12MutationProtocol == null
+            || executionState == null || graph == null || personStore == null
+            || actorChoiceStore == null || coreRoots == null
             || !executionState.HasAdmittedSelectedDailyExecution
             || !executionState.SelectedRuntimeExecutionRootsBound
             || !executionState.HasRuntimeProtocolOperationInventory
@@ -319,7 +331,8 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
 
         boundary = new DailyV1CoreSelectedActorTurnExecutionBoundary(
             executionState, graph, personStore, actorChoiceStore, coreRoots,
-            selectedOwners.AsReadOnly(), hostPorts);
+            selectedOwners.AsReadOnly(), hostPorts,
+            actionSlotP12MutationProtocol);
         return true;
     }
 
@@ -607,14 +620,22 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
     public void LogRequestedActionDecisionFailure(string message) =>
         hostPorts.LogRequestedActionDecisionFailure(message);
 
-    public bool OwnsSelectedActionSlotP12Mutation => hostPorts.OwnsSelectedActionSlotP12Mutation;
+    public bool OwnsSelectedActionSlotP12Mutation =>
+        executionState.AdmissionContext != null;
 
     public bool CanCommitSelectedActionSlotP12Mutation(
         DailyV1SelectedRuntimeOwnerGraph expectedGraph,
-        DailyV1NpcRuntimeOwners actor) =>
-        ReferenceEquals(expectedGraph, graph)
-        && TryGetExactActor(actor)
-        && hostPorts.CanCommitSelectedActionSlotP12Mutation(graph, actor);
+        DailyV1NpcRuntimeOwners actor)
+    {
+        if (!ReferenceEquals(expectedGraph, graph)
+            || !TryGetExactActor(actor)
+            || (hostPorts.RequiresActionProjection
+                && !hostPorts.IsSelectedActionSlotProjectionPrepared(graph, actor)))
+            return false;
+
+        return executionState.TryCanCommitSelectedNpcActionSlotMutation(
+            graph, actor, actionSlotP12MutationProtocol);
+    }
 
     public bool NotifySelectedActionSlotP12MutationCommitted(
         DailyV1SelectedRuntimeOwnerGraph expectedGraph,
@@ -623,8 +644,8 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         long revision) =>
         ReferenceEquals(expectedGraph, graph)
         && TryGetExactActor(actor)
-        && hostPorts.NotifySelectedActionSlotP12MutationCommitted(
-            graph, actor, sectionId, revision);
+        && executionState.TryRecordSelectedNpcActionSlotMutation(
+            graph, actor, sectionId, revision, actionSlotP12MutationProtocol);
 
     public bool CanAdmitSelectedMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) =>
         TryGetExactActor(actor) && hostPorts.CanAdmitSelectedMerchantPlanMutation(actor);
