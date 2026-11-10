@@ -101,6 +101,41 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
+    public void CoreActorTurnPreservesDirectCrimeJusticeMutationWhenHostAdmissionIsDisabled()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        FakeBoundary hostBoundary = new FakeBoundary(
+            composition.RuntimeIdAllocator,
+            composition.RandomSource,
+            composition.RecordSequence,
+            composition.DecisionStore,
+            composition.ActorChoiceStore)
+        {
+            CrimeJusticeAdmissionEnabled = false
+        };
+
+        Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreate(
+            state, composition.OwnerGraph, hostBoundary,
+            out IDailyV1SelectedActorTurnExecutionContext context), Is.True,
+            "The fixture supplies the admitted Core actor-turn roots and the existing compatibility host port.");
+        Assert.That(context.Boundary, Is.InstanceOf<DailyV1CoreSelectedActorTurnExecutionBoundary>());
+
+        int mutationCount = 0;
+        ((IDailyV1SelectedCrimeJusticeDailyBoundary)context.Boundary).ExecuteWithinDailyMutation(
+            DailyV1SelectedCrimeJusticeDailyPhase.ClearArrestedToday,
+            () => mutationCount++);
+
+        Assert.That(mutationCount, Is.EqualTo(1),
+            "The compatibility path executes the existing mutation directly when the host has not admitted the P12 operation.");
+        Assert.That(hostBoundary.LegacyCrimeJusticeDailyMutations, Is.Zero,
+            "Core must not delegate this selected operation through the host's legacy mutation wrapper.");
+        Assert.That(state.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+            composition.OwnerGraph, out _), Is.False,
+            "A non-admitted host binding is not pinned as the Core session's admitted P12 identity.");
+        Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.False);
+    }
+    [Test]
     public void StateBackedDayStartUsesCoreBoundRosterInsteadOfHostProjection()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
@@ -1289,6 +1324,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal IReadOnlyList<DailyV1ActorTurnRosterProjection> DayStartRuntimeRosterOverride { get; set; }
         internal bool RejectTravelContext { get; set; }
         internal bool CrimeJusticeProjectionOwnerBindingsMatch { get; set; } = true;
+        internal bool CrimeJusticeAdmissionEnabled { get; set; } = true;
         internal bool UseSelectedActionExecution { get; set; }
         internal bool? ActorChoiceSelectedActionExecutionOverride { get; set; }
         internal bool FailDecisionRecordOwnerResolution { get; set; }
@@ -1843,7 +1879,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                     graph.JusticeRecordsOwner,
                     justiceIdentity, justiceIdentity,
                     graph.JusticeRecordsOwner,
-                    admissionEnabled: true);
+                    admissionEnabled: owner.CrimeJusticeAdmissionEnabled);
                 return true;
             }
 
