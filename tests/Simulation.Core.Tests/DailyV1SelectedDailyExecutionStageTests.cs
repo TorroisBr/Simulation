@@ -664,15 +664,6 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
         DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
-        // This focused fixture declares only the section exercised below; production
-        // admission separately seals the complete selected-profile census inventory.
-        string actionSlotSectionId = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
-            + graph.Npcs[0].RuntimeId;
-        Assert.That(state.TryRegisterExpectedOwnerSectionContract(
-            actionSlotSectionId,
-            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
-            OwnerSectionRole.Required), Is.True);
-        Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.True);
         long initialDay = state.SimulationTime.AbsoluteDay;
         long initialJusticeRevision = graph.JusticeRecordsOwner.Revision;
         FakeBoundary dailyBoundary = new FakeBoundary(
