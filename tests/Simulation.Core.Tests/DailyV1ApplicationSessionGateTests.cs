@@ -2524,6 +2524,14 @@ public sealed class DailyV1ApplicationSessionGateTests
             section.SectionId, DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId, StringComparison.Ordinal));
         object hostNeutralProjectionIdentity = new object();
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedJusticeSections(
+                session.OwnerGraph, hostNeutralProjectionIdentity, 1L,
+                out IReadOnlyList<OwnerSectionCensusWitness> nonzeroReceiptWitnesses,
+                out string nonzeroReceiptDiagnostic),
+            Is.False,
+            "The selected UnityBootstrap-Daily-v1 profile admits only the exact-empty Justice P18 receipt sentinel.");
+        Assert.That(nonzeroReceiptWitnesses, Is.Null);
+        Assert.That(nonzeroReceiptDiagnostic, Does.Contain("exact-zero P18 receipt"));
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedJusticeSections(
                 session.OwnerGraph, hostNeutralProjectionIdentity, baselineReceipts.Revision,
                 out IReadOnlyList<OwnerSectionCensusWitness> coreJusticeWitnesses, out string witnessDiagnostic),
             Is.True, witnessDiagnostic);

@@ -1526,9 +1526,9 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         witnesses = null;
         diagnostic = null;
         DailyV1JusticeRecordsOwner owner = graph?.JusticeRecordsOwner;
-        if (owner == null || projectionIdentity == null || expectedP18ReceiptRevision < 0L)
+        if (owner == null || projectionIdentity == null || expectedP18ReceiptRevision != 0L)
         {
-            diagnostic = "The exact selected Justice owner or its host census identity is unavailable.";
+            diagnostic = "The exact selected Justice owner, host census identity, and exact-zero P18 receipt witness are required.";
             return false;
         }
 
@@ -1586,9 +1586,9 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     {
         diagnostic = null;
         if (graph?.JusticeRecordsOwner == null || sections == null || projectionIdentity == null
-            || expectedP18ReceiptRevision < 0L)
+            || expectedP18ReceiptRevision != 0L)
         {
-            diagnostic = "The exact selected Justice owner or its census projection is unavailable.";
+            diagnostic = "The exact selected Justice owner, census projection, and exact-zero P18 receipt witness are required.";
             return false;
         }
 

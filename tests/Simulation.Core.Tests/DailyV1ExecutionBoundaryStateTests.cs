@@ -474,7 +474,15 @@ public sealed class DailyV1ExecutionBoundaryStateTests
             if (alias == null) alias = "unique/" + id;
             if (!identities.TryGetValue(alias, out object identity))
                 identities.Add(alias, identity = new object());
-            result.Add(new OwnerSectionCensusSnapshot(id, 1, role, identity, cardinality, 1L));
+            long revision = string.Equals(id,
+                    DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
+                    StringComparison.Ordinal)
+                || string.Equals(id,
+                    DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+                    StringComparison.Ordinal)
+                ? 0L
+                : 1L;
+            result.Add(new OwnerSectionCensusSnapshot(id, 1, role, identity, cardinality, revision));
         }
     }
 }
