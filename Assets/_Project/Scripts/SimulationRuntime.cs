@@ -384,6 +384,55 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         public void FaultClosed() => runtime.FaultRuntimeAdmission();
     }
 
+    /// <summary>
+    /// Binds the Core-owned Merchant daily operation to the registered Unity
+    /// census. Core owns the seven-row cut, operation scope, and changed-row
+    /// receipt; this adapter verifies only exact host projection bindings and
+    /// forwards the existing census protocol calls.
+    /// </summary>
+    private sealed class SelectedMerchantDailyTradeP12ProtocolAdapter
+        : IDailyV1SelectedP12MerchantDailyTradeProtocol
+    {
+        private readonly SimulationRuntime runtime;
+
+        internal SelectedMerchantDailyTradeP12ProtocolAdapter(SimulationRuntime runtime)
+        {
+            this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        }
+
+        public bool TryValidateOwnerSections(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            IReadOnlyList<string> sectionIds) =>
+            runtime.TryValidateSelectedMerchantDailyTradeOwnerSections(graph, actor, sectionIds);
+
+        public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
+            runtime.npcRosterCensusProtocol != null
+            && runtime.npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _);
+
+        public bool TryValidateMutationEpochCapacity() =>
+            runtime.npcRosterCensusProtocol != null
+            && runtime.npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _);
+
+        public bool TryEnterOperation(out IDisposable operationScope)
+        {
+            operationScope = null;
+            if (!runtime.TryEnterRuntimeAdmissionOperation(
+                    DailyV1RuntimeProtocolOperationContracts.MerchantDailyNpcTrade,
+                    out SimulationOperationScope scope)
+                || scope == null)
+                return false;
+            operationScope = scope;
+            return true;
+        }
+
+        public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) =>
+            runtime.npcRosterCensusProtocol != null
+            && runtime.npcRosterCensusProtocol.NotifyCommittedMutations(sectionIds, out _);
+
+        public void FaultClosed() => runtime.FaultRuntimeAdmission();
+    }
+
     private sealed class SelectedSoloTravelActionBoundaryAdapter
         : DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary
     {
@@ -5666,6 +5715,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return coreHandled;
         }
 
+        coreHandled = dailyExecutionBoundary.TryCanCommitSelectedP12MerchantDailyTradeMutation(
+            requested, out bool handledByCoreMerchantDailyTrade);
+        if (handledByCoreMerchantDailyTrade)
+        {
+            if (!coreHandled) FaultRuntimeAdmission();
+            return coreHandled;
+        }
+
         P12TravelPartyAdvanceOperationContext travelContext =
             activeP12TravelPartyAdvanceOperationContext;
         P12MerchantOperationContext merchantContext = activeP12MerchantOperationContext;
@@ -5791,6 +5848,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         coreRecorded = dailyExecutionBoundary.TryRecordSelectedP12TravelPartyStartMutation(
             changed, out bool recordedByCoreTravelPartyStart);
         if (recordedByCoreTravelPartyStart)
+        {
+            if (!coreRecorded) FaultRuntimeAdmission();
+            return coreRecorded;
+        }
+
+        coreRecorded = dailyExecutionBoundary.TryRecordSelectedP12MerchantDailyTradeMutation(
+            changed, out bool recordedByCoreMerchantDailyTrade);
+        if (recordedByCoreMerchantDailyTrade)
         {
             if (!coreRecorded) FaultRuntimeAdmission();
             return coreRecorded;
@@ -6382,6 +6447,58 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             context.ProtocolScope = null;
             operation?.Dispose();
         }
+    }
+
+    private bool TryValidateSelectedMerchantDailyTradeOwnerSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        IReadOnlyList<string> sectionIds)
+    {
+        if (runtimeAdmissionContext == null
+            || !IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || activeP12MerchantOperationContext != null
+            || graph == null || actor == null || sectionIds == null
+            || !ReferenceEquals(graph, SelectedRuntimeOwnerGraph)
+            || !graph.ContainsExactNpcOwner(actor)
+            || string.IsNullOrWhiteSpace(actor.RuntimeId)
+            || !npcRegistryById.TryGetValue(actor.RuntimeId, out NpcRuntime exactNpc)
+            || exactNpc == null || !ReferenceEquals(npcRegistryById[actor.RuntimeId], exactNpc)
+            || !ReferenceEquals(exactNpc.SelectedRuntimeOwners, actor)
+            || exactNpc.ExistingMerchantTradePlan == null
+            || exactNpc.ExistingTravelPlan == null
+            || exactNpc.ExistingSpatialKnowledge == null
+            || exactNpc.ExistingCommercialKnowledge == null
+            || !npcMerchantPlanMutationBindings.TryGetValue(
+                actor.MerchantTradePlan, out P12NpcOwnerMutationBinding merchantPlanBinding)
+            || !npcTravelPlanMutationBindings.TryGetValue(
+                exactNpc.ExistingTravelPlan, out P12NpcOwnerMutationBinding travelPlanBinding)
+            || !npcSpatialKnowledgeMutationBindings.TryGetValue(
+                exactNpc.ExistingSpatialKnowledge, out P12NpcOwnerMutationBinding spatialBinding)
+            || !npcCommercialKnowledgeMutationBindings.TryGetValue(
+                exactNpc.ExistingCommercialKnowledge, out P12NpcOwnerMutationBinding commercialBinding)
+            || !ReferenceEquals(merchantPlanBinding.Owner, actor.MerchantTradePlan)
+            || !IsCurrentP12MerchantOwnerBinding(merchantPlanBinding)
+            || !IsCurrentP12MerchantOwnerBinding(travelPlanBinding)
+            || !IsCurrentP12MerchantOwnerBinding(spatialBinding)
+            || !IsCurrentP12MerchantOwnerBinding(commercialBinding))
+            return false;
+
+        HashSet<string> expected = new HashSet<string>(StringComparer.Ordinal);
+        foreach (P12NpcOwnerMutationBinding binding in new[]
+        {
+            merchantPlanBinding, travelPlanBinding, spatialBinding, commercialBinding
+        })
+            foreach (string sectionId in binding.SectionIds)
+                if (string.IsNullOrWhiteSpace(sectionId) || !expected.Add(sectionId))
+                    return false;
+
+        if (expected.Count != 7 || sectionIds.Count != 7) return false;
+        HashSet<string> supplied = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in sectionIds)
+            if (string.IsNullOrWhiteSpace(sectionId) || !supplied.Add(sectionId))
+                return false;
+        return expected.SetEquals(supplied);
     }
 
     private bool TryBeginP12MerchantDailyNpcTradeOperation(
@@ -12573,14 +12690,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             runtime.merchantSystem.EnsureCanAdvanceSelectedTradeState();
             if (runtime.runtimeAdmissionContext == null)
                 return operation();
-
-            if (!runtime.TryBeginP12MerchantDailyNpcTradeOperation(
-                exactRuntime, out P12MerchantOperationScope merchantOperationScope))
-                throw new InvalidOperationException(
-                    "The P12 daily Merchant owner operation could not be admitted.");
-
-            using (merchantOperationScope)
-                return operation();
+            return runtime.dailyExecutionBoundary.ExecuteSelectedP12MerchantDailyTrade(
+                runtime.SelectedRuntimeOwnerGraph,
+                actor,
+                new SelectedMerchantDailyTradeP12ProtocolAdapter(runtime),
+                operation);
         }
 
         public bool TryInstallPlanState(

@@ -119,6 +119,26 @@ internal interface IDailyV1SelectedP12TravelPartyStartProtocol
 }
 
 /// <summary>
+/// Existing P12 census operations required for one selected Merchant daily
+/// state pass. Core derives the seven-row owner cut, owns the serialized
+/// operation lifetime, and publishes one union receipt when the pass ends.
+/// The host confirms its exact projections and binds the calls to its already
+/// registered census protocol.
+/// </summary>
+internal interface IDailyV1SelectedP12MerchantDailyTradeProtocol
+{
+    bool TryValidateOwnerSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        IReadOnlyList<string> sectionIds);
+    bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
+    bool TryValidateMutationEpochCapacity();
+    bool TryEnterOperation(out IDisposable operationScope);
+    bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds);
+    void FaultClosed();
+}
+
+/// <summary>
 /// Owns the per-runtime single-writer advance lease and completed Daily-v1
 /// core sequence. This is execution state, not a thread lock or persisted data.
 /// </summary>
@@ -174,6 +194,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private SelectedP12TravelPartyAdvanceContext selectedP12TravelPartyAdvanceContext;
     private SelectedP12TravelPartyStartContext selectedP12TravelPartyStartContext;
     private SelectedP12SoloTravelStartContext selectedP12SoloTravelStartContext;
+    private SelectedP12MerchantDailyTradeContext selectedP12MerchantDailyTradeContext;
     private DailyV1Application applicationAdvanceAuthority;
     private DailyV1ActiveRuntimeSession applicationAdvanceSession;
 
@@ -214,6 +235,39 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
         internal bool IsOwnedByCurrentThread() =>
             ReferenceEquals(OwnerThread, Thread.CurrentThread)
+            && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
+
+    private sealed class SelectedP12MerchantDailyTradeContext
+    {
+        internal readonly DailyV1SelectedRuntimeOwnerGraph Graph;
+        internal readonly DailyV1NpcRuntimeOwners Actor;
+        internal readonly IDailyV1SelectedP12MerchantDailyTradeProtocol Protocol;
+        internal readonly Thread OwnerThread;
+        internal readonly int OwnerManagedThreadId;
+        internal readonly HashSet<string> AllowedSectionIds;
+        internal readonly HashSet<string> ChangedSectionIds =
+            new HashSet<string>(StringComparer.Ordinal);
+        internal IDisposable ProtocolScope;
+
+        internal SelectedP12MerchantDailyTradeContext(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            IDailyV1SelectedP12MerchantDailyTradeProtocol protocol,
+            IReadOnlyList<string> sectionIds,
+            IDisposable protocolScope)
+        {
+            Graph = graph ?? throw new ArgumentNullException(nameof(graph));
+            Actor = actor ?? throw new ArgumentNullException(nameof(actor));
+            Protocol = protocol ?? throw new ArgumentNullException(nameof(protocol));
+            OwnerThread = Thread.CurrentThread;
+            OwnerManagedThreadId = OwnerThread.ManagedThreadId;
+            AllowedSectionIds = new HashSet<string>(sectionIds ??
+                throw new ArgumentNullException(nameof(sectionIds)), StringComparer.Ordinal);
+            ProtocolScope = protocolScope ?? throw new ArgumentNullException(nameof(protocolScope));
+        }
+
+        internal bool IsOwnedByCurrentThread() => ReferenceEquals(OwnerThread, Thread.CurrentThread)
             && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
     }
 
@@ -1416,6 +1470,271 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         ownerSections = result.OwnerSections;
         mutationEpoch = result.MutationEpoch;
         return true;
+    }
+
+    /// <summary>
+    /// Derives the exact P12 row cut for the selected Merchant daily state
+    /// pass. The two plan owners each have one row, SpatialKnowledge owns its
+    /// locations/routes pair, and CommercialKnowledge owns its market,
+    /// liquidity, and share-receipt rows.
+    /// </summary>
+    internal bool TryCreateSelectedP12MerchantDailyTradeSectionIds(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        out IReadOnlyList<string> sectionIds)
+    {
+        sectionIds = null;
+        if (graph == null || actor == null || graph.Npcs == null
+            || !HasAdmittedSelectedDailyExecution
+            || AdmissionContext == null || !AdmissionContext.IsOwnedByCurrentThread()
+            || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(actor.Definitions, graph.Definitions)
+            || string.IsNullOrWhiteSpace(actor.RuntimeId)
+            || actor.MerchantTradePlan == null || actor.TravelPlan == null
+            || actor.SpatialKnowledge == null || actor.CommercialKnowledge == null
+            || selectedRuntimeActorRoster == null)
+            return false;
+
+        int exactGraphActorCount = 0;
+        foreach (DailyV1NpcRuntimeOwners candidate in graph.Npcs)
+            if (candidate != null
+                && string.Equals(candidate.RuntimeId, actor.RuntimeId, StringComparison.Ordinal))
+            {
+                if (!ReferenceEquals(candidate, actor)) return false;
+                exactGraphActorCount++;
+            }
+        if (exactGraphActorCount != 1) return false;
+
+        int exactRosterEntryCount = 0;
+        foreach (DailyV1ActorTurnRosterProjection member in selectedRuntimeActorRoster)
+            if (member != null
+                && string.Equals(member.RuntimeId, actor.RuntimeId, StringComparison.Ordinal))
+                exactRosterEntryCount++;
+        if (exactRosterEntryCount != 1) return false;
+
+        List<string> ids = new List<string>(7)
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind, actor.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix + actor.RuntimeId
+        };
+        HashSet<string> unique = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string id in ids)
+            if (string.IsNullOrWhiteSpace(id) || !unique.Add(id)) return false;
+        ids.Sort(StringComparer.Ordinal);
+        sectionIds = Array.AsReadOnly(ids.ToArray());
+        return true;
+    }
+
+    /// <summary>
+    /// Opens the Core-owned selected Merchant P12 operation. The host proves
+    /// its exact compatibility projections against Core's seven-row cut and
+    /// provides the registered census lease; Core owns the changed-row set
+    /// and emits one receipt at operation exit.
+    /// </summary>
+    internal bool ExecuteSelectedP12MerchantDailyTrade(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        IDailyV1SelectedP12MerchantDailyTradeProtocol protocol,
+        Func<bool> operation)
+    {
+        if (operation == null) return false;
+        if (!HasAdmittedSelectedDailyExecution) return operation();
+        if (graph == null || actor == null || protocol == null)
+        {
+            FaultSelectedMerchantDailyTrade(protocol);
+            return false;
+        }
+        if (!TryCreateSelectedP12MerchantDailyTradeSectionIds(
+                graph, actor, out IReadOnlyList<string> sectionIds))
+        {
+            FaultSelectedMerchantDailyTrade(protocol);
+            return false;
+        }
+
+        SelectedP12MerchantDailyTradeContext context = null;
+        IDisposable protocolScope = null;
+        lock (operationSyncRoot)
+        {
+            if (!HasAdmittedSelectedDailyExecution
+                || AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+                || selectedP12MerchantDailyTradeContext != null
+                || selectedP12TravelPartyAdvanceContext != null
+                || selectedP12TravelPartyStartContext != null
+                || selectedP12SoloTravelStartContext != null
+                || !AreRequiredSelectedP12Sections(sectionIds))
+            {
+                FaultSelectedMerchantDailyTrade(protocol);
+                return false;
+            }
+
+            try
+            {
+                if (!protocol.TryValidateOwnerSections(graph, actor, sectionIds)
+                    || !protocol.TryValidateUnchangedSections(sectionIds)
+                    || !protocol.TryValidateMutationEpochCapacity()
+                    || !protocol.TryEnterOperation(out protocolScope)
+                    || protocolScope == null)
+                {
+                    FaultSelectedMerchantDailyTrade(protocol);
+                    IDisposable rejectedScope = protocolScope;
+                    protocolScope = null;
+                    try { rejectedScope?.Dispose(); }
+                    catch { FaultSelectedMerchantDailyTrade(protocol); }
+                    return false;
+                }
+
+                context = new SelectedP12MerchantDailyTradeContext(
+                    graph, actor, protocol, sectionIds, protocolScope);
+                protocolScope = null;
+                selectedP12MerchantDailyTradeContext = context;
+            }
+            catch
+            {
+                FaultSelectedMerchantDailyTrade(protocol);
+                IDisposable failedScope = protocolScope;
+                protocolScope = null;
+                try { failedScope?.Dispose(); }
+                catch { FaultSelectedMerchantDailyTrade(protocol); }
+                return false;
+            }
+        }
+
+        try
+        {
+            return operation();
+        }
+        finally
+        {
+            ExitSelectedP12MerchantDailyTrade(context);
+        }
+    }
+
+    internal bool TryCanCommitSelectedP12MerchantDailyTradeMutation(
+        IEnumerable<string> sectionIds,
+        out bool handled)
+    {
+        lock (operationSyncRoot)
+        {
+            SelectedP12MerchantDailyTradeContext context = selectedP12MerchantDailyTradeContext;
+            handled = context != null;
+            if (context == null) return true;
+            if (!IsCurrentSelectedMerchantDailyTradeContext(context)
+                || !TryGetRequestedMerchantDailyTradeSections(context, sectionIds,
+                    out HashSet<string> requested))
+            {
+                FaultSelectedMerchantDailyTrade(context.Protocol);
+                return false;
+            }
+
+            requested.ExceptWith(context.ChangedSectionIds);
+            if (requested.Count == 0) return true;
+            try
+            {
+                if (context.Protocol.TryValidateUnchangedSections(ToOrderedSectionArray(requested)))
+                    return true;
+            }
+            catch { }
+            FaultSelectedMerchantDailyTrade(context.Protocol);
+            return false;
+        }
+    }
+
+    internal bool TryRecordSelectedP12MerchantDailyTradeMutation(
+        IEnumerable<string> sectionIds,
+        out bool handled)
+    {
+        lock (operationSyncRoot)
+        {
+            SelectedP12MerchantDailyTradeContext context = selectedP12MerchantDailyTradeContext;
+            handled = context != null;
+            if (context == null) return true;
+            if (!IsCurrentSelectedMerchantDailyTradeContext(context)
+                || !TryGetRequestedMerchantDailyTradeSections(context, sectionIds,
+                    out HashSet<string> changed))
+            {
+                FaultSelectedMerchantDailyTrade(context.Protocol);
+                return false;
+            }
+            context.ChangedSectionIds.UnionWith(changed);
+            return true;
+        }
+    }
+
+    private static bool TryGetRequestedMerchantDailyTradeSections(
+        SelectedP12MerchantDailyTradeContext context,
+        IEnumerable<string> sectionIds,
+        out HashSet<string> requested)
+    {
+        requested = new HashSet<string>(StringComparer.Ordinal);
+        if (context == null || sectionIds == null) return false;
+        try
+        {
+            foreach (string sectionId in sectionIds)
+                if (string.IsNullOrWhiteSpace(sectionId)
+                    || !requested.Add(sectionId)
+                    || !context.AllowedSectionIds.Contains(sectionId))
+                    return false;
+        }
+        catch { return false; }
+        return requested.Count != 0;
+    }
+
+    private bool IsCurrentSelectedMerchantDailyTradeContext(
+        SelectedP12MerchantDailyTradeContext context) =>
+        context != null
+        && ReferenceEquals(selectedP12MerchantDailyTradeContext, context)
+        && context.IsOwnedByCurrentThread()
+        && HasAdmittedSelectedDailyExecution
+        && AdmissionContext != null
+        && AdmissionContext.IsOwnedByCurrentThread()
+        && ReferenceEquals(selectedRuntimeOwnerGraph, context.Graph)
+        && TryCreateSelectedP12MerchantDailyTradeSectionIds(
+            context.Graph, context.Actor, out IReadOnlyList<string> currentSectionIds)
+        && HaveExactSelectedP12SectionSet(
+            currentSectionIds, ToOrderedSectionArray(context.AllowedSectionIds));
+
+    private void ExitSelectedP12MerchantDailyTrade(
+        SelectedP12MerchantDailyTradeContext context)
+    {
+        lock (operationSyncRoot)
+        {
+            try
+            {
+                if (!IsCurrentSelectedMerchantDailyTradeContext(context))
+                    FaultSelectedMerchantDailyTrade(context?.Protocol);
+                else if (context.ChangedSectionIds.Count != 0
+                    && !context.Protocol.NotifyCommittedMutations(
+                        ToOrderedSectionArray(context.ChangedSectionIds)))
+                    FaultSelectedMerchantDailyTrade(context.Protocol);
+            }
+            catch { FaultSelectedMerchantDailyTrade(context?.Protocol); }
+            finally
+            {
+                if (ReferenceEquals(selectedP12MerchantDailyTradeContext, context))
+                    selectedP12MerchantDailyTradeContext = null;
+                IDisposable protocolScope = context?.ProtocolScope;
+                if (context != null) context.ProtocolScope = null;
+                try { protocolScope?.Dispose(); }
+                catch { FaultSelectedMerchantDailyTrade(context?.Protocol); }
+            }
+        }
+    }
+
+    private static void FaultSelectedMerchantDailyTrade(
+        IDailyV1SelectedP12MerchantDailyTradeProtocol protocol)
+    {
+        try { protocol?.FaultClosed(); }
+        catch { }
     }
 
     /// <summary>

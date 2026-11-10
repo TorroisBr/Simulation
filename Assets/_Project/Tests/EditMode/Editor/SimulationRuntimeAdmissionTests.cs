@@ -1897,6 +1897,81 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
+    private sealed class SelectedMerchantDailyTradeProtocolStub
+        : IDailyV1SelectedP12MerchantDailyTradeProtocol
+    {
+        private sealed class Scope : IDisposable
+        {
+            private readonly SelectedMerchantDailyTradeProtocolStub owner;
+            private bool disposed;
+
+            internal Scope(SelectedMerchantDailyTradeProtocolStub owner) => this.owner = owner;
+
+            public void Dispose()
+            {
+                if (disposed) return;
+                disposed = true;
+                owner.DisposeCount++;
+            }
+        }
+
+        internal bool AcceptOwnerBindings = true;
+        internal int FaultCount;
+        internal int EnterCount;
+        internal int DisposeCount;
+        internal string[] ValidatedSectionIds;
+        internal readonly List<string[]> Notifications = new List<string[]>();
+
+        public bool TryValidateOwnerSections(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            IReadOnlyList<string> sectionIds)
+        {
+            if (graph == null || actor == null || sectionIds == null
+                || !graph.ContainsExactNpcOwner(actor) || sectionIds.Count != 7)
+                return false;
+            string[] expected =
+            {
+                DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind, actor.RuntimeId),
+                DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + actor.RuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + actor.RuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix + actor.RuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix + actor.RuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix + actor.RuntimeId
+            };
+            HashSet<string> expectedSet = new HashSet<string>(expected, StringComparer.Ordinal);
+            HashSet<string> actualSet = new HashSet<string>(sectionIds, StringComparer.Ordinal);
+            if (expectedSet.Count != 7 || actualSet.Count != 7 || !expectedSet.SetEquals(actualSet))
+                return false;
+            ValidatedSectionIds = new List<string>(sectionIds).ToArray();
+            return AcceptOwnerBindings;
+        }
+
+        public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
+            sectionIds != null && sectionIds.Count > 0;
+
+        public bool TryValidateMutationEpochCapacity() => true;
+
+        public bool TryEnterOperation(out IDisposable operationScope)
+        {
+            EnterCount++;
+            operationScope = new Scope(this);
+            return true;
+        }
+
+        public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds)
+        {
+            if (sectionIds == null) return false;
+            Notifications.Add(new List<string>(sectionIds).ToArray());
+            return true;
+        }
+
+        public void FaultClosed() => FaultCount++;
+    }
+
     [Test]
     public void DailyKnowledgeWritersRefreshOwnerBaselinesBeforeMerchantRosterCall()
     {
@@ -1959,6 +2034,135 @@ public sealed class SimulationRuntimeAdmissionTests
             assessment.ToString());
     }
 
+    [Test]
+    public void SelectedMerchantCoreHostPassAdmitsSevenRowsAndPublishesOneCensusEpoch()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+
+        GameObject hostObject = new GameObject("P12 Core-owned selected Merchant operation");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+
+        SimulationTime simulationTime = ReadPrivateField<SimulationTime>(runtime, "simulationTime");
+        MerchantSystem merchantSystem = new MerchantSystem(
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            new EffectiveCommercialKnowledgeConfiguration(), null, simulationTime, null);
+        FieldInfo merchantField = typeof(SimulationRuntime).GetField(
+            "merchantSystem", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(merchantField, Is.Not.Null);
+        merchantField.SetValue(runtime, merchantSystem);
+
+        NpcRuntime merchant = null;
+        ItemData item = null;
+        DailyV1ItemDefinition itemDefinition = null;
+        foreach (NpcRuntime candidate in runtime.NpcRuntimes)
+        {
+            if (candidate == null || !candidate.HasJobType(NpcJobType.Merchant)
+                || candidate.CurrentCity == null) continue;
+            ItemData candidateItem = candidate.CurrentCity.Market?.Items
+                .Select(row => row?.Item).FirstOrDefault(value => value != null);
+            if (candidateItem == null
+                || !candidate.TryGetSelectedDailyV1Item(candidateItem, out DailyV1ItemDefinition candidateDefinition))
+                continue;
+            merchant = candidate;
+            item = candidateItem;
+            itemDefinition = candidateDefinition;
+            break;
+        }
+        Assert.That(merchant, Is.Not.Null,
+            "The accepted bootstrap fixture must expose a selected Merchant with a bound market item.");
+        Assert.That(itemDefinition, Is.Not.Null);
+        DailyV1NpcRuntimeOwners actor = merchant.SelectedRuntimeOwners;
+        Assert.That(actor, Is.Not.Null);
+        Assert.That(graph.ContainsExactNpcOwner(actor), Is.True);
+
+        DailyV1ExecutionBoundaryState executionState = ReadPrivateField<DailyV1ExecutionBoundaryState>(
+            runtime, "dailyExecutionBoundary");
+        Assert.That(executionState, Is.Not.Null);
+        Assert.That(executionState.TryCreateSelectedP12MerchantDailyTradeSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        Assert.That(sectionIds, Has.Count.EqualTo(7));
+        CollectionAssert.AreEquivalent(new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind, actor.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix + actor.RuntimeId
+        }, sectionIds);
+
+        MethodInfo createHostPorts = typeof(SimulationRuntime).GetMethod(
+            "TryCreateSelectedDailyV1ActorTurnHostPorts",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(createHostPorts, Is.Not.Null);
+        object[] hostPortArguments = { graph, null };
+        Assert.That((bool)createHostPorts.Invoke(runtime, hostPortArguments), Is.True);
+        IDailyV1SelectedActorTurnHostPorts hostPorts =
+            hostPortArguments[1] as IDailyV1SelectedActorTurnHostPorts;
+        Assert.That(hostPorts, Is.Not.Null);
+        Assert.That(DailyV1CoreSelectedMerchantTradeStateBoundary.TryCreate(
+            graph, null, hostPorts, out DailyV1CoreSelectedMerchantTradeStateBoundary merchantBoundary), Is.True);
+
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long beforeEpoch, out ContinuationCensusFailure beforeFailure), Is.True, beforeFailure.ToString());
+        long beforeRevision = actor.MerchantTradePlan.Revision;
+        Assert.That(hostPorts.ExecuteWithinSelectedMerchantDailyOperation(
+            actor,
+            () => merchantBoundary.TryInstallPlanState(
+                actor, itemDefinition, merchant.CurrentCity.RuntimeId, merchant.CurrentCity.RuntimeId,
+                2, 2, item.basePrice, 0, 0, "selected-core-merchant-scope-origin")), Is.True);
+        Assert.That(actor.MerchantTradePlan.Revision, Is.EqualTo(beforeRevision + 1));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long afterEpoch, out ContinuationCensusFailure afterFailure), Is.True, afterFailure.ToString());
+        Assert.That(afterEpoch, Is.EqualTo(beforeEpoch + 1),
+            "the production host projection must publish the selected Merchant owner change once at Core scope exit");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+
+        long stableRevision = actor.MerchantTradePlan.Revision;
+        long stableEpoch = afterEpoch;
+        Assert.That(hostPorts.ExecuteWithinSelectedMerchantDailyOperation(
+            actor,
+            () => merchantBoundary.TryInstallPlanState(
+                actor, itemDefinition, merchant.CurrentCity.RuntimeId, merchant.CurrentCity.RuntimeId,
+                2, 2, item.basePrice, 0, 0, "selected-core-merchant-scope-origin")), Is.True);
+        Assert.That(actor.MerchantTradePlan.Revision, Is.EqualTo(stableRevision));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long noOpEpoch, out ContinuationCensusFailure noOpFailure), Is.True, noOpFailure.ToString());
+        Assert.That(noOpEpoch, Is.EqualTo(stableEpoch), "an idempotent no-op must not publish another epoch");
+
+        SelectedMerchantDailyTradeProtocolStub staleProtocol = new SelectedMerchantDailyTradeProtocolStub
+        {
+            AcceptOwnerBindings = false
+        };
+        Assert.That(executionState.ExecuteSelectedP12MerchantDailyTrade(
+            graph, actor, staleProtocol, () => true), Is.False);
+        Assert.That(staleProtocol.FaultCount, Is.EqualTo(1));
+        Assert.That(staleProtocol.Notifications, Is.Empty);
+
+        SelectedMerchantDailyTradeProtocolStub partialProtocol = new SelectedMerchantDailyTradeProtocolStub();
+        Assert.That(executionState.ExecuteSelectedP12MerchantDailyTrade(
+            graph, actor, partialProtocol,
+            () => executionState.TryCanCommitSelectedP12MerchantDailyTradeMutation(
+                new[] { DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + actor.RuntimeId },
+                out bool handled) && handled), Is.False);
+        Assert.That(partialProtocol.FaultCount, Is.EqualTo(1));
+        Assert.That(partialProtocol.Notifications, Is.Empty);
+    }
     [Test]
     public void DirectPlanOwnerCommitsOutsideMerchantOperationRefreshTheirBaselinesImmediately()
     {
