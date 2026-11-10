@@ -170,8 +170,25 @@ internal sealed class DailyV1CoreSelectedDailyExecutionBoundary
     }
 
     public bool HasExactCrimeJusticeProjectionOwnerBindings(
-        DailyV1SelectedRuntimeOwnerGraph graph) =>
-        IsBoundTo(graph) && hostPorts.HasExactCrimeJusticeProjectionOwnerBindings(graph);
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (!IsBoundTo(graph)
+            || !hostPorts.HasExactCrimeJusticeProjectionOwnerBindings(graph))
+            return false;
+
+        if (hostPorts is IDailyV1SelectedCrimeJusticeDailyMutationHostPort bindingPort)
+        {
+            if (!bindingPort.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
+                || !executionState.TryBindSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, binding))
+            {
+                executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+                return false;
+            }
+        }
+        return true;
+    }
 
     public bool TryCreateSelectedDemographyContext(
         DailyV1SelectedRuntimeOwnerGraph graph,

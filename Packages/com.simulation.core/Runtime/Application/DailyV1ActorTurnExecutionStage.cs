@@ -201,34 +201,73 @@ internal interface IDailyV1SelectedActorTurnHostPorts
 
 /// <summary>
 /// Exact host-side census identities needed by the selected Crime/Justice
-/// operation. Core retains phase admission, reservation, mutation tracking,
-/// and epoch publication; the host only binds its existing census protocol
-/// and opaque Unity receipt-owner identities.
+/// operation. Core validates the exact Core Justice-owner relationships and
+/// pins this compatibility binding to the admitted execution session. The
+/// host contributes only its existing census protocol and opaque receipt-owner
+/// identities; operations do not ask Unity to select those identities again.
 /// </summary>
 internal sealed class DailyV1SelectedCrimeJusticeDailyMutationHostBinding
 {
     internal IDailyV1P12CrimeJusticeMutationProtocol Protocol { get; }
     internal object CrimeOwnerIdentity { get; }
     internal object CrimeReceiptCensusOwnerIdentity { get; }
+    internal DailyV1JusticeRecordsOwner CrimeJusticeRecordsOwner { get; }
     internal object JusticeOwnerIdentity { get; }
     internal object JusticeReceiptCensusOwnerIdentity { get; }
+    internal DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
     internal bool AdmissionEnabled { get; }
 
     internal DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
         IDailyV1P12CrimeJusticeMutationProtocol protocol,
         object crimeOwnerIdentity,
         object crimeReceiptCensusOwnerIdentity,
+        DailyV1JusticeRecordsOwner crimeJusticeRecordsOwner,
         object justiceOwnerIdentity,
         object justiceReceiptCensusOwnerIdentity,
+        DailyV1JusticeRecordsOwner justiceRecordsOwner,
         bool admissionEnabled)
     {
         Protocol = protocol;
         CrimeOwnerIdentity = crimeOwnerIdentity;
         CrimeReceiptCensusOwnerIdentity = crimeReceiptCensusOwnerIdentity;
+        CrimeJusticeRecordsOwner = crimeJusticeRecordsOwner;
         JusticeOwnerIdentity = justiceOwnerIdentity;
         JusticeReceiptCensusOwnerIdentity = justiceReceiptCensusOwnerIdentity;
+        JusticeRecordsOwner = justiceRecordsOwner;
         AdmissionEnabled = admissionEnabled;
     }
+
+    internal bool HasExactCoreOwnerRelationships(DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (!AdmissionEnabled || graph?.JusticeRecordsOwner == null || Protocol == null)
+            return false;
+
+        if ((CrimeOwnerIdentity == null) != (CrimeReceiptCensusOwnerIdentity == null)
+            || (CrimeOwnerIdentity != null
+                && (!ReferenceEquals(CrimeOwnerIdentity, CrimeReceiptCensusOwnerIdentity)
+                    || !ReferenceEquals(CrimeJusticeRecordsOwner, graph.JusticeRecordsOwner))))
+            return false;
+
+        if ((JusticeOwnerIdentity == null) != (JusticeReceiptCensusOwnerIdentity == null)
+            || (JusticeOwnerIdentity != null
+                && (!ReferenceEquals(JusticeOwnerIdentity, JusticeReceiptCensusOwnerIdentity)
+                    || !ReferenceEquals(JusticeRecordsOwner, graph.JusticeRecordsOwner))))
+            return false;
+
+        return true;
+    }
+
+    internal bool HasSameSessionBinding(
+        DailyV1SelectedCrimeJusticeDailyMutationHostBinding other) =>
+        other != null
+        && ReferenceEquals(Protocol, other.Protocol)
+        && ReferenceEquals(CrimeOwnerIdentity, other.CrimeOwnerIdentity)
+        && ReferenceEquals(CrimeReceiptCensusOwnerIdentity, other.CrimeReceiptCensusOwnerIdentity)
+        && ReferenceEquals(CrimeJusticeRecordsOwner, other.CrimeJusticeRecordsOwner)
+        && ReferenceEquals(JusticeOwnerIdentity, other.JusticeOwnerIdentity)
+        && ReferenceEquals(JusticeReceiptCensusOwnerIdentity, other.JusticeReceiptCensusOwnerIdentity)
+        && ReferenceEquals(JusticeRecordsOwner, other.JusticeRecordsOwner)
+        && AdmissionEnabled == other.AdmissionEnabled;
 }
 
 /// <summary>
@@ -700,13 +739,33 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         if (!Enum.IsDefined(typeof(DailyV1SelectedCrimeJusticeDailyPhase), phase)
             || mutation == null)
             throw new ArgumentException("The admitted Core actor turn requires a valid Crime/Justice P12 operation.");
-        if (!hostPorts.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
-                graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
-            || binding == null)
+        if (!executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding))
         {
-            executionState.MarkSelectedRuntimeCensusProtocolFaulted();
-            throw new InvalidOperationException(
-                "The selected Crime/Justice operation could not bind its exact host census identities to the admitted Core session.");
+            if (!hostPorts.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out binding)
+                || binding == null)
+            {
+                executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+                throw new InvalidOperationException(
+                    "The selected Crime/Justice operation could not bind its exact host census identities and Core owner relationships to the admitted session.");
+            }
+
+            if (!binding.AdmissionEnabled)
+            {
+                mutation();
+                return;
+            }
+
+            if (!executionState.TryBindSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, binding)
+                || !executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out binding))
+            {
+                executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+                throw new InvalidOperationException(
+                    "The selected Crime/Justice operation could not bind its exact host census identities and Core owner relationships to the admitted session.");
+            }
         }
 
         if (!binding.AdmissionEnabled)

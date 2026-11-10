@@ -5194,6 +5194,51 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void SelectedCrimeJusticeReceiptIdentityRemainsPinnedToTheCoreExecutionSession()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12 selected Crime/Justice pinned session binding");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstFailure), Is.True,
+            firstFailure.ToString());
+        long admittedDay = runtime.CurrentDay;
+        long justiceRevision = graph.JusticeRecordsOwner.Revision;
+        long completedSequence = runtime.ExecutionBoundaryState.CompletedCoreSequence;
+
+        FieldInfo boundCrimeField = typeof(SimulationRuntime).GetField(
+            "p12CrimeJusticeBoundCrimeSystem", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(boundCrimeField, Is.Not.Null);
+        boundCrimeField.SetValue(runtime, null);
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            runtime.TryAdvanceDay(out _));
+
+        Assert.That(failure.Message, Does.Contain("Unity projection bindings"));
+        Assert.That(runtime.CurrentDay, Is.EqualTo(admittedDay),
+            "A replacement or missing receipt identity is rejected before the next clock increment.");
+        Assert.That(graph.JusticeRecordsOwner.Revision, Is.EqualTo(justiceRevision),
+            "A changed session identity cannot authorize another Justice owner write.");
+        Assert.That(runtime.ExecutionBoundaryState.CompletedCoreSequence, Is.EqualTo(completedSequence),
+            "A rejected identity rebinding cannot complete a Core daily sequence.");
+        Assert.That(runtime.ExecutionBoundaryState.IsSelectedRuntimeCensusProtocolFaulted, Is.True,
+            "The exact execution session remains faulted after its host identity binding changes.");
+        Assert.That(runtime.ExecutionBoundaryState.AdvanceLeaseHeld, Is.False,
+            "The rejected rebind releases the serialized advance lease.");
+    }
+
+    [Test]
     public void SelectedCrimeJusticeDailyMutationRejectsMissingExactCrimeReceiptIdentity()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(

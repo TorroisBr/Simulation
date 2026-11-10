@@ -191,6 +191,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private DailyV1ActorTurnCoreRoots selectedRuntimeActorTurnCoreRoots;
     private DailyV1P12CrimeJusticeMutationCoordinator selectedP12CrimeJusticeMutationCoordinator;
     private IDailyV1P12CrimeJusticeMutationProtocol selectedP12CrimeJusticeMutationProtocol;
+    private DailyV1SelectedCrimeJusticeDailyMutationHostBinding selectedCrimeJusticeDailyMutationHostBinding;
     private SelectedP12TravelPartyAdvanceContext selectedP12TravelPartyAdvanceContext;
     private SelectedP12TravelPartyStartContext selectedP12TravelPartyStartContext;
     private SelectedP12SoloTravelStartContext selectedP12SoloTravelStartContext;
@@ -4152,6 +4153,74 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             catch { }
             return false;
         }
+    }
+
+    /// <summary>
+    /// Pins the selected Crime/Justice host compatibility identities and their
+    /// Core owner relationships to this admitted execution session. Later
+    /// phases must present the same bindings; the operation boundary consumes
+    /// this retained value rather than selecting identities from Unity again.
+    /// </summary>
+    internal bool TryBindSelectedCrimeJusticeDailyMutationHostBinding(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
+    {
+        if (graph == null || binding == null
+            || !binding.HasExactCoreOwnerRelationships(graph))
+        {
+            FaultSelectedCrimeJusticeBinding(binding);
+            MarkSelectedRuntimeCensusProtocolFaulted();
+            return false;
+        }
+
+        DailyV1SelectedCrimeJusticeDailyMutationHostBinding prior;
+        bool mismatch;
+        lock (operationSyncRoot)
+        {
+            bool exactSession = HasAdmittedSelectedDailyExecution
+                && AdmissionContext?.IsOwnedByCurrentThread() == true
+                && ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+                && ReferenceEquals(binding.JusticeRecordsOwner, graph.JusticeRecordsOwner);
+            prior = selectedCrimeJusticeDailyMutationHostBinding;
+            mismatch = !exactSession
+                || (prior != null && !prior.HasSameSessionBinding(binding));
+            if (!mismatch && prior == null)
+                selectedCrimeJusticeDailyMutationHostBinding = binding;
+        }
+
+        if (!mismatch) return true;
+
+        FaultSelectedCrimeJusticeBinding(prior);
+        FaultSelectedCrimeJusticeBinding(binding);
+        MarkSelectedRuntimeCensusProtocolFaulted();
+        return false;
+    }
+
+    internal bool TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
+    {
+        lock (operationSyncRoot)
+        {
+            binding = selectedCrimeJusticeDailyMutationHostBinding;
+            if (!HasAdmittedSelectedDailyExecution
+                || AdmissionContext?.IsOwnedByCurrentThread() != true
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+                || binding == null
+                || !binding.HasExactCoreOwnerRelationships(graph))
+            {
+                binding = null;
+                return false;
+            }
+            return true;
+        }
+    }
+
+    private static void FaultSelectedCrimeJusticeBinding(
+        DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
+    {
+        try { binding?.Protocol?.FaultClosed(); }
+        catch { }
     }
 
     /// <summary>

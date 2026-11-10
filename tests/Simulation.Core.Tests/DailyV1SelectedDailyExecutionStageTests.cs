@@ -1840,7 +1840,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 binding = new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
                     crimeJusticeProtocol,
                     this, this,
+                    graph.JusticeRecordsOwner,
                     justiceIdentity, justiceIdentity,
+                    graph.JusticeRecordsOwner,
                     admissionEnabled: true);
                 return true;
             }
