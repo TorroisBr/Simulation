@@ -9,6 +9,8 @@ public sealed class DailyV1ApplicationSessionGateTests
 {
     private sealed class TestHostProjection : IDailyV1ApplicationHostProjection
     {
+        public DailyV1ActiveRuntimeSession CoreRuntimeSession => null;
+
         public bool TryCreateSelectedTravelPartyStartHostOperation(
             DailyV1SelectedTravelPartyStartPlan plan,
             out IDailyV1SelectedTravelPartyStartHostOperation operation)

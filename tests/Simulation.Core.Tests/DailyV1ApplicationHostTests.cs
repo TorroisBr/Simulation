@@ -42,6 +42,13 @@ public sealed class DailyV1ApplicationHostTests
 
     private sealed class TestHostProjection : IDailyV1ApplicationHostProjection
     {
+        internal TestHostProjection(DailyV1ActiveRuntimeSession coreRuntimeSession)
+        {
+            CoreRuntimeSession = coreRuntimeSession;
+        }
+
+        public DailyV1ActiveRuntimeSession CoreRuntimeSession { get; }
+
         public bool TryCreateSelectedTravelPartyStartHostOperation(
             DailyV1SelectedTravelPartyStartPlan plan,
             out IDailyV1SelectedTravelPartyStartHostOperation operation)
@@ -542,20 +549,19 @@ public sealed class DailyV1ApplicationHostTests
         DailyV1ApplicationHost host = new DailyV1ApplicationHost(
             "start-existing-application-root", new MissingSlotOperations(),
             stageCompleted: null, logOutput: null, unityV1Identity: UnityIdentity());
-        TestHostProjection projection = new TestHostProjection();
+        TestHostProjection projection = null;
         int factoryCalls = 0;
         DailyV1ApplicationStartPreparation factoryPreparation = null;
 
         bool ProjectExactPreparation(
             DailyV1ApplicationStartPreparation candidatePreparation,
-            out DailyV1ActiveRuntimeSession restoredCandidateSession,
             out IDailyV1ApplicationHostProjection candidateProjection,
             out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
             out string diagnostic)
         {
             factoryCalls++;
             factoryPreparation = candidatePreparation;
-            restoredCandidateSession = null;
+            projection = new TestHostProjection(candidatePreparation.CoreSession);
             candidateProjection = projection;
             candidateHostPorts = new MinimalSelectedRuntimeAdvanceHostPorts(
                 candidatePreparation.CoreSession.ExecutionBoundaryState);
@@ -586,7 +592,7 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
-    public void CoreGenesisStartRejectsRestoreCandidateFromUnityProjectionCallback()
+    public void CoreGenesisStartRejectsProjectionWithoutExactCoreSessionBinding()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1Application application = new DailyV1Application();
@@ -594,15 +600,13 @@ public sealed class DailyV1ApplicationHostTests
             "start-existing-application-substitute-root", new MissingSlotOperations(),
             stageCompleted: null, logOutput: null, unityV1Identity: UnityIdentity());
 
-        bool SupplyRestoreOnlyCandidate(
+        bool ProjectWithoutCoreSession(
             DailyV1ApplicationStartPreparation preparation,
-            out DailyV1ActiveRuntimeSession restoredCandidateSession,
             out IDailyV1ApplicationHostProjection candidateProjection,
             out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
             out string diagnostic)
         {
-            restoredCandidateSession = preparation.CoreSession;
-            candidateProjection = new TestHostProjection();
+            candidateProjection = new TestHostProjection(null);
             candidateHostPorts = new MinimalSelectedRuntimeAdvanceHostPorts(
                 preparation.CoreSession.ExecutionBoundaryState);
             diagnostic = null;
@@ -610,11 +614,11 @@ public sealed class DailyV1ApplicationHostTests
         }
 
         Assert.That(application.TryStartOnExistingApplication(
-            definitions, host, SupplyRestoreOnlyCandidate,
+            definitions, host, ProjectWithoutCoreSession,
             out DailyV1ApplicationStartPreparation preparation,
             out P12AResult persistenceResult,
             out string startDiagnostic), Is.False);
-        Assert.That(startDiagnostic, Does.Contain("cannot substitute a session"));
+        Assert.That(startDiagnostic, Does.Contain("exact Core-selected initial runtime session"));
         Assert.That(preparation.Kind,
             Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
         Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
@@ -633,12 +637,10 @@ public sealed class DailyV1ApplicationHostTests
 
         bool RejectProjection(
             DailyV1ApplicationStartPreparation preparation,
-            out DailyV1ActiveRuntimeSession restoredCandidateSession,
             out IDailyV1ApplicationHostProjection candidateProjection,
             out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
             out string diagnostic)
         {
-            restoredCandidateSession = null;
             candidateProjection = null;
             candidateHostPorts = null;
             diagnostic = "Unity rejected the exact host projection.";
@@ -1056,7 +1058,8 @@ public sealed class DailyV1ApplicationHostTests
             foreignPreparation.CoreSession.ExecutionBoundaryState);
         Assert.That(preparation.Application.TryCommitInitialStartWithHostProjection(
             preparation, foreignPreparation.CoreSession,
-            new TestHostProjection(), foreignPorts, out string foreignCommitDiagnostic), Is.False);
+            new TestHostProjection(foreignPreparation.CoreSession), foreignPorts,
+            out string foreignCommitDiagnostic), Is.False);
         Assert.That(foreignCommitDiagnostic, Does.Contain("exact Core session"));
         Assert.That(preparation.Application.ActiveSession, Is.Null);
 
@@ -1064,7 +1067,8 @@ public sealed class DailyV1ApplicationHostTests
             preparation.CoreSession.ExecutionBoundaryState);
         Assert.That(preparation.Application.TryCommitInitialStartWithHostProjection(
             preparation, preparation.CoreSession,
-            new TestHostProjection(), exactPorts, out string commitDiagnostic), Is.True, commitDiagnostic);
+            new TestHostProjection(preparation.CoreSession), exactPorts,
+            out string commitDiagnostic), Is.True, commitDiagnostic);
         Assert.That(preparation.Application.ActiveSession, Is.SameAs(preparation.CoreSession),
             "The selected application transaction must publish the exact prepared Core genesis.");
     }

@@ -388,13 +388,12 @@ internal sealed class DailyV1ApplicationStartAdmission
 }
 
 /// <summary>
-/// Supplies the Unity view and boundary after Core has prepared initial
-/// genesis. Only the detached restore path may return a reconstructed Core
-/// session; genesis session identity is selected exclusively by Core.
+/// Supplies only the Unity view and boundary after Core has prepared Genesis
+/// or bound the fully staged restored session. The host never selects the
+/// authoritative Core session for either path.
 /// </summary>
 internal delegate bool DailyV1ApplicationInitialStartHostProjectionFactory(
     DailyV1ApplicationStartPreparation preparation,
-    out DailyV1ActiveRuntimeSession restoredCandidateSession,
     out IDailyV1ApplicationHostProjection candidateHostProjection,
     out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
     out string diagnostic);
@@ -415,6 +414,8 @@ internal sealed class DailyV1Application
     private bool initialGenesisPreparationAttempted;
     private DailyV1GenesisComposition preparedInitialGenesis;
     private DailyV1ActiveRuntimeSession preparedInitialSession;
+    private P12AContinuationImage preparedInitialRestoredImage;
+    private DailyV1ActiveRuntimeSession preparedInitialRestoredSession;
 
     // Construction remains internal until the complete TryStart path can
     // create and return the application only after genesis or restore commits.
@@ -593,14 +594,13 @@ internal sealed class DailyV1Application
                 definitions, host, out preparation, out persistenceResult, out diagnostic))
             return false;
 
-        DailyV1ActiveRuntimeSession restoredCandidateSession = null;
         IDailyV1ApplicationHostProjection candidateHostProjection = null;
         IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts = null;
         bool hostReady;
         try
         {
             hostReady = hostProjectionFactory(
-                preparation, out restoredCandidateSession, out candidateHostProjection,
+                preparation, out candidateHostProjection,
                 out candidateHostPorts, out diagnostic);
         }
         catch (Exception exception) when (exception is ArgumentException
@@ -624,15 +624,12 @@ internal sealed class DailyV1Application
         {
             case DailyV1ApplicationStartPreparationKind.GenesisPrepared:
                 candidateSession = preparation.CoreSession;
-                if (restoredCandidateSession != null)
-                {
-                    diagnostic = "The initial Unity adapter cannot substitute a session for Core's prepared genesis.";
-                    return false;
-                }
                 break;
 
             case DailyV1ApplicationStartPreparationKind.RestoreRequired:
-                candidateSession = restoredCandidateSession;
+                if (!TryGetPreparedInitialRestoredSession(
+                        preparation, out candidateSession, out diagnostic))
+                    return false;
                 break;
 
             default:
@@ -640,9 +637,28 @@ internal sealed class DailyV1Application
                 return false;
         }
 
-        return TryCommitInitialStartWithHostProjection(
+        if (!ReferenceEquals(candidateHostProjection.CoreRuntimeSession, candidateSession))
+        {
+            diagnostic = "The host projection must retain the exact Core-selected initial runtime session.";
+            return false;
+        }
+
+        bool committed = TryCommitInitialStartWithHostProjection(
             preparation, candidateSession, candidateHostProjection,
             candidateHostPorts, out diagnostic);
+        if (committed && preparation.Kind == DailyV1ApplicationStartPreparationKind.RestoreRequired)
+        {
+            lock (activeSessionGate.SyncRoot)
+            {
+                if (ReferenceEquals(preparedInitialRestoredImage, preparation.RestoreImage)
+                    && ReferenceEquals(preparedInitialRestoredSession, candidateSession))
+                {
+                    preparedInitialRestoredImage = null;
+                    preparedInitialRestoredSession = null;
+                }
+            }
+        }
+        return committed;
     }
 
     private static SimulationLogger CreateInitialLogger(
@@ -870,6 +886,36 @@ internal sealed class DailyV1Application
             return false;
         }
         return true;
+    }
+
+    private bool TryGetPreparedInitialRestoredSession(
+        DailyV1ApplicationStartPreparation preparation,
+        out DailyV1ActiveRuntimeSession candidate,
+        out string diagnostic)
+    {
+        candidate = null;
+        diagnostic = null;
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (preparation == null
+                || preparation.Kind != DailyV1ApplicationStartPreparationKind.RestoreRequired
+                || !ReferenceEquals(preparation.Application, this)
+                || preparation.RestoreImage == null
+                || !ReferenceEquals(initialContinuationImage, preparation.RestoreImage)
+                || initialContinuationLoadResult?.Code != P12AResultCode.Loaded
+                || !ReferenceEquals(preparedInitialRestoredImage, preparation.RestoreImage)
+                || preparedInitialRestoredSession == null
+                || preparedInitialRestoredSession.P12CRoots == null
+                || !preparedInitialRestoredSession.TryGetInitialRestoreCommitProof(
+                    preparation.RestoreImage, out _))
+            {
+                diagnostic = "Core has no complete private restored session bound to this application's admitted initial image.";
+                return false;
+            }
+
+            candidate = preparedInitialRestoredSession;
+            return true;
+        }
     }
 
     private bool TryCreateInitialStartAdmissionFromNoSave(
@@ -3743,7 +3789,10 @@ internal sealed class DailyV1Application
                 || !HasRestoredContinuationStagingAuthority(null, null)
                 || !string.Equals(stages.CoreRoots.WorldIdentity?.Value,
                     stages.Image.Header?.WorldId, StringComparison.Ordinal)
-                || stages.Image.Header?.Day != candidateSession.SimulationTime?.AbsoluteDay)
+                || stages.Image.Header?.Day != candidateSession.SimulationTime?.AbsoluteDay
+                || candidateSession.P12CRoots == null
+                || !ReferenceEquals(initialContinuationImage, stages.Image)
+                || initialContinuationLoadResult?.Code != P12AResultCode.Loaded)
             {
                 diagnostic = "Initial restore proof requires the exact admitted image and its complete private Core C/D/E/F session.";
                 return false;
@@ -3784,6 +3833,9 @@ internal sealed class DailyV1Application
                 diagnostic = "The exact initial image proof could not be bound once to its private restored Core session.";
                 return false;
             }
+
+            preparedInitialRestoredImage = stages.Image;
+            preparedInitialRestoredSession = candidateSession;
 
             return true;
         }

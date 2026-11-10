@@ -29,6 +29,8 @@ internal sealed class SimulationActiveSession : IDailyV1ApplicationHostProjectio
     /// the Core execution boundary retained here.
     /// </summary>
     internal DailyV1ActiveRuntimeSession CoreRuntimeSession { get; }
+    DailyV1ActiveRuntimeSession IDailyV1ApplicationHostProjection.CoreRuntimeSession =>
+        CoreRuntimeSession;
     internal DailyV1ExecutionBoundaryState ExecutionBoundaryState =>
         CoreRuntimeSession?.ExecutionBoundaryState ?? Runtime.ExecutionBoundaryState;
 
@@ -410,13 +412,11 @@ public class TesteSimulacao : MonoBehaviour
             bool started = dailyV1Application.TryStartOnExistingApplication(
                 currentDefinitions, host,
                 (DailyV1ApplicationStartPreparation preparation,
-                    out DailyV1ActiveRuntimeSession restoredCandidateSession,
                     out IDailyV1ApplicationHostProjection candidateProjection,
                     out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
                     out string hostDiagnostic) => TryBuildInitialStartHostProjection(
                         preparation, host, compatibility, effective, calendar,
                         currentDefinitions, currentBindings,
-                        out restoredCandidateSession,
                         out candidateProjection,
                         out candidateHostPorts, out hostDiagnostic),
                 out DailyV1ApplicationStartPreparation completedPreparation,
@@ -548,12 +548,10 @@ public class TesteSimulacao : MonoBehaviour
         CalendarDefinition calendar,
         DailyV1EffectiveDefinitions definitions,
         DailyV1DefinitionAdapter.SelectedBindings bindings,
-        out DailyV1ActiveRuntimeSession candidateCoreSession,
         out IDailyV1ApplicationHostProjection candidateProjection,
         out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
         out string diagnostic)
     {
-        candidateCoreSession = null;
         candidateProjection = null;
         candidateHostPorts = null;
         diagnostic = null;
@@ -648,7 +646,6 @@ public class TesteSimulacao : MonoBehaviour
             return false;
         }
 
-        candidateCoreSession = restoredProjection.CoreRuntimeSession;
         candidateProjection = restoredProjection;
         candidateHostPorts = restoredProjection.Runtime;
         return true;

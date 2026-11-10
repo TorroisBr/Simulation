@@ -12,6 +12,7 @@ using System.Text;
 /// </summary>
 internal interface IDailyV1ApplicationHostProjection
 {
+    DailyV1ActiveRuntimeSession CoreRuntimeSession { get; }
     bool TryCreateSelectedTravelPartyStartHostOperation(
         DailyV1SelectedTravelPartyStartPlan plan,
         out IDailyV1SelectedTravelPartyStartHostOperation operation);
