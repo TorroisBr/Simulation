@@ -7,6 +7,7 @@ Status: candidate validation recorded; this is not a canonical-promotion evidenc
 - Base: `c1a5da9d10b0acbc01a37cd9afe86f90d589397f`
 - Tested source/test commit: `729a70c6d265e5bf7ba1abb5e35d438e2ab1ebef`
 - Tested Git tree: `b719183d0871ab8aca6a35bd1afc7ec0d9ffdb65`
+- Unity runner input snapshot: HEAD c1a5da9d10b0acbc01a37cd9afe86f90d589397f, full snapshot tree 313b77049a82a47d00c4be3787d57001f33e0a2d, as recorded in the protected run manifest. This is the runner's complete worktree-input snapshot, not the committed candidate tree above. Unity-captured implementation/test inputs correspond byte-for-byte to the reviewed candidate paths; the candidate commit records their post-run committed tree identity.
 - Core canonical at validation: `a07402faa4739d0bb276d3bc4aa24e6ed7bd6cea`
 - The five committed implementation/test paths matched the tested checkout after the commit. No code or test changes followed the runs.
 
