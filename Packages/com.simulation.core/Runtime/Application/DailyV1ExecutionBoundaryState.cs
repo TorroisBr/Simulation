@@ -1364,6 +1364,15 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         IReadOnlyList<OwnerSectionCensusSnapshot> capturedSections = result.OwnerSections;
         if (captureOwnerGraph != null)
         {
+            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcRuntimeStateSections(
+                    captureOwnerGraph, capturedSections,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> coreRuntimeStateSections,
+                    out _))
+            {
+                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+            capturedSections = coreRuntimeStateSections;
             if (!DailyV1SelectedRuntimeOwnerCensusSource.TryCreateHostOwnedCensusRemainder(
                     capturedSections, captureOwnerGraph, captureActorChoiceStore,
                     out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections, out _))

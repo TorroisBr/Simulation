@@ -4105,7 +4105,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                                 out ContinuationCensusFailure censusFailure))
                             return DailyV1OwnerSectionCensusCaptureResult.Rejected(
                                 MapDailyCaptureFailure(censusFailure), censusFailure.ToString());
-                        return DailyV1OwnerSectionCensusCaptureResult.Captured(ownerSections, mutationEpoch);
+                        if (!TryCreateSelectedCoreHostCensusRemainder(
+                                ownerSections,
+                                out IReadOnlyList<OwnerSectionCensusSnapshot> hostRemainder,
+                                out string remainderDiagnostic))
+                            return DailyV1OwnerSectionCensusCaptureResult.Rejected(
+                                DailyCaptureEligibilityFailure.OwnerCoverageIncomplete,
+                                remainderDiagnostic ?? "The selected Core NPC census could not bind its exact owner rows.");
+                        return DailyV1OwnerSectionCensusCaptureResult.Captured(hostRemainder, mutationEpoch);
                     });
             if (!censusSourceBound)
             {
@@ -11718,10 +11725,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        // Return the complete witness vector to Core. Core alone validates
-        // exact selected-owner identities and derives the Core-owned remainder;
-        // Unity's internal census still owns quiescence and the shared epoch.
-        ownerSections = completeHostSections;
+        if (!TryCreateSelectedCoreHostCensusRemainder(
+                completeHostSections,
+                out ownerSections,
+                out _))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return false;
+        }
 
         failure = DailyCaptureEligibilityFailure.None;
         return true;
@@ -11747,10 +11760,68 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        // Restoration uses the same complete-source contract as capture.
-        // Core binds the exact owner graph and performs the selected-row split.
-        ownerSections = completeHostSections;
+        if (!TryCreateSelectedCoreHostCensusRemainder(
+                completeHostSections,
+                out ownerSections,
+                out diagnostic))
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "Core could not bind its exact selected NPC runtime-state census.";
+            return false;
+        }
         diagnostic = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Keeps the Unity census protocol as the source of quiescence and epoch,
+    /// but removes the selected-only CurrentAction projection from the vector
+    /// handed to Core after Core has verified it against the exact owner graph.
+    /// Mixed rosters retain every host row for compatibility fallback.
+    /// </summary>
+    private bool TryCreateSelectedCoreHostCensusRemainder(
+        IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out string diagnostic)
+    {
+        hostSections = completeHostSections;
+        diagnostic = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+        if (completeHostSections == null || graph?.Npcs == null
+            || graph.PersonStore == null || graph.Npcs.Count == 0)
+        {
+            diagnostic = completeHostSections == null
+                ? "The Unity census protocol returned no owner vector."
+                : null;
+            return completeHostSections != null;
+        }
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryGetExactCoreOwnedNpcInventoryAndMoneyAccountSectionIds(
+                completeHostSections, graph,
+                out IReadOnlyList<string> exactSelectedInventoryAndMoneyAccountIds,
+                out diagnostic))
+            return false;
+        if (exactSelectedInventoryAndMoneyAccountIds.Count == 0)
+            return true;
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcRuntimeStateSections(
+                graph, completeHostSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> validatedSections,
+                out diagnostic)
+            || validatedSections == null)
+        {
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The selected NPC runtime-state census does not match Core owners.";
+            return false;
+        }
+
+        string currentActionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix;
+        OwnerSectionCensusSnapshot[] remainder = validatedSections
+            .Where(section => !section.SectionId.StartsWith(currentActionPrefix, StringComparison.Ordinal))
+            .ToArray();
+        hostSections = Array.AsReadOnly(remainder);
         return true;
     }
 

@@ -3780,6 +3780,16 @@ public sealed class SimulationRuntimeAdmissionTests
                     .Concat(exactRuntimeStateSectionIds)
                     .Concat(exactNpcKnowledgeAndPlanSectionIds)
                     .ToArray();
+            string currentActionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix;
+            string[] coreOwnedCurrentActionSectionIds = coreOwnedHostPortSectionIds
+                .Where(sectionId => sectionId.StartsWith(currentActionPrefix, StringComparison.Ordinal))
+                .ToArray();
+            Assert.That(coreOwnedCurrentActionSectionIds,
+                Has.Length.EqualTo(selectedOwnerGraph.Npcs.Count));
+            HashSet<string> coreOwnedHostReturnedSectionIds = new HashSet<string>(
+                coreOwnedHostPortSectionIds.Where(sectionId =>
+                    !sectionId.StartsWith(currentActionPrefix, StringComparison.Ordinal)),
+                StringComparer.Ordinal);
             HashSet<string> coreOwnedHostPortSectionIdSet = new HashSet<string>(
                 coreOwnedHostPortSectionIds, StringComparer.Ordinal);
             Assert.That(coreOwnedHostPortSectionIds,
@@ -3795,13 +3805,23 @@ public sealed class SimulationRuntimeAdmissionTests
                     out DailyCaptureEligibilityFailure hostCaptureFailure),
                 Is.True, hostCaptureFailure.ToString());
             Assert.That(hostMutationEpoch, Is.EqualTo(completedToken.MutationEpoch));
-            Assert.That(hostCensus, Has.Count.EqualTo(completedToken.OwnerSections.Count),
-                "Unity returns the complete census; Core validates and selects its own source rows.");
-            foreach (string coreOwnedSectionId in coreOwnedHostPortSectionIds)
+            Assert.That(hostCensus, Has.Count.EqualTo(
+                    completedToken.OwnerSections.Count - selectedOwnerGraph.Npcs.Count),
+                "The quiescent Unity protocol captures the full census, then the host-to-Core vector omits only exact selected CurrentAction projections.");
+            Assert.That(hostCensus.Any(section =>
+                    section.SectionId.StartsWith(currentActionPrefix, StringComparison.Ordinal)),
+                Is.False,
+                "Core owns the selected CurrentAction rows in the vector used for final owner composition.");
+            foreach (string coreOwnedSectionId in coreOwnedHostReturnedSectionIds)
                 Assert.That(hostCensus.Any(section => section.SectionId == coreOwnedSectionId),
-                    Is.True, "The host cannot omit Core-owned rows before Core validates their exact identities: " + coreOwnedSectionId);
+                    Is.True, "The host retains other Core census witnesses for exact validation: " + coreOwnedSectionId);
+            foreach (string coreOwnedSectionId in coreOwnedCurrentActionSectionIds)
+                Assert.That(hostCensus.Any(section => section.SectionId == coreOwnedSectionId),
+                    Is.False, "Selected Core ActionSlot rows are omitted from the host remainder: " + coreOwnedSectionId);
             foreach (OwnerSectionCensusSnapshot original in completedToken.OwnerSections)
             {
+                if (original.SectionId.StartsWith(currentActionPrefix, StringComparison.Ordinal))
+                    continue;
                 OwnerSectionCensusSnapshot hostSection = hostCensus.Single(section =>
                     section.SectionId == original.SectionId);
                 Assert.That(hostSection.Role, Is.EqualTo(original.Role), original.SectionId);
@@ -4956,6 +4976,12 @@ public sealed class SimulationRuntimeAdmissionTests
                         + npc.RuntimeId), Is.True,
                 "A mixed roster keeps the travel-state census row for every selected and compatibility NPC.");
         }
+        Assert.That(mixedRosterHostSections.Count(section =>
+                section.SectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix,
+                    StringComparison.Ordinal)),
+            Is.EqualTo(runtime.NpcRuntimes.Count),
+            "The mixed-roster fallback retains CurrentAction rows for the complete compatibility roster.");
         Assert.That(mixedRosterHostSections.Any(section =>
                 section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(
                     unselected.RuntimeId)), Is.True,

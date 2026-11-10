@@ -4123,6 +4123,63 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(coreOwnedRuntimeStateIds.ToHashSet(StringComparer.Ordinal),
             Is.EquivalentTo(providers.Select(provider => provider.GetCurrentCensus().SectionId)));
 
+        string currentActionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix;
+        string[] selectedCurrentActionIds = coreOwnedRuntimeStateIds
+            .Where(sectionId => sectionId.StartsWith(currentActionPrefix, StringComparison.Ordinal))
+            .ToArray();
+        Assert.That(selectedCurrentActionIds, Has.Length.EqualTo(graph.Npcs.Count));
+        HashSet<string> selectedCurrentActionIdSet = new HashSet<string>(
+            selectedCurrentActionIds, StringComparer.Ordinal);
+        OwnerSectionCensusSnapshot[] currentActionOmittedVector = completeVector
+            .Where(section => !selectedCurrentActionIdSet.Contains(section.SectionId)).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryRebindCoreOwnedNpcRuntimeStateSections(
+                    graph, currentActionOmittedVector,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> currentActionRecomposed,
+                    out string currentActionDiagnostic),
+            Is.True, currentActionDiagnostic);
+        Assert.That(currentActionRecomposed.Select(section => section.SectionId)
+                .OrderBy(sectionId => sectionId, StringComparer.Ordinal),
+            Is.EqualTo(completeVector.Select(section => section.SectionId)
+                .OrderBy(sectionId => sectionId, StringComparer.Ordinal)));
+        foreach (IOwnerSectionCensusProvider provider in providers.Where(provider =>
+                     provider.GetCurrentCensus().SectionId.StartsWith(
+                         currentActionPrefix, StringComparison.Ordinal)))
+        {
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            OwnerSectionCensusSnapshot actual = currentActionRecomposed.Single(
+                section => section.SectionId == witness.SectionId);
+            Assert.That(actual.Role, Is.EqualTo(OwnerSectionRole.Required), witness.SectionId);
+            Assert.That(actual.SchemaVersion, Is.EqualTo(witness.SchemaVersion), witness.SectionId);
+            Assert.That(actual.OwnerInstanceIdentity, Is.SameAs(witness.OwnerInstanceIdentity), witness.SectionId);
+            Assert.That(actual.Cardinality, Is.EqualTo(witness.Cardinality), witness.SectionId);
+            Assert.That(actual.Revision, Is.EqualTo(witness.Revision), witness.SectionId);
+        }
+
+        OwnerSectionCensusSnapshot[] partialCurrentActionVector = completeVector
+            .Where(section => section.SectionId != selectedCurrentActionIds[0]).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryRebindCoreOwnedNpcRuntimeStateSections(
+                    graph, partialCurrentActionVector, out _, out _),
+            Is.False, "Partial CurrentAction omission cannot be mistaken for Core-owned exact omission.");
+
+        OwnerSectionCensusSnapshot justiceRecords = completeVector.Single(section =>
+            section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedDailyOwnerVector(
+                graph,
+                session.ExecutionBoundaryState.SelectedActorChoiceStore,
+                currentActionOmittedVector,
+                justiceRecords.OwnerInstanceIdentity,
+                0L,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreVector,
+                out string completeCoreVectorDiagnostic),
+            Is.True, completeCoreVectorDiagnostic);
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+            completeCoreVector), Is.True);
+        foreach (string sectionId in selectedCurrentActionIds)
+            Assert.That(completeCoreVector.Any(section => section.SectionId == sectionId), Is.True,
+                "Full Core owner-vector composition restores each authoritative ActionSlot census row.");
+
         HashSet<string> omittedIds = new HashSet<string>(
             coreOwnedRuntimeStateIds, StringComparer.Ordinal);
         OwnerSectionCensusSnapshot[] hostRemainder = completeVector
@@ -4239,6 +4296,10 @@ public sealed class DailyV1ApplicationSessionGateTests
                     section.SectionId == compatibilityRow.SectionId),
                 Is.SameAs(compatibilityRow),
                 "Mixed-roster capture preserves every host-owned selected/compatibility census fact.");
+        Assert.That(mixedResult.Count(section =>
+                section.SectionId.StartsWith(currentActionPrefix, StringComparison.Ordinal)),
+            Is.EqualTo(graph.Npcs.Count + 1),
+            "Mixed-roster composition keeps every selected and compatibility CurrentAction row.");
 
         string omittedKnowledgeAndPlanId = coreOwnedKnowledgeAndPlanIds[0];
         OwnerSectionCensusSnapshot[] partialKnowledgeAndPlanVector = completeVector

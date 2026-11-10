@@ -170,12 +170,24 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
     bool TryCreateSelectedDailyExecutionHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedDailyExecutionHostPorts hostPorts);
+    /// <summary>
+    /// Captures the full quiescent source internally. For an exact selected
+    /// roster, the returned handoff may omit the whole NPC CurrentAction
+    /// family only after it has been verified against the Core owner graph;
+    /// Core reconstructs those rows before the P12 complete-vector gate.
+    /// Mixed rosters retain every compatibility row.
+    /// </summary>
     bool TryCaptureOwnerSectionCensus(
         DailyV1CaptureScopeAllowance allowedOuterScope,
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
         out DailyCaptureEligibilityFailure failure);
     bool TryBindRestoredCandidateMutationGuard(out string diagnostic);
+    /// <summary>
+    /// The detached-target capture follows the same exact selected-roster
+    /// omission rule as live capture; Core reconstructs the CurrentAction
+    /// family before validating the full P12 target vector.
+    /// </summary>
     bool TryCaptureUnadmittedRestoredDailyOwnerVector(
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
@@ -1022,8 +1034,12 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 graph, actorChoiceStore, politicalDecisionRowsBeforeP12F,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreP12FSections,
                 out diagnostic)
+            || !TryRebindCoreOwnedNpcRuntimeStateSections(
+                graph, completeCoreP12FSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreNpcRuntimeStateRows,
+                out diagnostic)
             || !TryRemoveCoreOwnedSelectedRuntimeSections(
-                completeCoreP12FSections, graph,
+                completeCoreNpcRuntimeStateRows, graph,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
                 out diagnostic)
             || !TryValidateExcludedNpcReceiptSections(
@@ -3689,6 +3705,10 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix,
             DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix
         };
+        string currentActionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix;
+        bool hostOmittedExactCoreCurrentActionRows = !mixedRoster
+            && graph.Npcs.Count > 0
+            && CountFamilyRows(copied, currentActionPrefix) == 0;
         bool hostOmittedExactCoreRuntimeStateRows = !mixedRoster && graph.Npcs.Count > 0;
         foreach (string prefix in statePrefixes)
             if (CountFamilyRows(copied, prefix) != 0)
@@ -3702,7 +3722,10 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                     expectedRows++;
 
             int actualRows = CountFamilyRows(copied, prefix);
-            if (hostOmittedExactCoreRuntimeStateRows && actualRows == 0)
+            bool hostOmittedExactFamily = hostOmittedExactCoreRuntimeStateRows
+                || (string.Equals(prefix, currentActionPrefix, StringComparison.Ordinal)
+                    && hostOmittedExactCoreCurrentActionRows);
+            if (hostOmittedExactFamily && actualRows == 0)
                 continue;
             bool residenceFamily = string.Equals(
                 prefix, DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix,
@@ -3725,7 +3748,10 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             OwnerSectionCensusWitness witness = witnesses[i];
             if (!indexes.TryGetValue(witness.SectionId, out int index))
             {
-                if (hostOmittedExactCoreRuntimeStateRows)
+                bool omittedCoreOwnedRow = hostOmittedExactCoreRuntimeStateRows
+                    || (hostOmittedExactCoreCurrentActionRows
+                        && witness.SectionId.StartsWith(currentActionPrefix, StringComparison.Ordinal));
+                if (omittedCoreOwnedRow)
                 {
                     witnessIndexes[i] = -1;
                     continue;
@@ -3753,12 +3779,15 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return true;
         }
 
-        if (hostOmittedExactCoreRuntimeStateRows)
+        if (hostOmittedExactCoreRuntimeStateRows || hostOmittedExactCoreCurrentActionRows)
         {
             List<OwnerSectionCensusSnapshot> recomposed =
                 new List<OwnerSectionCensusSnapshot>(copied.Length + witnesses.Length);
             recomposed.AddRange(copied);
-            foreach (OwnerSectionCensusWitness witness in witnesses)
+            for (int i = 0; i < witnesses.Length; i++)
+            {
+                if (witnessIndexes[i] >= 0) continue;
+                OwnerSectionCensusWitness witness = witnesses[i];
                 recomposed.Add(new OwnerSectionCensusSnapshot(
                     witness.SectionId,
                     witness.SchemaVersion,
@@ -3766,6 +3795,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                     witness.OwnerInstanceIdentity,
                     witness.Cardinality,
                     witness.Revision));
+            }
             recomposed.Sort((left, right) =>
                 StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
             ownerSections = Array.AsReadOnly(recomposed.ToArray());
