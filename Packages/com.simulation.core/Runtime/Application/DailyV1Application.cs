@@ -4773,6 +4773,15 @@ internal sealed class DailyV1Application
             || !ReferenceEquals(hostPorts.ExecutionState,
                 candidateSession.ExecutionBoundaryState))
             return false;
+        if (hostPorts is IDailyV1SelectedRuntimeOwnerCensusIdentityHostPorts censusIdentityHostPorts)
+        {
+            object censusSourceIdentity = censusIdentityHostPorts.SelectedRuntimeOwnerCensusSourceIdentity;
+            if (censusSourceIdentity == null
+                || !ReferenceEquals(
+                    candidateSession.ExecutionBoundaryState.SelectedRuntimeOwnerCensusSourceIdentity,
+                    censusSourceIdentity))
+                return false;
+        }
         lock (activeSessionGate.SyncRoot)
         {
             DailyV1ActiveRuntimeSession current = activeSessionGate.Current;

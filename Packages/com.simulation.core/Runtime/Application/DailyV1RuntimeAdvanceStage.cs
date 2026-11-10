@@ -181,6 +181,17 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 }
 
 /// <summary>
+/// Optional exact-identity assertion for host adapters whose census source is
+/// bound separately during runtime composition. Core checks that the source
+/// attached to the execution state is the same object this host adapter will
+/// use for live and restored owner vectors before binding the runtime boundary.
+/// </summary>
+internal interface IDailyV1SelectedRuntimeOwnerCensusIdentityHostPorts
+{
+    object SelectedRuntimeOwnerCensusSourceIdentity { get; }
+}
+
+/// <summary>
 /// Legacy boundary for callers that still own their own day or intraday
 /// implementation. Selected Daily-v1 application sessions use the Core
 /// selected boundary and cannot reach these host advancement members.

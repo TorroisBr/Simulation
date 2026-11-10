@@ -18,6 +18,21 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
     }
 
+    private sealed class CensusIdentityApplicationAdvanceBoundary
+        : ApplicationAdvanceBoundary,
+          IDailyV1SelectedRuntimeOwnerCensusIdentityHostPorts
+    {
+        internal CensusIdentityApplicationAdvanceBoundary(
+            DailyV1ExecutionBoundaryState state,
+            object censusSourceIdentity)
+            : base(state, null)
+        {
+            SelectedRuntimeOwnerCensusSourceIdentity = censusSourceIdentity;
+        }
+
+        public object SelectedRuntimeOwnerCensusSourceIdentity { get; }
+    }
+
     private static P12ACompatibilityDescriptor UnityIdentity() =>
         new P12ACompatibilityDescriptor(
             "UnityBootstrap-Daily-v1", 1, "config", "6000.3.9f1", "WindowsEditor", "Mono",
@@ -84,7 +99,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             return false;
         }
     }
-    private sealed class ApplicationAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary,
+    private class ApplicationAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary,
         IDailyV1SelectedRuntimeAdvanceHostPorts
     {
         private readonly DailyV1ExecutionBoundaryState state;
@@ -2245,6 +2260,39 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(boundApplication, Is.SameAs(application),
             "Application routing identity is owned by the Core execution state.");
         Assert.That(boundSession, Is.SameAs(session));
+    }
+
+    [Test]
+    public void ApplicationRejectsHostPortsWhoseCensusSourceIsNotTheExactSessionBinding()
+    {
+        DailyV1Application application = new DailyV1Application();
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);
+
+        object boundCensusSource = new object();
+        Assert.That(session.ExecutionBoundaryState.TryBindSelectedRuntimeOwnerCensusSource(
+            boundCensusSource,
+            _ => DailyV1OwnerSectionCensusCaptureResult.Captured(
+                Array.Empty<OwnerSectionCensusSnapshot>(),
+                session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch)), Is.True,
+            "The candidate session first binds its exact census source under its Core state.");
+
+        CensusIdentityApplicationAdvanceBoundary wrongSource =
+            new CensusIdentityApplicationAdvanceBoundary(
+                session.ExecutionBoundaryState, new object());
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, wrongSource), Is.False,
+            "A host adapter cannot publish a runtime while naming a different census source.");
+
+        CensusIdentityApplicationAdvanceBoundary exactSource =
+            new CensusIdentityApplicationAdvanceBoundary(
+                session.ExecutionBoundaryState, boundCensusSource);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, exactSource), Is.True,
+            "The shared application binds only the exact source that owns this session's P12 census.");
     }
 
     [Test]
