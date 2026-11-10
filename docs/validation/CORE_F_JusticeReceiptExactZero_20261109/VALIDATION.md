@@ -9,7 +9,7 @@
 - The generic complete owner-vector fixture supplies revision zero for both exact-empty Crime and Justice receipt rows; other owner revisions remain unchanged.
 - No P12 row identity, serialization, Justice owner identity, Unity compatibility identity, or host contract changed. The current Unity adapter continues to bind the selected Core Justice owner and its receipt slot to the same `JusticeSystem` object. A detached host must provide one transient identity for the same paired rows and bind it to its exact owner/receipt slot.
 
-The architecture review `docs/reviews/CORE_F_JusticeCensusHostNeutralIdentity_ArchitectureReview_cbacf617.md` concluded PASS: the shared identity contract supports host-neutral execution without P12 reconciliation. Exact-tip implementation review of this change is pending.
+The architecture review `docs/reviews/CORE_F_JusticeCensusHostNeutralIdentity_ArchitectureReview_cbacf617.md` concluded PASS: the shared identity contract supports host-neutral execution without P12 reconciliation. Exact-tip implementation review PASSED for `b31970333a618900afb76c169a92c7f095ab8ffb` / tree `996d7722d753ffaaf4e19fb3ad2292672a6dfcaf`; the durable independent review is in `INDEPENDENT_REVIEW.md`. This does not represent canonical promotion or full CORE-F acceptance.
 
 ## Source identity
 
