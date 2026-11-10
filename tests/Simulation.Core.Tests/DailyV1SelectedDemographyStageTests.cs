@@ -76,17 +76,28 @@ public sealed class DailyV1SelectedDemographyStageTests
     }
 
     [Test]
-    public void RepresentedResidentFloorCombinesCorePersonRowsWithHostSupplement()
+    public void RepresentedResidentFloorCombinesPersonRowsSelectedCoreNpcOwnersAndHostRemainder()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph();
         PersonStore people = new PersonStore();
         DailyV1CityRuntimeOwners residentCity = graph.Cities[0];
+        DailyV1CityRuntimeOwners otherCity = graph.Cities[1];
 
         PersonRuntime livingResident = new PersonRuntime(new PersonId("core-resident"), 0L);
         Assert.That(people.TryRegister(livingResident, out PersonStoreFailure livingFailure),
             Is.True, livingFailure.ToString());
         Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
             livingResident, residentCity.RuntimeId), Is.True);
+
+        PersonRuntime materializedResident = new PersonRuntime(new PersonId("materialized-core-resident"), 0L);
+        Assert.That(people.TryRegister(materializedResident, out PersonStoreFailure materializedFailure),
+            Is.True, materializedFailure.ToString());
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            materializedResident, residentCity.RuntimeId), Is.True);
+        DailyV1NpcRuntimeOwners personBackedNpc = graph.Npcs[3];
+        Assert.That(people.TryBindMaterializedNpc(
+            materializedResident.PersonId, personBackedNpc.RuntimeId, out PersonStoreFailure bindFailure),
+            Is.True, bindFailure.ToString());
 
         PersonRuntime deadResident = new PersonRuntime(new PersonId("dead-resident"), 0L, 1L);
         Assert.That(people.TryRegister(deadResident, out PersonStoreFailure deadFailure),
@@ -100,7 +111,18 @@ public sealed class DailyV1SelectedDemographyStageTests
         Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
             outsideResident, "not-in-selected-city-graph"), Is.True);
 
-        RecordingBoundary boundary = new RecordingBoundary(graph.Cities, residentFloorSupplement: 2);
+        Assert.That(graph.TryBindPersonStore(people), Is.True,
+            "The selected owner graph must bind the exact PersonStore before demography executes.");
+
+        DailyV1NpcRuntimeOwners selectedLegacyResident = graph.Npcs[0];
+        Assert.That(selectedLegacyResident.Residence.TryInstallExact(residentCity.RuntimeId, 0L), Is.True);
+        DailyV1NpcRuntimeOwners deadLegacyResident = graph.Npcs[1];
+        Assert.That(deadLegacyResident.Residence.TryInstallExact(residentCity.RuntimeId, 0L), Is.True);
+        Assert.That(deadLegacyResident.Lifecycle.TrySetLifeState(NpcLifeState.Dead), Is.True);
+        DailyV1NpcRuntimeOwners otherCityLegacyResident = graph.Npcs[2];
+        Assert.That(otherCityLegacyResident.Residence.TryInstallExact(otherCity.RuntimeId, 0L), Is.True);
+
+        RecordingBoundary boundary = new RecordingBoundary(graph.Cities, residentCity.RuntimeId, 1);
         RecordingAggregateProvider provider = new RecordingAggregateProvider(boundary.Events);
 
         DailyV1SelectedDemographyStage.Advance(
@@ -115,9 +137,14 @@ public sealed class DailyV1SelectedDemographyStageTests
             boundary);
 
         Assert.That(provider.Contexts, Has.Count.EqualTo(graph.Cities.Count));
-        foreach (AggregateDemographyContext context in provider.Contexts)
-            Assert.That(context.RepresentedResidentFloor,
-                Is.EqualTo(context.SettlementRuntimeId == residentCity.RuntimeId ? 3 : 2));
+        Assert.That(provider.Contexts.Single(context => context.SettlementRuntimeId == residentCity.RuntimeId)
+            .RepresentedResidentFloor, Is.EqualTo(4),
+            "Two living PersonStore residents, one selected Core legacy NPC, and one host compatibility resident count once each.");
+        Assert.That(provider.Contexts.Single(context => context.SettlementRuntimeId == otherCity.RuntimeId)
+            .RepresentedResidentFloor, Is.EqualTo(1),
+            "The living selected Core NPC resident is counted for its own City; the dead resident and outside Person are excluded.");
+        Assert.That(boundary.SelectedNpcRuntimeIds,
+            Is.EqualTo(graph.Npcs.Select(npc => npc.RuntimeId).OrderBy(id => id, StringComparer.Ordinal)));
     }
 
     private static DailyV1SelectedRuntimeOwnerGraph CreateGraph()
@@ -136,6 +163,7 @@ public sealed class DailyV1SelectedDemographyStageTests
     {
         private readonly IReadOnlyDictionary<string, int> floorSupplements;
         internal readonly List<string> Events = new List<string>();
+        internal IReadOnlyList<string> SelectedNpcRuntimeIds { get; private set; }
         internal PersonId DeathToApply;
 
         internal RecordingBoundary(
@@ -148,6 +176,20 @@ public sealed class DailyV1SelectedDemographyStageTests
             floorSupplements = values;
         }
 
+        internal RecordingBoundary(
+            IReadOnlyList<DailyV1CityRuntimeOwners> cities,
+            string supplementalCityRuntimeId,
+            int residentFloorSupplement)
+        {
+            Dictionary<string, int> values = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (DailyV1CityRuntimeOwners city in cities)
+                values.Add(city.RuntimeId, string.Equals(
+                    city.RuntimeId, supplementalCityRuntimeId, StringComparison.Ordinal)
+                    ? residentFloorSupplement
+                    : 0);
+            floorSupplements = values;
+        }
+
         public bool TryApplyPersonDeath(PersonId personId, out string failure)
         {
             Events.Add("death:" + personId.Value);
@@ -155,9 +197,11 @@ public sealed class DailyV1SelectedDemographyStageTests
             return DeathToApply != null && DeathToApply.Equals(personId);
         }
 
-        public IReadOnlyDictionary<string, int> BuildResidentFloorSupplement()
+        public IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(
+            IReadOnlyCollection<string> selectedNpcRuntimeIds)
         {
             Events.Add("floors");
+            SelectedNpcRuntimeIds = selectedNpcRuntimeIds.ToArray();
             return floorSupplements;
         }
     }

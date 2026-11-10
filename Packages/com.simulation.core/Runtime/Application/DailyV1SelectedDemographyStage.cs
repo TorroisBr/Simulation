@@ -5,10 +5,12 @@ internal interface IDailyV1SelectedDemographyBoundary
 {
     bool TryApplyPersonDeath(PersonId personId, out string failure);
     /// <summary>
-    /// Returns the residual represented residents from the host's full roster
-    /// after subtracting the exact living PersonStore residents supplied by Core.
+    /// Returns represented residents from host compatibility NPCs outside the
+    /// exact selected Core owner graph. PersonStore residents and selected Core
+    /// NPC residence owners are counted by Core and must not be included here.
     /// </summary>
-    IReadOnlyDictionary<string, int> BuildResidentFloorSupplement();
+    IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(
+        IReadOnlyCollection<string> selectedNpcRuntimeIds);
 }
 
 internal sealed class DailyV1SelectedDemographyDiagnostic
@@ -87,8 +89,11 @@ internal static class DailyV1SelectedDemographyStage
                     calendar,
                     aggregateConfiguration.AnnualBirthRate,
                     aggregateConfiguration.AnnualDeathRate);
+            List<string> selectedNpcRuntimeIds = BuildSelectedNpcRuntimeIds(graph);
             IReadOnlyDictionary<string, int> floors = BuildRepresentedResidentFloors(
-                graph, personStore, boundary.BuildResidentFloorSupplement());
+                graph,
+                personStore,
+                boundary.BuildCompatibilityResidentFloorSupplement(selectedNpcRuntimeIds));
             ApplyAggregateDemography(graph, provider, floors, absoluteDay, result);
         }
 
@@ -118,20 +123,84 @@ internal static class DailyV1SelectedDemographyStage
                 personResidentFloors[person.ResidenceSettlementRuntimeId] = count + 1;
         }
 
+        Dictionary<string, int> selectedLegacyResidentFloors = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            if (city != null && !string.IsNullOrWhiteSpace(city.RuntimeId))
+                selectedLegacyResidentFloors[city.RuntimeId] = 0;
+        }
+
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || npc.Lifecycle == null || npc.Residence == null)
+                throw new InvalidOperationException(
+                    "Selected demography requires the exact Core NPC lifecycle and residence owners.");
+
+            if (personStore.TryGetByMaterializedNpcRuntimeId(
+                    npc.RuntimeId, out PersonRuntime person))
+            {
+                if (person == null || person.PersonId == null || !person.IsMaterialized
+                    || !string.Equals(person.MaterializedNpcRuntimeId, npc.RuntimeId, StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        "Selected demography found an inconsistent Core PersonStore materialization binding.");
+
+                // Person-backed NPC residence is authoritative in PersonStore
+                // and is already included in personResidentFloors.
+                continue;
+            }
+
+            string settlementRuntimeId = npc.Residence.SettlementRuntimeId;
+            if (npc.Lifecycle.LifeState != NpcLifeState.Alive
+                || string.IsNullOrWhiteSpace(settlementRuntimeId)
+                || !selectedLegacyResidentFloors.TryGetValue(
+                    settlementRuntimeId, out int selectedResidents))
+                continue;
+
+            if (selectedResidents == int.MaxValue)
+                throw new InvalidOperationException(
+                    "Selected demography exceeded the representable legacy resident count.");
+            selectedLegacyResidentFloors[settlementRuntimeId] = selectedResidents + 1;
+        }
+
         Dictionary<string, int> floors = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (DailyV1CityRuntimeOwners city in graph.Cities)
         {
             if (city == null || string.IsNullOrWhiteSpace(city.RuntimeId)
                 || residentFloorSupplement == null
                 || !personResidentFloors.TryGetValue(city.RuntimeId, out int personFloor)
+                || !selectedLegacyResidentFloors.TryGetValue(city.RuntimeId, out int selectedLegacyFloor)
                 || !residentFloorSupplement.TryGetValue(city.RuntimeId, out int supplement)
-                || personFloor < 0 || supplement < 0 || personFloor > int.MaxValue - supplement)
+                || personFloor < 0 || selectedLegacyFloor < 0 || supplement < 0
+                || personFloor > int.MaxValue - selectedLegacyFloor
+                || personFloor + selectedLegacyFloor > int.MaxValue - supplement)
                 continue;
 
-            floors[city.RuntimeId] = personFloor + supplement;
+            floors[city.RuntimeId] = personFloor + selectedLegacyFloor + supplement;
         }
 
         return floors;
+    }
+
+    private static List<string> BuildSelectedNpcRuntimeIds(
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph?.Npcs == null)
+            throw new ArgumentNullException(nameof(graph));
+
+        List<string> runtimeIds = new List<string>(graph.Npcs.Count);
+        HashSet<string> uniqueRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || !uniqueRuntimeIds.Add(npc.RuntimeId))
+                throw new InvalidOperationException(
+                    "Selected demography requires unique exact Core NPC runtime identities.");
+            runtimeIds.Add(npc.RuntimeId);
+        }
+
+        runtimeIds.Sort(StringComparer.Ordinal);
+        return runtimeIds;
     }
 
     private static void ApplyNaturalMortality(

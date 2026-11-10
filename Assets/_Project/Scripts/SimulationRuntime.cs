@@ -8671,8 +8671,42 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     /// </summary>
     internal RepresentedResidentFloorSnapshot BuildRepresentedResidentFloorSnapshot()
     {
+        return BuildRepresentedResidentFloorSnapshot(null);
+    }
+
+    /// <summary>
+    /// Computes host compatibility resident floors while excluding NPCs whose
+    /// residence and life state are supplied by the exact selected Core owner
+    /// graph. PersonStore remains present so its unmaterialized and materialized
+    /// living residents retain their existing deduplicated contribution.
+    /// </summary>
+    internal RepresentedResidentFloorSnapshot BuildRepresentedResidentFloorSnapshot(
+        IReadOnlyCollection<string> selectedNpcRuntimeIds)
+    {
         Dictionary<string, int> floors = new Dictionary<string, int>(StringComparer.Ordinal);
         Dictionary<string, int> hostSupplements = new Dictionary<string, int>(StringComparer.Ordinal);
+        HashSet<string> selectedRuntimeIds = null;
+        if (selectedNpcRuntimeIds != null && selectedNpcRuntimeIds.Count > 0)
+        {
+            selectedRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string runtimeId in selectedNpcRuntimeIds)
+            {
+                if (string.IsNullOrWhiteSpace(runtimeId) || !selectedRuntimeIds.Add(runtimeId))
+                    throw new InvalidOperationException(
+                        "The selected Core resident projection requires unique nonempty NPC runtime identities.");
+            }
+        }
+
+        IReadOnlyList<NpcRuntime> compatibilityNpcSnapshot = npcRuntimeSnapshot;
+        if (selectedRuntimeIds != null)
+        {
+            List<NpcRuntime> compatibilityNpcs = new List<NpcRuntime>(npcRuntimeSnapshot.Count);
+            foreach (NpcRuntime npc in npcRuntimeSnapshot)
+                if (npc == null || !selectedRuntimeIds.Contains(npc.RuntimeId ?? string.Empty))
+                    compatibilityNpcs.Add(npc);
+            compatibilityNpcSnapshot = compatibilityNpcs;
+        }
+
         foreach (CityRuntime city in cities)
         {
             if (city == null || string.IsNullOrWhiteSpace(city.RuntimeId))
@@ -8683,7 +8717,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             SettlementPopulationPresenceSummary presence =
                 SettlementPopulationPresenceQuery.BuildSummary(
                     city,
-                    npcRuntimeSnapshot,
+                    compatibilityNpcSnapshot,
                     personStore.Persons);
             int representedResidents = presence?.RepresentedResidentCount ?? 0;
             int corePersonResidents = 0;

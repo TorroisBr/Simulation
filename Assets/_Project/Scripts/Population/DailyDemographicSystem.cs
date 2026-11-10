@@ -294,9 +294,11 @@ public static class DailyDemographicSystem
             return false;
         }
 
-        public IReadOnlyDictionary<string, int> BuildResidentFloorSupplement()
+        public IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(
+            IReadOnlyCollection<string> selectedNpcRuntimeIds)
         {
-            RepresentedResidentFloorSnapshot snapshot = world.BuildRepresentedResidentFloorSnapshot();
+            RepresentedResidentFloorSnapshot snapshot =
+                world.BuildRepresentedResidentFloorSnapshot(selectedNpcRuntimeIds);
             Dictionary<string, int> floors = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (DailyV1CityRuntimeOwners city in graph.Cities)
             {

@@ -1505,7 +1505,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 return false;
             }
 
-            public IReadOnlyDictionary<string, int> BuildResidentFloorSupplement() => representedFloors;
+            public IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(
+                IReadOnlyCollection<string> selectedNpcRuntimeIds) => representedFloors;
         }
 
         private sealed class FakeTravelContext : IDailyV1SelectedTravelDayExecutionContext,

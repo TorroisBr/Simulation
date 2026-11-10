@@ -89,16 +89,26 @@ public sealed class PersonResidenceFoundationTests
     {
         CityRuntime city = CreateCity("residence-floor-snapshot", 5);
         NpcRuntime legacy = CreateLegacyResident(city, "npc-floor-snapshot");
-        SimulationRuntime world = CreateWorldWithNpcs(new[] { legacy }, city);
+        NpcRuntime compatibility = CreateLegacyResident(city, "npc-floor-compatibility-snapshot");
+        SimulationRuntime world = CreateWorldWithNpcs(new[] { legacy, compatibility }, city);
         PersonRuntime person = RegisterPerson(world, "person-floor-snapshot");
         Assert.That(world.TryBindExistingPersonResident(person.PersonId, city, out _), Is.True);
 
         RepresentedResidentFloorSnapshot snapshot = world.BuildRepresentedResidentFloorSnapshot();
 
         Assert.That(snapshot.TryGetFloor(city.RuntimeId, out int representedFloor), Is.True);
-        Assert.That(representedFloor, Is.EqualTo(2));
+        Assert.That(representedFloor, Is.EqualTo(3));
         Assert.That(snapshot.TryGetHostSupplement(city.RuntimeId, out int hostSupplement), Is.True);
-        Assert.That(hostSupplement, Is.EqualTo(1));
+        Assert.That(hostSupplement, Is.EqualTo(2));
+
+        RepresentedResidentFloorSnapshot selectedCoreSnapshot =
+            world.BuildRepresentedResidentFloorSnapshot(new[] { legacy.RuntimeId });
+        Assert.That(selectedCoreSnapshot.TryGetFloor(city.RuntimeId, out int coreRepresentedFloor), Is.True);
+        Assert.That(coreRepresentedFloor, Is.EqualTo(2),
+            "The Core owner graph supplies the selected legacy NPC; the host snapshot retains the other compatibility NPC and PersonStore resident.");
+        Assert.That(selectedCoreSnapshot.TryGetHostSupplement(city.RuntimeId, out int compatibilitySupplement), Is.True);
+        Assert.That(compatibilitySupplement, Is.EqualTo(1),
+            "Only the selected NPC is excluded; the unselected compatibility NPC remains in the host remainder.");
     }
 
     [Test]
