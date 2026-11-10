@@ -387,9 +387,14 @@ internal sealed class DailyV1ApplicationStartAdmission
     }
 }
 
+/// <summary>
+/// Supplies the Unity view and boundary after Core has prepared initial
+/// genesis. Only the detached restore path may return a reconstructed Core
+/// session; genesis session identity is selected exclusively by Core.
+/// </summary>
 internal delegate bool DailyV1ApplicationInitialStartHostProjectionFactory(
     DailyV1ApplicationStartPreparation preparation,
-    out DailyV1ActiveRuntimeSession candidateSession,
+    out DailyV1ActiveRuntimeSession restoredCandidateSession,
     out IDailyV1ApplicationHostProjection candidateHostProjection,
     out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
     out string diagnostic);
@@ -563,9 +568,9 @@ internal sealed class DailyV1Application
 
     /// <summary>
     /// Runs the selected initial-start transaction on this application:
-    /// Core admits and prepares exactly one NoSave or Restore path, asks the
-    /// host to build only the matching projection and boundary, then commits
-    /// that exact candidate through the Core session gate.
+    /// Core admits and prepares exactly one NoSave or Restore path, selects
+    /// the prepared Core genesis session itself, asks the host for the matching
+    /// projection and boundary, then commits through the Core session gate.
     /// </summary>
     internal bool TryStartOnExistingApplication(
         DailyV1EffectiveDefinitions definitions,
@@ -588,14 +593,14 @@ internal sealed class DailyV1Application
                 definitions, host, out preparation, out persistenceResult, out diagnostic))
             return false;
 
-        DailyV1ActiveRuntimeSession candidateSession = null;
+        DailyV1ActiveRuntimeSession restoredCandidateSession = null;
         IDailyV1ApplicationHostProjection candidateHostProjection = null;
         IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts = null;
         bool hostReady;
         try
         {
             hostReady = hostProjectionFactory(
-                preparation, out candidateSession, out candidateHostProjection,
+                preparation, out restoredCandidateSession, out candidateHostProjection,
                 out candidateHostPorts, out diagnostic);
         }
         catch (Exception exception) when (exception is ArgumentException
@@ -612,6 +617,27 @@ internal sealed class DailyV1Application
             if (string.IsNullOrWhiteSpace(diagnostic))
                 diagnostic = "The initial-start host could not project the exact admitted Core candidate.";
             return false;
+        }
+
+        DailyV1ActiveRuntimeSession candidateSession;
+        switch (preparation.Kind)
+        {
+            case DailyV1ApplicationStartPreparationKind.GenesisPrepared:
+                candidateSession = preparation.CoreSession;
+                if (restoredCandidateSession != null)
+                {
+                    diagnostic = "The initial Unity adapter cannot substitute a session for Core's prepared genesis.";
+                    return false;
+                }
+                break;
+
+            case DailyV1ApplicationStartPreparationKind.RestoreRequired:
+                candidateSession = restoredCandidateSession;
+                break;
+
+            default:
+                diagnostic = "Core initial-start preparation selected an unsupported application path.";
+                return false;
         }
 
         return TryCommitInitialStartWithHostProjection(

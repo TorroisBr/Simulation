@@ -548,17 +548,17 @@ public sealed class DailyV1ApplicationHostTests
 
         bool ProjectExactPreparation(
             DailyV1ApplicationStartPreparation candidatePreparation,
-            out DailyV1ActiveRuntimeSession candidateSession,
+            out DailyV1ActiveRuntimeSession restoredCandidateSession,
             out IDailyV1ApplicationHostProjection candidateProjection,
             out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
             out string diagnostic)
         {
             factoryCalls++;
             factoryPreparation = candidatePreparation;
-            candidateSession = candidatePreparation.CoreSession;
+            restoredCandidateSession = null;
             candidateProjection = projection;
             candidateHostPorts = new MinimalSelectedRuntimeAdvanceHostPorts(
-                candidateSession.ExecutionBoundaryState);
+                candidatePreparation.CoreSession.ExecutionBoundaryState);
             diagnostic = null;
             return true;
         }
@@ -596,12 +596,12 @@ public sealed class DailyV1ApplicationHostTests
 
         bool RejectProjection(
             DailyV1ApplicationStartPreparation preparation,
-            out DailyV1ActiveRuntimeSession candidateSession,
+            out DailyV1ActiveRuntimeSession restoredCandidateSession,
             out IDailyV1ApplicationHostProjection candidateProjection,
             out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
             out string diagnostic)
         {
-            candidateSession = preparation.CoreSession;
+            restoredCandidateSession = null;
             candidateProjection = null;
             candidateHostPorts = null;
             diagnostic = "Unity rejected the exact host projection.";

@@ -409,13 +409,15 @@ public class TesteSimulacao : MonoBehaviour
         {
             bool started = dailyV1Application.TryStartOnExistingApplication(
                 currentDefinitions, host,
-                (DailyV1ApplicationStartPreparation preparation, out DailyV1ActiveRuntimeSession candidateCoreSession,
+                (DailyV1ApplicationStartPreparation preparation,
+                    out DailyV1ActiveRuntimeSession restoredCandidateSession,
                     out IDailyV1ApplicationHostProjection candidateProjection,
                     out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
                     out string hostDiagnostic) => TryBuildInitialStartHostProjection(
                         preparation, host, compatibility, effective, calendar,
                         currentDefinitions, currentBindings,
-                        out candidateCoreSession, out candidateProjection,
+                        out restoredCandidateSession,
+                        out candidateProjection,
                         out candidateHostPorts, out hostDiagnostic),
                 out DailyV1ApplicationStartPreparation completedPreparation,
                 out P12AResult startResult,
@@ -616,7 +618,6 @@ public class TesteSimulacao : MonoBehaviour
                 return false;
             }
 
-            candidateCoreSession = preparation.CoreSession;
             candidateProjection = genesisProjection;
             candidateHostPorts = genesisProjection.Runtime;
             return true;
