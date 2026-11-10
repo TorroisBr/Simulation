@@ -590,75 +590,75 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        if (!TryPrepareStartOnExistingApplication(
-                definitions, host, out preparation, out persistenceResult, out diagnostic))
-            return false;
-
-        IDailyV1ApplicationHostProjection candidateHostProjection = null;
-        IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts = null;
-        bool hostReady;
+        bool committed = false;
         try
         {
-            hostReady = hostProjectionFactory(
-                preparation, out candidateHostProjection,
-                out candidateHostPorts, out diagnostic);
-        }
-        catch (Exception exception) when (exception is ArgumentException
-            || exception is InvalidOperationException || exception is OverflowException
-            || exception is NullReferenceException)
-        {
-            diagnostic = "The initial-start host projection failed before Core publication: "
-                + exception.Message;
-            return false;
-        }
-
-        if (!hostReady)
-        {
-            if (string.IsNullOrWhiteSpace(diagnostic))
-                diagnostic = "The initial-start host could not project the exact admitted Core candidate.";
-            return false;
-        }
-
-        DailyV1ActiveRuntimeSession candidateSession;
-        switch (preparation.Kind)
-        {
-            case DailyV1ApplicationStartPreparationKind.GenesisPrepared:
-                candidateSession = preparation.CoreSession;
-                break;
-
-            case DailyV1ApplicationStartPreparationKind.RestoreRequired:
-                if (!TryGetPreparedInitialRestoredSession(
-                        preparation, out candidateSession, out diagnostic))
-                    return false;
-                break;
-
-            default:
-                diagnostic = "Core initial-start preparation selected an unsupported application path.";
+            if (!TryPrepareStartOnExistingApplication(
+                    definitions, host, out preparation, out persistenceResult, out diagnostic))
                 return false;
-        }
 
-        if (!ReferenceEquals(candidateHostProjection.CoreRuntimeSession, candidateSession))
-        {
-            diagnostic = "The host projection must retain the exact Core-selected initial runtime session.";
-            return false;
-        }
-
-        bool committed = TryCommitInitialStartWithHostProjection(
-            preparation, candidateSession, candidateHostProjection,
-            candidateHostPorts, out diagnostic);
-        if (committed && preparation.Kind == DailyV1ApplicationStartPreparationKind.RestoreRequired)
-        {
-            lock (activeSessionGate.SyncRoot)
+            IDailyV1ApplicationHostProjection candidateHostProjection = null;
+            IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts = null;
+            bool hostReady;
+            try
             {
-                if (ReferenceEquals(preparedInitialRestoredImage, preparation.RestoreImage)
-                    && ReferenceEquals(preparedInitialRestoredSession, candidateSession))
-                {
-                    preparedInitialRestoredImage = null;
-                    preparedInitialRestoredSession = null;
-                }
+                hostReady = hostProjectionFactory(
+                    preparation, out candidateHostProjection,
+                    out candidateHostPorts, out diagnostic);
+            }
+            catch (Exception exception) when (exception is ArgumentException
+                || exception is InvalidOperationException || exception is OverflowException
+                || exception is NullReferenceException)
+            {
+                diagnostic = "The initial-start host projection failed before Core publication: "
+                    + exception.Message;
+                return false;
+            }
+
+            if (!hostReady)
+            {
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "The initial-start host could not project the exact admitted Core candidate.";
+                return false;
+            }
+
+            DailyV1ActiveRuntimeSession candidateSession;
+            switch (preparation.Kind)
+            {
+                case DailyV1ApplicationStartPreparationKind.GenesisPrepared:
+                    candidateSession = preparation.CoreSession;
+                    break;
+
+                case DailyV1ApplicationStartPreparationKind.RestoreRequired:
+                    if (!TryGetPreparedInitialRestoredSession(
+                            preparation, out candidateSession, out diagnostic))
+                        return false;
+                    break;
+
+                default:
+                    diagnostic = "Core initial-start preparation selected an unsupported application path.";
+                    return false;
+            }
+
+            if (candidateHostProjection == null || candidateHostPorts == null
+                || !ReferenceEquals(candidateHostProjection.CoreRuntimeSession, candidateSession))
+            {
+                diagnostic = "The host projection and ports must retain the exact Core-selected initial runtime session.";
+                return false;
+            }
+
+            committed = TryCommitInitialStartWithHostProjection(
+                preparation, candidateSession, candidateHostProjection,
+                candidateHostPorts, out diagnostic);
+            return committed;
+        }
+        finally
+        {
+            if (preparation?.Kind == DailyV1ApplicationStartPreparationKind.RestoreRequired)
+            {
+                ClearPreparedInitialRestoredSession(preparation.RestoreImage);
             }
         }
-        return committed;
     }
 
     private static SimulationLogger CreateInitialLogger(
@@ -915,6 +915,24 @@ internal sealed class DailyV1Application
 
             candidate = preparedInitialRestoredSession;
             return true;
+        }
+    }
+
+    private void ClearPreparedInitialRestoredSession(P12AContinuationImage image)
+    {
+        if (image == null) return;
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (!ReferenceEquals(preparedInitialRestoredImage, image)) return;
+
+            DailyV1ActiveRuntimeSession session = preparedInitialRestoredSession;
+            if (session != null
+                && session.TryGetInitialRestoreCommitProof(image,
+                    out DailyV1InitialRestoredImageCommitProof proof))
+                session.ClearInitialRestoreCommitProof(proof);
+
+            preparedInitialRestoredImage = null;
+            preparedInitialRestoredSession = null;
         }
     }
 

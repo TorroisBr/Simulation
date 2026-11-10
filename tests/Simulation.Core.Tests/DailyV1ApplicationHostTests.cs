@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 using NUnit.Framework;
 
@@ -624,6 +625,74 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
         Assert.That(application.ActiveSession, Is.Null,
             "A Genesis projection callback cannot choose the Core session that will be published.");
+    }
+
+    [Test]
+    public void CoreGenesisStartRejectsSuccessfulProjectionCallbackWithoutProjection()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "start-existing-application-null-projection-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, unityV1Identity: UnityIdentity());
+
+        bool ProjectNull(
+            DailyV1ApplicationStartPreparation preparation,
+            out IDailyV1ApplicationHostProjection candidateProjection,
+            out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+            out string diagnostic)
+        {
+            candidateProjection = null;
+            candidateHostPorts = new MinimalSelectedRuntimeAdvanceHostPorts(
+                preparation.CoreSession.ExecutionBoundaryState);
+            diagnostic = null;
+            return true;
+        }
+
+        Assert.That(application.TryStartOnExistingApplication(
+            definitions, host, ProjectNull,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult persistenceResult,
+            out string startDiagnostic), Is.False);
+        Assert.That(startDiagnostic, Does.Contain("host projection and ports"));
+        Assert.That(preparation.Kind,
+            Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+        Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(application.ActiveSession, Is.Null,
+            "A successful callback with no projection must not publish the prepared Core session.");
+    }
+
+    [Test]
+    public void InitialRestoreCleanupReleasesItsPrivateSessionAndImageReferences()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession privateSession,
+            out string diagnostic), Is.True, diagnostic);
+
+        P12AContinuationImage image = AdmissionOnlyImage();
+        FieldInfo imageField = typeof(DailyV1Application).GetField(
+            "preparedInitialRestoredImage", BindingFlags.Instance | BindingFlags.NonPublic);
+        FieldInfo sessionField = typeof(DailyV1Application).GetField(
+            "preparedInitialRestoredSession", BindingFlags.Instance | BindingFlags.NonPublic);
+        MethodInfo cleanup = typeof(DailyV1Application).GetMethod(
+            "ClearPreparedInitialRestoredSession", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(imageField, Is.Not.Null);
+        Assert.That(sessionField, Is.Not.Null);
+        Assert.That(cleanup, Is.Not.Null);
+
+        imageField.SetValue(application, image);
+        sessionField.SetValue(application, privateSession);
+
+        cleanup.Invoke(application, new object[] { image });
+
+        Assert.That(imageField.GetValue(application), Is.Null,
+            "The application must release the private restored image after the attempt fails.");
+        Assert.That(sessionField.GetValue(application), Is.Null,
+            "The application must release the unpublished restored session after the attempt fails.");
     }
 
     [Test]

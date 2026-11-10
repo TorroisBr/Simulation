@@ -435,6 +435,9 @@ public class TesteSimulacao : MonoBehaviour
             {
                 bootstrapFailed = true;
                 pendingInitialStartHostProjection = null;
+                dailyV1InitialStartPreparation = null;
+                dailyV1InitialStartHost = null;
+                dailyV1StartAdmission = null;
                 UnityEngine.Debug.LogError("P12-A Core initial-start transaction failed before publishing its exact host session. "
                     + (startResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString())
                     + (string.IsNullOrWhiteSpace(startDiagnostic) ? string.Empty : ": " + startDiagnostic));
