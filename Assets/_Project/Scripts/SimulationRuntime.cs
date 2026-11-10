@@ -81,8 +81,7 @@ public sealed class SimulationRuntimeSpatialInvariantReport
 }
 
 public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
-    IDailyV1RuntimeAdvanceBoundary, IDailyV1SelectedRuntimeAdvanceHostPorts,
-    IDailyV1SelectedRuntimeOwnerCensusIdentityHostPorts
+    IDailyV1RuntimeAdvanceBoundary, IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     [ThreadStatic]
     private static DailyGameplayExecutionProbeForTest activeDailyGameplayExecutionProbeForTest;
@@ -11532,7 +11531,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     DailyV1ExecutionBoundaryState IDailyV1SelectedRuntimeAdvanceHostPorts.ExecutionState =>
         dailyExecutionBoundary;
 
-    object IDailyV1SelectedRuntimeOwnerCensusIdentityHostPorts.SelectedRuntimeOwnerCensusSourceIdentity =>
+    object IDailyV1SelectedRuntimeAdvanceHostPorts.SelectedRuntimeOwnerCensusSourceIdentity =>
         npcRosterCensusProtocol;
 
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryGetExactJusticeRecordsCensusProjectionIdentity(

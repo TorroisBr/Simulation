@@ -1134,6 +1134,7 @@ public sealed class DailyV1ApplicationHostTests
         }
 
         public DailyV1ExecutionBoundaryState ExecutionState { get; }
+        public object SelectedRuntimeOwnerCensusSourceIdentity => this;
         internal int RestoredVectorCaptureCalls { get; private set; }
 
         public bool TryGetExactJusticeRecordsCensusProjectionIdentity(

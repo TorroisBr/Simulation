@@ -4802,10 +4802,7 @@ internal sealed class DailyV1Application
         DailyV1ActiveRuntimeSession candidateSession,
         IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts)
     {
-        if (!(hostPorts is IDailyV1SelectedRuntimeOwnerCensusIdentityHostPorts censusIdentityHostPorts))
-            return true;
-
-        object censusSourceIdentity = censusIdentityHostPorts.SelectedRuntimeOwnerCensusSourceIdentity;
+        object censusSourceIdentity = hostPorts.SelectedRuntimeOwnerCensusSourceIdentity;
         DailyV1ExecutionBoundaryState executionState = candidateSession.ExecutionBoundaryState;
         if (censusSourceIdentity == null) return false;
 

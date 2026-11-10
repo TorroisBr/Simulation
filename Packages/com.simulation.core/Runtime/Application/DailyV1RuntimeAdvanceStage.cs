@@ -161,6 +161,8 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
+    // Stable identity for the complete live/restored owner-census reader.
+    object SelectedRuntimeOwnerCensusSourceIdentity { get; }
     bool TryGetExactJusticeRecordsCensusProjectionIdentity(
         DailyV1JusticeRecordsOwner owner,
         out object projectionIdentity,
@@ -181,16 +183,6 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 }
 
 /// <summary>
-/// Exact census source identity for one runtime host adapter. A compatibility
-/// host may bind its source during runtime initialization; a host composed by
-/// Core may bind through this port during boundary setup. Core requires the
-/// same source identity for live and restored owner vectors in either case.
-/// </summary>
-internal interface IDailyV1SelectedRuntimeOwnerCensusIdentityHostPorts
-{
-    object SelectedRuntimeOwnerCensusSourceIdentity { get; }
-}
-
 /// <summary>
 /// Legacy boundary for callers that still own their own day or intraday
 /// implementation. Selected Daily-v1 application sessions use the Core

@@ -19,8 +19,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     private sealed class CensusIdentityApplicationAdvanceBoundary
-        : ApplicationAdvanceBoundary,
-          IDailyV1SelectedRuntimeOwnerCensusIdentityHostPorts
+        : ApplicationAdvanceBoundary
     {
         internal CensusIdentityApplicationAdvanceBoundary(
             DailyV1ExecutionBoundaryState state,
@@ -30,7 +29,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             SelectedRuntimeOwnerCensusSourceIdentity = censusSourceIdentity;
         }
 
-        public object SelectedRuntimeOwnerCensusSourceIdentity { get; }
+        public override object SelectedRuntimeOwnerCensusSourceIdentity { get; }
     }
 
     private static P12ACompatibilityDescriptor UnityIdentity() =>
@@ -126,6 +125,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
 
         internal bool OperationEntered { get; private set; }
+        public virtual object SelectedRuntimeOwnerCensusSourceIdentity => this;
         internal int ActiveOperationCountAtStageCreation { get; private set; }
         internal bool SelectedBoundaryRequested { get; private set; }
         internal bool ReturnSelectedExecutionHostPorts { get; set; }
@@ -421,7 +421,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         out ApplicationAdvanceBoundary boundary,
         DailyV1EffectiveDefinitions definitions = null,
         bool publishWorld = true,
-        bool markCensusProtocolReady = true)
+        bool markCensusProtocolReady = true,
+        bool bindAdvanceBoundary = true)
     {
         DailyV1Application application = new DailyV1Application();
         definitions ??= DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -437,8 +438,11 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(session.ExecutionBoundaryState.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True,
                 "The Core boundary fixture models a successfully bound census protocol.");
         boundary = new ApplicationAdvanceBoundary(session.ExecutionBoundaryState, onOperationEntry);
-        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, boundary), Is.True);
-        Assert.That(application.TryPublishInitial(session), Is.True);
+        if (bindAdvanceBoundary)
+        {
+            Assert.That(application.TryBindRuntimeAdvanceBoundary(session, boundary), Is.True);
+            Assert.That(application.TryPublishInitial(session), Is.True);
+        }
         return application;
     }
 
@@ -1681,7 +1685,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(sourceState.TryMarkFactualReadWorldPublished(), Is.True);
         OwnerSectionCensusSnapshot[] sourceOwners =
             CreateCoreBoundCompleteOwnerSectionVector(sourceSession);
-        const long sourceEpoch = 23L;
+        long sourceEpoch = sourceState.MutationEpochState.CurrentEpoch;
         ApplicationAdvanceBoundary sourceBoundary = new ApplicationAdvanceBoundary(
             sourceState, null, sourceOwners, sourceEpoch);
         TestHostProjection sourceProjection = new TestHostProjection();
@@ -1722,7 +1726,21 @@ public sealed class DailyV1ApplicationSessionGateTests
                 == PoliticalDecisionStoreCensusProvider.SectionId).OwnerInstanceIdentity,
                 Is.SameAs(candidateComposition.OwnerGraph.PoliticalDecisionStore),
                 "The restored token fixture starts with the exact P12-E Core owner identity.");
-            const long candidateEpoch = 31L;
+            long candidateEpoch = candidateState.MutationEpochState.CurrentEpoch;
+            ApplicationAdvanceBoundary candidateBoundary = new ApplicationAdvanceBoundary(
+                candidateState, null, candidateOwners, candidateEpoch);
+            Assert.That(candidateState.TryBindSelectedRuntimeOwnerCensusSource(
+                candidateBoundary.SelectedRuntimeOwnerCensusSourceIdentity,
+                allowedOuterScope => candidateBoundary.TryCaptureOwnerSectionCensus(
+                        allowedOuterScope,
+                        out IReadOnlyList<OwnerSectionCensusSnapshot> capturedOwnerSections,
+                        out long capturedEpoch,
+                        out DailyCaptureEligibilityFailure captureFailure)
+                    ? DailyV1OwnerSectionCensusCaptureResult.Captured(
+                        capturedOwnerSections, capturedEpoch)
+                    : DailyV1OwnerSectionCensusCaptureResult.Rejected(
+                        captureFailure, "The restore fixture census source rejected capture.")), Is.True,
+                "The restored candidate binds its exact host census before issuing a capture token.");
             Assert.That(candidateState.TryCreateRestoredContinuationToken(
                 candidateAdmission,
                 candidateState.ConfigurationIdentity,
@@ -1739,8 +1757,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(application.TryCreateRestoredActiveRuntimeSession(
                 candidateState, definitions, 0L, replacementOperation,
                 out DailyV1ActiveRuntimeSession candidate, out diagnostic), Is.True, diagnostic);
-            ApplicationAdvanceBoundary candidateBoundary = new ApplicationAdvanceBoundary(
-                candidateState, null, candidateOwners, candidateEpoch);
+
             Assert.That(bootstrapAdmission.IsOwnedByCurrentThread(), Is.True,
                 "The restore commit runs on the application's bootstrap owner thread.");
             Assert.That(candidateAdmission.IsOwnedByCurrentThread(), Is.True,
@@ -2282,6 +2299,12 @@ public sealed class DailyV1ApplicationSessionGateTests
                 session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch)), Is.True,
             "The candidate session first binds its exact census source under its Core state.");
 
+        CensusIdentityApplicationAdvanceBoundary missingSource =
+            new CensusIdentityApplicationAdvanceBoundary(
+                session.ExecutionBoundaryState, null);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, missingSource), Is.False,
+            "A selected host boundary must expose the stable owner-census source identity.");
+
         CensusIdentityApplicationAdvanceBoundary wrongSource =
             new CensusIdentityApplicationAdvanceBoundary(
                 session.ExecutionBoundaryState, new object());
@@ -2512,7 +2535,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(coreBoundary, Is.Not.Null);
         IReadOnlyList<OwnerSectionCensusSnapshot> completeHostVector =
             CreateCoreBoundCompleteOwnerSectionVector(session);
-        hostPorts.SetAdmissionEvidence(completeHostVector, mutationEpoch: 17L);
+        hostPorts.SetAdmissionEvidence(completeHostVector,
+            mutationEpoch: session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch);
 
         Assert.That(coreBoundary.TryCaptureCompletedDailyCaptureEvidence(
             out _, out _, out DailyCaptureEligibilityFailure failure), Is.False,
@@ -2638,12 +2662,13 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(baselineRecords.OwnerInstanceIdentity,
             Is.Not.SameAs(session.OwnerGraph.JusticeRecordsOwner),
             "The Core validator accepts one host-local opaque identity while deriving owner facts from the exact Core owner.");
-        hostPorts.SetAdmissionEvidence(baseline, mutationEpoch: 73L);
+        long sharedEpoch = session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch;
+        hostPorts.SetAdmissionEvidence(baseline, mutationEpoch: sharedEpoch);
 
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(false,
             out IReadOnlyList<OwnerSectionCensusSnapshot> admitted, out long admittedEpoch,
             out DailyCaptureEligibilityFailure failure), Is.True);
-        Assert.That(admittedEpoch, Is.EqualTo(73L));
+        Assert.That(admittedEpoch, Is.EqualTo(sharedEpoch));
         Assert.That(admitted.Single(section => section.SectionId
                 == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId).Cardinality,
             Is.EqualTo(session.OwnerGraph.JusticeRecordsOwner.WantedRecords.Count
@@ -2656,7 +2681,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         {
             List<OwnerSectionCensusSnapshot> candidate = baseline.ToList();
             mutate(candidate);
-            hostPorts.SetAdmissionEvidence(candidate.ToArray(), mutationEpoch: 74L);
+            hostPorts.SetAdmissionEvidence(candidate.ToArray(), mutationEpoch: sharedEpoch);
             bool captured = coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(false,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> rejected, out long rejectedEpoch, out failure);
             Assert.That(captured, Is.False, reason);
@@ -3794,7 +3819,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     public void CoreBoundCensusCaptureOwnsHostRemainderSelectionAfterEpochValidation()
     {
         CreateApplicationWithAdvanceBoundary(
-            null, out DailyV1ActiveRuntimeSession session, out _);
+            null, out DailyV1ActiveRuntimeSession session, out _, bindAdvanceBoundary: false);
         DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
         OwnerSectionCensusSnapshot[] completeHostVector =
             CreateCoreBoundCompleteOwnerSectionVector(session);
@@ -3848,7 +3873,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     public void CoreBoundCensusCaptureRejectsEpochDriftBeforeRemainderProjection()
     {
         CreateApplicationWithAdvanceBoundary(
-            null, out DailyV1ActiveRuntimeSession session, out _);
+            null, out DailyV1ActiveRuntimeSession session, out _, bindAdvanceBoundary: false);
         DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
         OwnerSectionCensusSnapshot[] completeHostVector =
             CreateCoreBoundCompleteOwnerSectionVector(session);

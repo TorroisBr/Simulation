@@ -23,6 +23,7 @@ public sealed class SimulationRuntimeOrchestrationTests
             ExecutionState = state;
 
         public DailyV1ExecutionBoundaryState ExecutionState { get; }
+        public object SelectedRuntimeOwnerCensusSourceIdentity => this;
         public bool HasExactCoreOwnedSelectedCensusSources => true;
         public bool TryGetExactJusticeRecordsCensusProjectionIdentity(
             DailyV1JusticeRecordsOwner owner, out object projectionIdentity, out long p18ReceiptRevision)
