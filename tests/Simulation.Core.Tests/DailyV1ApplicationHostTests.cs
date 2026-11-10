@@ -180,6 +180,39 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
+    public void CoreApplicationRetainsOneExactHostConfigurationForItsStartLifetime()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "application-host-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, dotNetIdentity: DotNetIdentity());
+
+        Assert.That(DailyV1Application.TryPrepareStart(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult result,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(preparation, Is.Not.Null);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(preparation.Application.BoundHost, Is.SameAs(host),
+            "The Core application must retain the exact root, file operations, and host identity selected for start.");
+
+        DailyV1ApplicationHost alternateHost = new DailyV1ApplicationHost(
+            "alternate-application-host-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, dotNetIdentity: DotNetIdentity());
+        Assert.That(preparation.Application.TryPrepareStartOnExistingApplication(
+            definitions, alternateHost,
+            out DailyV1ApplicationStartPreparation ignoredPreparation,
+            out P12AResult alternateResult,
+            out string alternateDiagnostic), Is.False);
+        Assert.That(ignoredPreparation, Is.Null);
+        Assert.That(alternateResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+        Assert.That(alternateDiagnostic, Does.Contain("cannot change storage or host identity"));
+        Assert.That(preparation.Application.BoundHost, Is.SameAs(host),
+            "A later call must not rebind a published-or-prepared application's storage identity.");
+    }
+
+    [Test]
     public void InitialSlotInspectionAdmitsGenesisOnlyWhenTheCoreSlotIsMissing()
     {
         DailyV1Application application = new DailyV1Application();

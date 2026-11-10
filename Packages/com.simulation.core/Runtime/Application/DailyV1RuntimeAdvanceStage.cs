@@ -426,137 +426,17 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             return false;
         }
 
-        DailyV1JusticeRecordsOwner justiceOwner =
-            executionState.SelectedRuntimeOwnerGraph?.JusticeRecordsOwner;
+        DailyV1SelectedRuntimeOwnerGraph graph = executionState.SelectedRuntimeOwnerGraph;
+        DailyV1JusticeRecordsOwner justiceOwner = graph?.JusticeRecordsOwner;
         if (!hostPorts.TryGetExactJusticeRecordsCensusProjectionIdentity(
                 justiceOwner, out object justiceProjectionIdentity, out long p18ReceiptRevision)
-            || !DailyV1SelectedRuntimeOwnerCensusSource.TryValidateCoreOwnedJusticeSections(
-                executionState.SelectedRuntimeOwnerGraph, ownerSections, justiceProjectionIdentity,
-                p18ReceiptRevision, out _))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-
-        // Exact selected City and PoliticalDecision rows may be absent from the
-        // host remainder. Restore those Core witnesses before P12-F requires
-        // the complete vector; stale City or PoliticalDecision facts remain on
-        // the established host path and fail the exact composition gate.
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
-                executionState.SelectedRuntimeOwnerGraph,
-                ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionsWithCity,
-                out _)
-            || !DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
-                executionState.SelectedRuntimeOwnerGraph,
-                ownerSectionsWithCity,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionsWithPoliticalDecision,
-                out _)
-            || !DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                executionState.SelectedRuntimeOwnerGraph,
-                executionState.SelectedActorChoiceStore,
-                ownerSectionsWithPoliticalDecision,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreP12FSections,
-                out _)
-            || !DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
-                completeCoreP12FSections,
-                executionState.SelectedRuntimeOwnerGraph,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
-                out _))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-        ownerSections = hostOwnedSections;
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
-                executionState.SelectedRuntimeOwnerGraph,
-                ownerSections,
-                out _))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedGenealogySection(
-                executionState.SelectedRuntimeOwnerGraph,
-                ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedGenealogySections,
-                out _))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-        ownerSections = coreOwnedGenealogySections;
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
-                executionState.SelectedRuntimeOwnerGraph,
-                ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedPoliticalDecisionSections,
-                out _))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-        ownerSections = coreOwnedPoliticalDecisionSections;
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
-                executionState.SelectedRuntimeOwnerGraph,
-                ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedPersonStoreSections,
-                out _))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-        ownerSections = coreOwnedPersonStoreSections;
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedIdentitySpatialSections(
-                executionState.SelectedRuntimeOwnerGraph,
-                ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedIdentitySpatialSections,
-                out _))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-        ownerSections = coreOwnedIdentitySpatialSections;
-
-        // P12-F requires a structurally complete vector. Recompose the selected
-        // Core-owned identity, spatial and City rows before that gate; the host
-        // filter removes them only when their captured witnesses match exactly.
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
-                executionState.SelectedRuntimeOwnerGraph,
-                ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> cityRowsBeforeP12F,
-                out _))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-        ownerSections = cityRowsBeforeP12F;
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                executionState.SelectedRuntimeOwnerGraph,
+            || !DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedDailyOwnerVector(
+                graph,
                 executionState.SelectedActorChoiceStore,
                 ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedP12FSections,
+                justiceProjectionIdentity,
+                p18ReceiptRevision,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeOwnerSections,
                 out _))
         {
             ownerSections = null;
@@ -564,122 +444,7 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
             failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
             return false;
         }
-        ownerSections = coreOwnedP12FSections;
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
-                executionState.SelectedRuntimeOwnerGraph,
-                ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedNpcSections,
-                out _))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-        ownerSections = coreOwnedNpcSections;
-
-        if (executionState.SelectedRuntimeOwnerGraph.PersonStore != null)
-        {
-            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcRuntimeStateSections(
-                    executionState.SelectedRuntimeOwnerGraph,
-                    ownerSections,
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedNpcRuntimeStateSections,
-                    out _))
-            {
-                ownerSections = null;
-                mutationEpoch = 0L;
-                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-                return false;
-            }
-
-            ownerSections = coreOwnedNpcRuntimeStateSections;
-        }
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedCommercialKnowledgeSections(
-                executionState.SelectedRuntimeOwnerGraph,
-                ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedCommercialKnowledgeSections,
-                out _))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-        ownerSections = coreOwnedCommercialKnowledgeSections;
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
-                executionState.SelectedRuntimeOwnerGraph,
-                ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedNpcKnowledgeAndPlanSections,
-                out _))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-        ownerSections = coreOwnedNpcKnowledgeAndPlanSections;
-
-        if (executionState.SelectedRuntimeOwnerGraph.PersonStore != null)
-        {
-            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedPersonStoreSections(
-                    executionState.SelectedRuntimeOwnerGraph,
-                    ownerSections,
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedPersonSections,
-                    out _))
-            {
-                ownerSections = null;
-                mutationEpoch = 0L;
-                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-                return false;
-            }
-
-            ownerSections = coreOwnedPersonSections;
-        }
-
-        if (executionState.SelectedRuntimeOwnerGraph.PersonStore != null)
-        {
-            if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCorePersonLifeResidenceSections(
-                    executionState.SelectedRuntimeOwnerGraph,
-                    ownerSections,
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedPersonLifeResidenceSections,
-                    out _))
-            {
-                ownerSections = null;
-                mutationEpoch = 0L;
-                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-                return false;
-            }
-
-            ownerSections = coreOwnedPersonLifeResidenceSections;
-        }
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreSpatialKnowledgeSections(
-                executionState.SelectedRuntimeOwnerGraph,
-                ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedSpatialKnowledgeSections,
-                out _))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-        ownerSections = coreOwnedSpatialKnowledgeSections;
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedCitySections(
-                executionState.SelectedRuntimeOwnerGraph,
-                ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> coreOwnedCitySections,
-                out _))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-        ownerSections = coreOwnedCitySections;
+        ownerSections = completeOwnerSections;
 
         failure = DailyCaptureEligibilityFailure.None;
         return true;
@@ -1212,6 +977,143 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             "selected Core identity/spatial/runtime and City",
             out hostOwnedSections,
             out diagnostic);
+    }
+
+    /// <summary>
+    /// Reconstructs one complete selected Daily-v1 owner vector from the
+    /// captured host vector and the exact Core owner graph. Both live capture
+    /// and detached restored-target admission use this path so the Core-owned
+    /// row projection, alias binding, and host remainder checks cannot drift.
+    /// The host still supplies its actual census and epoch; this method never
+    /// fabricates a host owner or revision.
+    /// </summary>
+    internal static bool TryComposeCoreOwnedDailyOwnerVector(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        ActorChoiceStore actorChoiceStore,
+        IReadOnlyList<OwnerSectionCensusSnapshot> capturedOwnerSections,
+        object justiceProjectionIdentity,
+        long p18ReceiptRevision,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> completeOwnerSections,
+        out string diagnostic)
+    {
+        completeOwnerSections = null;
+        diagnostic = null;
+        if (graph == null || actorChoiceStore == null || capturedOwnerSections == null)
+        {
+            diagnostic = "The complete Core owner-vector composition requires the exact graph, actor-choice store, and captured census.";
+            return false;
+        }
+
+        if (!TryValidateCoreOwnedJusticeSections(
+                graph, capturedOwnerSections, justiceProjectionIdentity,
+                p18ReceiptRevision, out diagnostic)
+            || !TryAddCoreOwnedCitySections(
+                graph, capturedOwnerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> cityRowsBeforeP12F,
+                out diagnostic)
+            || !TryComposeCoreOwnedPoliticalDecisionSection(
+                graph, cityRowsBeforeP12F,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> politicalDecisionRowsBeforeP12F,
+                out diagnostic)
+            || !TryComposeCoreOwnedP12FSections(
+                graph, actorChoiceStore, politicalDecisionRowsBeforeP12F,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreP12FSections,
+                out diagnostic)
+            || !TryRemoveCoreOwnedSelectedRuntimeSections(
+                completeCoreP12FSections, graph,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> hostOwnedSections,
+                out diagnostic)
+            || !TryValidateExcludedNpcReceiptSections(
+                graph, hostOwnedSections, out diagnostic)
+            || !TryRebindCoreOwnedGenealogySection(
+                graph, hostOwnedSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> genealogySections,
+                out diagnostic)
+            || !TryComposeCoreOwnedPoliticalDecisionSection(
+                graph, genealogySections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> politicalDecisionSections,
+                out diagnostic)
+            || !TryComposeCoreOwnedPersonStoreSections(
+                graph, politicalDecisionSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> personStoreSections,
+                out diagnostic)
+            || !TryComposeCoreOwnedIdentitySpatialSections(
+                graph, personStoreSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> identitySpatialSections,
+                out diagnostic)
+            || !TryAddCoreOwnedCitySections(
+                graph, identitySpatialSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> citySections,
+                out diagnostic)
+            || !TryComposeCoreOwnedP12FSections(
+                graph, actorChoiceStore, citySections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> cityAndP12FSections,
+                out diagnostic)
+            || !TryRebindCoreOwnedNpcSections(
+                graph, cityAndP12FSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> npcSections,
+                out diagnostic))
+        {
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The Core owner graph could not reproduce its exact selected census rows.";
+            return false;
+        }
+
+        IReadOnlyList<OwnerSectionCensusSnapshot> composed = npcSections;
+        if (graph.PersonStore != null)
+        {
+            if (!TryRebindCoreOwnedNpcRuntimeStateSections(
+                    graph, composed,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> runtimeStateSections,
+                    out diagnostic))
+                return false;
+            composed = runtimeStateSections;
+        }
+
+        if (!TryRebindCoreOwnedCommercialKnowledgeSections(
+                graph, composed,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> commercialKnowledgeSections,
+                out diagnostic)
+            || !TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
+                graph, commercialKnowledgeSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> npcKnowledgeAndPlanSections,
+                out diagnostic))
+            return false;
+        composed = npcKnowledgeAndPlanSections;
+
+        if (graph.PersonStore != null)
+        {
+            if (!TryRebindCoreOwnedPersonStoreSections(
+                    graph, composed,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> boundPersonSections,
+                    out diagnostic)
+                || !TryRebindCorePersonLifeResidenceSections(
+                    graph, boundPersonSections,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> personLifeResidenceSections,
+                    out diagnostic))
+                return false;
+            composed = personLifeResidenceSections;
+        }
+
+        if (!TryRebindCoreSpatialKnowledgeSections(
+                graph, composed,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> spatialKnowledgeSections,
+                out diagnostic)
+            || !TryComposeCoreOwnedCitySections(
+                graph, spatialKnowledgeSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeCitySections,
+                out diagnostic)
+            || !DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+                completeCitySections))
+        {
+            completeOwnerSections = null;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The composed selected Daily-v1 owner vector is incomplete.";
+            return false;
+        }
+
+        completeOwnerSections = completeCitySections;
+        return true;
     }
 
     internal static bool TryComposeCoreOwnedIdentitySpatialSections(
@@ -5543,131 +5445,19 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         DailyV1JusticeRecordsOwner justiceOwner = selectedRuntimeOwnerGraph?.JusticeRecordsOwner;
         if (!hostPorts.TryGetExactJusticeRecordsCensusProjectionIdentity(
                 justiceOwner, out object justiceProjectionIdentity, out long p18ReceiptRevision)
-            || !DailyV1SelectedRuntimeOwnerCensusSource.TryValidateCoreOwnedJusticeSections(
-                selectedRuntimeOwnerGraph, ownerSections, justiceProjectionIdentity,
-                p18ReceiptRevision, out diagnostic))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            if (string.IsNullOrWhiteSpace(diagnostic))
-                diagnostic = "The Core restored boundary could not validate its exact Justice owner census.";
-            return false;
-        }
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
+            || !DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedDailyOwnerVector(
                 selectedRuntimeOwnerGraph,
                 selectedActorChoiceStore,
                 ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> completeCoreP12FSections,
-                out diagnostic))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            if (string.IsNullOrWhiteSpace(diagnostic))
-                diagnostic = "The Core restored boundary could not compose its P12-F owner rows.";
-            return false;
-        }
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRemoveCoreOwnedSelectedRuntimeSections(
-                completeCoreP12FSections,
-                selectedRuntimeOwnerGraph,
-                out ownerSections,
-                out diagnostic))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            if (string.IsNullOrWhiteSpace(diagnostic))
-                diagnostic = "The Core restored boundary could not select its exact migrated owner census rows.";
-            return false;
-        }
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
-                selectedRuntimeOwnerGraph, ownerSections, out diagnostic))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            if (string.IsNullOrWhiteSpace(diagnostic))
-                diagnostic = "The Core restored boundary could not validate its exact-empty NPC receipt rows.";
-            return false;
-        }
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPoliticalDecisionSection(
-                selectedRuntimeOwnerGraph,
-                ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> politicalDecisionSections,
-                out diagnostic))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            if (string.IsNullOrWhiteSpace(diagnostic))
-                diagnostic = "The Core restored boundary could not bind its exact P12-E PoliticalDecision owner.";
-            return false;
-        }
-        ownerSections = politicalDecisionSections;
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
-                selectedRuntimeOwnerGraph,
-                ownerSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> personStoreComposedSections,
-                out diagnostic))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            if (string.IsNullOrWhiteSpace(diagnostic))
-                diagnostic = "The Core restored boundary could not compose its exact PersonStore alias rows.";
-            return false;
-        }
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedIdentitySpatialSections(
-                selectedRuntimeOwnerGraph,
-                personStoreComposedSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> identitySpatialComposedSections,
-                out diagnostic))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            if (string.IsNullOrWhiteSpace(diagnostic))
-                diagnostic = "The Core restored boundary could not compose its exact identity and spatial owner rows.";
-            return false;
-        }
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryAddCoreOwnedCitySections(
-                selectedRuntimeOwnerGraph,
-                identitySpatialComposedSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> cityComposedSections,
-                out diagnostic))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            if (string.IsNullOrWhiteSpace(diagnostic))
-                diagnostic = "The Core restored boundary could not compose its exact City owner rows.";
-            return false;
-        }
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcKnowledgeAndPlanSections(
-                selectedRuntimeOwnerGraph,
-                cityComposedSections,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> npcKnowledgeAndPlanSections,
-                out diagnostic))
-        {
-            ownerSections = null;
-            mutationEpoch = 0L;
-            if (string.IsNullOrWhiteSpace(diagnostic))
-                diagnostic = "The Core restored boundary could not bind its exact NPC Knowledge and Plan owners.";
-            return false;
-        }
-
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
-                selectedRuntimeOwnerGraph,
-                selectedActorChoiceStore,
-                npcKnowledgeAndPlanSections,
+                justiceProjectionIdentity,
+                p18ReceiptRevision,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> completeOwnerSections,
                 out diagnostic))
         {
             ownerSections = null;
             mutationEpoch = 0L;
             if (string.IsNullOrWhiteSpace(diagnostic))
-                diagnostic = "The Core restored boundary could not compose its exact P12-F owner rows.";
+                diagnostic = "The Core restored boundary could not compose its exact complete owner vector.";
             return false;
         }
 

@@ -401,6 +401,7 @@ internal sealed class DailyV1Application
             session => session.ExecutionBoundaryState);
     private readonly Dictionary<DailyV1ActiveRuntimeSession, IDailyV1ApplicationHostProjection>
         activeHostProjections = new Dictionary<DailyV1ActiveRuntimeSession, IDailyV1ApplicationHostProjection>();
+    private DailyV1ApplicationHost applicationHost;
     private SimulationRuntimeAdmissionContext bootstrapAdmissionContext;
     private bool initialContinuationLoadAttempted;
     private bool initialContinuationLoadBlocksGenesis;
@@ -413,6 +414,54 @@ internal sealed class DailyV1Application
     // Construction remains internal until the complete TryStart path can
     // create and return the application only after genesis or restore commits.
     internal DailyV1Application() { }
+
+    /// <summary>
+    /// The immutable host selected for this application start. The storage
+    /// root, file operations, and host identity remain runtime host state; they
+    /// are never copied into the persisted continuation image.
+    /// </summary>
+    internal DailyV1ApplicationHost BoundHost
+    {
+        get
+        {
+            lock (activeSessionGate.SyncRoot) return applicationHost;
+        }
+    }
+
+    private bool TryBindApplicationHost(
+        DailyV1ApplicationHost host,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (host == null)
+        {
+            diagnostic = "The Core application requires its exact immutable host configuration.";
+            return false;
+        }
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (applicationHost != null)
+            {
+                if (ReferenceEquals(applicationHost, host)) return true;
+                diagnostic = "A Core application cannot change storage or host identity after its start configuration is bound.";
+                return false;
+            }
+
+            if (activeSessionGate.Current != null
+                || activeSessionGate.ActiveOperationCount != 0
+                || initialGenesisPreparationAttempted
+                || preparedInitialGenesis != null
+                || preparedInitialSession != null)
+            {
+                diagnostic = "The Core application cannot bind a host after runtime preparation or publication has begun.";
+                return false;
+            }
+
+            applicationHost = host;
+            return true;
+        }
+    }
 
     /// <summary>
     /// Makes the one Core-owned initial admission decision before allocating a
@@ -447,6 +496,8 @@ internal sealed class DailyV1Application
             diagnostic = "The selected Daily-v1 definitions and explicit application host are required.";
             return false;
         }
+
+        if (!TryBindApplicationHost(host, out diagnostic)) return false;
 
         if (!TryAdmitInitialStart(
                 definitions, host, out DailyV1ApplicationStartAdmission admission,
@@ -662,6 +713,8 @@ internal sealed class DailyV1Application
             diagnostic = "The admitted definitions and explicit application host are required to prepare the restore start.";
             return false;
         }
+
+        if (!TryBindApplicationHost(host, out diagnostic)) return false;
 
         try
         {
@@ -2696,6 +2749,12 @@ internal sealed class DailyV1Application
                     initialContinuationLoadResult = result;
                 }
             }
+            return false;
+        }
+
+        if (!TryBindApplicationHost(host, out _))
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
             return false;
         }
 

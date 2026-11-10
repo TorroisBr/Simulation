@@ -3797,6 +3797,71 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void CoreSharedDailyOwnerVectorComposerPreservesCompleteHostCensusAndJusticeAlias()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session, out _);
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
+        OwnerSectionCensusSnapshot[] captured =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        OwnerSectionCensusSnapshot records = captured.Single(section =>
+            section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+        object justiceProjectionIdentity = records.OwnerInstanceIdentity;
+        string hostOwnedRequiredId = DailyV1SelectedOwnerSectionCensusContract.FixedRequired
+            .First(sectionId =>
+                !DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds
+                    .Contains(sectionId, StringComparer.Ordinal)
+                && sectionId != DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId
+                && sectionId != DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+        OwnerSectionCensusSnapshot hostOwnedBefore = captured.Single(section =>
+            section.SectionId == hostOwnedRequiredId);
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedDailyOwnerVector(
+                graph, actorChoices, captured, justiceProjectionIdentity, 0L,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> composed,
+                out string diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+            composed), Is.True);
+        Assert.That(composed.Select(section => section.SectionId),
+            Is.EquivalentTo(captured.Select(section => section.SectionId)));
+
+        OwnerSectionCensusSnapshot composedRecords = composed.Single(section =>
+            section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+        OwnerSectionCensusSnapshot composedReceipts = composed.Single(section =>
+            section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+        Assert.That(composedRecords.OwnerInstanceIdentity, Is.SameAs(justiceProjectionIdentity));
+        Assert.That(composedReceipts.OwnerInstanceIdentity, Is.SameAs(justiceProjectionIdentity));
+        Assert.That(composedRecords.Cardinality,
+            Is.EqualTo(graph.JusticeRecordsOwner.WantedRecords.Count
+                + graph.JusticeRecordsOwner.Sentences.Count));
+        Assert.That(composedRecords.Revision, Is.EqualTo(graph.JusticeRecordsOwner.Revision));
+        Assert.That(composedReceipts.Cardinality, Is.EqualTo(1));
+        Assert.That(composedReceipts.Revision, Is.Zero,
+            "The P18 receipt census keeps its established exact-zero sentinel.");
+
+        OwnerSectionCensusSnapshot hostOwnedAfter = composed.Single(section =>
+            section.SectionId == hostOwnedRequiredId);
+        Assert.That(hostOwnedAfter.OwnerInstanceIdentity,
+            Is.SameAs(hostOwnedBefore.OwnerInstanceIdentity));
+        Assert.That(hostOwnedAfter.Cardinality, Is.EqualTo(hostOwnedBefore.Cardinality));
+        Assert.That(hostOwnedAfter.Revision, Is.EqualTo(hostOwnedBefore.Revision));
+
+        OwnerSectionCensusSnapshot[] nonzeroReceiptRevision = captured.Select(section =>
+            section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId
+                ? new OwnerSectionCensusSnapshot(
+                    section.SectionId, section.SchemaVersion, section.Role,
+                    section.OwnerInstanceIdentity, section.Cardinality, 1L)
+                : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedDailyOwnerVector(
+                graph, actorChoices, nonzeroReceiptRevision, justiceProjectionIdentity, 1L,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> rejected,
+                out string rejectionDiagnostic), Is.False);
+        Assert.That(rejected, Is.Null);
+        Assert.That(rejectionDiagnostic, Does.Contain("exact-zero"));
+    }
+
+    [Test]
     public void CoreRecomposesTheWholeSelectedNpcCensusFragmentFromItsExactOwnerGraph()
     {
         CreateApplicationWithAdvanceBoundary(
