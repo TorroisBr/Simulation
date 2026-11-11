@@ -261,6 +261,37 @@ public sealed class SettlementPopulationRuntime
         return TryApplyTransitionCore(transition, out failure);
     }
 
+    internal bool TryApplyTransitionWithResidenceCommit(
+        SettlementPopulationTransition transition,
+        Func<bool> commitResidenceOwner,
+        out PopulationTransitionFailure failure)
+    {
+        failure = PopulationTransitionFailure.None;
+        if (!CanApplyTransition(transition, out failure))
+            return false;
+        if (commitResidenceOwner == null
+            || !CanCommitP12PopulationMutation(true, false))
+        {
+            failure = PopulationTransitionFailure.RuntimeFaulted;
+            return false;
+        }
+
+        bool residenceCommitted;
+        try { residenceCommitted = commitResidenceOwner(); }
+        catch { residenceCommitted = false; }
+        if (!residenceCommitted)
+        {
+            failure = PopulationTransitionFailure.RuntimeFaulted;
+            return false;
+        }
+
+        // The residence callback is the final failure-capable owner write.
+        // City state is assigned only after it succeeds.
+        currentPopulation = transition.PopulationAfter;
+        revision++;
+        NotifyP12PopulationMutationCommitted(true, false);
+        return true;
+    }
     internal bool TryApplyTransitionWithReceipt(
         string operationIdentity,
         string operationFingerprint,

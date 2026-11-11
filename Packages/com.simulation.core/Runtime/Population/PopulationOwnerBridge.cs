@@ -158,6 +158,20 @@ public static class PopulationOwnerBridge
             out failure);
     }
 
+    internal static bool TryApplyWithResidenceCommit(
+        SettlementPopulationRuntime owner,
+        SettlementPopulationTransition transition,
+        Func<bool> commitResidenceOwner,
+        out PopulationTransitionFailure failure)
+    {
+        if (owner == null)
+        {
+            failure = PopulationTransitionFailure.InvalidSettlement;
+            return false;
+        }
+        return owner.TryApplyTransitionWithResidenceCommit(
+            transition, commitResidenceOwner, out failure);
+    }
     public static bool TryApplyAggregateWithReceipt(
         SettlementPopulationRuntime owner,
         int representedResidentFloor,

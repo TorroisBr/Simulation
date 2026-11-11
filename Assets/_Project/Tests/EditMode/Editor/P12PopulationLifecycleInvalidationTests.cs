@@ -102,6 +102,158 @@ public sealed class P12PopulationLifecycleInvalidationTests
     }
 
     [Test]
+    [TestCase(false)]
+    [TestCase(true)]
+    public void SelectedPopulationChangeCommitsCityAndExactResidenceOwner(bool personBacked)
+    {
+        CityData cityData = SimulationTestFactory.CreateCityData(
+            "core-selected-population-change-city-definition-" + personBacked);
+        cityData.initialPopulation = 5;
+        CityData saturatedCityData = SimulationTestFactory.CreateCityData(
+            "core-selected-population-change-saturated-definition-" + personBacked);
+        saturatedCityData.initialPopulation = 3;
+        NpcData npcData = SimulationTestFactory.CreateNpc(
+            "core-selected-population-change-npc-definition-" + personBacked);
+        SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        authoring.Cities.Add(cityData);
+        authoring.Cities.Add(saturatedCityData);
+        authoring.Npcs.Add(new NpcSimulationConfig { npc = npcData });
+        EffectiveSimulationConfiguration configuration = CreateP12Configuration();
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(
+            authoring.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions =
+            SimulationGenesisPipeline.CreateSelectedDefinitions(
+                authoring, configuration, calendar,
+                out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        CityRuntime city = CityRuntime.CreateSelectedDailyV1(
+            "core-selected-population-change-city-" + personBacked,
+            definitions.Cities[cityData.DefinitionId],
+            definitions,
+            bindings,
+            new SpatialLocationRuntime(
+                "core-selected-population-change-location-" + personBacked));
+        CityRuntime saturatedCity = CityRuntime.CreateSelectedDailyV1(
+            "core-selected-population-change-saturated-city-" + personBacked,
+            definitions.Cities[saturatedCityData.DefinitionId],
+            definitions,
+            bindings,
+            new SpatialLocationRuntime(
+                "core-selected-population-change-saturated-location-" + personBacked));
+        SetPopulationRevision(saturatedCity.Population, long.MaxValue);
+        NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+            "core-selected-population-change-npc-" + personBacked,
+            npcData,
+            definitions.Npcs[npcData.DefinitionId],
+            definitions,
+            bindings,
+            (CityRuntime)null,
+            0f);
+        PersonStore people = new PersonStore();
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(0L),
+            new[] { city, saturatedCity },
+            new[] { npc },
+            configuration: configuration,
+            personStore: people,
+            runtimeAdmissionContext:
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+
+        PersonRuntime person = null;
+        if (personBacked)
+        {
+            person = new PersonRuntime(
+                new PersonId("core-selected-population-change-person-" + personBacked), 0L);
+            Assert.That(runtime.TryRegisterPerson(
+                person, out PersonStoreFailure registerFailure),
+                Is.True, registerFailure.ToString());
+            Assert.That(runtime.TryBindExistingNpcToPerson(
+                person.PersonId, npc.RuntimeId,
+                out PersonMaterializationFailure bindFailure),
+                Is.True, bindFailure.ToString());
+            Assert.That(npc.BoundPersonRuntime, Is.SameAs(person));
+            Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
+        }
+
+        AssertCensus(runtime);
+        long epoch = ReadEpoch(runtime);
+        long populationRevision = city.Population.Revision;
+        long residenceRevision = personBacked
+            ? PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person)
+            : ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: true);
+
+        Assert.That(runtime.TryApplyImmigration(
+            npc, city, out NpcPopulationLifecycleTransition immigration,
+            out NpcPopulationLifecycleFailure immigrationFailure),
+            Is.True, immigrationFailure.ToString());
+        Assert.That(immigration.Operation, Is.EqualTo(NpcPopulationLifecycleOperation.Immigration));
+        Assert.That(immigration.PopulationBefore, Is.EqualTo(5));
+        Assert.That(immigration.PopulationAfter, Is.EqualTo(6));
+        Assert.That(city.CurrentPopulation, Is.EqualTo(6));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevision + 1L));
+        Assert.That(npc.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        AssertEpoch(runtime, epoch + 1L);
+        if (personBacked)
+        {
+            Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+            Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person),
+                Is.EqualTo(residenceRevision + 1L));
+        }
+        else
+        {
+            AssertNpcRevision(runtime, npc.RuntimeId, residence: true,
+                expected: residenceRevision + 1L);
+        }
+        AssertCensus(runtime);
+
+        populationRevision = city.Population.Revision;
+        residenceRevision = personBacked
+            ? PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person)
+            : ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: true);
+        Assert.That(runtime.TryApplyEmigration(
+            npc, city, out NpcPopulationLifecycleTransition emigration,
+            out NpcPopulationLifecycleFailure emigrationFailure),
+            Is.True, emigrationFailure.ToString());
+        Assert.That(emigration.Operation, Is.EqualTo(NpcPopulationLifecycleOperation.Emigration));
+        Assert.That(emigration.PopulationBefore, Is.EqualTo(6));
+        Assert.That(emigration.PopulationAfter, Is.EqualTo(5));
+        Assert.That(city.CurrentPopulation, Is.EqualTo(5));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevision + 1L));
+        Assert.That(npc.ResidenceSettlementRuntimeId, Is.Null);
+        AssertEpoch(runtime, epoch + 2L);
+        if (personBacked)
+        {
+            Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
+            Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person),
+                Is.EqualTo(residenceRevision + 1L));
+        }
+        else
+        {
+            AssertNpcRevision(runtime, npc.RuntimeId, residence: true,
+                expected: residenceRevision + 1L);
+        }
+        AssertCensus(runtime);
+
+        long saturatedEpoch = ReadEpoch(runtime);
+        long saturatedCityPopulation = saturatedCity.CurrentPopulation;
+        long ownerResidenceRevision = personBacked
+            ? PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person)
+            : ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: true);
+        Assert.That(runtime.TryApplyImmigration(
+            npc, saturatedCity, out _, out NpcPopulationLifecycleFailure saturatedFailure),
+            Is.False);
+        Assert.That(saturatedFailure, Is.EqualTo(NpcPopulationLifecycleFailure.RevisionOverflow));
+        Assert.That(saturatedCity.CurrentPopulation, Is.EqualTo(saturatedCityPopulation));
+        Assert.That(saturatedCity.Population.Revision, Is.EqualTo(long.MaxValue));
+        Assert.That(npc.ResidenceSettlementRuntimeId, Is.Null);
+        AssertEpoch(runtime, saturatedEpoch);
+        if (personBacked)
+            Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person),
+                Is.EqualTo(ownerResidenceRevision));
+        else
+            AssertNpcRevision(runtime, npc.RuntimeId, residence: true,
+                expected: ownerResidenceRevision);
+        AssertCensus(runtime);
+    }
     public void SelectedResidenceSetterUsesCoreOwnerValueForIdempotency()
     {
         NpcRuntime npc = CreateSelectedNpc("p12-selected-residence-idempotency");

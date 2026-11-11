@@ -10717,51 +10717,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         out NpcPopulationLifecycleTransition transition,
         out NpcPopulationLifecycleFailure failure)
     {
-        if (runtimeAdmissionContext != null
-            && TryBuildP12NpcPopulationOperation(
-                npcRuntime,
-                settlement,
-                residentDeath: false,
-                out List<string> sectionIds,
-                out Func<bool> localRevisionCapacity))
-        {
-            if (!TryBeginP12PopulationOperation(
-                    DailyV1RuntimeProtocolOperationContracts.PopulationImmigration,
-                    sectionIds,
-                    localRevisionCapacity,
-                    out P12PopulationOperationScope p12Scope))
-            {
-                transition = null;
-                failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
-                return false;
-            }
-
-            using (p12Scope)
-            {
-                bool admitted = NpcPopulationLifecycleSystem.TryApplyImmigration(
-                    npcRuntime,
-                    settlement,
-                    GetAuthoritativeNpcRoster(),
-                    out transition,
-                    out failure);
-                if (admitted) AdvancePoliticalWorldRevision();
-                p12Scope?.Complete(admitted);
-                return admitted;
-            }
-        }
-
-        bool applied = NpcPopulationLifecycleSystem.TryApplyImmigration(
+        return TryApplySelectedPopulationChange(
             npcRuntime,
             settlement,
-            GetAuthoritativeNpcRoster(),
+            DailyV1SelectedPopulationChange.Immigration,
             out transition,
             out failure);
-        if (applied)
-        {
-            AdvancePoliticalWorldRevision();
-        }
-
-        return applied;
     }
 
     public bool TryApplyEmigration(
@@ -10770,53 +10731,187 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         out NpcPopulationLifecycleTransition transition,
         out NpcPopulationLifecycleFailure failure)
     {
-        if (runtimeAdmissionContext != null
-            && TryBuildP12NpcPopulationOperation(
+        return TryApplySelectedPopulationChange(
+            npcRuntime,
+            settlement,
+            DailyV1SelectedPopulationChange.Emigration,
+            out transition,
+            out failure);
+    }
+
+    private bool TryApplySelectedPopulationChange(
+        NpcRuntime npcRuntime,
+        CityRuntime settlement,
+        DailyV1SelectedPopulationChange operation,
+        out NpcPopulationLifecycleTransition transition,
+        out NpcPopulationLifecycleFailure failure)
+    {
+        transition = null;
+        if (npcRuntime == null)
+        {
+            failure = NpcPopulationLifecycleFailure.InvalidNpc;
+            return false;
+        }
+        if (settlement == null || string.IsNullOrWhiteSpace(settlement.RuntimeId))
+        {
+            failure = NpcPopulationLifecycleFailure.InvalidSettlement;
+            return false;
+        }
+
+        bool immigration = operation == DailyV1SelectedPopulationChange.Immigration;
+        if (runtimeAdmissionContext == null)
+        {
+            return immigration
+                ? NpcPopulationLifecycleSystem.TryApplyImmigration(
+                    npcRuntime, settlement, GetAuthoritativeNpcRoster(), out transition, out failure)
+                : NpcPopulationLifecycleSystem.TryApplyEmigration(
+                    npcRuntime, settlement, GetAuthoritativeNpcRoster(), out transition, out failure);
+        }
+
+        if (!TryBuildP12NpcPopulationOperation(
                 npcRuntime,
                 settlement,
                 residentDeath: false,
                 out List<string> sectionIds,
                 out Func<bool> localRevisionCapacity))
         {
-            if (!TryBeginP12PopulationOperation(
-                    DailyV1RuntimeProtocolOperationContracts.PopulationEmigration,
-                    sectionIds,
-                    localRevisionCapacity,
-                    out P12PopulationOperationScope p12Scope))
+            failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        bool hasUnselectedRuntimeMember = npcRuntimes != null
+            && npcRuntimes.Any(runtime => runtime != null
+                && !runtime.UsesSelectedDailyV1Definitions);
+        bool useCoreSelectedOperation = IsDailyCaptureProfile
+            && !hasUnselectedRuntimeMember
+            && npcRuntime.SelectedRuntimeOwners != null
+            && settlement.SelectedRuntimeOwners != null;
+        DailyV1SelectedRuntimeOwnerGraph graph = null;
+        DailyV1SelectedPopulationChangePlan selectedPlan = null;
+        if (useCoreSelectedOperation)
+        {
+            graph = SelectedRuntimeOwnerGraph;
+            DailyV1SelectedPopulationChangeFailure prepareFailure =
+                DailyV1SelectedPopulationChangeFailure.RuntimeFaulted;
+            if (graph == null
+                || !ReferenceEquals(npcRuntime.SelectedRuntimeOwnerGraph, graph)
+                || !graph.TryGetNpcOwner(npcRuntime.RuntimeId, out DailyV1NpcRuntimeOwners npcOwner)
+                || !ReferenceEquals(npcOwner, npcRuntime.SelectedRuntimeOwners)
+                || !graph.ContainsExactNpcOwner(npcOwner)
+                || !ReferenceEquals(settlement.SelectedRuntimeOwners?.Definitions, npcOwner.Definitions)
+                || !graph.ContainsExactCityOwner(settlement.SelectedRuntimeOwners)
+                || !DailyV1SelectedPopulationChangeOperation.TryPrepare(
+                    graph,
+                    npcOwner,
+                    settlement.SelectedRuntimeOwners,
+                    operation,
+                    out selectedPlan,
+                    out prepareFailure)
+                || (selectedPlan.IsPersonBacked
+                    ? !ReferenceEquals(npcRuntime.BoundPersonRuntime, selectedPlan.Person)
+                    : npcRuntime.BoundPersonRuntime != null)
+                || !string.Equals(
+                    npcRuntime.ResidenceSettlementRuntimeId,
+                    selectedPlan.ResidenceBefore,
+                    StringComparison.Ordinal))
             {
-                transition = null;
-                failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
+                failure = graph == null
+                    ? NpcPopulationLifecycleFailure.RuntimeFaulted
+                    : ToNpcPopulationLifecycleFailure(prepareFailure);
                 return false;
             }
 
-            using (p12Scope)
-            {
-                bool admitted = NpcPopulationLifecycleSystem.TryApplyEmigration(
-                    npcRuntime,
-                    settlement,
-                    GetAuthoritativeNpcRoster(),
-                    out transition,
-                    out failure);
-                if (admitted) AdvancePoliticalWorldRevision();
-                p12Scope?.Complete(admitted);
-                return admitted;
-            }
+            transition = new NpcPopulationLifecycleTransition(
+                selectedPlan.Npc.RuntimeId,
+                selectedPlan.City.RuntimeId,
+                immigration
+                    ? NpcPopulationLifecycleOperation.Immigration
+                    : NpcPopulationLifecycleOperation.Emigration,
+                selectedPlan.PopulationRevision,
+                selectedPlan.PopulationBefore,
+                selectedPlan.PopulationAfter,
+                selectedPlan.ResidenceBefore,
+                selectedPlan.ResidenceAfter,
+                NpcLifeState.Alive,
+                NpcLifeState.Alive);
         }
 
-        bool applied = NpcPopulationLifecycleSystem.TryApplyEmigration(
-            npcRuntime,
-            settlement,
-            GetAuthoritativeNpcRoster(),
-            out transition,
-            out failure);
-        if (applied)
+        string operationId = immigration
+            ? DailyV1RuntimeProtocolOperationContracts.PopulationImmigration
+            : DailyV1RuntimeProtocolOperationContracts.PopulationEmigration;
+        if (!TryBeginP12PopulationOperation(
+                operationId,
+                sectionIds,
+                localRevisionCapacity,
+                out P12PopulationOperationScope p12Scope))
         {
-            AdvancePoliticalWorldRevision();
+            transition = null;
+            failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
+            return false;
         }
 
-        return applied;
+        using (p12Scope)
+        {
+            bool admitted;
+            if (useCoreSelectedOperation)
+            {
+                admitted = DailyV1SelectedPopulationChangeOperation.TryCommit(
+                    graph,
+                    selectedPlan,
+                    () => npcRuntime.CanCommitP12LifecycleMutation(false, true),
+                    npcRuntime.NotifyCoreSelectedResidenceMutationCommitted,
+                    out DailyV1SelectedPopulationChangeFailure commitFailure);
+                failure = ToNpcPopulationLifecycleFailure(commitFailure);
+            }
+            else
+            {
+                admitted = immigration
+                    ? NpcPopulationLifecycleSystem.TryApplyImmigration(
+                        npcRuntime, settlement, GetAuthoritativeNpcRoster(), out transition, out failure)
+                    : NpcPopulationLifecycleSystem.TryApplyEmigration(
+                        npcRuntime, settlement, GetAuthoritativeNpcRoster(), out transition, out failure);
+            }
+
+            if (admitted) AdvancePoliticalWorldRevision();
+            p12Scope?.Complete(admitted);
+            return admitted;
+        }
     }
 
+    private static NpcPopulationLifecycleFailure ToNpcPopulationLifecycleFailure(
+        DailyV1SelectedPopulationChangeFailure failure)
+    {
+        switch (failure)
+        {
+            case DailyV1SelectedPopulationChangeFailure.None:
+                return NpcPopulationLifecycleFailure.None;
+            case DailyV1SelectedPopulationChangeFailure.InvalidNpc:
+                return NpcPopulationLifecycleFailure.InvalidNpc;
+            case DailyV1SelectedPopulationChangeFailure.DeadNpc:
+                return NpcPopulationLifecycleFailure.DeadNpc;
+            case DailyV1SelectedPopulationChangeFailure.InvalidSettlement:
+                return NpcPopulationLifecycleFailure.InvalidSettlement;
+            case DailyV1SelectedPopulationChangeFailure.ResidenceAlreadyAssigned:
+                return NpcPopulationLifecycleFailure.ResidenceAlreadyAssigned;
+            case DailyV1SelectedPopulationChangeFailure.ResidenceMismatch:
+                return NpcPopulationLifecycleFailure.ResidenceMismatch;
+            case DailyV1SelectedPopulationChangeFailure.AggregateCapacityExceeded:
+                return NpcPopulationLifecycleFailure.AggregateCapacityExceeded;
+            case DailyV1SelectedPopulationChangeFailure.PopulationUnderflow:
+                return NpcPopulationLifecycleFailure.PopulationUnderflow;
+            case DailyV1SelectedPopulationChangeFailure.PopulationOverflow:
+                return NpcPopulationLifecycleFailure.PopulationOverflow;
+            case DailyV1SelectedPopulationChangeFailure.RevisionOverflow:
+                return NpcPopulationLifecycleFailure.RevisionOverflow;
+            case DailyV1SelectedPopulationChangeFailure.StaleState:
+                return NpcPopulationLifecycleFailure.StaleState;
+            case DailyV1SelectedPopulationChangeFailure.InvalidTransition:
+                return NpcPopulationLifecycleFailure.InvalidTransition;
+            default:
+                return NpcPopulationLifecycleFailure.RuntimeFaulted;
+        }
+    }
     public bool TryApplyResidenceMigration(
         NpcRuntime npcRuntime,
         CityRuntime origin,
