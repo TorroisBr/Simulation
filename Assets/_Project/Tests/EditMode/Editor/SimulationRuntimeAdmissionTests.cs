@@ -5417,8 +5417,51 @@ public sealed class SimulationRuntimeAdmissionTests
                 "The active Core save operation must capture CrimeSocial from its selected owner graph.");
             Assert.That(coreSources.CrimeSocialAppraisal.CapturedAbsoluteDay,
                 Is.EqualTo(saveOperation.SourceWitness.Token.AbsoluteDay));
+            Assert.That(P12EJusticeRecordsSnapshotAdapter.TryValidateCoreOwnerProjection(
+                    runtime, saveOperation.SourceWitness.Token,
+                    saveOperation.SourceWitness.TokenOwnerSections,
+                    coreSources.JusticeRecords,
+                    out P12EJusticeSnapshotFailure projectionFailure), Is.True,
+                projectionFailure?.Code.ToString());
+            P12EJusticeRecordsOwnerSnapshot wrongDayCoreSnapshot =
+                new P12EJusticeRecordsOwnerSnapshot(
+                    saveOperation.SourceWitness.Token.AbsoluteDay + 1L,
+                    coreSources.JusticeRecords.Records);
+            Assert.That(P12EJusticeRecordsSnapshotAdapter.TryValidateCoreOwnerProjection(
+                    runtime, saveOperation.SourceWitness.Token,
+                    saveOperation.SourceWitness.TokenOwnerSections,
+                    wrongDayCoreSnapshot,
+                    out P12EJusticeSnapshotFailure wrongDayFailure), Is.False,
+                "A Core snapshot from another day cannot satisfy the Unity compatibility bridge.");
+            Assert.That(wrongDayFailure?.Code,
+                Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidCaptureContext));
             DailyV1JusticeRecordsOwner coreJustice = coreSession.OwnerGraph.JusticeRecordsOwner;
             P12EJusticeRecordsSnapshotSection records = coreSources.JusticeRecords.Records;
+            P12EJusticeWantedSnapshotRow currentWanted = records.WantedRows.Single();
+            P12EJusticeSentenceSnapshotRow currentSentence = records.SentenceRows.Single();
+            const string wrongProjectionCityId = "p12e-justice-projection-mismatch-city";
+            P12EJusticeRecordsOwnerSnapshot wrongProjectionSnapshot =
+                new P12EJusticeRecordsOwnerSnapshot(
+                    coreSources.JusticeRecords.CapturedAbsoluteDay,
+                    new P12EJusticeRecordsSnapshotSection(
+                        records.SectionId, records.SchemaVersion, records.RecordCount, records.Revision,
+                        new[] { new P12EJusticeWantedSnapshotRow(
+                            currentWanted.Ordinal, currentWanted.TargetRuntimeId,
+                            currentWanted.TargetPersonIdValue, wrongProjectionCityId,
+                            currentWanted.Bounty, currentWanted.SentenceDays, currentWanted.IsResolved) },
+                        new[] { new P12EJusticeSentenceSnapshotRow(
+                            currentSentence.Ordinal, currentSentence.TargetRuntimeId,
+                            currentSentence.TargetPersonIdValue, wrongProjectionCityId,
+                            currentSentence.WarrantOrdinal, currentSentence.RemainingDays,
+                            currentSentence.FailedEscapeAttempts, currentSentence.WasArrestedToday) }));
+            Assert.That(P12EJusticeRecordsSnapshotAdapter.TryValidateCoreOwnerProjection(
+                    runtime, saveOperation.SourceWitness.Token,
+                    saveOperation.SourceWitness.TokenOwnerSections,
+                    wrongProjectionSnapshot,
+                    out P12EJusticeSnapshotFailure wrongProjectionFailure), Is.False,
+                "The shared Core values must still match the exact Unity City projection.");
+            Assert.That(wrongProjectionFailure?.Code,
+                Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidOwnerValues));
             Assert.That(records.Revision, Is.EqualTo(coreJustice.Revision));
             Assert.That(records.WantedRows, Has.Count.EqualTo(1));
             Assert.That(records.SentenceRows, Has.Count.EqualTo(1));

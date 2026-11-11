@@ -290,11 +290,27 @@ internal sealed class P12EDailyV1OwnerPackage
                 return false;
             }
 
-            if (!P12EJusticeRecordsSnapshotAdapter.TryCapture(
-                    sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
-                    out P12EJusticeRecordsOwnerSnapshot projectedJusticeSnapshot, out _, context.StagingAttempt)
-                || !justiceOwner.TryCaptureP12AReceiptOwnerSnapshot(
-                    out P12AJusticeReceiptOwnerSnapshot justiceReceiptSnapshot))
+            P12EJusticeRecordsOwnerSnapshot justiceSnapshot;
+            P12AJusticeReceiptOwnerSnapshot justiceReceiptSnapshot;
+            if (context.ContinuationSaveOperation != null)
+            {
+                justiceSnapshot = coreOwnerSnapshots.JusticeRecords;
+                if (justiceSnapshot == null
+                    || !P12EJusticeRecordsSnapshotAdapter.TryValidateCoreOwnerProjection(
+                        sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
+                        justiceSnapshot, out _, context.StagingAttempt)
+                    || !justiceOwner.TryCaptureP12AReceiptOwnerSnapshot(
+                        out justiceReceiptSnapshot))
+                {
+                    failure = P12EDailyV1OwnerPackageFailure.CaptureFailed;
+                    return false;
+                }
+            }
+            else if (!P12EJusticeRecordsSnapshotAdapter.TryCapture(
+                         sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
+                         out justiceSnapshot, out _, context.StagingAttempt)
+                     || !justiceOwner.TryCaptureP12AReceiptOwnerSnapshot(
+                         out justiceReceiptSnapshot))
             {
                 failure = P12EDailyV1OwnerPackageFailure.CaptureFailed;
                 return false;
@@ -318,23 +334,6 @@ internal sealed class P12EDailyV1OwnerPackage
                 return false;
             }
 
-            P12EJusticeRecordsOwnerSnapshot justiceSnapshot = projectedJusticeSnapshot;
-            if (context.ContinuationSaveOperation != null)
-            {
-                P12EJusticeRecordsOwnerSnapshot coreJusticeSnapshot = coreOwnerSnapshots?.JusticeRecords;
-                if (coreJusticeSnapshot == null
-                    || !P12EJusticeRecordsSnapshotAdapter.AreEquivalent(
-                        coreJusticeSnapshot, projectedJusticeSnapshot))
-                {
-                    failure = P12EDailyV1OwnerPackageFailure.CaptureFailed;
-                    return false;
-                }
-
-                // The Unity owner remains a compatibility projection and exact
-                // census-identity witness; the shared Core graph supplies the
-                // detached values used by the active save operation.
-                justiceSnapshot = coreJusticeSnapshot;
-            }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.EOwnerSnapshotsCaptured);
 
             if (!context.StagingAttempt.IsCurrentFor(

@@ -139,6 +139,128 @@ internal static class P12EJusticeRecordsSnapshotAdapter
         return true;
     }
 
+    /// <summary>
+    /// Validates the Unity compatibility projection against an already captured
+    /// Core-owned Justice snapshot without producing a second value snapshot.
+    /// Core remains the source of serialized rows; this method proves the
+    /// exact Unity owner/receipt identity bridge and legacy root references.
+    /// </summary>
+    internal static bool TryValidateCoreOwnerProjection(
+        SimulationRuntime runtime,
+        DailyCaptureEligibilityToken token,
+        IReadOnlyList<OwnerSectionCensusSnapshot> sharedOwnerSectionVector,
+        P12EJusticeRecordsOwnerSnapshot coreSnapshot,
+        out P12EJusticeSnapshotFailure failure,
+        DailyCaptureStagingAttempt stagingAttempt = null)
+    {
+        failure = P12EJusticeSnapshotFailure.Create(
+            P12EJusticeSnapshotFailureCode.InvalidCaptureContext,
+            "The exact Core Justice snapshot, completed token, and Unity compatibility projection are required.");
+        if (runtime == null || token == null || sharedOwnerSectionVector == null
+            || coreSnapshot == null
+            || !ReferenceEquals(token.OwnerSections, sharedOwnerSectionVector)
+            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
+                runtime, token, sharedOwnerSectionVector, stagingAttempt)
+            || !coreSnapshot.TryValidate(out failure))
+            return false;
+        if (coreSnapshot.CapturedAbsoluteDay != token.AbsoluteDay)
+            return Fail(P12EJusticeSnapshotFailureCode.InvalidCaptureContext,
+                "The Core Justice snapshot must belong to the exact completed boundary day.", out failure);
+        if (token.AdmissionContext == null
+            || token.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || token.CompletedCoreSequence <= 0L || token.AbsoluteDay < 0L || token.MutationEpoch < 0L)
+            return Fail(P12EJusticeSnapshotFailureCode.InvalidCaptureContext,
+                "A successful completed Daily-v1 boundary token is required.", out failure);
+
+        OwnerSectionCensusSnapshot justiceWitness = Find(sharedOwnerSectionVector,
+            P12CrimeJusticeCensusProvider.JusticeRecordsSectionId);
+        JusticeSystem owner = justiceWitness?.OwnerInstanceIdentity as JusticeSystem;
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = runtime.SelectedRuntimeOwnerGraph;
+        DailyV1JusticeRecordsOwner coreOwner = selectedGraph?.JusticeRecordsOwner;
+        P12EJusticeRecordsSnapshotSection records = coreSnapshot.Records;
+        if (owner == null || coreOwner == null
+            || !runtime.HasSameJusticeSystemOwner(owner)
+            || !ReferenceEquals(coreOwner, owner.CoreOwner)
+            || justiceWitness.SchemaVersion != P12CrimeJusticeCensusProvider.SchemaVersion
+            || justiceWitness.Role != OwnerSectionRole.Required)
+            return Fail(P12EJusticeSnapshotFailureCode.InvalidOwnerSectionVector,
+                "The exact Unity Justice compatibility owner must remain bound to the selected Core owner.",
+                out failure);
+
+        OwnerSectionCensusSnapshot receiptWitness = Find(sharedOwnerSectionVector,
+            P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId);
+        if (!TryMatchesReceiptWitness(receiptWitness, owner))
+            return Fail(P12EJusticeSnapshotFailureCode.InvalidOwnerSectionVector,
+                "The exact Justice P18 receipt witness must remain aliased to the current Unity owner.",
+                out failure);
+
+        if (!TryBuildInstalledMaps(runtime, out HashSet<NpcRuntime> installedNpcs,
+                out HashSet<CityRuntime> installedCities,
+                out Dictionary<string, NpcRuntime> installedNpcsById))
+            return Fail(P12EJusticeSnapshotFailureCode.InvalidOwnerValues,
+                "The admitted runtime NPC or City roots have invalid or ambiguous identities.", out failure);
+
+        if (records.WantedRows == null || records.SentenceRows == null
+            || coreOwner.WantedRecords == null || coreOwner.Sentences == null
+            || records.WantedRows.Count != coreOwner.WantedRecords.Count
+            || records.SentenceRows.Count != coreOwner.Sentences.Count)
+            return Fail(P12EJusticeSnapshotFailureCode.InvalidCardinality,
+                "The captured Justice rows no longer match the exact selected Core owner.", out failure);
+
+        if (!owner.TryReadP12CrimeJusticeCensus(installedNpcs.Contains, installedCities.Contains,
+                out int wantedCount, out int sentenceCount, out long projectedRevision)
+            || wantedCount != records.WantedRows.Count
+            || sentenceCount != records.SentenceRows.Count
+            || projectedRevision != records.Revision
+            || coreOwner.Revision != records.Revision
+            || !Matches(justiceWitness, owner, records.RecordCount, records.Revision))
+            return Fail(P12EJusticeSnapshotFailureCode.InvalidOwnerSectionVector,
+                "The Unity projection, Core owner revision, and exact Justice census witness disagree.",
+                out failure);
+
+        if (!owner.MatchesP12EOwnerSnapshot(coreSnapshot))
+            return Fail(P12EJusticeSnapshotFailureCode.InvalidOwnerValues,
+                "The Unity Justice row projection does not match the exact Core-owned snapshot.", out failure);
+
+        for (int index = 0; index < records.WantedRows.Count; index++)
+        {
+            P12EJusticeWantedSnapshotRow snapshotRow = records.WantedRows[index];
+            if (!installedNpcsById.TryGetValue(snapshotRow.TargetRuntimeId, out NpcRuntime target)
+                || !TryValidateTargetPersonBinding(snapshotRow.TargetRuntimeId,
+                    snapshotRow.TargetPersonIdValue, target, runtime.PersonStore))
+                return Fail(P12EJusticeSnapshotFailureCode.InvalidReference,
+                    "A Core Justice wanted row no longer resolves to the exact Unity NPC, City, and Person projection.",
+                    out failure);
+        }
+
+        for (int index = 0; index < records.SentenceRows.Count; index++)
+        {
+            P12EJusticeSentenceSnapshotRow snapshotRow = records.SentenceRows[index];
+            if (!installedNpcsById.TryGetValue(snapshotRow.TargetRuntimeId, out NpcRuntime target)
+                || !TryValidateTargetPersonBinding(snapshotRow.TargetRuntimeId,
+                    snapshotRow.TargetPersonIdValue, target, runtime.PersonStore))
+                return Fail(P12EJusticeSnapshotFailureCode.InvalidRelation,
+                    "A Core Justice sentence no longer resolves to its exact warrant and Unity NPC, City, and Person projection.",
+                    out failure);
+        }
+
+        if (coreOwner.Revision != records.Revision
+            || !owner.TryReadP12CrimeJusticeCensus(installedNpcs.Contains, installedCities.Contains,
+                out int finalWantedCount, out int finalSentenceCount, out long finalRevision)
+            || finalWantedCount != wantedCount || finalSentenceCount != sentenceCount
+            || finalRevision != projectedRevision
+            || !Matches(justiceWitness, owner, records.RecordCount, records.Revision)
+            || !TryMatchesReceiptWitness(receiptWitness, owner)
+            || !DailyCaptureStagingAttempt.IsCaptureCurrent(
+                runtime, token, sharedOwnerSectionVector, stagingAttempt))
+            return Fail(P12EJusticeSnapshotFailureCode.InvalidOwnerSectionVector,
+                "Justice owner values, receipt identity, or the completed-boundary token changed during projection validation.",
+                out failure);
+
+        failure = P12EJusticeSnapshotFailure.None;
+        return true;
+    }
+
     internal static bool AreEquivalent(
         P12EJusticeRecordsOwnerSnapshot left,
         P12EJusticeRecordsOwnerSnapshot right)

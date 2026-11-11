@@ -2483,6 +2483,80 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    /// <summary>
+    /// Checks that the existing Unity Justice wrappers still project the exact
+    /// Core-owned P12-E value snapshot without allocating a second snapshot.
+    /// </summary>
+    internal bool MatchesP12EOwnerSnapshot(P12EJusticeRecordsOwnerSnapshot expected)
+    {
+        if (expected == null || !expected.TryValidate(out _)
+            || wantedRecords == null || prisonSentences == null)
+            return false;
+
+        P12EJusticeRecordsSnapshotSection records = expected.Records;
+        DailyV1JusticeRecordsOwner owner = justiceRecordsOwner;
+        if (records == null || owner == null || owner.WantedRecords == null || owner.Sentences == null
+            || owner.Revision != records.Revision
+            || records.WantedRows.Count != wantedRecords.Count
+            || records.SentenceRows.Count != prisonSentences.Count
+            || records.WantedRows.Count != owner.WantedRecords.Count
+            || records.SentenceRows.Count != owner.Sentences.Count)
+            return false;
+
+        Dictionary<WantedRecordRuntime, int> warrantOrdinals =
+            new Dictionary<WantedRecordRuntime, int>();
+        for (int index = 0; index < records.WantedRows.Count; index++)
+        {
+            P12EJusticeWantedSnapshotRow snapshot = records.WantedRows[index];
+            WantedRecordRuntime projection = wantedRecords[index];
+            DailyV1JusticeWantedRecordOwner coreRow = owner.WantedRecords[index];
+            if (snapshot == null || projection == null || coreRow == null
+                || warrantOrdinals.ContainsKey(projection)
+                || !ReferenceEquals(projection.CoreOwner, coreRow)
+                || projection.Target == null || projection.City == null
+                || !string.Equals(snapshot.TargetRuntimeId, coreRow.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(snapshot.CityRuntimeId, coreRow.CityRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(snapshot.TargetRuntimeId, projection.Target.RuntimeId, StringComparison.Ordinal)
+                || !string.Equals(snapshot.TargetPersonIdValue, projection.Target.PersonId?.Value, StringComparison.Ordinal)
+                || !string.Equals(snapshot.CityRuntimeId, projection.City.RuntimeId, StringComparison.Ordinal)
+                || snapshot.Bounty != coreRow.Bounty || snapshot.Bounty != projection.Bounty
+                || snapshot.SentenceDays != coreRow.SentenceDays || snapshot.SentenceDays != projection.SentenceDays
+                || snapshot.IsResolved != coreRow.IsResolved || snapshot.IsResolved != projection.P12Resolved)
+                return false;
+            warrantOrdinals.Add(projection, index);
+        }
+
+        for (int index = 0; index < records.SentenceRows.Count; index++)
+        {
+            P12EJusticeSentenceSnapshotRow snapshot = records.SentenceRows[index];
+            PrisonSentenceRuntime projection = prisonSentences[index];
+            DailyV1JusticeSentenceOwner coreRow = owner.Sentences[index];
+            if (snapshot == null || projection == null || coreRow == null
+                || projection.Target == null || projection.City == null || projection.Warrant == null
+                || !warrantOrdinals.TryGetValue(projection.Warrant, out int warrantOrdinal)
+                || !ReferenceEquals(projection.CoreOwner, coreRow)
+                || warrantOrdinal != snapshot.WarrantOrdinal
+                || warrantOrdinal < 0 || warrantOrdinal >= owner.WantedRecords.Count
+                || !ReferenceEquals(coreRow.Warrant, owner.WantedRecords[warrantOrdinal])
+                || !ReferenceEquals(projection.Target, projection.Warrant.Target)
+                || !ReferenceEquals(projection.City, projection.Warrant.City)
+                || !string.Equals(snapshot.TargetRuntimeId, coreRow.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(snapshot.CityRuntimeId, coreRow.CityRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(snapshot.TargetRuntimeId, projection.Target.RuntimeId, StringComparison.Ordinal)
+                || !string.Equals(snapshot.TargetPersonIdValue, projection.Target.PersonId?.Value, StringComparison.Ordinal)
+                || !string.Equals(snapshot.CityRuntimeId, projection.City.RuntimeId, StringComparison.Ordinal)
+                || snapshot.RemainingDays != coreRow.RemainingDays
+                || snapshot.RemainingDays != projection.RemainingDays
+                || snapshot.FailedEscapeAttempts != coreRow.FailedEscapeAttempts
+                || snapshot.FailedEscapeAttempts != projection.FailedEscapeAttempts
+                || snapshot.WasArrestedToday != coreRow.WasArrestedToday
+                || snapshot.WasArrestedToday != projection.WasArrestedToday)
+                return false;
+        }
+
+        return owner.Revision == records.Revision;
+    }
+
     internal static bool TryCreateFromP12EOwnerSnapshot(
         NpcStatusData freeStatus,
         NpcStatusData wantedStatus,
