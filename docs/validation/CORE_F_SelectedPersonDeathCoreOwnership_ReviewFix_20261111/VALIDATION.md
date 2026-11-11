@@ -41,8 +41,15 @@ validation-input SHA-256:
 
 - Focused EditMode filter `P12PopulationLifecycleInvalidationTests`: 23/23
   passed; zero failed, skipped, or inconclusive. Run ID:
-  `3e16439ef5da4fc2a9b849e0c638794c`. The original filtered report and log
-  remain in private owner-only evidence retention.
+  `0d2a8e00ebf84a78821b5387617a2ef7`. Its stable input manifest records the
+  committed test source SHA-256
+  `049d9848e755a231227555c893cd9343e768b3910357b23279a818c91fb3b159`.
+  The original filtered XML/log and private run manifest remain retained.
+  An earlier focused run (`3e16439ef5da4fc2a9b849e0c638794c`) was 22/23 on
+  pre-final test source SHA-256
+  `746526f61b84ecf3cb75e952733242fbbf1a1e18d60d3925683994dab0051bb0`;
+  that failure is from a superseded test revision and does not validate or
+  contradict the committed source.
 - Full EditMode: 3,306/3,306 passed; zero failed, skipped, or inconclusive.
   Run ID: `2aad036bf67943c8a9e36bf48af6ae5f`.
 - Official Smoke filter `Smoke`: 5/5 passed. Run ID:
