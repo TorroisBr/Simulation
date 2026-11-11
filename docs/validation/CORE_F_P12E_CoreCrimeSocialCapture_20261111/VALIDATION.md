@@ -57,7 +57,11 @@ cases and is the normalized public result evidence.
 - Protected CoreValidation manifest SHA-256:
   `d23b7f87405b37d863ed77e61b0b6e52b2b3d4e60f755177c020a68c64120594`.
 
-Independent exact-tip review is pending for implementation commit
-`c1bf84233de9e7fdd7b28f164c4724862fc95dfc`. This checkpoint does not complete
-CORE-F, establish detached .NET continuation, or authorize Core canonical
-promotion.
+Independent exact-tip review passed for implementation commit
+`c1bf84233de9e7fdd7b28f164c4724862fc95dfc` and tree
+`287676e58399f04823bd8bdcaddc60815dacf976`; see
+[`IMPLEMENTATION_REVIEW.md`](IMPLEMENTATION_REVIEW.md). The later candidate
+commit `d4b7bf20205cf600cb5d5ee5f85c73d305db0779` and this review record add
+only documentation and the normalized Unity package; production and test
+sources remain unchanged. This checkpoint does not complete CORE-F, establish
+detached .NET continuation, or authorize Core canonical promotion.
