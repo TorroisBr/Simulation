@@ -76,6 +76,7 @@ validation-input SHA-256:
 
 ## Review and status
 
-A new independent exact-tip review of candidate
-`34a3bf8b3cb6f63dd19267ab502b2ebf275d1e28` is pending. This checkpoint is
-not promoted to Core canonical and does not complete CORE-F.
+Independent exact-tip review of candidate
+`7a29f29404695b1de911abff5085aa414f2c305b` passed with no actionable
+findings. The review record is `INDEPENDENT_REVIEW_7A29F294.md`. This
+checkpoint is not promoted to Core canonical and does not complete CORE-F.
