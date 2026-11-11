@@ -51,6 +51,7 @@ public sealed class DailyV1SelectedDemographyStageTests
         PersonId personId = new PersonId("daily-demography-person");
         Assert.That(people.TryRegister(new PersonRuntime(personId, 0L), out PersonStoreFailure failure),
             Is.True, failure.ToString());
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
 
         RecordingBoundary boundary = new RecordingBoundary(graph.Cities);
         boundary.DeathToApply = personId;
@@ -73,6 +74,87 @@ public sealed class DailyV1SelectedDemographyStageTests
         Assert.That(boundary.Events[0], Is.EqualTo("death:" + personId.Value));
         Assert.That(boundary.Events[1], Is.EqualTo("floors"));
         Assert.That(boundary.Events[2], Does.StartWith("policy:"));
+    }
+
+    [Test]
+    public void SelectedResidentDeathCommitsPersonPopulationAndMaterializedNpcOwnersInCore()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph();
+        PersonStore people = new PersonStore();
+        DailyV1CityRuntimeOwners city = graph.Cities[0];
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[3];
+        PersonRuntime person = new PersonRuntime(new PersonId("core-owned-resident-death"), 0L);
+        Assert.That(people.TryRegister(person, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            person, city.RuntimeId), Is.True);
+        Assert.That(people.TryBindMaterializedNpc(
+            person.PersonId, npc.RuntimeId, out PersonStoreFailure bindFailure),
+            Is.True, bindFailure.ToString());
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
+
+        long populationRevision = city.Population.Revision;
+        int populationBefore = city.Population.CurrentPopulation;
+        long personRevision = PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person);
+        RecordingBoundary boundary = new RecordingBoundary(graph.Cities)
+        {
+            DeathToApply = person.PersonId
+        };
+
+        DailyV1SelectedDemographyResult result = DailyV1SelectedDemographyStage.Advance(
+            graph, people, 1L,
+            new SimulationCalendar(new CalendarDefinition(2, 1, 2)),
+            new EffectiveNaturalMortalityConfiguration(true, 1d),
+            new EffectiveAggregateDemographyConfiguration(),
+            new CertainMortalitySamples(), null, boundary);
+
+        Assert.That(result.NamedDeathsApplied, Is.EqualTo(1));
+        Assert.That(person.DeathAbsoluteDay, Is.EqualTo(1L));
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person),
+            Is.EqualTo(personRevision + 2L));
+        Assert.That(city.Population.CurrentPopulation, Is.EqualTo(populationBefore - 1));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevision + 1L));
+        Assert.That(npc.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Dead));
+        Assert.That(npc.Lifecycle.LifeStateRevision, Is.EqualTo(1L));
+        Assert.That(npc.ActionSlot.Revision, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedDeathRejectsStalePopulationBeforeMutatingPersonOrNpcOwners()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph();
+        PersonStore people = new PersonStore();
+        DailyV1CityRuntimeOwners city = graph.Cities[0];
+        PersonRuntime person = new PersonRuntime(new PersonId("stale-core-death"), 0L);
+        Assert.That(people.TryRegister(person, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            person, city.RuntimeId), Is.True);
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryPrepare(
+            graph, people, person, 1L,
+            out DailyV1SelectedPersonDeathPlan plan, out string prepareFailure),
+            Is.True, prepareFailure);
+
+        Assert.That(SettlementPopulationSystem.TryPropose(
+            city.Population, new PopulationChangeSet(1, 0, 0, 0),
+            out SettlementPopulationTransition competingTransition,
+            out PopulationTransitionFailure proposalFailure), Is.True, proposalFailure.ToString());
+        Assert.That(SettlementPopulationSystem.TryApply(
+            city.Population, competingTransition, out PopulationTransitionFailure applyFailure),
+            Is.True, applyFailure.ToString());
+        long personRevision = PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person);
+        int populationAfterCompetingWrite = city.Population.CurrentPopulation;
+        long populationRevisionAfterCompetingWrite = city.Population.Revision;
+
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryCommit(
+            graph, people, plan, out _), Is.False);
+        Assert.That(person.DeathAbsoluteDay, Is.Null);
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person), Is.EqualTo(personRevision));
+        Assert.That(city.Population.CurrentPopulation, Is.EqualTo(populationAfterCompetingWrite));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevisionAfterCompetingWrite));
     }
 
     [Test]
@@ -190,11 +272,21 @@ public sealed class DailyV1SelectedDemographyStageTests
             floorSupplements = values;
         }
 
-        public bool TryApplyPersonDeath(PersonId personId, out string failure)
+        public bool TryApplyPersonDeath(
+            DailyV1SelectedPersonDeathPlan plan,
+            Func<bool> coreCommit,
+            out string failure)
         {
-            Events.Add("death:" + personId.Value);
-            failure = null;
-            return DeathToApply != null && DeathToApply.Equals(personId);
+            Events.Add("death:" + plan.Person.PersonId.Value);
+            if (DeathToApply == null || !DeathToApply.Equals(plan.Person.PersonId))
+            {
+                failure = "DeathNotAdmitted";
+                return false;
+            }
+
+            bool applied = coreCommit != null && coreCommit();
+            failure = applied ? null : "CoreDeathCommitRejected";
+            return applied;
         }
 
         public IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(

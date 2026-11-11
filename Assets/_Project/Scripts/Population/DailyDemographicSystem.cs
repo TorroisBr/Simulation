@@ -128,16 +128,16 @@ public sealed class DailyDemographyReport
 }
 
 /// <summary>
-/// Unity's demographic adapter supplies the existing death writer and represented
-/// resident floors. The selected ordered demographic algorithm is owned by Core;
-/// the legacy non-selected path remains here for other runtime configurations.
+/// Unity's demographic adapter supplies P12 admission/projection and represented
+/// resident floors. Core owns the selected death and aggregate owner writes; the
+/// legacy non-selected path remains here for other runtime configurations.
 /// </summary>
 public static class DailyDemographicSystem
 {
     /// <summary>
     /// Runs selected Daily-v1 demography through the exact Core owner graph.
-    /// Death lifecycle remains delegated to SimulationRuntime's existing
-    /// authoritative writer; aggregate changes install on Core City owners.
+    /// SimulationRuntime admits the existing P12 census scope and publishes
+    /// compatibility fields; Core applies the selected Person-death owners.
     /// </summary>
     internal static DailyDemographyReport AdvanceSelected(
         SimulationRuntime world,
@@ -279,19 +279,12 @@ public static class DailyDemographicSystem
             this.graph = graph;
         }
 
-        public bool TryApplyPersonDeath(PersonId personId, out string failure)
+        public bool TryApplyPersonDeath(
+            DailyV1SelectedPersonDeathPlan plan,
+            Func<bool> coreCommit,
+            out string failure)
         {
-            if (world.TryApplyPersonDeath(
-                    personId,
-                    out _,
-                    out PersonDeathLifecycleFailure deathFailure))
-            {
-                failure = null;
-                return true;
-            }
-
-            failure = deathFailure.ToString();
-            return false;
+            return world.TryExecuteCoreSelectedPersonDeath(plan, coreCommit, out failure);
         }
 
         public IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(

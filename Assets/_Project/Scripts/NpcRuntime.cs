@@ -2310,6 +2310,50 @@ public class NpcRuntime : ICapabilityConditionSource
         return true;
     }
 
+    /// <summary>
+    /// Publishes Unity compatibility fields and the existing P12 lifecycle
+    /// invalidation after Core has committed a selected Person-death owner
+    /// transaction. The selected lifecycle/action owners must already contain
+    /// the committed values; this method never applies an owner mutation.
+    /// </summary>
+    internal bool CanPublishCoreSelectedPersonDeath(
+        DailyV1NpcRuntimeOwners expectedOwners,
+        bool currentActionChanged) =>
+        expectedOwners != null
+        && ReferenceEquals(selectedRuntimeOwners, expectedOwners)
+        && expectedOwners.Lifecycle?.LifeState == NpcLifeState.Alive
+        && (currentActionRuntime != null) == currentActionChanged
+        && HasConsistentCurrentActionSlot;
+
+    internal bool PublishCoreSelectedPersonDeath(
+        DailyV1NpcRuntimeOwners expectedOwners,
+        bool currentActionChanged)
+    {
+        if (expectedOwners == null
+            || !ReferenceEquals(selectedRuntimeOwners, expectedOwners)
+            || expectedOwners.Lifecycle?.LifeState != NpcLifeState.Dead
+            || expectedOwners.ActionSlot?.CurrentAction != null
+            || expectedOwners.ActionSlot?.CurrentPayload != null
+            || (currentActionRuntime != null) != currentActionChanged
+            || !ReferenceEquals(expectedOwners.ActionSlot, selectedRuntimeOwners.ActionSlot))
+            return false;
+
+        NpcActionRuntime previous = currentActionRuntime;
+        lifeState = expectedOwners.Lifecycle.LifeState;
+        injurySeverity = expectedOwners.Lifecycle.InjurySeverity;
+        currentAction = null;
+        currentActionRuntime = null;
+        previous?.UnbindP12Owner(this);
+        previous?.UnbindSelectedOwner();
+        NotifyP12LifecycleMutationCommitted(
+            lifeStateChanged: true,
+            residenceChanged: false,
+            currentActionChanged: currentActionChanged,
+            currentActionRevisionAlreadyCommitted: currentActionChanged,
+            lifeStateRevisionAlreadyCommitted: true);
+        return true;
+    }
+
     public bool TryApplyInjury(NpcInjurySeverity severity)
     {
         // Injury severity has no owner section or operation in this bounded P12 profile.

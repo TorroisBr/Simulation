@@ -1499,7 +1499,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 representedFloors = floors;
             }
 
-            public bool TryApplyPersonDeath(PersonId personId, out string failure)
+            public bool TryApplyPersonDeath(
+                DailyV1SelectedPersonDeathPlan plan,
+                Func<bool> coreCommit,
+                out string failure)
             {
                 failure = "No mortality is expected in this fixture.";
                 return false;

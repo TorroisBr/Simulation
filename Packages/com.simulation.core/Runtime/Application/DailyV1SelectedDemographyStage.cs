@@ -3,7 +3,16 @@ using System.Collections.Generic;
 
 internal interface IDailyV1SelectedDemographyBoundary
 {
-    bool TryApplyPersonDeath(PersonId personId, out string failure);
+    /// <summary>
+    /// Admits the exact Core-prepared death operation through the host's
+    /// existing owner-section protocol, then invokes Core's commit. The host
+    /// may validate census bindings and publish compatibility notifications;
+    /// it does not choose or apply the death.
+    /// </summary>
+    bool TryApplyPersonDeath(
+        DailyV1SelectedPersonDeathPlan plan,
+        Func<bool> coreCommit,
+        out string failure);
     /// <summary>
     /// Returns represented residents from host compatibility NPCs outside the
     /// exact selected Core owner graph. PersonStore residents and selected Core
@@ -11,6 +20,246 @@ internal interface IDailyV1SelectedDemographyBoundary
     /// </summary>
     IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(
         IReadOnlyCollection<string> selectedNpcRuntimeIds);
+}
+
+/// <summary>
+/// Immutable expected-state witness for one selected Person death. The
+/// captured object references are the exact Core owners in the admitted
+/// graph; the host uses them only to bind the existing P12 census operation.
+/// </summary>
+internal sealed class DailyV1SelectedPersonDeathPlan
+{
+    internal PersonRuntime Person { get; }
+    internal long AbsoluteDay { get; }
+    internal DailyV1NpcRuntimeOwners MaterializedNpc { get; }
+    internal DailyV1CityRuntimeOwners ResidenceCity { get; }
+    internal long ExpectedPopulationRevision { get; }
+    internal int ExpectedPopulation { get; }
+    internal SettlementPopulationTransition PopulationTransition { get; }
+    internal DailyV1ActionDefinition ExpectedAction { get; }
+    internal DailyV1NpcActionPayloadOwner ExpectedPayload { get; }
+    internal bool IsResident => ResidenceCity != null;
+
+    internal DailyV1SelectedPersonDeathPlan(
+        PersonRuntime person,
+        long absoluteDay,
+        DailyV1NpcRuntimeOwners materializedNpc,
+        DailyV1CityRuntimeOwners residenceCity,
+        long expectedPopulationRevision,
+        int expectedPopulation,
+        SettlementPopulationTransition populationTransition,
+        DailyV1ActionDefinition expectedAction,
+        DailyV1NpcActionPayloadOwner expectedPayload)
+    {
+        Person = person ?? throw new ArgumentNullException(nameof(person));
+        AbsoluteDay = absoluteDay;
+        MaterializedNpc = materializedNpc;
+        ResidenceCity = residenceCity;
+        ExpectedPopulationRevision = expectedPopulationRevision;
+        ExpectedPopulation = expectedPopulation;
+        PopulationTransition = populationTransition;
+        ExpectedAction = expectedAction;
+        ExpectedPayload = expectedPayload;
+    }
+}
+
+/// <summary>
+/// Core-owned selected Person-death proposal and commit. The host participates
+/// only in P12 admission/notification around this operation.
+/// </summary>
+internal static class DailyV1SelectedPersonDeathOperation
+{
+    internal static bool TryPrepare(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        PersonRuntime person,
+        long absoluteDay,
+        out DailyV1SelectedPersonDeathPlan plan,
+        out string failure)
+    {
+        plan = null;
+        failure = "Selected Person death requires the exact Core owner graph and PersonStore.";
+        if (graph == null || personStore == null || person == null
+            || absoluteDay < 0L
+            || !ReferenceEquals(graph.PersonStore, personStore)
+            || person.PersonId == null
+            || !personStore.TryGet(person.PersonId, out PersonRuntime registeredPerson)
+            || !ReferenceEquals(registeredPerson, person))
+            return false;
+
+        if (person.DeathAbsoluteDay.HasValue
+            || (person.BirthAbsoluteDay.HasValue && person.BirthAbsoluteDay.Value > absoluteDay))
+        {
+            failure = "The selected Person is already dead or has a future birth day.";
+            return false;
+        }
+
+        DailyV1NpcRuntimeOwners materializedNpc = null;
+        if (!string.IsNullOrWhiteSpace(person.MaterializedNpcRuntimeId))
+        {
+            if (!personStore.TryGetByMaterializedNpcRuntimeId(
+                    person.MaterializedNpcRuntimeId, out PersonRuntime materializedPerson)
+                || !ReferenceEquals(materializedPerson, person)
+                || !graph.TryGetNpcOwner(person.MaterializedNpcRuntimeId, out materializedNpc)
+                || !graph.ContainsExactNpcOwner(materializedNpc)
+                || materializedNpc.Lifecycle?.LifeState != NpcLifeState.Alive)
+            {
+                failure = "The selected Person materialization does not bind to its exact living Core NPC owner.";
+                return false;
+            }
+        }
+
+        DailyV1CityRuntimeOwners residenceCity = null;
+        long expectedPopulationRevision = 0L;
+        int expectedPopulation = 0;
+        SettlementPopulationTransition populationTransition = null;
+        if (!string.IsNullOrWhiteSpace(person.ResidenceSettlementRuntimeId))
+        {
+            int matches = 0;
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+            {
+                if (candidate == null
+                    || !string.Equals(candidate.RuntimeId,
+                        person.ResidenceSettlementRuntimeId, StringComparison.Ordinal))
+                    continue;
+                matches++;
+                residenceCity = candidate;
+            }
+
+            if (matches != 1 || residenceCity?.Population == null
+                || residenceCity.Population.CurrentPopulation <= 0
+                || !graph.ContainsExactCityOwner(residenceCity)
+                || !SettlementPopulationSystem.TryPropose(
+                    residenceCity.Population,
+                    new PopulationChangeSet(0, 1, 0, 0),
+                    out populationTransition,
+                    out _))
+            {
+                failure = "The selected resident Person has no unique live Core City population owner.";
+                return false;
+            }
+
+            expectedPopulationRevision = residenceCity.Population.Revision;
+            expectedPopulation = residenceCity.Population.CurrentPopulation;
+        }
+
+        DailyV1ActionDefinition expectedAction = materializedNpc?.ActionSlot?.CurrentAction;
+        DailyV1NpcActionPayloadOwner expectedPayload = materializedNpc?.ActionSlot?.CurrentPayload;
+        if (materializedNpc != null
+            && !materializedNpc.CanCommitPersonDeathAfterValidation(
+                NpcInjurySeverity.None, expectedAction, expectedPayload))
+        {
+            failure = "The materialized Core NPC owner cannot admit its death transition.";
+            return false;
+        }
+
+        plan = new DailyV1SelectedPersonDeathPlan(
+            person, absoluteDay, materializedNpc, residenceCity,
+            expectedPopulationRevision, expectedPopulation, populationTransition,
+            expectedAction, expectedPayload);
+        failure = null;
+        return true;
+    }
+
+    internal static bool TryCommit(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        DailyV1SelectedPersonDeathPlan plan,
+        out string failure)
+    {
+        failure = "Selected Person death expected state changed before Core commit.";
+        if (graph == null || personStore == null || plan == null
+            || !ReferenceEquals(graph.PersonStore, personStore)
+            || plan.Person.PersonId == null
+            || !personStore.TryGet(plan.Person.PersonId, out PersonRuntime registeredPerson)
+            || !ReferenceEquals(registeredPerson, plan.Person)
+            || plan.Person.DeathAbsoluteDay.HasValue
+            || (plan.Person.BirthAbsoluteDay.HasValue
+                && plan.Person.BirthAbsoluteDay.Value > plan.AbsoluteDay))
+            return false;
+
+        string expectedResidenceId = plan.ResidenceCity?.RuntimeId;
+        if (!string.Equals(plan.Person.ResidenceSettlementRuntimeId,
+                expectedResidenceId, StringComparison.Ordinal))
+            return false;
+
+        DailyV1NpcRuntimeOwners materializedNpc = plan.MaterializedNpc;
+        string expectedNpcId = materializedNpc?.RuntimeId;
+        if (!string.Equals(plan.Person.MaterializedNpcRuntimeId,
+                expectedNpcId, StringComparison.Ordinal)
+            || (materializedNpc != null
+                && (!graph.ContainsExactNpcOwner(materializedNpc)
+                    || !personStore.TryGetByMaterializedNpcRuntimeId(
+                        materializedNpc.RuntimeId, out PersonRuntime boundPerson)
+                    || !ReferenceEquals(boundPerson, plan.Person)
+                    || !materializedNpc.CanCommitPersonDeathAfterValidation(
+                        NpcInjurySeverity.None, plan.ExpectedAction, plan.ExpectedPayload))))
+            return false;
+
+        if (!PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(
+                plan.Person, plan.IsResident ? 2 : 1)
+            || !PersonRuntimeOwnerBridge.CanCommitP12LifeResidenceMutation(plan.Person))
+        {
+            failure = "The selected Person lifecycle revision or writer is unavailable.";
+            return false;
+        }
+
+        if (plan.IsResident)
+        {
+            SettlementPopulationRuntime population = plan.ResidenceCity?.Population;
+            if (population == null
+                || !graph.ContainsExactCityOwner(plan.ResidenceCity)
+                || population.Revision != plan.ExpectedPopulationRevision
+                || population.CurrentPopulation != plan.ExpectedPopulation
+                || plan.ExpectedPopulation <= 0
+                || !PopulationOwnerBridge.CanAdvanceP12AggregateRevision(population)
+                || plan.PopulationTransition == null
+                || plan.PopulationTransition.ExpectedRevision != plan.ExpectedPopulationRevision
+                || plan.PopulationTransition.PopulationBefore != plan.ExpectedPopulation)
+            {
+                failure = "The selected resident population owner changed or cannot advance its revision.";
+                return false;
+            }
+        }
+
+        // All owner identities, revisions, bindings, and the population
+        // transition are checked before the first authoritative write.
+        if (plan.IsResident
+            && !SettlementPopulationSystem.TryApply(
+                plan.ResidenceCity.Population, plan.PopulationTransition, out _))
+        {
+            failure = "The prepared selected resident population transition was rejected.";
+            return false;
+        }
+
+        if (!PersonRuntimeOwnerBridge.RecordDeathAfterValidation(
+                plan.Person, plan.AbsoluteDay))
+        {
+            failure = "The selected Person death write was rejected after preflight.";
+            return false;
+        }
+
+        if (plan.IsResident
+            && !PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(plan.Person, null))
+        {
+            failure = "The selected Person residence clear was rejected after preflight.";
+            return false;
+        }
+
+        if (materializedNpc != null
+            && !materializedNpc.TryCommitPersonDeathAfterValidation(
+                NpcInjurySeverity.None,
+                plan.ExpectedAction,
+                plan.ExpectedPayload,
+                out _))
+        {
+            failure = "The selected materialized NPC death write was rejected after preflight.";
+            return false;
+        }
+
+        failure = null;
+        return true;
+    }
 }
 
 internal sealed class DailyV1SelectedDemographyDiagnostic
@@ -54,9 +303,9 @@ internal sealed class DailyV1SelectedDemographyResult
 }
 
 /// <summary>
-/// Owns the selected Daily-v1 demographic ordering and aggregate population
-/// writes. The host supplies only the existing person-death writer and the
-/// represented-resident facts derived from that same runtime.
+/// Owns the selected Daily-v1 demographic ordering, Person-death proposals and
+/// Core owner writes. The host supplies only the existing P12 census admission
+/// boundary and represented-resident facts for unselected compatibility NPCs.
 /// </summary>
 internal static class DailyV1SelectedDemographyStage
 {
@@ -255,10 +504,25 @@ internal static class DailyV1SelectedDemographyStage
             }
 
             if (!evaluation.ShouldDie) continue;
-            if (!boundary.TryApplyPersonDeath(person.PersonId, out string deathFailure))
+            if (!DailyV1SelectedPersonDeathOperation.TryPrepare(
+                    graph, personStore, person, absoluteDay,
+                    out DailyV1SelectedPersonDeathPlan plan,
+                    out string prepareFailure))
             {
                 result.Add(true, "NaturalMortalityApplyRejected", person.PersonId.Value,
-                    deathFailure ?? string.Empty);
+                    prepareFailure ?? string.Empty);
+                continue;
+            }
+
+            string coreFailure = null;
+            if (!boundary.TryApplyPersonDeath(
+                    plan,
+                    () => DailyV1SelectedPersonDeathOperation.TryCommit(
+                        graph, personStore, plan, out coreFailure),
+                    out string deathFailure))
+            {
+                result.Add(true, "NaturalMortalityApplyRejected", person.PersonId.Value,
+                    deathFailure ?? coreFailure ?? string.Empty);
                 continue;
             }
 

@@ -321,6 +321,117 @@ public sealed partial class SimulationRuntime
         return true;
     }
 
+    /// <summary>
+    /// Admits Core's selected Person-death commit through the existing P12
+    /// owner-section operation. This adapter binds the Core plan to the
+    /// runtime's exact registered census owners and publishes only the Unity
+    /// compatibility projection; Core performs the authoritative writes.
+    /// </summary>
+    internal bool TryExecuteCoreSelectedPersonDeath(
+        DailyV1SelectedPersonDeathPlan plan,
+        System.Func<bool> coreCommit,
+        out string failure)
+    {
+        failure = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+        if (plan == null || coreCommit == null || graph == null
+            || !ReferenceEquals(graph.PersonStore, personStore)
+            || !ReferenceEquals(SelectedRuntimeOwnerGraph, graph)
+            || CurrentDay != plan.AbsoluteDay
+            || plan.Person == null || plan.Person.PersonId == null
+            || !personStore.TryGet(plan.Person.PersonId, out PersonRuntime registeredPerson)
+            || !ReferenceEquals(registeredPerson, plan.Person))
+        {
+            failure = "RuntimeFaulted";
+            return false;
+        }
+
+        NpcRuntime materializedNpc = null;
+        bool actionChanged = false;
+        if (plan.MaterializedNpc != null)
+        {
+            if (!graph.ContainsExactNpcOwner(plan.MaterializedNpc)
+                || !npcRegistryById.TryGetValue(
+                    plan.MaterializedNpc.RuntimeId, out materializedNpc)
+                || materializedNpc == null
+                || !ReferenceEquals(materializedNpc.SelectedRuntimeOwners, plan.MaterializedNpc)
+                || !ReferenceEquals(materializedNpc.BoundPersonRuntime, plan.Person)
+                || !materializedNpc.HasConsistentCurrentActionSlot)
+            {
+                failure = "RuntimeFaulted";
+                return false;
+            }
+            actionChanged = materializedNpc.CurrentActionRuntime != null;
+            if (!materializedNpc.CanPublishCoreSelectedPersonDeath(
+                    plan.MaterializedNpc, actionChanged))
+            {
+                failure = "RuntimeFaulted";
+                return false;
+            }
+        }
+
+        CityRuntime settlement = null;
+        if (plan.IsResident
+            && (!graph.ContainsExactCityOwner(plan.ResidenceCity)
+                || !TryResolveCityByRuntimeId(
+                    plan.ResidenceCity.RuntimeId, out settlement)
+                || settlement == null
+                || !ReferenceEquals(settlement.SelectedRuntimeOwners, plan.ResidenceCity)
+                || !ReferenceEquals(settlement.Population, plan.ResidenceCity.Population)))
+        {
+            failure = "RuntimeFaulted";
+            return false;
+        }
+
+        List<string> sectionIds = null;
+        if (runtimeAdmissionContext != null
+            && !TryBuildPersonLifecycleSectionIds(
+                plan.Person, plan.IsResident, materializedNpc, settlement,
+                out sectionIds))
+        {
+            failure = "RuntimeFaulted";
+            return false;
+        }
+
+        P12PopulationOperationScope p12Scope = null;
+        if (!TryBeginP12PopulationOperation(
+                DailyV1RuntimeProtocolOperationContracts.PersonDeath,
+                sectionIds,
+                () => PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(
+                        plan.Person, plan.IsResident ? 2 : 1)
+                    && (materializedNpc == null
+                        || (materializedNpc.CanAdvanceP12LifecycleRevisions(
+                                1, 0, actionChanged ? 1 : 0)
+                            && materializedNpc.CanCommitSelectedPersonDeathAfterValidation(
+                                NpcInjurySeverity.None, out _)))
+                    && (!plan.IsResident
+                        || PopulationOwnerBridge.CanAdvanceP12AggregateRevision(
+                            settlement.Population)),
+                out p12Scope))
+        {
+            failure = "RuntimeFaulted";
+            return false;
+        }
+
+        using (p12Scope)
+        {
+            bool applied = coreCommit();
+            if (applied && materializedNpc != null
+                && !materializedNpc.PublishCoreSelectedPersonDeath(
+                    plan.MaterializedNpc, actionChanged))
+            {
+                FaultRuntimeAdmission();
+                failure = "RuntimeFaulted";
+                applied = false;
+            }
+
+            if (applied)
+                AdvancePoliticalWorldRevision();
+            p12Scope?.Complete(applied);
+            return applied;
+        }
+    }
+
     private void ExitP12PopulationOperation(
         P12PopulationOperationContext context,
         bool operationSucceeded)
