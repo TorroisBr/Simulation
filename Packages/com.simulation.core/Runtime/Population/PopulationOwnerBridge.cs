@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 /// <summary>
@@ -133,6 +134,27 @@ public static class PopulationOwnerBridge
             destinationExpectedRevision,
             originPopulationBefore,
             destinationPopulationBefore,
+            out failure);
+    }
+
+    internal static bool TryApplyPairedMigrationWithResidenceCommit(
+        SettlementPopulationRuntime origin,
+        SettlementPopulationRuntime destination,
+        long originExpectedRevision,
+        long destinationExpectedRevision,
+        int originPopulationBefore,
+        int destinationPopulationBefore,
+        Func<bool> commitResidenceOwner,
+        out PopulationTransitionFailure failure)
+    {
+        return SettlementPopulationRuntime.TryApplyPairedMigrationWithResidenceCommit(
+            origin,
+            destination,
+            originExpectedRevision,
+            destinationExpectedRevision,
+            originPopulationBefore,
+            destinationPopulationBefore,
+            commitResidenceOwner,
             out failure);
     }
 

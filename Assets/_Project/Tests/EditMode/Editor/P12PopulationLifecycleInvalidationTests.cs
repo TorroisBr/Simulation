@@ -197,6 +197,167 @@ public sealed class P12PopulationLifecycleInvalidationTests
         AssertCensus(runtime);
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public void CoreSelectedResidenceMigrationCommitsPairedCitiesAndExactResidenceOwner(bool personBacked)
+    {
+        CityData originData = SimulationTestFactory.CreateCityData("core-selected-migration-origin-def");
+        originData.initialPopulation = 5;
+        CityData destinationData = SimulationTestFactory.CreateCityData("core-selected-migration-destination-def");
+        destinationData.initialPopulation = 3;
+        NpcData npcData = SimulationTestFactory.CreateNpc("core-selected-migration-npc-def");
+        SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        authoring.Cities.Add(originData);
+        authoring.Cities.Add(destinationData);
+        authoring.Npcs.Add(new NpcSimulationConfig { npc = npcData, startingCity = originData });
+        EffectiveSimulationConfiguration configuration = CreateP12Configuration();
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(authoring.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            authoring, configuration, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        CityRuntime origin = CityRuntime.CreateSelectedDailyV1(
+            "core-selected-migration-origin", definitions.Cities[originData.DefinitionId], definitions,
+            bindings, new SpatialLocationRuntime("core-selected-migration-origin-location"));
+        CityRuntime destination = CityRuntime.CreateSelectedDailyV1(
+            "core-selected-migration-destination", definitions.Cities[destinationData.DefinitionId], definitions,
+            bindings, new SpatialLocationRuntime("core-selected-migration-destination-location"));
+        NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+            "core-selected-migration-npc", npcData, definitions.Npcs[npcData.DefinitionId], definitions,
+            bindings, origin, 0f);
+        if (!personBacked)
+        {
+            Assert.That(SettlementPopulationMembershipSystem.TryBindExistingResident(
+                origin,
+                npc,
+                SimulationTestFactory.CreateAuthoritativeNpcRoster(new[] { npc }),
+                out PopulationMembershipFailure membershipFailure), Is.True, membershipFailure.ToString());
+        }
+        PersonStore people = new PersonStore();
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(0L), new[] { origin, destination }, new[] { npc },
+            configuration: configuration, personStore: people,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+
+        PersonRuntime person = null;
+        if (personBacked)
+        {
+            person = new PersonRuntime(new PersonId("core-selected-migration-person"), 0L);
+            Assert.That(runtime.TryRegisterPerson(person, out PersonStoreFailure registerFailure), Is.True, registerFailure.ToString());
+            Assert.That(runtime.TryBindExistingPersonResident(person.PersonId, origin, out PersonResidenceMembershipFailure residenceFailure),
+                Is.True, residenceFailure.ToString());
+            Assert.That(runtime.TryBindExistingNpcToPerson(person.PersonId, npc.RuntimeId, out PersonMaterializationFailure bindFailure),
+                Is.True, bindFailure.ToString());
+            Assert.That(npc.BoundPersonRuntime, Is.SameAs(person));
+        }
+
+        AssertCensus(runtime);
+        Assert.That(NpcResidenceMigrationSystem.TryPropose(
+            npc,
+            origin,
+            destination,
+            runtime.GetAuthoritativeNpcRoster(),
+            out NpcResidenceMigrationTransition transition,
+            out NpcResidenceMigrationFailure proposeFailure), Is.True, proposeFailure.ToString());
+
+        long epoch = ReadEpoch(runtime);
+        long originRevision = origin.Population.Revision;
+        long destinationRevision = destination.Population.Revision;
+        long residenceRevision = personBacked
+            ? PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person)
+            : ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: true);
+        bool applied = runtime.TryApplyResidenceMigration(
+            npc, origin, destination, transition, out NpcResidenceMigrationFailure failure);
+
+        Assert.That(applied, Is.True, failure.ToString());
+        Assert.That(origin.CurrentPopulation, Is.EqualTo(4));
+        Assert.That(destination.CurrentPopulation, Is.EqualTo(4));
+        Assert.That(origin.Population.Revision, Is.EqualTo(originRevision + 1L));
+        Assert.That(destination.Population.Revision, Is.EqualTo(destinationRevision + 1L));
+        Assert.That(npc.ResidenceSettlementRuntimeId, Is.EqualTo(destination.RuntimeId));
+        AssertEpoch(runtime, epoch + 1L);
+        if (personBacked)
+        {
+            Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(destination.RuntimeId));
+            Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person), Is.EqualTo(residenceRevision + 1L));
+        }
+        else
+        {
+            AssertNpcRevision(runtime, npc.RuntimeId, residence: true, expected: residenceRevision + 1L);
+        }
+        AssertCensus(runtime);
+    }
+
+    [Test]
+    public void CoreSelectedResidenceMigrationRejectsForgedTransitionBeforeAnyOwnerWrite()
+    {
+        CityData originData = SimulationTestFactory.CreateCityData("core-selected-migration-forged-origin-def");
+        originData.initialPopulation = 5;
+        CityData destinationData = SimulationTestFactory.CreateCityData("core-selected-migration-forged-destination-def");
+        destinationData.initialPopulation = 3;
+        NpcData npcData = SimulationTestFactory.CreateNpc("core-selected-migration-forged-npc-def");
+        SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        authoring.Cities.Add(originData);
+        authoring.Cities.Add(destinationData);
+        authoring.Npcs.Add(new NpcSimulationConfig { npc = npcData, startingCity = originData });
+        EffectiveSimulationConfiguration configuration = CreateP12Configuration();
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(authoring.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            authoring, configuration, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        CityRuntime origin = CityRuntime.CreateSelectedDailyV1(
+            "core-selected-migration-forged-origin", definitions.Cities[originData.DefinitionId], definitions,
+            bindings, new SpatialLocationRuntime("core-selected-migration-forged-origin-location"));
+        CityRuntime destination = CityRuntime.CreateSelectedDailyV1(
+            "core-selected-migration-forged-destination", definitions.Cities[destinationData.DefinitionId], definitions,
+            bindings, new SpatialLocationRuntime("core-selected-migration-forged-destination-location"));
+        NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+            "core-selected-migration-forged-npc", npcData, definitions.Npcs[npcData.DefinitionId], definitions,
+            bindings, origin, 0f);
+        Assert.That(SettlementPopulationMembershipSystem.TryBindExistingResident(
+            origin,
+            npc,
+            SimulationTestFactory.CreateAuthoritativeNpcRoster(new[] { npc }),
+            out PopulationMembershipFailure membershipFailure), Is.True, membershipFailure.ToString());
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(0L), new[] { origin, destination }, new[] { npc },
+            configuration: configuration, personStore: new PersonStore(),
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        AssertCensus(runtime);
+        Assert.That(NpcResidenceMigrationSystem.TryPropose(
+            npc,
+            origin,
+            destination,
+            runtime.GetAuthoritativeNpcRoster(),
+            out NpcResidenceMigrationTransition proposed,
+            out NpcResidenceMigrationFailure proposeFailure), Is.True, proposeFailure.ToString());
+        NpcResidenceMigrationTransition forged = new NpcResidenceMigrationTransition(
+            proposed.NpcRuntimeId,
+            proposed.OriginSettlementRuntimeId,
+            proposed.DestinationSettlementRuntimeId,
+            proposed.OriginExpectedRevision,
+            proposed.DestinationExpectedRevision,
+            proposed.OriginPopulationBefore,
+            proposed.OriginPopulationAfter + 1,
+            proposed.DestinationPopulationBefore,
+            proposed.DestinationPopulationAfter);
+        long epoch = ReadEpoch(runtime);
+        long originRevision = origin.Population.Revision;
+        long destinationRevision = destination.Population.Revision;
+        long residenceRevision = ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: true);
+
+        bool applied = runtime.TryApplyResidenceMigration(
+            npc, origin, destination, forged, out NpcResidenceMigrationFailure failure);
+
+        Assert.That(applied, Is.False);
+        Assert.That(failure, Is.EqualTo(NpcResidenceMigrationFailure.InvalidTransition));
+        Assert.That(origin.CurrentPopulation, Is.EqualTo(5));
+        Assert.That(destination.CurrentPopulation, Is.EqualTo(3));
+        Assert.That(origin.Population.Revision, Is.EqualTo(originRevision));
+        Assert.That(destination.Population.Revision, Is.EqualTo(destinationRevision));
+        Assert.That(npc.ResidenceSettlementRuntimeId, Is.EqualTo(origin.RuntimeId));
+        AssertNpcRevision(runtime, npc.RuntimeId, residence: true, expected: residenceRevision);
+        AssertEpoch(runtime, epoch);
+        AssertCensus(runtime);
+    }
+
     [Test]
     public void PersonResidenceBindingAndReceiptFreeDeathUseCompleteOneEpochBoundaries()
     {

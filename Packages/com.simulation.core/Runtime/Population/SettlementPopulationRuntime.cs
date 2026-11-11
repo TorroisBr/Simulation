@@ -436,6 +436,27 @@ public sealed class SettlementPopulationRuntime
         int destinationPopulationBefore,
         out PopulationTransitionFailure failure)
     {
+        return TryApplyPairedMigrationWithResidenceCommit(
+            origin,
+            destination,
+            originExpectedRevision,
+            destinationExpectedRevision,
+            originPopulationBefore,
+            destinationPopulationBefore,
+            null,
+            out failure);
+    }
+
+    internal static bool TryApplyPairedMigrationWithResidenceCommit(
+        SettlementPopulationRuntime origin,
+        SettlementPopulationRuntime destination,
+        long originExpectedRevision,
+        long destinationExpectedRevision,
+        int originPopulationBefore,
+        int destinationPopulationBefore,
+        Func<bool> commitResidenceOwner,
+        out PopulationTransitionFailure failure)
+    {
         failure = PopulationTransitionFailure.None;
 
         if (!originCanApply(origin, destination, out failure))
@@ -504,6 +525,22 @@ public sealed class SettlementPopulationRuntime
         {
             failure = PopulationTransitionFailure.RuntimeFaulted;
             return false;
+        }
+
+        // The residence owner is the third participant in a selected migration.
+        // Commit it only after both aggregate owners have completed all preflight,
+        // immediately before these paired writes, so no later validation can leave
+        // a partially applied migration.
+        if (commitResidenceOwner != null)
+        {
+            bool residenceCommitted;
+            try { residenceCommitted = commitResidenceOwner(); }
+            catch { residenceCommitted = false; }
+            if (!residenceCommitted)
+            {
+                failure = PopulationTransitionFailure.RuntimeFaulted;
+                return false;
+            }
         }
 
         // This boundary computes the only valid migration delta and commits both sides

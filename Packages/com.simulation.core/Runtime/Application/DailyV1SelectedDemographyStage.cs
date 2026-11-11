@@ -431,6 +431,350 @@ internal static class DailyV1SelectedPersonDeathOperation
     }
 }
 
+internal enum DailyV1SelectedResidenceMigrationFailure
+{
+    None = 0,
+    InvalidNpc = 1,
+    DeadNpc = 2,
+    InvalidOrigin = 3,
+    InvalidDestination = 4,
+    SameSettlement = 5,
+    ResidenceMismatch = 6,
+    OriginUnderflow = 7,
+    DestinationOverflow = 8,
+    OriginStaleState = 9,
+    DestinationStaleState = 10,
+    OriginRevisionOverflow = 11,
+    DestinationRevisionOverflow = 12,
+    InvalidTransition = 13,
+    AlreadyApplied = 14,
+    RuntimeFaulted = 15
+}
+
+/// <summary>
+/// Prepared selected-owner residence migration. The plan binds the exact Core
+/// NPC, paired City population owners, and the authoritative Person or
+/// non-Person residence owner before any member is written.
+/// </summary>
+internal sealed class DailyV1SelectedResidenceMigrationPlan
+{
+    internal DailyV1NpcRuntimeOwners Npc { get; }
+    internal DailyV1CityRuntimeOwners Origin { get; }
+    internal DailyV1CityRuntimeOwners Destination { get; }
+    internal PersonRuntime Person { get; }
+    internal DailyV1NpcResidenceOwner NpcResidence { get; }
+    internal long OriginExpectedRevision { get; }
+    internal long DestinationExpectedRevision { get; }
+    internal int OriginPopulationBefore { get; }
+    internal int DestinationPopulationBefore { get; }
+    internal long ResidenceExpectedRevision { get; }
+    internal string OriginRuntimeId => Origin.RuntimeId;
+    internal string DestinationRuntimeId => Destination.RuntimeId;
+    internal bool IsPersonBacked => Person != null;
+
+    internal DailyV1SelectedResidenceMigrationPlan(
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1CityRuntimeOwners origin,
+        DailyV1CityRuntimeOwners destination,
+        PersonRuntime person,
+        DailyV1NpcResidenceOwner npcResidence,
+        long originExpectedRevision,
+        long destinationExpectedRevision,
+        int originPopulationBefore,
+        int destinationPopulationBefore,
+        long residenceExpectedRevision)
+    {
+        Npc = npc ?? throw new ArgumentNullException(nameof(npc));
+        Origin = origin ?? throw new ArgumentNullException(nameof(origin));
+        Destination = destination ?? throw new ArgumentNullException(nameof(destination));
+        Person = person;
+        NpcResidence = npcResidence;
+        OriginExpectedRevision = originExpectedRevision;
+        DestinationExpectedRevision = destinationExpectedRevision;
+        OriginPopulationBefore = originPopulationBefore;
+        DestinationPopulationBefore = destinationPopulationBefore;
+        ResidenceExpectedRevision = residenceExpectedRevision;
+    }
+
+    internal bool MatchesCommand(
+        string npcRuntimeId,
+        string originRuntimeId,
+        string destinationRuntimeId,
+        long originExpectedRevision,
+        long destinationExpectedRevision,
+        int originPopulationBefore,
+        int originPopulationAfter,
+        int destinationPopulationBefore,
+        int destinationPopulationAfter)
+    {
+        return string.Equals(Npc.RuntimeId, npcRuntimeId, StringComparison.Ordinal)
+            && string.Equals(Origin.RuntimeId, originRuntimeId, StringComparison.Ordinal)
+            && string.Equals(Destination.RuntimeId, destinationRuntimeId, StringComparison.Ordinal)
+            && OriginExpectedRevision == originExpectedRevision
+            && DestinationExpectedRevision == destinationExpectedRevision
+            && OriginPopulationBefore == originPopulationBefore
+            && OriginPopulationBefore > 0
+            && OriginPopulationBefore - 1 == originPopulationAfter
+            && DestinationPopulationBefore == destinationPopulationBefore
+            && DestinationPopulationBefore < int.MaxValue
+            && DestinationPopulationBefore + 1 == destinationPopulationAfter;
+    }
+}
+
+/// <summary>
+/// Core-owned selected residence migration. P12 admission remains at the
+/// runtime boundary, while this operation owns the exact Core facts and
+/// commits the paired City owners with their residence owner as one prepared
+/// transaction.
+/// </summary>
+internal static class DailyV1SelectedResidenceMigrationOperation
+{
+    internal static bool TryPrepare(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1CityRuntimeOwners origin,
+        DailyV1CityRuntimeOwners destination,
+        out DailyV1SelectedResidenceMigrationPlan plan,
+        out DailyV1SelectedResidenceMigrationFailure failure)
+    {
+        plan = null;
+        failure = DailyV1SelectedResidenceMigrationFailure.InvalidNpc;
+        if (graph == null || npc == null || !graph.ContainsExactNpcOwner(npc))
+            return false;
+        if (npc.Lifecycle?.LifeState != NpcLifeState.Alive)
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.DeadNpc;
+            return false;
+        }
+
+        if (origin == null || !graph.ContainsExactCityOwner(origin)
+            || origin.Population == null
+            || !string.Equals(origin.Population.SettlementRuntimeId, origin.RuntimeId, StringComparison.Ordinal))
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.InvalidOrigin;
+            return false;
+        }
+        if (destination == null || !graph.ContainsExactCityOwner(destination)
+            || destination.Population == null
+            || !string.Equals(destination.Population.SettlementRuntimeId, destination.RuntimeId, StringComparison.Ordinal))
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.InvalidDestination;
+            return false;
+        }
+        if (ReferenceEquals(origin, destination)
+            || string.Equals(origin.RuntimeId, destination.RuntimeId, StringComparison.Ordinal))
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.SameSettlement;
+            return false;
+        }
+
+        PersonRuntime person = null;
+        DailyV1NpcResidenceOwner npcResidence = null;
+        long residenceRevision;
+        string residenceRuntimeId;
+        if (graph.PersonStore != null
+            && graph.PersonStore.TryGetByMaterializedNpcRuntimeId(npc.RuntimeId, out PersonRuntime materializedPerson))
+        {
+            if (!string.Equals(materializedPerson.MaterializedNpcRuntimeId, npc.RuntimeId, StringComparison.Ordinal))
+            {
+                failure = DailyV1SelectedResidenceMigrationFailure.RuntimeFaulted;
+                return false;
+            }
+            person = materializedPerson;
+            if (person.DeathAbsoluteDay.HasValue)
+            {
+                failure = DailyV1SelectedResidenceMigrationFailure.DeadNpc;
+                return false;
+            }
+            residenceRuntimeId = person.ResidenceSettlementRuntimeId;
+            residenceRevision = PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person);
+        }
+        else
+        {
+            npcResidence = npc.Residence;
+            if (npcResidence == null
+                || !string.Equals(npcResidence.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal))
+            {
+                failure = DailyV1SelectedResidenceMigrationFailure.RuntimeFaulted;
+                return false;
+            }
+            residenceRuntimeId = npcResidence.SettlementRuntimeId;
+            residenceRevision = npcResidence.Revision;
+        }
+
+        if (!string.Equals(residenceRuntimeId, origin.RuntimeId, StringComparison.Ordinal))
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.ResidenceMismatch;
+            return false;
+        }
+
+        SettlementPopulationRuntime originPopulation = origin.Population;
+        SettlementPopulationRuntime destinationPopulation = destination.Population;
+        if (originPopulation.CurrentPopulation <= 0)
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.OriginUnderflow;
+            return false;
+        }
+        if (destinationPopulation.CurrentPopulation == int.MaxValue)
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.DestinationOverflow;
+            return false;
+        }
+        if (originPopulation.Revision == long.MaxValue)
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.OriginRevisionOverflow;
+            return false;
+        }
+        if (destinationPopulation.Revision == long.MaxValue)
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.DestinationRevisionOverflow;
+            return false;
+        }
+
+        plan = new DailyV1SelectedResidenceMigrationPlan(
+            npc,
+            origin,
+            destination,
+            person,
+            npcResidence,
+            originPopulation.Revision,
+            destinationPopulation.Revision,
+            originPopulation.CurrentPopulation,
+            destinationPopulation.CurrentPopulation,
+            residenceRevision);
+        failure = DailyV1SelectedResidenceMigrationFailure.None;
+        return true;
+    }
+
+    internal static bool TryCommit(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1SelectedResidenceMigrationPlan plan,
+        Func<bool> npcResidenceMutationAdmission,
+        Action notifyNpcResidenceCommitted,
+        out DailyV1SelectedResidenceMigrationFailure failure)
+    {
+        failure = DailyV1SelectedResidenceMigrationFailure.RuntimeFaulted;
+        if (graph == null || plan == null
+            || !graph.ContainsExactNpcOwner(plan.Npc)
+            || !graph.ContainsExactCityOwner(plan.Origin)
+            || !graph.ContainsExactCityOwner(plan.Destination)
+            || plan.Npc.Lifecycle?.LifeState != NpcLifeState.Alive
+            || !ReferenceEquals(plan.Npc.Definitions, plan.Origin.Definitions)
+            || !ReferenceEquals(plan.Npc.Definitions, plan.Destination.Definitions))
+            return false;
+
+        SettlementPopulationRuntime originPopulation = plan.Origin.Population;
+        SettlementPopulationRuntime destinationPopulation = plan.Destination.Population;
+        if (originPopulation == null || destinationPopulation == null)
+            return false;
+        if (originPopulation.Revision != plan.OriginExpectedRevision
+            || originPopulation.CurrentPopulation != plan.OriginPopulationBefore)
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.OriginStaleState;
+            return false;
+        }
+        if (destinationPopulation.Revision != plan.DestinationExpectedRevision
+            || destinationPopulation.CurrentPopulation != plan.DestinationPopulationBefore)
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.DestinationStaleState;
+            return false;
+        }
+        if (!PopulationOwnerBridge.CanAdvanceP12AggregateRevision(originPopulation))
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.OriginRevisionOverflow;
+            return false;
+        }
+        if (!PopulationOwnerBridge.CanAdvanceP12AggregateRevision(destinationPopulation))
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.DestinationRevisionOverflow;
+            return false;
+        }
+
+        if (plan.Person != null)
+        {
+            if (graph.PersonStore == null
+                || !graph.PersonStore.TryGetByMaterializedNpcRuntimeId(
+                    plan.Npc.RuntimeId, out PersonRuntime registeredPerson)
+                || !ReferenceEquals(registeredPerson, plan.Person)
+                || plan.Person.DeathAbsoluteDay.HasValue
+                || !string.Equals(plan.Person.MaterializedNpcRuntimeId,
+                    plan.Npc.RuntimeId, StringComparison.Ordinal)
+                || !string.Equals(plan.Person.ResidenceSettlementRuntimeId,
+                    plan.Origin.RuntimeId, StringComparison.Ordinal)
+                || PersonRuntimeOwnerBridge.GetLifeResidenceRevision(plan.Person)
+                    != plan.ResidenceExpectedRevision
+                || !PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(plan.Person, 1)
+                || !PersonRuntimeOwnerBridge.CanCommitP12LifeResidenceMutation(plan.Person))
+            {
+                failure = DailyV1SelectedResidenceMigrationFailure.RuntimeFaulted;
+                return false;
+            }
+        }
+        else if (plan.NpcResidence == null
+            || !ReferenceEquals(plan.NpcResidence, plan.Npc.Residence)
+            || !plan.NpcResidence.Matches(plan.Origin.RuntimeId, plan.ResidenceExpectedRevision)
+            || !plan.NpcResidence.CanAdvanceRevision(1)
+            || npcResidenceMutationAdmission == null)
+        {
+            failure = DailyV1SelectedResidenceMigrationFailure.RuntimeFaulted;
+            return false;
+        }
+
+        bool CommitResidence()
+        {
+            if (plan.Person != null)
+                return PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+                    plan.Person, plan.Destination.RuntimeId);
+
+            bool admitted;
+            try { admitted = npcResidenceMutationAdmission(); }
+            catch { admitted = false; }
+            if (!admitted
+                || !plan.NpcResidence.TrySetValue(plan.Destination.RuntimeId))
+                return false;
+            plan.NpcResidence.NotifyMutationCommitted();
+            try { notifyNpcResidenceCommitted?.Invoke(); }
+            catch { /* The host notification is not an authoritative write. */ }
+            return true;
+        }
+
+        if (!PopulationOwnerBridge.TryApplyPairedMigrationWithResidenceCommit(
+                originPopulation,
+                destinationPopulation,
+                plan.OriginExpectedRevision,
+                plan.DestinationExpectedRevision,
+                plan.OriginPopulationBefore,
+                plan.DestinationPopulationBefore,
+                CommitResidence,
+                out PopulationTransitionFailure populationFailure))
+        {
+            failure = populationFailure switch
+            {
+                PopulationTransitionFailure.StaleState
+                    when originPopulation.Revision != plan.OriginExpectedRevision
+                        || originPopulation.CurrentPopulation != plan.OriginPopulationBefore
+                    => DailyV1SelectedResidenceMigrationFailure.OriginStaleState,
+                PopulationTransitionFailure.StaleState
+                    => DailyV1SelectedResidenceMigrationFailure.DestinationStaleState,
+                PopulationTransitionFailure.WouldUnderflow
+                    => DailyV1SelectedResidenceMigrationFailure.OriginUnderflow,
+                PopulationTransitionFailure.WouldOverflow
+                    => DailyV1SelectedResidenceMigrationFailure.DestinationOverflow,
+                PopulationTransitionFailure.RevisionOverflow
+                    when originPopulation.Revision == long.MaxValue
+                    => DailyV1SelectedResidenceMigrationFailure.OriginRevisionOverflow,
+                PopulationTransitionFailure.RevisionOverflow
+                    => DailyV1SelectedResidenceMigrationFailure.DestinationRevisionOverflow,
+                _ => DailyV1SelectedResidenceMigrationFailure.RuntimeFaulted
+            };
+            return false;
+        }
+
+        failure = DailyV1SelectedResidenceMigrationFailure.None;
+        return true;
+    }
+}
+
 internal sealed class DailyV1SelectedDemographyDiagnostic
 {
     internal bool IsError { get; }

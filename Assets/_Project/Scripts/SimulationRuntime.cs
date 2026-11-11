@@ -10824,46 +10824,174 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         NpcResidenceMigrationTransition transition,
         out NpcResidenceMigrationFailure failure)
     {
-        if (runtimeAdmissionContext != null
-            && TryBuildP12ResidenceMigrationOperation(
+        if (npcRuntime == null)
+        {
+            failure = NpcResidenceMigrationFailure.InvalidNpc;
+            return false;
+        }
+        if (origin == null)
+        {
+            failure = NpcResidenceMigrationFailure.InvalidOrigin;
+            return false;
+        }
+        if (destination == null)
+        {
+            failure = NpcResidenceMigrationFailure.InvalidDestination;
+            return false;
+        }
+        if (transition == null)
+        {
+            failure = NpcResidenceMigrationFailure.InvalidTransition;
+            return false;
+        }
+
+        if (runtimeAdmissionContext == null)
+        {
+            return NpcResidenceMigrationSystem.TryApply(
+                npcRuntime,
+                origin,
+                destination,
+                GetAuthoritativeNpcRoster(),
+                transition,
+                out failure);
+        }
+
+        if (!TryBuildP12ResidenceMigrationOperation(
                 npcRuntime,
                 origin,
                 destination,
                 out List<string> sectionIds,
                 out Func<bool> localRevisionCapacity))
         {
-            if (!TryBeginP12PopulationOperation(
-                    DailyV1RuntimeProtocolOperationContracts.PopulationResidenceMigration,
-                    sectionIds,
-                    localRevisionCapacity,
-                    out P12PopulationOperationScope p12Scope))
+            failure = NpcResidenceMigrationFailure.RuntimeFaulted;
+            FaultRuntimeAdmission();
+            return false;
+        }
+
+        bool hasUnselectedRuntimeMember = npcRuntimes != null
+            && npcRuntimes.Any(runtime => runtime != null
+                && !runtime.UsesSelectedDailyV1Definitions);
+        bool useCoreSelectedOperation = IsDailyCaptureProfile
+            && !hasUnselectedRuntimeMember;
+        DailyV1SelectedResidenceMigrationPlan selectedPlan = null;
+        if (useCoreSelectedOperation)
+        {
+            DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+            DailyV1SelectedResidenceMigrationFailure prepareFailure =
+                DailyV1SelectedResidenceMigrationFailure.RuntimeFaulted;
+            if (graph == null
+                || !DailyV1SelectedResidenceMigrationOperation.TryPrepare(
+                    graph,
+                    npcRuntime.SelectedRuntimeOwners,
+                    origin.SelectedRuntimeOwners,
+                    destination.SelectedRuntimeOwners,
+                    out selectedPlan,
+                    out prepareFailure))
             {
-                failure = NpcResidenceMigrationFailure.RuntimeFaulted;
+                failure = graph == null
+                    ? NpcResidenceMigrationFailure.RuntimeFaulted
+                    : ToNpcResidenceMigrationFailure(prepareFailure);
                 return false;
             }
 
-            using (p12Scope)
+            if (!selectedPlan.MatchesCommand(
+                    transition.NpcRuntimeId,
+                    transition.OriginSettlementRuntimeId,
+                    transition.DestinationSettlementRuntimeId,
+                    transition.OriginExpectedRevision,
+                    transition.DestinationExpectedRevision,
+                    transition.OriginPopulationBefore,
+                    transition.OriginPopulationAfter,
+                    transition.DestinationPopulationBefore,
+                    transition.DestinationPopulationAfter))
             {
-                bool admitted = NpcResidenceMigrationSystem.TryApply(
+                failure = transition.OriginExpectedRevision != selectedPlan.OriginExpectedRevision
+                    ? NpcResidenceMigrationFailure.OriginStaleState
+                    : transition.DestinationExpectedRevision != selectedPlan.DestinationExpectedRevision
+                        ? NpcResidenceMigrationFailure.DestinationStaleState
+                        : NpcResidenceMigrationFailure.InvalidTransition;
+                return false;
+            }
+        }
+
+        if (!TryBeginP12PopulationOperation(
+                DailyV1RuntimeProtocolOperationContracts.PopulationResidenceMigration,
+                sectionIds,
+                localRevisionCapacity,
+                out P12PopulationOperationScope p12Scope))
+        {
+            failure = NpcResidenceMigrationFailure.RuntimeFaulted;
+            return false;
+        }
+
+        using (p12Scope)
+        {
+            bool admitted;
+            if (useCoreSelectedOperation)
+            {
+                admitted = DailyV1SelectedResidenceMigrationOperation.TryCommit(
+                    SelectedRuntimeOwnerGraph,
+                    selectedPlan,
+                    () => npcRuntime.CanCommitP12LifecycleMutation(false, true),
+                    npcRuntime.NotifyCoreSelectedResidenceMutationCommitted,
+                    out DailyV1SelectedResidenceMigrationFailure commitFailure);
+                failure = ToNpcResidenceMigrationFailure(commitFailure);
+            }
+            else
+            {
+                admitted = NpcResidenceMigrationSystem.TryApply(
                     npcRuntime,
                     origin,
                     destination,
                     GetAuthoritativeNpcRoster(),
                     transition,
                     out failure);
-                if (admitted) AdvancePoliticalWorldRevision();
-                p12Scope?.Complete(admitted);
-                return admitted;
             }
-        }
 
-        return NpcResidenceMigrationSystem.TryApply(
-            npcRuntime,
-            origin,
-            destination,
-            GetAuthoritativeNpcRoster(),
-            transition,
-            out failure);
+            if (admitted) AdvancePoliticalWorldRevision();
+            p12Scope?.Complete(admitted);
+            return admitted;
+        }
+    }
+
+    private static NpcResidenceMigrationFailure ToNpcResidenceMigrationFailure(
+        DailyV1SelectedResidenceMigrationFailure failure)
+    {
+        switch (failure)
+        {
+            case DailyV1SelectedResidenceMigrationFailure.None:
+                return NpcResidenceMigrationFailure.None;
+            case DailyV1SelectedResidenceMigrationFailure.InvalidNpc:
+                return NpcResidenceMigrationFailure.InvalidNpc;
+            case DailyV1SelectedResidenceMigrationFailure.DeadNpc:
+                return NpcResidenceMigrationFailure.DeadNpc;
+            case DailyV1SelectedResidenceMigrationFailure.InvalidOrigin:
+                return NpcResidenceMigrationFailure.InvalidOrigin;
+            case DailyV1SelectedResidenceMigrationFailure.InvalidDestination:
+                return NpcResidenceMigrationFailure.InvalidDestination;
+            case DailyV1SelectedResidenceMigrationFailure.SameSettlement:
+                return NpcResidenceMigrationFailure.SameSettlement;
+            case DailyV1SelectedResidenceMigrationFailure.ResidenceMismatch:
+                return NpcResidenceMigrationFailure.ResidenceMismatch;
+            case DailyV1SelectedResidenceMigrationFailure.OriginUnderflow:
+                return NpcResidenceMigrationFailure.OriginUnderflow;
+            case DailyV1SelectedResidenceMigrationFailure.DestinationOverflow:
+                return NpcResidenceMigrationFailure.DestinationOverflow;
+            case DailyV1SelectedResidenceMigrationFailure.OriginStaleState:
+                return NpcResidenceMigrationFailure.OriginStaleState;
+            case DailyV1SelectedResidenceMigrationFailure.DestinationStaleState:
+                return NpcResidenceMigrationFailure.DestinationStaleState;
+            case DailyV1SelectedResidenceMigrationFailure.OriginRevisionOverflow:
+                return NpcResidenceMigrationFailure.OriginRevisionOverflow;
+            case DailyV1SelectedResidenceMigrationFailure.DestinationRevisionOverflow:
+                return NpcResidenceMigrationFailure.DestinationRevisionOverflow;
+            case DailyV1SelectedResidenceMigrationFailure.InvalidTransition:
+                return NpcResidenceMigrationFailure.InvalidTransition;
+            case DailyV1SelectedResidenceMigrationFailure.AlreadyApplied:
+                return NpcResidenceMigrationFailure.AlreadyApplied;
+            default:
+                return NpcResidenceMigrationFailure.RuntimeFaulted;
+        }
     }
 
     public bool TryApplyResidentDeath(

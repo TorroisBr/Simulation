@@ -1236,6 +1236,7 @@ public class NpcRuntime : ICapabilityConditionSource
         bool currentActionChanged = false,
         bool currentActionRevisionAlreadyCommitted = false,
         bool lifeStateRevisionAlreadyCommitted = false,
+        bool residenceRevisionAlreadyCommitted = false,
         bool notifyP12MutationBoundary = true)
     {
         if (lifeStateChanged && !lifeStateRevisionAlreadyCommitted)
@@ -1245,7 +1246,7 @@ public class NpcRuntime : ICapabilityConditionSource
             else if (lifeStateRevision < long.MaxValue)
                 lifeStateRevision++;
         }
-        if (residenceChanged)
+        if (residenceChanged && !residenceRevisionAlreadyCommitted)
         {
             if (selectedRuntimeOwners != null)
                 selectedRuntimeOwners.Residence.NotifyMutationCommitted();
@@ -1262,6 +1263,14 @@ public class NpcRuntime : ICapabilityConditionSource
         if (!notifyP12MutationBoundary || p12LifecycleMutationCommitted == null) return;
         try { p12LifecycleMutationCommitted(this, lifeStateChanged, residenceChanged, currentActionChanged); }
         catch { }
+    }
+
+    internal void NotifyCoreSelectedResidenceMutationCommitted()
+    {
+        NotifyP12LifecycleMutationCommitted(
+            false,
+            true,
+            residenceRevisionAlreadyCommitted: true);
     }
 
 	public NpcRuntime(string runtimeId, NpcData npcData)
