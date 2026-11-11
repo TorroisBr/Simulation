@@ -621,6 +621,17 @@ public sealed class DailyV1ApplicationSessionGateTests
         sections = ReplaceSelectedNpcOwnerSectionVector(graph, sections);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
             graph, sections, out _, out string diagnostic), Is.True, diagnostic);
+        if (graph.P12EOwners != null)
+        {
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12EOwnerSections(
+                graph, Array.Empty<OwnerSectionCensusSnapshot>(),
+                out IReadOnlyList<OwnerSectionCensusSnapshot> exactP12EOwnerRows,
+                out diagnostic), Is.True, diagnostic);
+            HashSet<string> coreP12EOwnerSectionIds = new HashSet<string>(
+                exactP12EOwnerRows.Select(section => section.SectionId), StringComparer.Ordinal);
+            sections = sections.Where(section => !coreP12EOwnerSectionIds.Contains(section.SectionId))
+                .Concat(exactP12EOwnerRows).ToArray();
+        }
         return RebindCoreJusticeOwnerSectionVector(graph, sections);
     }
 
@@ -720,6 +731,17 @@ public sealed class DailyV1ApplicationSessionGateTests
         sections = ReplaceSelectedNpcOwnerSectionVector(graph, sections);
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedNpcSections(
             graph, sections, out _, out string diagnostic), Is.True, diagnostic);
+        if (graph.P12EOwners != null)
+        {
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12EOwnerSections(
+                graph, Array.Empty<OwnerSectionCensusSnapshot>(),
+                out IReadOnlyList<OwnerSectionCensusSnapshot> exactP12EOwnerRows,
+                out diagnostic), Is.True, diagnostic);
+            HashSet<string> coreP12EOwnerSectionIds = new HashSet<string>(
+                exactP12EOwnerRows.Select(section => section.SectionId), StringComparer.Ordinal);
+            sections = sections.Where(section => !coreP12EOwnerSectionIds.Contains(section.SectionId))
+                .Concat(exactP12EOwnerRows).ToArray();
+        }
         return RebindCoreJusticeOwnerSectionVector(graph, sections);
     }
 

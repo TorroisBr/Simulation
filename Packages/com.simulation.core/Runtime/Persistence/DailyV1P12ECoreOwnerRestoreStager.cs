@@ -443,6 +443,52 @@ internal sealed class DailyV1P12ECoreOwnerRestoreBuilder
 /// <summary>Stages the dependency-ordered P12-E owner chain whose authorities are already in Core.</summary>
 internal static class DailyV1P12ECoreOwnerRestoreStager
 {
+    /// <summary>
+    /// Creates the selected Daily-v1 Genesis P12-E owners around the exact
+    /// Person, PoliticalDecision, and Justice authorities already created by
+    /// Core. P9's admitted proving profile begins these remaining P12-E owners
+    /// empty; their dependency graph is the same graph used by restore.
+    /// </summary>
+    internal static bool TryCreateEmptyForGenesis(
+        PersonStore persons,
+        SpatialAuthorityStore spatialAuthority,
+        PoliticalDecisionStore politicalDecisions,
+        DailyV1JusticeRecordsOwner justiceRecords,
+        out P12ECoreOwnerRestoreStage staged)
+    {
+        staged = null;
+        if (persons == null || spatialAuthority == null || politicalDecisions == null
+            || justiceRecords == null
+            || !politicalDecisions.IsCompatibleWithPersonStore(persons)
+            || !politicalDecisions.TryBindToPersonStore(persons))
+            return false;
+
+        InstitutionStore institutions = new InstitutionStore();
+        OfficeStore offices = new OfficeStore(institutions);
+        PropertyOwnershipStore propertyOwnership = new PropertyOwnershipStore(persons);
+        EstateStore estates = new EstateStore(persons);
+        FactionStore factions = new FactionStore(persons);
+        PoliticalClaimStore politicalClaims = new PoliticalClaimStore();
+        PoliticalSupportStore politicalSupport = new PoliticalSupportStore(
+            persons, factions, politicalClaims);
+        ArmedForceStore armedForces = new ArmedForceStore(persons);
+        ContingentManpowerStateStore manpower = new ContingentManpowerStateStore(
+            armedForces, null, false);
+        manpower.AttachToArmedForceStore();
+        ArmedForceSpatialStateStore positions = new ArmedForceSpatialStateStore(
+            armedForces, spatialAuthority);
+        PersistentConflictStore conflicts = new PersistentConflictStore(armedForces);
+        PersistentWarStore wars = new PersistentWarStore(armedForces, conflicts);
+        PersistentBattleStore battles = new PersistentBattleStore(
+            armedForces, conflicts, wars, spatialAuthority);
+
+        staged = new P12ECoreOwnerRestoreStage(
+            persons, institutions, offices, propertyOwnership, estates, factions,
+            politicalClaims, politicalSupport, politicalDecisions, justiceRecords,
+            armedForces, manpower, positions, conflicts, wars, battles);
+        return true;
+    }
+
     internal static bool TryStage(
         P12EInstitutionOfficeOwnerSnapshot institutionOffice,
         PropertyEstateOwnerSnapshot propertyEstate,

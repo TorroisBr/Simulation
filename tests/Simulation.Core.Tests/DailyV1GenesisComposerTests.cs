@@ -30,6 +30,24 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(composition.OwnerGraph.GenealogyStore.Revision, Is.Zero);
         Assert.That(composition.OwnerGraph.TryBindGenealogyStore(new GenealogyStore()), Is.False,
             "The selected Core genesis graph cannot replace its exact empty GenealogyStore.");
+        Assert.That(composition.OwnerGraph.P12EOwners, Is.Not.Null,
+            "Core Genesis publishes the complete selected P12-E owner set before its graph is exposed.");
+        Assert.That(composition.OwnerGraph.P12EOwners.Persons, Is.SameAs(composition.PersonStore));
+        Assert.That(composition.OwnerGraph.P12EOwners.JusticeRecords,
+            Is.SameAs(composition.OwnerGraph.JusticeRecordsOwner),
+            "Genesis Justice facts remain the exact Core-authored owner.");
+        Assert.That(composition.OwnerGraph.P12EOwners.PoliticalDecisions,
+            Is.SameAs(composition.OwnerGraph.PoliticalDecisionStore));
+        Assert.That(composition.OwnerGraph.P12EOwners.Positions.SpatialAuthorityStore,
+            Is.SameAs(composition.SpatialAuthority));
+        Assert.That(composition.OwnerGraph.P12EOwners.Battles.WarStore,
+            Is.SameAs(composition.OwnerGraph.P12EOwners.Wars));
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12EOwnerSections(
+            composition.OwnerGraph, Array.Empty<OwnerSectionCensusSnapshot>(),
+            out IReadOnlyList<OwnerSectionCensusSnapshot> genesisP12ERows,
+            out string p12ECensusDiagnostic), Is.True, p12ECensusDiagnostic);
+        Assert.That(genesisP12ERows, Has.Count.EqualTo(20));
+        Assert.That(genesisP12ERows.All(section => section.Role == OwnerSectionRole.Required), Is.True);
         Assert.That(composition.OwnerGraph.Expeditions, Is.SameAs(composition.Expeditions),
             "The Core graph must retain the exact ExpeditionStore created by genesis.");
         Assert.That(composition.ExplorableSites, Is.Not.Null);
