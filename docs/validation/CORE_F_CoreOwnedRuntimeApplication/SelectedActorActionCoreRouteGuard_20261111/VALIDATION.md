@@ -1,6 +1,6 @@
 # CORE-F guarded selected actor-action routing
 
-Status: validated candidate checkpoint, pending independent exact-tip review. CORE-F remains incomplete; Core canonical is unchanged.
+Status: validated candidate checkpoint; independent exact-tip review PASS. CORE-F remains incomplete; Core canonical is unchanged.
 
 ## Source identity and scope
 
