@@ -283,7 +283,7 @@ internal static class DailyV1GenesisComposer
                         return Fail("The selected Core runtime could not bind its initial owner roots.", out diagnostic);
                     if (!DailyV1P12ECoreOwnerRestoreStager.TryCreateEmptyForGenesis(
                             personStore, spatialAuthority, graph.PoliticalDecisionStore,
-                            graph.JusticeRecordsOwner,
+                            graph.JusticeRecordsOwner, time,
                             out P12ECoreOwnerRestoreStage p12EOwners)
                         || !graph.TryBindP12EOwners(p12EOwners)
                         || !ReferenceEquals(graph.P12EOwners, p12EOwners)

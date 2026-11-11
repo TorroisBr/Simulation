@@ -13,7 +13,8 @@ internal enum P12ECoreOwnerRestoreStep
     Military = 7,
     Conflict = 8,
     War = 9,
-    Battle = 10
+    Battle = 10,
+    CrimeSocialAppraisal = 11
 }
 
 internal enum P12ECoreOwnerRestoreFailure
@@ -42,6 +43,7 @@ internal sealed class P12ECoreOwnerRestoreStage
     internal PersistentConflictStore Conflicts { get; }
     internal PersistentWarStore Wars { get; }
     internal PersistentBattleStore Battles { get; }
+    internal CrimeSocialAppraisalWorldState CrimeSocialAppraisal { get; private set; }
 
     internal P12ECoreOwnerRestoreStage(
         PersonStore persons,
@@ -59,7 +61,8 @@ internal sealed class P12ECoreOwnerRestoreStage
         ArmedForceSpatialStateStore positions,
         PersistentConflictStore conflicts,
         PersistentWarStore wars,
-        PersistentBattleStore battles)
+        PersistentBattleStore battles,
+        CrimeSocialAppraisalWorldState crimeSocialAppraisal = null)
     {
         Persons = persons;
         Institutions = institutions;
@@ -77,6 +80,19 @@ internal sealed class P12ECoreOwnerRestoreStage
         Conflicts = conflicts;
         Wars = wars;
         Battles = battles;
+        CrimeSocialAppraisal = crimeSocialAppraisal;
+    }
+
+    internal bool TryBindCrimeSocialAppraisal(CrimeSocialAppraisalWorldState owner)
+    {
+        if (owner == null || !ReferenceEquals(owner.PersonStore, Persons)
+            || !ReferenceEquals(owner.InstitutionStore, Institutions)
+            || owner.SimulationTime == null)
+            return false;
+        if (CrimeSocialAppraisal != null)
+            return ReferenceEquals(CrimeSocialAppraisal, owner);
+        CrimeSocialAppraisal = owner;
+        return true;
     }
 }
 
@@ -454,10 +470,12 @@ internal static class DailyV1P12ECoreOwnerRestoreStager
         SpatialAuthorityStore spatialAuthority,
         PoliticalDecisionStore politicalDecisions,
         DailyV1JusticeRecordsOwner justiceRecords,
+        SimulationTime simulationTime,
         out P12ECoreOwnerRestoreStage staged)
     {
         staged = null;
         if (persons == null || spatialAuthority == null || politicalDecisions == null
+            || simulationTime == null
             || justiceRecords == null
             || !politicalDecisions.IsCompatibleWithPersonStore(persons)
             || !politicalDecisions.TryBindToPersonStore(persons))
@@ -485,7 +503,8 @@ internal static class DailyV1P12ECoreOwnerRestoreStager
         staged = new P12ECoreOwnerRestoreStage(
             persons, institutions, offices, propertyOwnership, estates, factions,
             politicalClaims, politicalSupport, politicalDecisions, justiceRecords,
-            armedForces, manpower, positions, conflicts, wars, battles);
+            armedForces, manpower, positions, conflicts, wars, battles,
+            new CrimeSocialAppraisalWorldState(persons, institutions, simulationTime));
         return true;
     }
 
@@ -501,6 +520,8 @@ internal static class DailyV1P12ECoreOwnerRestoreStager
         PersistentConflictOwnerSnapshot conflicts,
         PersistentWarOwnerSnapshot wars,
         PersistentBattleOwnerSnapshot battles,
+        P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialAppraisal,
+        SimulationTime stagedTime,
         bool localTopologyComposed,
         PersonStore persons,
         SpatialAuthorityStore stagedSpatialAuthority,
@@ -539,6 +560,21 @@ internal static class DailyV1P12ECoreOwnerRestoreStager
         if (!builder.TryStageBattle(battles, localTopologyComposed, out failure)) return false;
         stageObserver?.Invoke(P12ECoreOwnerRestoreStep.Battle);
 
-        return builder.TryBuild(out staged, out failure);
+        if (!builder.TryBuild(out P12ECoreOwnerRestoreStage built, out failure)
+            || crimeSocialAppraisal == null || stagedTime == null
+            || stagedTime.AbsoluteDay != capturedDay
+            || !crimeSocialAppraisal.TryStage(
+                persons, built.Institutions, stagedTime,
+                out CrimeSocialAppraisalWorldState stagedCrimeSocial, out _)
+            || !built.TryBindCrimeSocialAppraisal(stagedCrimeSocial))
+        {
+            staged = null;
+            failure = P12ECoreOwnerRestoreFailure.StageFailed;
+            return false;
+        }
+
+        stageObserver?.Invoke(P12ECoreOwnerRestoreStep.CrimeSocialAppraisal);
+        staged = built;
+        return true;
     }
 }

@@ -1176,6 +1176,7 @@ public class TesteSimulacao : MonoBehaviour
                             configuration: effectiveConfiguration, randomSource: authoritativeRandomSource,
                             personStore: selectedCoreGenesis?.PersonStore,
                             genealogyStore: selectedCoreGenesis?.OwnerGraph?.GenealogyStore,
+                            p12CrimeSocialAppraisalWorldState: selectedInitialRuntimeOwnerGraph?.P12EOwners?.CrimeSocialAppraisal,
                             institutionStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.Institutions,
                             officeStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.Offices,
                             propertyOwnershipStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.PropertyOwnership,

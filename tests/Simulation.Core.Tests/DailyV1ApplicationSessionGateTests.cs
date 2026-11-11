@@ -999,8 +999,20 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryBeginContinuationSaveOperation(
             session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
 
-        OwnerSectionCensusSnapshot original = sections[0];
-        sections[0] = new OwnerSectionCensusSnapshot(
+        string hostOwnedSectionId = DailyV1SelectedOwnerSectionCensusContract.FixedRequired
+            .First(sectionId =>
+                !DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds
+                    .Contains(sectionId, StringComparer.Ordinal)
+                && sectionId != P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId
+                && sectionId != P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId
+                && sectionId != P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId
+                && sectionId != DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId
+                && sectionId != DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+        int hostOwnedSectionIndex = Array.FindIndex(sections,
+            section => section.SectionId == hostOwnedSectionId);
+        Assert.That(hostOwnedSectionIndex, Is.GreaterThanOrEqualTo(0));
+        OwnerSectionCensusSnapshot original = sections[hostOwnedSectionIndex];
+        sections[hostOwnedSectionIndex] = new OwnerSectionCensusSnapshot(
             original.SectionId, original.SchemaVersion, original.Role,
             original.OwnerInstanceIdentity, original.Cardinality, original.Revision + 1L);
         boundary.SetAdmissionEvidence(sections, 0L);
@@ -3927,6 +3939,10 @@ public sealed class DailyV1ApplicationSessionGateTests
             null, out DailyV1ActiveRuntimeSession session, out _);
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
         ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
+        CrimeSocialAppraisalWorldState crimeSocial = graph.P12EOwners?.CrimeSocialAppraisal;
+        Assert.That(crimeSocial, Is.Not.Null);
+        Assert.That(crimeSocial.SimulationTime,
+            Is.SameAs(session.ExecutionBoundaryState.SimulationTime));
         OwnerSectionCensusSnapshot[] captured =
             CreateCoreBoundCompleteOwnerSectionVector(session);
         OwnerSectionCensusSnapshot records = captured.Single(section =>
@@ -3936,6 +3952,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             .First(sectionId =>
                 !DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds
                     .Contains(sectionId, StringComparer.Ordinal)
+                && sectionId != P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId
+                && sectionId != P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId
+                && sectionId != P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId
                 && sectionId != DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId
                 && sectionId != DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
         OwnerSectionCensusSnapshot hostOwnedBefore = captured.Single(section =>
@@ -3949,6 +3968,15 @@ public sealed class DailyV1ApplicationSessionGateTests
             composed), Is.True);
         Assert.That(composed.Select(section => section.SectionId),
             Is.EquivalentTo(captured.Select(section => section.SectionId)));
+        Assert.That(composed.Single(section => section.SectionId
+                == P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId).OwnerInstanceIdentity,
+            Is.SameAs(crimeSocial.TheftOutcomes));
+        Assert.That(composed.Single(section => section.SectionId
+                == P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId).OwnerInstanceIdentity,
+            Is.SameAs(crimeSocial.CrimeKnowledge));
+        Assert.That(composed.Single(section => section.SectionId
+                == P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId).OwnerInstanceIdentity,
+            Is.SameAs(crimeSocial.SocialReactions));
 
         OwnerSectionCensusSnapshot composedRecords = composed.Single(section =>
             section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
@@ -5319,7 +5347,7 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         Assert.That(application.TryStageRestoredP12EOwners(
                 null, null, null, null, null, null, null, null,
-                null, null, null, null, false, null, null, null, 0L, session, null,
+                null, null, null, null, null, null, false, null, null, null, 0L, session, null,
                 out P12ECoreOwnerRestoreStage unreservedOwners,
                 out P12AResult unreservedResult), Is.False);
         Assert.That(unreservedOwners, Is.Null);
@@ -5331,7 +5359,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         {
             Assert.That(application.TryStageRestoredP12EOwners(
                     null, null, null, null, null, null, null, null,
-                    null, null, null, null, false, null, null, null, 0L, session, replacement,
+                    null, null, null, null, null, null, false, null, null, null, 0L, session, replacement,
                     out P12ECoreOwnerRestoreStage reservedOwners,
                     out P12AResult reservedResult), Is.False);
             Assert.That(reservedOwners, Is.Null);
@@ -5343,7 +5371,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(initialApplication.TryCaptureBootstrapAdmissionContext(out _), Is.True);
         Assert.That(initialApplication.TryStageRestoredP12EOwners(
                 null, null, null, null, null, null, null, null,
-                null, null, null, null, false, null, null, null, 0L, null, null,
+                null, null, null, null, null, null, false, null, null, null, 0L, null, null,
                 out P12ECoreOwnerRestoreStage initialOwners,
                 out P12AResult initialResult), Is.False);
         Assert.That(initialOwners, Is.Null);

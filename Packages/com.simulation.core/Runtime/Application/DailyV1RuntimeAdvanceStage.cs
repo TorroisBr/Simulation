@@ -475,6 +475,35 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceBoundary
 /// </summary>
 internal static class DailyV1SelectedRuntimeOwnerCensusSource
 {
+    private sealed class P12OwnerSectionCensusProvider<TOwner> : IOwnerSectionCensusProvider
+        where TOwner : class
+    {
+        private readonly string sectionId;
+        private readonly int schemaVersion;
+        private readonly TOwner owner;
+        private readonly Func<TOwner, int> cardinality;
+        private readonly Func<TOwner, long> revision;
+
+        internal P12OwnerSectionCensusProvider(
+            string sectionId,
+            int schemaVersion,
+            TOwner owner,
+            Func<TOwner, int> cardinality,
+            Func<TOwner, long> revision)
+        {
+            this.sectionId = sectionId ?? throw new ArgumentNullException(nameof(sectionId));
+            if (schemaVersion <= 0) throw new ArgumentOutOfRangeException(nameof(schemaVersion));
+            this.schemaVersion = schemaVersion;
+            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            this.cardinality = cardinality ?? throw new ArgumentNullException(nameof(cardinality));
+            this.revision = revision ?? throw new ArgumentNullException(nameof(revision));
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus() =>
+            new OwnerSectionCensusWitness(sectionId, schemaVersion, owner,
+                cardinality(owner), revision(owner));
+    }
+
     private sealed class ReferenceIdentityComparer : IEqualityComparer<object>
     {
         internal static readonly ReferenceIdentityComparer Instance = new ReferenceIdentityComparer();
@@ -1158,7 +1187,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         }
 
         P12ECoreOwnerRestoreStage owners = graph.P12EOwners;
-        if (owners == null)
+        if (owners == null || owners.CrimeSocialAppraisal == null)
         {
             OwnerSectionCensusSnapshot[] unchanged = new OwnerSectionCensusSnapshot[hostSections.Count];
             for (int i = 0; i < unchanged.Length; i++) unchanged[i] = hostSections[i];
@@ -1166,7 +1195,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return true;
         }
 
-        List<OwnerSectionCensusSnapshot> expected = new List<OwnerSectionCensusSnapshot>(20);
+        List<OwnerSectionCensusSnapshot> expected = new List<OwnerSectionCensusSnapshot>(23);
         IReadOnlyList<IOwnerSectionCensusProvider> institutionOffice =
             InstitutionOfficeCensusProvider.CreateProviders(owners.Institutions, owners.Offices);
         if (!TryAppendCoreP12EOwnerProviders(expected, institutionOffice,
@@ -1228,6 +1257,46 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 new[] { PoliticalSupportStoreCensusProvider.RelationsSectionId },
                 new[] { PoliticalSupportStoreCensusProvider.SchemaVersion },
                 new object[] { owners.PoliticalSupport }, out diagnostic)
+            || !TryAppendCoreP12EOwnerProviders(expected,
+                new IOwnerSectionCensusProvider[]
+                {
+                    new P12OwnerSectionCensusProvider<TheftOutcomeStore>(
+                        P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId,
+                        P12CrimeSocialAppraisalOwnerContract.SchemaVersion,
+                        owners.CrimeSocialAppraisal.TheftOutcomes,
+                        owner => owner.Count,
+                        owner => owner.P12CensusRevision),
+                    new P12OwnerSectionCensusProvider<CrimeKnowledgeStore>(
+                        P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId,
+                        P12CrimeSocialAppraisalOwnerContract.SchemaVersion,
+                        owners.CrimeSocialAppraisal.CrimeKnowledge,
+                        owner => owner.Count,
+                        owner => owner.P12CensusRevision),
+                    new P12OwnerSectionCensusProvider<SocialReactionStore>(
+                        P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId,
+                        P12CrimeSocialAppraisalOwnerContract.SchemaVersion,
+                        owners.CrimeSocialAppraisal.SocialReactions,
+                        owner => owner.Count,
+                        owner => owner.P12CensusRevision)
+                },
+                new[]
+                {
+                    P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId,
+                    P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId,
+                    P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId
+                },
+                new[]
+                {
+                    P12CrimeSocialAppraisalOwnerContract.SchemaVersion,
+                    P12CrimeSocialAppraisalOwnerContract.SchemaVersion,
+                    P12CrimeSocialAppraisalOwnerContract.SchemaVersion
+                },
+                new object[]
+                {
+                    owners.CrimeSocialAppraisal.TheftOutcomes,
+                    owners.CrimeSocialAppraisal.CrimeKnowledge,
+                    owners.CrimeSocialAppraisal.SocialReactions
+                }, out diagnostic)
             || !TryAppendCoreP12EOwnerProviders(expected,
                 ArmedForceStoreCensusProvider.CreateProviders(owners.ArmedForces),
                 new[]

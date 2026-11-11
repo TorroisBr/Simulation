@@ -4479,6 +4479,12 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
     internal bool TryBindSelectedRuntimeOwnerGraph(DailyV1SelectedRuntimeOwnerGraph graph)
     {
+        P12ECoreOwnerRestoreStage p12EOwners = graph?.P12EOwners;
+        if (p12EOwners != null
+            && (p12EOwners.CrimeSocialAppraisal == null
+                || !ReferenceEquals(p12EOwners.CrimeSocialAppraisal.SimulationTime, SimulationTime)))
+            return false;
+
         if (selectedRuntimeOwnerGraphBound)
             return ReferenceEquals(selectedRuntimeOwnerGraph, graph);
 

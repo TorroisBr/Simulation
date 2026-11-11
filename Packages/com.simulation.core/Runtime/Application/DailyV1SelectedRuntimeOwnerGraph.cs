@@ -135,6 +135,10 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             || owners.ArmedForces == null || owners.Manpower == null
             || owners.Positions == null || owners.Conflicts == null
             || owners.Wars == null || owners.Battles == null
+            || owners.CrimeSocialAppraisal == null
+            || !ReferenceEquals(owners.CrimeSocialAppraisal.PersonStore, PersonStore)
+            || !ReferenceEquals(owners.CrimeSocialAppraisal.InstitutionStore, owners.Institutions)
+            || owners.CrimeSocialAppraisal.SimulationTime == null
             || !InstitutionOfficeOwnerBridge.BelongsTo(owners.Offices, owners.Institutions)
             || !ReferenceEquals(owners.PropertyOwnership.PersonStoreForWorldBoundary, PersonStore)
             || !ReferenceEquals(owners.Estates.PersonStoreForWorldBoundary, PersonStore)
@@ -390,7 +394,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.Positions)
                 || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.Conflicts)
                 || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.Wars)
-                || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.Battles)))
+                || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.Battles)
+                || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.CrimeSocialAppraisal)))
             return null;
         return authorities;
     }

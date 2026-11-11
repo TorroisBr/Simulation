@@ -42,11 +42,13 @@ public sealed class DailyV1GenesisComposerTests
             Is.SameAs(composition.SpatialAuthority));
         Assert.That(composition.OwnerGraph.P12EOwners.Battles.WarStore,
             Is.SameAs(composition.OwnerGraph.P12EOwners.Wars));
+        Assert.That(composition.OwnerGraph.P12EOwners.CrimeSocialAppraisal.SimulationTime,
+            Is.SameAs(composition.SimulationTime));
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12EOwnerSections(
             composition.OwnerGraph, Array.Empty<OwnerSectionCensusSnapshot>(),
             out IReadOnlyList<OwnerSectionCensusSnapshot> genesisP12ERows,
             out string p12ECensusDiagnostic), Is.True, p12ECensusDiagnostic);
-        Assert.That(genesisP12ERows, Has.Count.EqualTo(20));
+        Assert.That(genesisP12ERows, Has.Count.EqualTo(23));
         Assert.That(genesisP12ERows.All(section => section.Role == OwnerSectionRole.Required), Is.True);
         Assert.That(composition.OwnerGraph.Expeditions, Is.SameAs(composition.Expeditions),
             "The Core graph must retain the exact ExpeditionStore created by genesis.");
@@ -87,23 +89,19 @@ public sealed class DailyV1GenesisComposerTests
             source.AdmissionContext.CreateRestoredContinuationContext();
         SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
 
-        Assert.That(DailyV1RestoredExecutionBoundaryComposer.TryCreate(
-            definitions, source.EffectiveConfiguration, source.Calendar, restoredTime,
-            restoredAdmission, source.WorldId, source.OwnerGraph,
-            source.RuntimeIdAllocator, source.RandomSource, source.RecordSequence,
-            source.DecisionStore, new ActorChoiceStore(new PersonStore()),
+        Assert.That(TryComposeRestoredBoundary(
+            source, restoredTime, restoredAdmission, new ActorChoiceStore(new PersonStore()),
             out _, out string rejectedDiagnostic), Is.False);
         Assert.That(rejectedDiagnostic, Does.Contain("exact admitted definitions"));
 
-        Assert.That(DailyV1RestoredExecutionBoundaryComposer.TryCreate(
-            definitions, source.EffectiveConfiguration, source.Calendar, restoredTime,
-            restoredAdmission, source.WorldId, source.OwnerGraph,
-            source.RuntimeIdAllocator, source.RandomSource, source.RecordSequence,
-            source.DecisionStore, source.ActorChoiceStore,
+        Assert.That(TryComposeRestoredBoundary(
+            source, restoredTime, restoredAdmission, source.ActorChoiceStore,
             out DailyV1ExecutionBoundaryState restoredBoundary,
             out string diagnostic), Is.True, diagnostic);
 
-        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph, Is.SameAs(source.OwnerGraph));
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph, Is.Not.SameAs(source.OwnerGraph));
+        Assert.That(restoredBoundary.SelectedRuntimeOwnerGraph.P12EOwners.CrimeSocialAppraisal.SimulationTime,
+            Is.SameAs(restoredTime));
         Assert.That(restoredBoundary.SimulationTime, Is.SameAs(restoredTime));
         Assert.That(restoredBoundary.AdmissionContext, Is.SameAs(restoredAdmission));
         Assert.That(restoredBoundary.WorldId, Is.SameAs(source.WorldId));
@@ -111,7 +109,7 @@ public sealed class DailyV1GenesisComposerTests
             Is.EqualTo(source.OwnerGraph.Npcs.Select(owner => owner.RuntimeId)));
         Assert.That(restoredBoundary.HasAdmittedSelectedDailyExecution, Is.True);
         Assert.That(restoredBoundary.HasExactSelectedRuntimeExecutionRoots(
-            source.OwnerGraph, source.PersonStore, source.ActorChoiceStore, source.RandomSource,
+            restoredBoundary.SelectedRuntimeOwnerGraph, source.PersonStore, source.ActorChoiceStore, source.RandomSource,
             source.RuntimeIdAllocator, source.RecordSequence, source.DecisionStore), Is.True);
 
         Assert.That(application.TryCreateRestoredActiveRuntimeSession(
@@ -135,11 +133,8 @@ public sealed class DailyV1GenesisComposerTests
         SimulationRuntimeAdmissionContext restoredAdmission =
             source.AdmissionContext.CreateRestoredContinuationContext();
         SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
-        Assert.That(DailyV1RestoredExecutionBoundaryComposer.TryCreate(
-            definitions, source.EffectiveConfiguration, source.Calendar, restoredTime,
-            restoredAdmission, source.WorldId, source.OwnerGraph,
-            source.RuntimeIdAllocator, source.RandomSource, source.RecordSequence,
-            source.DecisionStore, source.ActorChoiceStore,
+        Assert.That(TryComposeRestoredBoundary(
+            source, restoredTime, restoredAdmission, source.ActorChoiceStore,
             out DailyV1ExecutionBoundaryState restoredBoundary,
             out string diagnostic), Is.True, diagnostic);
 
@@ -181,11 +176,8 @@ public sealed class DailyV1GenesisComposerTests
         SimulationRuntimeAdmissionContext restoredAdmission =
             source.AdmissionContext.CreateRestoredContinuationContext();
         SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
-        Assert.That(DailyV1RestoredExecutionBoundaryComposer.TryCreate(
-            definitions, source.EffectiveConfiguration, source.Calendar, restoredTime,
-            restoredAdmission, source.WorldId, source.OwnerGraph,
-            source.RuntimeIdAllocator, source.RandomSource, source.RecordSequence,
-            source.DecisionStore, source.ActorChoiceStore,
+        Assert.That(TryComposeRestoredBoundary(
+            source, restoredTime, restoredAdmission, source.ActorChoiceStore,
             out DailyV1ExecutionBoundaryState restoredBoundary,
             out string diagnostic), Is.True, diagnostic);
 
@@ -703,5 +695,68 @@ public sealed class DailyV1GenesisComposerTests
             Is.EqualTo(expected.SpatialNetwork.Routes.Select(route => route.RuntimeId)));
         Assert.That(composition.OwnerGraph.Npcs.Select(owner => owner.RuntimeId),
             Is.EqualTo(expected.Npcs.Select(owner => owner.RuntimeId)));
+    }
+
+    private static bool TryComposeRestoredBoundary(
+        DailyV1GenesisComposition source,
+        SimulationTime restoredTime,
+        SimulationRuntimeAdmissionContext restoredAdmission,
+        ActorChoiceStore actorChoiceStore,
+        out DailyV1ExecutionBoundaryState boundary,
+        out string diagnostic)
+    {
+        P12ECoreOwnerRestoreStage sourceP12E = source.OwnerGraph.P12EOwners;
+        P12ECoreOwnerRestoreStage restoredP12E = new P12ECoreOwnerRestoreStage(
+            sourceP12E.Persons,
+            sourceP12E.Institutions,
+            sourceP12E.Offices,
+            sourceP12E.PropertyOwnership,
+            sourceP12E.Estates,
+            sourceP12E.Factions,
+            sourceP12E.PoliticalClaims,
+            sourceP12E.PoliticalSupport,
+            sourceP12E.PoliticalDecisions,
+            sourceP12E.JusticeRecords,
+            sourceP12E.ArmedForces,
+            sourceP12E.Manpower,
+            sourceP12E.Positions,
+            sourceP12E.Conflicts,
+            sourceP12E.Wars,
+            sourceP12E.Battles,
+            new CrimeSocialAppraisalWorldState(
+                sourceP12E.Persons, sourceP12E.Institutions, restoredTime));
+        DailyV1CalendarDefinition calendar = source.Definitions.Calendar;
+        CalendarDefinition calendarDefinition = calendar.monthLengths != null
+            && calendar.monthLengths.Count > 0
+            ? new CalendarDefinition(new List<int>(calendar.monthLengths), calendar.daysPerWeek)
+            : new CalendarDefinition(calendar.monthsPerYear,
+                calendar.weeksPerMonth, calendar.daysPerWeek);
+        return DailyV1RestoredExecutionBoundaryComposer.TryCreate(
+            source.Definitions,
+            source.EffectiveConfiguration,
+            calendarDefinition,
+            restoredTime,
+            restoredAdmission,
+            source.WorldId,
+            source.OwnerGraph.Cities,
+            source.OwnerGraph.Npcs,
+            source.OwnerGraph.SpatialNetwork,
+            source.OwnerGraph.JusticeRecordsOwner,
+            source.TravelPartyStore,
+            source.OwnerGraph.RuntimeIdentityIndex,
+            source.PersonStore,
+            source.OwnerGraph.GenealogyStore,
+            new ScheduledDirectiveStore(restoredTime),
+            source.Expeditions,
+            source.RuntimeIdAllocator,
+            source.RandomSource,
+            source.RecordSequence,
+            source.DecisionStore,
+            actorChoiceStore,
+            out boundary,
+            out _,
+            out diagnostic,
+            source.OwnerGraph.PoliticalDecisionStore,
+            restoredP12E);
     }
 }

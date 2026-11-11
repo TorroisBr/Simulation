@@ -4136,6 +4136,8 @@ internal sealed class DailyV1Application
         PersistentConflictOwnerSnapshot conflicts,
         PersistentWarOwnerSnapshot wars,
         PersistentBattleOwnerSnapshot battles,
+        P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialAppraisal,
+        SimulationTime stagedTime,
         bool localTopologyComposed,
         PersonStore persons,
         IReadOnlyList<DailyV1CityRuntimeOwners> stagedCities,
@@ -4153,7 +4155,9 @@ internal sealed class DailyV1Application
             return false;
 
         if (stagedRoots == null || !stagedRoots.IsDetached
-            || persons == null || stagedCities == null || stagedNpcs == null)
+            || persons == null || stagedCities == null || stagedNpcs == null
+            || crimeSocialAppraisal == null || stagedTime == null
+            || stagedTime.AbsoluteDay != capturedDay)
         {
             result = new P12AResult(P12AResultCode.InvalidOwnerValue);
             return false;
@@ -4162,7 +4166,7 @@ internal sealed class DailyV1Application
         if (!DailyV1P12ECoreOwnerRestoreStager.TryStage(
                 institutionOffice, propertyEstate, faction, politicalClaims,
                 politicalSupport, politicalDecisions, justiceRecords, military, conflicts, wars,
-                battles, localTopologyComposed,
+                battles, crimeSocialAppraisal, stagedTime, localTopologyComposed,
                 persons, stagedRoots.SpatialAuthority, stagedCities, stagedNpcs,
                 capturedDay, stageObserver,
                 out stagedOwners, out _)
@@ -4711,6 +4715,7 @@ internal sealed class DailyV1Application
                 snapshots.Faction, snapshots.PoliticalClaims, snapshots.PoliticalSupport,
                 snapshots.PoliticalDecisions, snapshots.Justice, snapshots.Military,
                 snapshots.Conflicts, snapshots.Wars, snapshots.Battles,
+                snapshots.CrimeSocial, stages.StagedTime,
                 false, d.Persons, d.Cities, d.Npcs, stages.Image.Header.Day,
                 stages.ExpectedSession, stages.ReplacementOperation,
                 out stagedOwners, out result, stageObserver)
