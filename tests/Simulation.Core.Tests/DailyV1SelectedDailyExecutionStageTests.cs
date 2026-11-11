@@ -1499,14 +1499,35 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 representedFloors = floors;
             }
 
-            public bool TryApplyPersonDeath(
+            public bool TryValidatePersonDeathProjection(
                 DailyV1SelectedPersonDeathPlan plan,
-                Func<bool> coreCommit,
+                out bool currentActionChanged,
                 out string failure)
             {
+                currentActionChanged = false;
                 failure = "No mortality is expected in this fixture.";
                 return false;
             }
+
+            public bool TryBeginPersonDeathOperation(
+                DailyV1SelectedPersonDeathPlan plan,
+                bool currentActionChanged,
+                string operationId,
+                IReadOnlyList<string> sectionIds,
+                Func<bool> localRevisionCapacity,
+                out IDailyV1SelectedPersonDeathP12Scope scope)
+            {
+                scope = null;
+                return false;
+            }
+
+            public bool TryPublishPersonDeathProjection(
+                DailyV1SelectedPersonDeathPlan plan,
+                bool currentActionChanged) => false;
+
+            public void FaultPersonDeathRuntime() { }
+
+            public void AdvancePersonDeathWorldRevision() { }
 
             public IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(
                 IReadOnlyCollection<string> selectedNpcRuntimeIds) => representedFloors;

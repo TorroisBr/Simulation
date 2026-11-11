@@ -270,6 +270,7 @@ public static class DailyDemographicSystem
     {
         private readonly SimulationRuntime world;
         private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+        private readonly IDailyV1SelectedPersonDeathBoundary personDeathBoundary;
 
         internal RuntimeDemographyBoundary(
             SimulationRuntime world,
@@ -277,16 +278,36 @@ public static class DailyDemographicSystem
         {
             this.world = world;
             this.graph = graph;
+            personDeathBoundary = world.CreateSelectedPersonDeathBoundary();
         }
 
-        public bool TryApplyPersonDeath(
+        public bool TryValidatePersonDeathProjection(
             DailyV1SelectedPersonDeathPlan plan,
-            Func<bool> coreCommit,
-            out string failure)
-        {
-            return world.TryExecuteCoreSelectedPersonDeath(plan, coreCommit, out failure);
-        }
+            out bool currentActionChanged,
+            out string failure) =>
+            personDeathBoundary.TryValidatePersonDeathProjection(
+                plan, out currentActionChanged, out failure);
 
+        public bool TryBeginPersonDeathOperation(
+            DailyV1SelectedPersonDeathPlan plan,
+            bool currentActionChanged,
+            string operationId,
+            IReadOnlyList<string> sectionIds,
+            Func<bool> localRevisionCapacity,
+            out IDailyV1SelectedPersonDeathP12Scope scope) =>
+            personDeathBoundary.TryBeginPersonDeathOperation(
+                plan, currentActionChanged, operationId, sectionIds, localRevisionCapacity, out scope);
+
+        public bool TryPublishPersonDeathProjection(
+            DailyV1SelectedPersonDeathPlan plan,
+            bool currentActionChanged) =>
+            personDeathBoundary.TryPublishPersonDeathProjection(plan, currentActionChanged);
+
+        public void FaultPersonDeathRuntime() =>
+            personDeathBoundary.FaultPersonDeathRuntime();
+
+        public void AdvancePersonDeathWorldRevision() =>
+            personDeathBoundary.AdvancePersonDeathWorldRevision();
         public IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(
             IReadOnlyCollection<string> selectedNpcRuntimeIds)
         {

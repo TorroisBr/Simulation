@@ -1,18 +1,33 @@
 using System;
 using System.Collections.Generic;
 
-internal interface IDailyV1SelectedDemographyBoundary
+internal interface IDailyV1SelectedPersonDeathP12Scope : IDisposable
 {
-    /// <summary>
-    /// Admits the exact Core-prepared death operation through the host's
-    /// existing owner-section protocol, then invokes Core's commit. The host
-    /// may validate census bindings and publish compatibility notifications;
-    /// it does not choose or apply the death.
-    /// </summary>
-    bool TryApplyPersonDeath(
+    void Complete(bool operationSucceeded);
+}
+
+internal interface IDailyV1SelectedPersonDeathBoundary
+{
+    bool TryValidatePersonDeathProjection(
         DailyV1SelectedPersonDeathPlan plan,
-        Func<bool> coreCommit,
+        out bool currentActionChanged,
         out string failure);
+    bool TryBeginPersonDeathOperation(
+        DailyV1SelectedPersonDeathPlan plan,
+        bool currentActionChanged,
+        string operationId,
+        IReadOnlyList<string> sectionIds,
+        Func<bool> localRevisionCapacity,
+        out IDailyV1SelectedPersonDeathP12Scope scope);
+    bool TryPublishPersonDeathProjection(
+        DailyV1SelectedPersonDeathPlan plan,
+        bool currentActionChanged);
+    void FaultPersonDeathRuntime();
+    void AdvancePersonDeathWorldRevision();
+}
+
+internal interface IDailyV1SelectedDemographyBoundary : IDailyV1SelectedPersonDeathBoundary
+{
     /// <summary>
     /// Returns represented residents from host compatibility NPCs outside the
     /// exact selected Core owner graph. PersonStore residents and selected Core
@@ -21,7 +36,6 @@ internal interface IDailyV1SelectedDemographyBoundary
     IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(
         IReadOnlyCollection<string> selectedNpcRuntimeIds);
 }
-
 /// <summary>
 /// Immutable expected-state witness for one selected Person death. The
 /// captured object references are the exact Core owners in the admitted
@@ -258,6 +272,136 @@ internal static class DailyV1SelectedPersonDeathOperation
         }
 
         failure = null;
+        return true;
+    }
+
+    internal static bool TryExecute(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        DailyV1SelectedPersonDeathPlan plan,
+        IDailyV1SelectedPersonDeathBoundary boundary,
+        out string failure)
+    {
+        failure = "RuntimeFaulted";
+        if (graph == null || personStore == null || plan == null || boundary == null
+            || !ReferenceEquals(graph.PersonStore, personStore)
+            || plan.Person?.PersonId == null
+            || !personStore.TryGet(plan.Person.PersonId, out PersonRuntime registeredPerson)
+            || !ReferenceEquals(registeredPerson, plan.Person))
+            return false;
+
+        if (!boundary.TryValidatePersonDeathProjection(
+                plan, out bool currentActionChanged, out failure)
+            || (plan.MaterializedNpc == null && currentActionChanged)
+            || (plan.MaterializedNpc != null
+                && currentActionChanged != (plan.ExpectedAction != null)))
+        {
+            failure = "RuntimeFaulted";
+            return false;
+        }
+
+        if (!TryCreateP12SectionIds(plan, out IReadOnlyList<string> sectionIds))
+        {
+            failure = "RuntimeFaulted";
+            return false;
+        }
+
+        Func<bool> localRevisionCapacity = () =>
+            PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(
+                plan.Person, plan.IsResident ? 2 : 1)
+            && (plan.MaterializedNpc == null
+                || (plan.MaterializedNpc.Lifecycle != null
+                    && plan.MaterializedNpc.Lifecycle.CanAdvanceRevision(1)
+                    && (!currentActionChanged
+                        || (plan.MaterializedNpc.ActionSlot != null
+                            && plan.MaterializedNpc.ActionSlot.CanAdvanceRevision(1)))
+                    && plan.MaterializedNpc.CanCommitPersonDeathAfterValidation(
+                        NpcInjurySeverity.None, plan.ExpectedAction, plan.ExpectedPayload)))
+            && (!plan.IsResident
+                || PopulationOwnerBridge.CanAdvanceP12AggregateRevision(
+                    plan.ResidenceCity?.Population));
+
+        if (!boundary.TryBeginPersonDeathOperation(
+                plan,
+                currentActionChanged,
+                DailyV1RuntimeProtocolOperationContracts.PersonDeath,
+                sectionIds,
+                localRevisionCapacity,
+                out IDailyV1SelectedPersonDeathP12Scope scope))
+        {
+            failure = "RuntimeFaulted";
+            return false;
+        }
+
+        using (scope)
+        {
+            if (!TryCommit(graph, personStore, plan, out failure))
+            {
+                scope?.Complete(false);
+                return false;
+            }
+
+            if (plan.MaterializedNpc != null
+                && !boundary.TryPublishPersonDeathProjection(plan, currentActionChanged))
+            {
+                boundary.FaultPersonDeathRuntime();
+                failure = "RuntimeFaulted";
+                scope?.Complete(false);
+                return false;
+            }
+
+            boundary.AdvancePersonDeathWorldRevision();
+            failure = null;
+            scope?.Complete(true);
+            return true;
+        }
+    }
+
+    private static bool TryCreateP12SectionIds(
+        DailyV1SelectedPersonDeathPlan plan,
+        out IReadOnlyList<string> sectionIds)
+    {
+        sectionIds = null;
+        if (plan?.Person?.PersonId == null)
+            return false;
+
+        List<string> ids = new List<string>
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(
+                plan.Person.PersonId)
+        };
+
+        if (plan.MaterializedNpc != null)
+        {
+            if (string.IsNullOrWhiteSpace(plan.MaterializedNpc.RuntimeId))
+                return false;
+            ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcLifeStatePrefix + plan.MaterializedNpc.RuntimeId);
+            if (plan.ExpectedAction != null)
+                ids.Add(DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix + plan.MaterializedNpc.RuntimeId);
+        }
+
+        if (plan.IsResident)
+        {
+            if (string.IsNullOrWhiteSpace(plan.ResidenceCity?.RuntimeId)
+                || plan.ResidenceCity.Population == null)
+                return false;
+            string cityKey;
+            try
+            {
+                cityKey = P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(
+                    plan.ResidenceCity.RuntimeId);
+            }
+            catch
+            {
+                return false;
+            }
+            if (string.IsNullOrWhiteSpace(cityKey))
+                return false;
+            ids.Add(DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix
+                + cityKey);
+        }
+
+        sectionIds = ids.AsReadOnly();
         return true;
     }
 }
@@ -514,15 +658,11 @@ internal static class DailyV1SelectedDemographyStage
                 continue;
             }
 
-            string coreFailure = null;
-            if (!boundary.TryApplyPersonDeath(
-                    plan,
-                    () => DailyV1SelectedPersonDeathOperation.TryCommit(
-                        graph, personStore, plan, out coreFailure),
-                    out string deathFailure))
+            if (!DailyV1SelectedPersonDeathOperation.TryExecute(
+                    graph, personStore, plan, boundary, out string deathFailure))
             {
                 result.Add(true, "NaturalMortalityApplyRejected", person.PersonId.Value,
-                    deathFailure ?? coreFailure ?? string.Empty);
+                    deathFailure ?? string.Empty);
                 continue;
             }
 

@@ -70,6 +70,8 @@ public sealed class DailyV1SelectedDemographyStageTests
 
         Assert.That(result.NamedPersonsEvaluated, Is.EqualTo(1));
         Assert.That(result.NamedDeathsApplied, Is.EqualTo(1));
+        Assert.That(boundary.DeathSectionIds,
+            Is.EqualTo(new[] { DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(personId) }));
         Assert.That(result.AggregateBirthsApplied, Is.EqualTo(graph.Cities.Count));
         Assert.That(boundary.Events[0], Is.EqualTo("death:" + personId.Value));
         Assert.That(boundary.Events[1], Is.EqualTo("floors"));
@@ -109,6 +111,14 @@ public sealed class DailyV1SelectedDemographyStageTests
             new CertainMortalitySamples(), null, boundary);
 
         Assert.That(result.NamedDeathsApplied, Is.EqualTo(1));
+        Assert.That(boundary.DeathSectionIds,
+            Is.EquivalentTo(new[]
+            {
+                DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(person.PersonId),
+                DailyV1SelectedOwnerSectionCensusContract.NpcLifeStatePrefix + npc.RuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix
+                    + P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(city.RuntimeId)
+            }));
         Assert.That(person.DeathAbsoluteDay, Is.EqualTo(1L));
         Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
         Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person),
@@ -247,6 +257,7 @@ public sealed class DailyV1SelectedDemographyStageTests
         internal readonly List<string> Events = new List<string>();
         internal IReadOnlyList<string> SelectedNpcRuntimeIds { get; private set; }
         internal PersonId DeathToApply;
+        internal IReadOnlyList<string> DeathSectionIds { get; private set; }
 
         internal RecordingBoundary(
             IReadOnlyList<DailyV1CityRuntimeOwners> cities,
@@ -272,21 +283,52 @@ public sealed class DailyV1SelectedDemographyStageTests
             floorSupplements = values;
         }
 
-        public bool TryApplyPersonDeath(
+        public bool TryValidatePersonDeathProjection(
             DailyV1SelectedPersonDeathPlan plan,
-            Func<bool> coreCommit,
+            out bool currentActionChanged,
             out string failure)
         {
+            currentActionChanged = plan?.ExpectedAction != null;
+            failure = plan == null ? "Missing death plan." : null;
+            return plan != null;
+        }
+
+        public bool TryBeginPersonDeathOperation(
+            DailyV1SelectedPersonDeathPlan plan,
+            bool currentActionChanged,
+            string operationId,
+            IReadOnlyList<string> sectionIds,
+            Func<bool> localRevisionCapacity,
+            out IDailyV1SelectedPersonDeathP12Scope scope)
+        {
+            scope = null;
             Events.Add("death:" + plan.Person.PersonId.Value);
+            DeathSectionIds = sectionIds?.ToArray();
             if (DeathToApply == null || !DeathToApply.Equals(plan.Person.PersonId))
             {
-                failure = "DeathNotAdmitted";
+                return false;
+            }
+            if (localRevisionCapacity == null || !localRevisionCapacity())
+            {
                 return false;
             }
 
-            bool applied = coreCommit != null && coreCommit();
-            failure = applied ? null : "CoreDeathCommitRejected";
-            return applied;
+            scope = new SuccessfulPersonDeathScope();
+            return true;
+        }
+
+        public bool TryPublishPersonDeathProjection(
+            DailyV1SelectedPersonDeathPlan plan,
+            bool currentActionChanged) => true;
+
+        public void FaultPersonDeathRuntime() { }
+
+        public void AdvancePersonDeathWorldRevision() { }
+
+        private sealed class SuccessfulPersonDeathScope : IDailyV1SelectedPersonDeathP12Scope
+        {
+            public void Complete(bool operationSucceeded) { }
+            public void Dispose() { }
         }
 
         public IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(

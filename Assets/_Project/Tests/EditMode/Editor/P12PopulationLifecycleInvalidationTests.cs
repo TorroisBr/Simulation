@@ -812,8 +812,6 @@ public sealed class P12PopulationLifecycleInvalidationTests
 
         bool applied = runtime.TryExecuteCoreSelectedPersonDeath(
             plan,
-            () => DailyV1SelectedPersonDeathOperation.TryCommit(
-                graph, people, plan, out _),
             out string failure);
 
         Assert.That(applied, Is.True, failure);
