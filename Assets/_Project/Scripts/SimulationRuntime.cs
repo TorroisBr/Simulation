@@ -8841,6 +8841,59 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     out failure))
                 return false;
 
+            bool hasUnselectedLiveRuntimeMember = npcRuntimes != null
+                && npcRuntimes.Any(runtime => runtime != null
+                    && !runtime.UsesSelectedDailyV1Definitions);
+            if (IsDailyCaptureProfile
+                && SelectedRuntimeOwnerGraph != null
+                && !hasUnselectedLiveRuntimeMember)
+            {
+                DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+                if (!DailyV1SelectedPersonDeathOperation.TryPrepare(
+                        graph,
+                        personStore,
+                        transition.ExpectedPerson,
+                        transition.ExpectedAbsoluteDay,
+                        out DailyV1SelectedPersonDeathPlan selectedPlan,
+                        out _)
+                    || !ReferenceEquals(selectedPlan.Person, transition.ExpectedPerson)
+                    || selectedPlan.AbsoluteDay != transition.ExpectedAbsoluteDay
+                    || (selectedPlan.MaterializedNpc != null) != transition.ExpectsMaterializedNpc
+                    || (transition.ExpectsMaterializedNpc
+                        && (!string.Equals(
+                                selectedPlan.MaterializedNpc.RuntimeId,
+                                transition.ExpectedMaterializedNpcRuntimeId,
+                                StringComparison.Ordinal)
+                            || !ReferenceEquals(
+                                materializedNpc?.SelectedRuntimeOwners,
+                                selectedPlan.MaterializedNpc)))
+                    || selectedPlan.IsResident != transition.ExpectsResident
+                    || (transition.ExpectsResident
+                        && !string.Equals(
+                            selectedPlan.ResidenceCity.RuntimeId,
+                            transition.ExpectedResidenceSettlementRuntimeId,
+                            StringComparison.Ordinal))
+                    || selectedPlan.ExpectedPopulationRevision
+                        != transition.ExpectedResidencePopulationRevision
+                    || selectedPlan.ExpectedPopulation
+                        != transition.ExpectedResidencePopulation)
+                {
+                    // The legacy proposal validator accepted one Unity view,
+                    // but the selected Core graph did not reproduce that exact
+                    // owner snapshot. Do not admit or mutate divergent state.
+                    FaultRuntimeAdmission();
+                    failure = PersonDeathLifecycleFailure.RuntimeFaulted;
+                    return false;
+                }
+
+                bool selectedApplied = TryExecuteCoreSelectedPersonDeath(
+                    selectedPlan, out _);
+                failure = selectedApplied
+                    ? PersonDeathLifecycleFailure.None
+                    : PersonDeathLifecycleFailure.RuntimeFaulted;
+                return selectedApplied;
+            }
+
             bool resident = transition.ExpectsResident;
             CityRuntime settlement = null;
             if (resident && !TryResolveCityByRuntimeId(

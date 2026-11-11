@@ -803,18 +803,22 @@ public sealed class P12PopulationLifecycleInvalidationTests
         long actionRevisionBefore = actionProvider.GetCurrentCensus().Revision;
         long epochBeforeDeath = ReadEpoch(runtime);
 
-        Assert.That(DailyV1SelectedPersonDeathOperation.TryPrepare(
-            graph, people, person, runtime.CurrentDay,
-            out DailyV1SelectedPersonDeathPlan plan, out string prepareFailure),
-            Is.True, prepareFailure);
-        Assert.That(plan.MaterializedNpc, Is.SameAs(npc.SelectedRuntimeOwners));
-        Assert.That(plan.ResidenceCity, Is.SameAs(city.SelectedRuntimeOwners));
+        Assert.That(runtime.TryProposePersonDeath(
+            person.PersonId,
+            out PersonDeathTransition transition,
+            out PersonDeathLifecycleFailure proposeFailure),
+            Is.True, proposeFailure.ToString());
+        Assert.That(transition.ExpectedPerson, Is.SameAs(person));
+        Assert.That(transition.ExpectedAbsoluteDay, Is.EqualTo(runtime.CurrentDay));
+        Assert.That(transition.ExpectedMaterializedNpcRuntimeId, Is.EqualTo(npc.RuntimeId));
+        Assert.That(transition.ExpectedResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(transition.ExpectedResidencePopulationRevision, Is.EqualTo(populationRevisionBefore));
+        Assert.That(transition.ExpectedResidencePopulation, Is.EqualTo(populationBefore));
 
-        bool applied = runtime.TryExecuteCoreSelectedPersonDeath(
-            plan,
-            out string failure);
+        bool applied = runtime.TryApplyPersonDeath(
+            transition, out PersonDeathLifecycleFailure failure);
 
-        Assert.That(applied, Is.True, failure);
+        Assert.That(applied, Is.True, failure.ToString());
         AssertEpoch(runtime, epochBeforeDeath + 1L);
         AssertCensus(runtime);
         Assert.That(person.DeathAbsoluteDay, Is.EqualTo(runtime.CurrentDay));
