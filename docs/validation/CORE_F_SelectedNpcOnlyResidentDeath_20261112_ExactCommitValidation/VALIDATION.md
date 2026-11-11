@@ -35,4 +35,12 @@ An initial exact-blob EditMode attempt used a deeply nested process-scoped E: te
 
 ## Review and status
 
-The new exact-source evidence is supplied for fresh independent review of implementation commit `7271fe39d0a06171e3e9876f39bb19cadb9d5202`. No Core-canonical promotion is performed. CORE-F remains incomplete.
+## Independent review
+
+- Verdict: PASS. Fresh independent exact-tip review covered candidate tip `3356f4977220ef36ae15be06086ac93f941da251`, tree `976dd2c8f4475e95f9a788cd56648e51e52077a7`.
+- The reviewed implementation commit is `7271fe39d0a06171e3e9876f39bb19cadb9d5202`, tree `bd58ccf5eef299460e9e5cf0d52b2d8051dfb318`.
+- The review confirmed the persisted-PersonId alias rejection at prepare and commit, post-commit Unity projection timing, transition clearing on failure, and regression coverage without weakened prior assertions.
+- The review verified the exact-source Unity package, 3,314/3,314 XML totals, Smoke cases, package hashes, and privacy scan. CoreValidation source/input identities were consistent with the protected run record.
+- No actionable defects remain for this bounded candidate.
+
+No Core-canonical promotion is performed. CORE-F remains incomplete.
