@@ -2120,6 +2120,15 @@ public sealed class SimulationRuntimeAdmissionTests
             "The selected SimulationRuntime actor-turn adapter must opt into Core-owned action selection and dispatch.");
         Assert.That(coreActionBoundary.UsesSelectedDailyV1ActionExecution(actor), Is.True,
             "Only the exact admitted actor owner is routed through Core's selected action stage.");
+        IDailyV1ActorTurnExecutionBoundary actorTurnBoundary =
+            hostPorts as IDailyV1ActorTurnExecutionBoundary;
+        Assert.That(actorTurnBoundary, Is.Not.Null);
+        long actionSlotRevisionBeforeHostFallback = actor.ActionSlot.Revision;
+        Assert.Throws<InvalidOperationException>(
+            () => actorTurnBoundary.EvaluateAndExecuteAction(actor),
+            "The selected Unity adapter must not fall back to Unity-owned action selection or execution.");
+        Assert.That(actor.ActionSlot.Revision, Is.EqualTo(actionSlotRevisionBeforeHostFallback),
+            "Rejecting a host-owned action callback must leave the exact Core action owner unchanged.");
         Assert.That(DailyV1CoreSelectedMerchantTradeStateBoundary.TryCreate(
             graph, null, hostPorts, out DailyV1CoreSelectedMerchantTradeStateBoundary merchantBoundary), Is.True);
 

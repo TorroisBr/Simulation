@@ -12906,16 +12906,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
         public void EvaluateAndExecuteAction(DailyV1NpcRuntimeOwners actor)
         {
-            NpcRuntime exactRuntime = RequireExactActor(actor);
-            runtime.EvaluateAction(exactRuntime);
-            if (exactRuntime.CurrentAction?.actionType == NpcActionType.SellGoods
-                && (exactRuntime.CurrentCity == null
-                    || !runtime.IsActorAtCurrentCityLocation(exactRuntime)))
-            {
-                exactRuntime.SetCurrentActionRuntime(null);
-                return;
-            }
-            runtime.TryExecuteCurrentAction(exactRuntime);
+            RequireExactActor(actor);
+            throw new InvalidOperationException(
+                "Selected Daily-v1 action selection and execution must remain in the Core actor-turn stage.");
         }
 
         public IAuthoritativeRandomSource RandomSource => runtime.randomSource;
