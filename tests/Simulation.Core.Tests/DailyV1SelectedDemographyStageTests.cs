@@ -148,21 +148,31 @@ public sealed class DailyV1SelectedDemographyStageTests
         Assert.That(populationBefore, Is.GreaterThan(0));
 
         Assert.That(DailyV1SelectedNpcResidentDeathOperation.TryPrepare(
-            graph, npc, city,
+            graph, npc, city, null,
             out DailyV1SelectedNpcResidentDeathPlan plan,
             out string prepareFailure), Is.True, prepareFailure);
 
         int admissionCalls = 0;
         int notificationCalls = 0;
+        int populationAtNotification = -1;
+        long populationRevisionAtNotification = -1L;
         Assert.That(DailyV1SelectedNpcResidentDeathOperation.TryCommit(
             graph,
             plan,
+            null,
             () => { admissionCalls++; return true; },
-            () => notificationCalls++,
+            () =>
+            {
+                notificationCalls++;
+                populationAtNotification = city.Population.CurrentPopulation;
+                populationRevisionAtNotification = city.Population.Revision;
+            },
             out string commitFailure), Is.True, commitFailure);
 
         Assert.That(admissionCalls, Is.EqualTo(1));
         Assert.That(notificationCalls, Is.EqualTo(1));
+        Assert.That(populationAtNotification, Is.EqualTo(populationBefore - 1));
+        Assert.That(populationRevisionAtNotification, Is.EqualTo(populationRevisionBefore + 1L));
         Assert.That(npc.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Dead));
         Assert.That(npc.Lifecycle.LifeStateRevision, Is.EqualTo(lifeRevisionBefore + 1L));
         Assert.That(npc.Residence.SettlementRuntimeId, Is.Null);
@@ -172,6 +182,42 @@ public sealed class DailyV1SelectedDemographyStageTests
         Assert.That(npc.ActionSlot.Revision, Is.EqualTo(actionRevisionBefore));
         Assert.That(city.Population.CurrentPopulation, Is.EqualTo(populationBefore - 1));
         Assert.That(city.Population.Revision, Is.EqualTo(populationRevisionBefore + 1L));
+    }
+
+    [Test]
+    public void SelectedNpcOnlyResidentDeathRejectsPersistedPersonIdAliasBeforeCensusOrOwnerWrite()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph();
+        PersonStore people = new PersonStore();
+        DailyV1CityRuntimeOwners city = graph.Cities[0];
+        PersonRuntime person = new PersonRuntime(
+            new PersonId("selected-npc-only-resident-death-person-alias"), 0L);
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            person, city.RuntimeId), Is.True);
+        Assert.That(people.TryRegister(person, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
+
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[3];
+        Assert.That(npc.Residence.TryInstallExact(city.RuntimeId, 0L), Is.True);
+        int populationBefore = city.Population.CurrentPopulation;
+        long populationRevisionBefore = city.Population.Revision;
+
+        Assert.That(DailyV1SelectedNpcResidentDeathOperation.TryPrepare(
+            graph, npc, city, person.PersonId,
+            out DailyV1SelectedNpcResidentDeathPlan plan,
+            out string failure), Is.False);
+
+        Assert.That(plan, Is.Null);
+        Assert.That(failure, Does.Contain("PersonId"));
+        Assert.That(person.DeathAbsoluteDay, Is.Null);
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(npc.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Alive));
+        Assert.That(npc.Lifecycle.LifeStateRevision, Is.Zero);
+        Assert.That(npc.Residence.SettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(npc.Residence.Revision, Is.Zero);
+        Assert.That(city.Population.CurrentPopulation, Is.EqualTo(populationBefore));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevisionBefore));
     }
 
     [Test]
@@ -185,7 +231,7 @@ public sealed class DailyV1SelectedDemographyStageTests
         Assert.That(npc.Residence.TryInstallExact(city.RuntimeId, 0L), Is.True);
 
         Assert.That(DailyV1SelectedNpcResidentDeathOperation.TryPrepare(
-            graph, npc, city,
+            graph, npc, city, null,
             out DailyV1SelectedNpcResidentDeathPlan plan,
             out string prepareFailure), Is.True, prepareFailure);
 
@@ -198,6 +244,7 @@ public sealed class DailyV1SelectedDemographyStageTests
         Assert.That(DailyV1SelectedNpcResidentDeathOperation.TryCommit(
             graph,
             plan,
+            null,
             () => { admissionCalls++; return true; },
             () => notificationCalls++,
             out _), Is.False);

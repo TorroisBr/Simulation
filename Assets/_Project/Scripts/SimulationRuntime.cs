@@ -11284,7 +11284,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
         DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
         if (!DailyV1SelectedNpcResidentDeathOperation.TryPrepare(
-                graph, npcOwner, cityOwner,
+                graph, npcOwner, cityOwner, npcRuntime.PersonId,
                 out DailyV1SelectedNpcResidentDeathPlan plan,
                 out _)
             || !MatchesCoreSelectedNpcResidentDeath(
@@ -11294,6 +11294,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 settlement.RuntimeId,
                 plan.CurrentActionChanged))
         {
+            transition = null;
             FaultRuntimeAdmission();
             failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
             return false;
@@ -11306,6 +11307,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 out List<string> sectionIds,
                 out Func<bool> localRevisionCapacity))
         {
+            transition = null;
             FaultRuntimeAdmission();
             failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
             return false;
@@ -11317,6 +11319,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 localRevisionCapacity,
                 out P12PopulationOperationScope p12Scope))
         {
+            transition = null;
             failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
             return false;
         }
@@ -11326,6 +11329,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             bool applied = DailyV1SelectedNpcResidentDeathOperation.TryCommit(
                 graph,
                 plan,
+                npcRuntime.PersonId,
                 () => npcRuntime.CanCommitP12LifecycleMutation(
                     lifeStateChanged: true,
                     residenceChanged: true,
@@ -11338,6 +11342,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             else
                 FaultRuntimeAdmission();
             p12Scope?.Complete(applied);
+            if (!applied)
+                transition = null;
             failure = applied
                 ? NpcPopulationLifecycleFailure.None
                 : NpcPopulationLifecycleFailure.RuntimeFaulted;

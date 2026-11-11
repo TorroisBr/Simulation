@@ -555,6 +555,7 @@ internal static class DailyV1SelectedNpcResidentDeathOperation
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners npc,
         DailyV1CityRuntimeOwners city,
+        PersonId persistedPersonId,
         out DailyV1SelectedNpcResidentDeathPlan plan,
         out string failure)
     {
@@ -571,6 +572,14 @@ internal static class DailyV1SelectedNpcResidentDeathOperation
             || !string.Equals(city.Population.SettlementRuntimeId, city.RuntimeId, StringComparison.Ordinal)
             || !string.Equals(npc.RuntimeId, npc.Residence.OwnerRuntimeId, StringComparison.Ordinal))
             return false;
+
+        if (persistedPersonId != null)
+        {
+            failure = graph.PersonStore.TryGet(persistedPersonId, out _)
+                ? "NPC-only resident death cannot alias a PersonStore-backed PersonId."
+                : "NPC-only resident death cannot carry a persisted PersonId without its PersonStore owner.";
+            return false;
+        }
 
         if (graph.PersonStore.TryGetByMaterializedNpcRuntimeId(npc.RuntimeId, out _))
         {
@@ -657,6 +666,7 @@ internal static class DailyV1SelectedNpcResidentDeathOperation
     internal static bool TryCommit(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1SelectedNpcResidentDeathPlan plan,
+        PersonId currentPersistedPersonId,
         Func<bool> npcMutationAdmission,
         Action npcMutationCommitted,
         out string failure)
@@ -666,6 +676,7 @@ internal static class DailyV1SelectedNpcResidentDeathOperation
             || !graph.ContainsExactNpcOwner(plan.Npc)
             || !graph.ContainsExactCityOwner(plan.City)
             || graph.PersonStore == null
+            || currentPersistedPersonId != null
             || graph.PersonStore.TryGetByMaterializedNpcRuntimeId(plan.Npc.RuntimeId, out _)
             || !ReferenceEquals(plan.Npc.Definitions, graph.Definitions)
             || !ReferenceEquals(plan.City.Definitions, graph.Definitions))
@@ -719,8 +730,6 @@ internal static class DailyV1SelectedNpcResidentDeathOperation
                 return false;
 
             npc.Residence.NotifyMutationCommitted();
-            try { npcMutationCommitted?.Invoke(); }
-            catch { }
             return true;
         }
 
@@ -734,6 +743,8 @@ internal static class DailyV1SelectedNpcResidentDeathOperation
             return false;
         }
 
+        try { npcMutationCommitted?.Invoke(); }
+        catch { }
         failure = null;
         return true;
     }
