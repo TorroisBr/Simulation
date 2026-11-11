@@ -19,8 +19,8 @@ The candidate was validated over base `914810df3d055dafa1f5e0687ced2f99580a4fd8`
 
 | Gate | Result | Run |
 |---|---:|---|
-| Official CoreValidation cold | 1089/1089 passed; 0 failed | `05cde30d65b04a4ba3ce362e99ead869` |
-| Official CoreValidation warm | 1089/1089 passed; 0 failed | `05cde30d65b04a4ba3ce362e99ead869` |
+| Official CoreValidation cold | 1089/1089 passed; 0 failed | `dd7c39d9969b4a409037a213a48f774e` |
+| Official CoreValidation warm | 1089/1089 passed; 0 failed | `dd7c39d9969b4a409037a213a48f774e` |
 | Core selected-demography test class | 3/3 passed in each CoreValidation pass | same run |
 | Focused Unity residence snapshot | 13/13 passed; 0 failed | `7d0385bc8dde453f931340bf6ddc85a4` |
 | Full Unity EditMode | 3305/3305 passed; 0 failed, skipped, or inconclusive | `bbb6ff43bbfb4cb8b43c215d34249214` |
@@ -30,6 +30,6 @@ The candidate was validated over base `914810df3d055dafa1f5e0687ced2f99580a4fd8`
 
 All four Unity runner inventories were stable before and after execution. The full EditMode report contains the Smoke and LongRun test identities. The final full EditMode result was packaged and verified against its protected original report using the approved evidence packager. The manifest SHA-256 is `23b6ac8dc7dcb6739dbc4b7d137d61b0f52a084bae9152c0ba58dbc5cbb1ff31`; the deterministic archive SHA-256 is `c3086c1351d98c5a3072d3d2e403df15268f89fa1a8b81c812cd78ca696a7616`.
 
-CoreValidation's original TRX, raw logs, and owner-only run manifest remain protected in local evidence retention. No public TRX package is claimed. The CoreValidation runner reported `LibraryAbsent=false`; this result is not a claim of .NET host execution independent of the Unity checkout.
+CoreValidation run `dd7c39d9969b4a409037a213a48f774e` recorded a stable input digest `ba1348c87c9a44f4e09fcfae4018d139bda06f5eb0aff3ce5fe7237bc9618fe2`; its manifest's `DailyV1SelectedDemographyStageTests.cs` SHA-256 matches the table above. Its original TRX, raw logs, and owner-only run manifest remain protected in local evidence retention. No public TRX package is claimed. The CoreValidation runner reported `LibraryAbsent=false`; this result is not a claim of .NET host execution independent of the Unity checkout.
 
 Pre-existing local `ProjectSettings/ProjectSettings.asset` and the unrelated prior validation-note edit were left untouched and are excluded from the candidate commit. Unity's before/after input inventory was stable with those existing local edits present.
