@@ -71,6 +71,92 @@ public sealed class P12ECoreOwnerRestoreStagerTests
     }
 
     [Test]
+    public void SelectedRuntimeGraphBindsTheCompleteP12EOwnerStageOnlyForExactRoots()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph seedGraph), Is.True);
+
+        PersonStore persons = new PersonStore();
+        int personIndex = 0;
+        foreach (DailyV1NpcRuntimeOwners npc in seedGraph.Npcs)
+        {
+            PersonId personId = new PersonId("p12e-owner-graph-person-" + personIndex++);
+            Assert.That(persons.TryRegister(new PersonRuntime(personId, 0L), out _), Is.True);
+            Assert.That(persons.TryBindMaterializedNpc(personId, npc.RuntimeId, out _), Is.True);
+        }
+        Assert.That(seedGraph.TryBindPersonStore(persons), Is.True);
+
+        Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
+            EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
+            EmptyPoliticalSupport(), EmptyPoliticalDecisions(), EmptyJustice(0L), EmptyMilitary(), EmptyConflict(),
+            EmptyWar(), EmptyBattle(), false, persons, new SpatialAuthorityStore(), seedGraph.Cities,
+            seedGraph.Npcs, 0L, null, out P12ECoreOwnerRestoreStage staged,
+            out P12ECoreOwnerRestoreFailure failure), Is.True, failure.ToString());
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            seedGraph.Cities, seedGraph.Npcs, seedGraph.SpatialNetwork, staged.JusticeRecords,
+            seedGraph.TravelParties, seedGraph.RuntimeIdentityIndex, persons,
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        P12ECoreOwnerRestoreStage wrongRoot = new P12ECoreOwnerRestoreStage(
+            new PersonStore(), staged.Institutions, staged.Offices, staged.PropertyOwnership,
+            staged.Estates, staged.Factions, staged.PoliticalClaims, staged.PoliticalSupport,
+            staged.PoliticalDecisions, staged.JusticeRecords, staged.ArmedForces, staged.Manpower,
+            staged.Positions, staged.Conflicts, staged.Wars, staged.Battles);
+        Assert.That(graph.TryBindP12EOwners(wrongRoot), Is.False);
+        Assert.That(graph.P12EOwners, Is.Null);
+        Assert.That(graph.PoliticalDecisionStore, Is.Null,
+            "Rejecting a mismatched complete set must not partially bind PoliticalDecision.");
+
+        Assert.That(graph.TryBindP12EOwners(staged), Is.True);
+        Assert.That(graph.P12EOwners, Is.SameAs(staged));
+        Assert.That(graph.PersonStore, Is.SameAs(staged.Persons));
+        Assert.That(graph.JusticeRecordsOwner, Is.SameAs(staged.JusticeRecords));
+        Assert.That(graph.PoliticalDecisionStore, Is.SameAs(staged.PoliticalDecisions));
+        Assert.That(staged.Offices.InstitutionStoreForWorldBoundary, Is.SameAs(staged.Institutions));
+        Assert.That(staged.PropertyOwnership.PersonStoreForWorldBoundary, Is.SameAs(persons));
+        Assert.That(staged.Estates.PersonStoreForWorldBoundary, Is.SameAs(persons));
+        Assert.That(staged.Manpower.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Positions.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Positions.SpatialAuthorityStore, Is.Not.Null);
+        Assert.That(staged.Conflicts.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Wars.ConflictStore, Is.SameAs(staged.Conflicts));
+        Assert.That(staged.Battles.WarStore, Is.SameAs(staged.Wars));
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12EOwnerSections(
+            graph, Array.Empty<OwnerSectionCensusSnapshot>(),
+            out IReadOnlyList<OwnerSectionCensusSnapshot> coreRows,
+            out string censusDiagnostic), Is.True, censusDiagnostic);
+        Assert.That(coreRows, Has.Count.EqualTo(20));
+        Assert.That(coreRows.All(row => row.Role == OwnerSectionRole.Required), Is.True);
+
+        List<OwnerSectionCensusSnapshot> partialRows = new List<OwnerSectionCensusSnapshot>(coreRows);
+        partialRows.RemoveAt(0);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12EOwnerSections(
+            graph, partialRows, out _, out _), Is.False,
+            "A host cannot omit only part of the Core-owned P12-E row set.");
+
+        List<OwnerSectionCensusSnapshot> staleRows = new List<OwnerSectionCensusSnapshot>(coreRows);
+        OwnerSectionCensusSnapshot firstRow = staleRows[0];
+        staleRows[0] = new OwnerSectionCensusSnapshot(
+            firstRow.SectionId, firstRow.SchemaVersion, firstRow.Role,
+            firstRow.OwnerInstanceIdentity, firstRow.Cardinality, firstRow.Revision + 1L);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12EOwnerSections(
+            graph, staleRows, out _, out _), Is.False,
+            "A stale owner revision cannot be accepted as the current Core P12-E census.");
+
+        P12ECoreOwnerRestoreStage replacementWrapper = new P12ECoreOwnerRestoreStage(
+            staged.Persons, staged.Institutions, staged.Offices, staged.PropertyOwnership,
+            staged.Estates, staged.Factions, staged.PoliticalClaims, staged.PoliticalSupport,
+            staged.PoliticalDecisions, staged.JusticeRecords, staged.ArmedForces, staged.Manpower,
+            staged.Positions, staged.Conflicts, staged.Wars, staged.Battles);
+        Assert.That(graph.TryBindP12EOwners(replacementWrapper), Is.False,
+            "After publication of the owner set, the graph must retain its exact aggregate identity.");
+        Assert.That(graph.P12EOwners, Is.SameAs(staged));
+    }
+
+    [Test]
     public void JusticeSnapshotStagesOneExactCoreOwnerWithOrderedRowsAndReciprocalPersonBindings()
     {
         RootFixture roots = CreateRoots("p12e-core-justice-city",

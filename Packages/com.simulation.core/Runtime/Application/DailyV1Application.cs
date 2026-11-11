@@ -1523,7 +1523,8 @@ internal sealed class DailyV1Application
         out DailyV1ActiveRuntimeSession candidate,
         out SimulationCalendar calendar,
         out string diagnostic,
-        PoliticalDecisionStore politicalDecisions = null)
+        PoliticalDecisionStore politicalDecisions = null,
+        P12ECoreOwnerRestoreStage p12EOwners = null)
     {
         candidate = null;
         calendar = null;
@@ -1562,7 +1563,8 @@ internal sealed class DailyV1Application
                 out DailyV1ExecutionBoundaryState executionBoundaryState,
                 out SimulationCalendar candidateCalendar,
                 out diagnostic,
-                politicalDecisions))
+                politicalDecisions,
+                p12EOwners))
             return false;
 
         if (!TryCreateRestoredActiveRuntimeSession(
@@ -1638,6 +1640,8 @@ internal sealed class DailyV1Application
             || !ReferenceEquals(stagedE.Persons, stagedD.Persons)
             || stagedE.JusticeRecords == null
             || stagedE.PoliticalDecisions == null
+            || stagedE.Positions == null
+            || !ReferenceEquals(stagedE.Positions.SpatialAuthorityStore, stagedRoots.SpatialAuthority)
             || !stagedE.PoliticalDecisions.IsCompatibleWithPersonStore(stagedD.Persons))
         {
             diagnostic = "Core restore composition requires P12-E owners bound to the exact P12-D PersonStore, including PoliticalDecision history.";
@@ -1704,12 +1708,21 @@ internal sealed class DailyV1Application
             out candidate,
             out calendar,
             out diagnostic,
-            stagedE.PoliticalDecisions))
+            stagedE.PoliticalDecisions,
+            stagedE))
             return false;
 
         if (candidate == null)
         {
             calendar = null;
+            return false;
+        }
+
+        if (!ReferenceEquals(candidate.OwnerGraph.P12EOwners, stagedE))
+        {
+            candidate = null;
+            calendar = null;
+            diagnostic = "The restored Core session did not retain the exact complete P12-E owner stage.";
             return false;
         }
 

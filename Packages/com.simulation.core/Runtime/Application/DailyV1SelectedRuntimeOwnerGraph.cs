@@ -28,6 +28,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal ScheduledDirectiveStore ScheduledDirectives { get; private set; }
     internal PoliticalKnowledgeStore PoliticalKnowledgeStore { get; private set; }
     internal PoliticalDecisionStore PoliticalDecisionStore { get; private set; }
+    internal P12ECoreOwnerRestoreStage P12EOwners { get; private set; }
     internal RuntimeIdAllocator RuntimeIdAllocator { get; private set; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
@@ -113,6 +114,49 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         else if (!store.IsCompatibleWithPersonStore(PersonStore)
             || !store.TryBindToPersonStore(PersonStore)) return false;
         PoliticalDecisionStore = store;
+        return true;
+    }
+
+    /// <summary>
+    /// Binds the complete, dependency-ordered P12-E owner stage to this exact
+    /// selected runtime graph. The stage is already privately validated by
+    /// the P12-E stager; this boundary verifies its shared roots and relation
+    /// identities before the graph retains the exact owner set.
+    /// </summary>
+    internal bool TryBindP12EOwners(P12ECoreOwnerRestoreStage owners)
+    {
+        if (owners == null || PersonStore == null
+            || !ReferenceEquals(owners.Persons, PersonStore)
+            || !ReferenceEquals(owners.JusticeRecords, JusticeRecordsOwner)
+            || owners.Institutions == null || owners.Offices == null
+            || owners.PropertyOwnership == null || owners.Estates == null
+            || owners.Factions == null || owners.PoliticalClaims == null
+            || owners.PoliticalSupport == null || owners.PoliticalDecisions == null
+            || owners.ArmedForces == null || owners.Manpower == null
+            || owners.Positions == null || owners.Conflicts == null
+            || owners.Wars == null || owners.Battles == null
+            || !InstitutionOfficeOwnerBridge.BelongsTo(owners.Offices, owners.Institutions)
+            || !ReferenceEquals(owners.PropertyOwnership.PersonStoreForWorldBoundary, PersonStore)
+            || !ReferenceEquals(owners.Estates.PersonStoreForWorldBoundary, PersonStore)
+            || !owners.PoliticalDecisions.IsCompatibleWithPersonStore(PersonStore)
+            || !ReferenceEquals(owners.Manpower.ArmedForceStore, owners.ArmedForces)
+            || !ReferenceEquals(owners.Positions.ArmedForceStore, owners.ArmedForces)
+            || owners.Positions.SpatialAuthorityStore == null
+            || !ReferenceEquals(owners.Conflicts.ArmedForceStore, owners.ArmedForces)
+            || !ReferenceEquals(owners.Wars.ArmedForceStore, owners.ArmedForces)
+            || !ReferenceEquals(owners.Wars.ConflictStore, owners.Conflicts)
+            || !ReferenceEquals(owners.Battles.ArmedForceStore, owners.ArmedForces)
+            || !ReferenceEquals(owners.Battles.ConflictStore, owners.Conflicts)
+            || !ReferenceEquals(owners.Battles.WarStore, owners.Wars))
+            return false;
+
+        if (P12EOwners != null) return ReferenceEquals(P12EOwners, owners);
+        if (PoliticalDecisionStore != null
+            && !ReferenceEquals(PoliticalDecisionStore, owners.PoliticalDecisions)) return false;
+        if (!owners.PoliticalDecisions.TryBindToPersonStore(PersonStore)) return false;
+
+        PoliticalDecisionStore = owners.PoliticalDecisions;
+        P12EOwners = owners;
         return true;
     }
 
@@ -276,6 +320,12 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 || !PopulationOwnerBridge.CanBindMutationStatus(city.Population, guard))
                 return false;
 
+        if (P12EOwners != null
+            && (!InstitutionOfficeOwnerBridge.CanBindMutationStatus(P12EOwners.Institutions, guard)
+                || !InstitutionOfficeOwnerBridge.CanBindMutationStatus(P12EOwners.Offices, guard)
+                || !PoliticalClaimOwnerBridge.CanBindMutationStatus(P12EOwners.PoliticalClaims, guard)))
+            return false;
+
         return true;
     }
 
@@ -302,6 +352,12 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             if (!PopulationOwnerBridge.TryBindMutationStatus(city.Population, guard))
                 return false;
 
+        if (P12EOwners != null
+            && (!InstitutionOfficeOwnerBridge.TryBindMutationStatus(P12EOwners.Institutions, guard)
+                || !InstitutionOfficeOwnerBridge.TryBindMutationStatus(P12EOwners.Offices, guard)
+                || !PoliticalClaimOwnerBridge.TryBindMutationStatus(P12EOwners.PoliticalClaims, guard)))
+            return false;
+
         return true;
     }
 
@@ -322,6 +378,19 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 authorities, PersonSpatialPositionStore?.SpatialAuthorityStore)
             || !AddMutationGuardAuthorityIfPresent(authorities, LegacySpatialAnchors)
             || !AddMutationGuardAuthorityIfPresent(authorities, ExplorableSites))
+            return null;
+
+        if (P12EOwners != null
+            && (!AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.PropertyOwnership)
+                || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.Estates)
+                || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.Factions)
+                || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.PoliticalSupport)
+                || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.ArmedForces)
+                || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.Manpower)
+                || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.Positions)
+                || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.Conflicts)
+                || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.Wars)
+                || !AddMutationGuardAuthorityIfPresent(authorities, P12EOwners.Battles)))
             return null;
         return authorities;
     }
@@ -1185,6 +1254,11 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 && !graph.TryBindPoliticalDecisionStore(PoliticalDecisionStore))
             || (ScheduledDirectives != null && !graph.TryBindScheduledDirectives(ScheduledDirectives))
             || (Expeditions != null && !graph.TryBindExpeditionStore(Expeditions)))
+        {
+            graph = null;
+            return false;
+        }
+        if (P12EOwners != null && !graph.TryBindP12EOwners(P12EOwners))
         {
             graph = null;
             return false;

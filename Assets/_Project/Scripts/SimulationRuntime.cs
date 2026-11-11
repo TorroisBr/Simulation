@@ -2468,6 +2468,28 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 runtimeAdmissionContext,
                 compositionProfile,
                 worldId);
+        P12ECoreOwnerRestoreStage coreP12EOwners = selectedExecutionBoundaryState?
+            .SelectedRuntimeOwnerGraph?.P12EOwners;
+        if (coreP12EOwners != null
+            && (!ReferenceEquals(coreP12EOwners.Persons, personStore)
+                || !ReferenceEquals(coreP12EOwners.Institutions, institutionStore)
+                || !ReferenceEquals(coreP12EOwners.Offices, officeStore)
+                || !ReferenceEquals(coreP12EOwners.PropertyOwnership, propertyOwnershipStore)
+                || !ReferenceEquals(coreP12EOwners.Estates, estateStore)
+                || !ReferenceEquals(coreP12EOwners.Factions, factionStore)
+                || !ReferenceEquals(coreP12EOwners.PoliticalClaims, politicalClaimStore)
+                || !ReferenceEquals(coreP12EOwners.PoliticalSupport, politicalSupportStore)
+                || !ReferenceEquals(coreP12EOwners.PoliticalDecisions, politicalDecisionStore)
+                || !ReferenceEquals(coreP12EOwners.ArmedForces, armedForceStore)
+                || !ReferenceEquals(coreP12EOwners.Manpower, contingentManpowerStateStore)
+                || !ReferenceEquals(coreP12EOwners.Positions, armedForceSpatialStateStore)
+                || !ReferenceEquals(coreP12EOwners.Conflicts, conflictStore)
+                || !ReferenceEquals(coreP12EOwners.Wars, warStore)
+                || !ReferenceEquals(coreP12EOwners.Battles, battleStore)
+                || !ReferenceEquals(coreP12EOwners.Positions.SpatialAuthorityStore, spatialAuthorityStore)))
+            throw new ArgumentException(
+                "The selected Unity runtime must project the exact complete P12-E owner set and spatial root admitted by Core.",
+                nameof(selectedExecutionBoundaryState));
         bool hasP16AProfileState = armedForceSpatialStateStore?.P16Profile != null;
         bool p16AComposition = compositionProfile == SimulationRuntimeCompositionProfile.P16AOneHopMilitary;
         bool p17AComposition = compositionProfile == SimulationRuntimeCompositionProfile.P17AWithdrawalWar;
@@ -2804,30 +2826,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 resolvedPersonStore,
                 resolvedSpatialAuthorityStore,
                 resolvedSpatialRouteKnowledgeStore);
-        InstitutionStore resolvedInstitutionStore = ResolveInstitutionStore(
-            institutionStore,
-            officeStore,
-            p12CrimeSocialAppraisalWorldState);
-        OfficeStore resolvedOfficeStore = CloneOfficeStore(
-            officeStore,
-            resolvedInstitutionStore,
-            resolvedPersonStore,
-            runtimeAdmissionContext?.IsRestoredContinuation == true);
-        PropertyOwnershipStore resolvedPropertyOwnershipStore = ClonePropertyOwnershipStore(
-            propertyOwnershipStore,
-            resolvedPersonStore,
-            simulationTime.AbsoluteDay);
-        EstateStore resolvedEstateStore = CloneEstateStore(
-            estateStore,
-            resolvedPersonStore,
-            simulationTime.AbsoluteDay);
-        FactionStore resolvedFactionStore = CloneFactionStore(
-            factionStore,
-            resolvedPersonStore,
-            simulationTime.AbsoluteDay);
-        ArmedForceStore resolvedArmedForceStore = CloneArmedForceStore(
-            armedForceStore,
-            resolvedPersonStore);
+        InstitutionStore resolvedInstitutionStore = coreP12EOwners?.Institutions
+            ?? ResolveInstitutionStore(institutionStore, officeStore, p12CrimeSocialAppraisalWorldState);
+        OfficeStore resolvedOfficeStore = coreP12EOwners?.Offices
+            ?? CloneOfficeStore(officeStore, resolvedInstitutionStore, resolvedPersonStore,
+                runtimeAdmissionContext?.IsRestoredContinuation == true);
+        PropertyOwnershipStore resolvedPropertyOwnershipStore = coreP12EOwners?.PropertyOwnership
+            ?? ClonePropertyOwnershipStore(propertyOwnershipStore, resolvedPersonStore, simulationTime.AbsoluteDay);
+        EstateStore resolvedEstateStore = coreP12EOwners?.Estates
+            ?? CloneEstateStore(estateStore, resolvedPersonStore, simulationTime.AbsoluteDay);
+        FactionStore resolvedFactionStore = coreP12EOwners?.Factions
+            ?? CloneFactionStore(factionStore, resolvedPersonStore, simulationTime.AbsoluteDay);
+        ArmedForceStore resolvedArmedForceStore = coreP12EOwners?.ArmedForces
+            ?? CloneArmedForceStore(armedForceStore, resolvedPersonStore);
         if (contingentManpowerStateStore != null
             && !ReferenceEquals(contingentManpowerStateStore.ArmedForceStore, armedForceStore))
         {
@@ -2835,38 +2846,28 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 "The supplied manpower state must belong to the supplied ArmedForceStore.",
                 nameof(contingentManpowerStateStore));
         }
-        ContingentManpowerStateStore resolvedManpowerStateStore = contingentManpowerStateStore == null
-            ? ContingentManpowerStateStore.CreateLegacyBootstrap(
-                resolvedArmedForceStore,
-                resolvedManpowerSourceProvider)
-            : contingentManpowerStateStore.CloneForRuntime(
-                resolvedArmedForceStore,
-                resolvedManpowerSourceProvider);
+        ContingentManpowerStateStore resolvedManpowerStateStore = coreP12EOwners?.Manpower
+            ?? (contingentManpowerStateStore == null
+                ? ContingentManpowerStateStore.CreateLegacyBootstrap(
+                    resolvedArmedForceStore,
+                    resolvedManpowerSourceProvider)
+                : contingentManpowerStateStore.CloneForRuntime(
+                    resolvedArmedForceStore,
+                    resolvedManpowerSourceProvider));
         resolvedManpowerStateStore.AttachToArmedForceStore();
         LocalTopologyStore resolvedLocalTopologyStore = localTopologyStore
             ?? (armedForceSpatialStateStore?.SubLocationResolver as LocalTopologyArmedForceSubLocationResolver)?.LocalTopologyStore;
-        ArmedForceSpatialStateStore resolvedArmedForceSpatialStateStore =
-            CloneArmedForceSpatialStateStore(
-                armedForceSpatialStateStore,
-                resolvedArmedForceStore,
-                resolvedSpatialAuthorityStore,
-                resolvedLocalTopologyStore);
-        PersistentConflictStore resolvedConflictStore = CloneConflictStore(
-            conflictStore,
-            resolvedArmedForceStore);
-        PersistentWarStore resolvedWarStore = CloneWarStore(
-            warStore,
-            resolvedArmedForceStore,
-            resolvedConflictStore,
-            resolvedFactionStore,
-            resolvedSpatialAuthorityStore,
-            resolvedArmedForceSpatialStateStore);
-        PersistentBattleStore resolvedBattleStore = CloneBattleStore(
-            battleStore,
-            resolvedArmedForceStore,
-            resolvedConflictStore,
-            resolvedWarStore,
-            resolvedSpatialAuthorityStore);
+        ArmedForceSpatialStateStore resolvedArmedForceSpatialStateStore = coreP12EOwners?.Positions
+            ?? CloneArmedForceSpatialStateStore(armedForceSpatialStateStore, resolvedArmedForceStore,
+                resolvedSpatialAuthorityStore, resolvedLocalTopologyStore);
+        PersistentConflictStore resolvedConflictStore = coreP12EOwners?.Conflicts
+            ?? CloneConflictStore(conflictStore, resolvedArmedForceStore);
+        PersistentWarStore resolvedWarStore = coreP12EOwners?.Wars
+            ?? CloneWarStore(warStore, resolvedArmedForceStore, resolvedConflictStore,
+                resolvedFactionStore, resolvedSpatialAuthorityStore, resolvedArmedForceSpatialStateStore);
+        PersistentBattleStore resolvedBattleStore = coreP12EOwners?.Battles
+            ?? CloneBattleStore(battleStore, resolvedArmedForceStore, resolvedConflictStore,
+                resolvedWarStore, resolvedSpatialAuthorityStore);
 
         SimulationCalendar resolvedCalendar = selectedCalendar
             ?? new SimulationCalendar(calendarDefinition ?? CalendarDefinition.CreateDefault());
@@ -2941,21 +2942,23 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         this.officeStore = resolvedOfficeStore;
         this.propertyOwnershipStore = resolvedPropertyOwnershipStore;
         this.estateStore = resolvedEstateStore;
-        this.politicalClaimStore = ClonePoliticalClaimStore(
-            politicalClaimStore,
-            resolvedPersonStore,
-            resolvedInstitutionStore,
-            resolvedOfficeStore,
-            resolvedPropertyOwnershipStore,
-            simulationTime.AbsoluteDay,
-            runtimeAdmissionContext?.IsRestoredContinuation == true);
+        this.politicalClaimStore = coreP12EOwners?.PoliticalClaims
+            ?? ClonePoliticalClaimStore(
+                politicalClaimStore,
+                resolvedPersonStore,
+                resolvedInstitutionStore,
+                resolvedOfficeStore,
+                resolvedPropertyOwnershipStore,
+                simulationTime.AbsoluteDay,
+                runtimeAdmissionContext?.IsRestoredContinuation == true);
         this.factionStore = resolvedFactionStore;
-        this.politicalSupportStore = ClonePoliticalSupportStore(
-            politicalSupportStore,
-            resolvedPersonStore,
-            this.factionStore,
-            this.politicalClaimStore,
-            simulationTime.AbsoluteDay);
+        this.politicalSupportStore = coreP12EOwners?.PoliticalSupport
+            ?? ClonePoliticalSupportStore(
+                politicalSupportStore,
+                resolvedPersonStore,
+                this.factionStore,
+                this.politicalClaimStore,
+                simulationTime.AbsoluteDay);
         PoliticalKnowledgeStore coreStagedPoliticalKnowledge = selectedExecutionBoundaryState?
             .SelectedRuntimeOwnerGraph?.PoliticalKnowledgeStore;
         if (coreStagedPoliticalKnowledge != null)
@@ -2990,17 +2993,18 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             throw new ArgumentException(
                 "The Unity runtime must project the exact PoliticalDecisionStore admitted by its Core execution boundary.",
                 nameof(politicalDecisionStore));
-        this.politicalDecisionStore = ClonePoliticalDecisionStore(
-            coreStagedPoliticalDecisions ?? politicalDecisionStore,
-            this.politicalKnowledgeStore,
-            simulationTime.AbsoluteDay,
-            this.personStore,
-            this.institutionStore,
-            this.officeStore,
-            this.politicalClaimStore,
-            initialPoliticalWorldRevision,
-            this.politicalKnowledgeStore.Revision,
-            preserveSourceIdentity: coreStagedPoliticalDecisions != null);
+        this.politicalDecisionStore = coreP12EOwners?.PoliticalDecisions
+            ?? ClonePoliticalDecisionStore(
+                coreStagedPoliticalDecisions ?? politicalDecisionStore,
+                this.politicalKnowledgeStore,
+                simulationTime.AbsoluteDay,
+                this.personStore,
+                this.institutionStore,
+                this.officeStore,
+                this.politicalClaimStore,
+                initialPoliticalWorldRevision,
+                this.politicalKnowledgeStore.Revision,
+                preserveSourceIdentity: coreStagedPoliticalDecisions != null);
         if (p12CrimeSocialAppraisalWorldState != null)
         {
             if (runtimeAdmissionContext == null)

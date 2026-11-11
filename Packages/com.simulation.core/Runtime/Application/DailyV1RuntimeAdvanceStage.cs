@@ -1120,8 +1120,12 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 graph, spatialKnowledgeSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> completeCitySections,
                 out diagnostic)
+            || !TryRebindCoreOwnedP12EOwnerSections(
+                graph, completeCitySections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeP12EOwnerSections,
+                out diagnostic)
             || !DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
-                completeCitySections))
+                completeP12EOwnerSections))
         {
             completeOwnerSections = null;
             if (string.IsNullOrWhiteSpace(diagnostic))
@@ -1129,8 +1133,244 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
         }
 
-        completeOwnerSections = completeCitySections;
+        completeOwnerSections = completeP12EOwnerSections;
         return true;
+    }
+
+    /// <summary>
+    /// Rebinds the fixed P12-E rows to the exact owner instances retained by
+    /// the selected Core graph. A host may retain every row or omit the whole
+    /// Core-owned subset; partial omission, stale revisions, and parallel
+    /// owner instances are rejected.
+    /// </summary>
+    internal static bool TryRebindCoreOwnedP12EOwnerSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> composedSections,
+        out string diagnostic)
+    {
+        composedSections = null;
+        diagnostic = null;
+        if (graph == null || hostSections == null)
+        {
+            diagnostic = "The Core P12-E census requires its exact owner graph and host census vector.";
+            return false;
+        }
+
+        P12ECoreOwnerRestoreStage owners = graph.P12EOwners;
+        if (owners == null)
+        {
+            OwnerSectionCensusSnapshot[] unchanged = new OwnerSectionCensusSnapshot[hostSections.Count];
+            for (int i = 0; i < unchanged.Length; i++) unchanged[i] = hostSections[i];
+            composedSections = Array.AsReadOnly(unchanged);
+            return true;
+        }
+
+        List<OwnerSectionCensusSnapshot> expected = new List<OwnerSectionCensusSnapshot>(20);
+        IReadOnlyList<IOwnerSectionCensusProvider> institutionOffice =
+            InstitutionOfficeCensusProvider.CreateProviders(owners.Institutions, owners.Offices);
+        if (!TryAppendCoreP12EOwnerProviders(expected, institutionOffice,
+                new[]
+                {
+                    InstitutionOfficeCensusProvider.InstitutionsSectionId,
+                    InstitutionOfficeCensusProvider.OfficesSectionId,
+                    InstitutionOfficeCensusProvider.IncumbenciesSectionId,
+                    InstitutionOfficeCensusProvider.TenuresSectionId
+                },
+                new[]
+                {
+                    InstitutionOfficeCensusProvider.SchemaVersion,
+                    InstitutionOfficeCensusProvider.SchemaVersion,
+                    InstitutionOfficeCensusProvider.SchemaVersion,
+                    InstitutionOfficeCensusProvider.SchemaVersion
+                },
+                new object[] { owners.Institutions, owners.Offices, owners.Offices, owners.Offices },
+                out diagnostic))
+            return false;
+
+        IReadOnlyList<IOwnerSectionCensusProvider> propertyProviders =
+            PropertyOwnershipCensusProvider.CreateProviders(owners.PropertyOwnership);
+        IOwnerSectionCensusProvider[] propertyEstate =
+        {
+            propertyProviders != null && propertyProviders.Count > 0 ? propertyProviders[0] : null,
+            propertyProviders != null && propertyProviders.Count > 1 ? propertyProviders[1] : null,
+            new EstateCensusProvider(owners.Estates)
+        };
+        if (!TryAppendCoreP12EOwnerProviders(expected, propertyEstate,
+                new[]
+                {
+                    PropertyOwnershipCensusProvider.OwnershipSectionId,
+                    PropertyOwnershipCensusProvider.TransferHistorySectionId,
+                    EstateCensusProvider.SectionId
+                },
+                new[]
+                {
+                    PropertyOwnershipCensusProvider.SchemaVersion,
+                    PropertyOwnershipCensusProvider.SchemaVersion,
+                    EstateCensusProvider.SchemaVersion
+                },
+                new object[] { owners.PropertyOwnership, owners.PropertyOwnership, owners.Estates },
+                out diagnostic))
+            return false;
+
+        if (!TryAppendCoreP12EOwnerProviders(expected,
+                FactionStoreCensusProvider.CreateProviders(owners.Factions),
+                new[] { FactionStoreCensusProvider.FactionsSectionId, FactionStoreCensusProvider.AffiliationsSectionId },
+                new[] { FactionStoreCensusProvider.SchemaVersion, FactionStoreCensusProvider.SchemaVersion },
+                new object[] { owners.Factions, owners.Factions }, out diagnostic)
+            || !TryAppendCoreP12EOwnerProviders(expected,
+                PoliticalClaimStoreCensusProvider.CreateProviders(owners.PoliticalClaims),
+                new[] { PoliticalClaimStoreCensusProvider.ClaimsSectionId, PoliticalClaimStoreCensusProvider.RecognitionsSectionId },
+                new[] { PoliticalClaimStoreCensusProvider.SchemaVersion, PoliticalClaimStoreCensusProvider.SchemaVersion },
+                new object[] { owners.PoliticalClaims, owners.PoliticalClaims }, out diagnostic)
+            || !TryAppendCoreP12EOwnerProviders(expected,
+                PoliticalSupportStoreCensusProvider.CreateProviders(owners.PoliticalSupport),
+                new[] { PoliticalSupportStoreCensusProvider.RelationsSectionId },
+                new[] { PoliticalSupportStoreCensusProvider.SchemaVersion },
+                new object[] { owners.PoliticalSupport }, out diagnostic)
+            || !TryAppendCoreP12EOwnerProviders(expected,
+                ArmedForceStoreCensusProvider.CreateProviders(owners.ArmedForces),
+                new[]
+                {
+                    ArmedForceStoreCensusProvider.ForcesSectionId,
+                    ArmedForceStoreCensusProvider.ContingentsSectionId,
+                    ArmedForceStoreCensusProvider.RelevantPersonReferencesSectionId
+                },
+                new[]
+                {
+                    ArmedForceStoreCensusProvider.SchemaVersion,
+                    ArmedForceStoreCensusProvider.SchemaVersion,
+                    ArmedForceStoreCensusProvider.SchemaVersion
+                },
+                new object[] { owners.ArmedForces, owners.ArmedForces, owners.ArmedForces }, out diagnostic)
+            || !TryAppendCoreP12EOwnerProviders(expected,
+                new[] { (IOwnerSectionCensusProvider)new ContingentManpowerCensusProvider(owners.Manpower) },
+                new[] { ContingentManpowerCensusProvider.SectionId },
+                new[] { ContingentManpowerCensusProvider.SchemaVersion },
+                new object[] { owners.Manpower }, out diagnostic)
+            || !TryAppendCoreP12EOwnerProviders(expected,
+                new[] { (IOwnerSectionCensusProvider)new ArmedForceSpatialCensusProvider(owners.Positions) },
+                new[] { ArmedForceSpatialCensusProvider.SectionId },
+                new[] { ArmedForceSpatialCensusProvider.SchemaVersion },
+                new object[] { owners.Positions }, out diagnostic)
+            || !TryAppendCoreP12EOwnerProviders(expected,
+                new[] { (IOwnerSectionCensusProvider)new PersistentConflictCensusProvider(owners.Conflicts) },
+                new[] { PersistentConflictCensusProvider.SectionId },
+                new[] { PersistentConflictCensusProvider.SchemaVersion },
+                new object[] { owners.Conflicts }, out diagnostic)
+            || !TryAppendCoreP12EOwnerProviders(expected,
+                new[] { (IOwnerSectionCensusProvider)new PersistentWarCensusProvider(owners.Wars) },
+                new[] { PersistentWarCensusProvider.SectionId },
+                new[] { PersistentWarCensusProvider.SchemaVersion },
+                new object[] { owners.Wars }, out diagnostic)
+            || !TryAppendCoreP12EOwnerProviders(expected,
+                new[] { (IOwnerSectionCensusProvider)new PersistentBattleCensusProvider(owners.Battles) },
+                new[] { PersistentBattleCensusProvider.SectionId },
+                new[] { PersistentBattleCensusProvider.SchemaVersion },
+                new object[] { owners.Battles }, out diagnostic))
+            return false;
+
+        HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot section in expected)
+            if (!expectedIds.Add(section.SectionId))
+            {
+                diagnostic = "The Core P12-E provider set contains a duplicate section identity.";
+                return false;
+            }
+
+        Dictionary<string, OwnerSectionCensusSnapshot> hostById =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot section in hostSections)
+        {
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || hostById.ContainsKey(section.SectionId))
+            {
+                diagnostic = "The host P12-E vector contains a missing or duplicate section identity.";
+                return false;
+            }
+            hostById.Add(section.SectionId, section);
+        }
+
+        int present = 0;
+        foreach (string sectionId in expectedIds)
+            if (hostById.ContainsKey(sectionId)) present++;
+        if (present != 0 && present != expected.Count)
+        {
+            diagnostic = "The host vector partially omitted the Core-owned P12-E owner set.";
+            return false;
+        }
+
+        foreach (OwnerSectionCensusSnapshot wanted in expected)
+            if (present != 0
+                && (!hostById.TryGetValue(wanted.SectionId, out OwnerSectionCensusSnapshot actual)
+                    || !HasExactOwnerSectionFacts(actual, wanted)))
+            {
+                diagnostic = "The host vector differs from the exact Core P12-E owner at "
+                    + wanted.SectionId + ".";
+                return false;
+            }
+
+        List<OwnerSectionCensusSnapshot> composed =
+            new List<OwnerSectionCensusSnapshot>(hostSections.Count + (present == 0 ? expected.Count : 0));
+        composed.AddRange(hostSections);
+        if (present == 0) composed.AddRange(expected);
+        composed.Sort((left, right) => StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+        composedSections = Array.AsReadOnly(composed.ToArray());
+        return true;
+    }
+
+    private static bool TryAppendCoreP12EOwnerProviders(
+        List<OwnerSectionCensusSnapshot> target,
+        IReadOnlyList<IOwnerSectionCensusProvider> providers,
+        IReadOnlyList<string> sectionIds,
+        IReadOnlyList<int> schemaVersions,
+        IReadOnlyList<object> ownerIdentities,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (target == null || providers == null || sectionIds == null
+            || schemaVersions == null || ownerIdentities == null
+            || providers.Count == 0 || providers.Count != sectionIds.Count
+            || providers.Count != schemaVersions.Count || providers.Count != ownerIdentities.Count)
+        {
+            diagnostic = "The Core P12-E census provider set is incomplete.";
+            return false;
+        }
+
+        try
+        {
+            for (int i = 0; i < providers.Count; i++)
+            {
+                OwnerSectionCensusWitness witness = providers[i]?.GetCurrentCensus();
+                if (witness == null
+                    || !string.Equals(witness.SectionId, sectionIds[i], StringComparison.Ordinal)
+                    || witness.SchemaVersion != schemaVersions[i]
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity, ownerIdentities[i])
+                    || witness.Cardinality < 0 || witness.Revision < 0L)
+                {
+                    diagnostic = "A Core P12-E provider returned stale or mismatched owner facts for "
+                        + sectionIds[i] + ".";
+                    return false;
+                }
+
+                target.Add(new OwnerSectionCensusSnapshot(
+                    witness.SectionId,
+                    witness.SchemaVersion,
+                    OwnerSectionRole.Required,
+                    witness.OwnerInstanceIdentity,
+                    witness.Cardinality,
+                    witness.Revision));
+            }
+            return true;
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            diagnostic = "A Core P12-E census provider failed while reading its selected owner facts.";
+            return false;
+        }
     }
 
     internal static bool TryComposeCoreOwnedIdentitySpatialSections(
