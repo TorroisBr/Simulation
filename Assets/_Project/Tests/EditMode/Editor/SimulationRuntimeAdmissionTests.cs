@@ -5413,6 +5413,10 @@ public sealed class SimulationRuntimeAdmissionTests
                     out string sourceCaptureDiagnostic), Is.True,
                 sourceCaptureFailure + ": " + sourceCaptureDiagnostic);
             Assert.That(coreSources?.JusticeRecords, Is.Not.Null);
+            Assert.That(coreSources?.CrimeSocialAppraisal, Is.Not.Null,
+                "The active Core save operation must capture CrimeSocial from its selected owner graph.");
+            Assert.That(coreSources.CrimeSocialAppraisal.CapturedAbsoluteDay,
+                Is.EqualTo(saveOperation.SourceWitness.Token.AbsoluteDay));
             DailyV1JusticeRecordsOwner coreJustice = coreSession.OwnerGraph.JusticeRecordsOwner;
             P12EJusticeRecordsSnapshotSection records = coreSources.JusticeRecords.Records;
             Assert.That(records.Revision, Is.EqualTo(coreJustice.Revision));
@@ -5729,6 +5733,12 @@ public sealed class SimulationRuntimeAdmissionTests
                         out P12AResult coreP12EResult), Is.True,
                     coreP12EResult?.SectionCode ?? coreP12EResult?.Code.ToString());
                 Assert.That(coreP12ESections, Is.Not.Empty);
+                Assert.That(coreP12ESections.Count(section => section.Id ==
+                        P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId), Is.EqualTo(1));
+                Assert.That(coreP12ESections.Count(section => section.Id ==
+                        P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId), Is.EqualTo(1));
+                Assert.That(coreP12ESections.Count(section => section.Id ==
+                        P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId), Is.EqualTo(1));
                 foreach (P12AOwnerSection coreP12ESection in coreP12ESections)
                 {
                     P12AOwnerSection imageSection = capturedImage.Sections.Single(

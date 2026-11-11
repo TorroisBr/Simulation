@@ -294,10 +294,25 @@ internal sealed class P12EDailyV1OwnerPackage
                     sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
                     out P12EJusticeRecordsOwnerSnapshot projectedJusticeSnapshot, out _, context.StagingAttempt)
                 || !justiceOwner.TryCaptureP12AReceiptOwnerSnapshot(
-                    out P12AJusticeReceiptOwnerSnapshot justiceReceiptSnapshot)
-                || !P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(
-                    sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
-                    out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialSnapshot, out _, context.StagingAttempt))
+                    out P12AJusticeReceiptOwnerSnapshot justiceReceiptSnapshot))
+            {
+                failure = P12EDailyV1OwnerPackageFailure.CaptureFailed;
+                return false;
+            }
+
+            P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialSnapshot;
+            if (context.ContinuationSaveOperation != null)
+            {
+                crimeSocialSnapshot = coreOwnerSnapshots.CrimeSocialAppraisal;
+                if (crimeSocialSnapshot == null)
+                {
+                    failure = P12EDailyV1OwnerPackageFailure.CaptureFailed;
+                    return false;
+                }
+            }
+            else if (!P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(
+                         sourceRuntime, exactCompletedToken, exactTokenOwnerSections,
+                         out crimeSocialSnapshot, out _, context.StagingAttempt))
             {
                 failure = P12EDailyV1OwnerPackageFailure.CaptureFailed;
                 return false;

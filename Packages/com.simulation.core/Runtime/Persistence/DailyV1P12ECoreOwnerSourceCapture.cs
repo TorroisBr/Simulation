@@ -25,8 +25,8 @@ internal interface IDailyV1P12ECoreOwnerCaptureBoundary
 /// <summary>
 /// Detached snapshots for the P12-E owners whose authorities already live in
 /// Core. Exact owners are selected from the token's census vector and captured
-/// here; Unity remains responsible for the installed Justice projection
-/// check and the CrimeSocial appraisal adapter.
+/// here; Unity remains responsible only for the installed Justice projection
+/// compatibility check.
 /// </summary>
 internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
 {
@@ -42,6 +42,7 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
         P12EPoliticalSupportOwnerSnapshot politicalSupport,
         P12EPoliticalDecisionOwnerSnapshot politicalDecisions,
         P12EJusticeRecordsOwnerSnapshot justiceRecords,
+        P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialAppraisal,
         P12EMilitaryOwnerSnapshot military,
         PersistentConflictOwnerSnapshot conflicts,
         PersistentWarOwnerSnapshot wars,
@@ -56,6 +57,7 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
         PoliticalSupport = politicalSupport;
         PoliticalDecisions = politicalDecisions;
         JusticeRecords = justiceRecords;
+        CrimeSocialAppraisal = crimeSocialAppraisal;
         Military = military;
         Conflicts = conflicts;
         Wars = wars;
@@ -69,6 +71,8 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
     internal P12EPoliticalSupportOwnerSnapshot PoliticalSupport { get; }
     internal P12EPoliticalDecisionOwnerSnapshot PoliticalDecisions { get; }
     internal P12EJusticeRecordsOwnerSnapshot JusticeRecords { get; }
+    internal P12ECrimeSocialAppraisalOwnerSnapshot CrimeSocialAppraisal { get; }
+    internal bool RequiresCoreCrimeSocialAppraisal => operation != null;
     internal P12EMilitaryOwnerSnapshot Military { get; }
     internal PersistentConflictOwnerSnapshot Conflicts { get; }
     internal PersistentWarOwnerSnapshot Wars { get; }
@@ -166,6 +170,22 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
                 return false;
             }
 
+            P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialAppraisal = null;
+            if (continuationSaveOperation != null)
+            {
+                CrimeSocialAppraisalWorldState exactCrimeSocialOwner =
+                    continuationSaveOperation.Session?.OwnerGraph?.P12EOwners?.CrimeSocialAppraisal;
+                if (exactCrimeSocialOwner == null
+                    || !P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(
+                        captureSource, token, ownerSectionVector, exactCrimeSocialOwner,
+                        out crimeSocialAppraisal, out _))
+                {
+                    failure = DailyV1P12ECoreOwnerSourceCaptureFailure.CaptureFailed;
+                    diagnostic = "The active Core session did not expose a capturable exact CrimeSocial owner graph.";
+                    return false;
+                }
+            }
+
             if (!P12EInstitutionOfficeOwnerSnapshot.TryCapture(captureSource, token, ownerSectionVector,
                     out P12EInstitutionOfficeOwnerSnapshot institutionOffice, out _)
                 || !PropertyEstateOwnerSnapshot.TryCapture(properties, estates, token, ownerSectionVector,
@@ -203,6 +223,7 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
             snapshots = new DailyV1P12ECoreOwnerSourceSnapshots(
                 continuationSaveOperation,
                 institutionOffice, propertyEstate, faction, claims, support, decisions, justiceRecords,
+                crimeSocialAppraisal,
                 military, conflictSnapshot, warSnapshot, battleSnapshot);
             failure = DailyV1P12ECoreOwnerSourceCaptureFailure.None;
             return true;
@@ -521,7 +542,8 @@ internal sealed class DailyV1P12ECoreOwnerSourceSnapshots
         IP12EFactionCaptureSource,
         IP12EPoliticalClaimCaptureSource,
         IP12EPoliticalSupportCaptureSource,
-        IP12EPoliticalDecisionCaptureSource
+        IP12EPoliticalDecisionCaptureSource,
+        IP12ECrimeSocialAppraisalCaptureSource
     {
         private readonly DailyCaptureEligibilityToken token;
         private readonly IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionVector;
@@ -605,6 +627,20 @@ internal static class DailyV1P12ECoreOwnerSectionEncoder
                 snapshots.JusticeRecords, out justice, out result))
             return false;
 
+        P12AOwnerSection crimeOutcomes = null;
+        P12AOwnerSection crimeKnowledge = null;
+        P12AOwnerSection socialReactions = null;
+        if ((snapshots.RequiresCoreCrimeSocialAppraisal
+                && snapshots.CrimeSocialAppraisal == null)
+            || (snapshots.CrimeSocialAppraisal != null
+                && (!P12ECrimeSocialAppraisalOwnerCodec.TryEncodeOutcomes(
+                        snapshots.CrimeSocialAppraisal, out crimeOutcomes, out result)
+                    || !P12ECrimeSocialAppraisalOwnerCodec.TryEncodeKnowledge(
+                        snapshots.CrimeSocialAppraisal, out crimeKnowledge, out result)
+                    || !P12ECrimeSocialAppraisalOwnerCodec.TryEncodeReactions(
+                        snapshots.CrimeSocialAppraisal, out socialReactions, out result))))
+            return false;
+
         List<P12AOwnerSection> encoded = new List<P12AOwnerSection>
         {
             institutions, offices, incumbencies, tenures,
@@ -616,6 +652,9 @@ internal static class DailyV1P12ECoreOwnerSectionEncoder
         encoded.AddRange(military);
         encoded.AddRange(conflicts);
         if (justice != null) encoded.Add(justice);
+        if (crimeOutcomes != null) encoded.Add(crimeOutcomes);
+        if (crimeKnowledge != null) encoded.Add(crimeKnowledge);
+        if (socialReactions != null) encoded.Add(socialReactions);
         encoded.Sort((left, right) =>
             StringComparer.Ordinal.Compare(left?.Id, right?.Id));
 
