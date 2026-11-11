@@ -374,57 +374,13 @@ internal static class DailyV1SelectedPopulationChangeOperation
         return true;
     }
 
-    private static bool TryCountNamedResidents(
+    internal static bool TryCountNamedResidents(
         DailyV1SelectedRuntimeOwnerGraph graph,
         string cityRuntimeId,
         out int residentCount)
     {
-        residentCount = 0;
-        if (graph?.PersonStore == null || string.IsNullOrWhiteSpace(cityRuntimeId))
-            return false;
-
-        foreach (PersonRuntime person in graph.PersonStore.Persons)
-        {
-            if (person == null || person.PersonId == null)
-                return false;
-            if (!person.DeathAbsoluteDay.HasValue
-                && string.Equals(person.ResidenceSettlementRuntimeId, cityRuntimeId, StringComparison.Ordinal))
-            {
-                if (residentCount == int.MaxValue) return false;
-                residentCount++;
-            }
-        }
-
-        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
-        {
-            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
-                || npc.Lifecycle == null || npc.Residence == null
-                || !string.Equals(npc.Residence.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal))
-                return false;
-            if (graph.PersonStore.TryGetByMaterializedNpcRuntimeId(
-                    npc.RuntimeId, out PersonRuntime materializedPerson))
-            {
-                if (materializedPerson == null
-                    || materializedPerson.PersonId == null
-                    || !ReferenceEquals(
-                        materializedPerson,
-                        graph.PersonStore.TryGet(materializedPerson.PersonId, out PersonRuntime registered)
-                            ? registered
-                            : null)
-                    || !string.Equals(materializedPerson.MaterializedNpcRuntimeId,
-                        npc.RuntimeId, StringComparison.Ordinal))
-                    return false;
-                continue;
-            }
-            if (npc.Lifecycle.LifeState == NpcLifeState.Alive
-                && string.Equals(npc.Residence.SettlementRuntimeId, cityRuntimeId, StringComparison.Ordinal))
-            {
-                if (residentCount == int.MaxValue) return false;
-                residentCount++;
-            }
-        }
-
-        return true;
+        return DailyV1SelectedResidentCensus.TryCountNamedResidents(
+            graph, cityRuntimeId, out residentCount);
     }
 
     private static DailyV1SelectedPopulationChangeFailure MapPopulationFailure(

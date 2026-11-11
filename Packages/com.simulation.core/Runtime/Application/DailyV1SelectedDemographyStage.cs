@@ -36,6 +36,68 @@ internal interface IDailyV1SelectedDemographyBoundary : IDailyV1SelectedPersonDe
     IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(
         IReadOnlyCollection<string> selectedNpcRuntimeIds);
 }
+
+/// <summary>
+/// Exact selected-owner resident census shared by Core demography and the
+/// Unity population-operation adapter. Person-backed NPCs are counted only
+/// through PersonStore; selected NPC-only residences are counted through the
+/// exact lifecycle and residence owners.
+/// </summary>
+internal static class DailyV1SelectedResidentCensus
+{
+    internal static bool TryCountNamedResidents(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string cityRuntimeId,
+        out int residentCount)
+    {
+        residentCount = 0;
+        if (graph?.PersonStore == null || string.IsNullOrWhiteSpace(cityRuntimeId))
+            return false;
+
+        foreach (PersonRuntime person in graph.PersonStore.Persons)
+        {
+            if (person == null || person.PersonId == null)
+                return false;
+            if (!person.DeathAbsoluteDay.HasValue
+                && string.Equals(person.ResidenceSettlementRuntimeId, cityRuntimeId, StringComparison.Ordinal))
+            {
+                if (residentCount == int.MaxValue) return false;
+                residentCount++;
+            }
+        }
+
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || npc.Lifecycle == null || npc.Residence == null
+                || !string.Equals(npc.Residence.OwnerRuntimeId, npc.RuntimeId, StringComparison.Ordinal))
+                return false;
+            if (graph.PersonStore.TryGetByMaterializedNpcRuntimeId(
+                    npc.RuntimeId, out PersonRuntime materializedPerson))
+            {
+                if (materializedPerson == null
+                    || materializedPerson.PersonId == null
+                    || !ReferenceEquals(
+                        materializedPerson,
+                        graph.PersonStore.TryGet(materializedPerson.PersonId, out PersonRuntime registered)
+                            ? registered
+                            : null)
+                    || !string.Equals(materializedPerson.MaterializedNpcRuntimeId,
+                        npc.RuntimeId, StringComparison.Ordinal))
+                    return false;
+                continue;
+            }
+            if (npc.Lifecycle.LifeState == NpcLifeState.Alive
+                && string.Equals(npc.Residence.SettlementRuntimeId, cityRuntimeId, StringComparison.Ordinal))
+            {
+                if (residentCount == int.MaxValue) return false;
+                residentCount++;
+            }
+        }
+
+        return true;
+    }
+}
 /// <summary>
 /// Immutable expected-state witness for one selected Person death. The
 /// captured object references are the exact Core owners in the admitted
@@ -427,6 +489,252 @@ internal static class DailyV1SelectedPersonDeathOperation
         }
 
         sectionIds = ids.AsReadOnly();
+        return true;
+    }
+}
+
+/// <summary>
+/// Immutable witness for one selected NPC-only resident death. It binds the
+/// exact Core NPC and City owners and the population transition before P12
+/// admission; the host participates only in mutation admission and notification.
+/// </summary>
+internal sealed class DailyV1SelectedNpcResidentDeathPlan
+{
+    internal DailyV1NpcRuntimeOwners Npc { get; }
+    internal DailyV1CityRuntimeOwners City { get; }
+    internal int NamedResidentsBefore { get; }
+    internal long LifeStateRevision { get; }
+    internal long ResidenceRevision { get; }
+    internal long ActionRevision { get; }
+    internal string ResidenceBefore { get; }
+    internal DailyV1ActionDefinition ExpectedAction { get; }
+    internal DailyV1NpcActionPayloadOwner ExpectedPayload { get; }
+    internal long PopulationRevision { get; }
+    internal int PopulationBefore { get; }
+    internal SettlementPopulationTransition PopulationTransition { get; }
+    internal bool CurrentActionChanged => ExpectedAction != null;
+
+    internal DailyV1SelectedNpcResidentDeathPlan(
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1CityRuntimeOwners city,
+        int namedResidentsBefore,
+        long lifeStateRevision,
+        long residenceRevision,
+        long actionRevision,
+        string residenceBefore,
+        DailyV1ActionDefinition expectedAction,
+        DailyV1NpcActionPayloadOwner expectedPayload,
+        long populationRevision,
+        int populationBefore,
+        SettlementPopulationTransition populationTransition)
+    {
+        Npc = npc ?? throw new ArgumentNullException(nameof(npc));
+        City = city ?? throw new ArgumentNullException(nameof(city));
+        NamedResidentsBefore = namedResidentsBefore;
+        LifeStateRevision = lifeStateRevision;
+        ResidenceRevision = residenceRevision;
+        ActionRevision = actionRevision;
+        ResidenceBefore = residenceBefore;
+        ExpectedAction = expectedAction;
+        ExpectedPayload = expectedPayload;
+        PopulationRevision = populationRevision;
+        PopulationBefore = populationBefore;
+        PopulationTransition = populationTransition
+            ?? throw new ArgumentNullException(nameof(populationTransition));
+    }
+}
+
+/// <summary>
+/// Core-owned selected NPC-only resident death transaction. The exact Core
+/// lifecycle, residence, action-slot and City population owners are committed
+/// together. The host supplies the existing P12 writer admission and notification.
+/// </summary>
+internal static class DailyV1SelectedNpcResidentDeathOperation
+{
+    internal static bool TryPrepare(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1CityRuntimeOwners city,
+        out DailyV1SelectedNpcResidentDeathPlan plan,
+        out string failure)
+    {
+        plan = null;
+        failure = "Selected NPC resident death requires the exact Core owner graph.";
+        if (graph == null || npc == null || city == null
+            || !graph.ContainsExactNpcOwner(npc)
+            || !graph.ContainsExactCityOwner(city)
+            || graph.PersonStore == null
+            || !ReferenceEquals(npc.Definitions, graph.Definitions)
+            || !ReferenceEquals(city.Definitions, graph.Definitions)
+            || npc.Lifecycle == null || npc.Residence == null || npc.ActionSlot == null
+            || city.Population == null
+            || !string.Equals(city.Population.SettlementRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(npc.RuntimeId, npc.Residence.OwnerRuntimeId, StringComparison.Ordinal))
+            return false;
+
+        if (graph.PersonStore.TryGetByMaterializedNpcRuntimeId(npc.RuntimeId, out _))
+        {
+            failure = "A PersonStore-backed NPC must use the selected Person-death operation.";
+            return false;
+        }
+        if (npc.Lifecycle.LifeState != NpcLifeState.Alive)
+        {
+            failure = "The selected NPC is not alive.";
+            return false;
+        }
+        if (!string.Equals(npc.Residence.SettlementRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+        {
+            failure = "The selected NPC is not resident in the exact selected City.";
+            return false;
+        }
+
+        SettlementPopulationRuntime population = city.Population;
+        int namedResidents = 0;
+        if (population.CurrentPopulation <= 0
+            || !DailyV1SelectedResidentCensus.TryCountNamedResidents(
+                graph, city.RuntimeId, out namedResidents)
+            || namedResidents <= 0
+            || namedResidents > population.CurrentPopulation)
+        {
+            failure = "The exact selected resident census is unavailable or inconsistent with the City aggregate.";
+            return false;
+        }
+
+        if (!PopulationOwnerBridge.CanAdvanceP12AggregateRevision(population)
+            || !npc.Lifecycle.CanAdvanceRevision(1)
+            || !npc.Residence.CanAdvanceRevision(1))
+        {
+            failure = "A selected resident-death owner revision cannot advance.";
+            return false;
+        }
+
+        DailyV1ActionDefinition expectedAction = npc.ActionSlot.CurrentAction;
+        DailyV1NpcActionPayloadOwner expectedPayload = npc.ActionSlot.CurrentPayload;
+        int actionRevisionIncrement = expectedAction == null ? 0 : 1;
+        if (!npc.ActionSlot.CanAdvanceRevision(actionRevisionIncrement)
+            || !npc.CanCommitResidentDeathAfterValidation(expectedAction, expectedPayload))
+        {
+            failure = "The selected NPC lifecycle or action owner cannot admit resident death.";
+            return false;
+        }
+
+        if (!SettlementPopulationSystem.TryPropose(
+                population,
+                new PopulationChangeSet(0, 1, 0, 0),
+                out SettlementPopulationTransition populationTransition,
+                out PopulationTransitionFailure populationFailure))
+        {
+            failure = populationFailure.ToString();
+            return false;
+        }
+
+        int namedResidentsAfter = namedResidents - 1;
+        if (populationTransition.PopulationAfter != population.CurrentPopulation - 1
+            || namedResidentsAfter < 0
+            || namedResidentsAfter > populationTransition.PopulationAfter)
+        {
+            failure = "The resident-death population transition violates the exact selected resident floor.";
+            return false;
+        }
+
+        plan = new DailyV1SelectedNpcResidentDeathPlan(
+            npc,
+            city,
+            namedResidents,
+            npc.Lifecycle.LifeStateRevision,
+            npc.Residence.Revision,
+            npc.ActionSlot.Revision,
+            npc.Residence.SettlementRuntimeId,
+            expectedAction,
+            expectedPayload,
+            population.Revision,
+            population.CurrentPopulation,
+            populationTransition);
+        failure = null;
+        return true;
+    }
+
+    internal static bool TryCommit(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1SelectedNpcResidentDeathPlan plan,
+        Func<bool> npcMutationAdmission,
+        Action npcMutationCommitted,
+        out string failure)
+    {
+        failure = "Selected NPC resident-death expected state changed before Core commit.";
+        if (graph == null || plan == null || npcMutationAdmission == null
+            || !graph.ContainsExactNpcOwner(plan.Npc)
+            || !graph.ContainsExactCityOwner(plan.City)
+            || graph.PersonStore == null
+            || graph.PersonStore.TryGetByMaterializedNpcRuntimeId(plan.Npc.RuntimeId, out _)
+            || !ReferenceEquals(plan.Npc.Definitions, graph.Definitions)
+            || !ReferenceEquals(plan.City.Definitions, graph.Definitions))
+            return false;
+
+        DailyV1NpcRuntimeOwners npc = plan.Npc;
+        DailyV1CityRuntimeOwners city = plan.City;
+        SettlementPopulationRuntime population = city.Population;
+        if (population == null
+            || npc.Lifecycle == null || npc.Residence == null || npc.ActionSlot == null
+            || npc.Lifecycle.LifeState != NpcLifeState.Alive
+            || npc.Lifecycle.LifeStateRevision != plan.LifeStateRevision
+            || !npc.Residence.Matches(plan.ResidenceBefore, plan.ResidenceRevision)
+            || !string.Equals(plan.ResidenceBefore, city.RuntimeId, StringComparison.Ordinal)
+            || npc.ActionSlot.Revision != plan.ActionRevision
+            || !ReferenceEquals(npc.ActionSlot.CurrentAction, plan.ExpectedAction)
+            || !ReferenceEquals(npc.ActionSlot.CurrentPayload, plan.ExpectedPayload)
+            || !npc.CanCommitResidentDeathAfterValidation(plan.ExpectedAction, plan.ExpectedPayload)
+            || population.Revision != plan.PopulationRevision
+            || population.CurrentPopulation != plan.PopulationBefore
+            || plan.PopulationBefore <= 0
+            || plan.PopulationTransition == null
+            || plan.PopulationTransition.ExpectedRevision != plan.PopulationRevision
+            || plan.PopulationTransition.PopulationBefore != plan.PopulationBefore
+            || plan.PopulationTransition.PopulationAfter != plan.PopulationBefore - 1
+            || !PopulationOwnerBridge.CanAdvanceP12AggregateRevision(population)
+            || !npc.Lifecycle.CanAdvanceRevision(1)
+            || !npc.Residence.CanAdvanceRevision(1)
+            || !npc.ActionSlot.CanAdvanceRevision(plan.CurrentActionChanged ? 1 : 0))
+            return false;
+
+        if (!DailyV1SelectedResidentCensus.TryCountNamedResidents(
+                graph, city.RuntimeId, out int currentNamedResidents)
+            || currentNamedResidents != plan.NamedResidentsBefore
+            || currentNamedResidents <= 0
+            || currentNamedResidents - 1 > plan.PopulationTransition.PopulationAfter)
+            return false;
+
+        bool CommitNpcOwners()
+        {
+            bool admitted;
+            try { admitted = npcMutationAdmission(); }
+            catch { admitted = false; }
+            if (!admitted
+                || !npc.TryCommitResidentDeathAfterValidation(
+                    plan.ExpectedAction,
+                    plan.ExpectedPayload,
+                    out bool currentActionChanged)
+                || currentActionChanged != plan.CurrentActionChanged
+                || !npc.Residence.TrySetValue(null))
+                return false;
+
+            npc.Residence.NotifyMutationCommitted();
+            try { npcMutationCommitted?.Invoke(); }
+            catch { }
+            return true;
+        }
+
+        if (!PopulationOwnerBridge.TryApplyWithResidenceCommit(
+                population,
+                plan.PopulationTransition,
+                CommitNpcOwners,
+                out PopulationTransitionFailure applyFailure))
+        {
+            failure = applyFailure.ToString();
+            return false;
+        }
+
+        failure = null;
         return true;
     }
 }

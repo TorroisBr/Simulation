@@ -63,6 +63,12 @@ internal sealed class DailyV1NpcRuntimeOwners
         return true;
     }
 
+    internal bool CanCommitResidentDeathAfterValidation(
+        DailyV1ActionDefinition expectedAction,
+        DailyV1NpcActionPayloadOwner expectedPayload) =>
+        CanCommitPersonDeathAfterValidation(
+            NpcInjurySeverity.None, expectedAction, expectedPayload);
+
     internal bool TryCommitPersonDeathAfterValidation(
         NpcInjurySeverity injurySeverity,
         DailyV1ActionDefinition expectedAction,
@@ -89,6 +95,13 @@ internal sealed class DailyV1NpcRuntimeOwners
         }
         return true;
     }
+
+    internal bool TryCommitResidentDeathAfterValidation(
+        DailyV1ActionDefinition expectedAction,
+        DailyV1NpcActionPayloadOwner expectedPayload,
+        out bool currentActionChanged) =>
+        TryCommitPersonDeathAfterValidation(
+            NpcInjurySeverity.None, expectedAction, expectedPayload, out currentActionChanged);
 
     private DailyV1NpcRuntimeOwners(
         string runtimeId,

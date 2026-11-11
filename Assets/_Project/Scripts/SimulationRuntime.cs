@@ -11111,6 +11111,30 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 out failure);
         }
 
+        if (runtimeAdmissionContext != null
+            && IsDailyCaptureProfile
+            && SelectedRuntimeOwnerGraph != null
+            && npcRuntime != null
+            && npcRuntime.BoundPersonRuntime == null
+            && npcRuntime.UsesSelectedDailyV1Definitions
+            && settlement?.SelectedRuntimeOwners != null
+            && !hasUnselectedRuntimeMember
+            && SelectedRuntimeOwnerGraph.TryGetNpcOwner(
+                npcRuntime.RuntimeId, out DailyV1NpcRuntimeOwners selectedNpcOwner)
+            && ReferenceEquals(selectedNpcOwner, npcRuntime.SelectedRuntimeOwners)
+            && TryGetExactSelectedCityOwner(
+                SelectedRuntimeOwnerGraph, settlement, out DailyV1CityRuntimeOwners selectedCityOwner)
+            && ReferenceEquals(selectedCityOwner.Population, settlement.Population))
+        {
+            return TryApplyCoreSelectedResidentNpcDeath(
+                npcRuntime,
+                settlement,
+                selectedNpcOwner,
+                selectedCityOwner,
+                out transition,
+                out failure);
+        }
+
         if (runtimeAdmissionContext != null)
         {
             if (!TryBuildP12NpcPopulationOperation(
@@ -11240,6 +11264,143 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             ? NpcPopulationLifecycleFailure.None
             : NpcPopulationLifecycleFailure.RuntimeFaulted;
         return applied;
+    }
+
+    private bool TryApplyCoreSelectedResidentNpcDeath(
+        NpcRuntime npcRuntime,
+        CityRuntime settlement,
+        DailyV1NpcRuntimeOwners npcOwner,
+        DailyV1CityRuntimeOwners cityOwner,
+        out NpcPopulationLifecycleTransition transition,
+        out NpcPopulationLifecycleFailure failure)
+    {
+        if (!NpcPopulationLifecycleSystem.TryProposeResidentDeath(
+                npcRuntime,
+                settlement,
+                GetAuthoritativeNpcRoster(),
+                out transition,
+                out failure))
+            return false;
+
+        DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+        if (!DailyV1SelectedNpcResidentDeathOperation.TryPrepare(
+                graph, npcOwner, cityOwner,
+                out DailyV1SelectedNpcResidentDeathPlan plan,
+                out _)
+            || !MatchesCoreSelectedNpcResidentDeath(
+                plan, transition, npcRuntime, settlement)
+            || !npcRuntime.CanPublishCoreSelectedResidentDeath(
+                npcOwner,
+                settlement.RuntimeId,
+                plan.CurrentActionChanged))
+        {
+            FaultRuntimeAdmission();
+            failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
+            return false;
+        }
+
+        if (!TryBuildP12NpcPopulationOperation(
+                npcRuntime,
+                settlement,
+                residentDeath: true,
+                out List<string> sectionIds,
+                out Func<bool> localRevisionCapacity))
+        {
+            FaultRuntimeAdmission();
+            failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
+            return false;
+        }
+
+        if (!TryBeginP12PopulationOperation(
+                DailyV1RuntimeProtocolOperationContracts.PopulationResidentDeath,
+                sectionIds,
+                localRevisionCapacity,
+                out P12PopulationOperationScope p12Scope))
+        {
+            failure = NpcPopulationLifecycleFailure.RuntimeFaulted;
+            return false;
+        }
+
+        using (p12Scope)
+        {
+            bool applied = DailyV1SelectedNpcResidentDeathOperation.TryCommit(
+                graph,
+                plan,
+                () => npcRuntime.CanCommitP12LifecycleMutation(
+                    lifeStateChanged: true,
+                    residenceChanged: true,
+                    currentActionChanged: plan.CurrentActionChanged),
+                () => npcRuntime.PublishCoreSelectedResidentDeath(
+                    plan.Npc, plan.CurrentActionChanged),
+                out _);
+            if (applied)
+                AdvancePoliticalWorldRevision();
+            else
+                FaultRuntimeAdmission();
+            p12Scope?.Complete(applied);
+            failure = applied
+                ? NpcPopulationLifecycleFailure.None
+                : NpcPopulationLifecycleFailure.RuntimeFaulted;
+            return applied;
+        }
+    }
+
+    private static bool TryGetExactSelectedCityOwner(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        CityRuntime settlement,
+        out DailyV1CityRuntimeOwners owner)
+    {
+        owner = null;
+        if (graph == null || settlement?.SelectedRuntimeOwners == null
+            || string.IsNullOrWhiteSpace(settlement.RuntimeId))
+            return false;
+
+        int matches = 0;
+        foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+        {
+            if (candidate == null
+                || !string.Equals(candidate.RuntimeId, settlement.RuntimeId, StringComparison.Ordinal))
+                continue;
+            owner = candidate;
+            matches++;
+        }
+        return matches == 1
+            && graph.ContainsExactCityOwner(owner)
+            && ReferenceEquals(owner, settlement.SelectedRuntimeOwners)
+            && ReferenceEquals(owner.Population, settlement.Population)
+            && ReferenceEquals(owner.Definitions, graph.Definitions);
+    }
+
+    private static bool MatchesCoreSelectedNpcResidentDeath(
+        DailyV1SelectedNpcResidentDeathPlan plan,
+        NpcPopulationLifecycleTransition transition,
+        NpcRuntime npcRuntime,
+        CityRuntime settlement)
+    {
+        DailyV1NpcRuntimeOwners npcOwner = plan?.Npc;
+        DailyV1CityRuntimeOwners cityOwner = plan?.City;
+        SettlementPopulationTransition population = plan?.PopulationTransition;
+        return plan != null
+            && transition != null
+            && npcRuntime != null
+            && settlement != null
+            && ReferenceEquals(npcOwner, npcRuntime.SelectedRuntimeOwners)
+            && ReferenceEquals(cityOwner, settlement.SelectedRuntimeOwners)
+            && ReferenceEquals(cityOwner?.Population, settlement.Population)
+            && npcOwner?.Lifecycle?.LifeState == NpcLifeState.Alive
+            && population != null
+            && transition.Operation == NpcPopulationLifecycleOperation.ResidentDeath
+            && string.Equals(transition.NpcRuntimeId, npcRuntime.RuntimeId, StringComparison.Ordinal)
+            && string.Equals(transition.SettlementRuntimeId, settlement.RuntimeId, StringComparison.Ordinal)
+            && transition.ExpectedRevision == plan.PopulationRevision
+            && transition.ExpectedRevision == population.ExpectedRevision
+            && transition.PopulationBefore == plan.PopulationBefore
+            && transition.PopulationBefore == population.PopulationBefore
+            && transition.PopulationAfter == population.PopulationAfter
+            && string.Equals(transition.ResidenceBefore, settlement.RuntimeId, StringComparison.Ordinal)
+            && transition.ResidenceAfter == null
+            && transition.LifeStateBefore == NpcLifeState.Alive
+            && transition.LifeStateAfter == NpcLifeState.Dead;
     }
 
     private static bool MatchesCoreSelectedResidentDeath(

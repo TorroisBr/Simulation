@@ -1273,6 +1273,46 @@ public class NpcRuntime : ICapabilityConditionSource
             residenceRevisionAlreadyCommitted: true);
     }
 
+    internal bool CanPublishCoreSelectedResidentDeath(
+        DailyV1NpcRuntimeOwners expectedOwners,
+        string expectedResidenceRuntimeId,
+        bool currentActionChanged) =>
+        expectedOwners != null
+        && ReferenceEquals(selectedRuntimeOwners, expectedOwners)
+        && expectedOwners.Lifecycle?.LifeState == NpcLifeState.Alive
+        && string.Equals(
+            expectedOwners.Residence?.SettlementRuntimeId,
+            expectedResidenceRuntimeId,
+            StringComparison.Ordinal)
+        && (currentActionRuntime != null) == currentActionChanged
+        && HasConsistentCurrentActionSlot;
+
+    /// <summary>
+    /// Projects an already-committed Core resident death into Unity compatibility
+    /// fields and publishes the existing P12 lifecycle invalidation. It does not
+    /// write authoritative Core owner values.
+    /// </summary>
+    internal void PublishCoreSelectedResidentDeath(
+        DailyV1NpcRuntimeOwners expectedOwners,
+        bool currentActionChanged)
+    {
+        NpcActionRuntime previous = currentActionRuntime;
+        lifeState = expectedOwners.Lifecycle.LifeState;
+        injurySeverity = expectedOwners.Lifecycle.InjurySeverity;
+        residenceSettlementRuntimeId = null;
+        currentAction = null;
+        currentActionRuntime = null;
+        previous?.UnbindP12Owner(this);
+        previous?.UnbindSelectedOwner();
+        NotifyP12LifecycleMutationCommitted(
+            lifeStateChanged: true,
+            residenceChanged: true,
+            currentActionChanged: currentActionChanged,
+            currentActionRevisionAlreadyCommitted: currentActionChanged,
+            lifeStateRevisionAlreadyCommitted: true,
+            residenceRevisionAlreadyCommitted: true);
+    }
+
 	public NpcRuntime(string runtimeId, NpcData npcData)
 		: this(runtimeId, npcData, null, 0f)
 	{
