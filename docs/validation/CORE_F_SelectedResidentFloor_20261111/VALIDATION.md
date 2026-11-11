@@ -28,7 +28,7 @@ The candidate was validated over base `914810df3d055dafa1f5e0687ced2f99580a4fd8`
 | `SimulationRuntimeLongRunTests` | 7/7 passed; 0 failed | `9a9ab57a8fc64968ba0c48d93ca90b1d` |
 | `git diff --check` | passed | candidate worktree |
 
-All four Unity runner inventories were stable before and after execution. The full EditMode report contains the Smoke and LongRun test identities. The final full EditMode result was packaged and verified against its protected original report using the approved evidence packager. The manifest SHA-256 is `23b6ac7c7dcbb6739dbc4b7d137d61b0f52a084bae9152c0ba58dbc5cbb1ff31`; the deterministic archive SHA-256 is `c3086c1351d98c5a3072d3d2e403df15268f89fa1a8b81c812cd78ca696a7616`.
+All four Unity runner inventories were stable before and after execution. The full EditMode report contains the Smoke and LongRun test identities. The final full EditMode result was packaged and verified against its protected original report using the approved evidence packager. The manifest SHA-256 is `23b6ac8dc7dcb6739dbc4b7d137d61b0f52a084bae9152c0ba58dbc5cbb1ff31`; the deterministic archive SHA-256 is `c3086c1351d98c5a3072d3d2e403df15268f89fa1a8b81c812cd78ca696a7616`.
 
 CoreValidation's original TRX, raw logs, and owner-only run manifest remain protected in local evidence retention. No public TRX package is claimed. The CoreValidation runner reported `LibraryAbsent=false`; this result is not a claim of .NET host execution independent of the Unity checkout.
 
