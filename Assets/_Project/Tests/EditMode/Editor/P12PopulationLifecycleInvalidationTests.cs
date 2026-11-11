@@ -842,6 +842,108 @@ public sealed class P12PopulationLifecycleInvalidationTests
     }
 
     [Test]
+    public void CoreSelectedResidentPersonDeathUsesResidentOperationAndReturnsTransition()
+    {
+        CityData cityData = SimulationTestFactory.CreateCityData("core-selected-resident-death-city-def");
+        cityData.initialPopulation = 5;
+        NpcData npcData = SimulationTestFactory.CreateNpc("core-selected-resident-death-npc-def");
+        NpcActionData action = SimulationTestFactory.CreateAction("core-selected-resident-death-action", NpcActionType.Normal);
+        SimulationConfigData authoring = SimulationTestFactory.CreateSimulationConfig();
+        authoring.Cities.Add(cityData);
+        authoring.Npcs.Add(new NpcSimulationConfig { npc = npcData, startingCity = cityData });
+        authoring.Actions.Add(action);
+        EffectiveSimulationConfiguration configuration = CreateP12Configuration();
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(authoring.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            authoring, configuration, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        CityRuntime city = CityRuntime.CreateSelectedDailyV1(
+            "core-selected-resident-death-city", definitions.Cities[cityData.DefinitionId], definitions,
+            bindings, new SpatialLocationRuntime("core-selected-resident-death-location"));
+        NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+            "core-selected-resident-death-npc", definitions.Npcs[npcData.DefinitionId], definitions,
+            bindings, city, 0f);
+        PersonStore people = new PersonStore();
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(0L), new[] { city }, new[] { npc }, configuredActions: new[] { action },
+            configuration: configuration, personStore: people,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        PersonRuntime person = new PersonRuntime(new PersonId("core-selected-resident-death-person"), 0L);
+        Assert.That(runtime.TryRegisterPerson(person, out PersonStoreFailure registerFailure), Is.True, registerFailure.ToString());
+        Assert.That(runtime.TryBindExistingPersonResident(person.PersonId, city, out PersonResidenceMembershipFailure residenceFailure),
+            Is.True, residenceFailure.ToString());
+        Assert.That(runtime.TryBindExistingNpcToPerson(person.PersonId, npc.RuntimeId, out PersonMaterializationFailure bindFailure),
+            Is.True, bindFailure.ToString());
+        NpcActionRuntime actionRuntime = new NpcActionRuntime(action);
+        using (EnterDailyAdvanceOperation(runtime)) npc.SetCurrentActionRuntime(actionRuntime);
+        NpcCurrentActionCensusProvider actionProvider = new NpcCurrentActionCensusProvider(npc);
+        AssertCensus(runtime);
+
+        long epoch = ReadEpoch(runtime);
+        long personRevision = PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person);
+        long npcRevision = new NpcLifecycleCensusProvider(npc, residence: false).GetCurrentCensus().Revision;
+        long actionRevision = actionProvider.GetCurrentCensus().Revision;
+        long populationRevision = city.Population.Revision;
+        bool applied = runtime.TryApplyResidentDeath(npc, city,
+            out NpcPopulationLifecycleTransition transition, out NpcPopulationLifecycleFailure failure);
+
+        Assert.That(applied, Is.True, failure.ToString());
+        Assert.That(transition.Operation, Is.EqualTo(NpcPopulationLifecycleOperation.ResidentDeath));
+        Assert.That(transition.NpcRuntimeId, Is.EqualTo(npc.RuntimeId));
+        Assert.That(transition.SettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(transition.ExpectedRevision, Is.EqualTo(populationRevision));
+        Assert.That(transition.PopulationBefore, Is.EqualTo(5));
+        Assert.That(transition.PopulationAfter, Is.EqualTo(4));
+        Assert.That(transition.ResidenceBefore, Is.EqualTo(city.RuntimeId));
+        Assert.That(transition.ResidenceAfter, Is.Null);
+        Assert.That(transition.LifeStateBefore, Is.EqualTo(NpcLifeState.Alive));
+        Assert.That(transition.LifeStateAfter, Is.EqualTo(NpcLifeState.Dead));
+        AssertEpoch(runtime, epoch + 1L);
+        AssertCensus(runtime);
+        Assert.That(person.DeathAbsoluteDay, Is.EqualTo(runtime.CurrentDay));
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person), Is.EqualTo(personRevision + 2L));
+        Assert.That(city.CurrentPopulation, Is.EqualTo(4));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevision + 1L));
+        Assert.That(npc.SelectedRuntimeOwners.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Dead));
+        Assert.That(npc.SelectedRuntimeOwners.Lifecycle.LifeStateRevision, Is.EqualTo(npcRevision + 1L));
+        Assert.That(npc.SelectedRuntimeOwners.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(actionProvider.GetCurrentCensus().Cardinality, Is.Zero);
+        Assert.That(actionProvider.GetCurrentCensus().Revision, Is.EqualTo(actionRevision + 1L));
+        Assert.That(npc.IsDead, Is.True);
+        Assert.That(npc.CurrentActionRuntime, Is.Null);
+        Assert.That(npc.BoundPersonRuntime, Is.SameAs(person));
+    }
+
+    [Test]
+    public void P12ResidentDeathRejectsForeignCityBeforeAnyOwnerWrite()
+    {
+        (SimulationRuntime runtime, CityRuntime city, PersonRuntime person, NpcRuntime npc) =
+            CreateMaterializedResidentFixture("p12-resident-death-foreign-city");
+        CityRuntime foreignCity = CreateCity(city.RuntimeId, city.CurrentPopulation);
+        long epoch = ReadEpoch(runtime);
+        long populationRevision = city.Population.Revision;
+        long personRevision = ReadPersonLifecycleRevision(runtime, person.PersonId);
+        long npcRevision = ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: false);
+
+        bool applied = runtime.TryApplyResidentDeath(npc, foreignCity,
+            out NpcPopulationLifecycleTransition transition, out NpcPopulationLifecycleFailure failure);
+
+        Assert.That(applied, Is.False);
+        Assert.That(failure, Is.EqualTo(NpcPopulationLifecycleFailure.RuntimeFaulted));
+        Assert.That(transition, Is.Null);
+        Assert.That(person.DeathAbsoluteDay, Is.Null);
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(npc.IsAlive, Is.True);
+        Assert.That(city.CurrentPopulation, Is.EqualTo(5));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevision));
+        Assert.That(foreignCity.CurrentPopulation, Is.EqualTo(5));
+        Assert.That(foreignCity.Population.Revision, Is.Zero);
+        Assert.That(ReadPersonLifecycleRevision(runtime, person.PersonId), Is.EqualTo(personRevision));
+        Assert.That(ReadNpcLifecycleRevision(runtime, npc.RuntimeId, residence: false), Is.EqualTo(npcRevision));
+        Assert.That(ReadRawEpoch(runtime), Is.EqualTo(epoch));
+    }
+
+    [Test]
     public void PersonBackedResidentDeathWithEmptyActionKeepsEmptyOwnerAndPublishesOneEpoch()
     {
         (SimulationRuntime runtime, CityRuntime city, PersonRuntime person, NpcRuntime npc) =
@@ -1277,6 +1379,22 @@ public sealed class P12PopulationLifecycleInvalidationTests
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
             out long epoch, out ContinuationCensusFailure failure), Is.True, failure.ToString());
         return epoch;
+    }
+
+    private static long ReadRawEpoch(SimulationRuntime runtime)
+    {
+        FieldInfo protocolField = typeof(SimulationRuntime).GetField(
+            "npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(protocolField, Is.Not.Null);
+        object protocol = protocolField.GetValue(runtime);
+        FieldInfo epochStateField = protocol.GetType().GetField(
+            "mutationEpochState", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(epochStateField, Is.Not.Null);
+        object epochState = epochStateField.GetValue(protocol);
+        PropertyInfo currentEpochProperty = epochState.GetType().GetProperty(
+            "CurrentEpoch", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(currentEpochProperty, Is.Not.Null);
+        return (long)currentEpochProperty.GetValue(epochState);
     }
 
     private static OwnerSectionCensusWitness FindWitness(

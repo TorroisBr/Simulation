@@ -329,10 +329,22 @@ public sealed partial class SimulationRuntime
         DailyV1SelectedPersonDeathPlan plan,
         out string failure)
     {
+        return TryExecuteCoreSelectedPersonDeath(
+            plan,
+            DailyV1RuntimeProtocolOperationContracts.PersonDeath,
+            out failure);
+    }
+
+    internal bool TryExecuteCoreSelectedPersonDeath(
+        DailyV1SelectedPersonDeathPlan plan,
+        string operationContractId,
+        out string failure)
+    {
         return DailyV1SelectedPersonDeathOperation.TryExecute(
             SelectedRuntimeOwnerGraph,
             personStore,
             plan,
+            operationContractId,
             new SelectedPersonDeathP12Boundary(this),
             out failure);
     }

@@ -282,8 +282,33 @@ internal static class DailyV1SelectedPersonDeathOperation
         IDailyV1SelectedPersonDeathBoundary boundary,
         out string failure)
     {
+        return TryExecute(
+            graph,
+            personStore,
+            plan,
+            DailyV1RuntimeProtocolOperationContracts.PersonDeath,
+            boundary,
+            out failure);
+    }
+
+    internal static bool TryExecute(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        DailyV1SelectedPersonDeathPlan plan,
+        string operationContractId,
+        IDailyV1SelectedPersonDeathBoundary boundary,
+        out string failure)
+    {
         failure = "RuntimeFaulted";
         if (graph == null || personStore == null || plan == null || boundary == null
+            || (!string.Equals(
+                    operationContractId,
+                    DailyV1RuntimeProtocolOperationContracts.PersonDeath,
+                    StringComparison.Ordinal)
+                && !string.Equals(
+                    operationContractId,
+                    DailyV1RuntimeProtocolOperationContracts.PopulationResidentDeath,
+                    StringComparison.Ordinal))
             || !ReferenceEquals(graph.PersonStore, personStore)
             || plan.Person?.PersonId == null
             || !personStore.TryGet(plan.Person.PersonId, out PersonRuntime registeredPerson)
@@ -324,7 +349,7 @@ internal static class DailyV1SelectedPersonDeathOperation
         if (!boundary.TryBeginPersonDeathOperation(
                 plan,
                 currentActionChanged,
-                DailyV1RuntimeProtocolOperationContracts.PersonDeath,
+                operationContractId,
                 sectionIds,
                 localRevisionCapacity,
                 out IDailyV1SelectedPersonDeathP12Scope scope))
