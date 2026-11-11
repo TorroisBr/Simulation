@@ -12426,6 +12426,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             IDailyV1SelectedActorChoiceExecutionContext,
             IDailyV1CoreActorChoiceExecutionBoundary,
             IDailyV1SelectedMerchantTradeStateBoundary,
+            IDailyV1SelectedActorActionExecutionBoundary,
             IDailyV1SelectedActorTurnHostPorts,
             IDailyV1SelectedCrimeJusticeDailyBoundary
     {

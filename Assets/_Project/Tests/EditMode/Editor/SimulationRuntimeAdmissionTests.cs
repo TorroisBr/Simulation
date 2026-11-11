@@ -2114,6 +2114,12 @@ public sealed class SimulationRuntimeAdmissionTests
         IDailyV1SelectedActorTurnHostPorts hostPorts =
             hostPortArguments[1] as IDailyV1SelectedActorTurnHostPorts;
         Assert.That(hostPorts, Is.Not.Null);
+        IDailyV1SelectedActorActionExecutionBoundary coreActionBoundary =
+            hostPorts as IDailyV1SelectedActorActionExecutionBoundary;
+        Assert.That(coreActionBoundary, Is.Not.Null,
+            "The selected SimulationRuntime actor-turn adapter must opt into Core-owned action selection and dispatch.");
+        Assert.That(coreActionBoundary.UsesSelectedDailyV1ActionExecution(actor), Is.True,
+            "Only the exact admitted actor owner is routed through Core's selected action stage.");
         Assert.That(DailyV1CoreSelectedMerchantTradeStateBoundary.TryCreate(
             graph, null, hostPorts, out DailyV1CoreSelectedMerchantTradeStateBoundary merchantBoundary), Is.True);
 
