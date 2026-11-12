@@ -10734,14 +10734,36 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 }
             }
 
+            bool selectedDailyV1Roster = IsDailyCaptureProfile
+                && cities.All(city => city != null && city.SelectedRuntimeOwners != null)
+                && npcRuntimes.All(npc => npc != null && npc.UsesSelectedDailyV1Definitions);
+
             bool bound;
             try
             {
-                bound = PersonMaterializationSystem.TryBindExistingNpcToPerson(
-                    this,
-                    personId,
-                    npcRuntimeId,
-                    out failure);
+                if (selectedDailyV1Roster)
+                {
+                    if (selectedGraph == null
+                        || !ReferenceEquals(selectedGraph.PersonStore, personStore)
+                        || !selectedGraph.MatchesExactOwnerInstances(
+                            cities.Select(city => city?.SelectedRuntimeOwners),
+                            npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners)))
+                    {
+                        failure = PersonMaterializationFailure.RuntimeFaulted;
+                        bound = false;
+                    }
+                    else
+                    {
+                        bound = PersonMaterializationSystem.TryBindExistingNpcToPersonSelectedCore(
+                            this, selectedGraph, personId, npcRuntimeId, out failure);
+                    }
+                }
+                else
+                {
+                    // Mixed and unselected compatibility rosters retain the established Unity binding path.
+                    bound = PersonMaterializationSystem.TryBindExistingNpcToPerson(
+                        this, personId, npcRuntimeId, out failure);
+                }
             }
             catch
             {

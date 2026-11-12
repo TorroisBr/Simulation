@@ -39,6 +39,144 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
     }
 
     [Test]
+    public void SelectedNpcPersonBindingCommitsAgainstTheExactCoreOwners()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        PersonStore personStore = graph.PersonStore;
+        if (personStore == null)
+        {
+            personStore = new PersonStore();
+            Assert.That(graph.TryBindPersonStore(personStore), Is.True);
+        }
+
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        string cityRuntimeId = graph.Cities[0].RuntimeId;
+        Assert.That(npc.Residence.TrySetValue(cityRuntimeId), Is.True);
+        npc.Residence.NotifyMutationCommitted();
+
+        PersonId personId = new PersonId("selected-npc-person-binding-core");
+        PersonRuntime person = new PersonRuntime(personId, 0L);
+        Assert.That(personStore.TryRegister(person, out PersonStoreFailure registerFailure), Is.True,
+            registerFailure.ToString());
+        long storeRevisionBeforeBinding = personStore.Revision;
+        long residenceRevisionBeforeBinding = PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person);
+
+        Assert.That(DailyV1SelectedNpcPersonBindingOperation.TryPrepare(
+                graph, personStore, personId, npc.RuntimeId, 0L,
+                out DailyV1SelectedNpcPersonBindingPlan plan,
+                out DailyV1SelectedNpcPersonBindingFailure prepareFailure), Is.True,
+            prepareFailure.ToString());
+        Assert.That(plan.RequiresPersonResidenceUpdate, Is.True);
+        Assert.That(person.IsMaterialized, Is.False,
+            "Preparation must not mutate the Person owner.");
+
+        Assert.That(DailyV1SelectedNpcPersonBindingOperation.TryCommit(
+                graph, personStore, plan, 0L,
+                out DailyV1SelectedNpcPersonBindingFailure commitFailure,
+                out int personStoreRevisionDelta, out bool compensationFailed), Is.True,
+            commitFailure.ToString());
+        Assert.That(compensationFailed, Is.False);
+        Assert.That(personStoreRevisionDelta, Is.EqualTo(1));
+        Assert.That(personStore.Revision, Is.EqualTo(storeRevisionBeforeBinding + 1L));
+        Assert.That(person.MaterializedNpcRuntimeId, Is.EqualTo(npc.RuntimeId));
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(cityRuntimeId));
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person),
+            Is.EqualTo(residenceRevisionBeforeBinding + 1L));
+        Assert.That(personStore.TryGetByMaterializedNpcRuntimeId(npc.RuntimeId,
+            out PersonRuntime indexedPerson), Is.True);
+        Assert.That(indexedPerson, Is.SameAs(person));
+        Assert.That(graph.TryGetNpcOwner(npc.RuntimeId, out DailyV1NpcRuntimeOwners exactNpc), Is.True);
+        Assert.That(exactNpc, Is.SameAs(npc),
+            "The binding must target the exact NPC owner already held by this graph.");
+    }
+
+    [Test]
+    public void SelectedNpcPersonBindingRejectsStalePlansWithoutOwnerMutation()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        PersonStore personStore = graph.PersonStore;
+        if (personStore == null)
+        {
+            personStore = new PersonStore();
+            Assert.That(graph.TryBindPersonStore(personStore), Is.True);
+        }
+
+        PersonId personId = new PersonId("selected-npc-person-binding-stale");
+        PersonRuntime person = new PersonRuntime(personId, 0L);
+        Assert.That(personStore.TryRegister(person, out PersonStoreFailure registerFailure), Is.True,
+            registerFailure.ToString());
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        Assert.That(DailyV1SelectedNpcPersonBindingOperation.TryPrepare(
+                graph, personStore, personId, npc.RuntimeId, 0L,
+                out DailyV1SelectedNpcPersonBindingPlan plan,
+                out DailyV1SelectedNpcPersonBindingFailure prepareFailure), Is.True,
+            prepareFailure.ToString());
+
+        PersonRuntime unrelatedPerson = new PersonRuntime(
+            new PersonId("selected-npc-person-binding-stale-intervening"), 0L);
+        Assert.That(personStore.TryRegister(unrelatedPerson, out PersonStoreFailure interveningFailure), Is.True,
+            interveningFailure.ToString());
+        long revisionAfterInterveningWrite = personStore.Revision;
+
+        Assert.That(DailyV1SelectedNpcPersonBindingOperation.TryCommit(
+                graph, personStore, plan, 0L,
+                out DailyV1SelectedNpcPersonBindingFailure commitFailure,
+                out int personStoreRevisionDelta, out bool compensationFailed), Is.False);
+        Assert.That(commitFailure, Is.EqualTo(DailyV1SelectedNpcPersonBindingFailure.StaleState));
+        Assert.That(personStoreRevisionDelta, Is.Zero);
+        Assert.That(compensationFailed, Is.False);
+        Assert.That(personStore.Revision, Is.EqualTo(revisionAfterInterveningWrite));
+        Assert.That(person.IsMaterialized, Is.False);
+        Assert.That(personStore.TryGetByMaterializedNpcRuntimeId(npc.RuntimeId, out _), Is.False);
+    }
+
+    [Test]
+    public void SelectedNpcPersonBindingRejectsLifeAndResidenceConflictsBeforeMutation()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        PersonStore personStore = graph.PersonStore;
+        if (personStore == null)
+        {
+            personStore = new PersonStore();
+            Assert.That(graph.TryBindPersonStore(personStore), Is.True);
+        }
+
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        PersonRuntime deceased = new PersonRuntime(new PersonId("selected-npc-person-binding-dead"), 0L, 0L);
+        Assert.That(personStore.TryRegister(deceased, out PersonStoreFailure deadRegisterFailure), Is.True,
+            deadRegisterFailure.ToString());
+        long storeRevisionBeforeRejections = personStore.Revision;
+        Assert.That(DailyV1SelectedNpcPersonBindingOperation.TryPrepare(
+                graph, personStore, deceased.PersonId, npc.RuntimeId, 1L,
+                out _, out DailyV1SelectedNpcPersonBindingFailure lifeFailure), Is.False);
+        Assert.That(lifeFailure, Is.EqualTo(DailyV1SelectedNpcPersonBindingFailure.LifeStateConflict));
+
+        Assert.That(npc.Residence.TrySetValue("binding-conflict-city"), Is.True);
+        npc.Residence.NotifyMutationCommitted();
+        PersonRuntime residentElsewhere = PersonRuntimeOwnerBridge.CreateForOwnerSnapshot(
+            new PersonId("selected-npc-person-binding-residence"), 0L, null,
+            "person-residence-city", null, 0L);
+        Assert.That(personStore.TryRegister(residentElsewhere,
+            out PersonStoreFailure residenceRegisterFailure), Is.True,
+            residenceRegisterFailure.ToString());
+        storeRevisionBeforeRejections = personStore.Revision;
+
+        Assert.That(DailyV1SelectedNpcPersonBindingOperation.TryPrepare(
+                graph, personStore, residentElsewhere.PersonId, npc.RuntimeId, 1L,
+                out _, out DailyV1SelectedNpcPersonBindingFailure residenceFailure), Is.False);
+        Assert.That(residenceFailure, Is.EqualTo(DailyV1SelectedNpcPersonBindingFailure.ResidenceConflict));
+        Assert.That(personStore.Revision, Is.EqualTo(storeRevisionBeforeRejections));
+        Assert.That(residentElsewhere.IsMaterialized, Is.False);
+        Assert.That(personStore.TryGetByMaterializedNpcRuntimeId(npc.RuntimeId, out _), Is.False);
+    }
+
+    [Test]
     public void SelectedGraphBindsExactPoliticalDecisionOwnerToTheSelectedPersonStore()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();

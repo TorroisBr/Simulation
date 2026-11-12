@@ -4730,10 +4730,20 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(city.ImportantNpcRevision, Is.EqualTo(initialCityPresenceRevision));
         AssertSelectedDailyNpcOwnerFamilies(runtime);
 
+        long personStoreRevisionBeforeBinding = runtime.PersonStore.Revision;
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long membershipEpochBeforeBinding, out _), Is.True);
+
         Assert.That(runtime.TryBindExistingNpcToPerson(personId, npc.RuntimeId,
             out PersonMaterializationFailure bindingFailure), Is.True, bindingFailure.ToString());
 
         Assert.That(runtime.PersonStore.Persons, Has.Count.EqualTo(1));
+        Assert.That(runtime.PersonStore.Revision, Is.EqualTo(personStoreRevisionBeforeBinding + 1L),
+            "The selected Core binding commits one PersonStore owner revision.");
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long membershipEpochAfterBinding, out _), Is.True);
+        Assert.That(membershipEpochAfterBinding, Is.EqualTo(membershipEpochBeforeBinding + 1L),
+            "Person identity and optional residence changes reconcile under one P12 membership epoch.");
         Assert.That(runtime.NpcRuntimes, Has.Count.EqualTo(initialNpcCount));
         Assert.That(npc.CurrentCity, Is.SameAs(city));
         Assert.That(ReadNonPublicProperty(npc, "BoundPersonRuntime"), Is.SameAs(person));

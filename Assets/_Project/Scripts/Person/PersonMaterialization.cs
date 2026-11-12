@@ -263,6 +263,122 @@ public static class PersonMaterializationSystem
         return true;
     }
 
+    /// <summary>
+    /// Applies the selected Daily-v1 Core binding operation while retaining
+    /// only the Unity NpcRuntime identity/reference projection in this host
+    /// adapter. The caller owns the enclosing P12 membership reservation and
+    /// publishes the derived actor-roster projection before invoking this.
+    /// </summary>
+    internal static bool TryBindExistingNpcToPersonSelectedCore(
+        SimulationRuntime world,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonId personId,
+        string npcRuntimeId,
+        out PersonMaterializationFailure failure)
+    {
+        failure = PersonMaterializationFailure.RuntimeFaulted;
+        if (world == null || graph == null
+            || !ReferenceEquals(graph.PersonStore, world.PersonStore))
+            return false;
+        if (world.IsMutationFaulted)
+            return false;
+        if (personId == null)
+        {
+            failure = PersonMaterializationFailure.InvalidPerson;
+            return false;
+        }
+        if (!world.TryGetNpcRuntime(npcRuntimeId, out NpcRuntime npcRuntime))
+        {
+            failure = PersonMaterializationFailure.NpcNotRegistered;
+            return false;
+        }
+        if (!npcRuntime.UsesSelectedDailyV1Definitions
+            || !ReferenceEquals(npcRuntime.SelectedRuntimeOwnerGraph, graph)
+            || !graph.TryGetNpcOwner(npcRuntimeId, out DailyV1NpcRuntimeOwners npcOwner)
+            || !ReferenceEquals(npcOwner, npcRuntime.SelectedRuntimeOwners))
+            return false;
+
+        if (npcRuntime.PersonId != null)
+        {
+            failure = npcRuntime.PersonId == personId
+                ? PersonMaterializationFailure.AlreadyMaterialized
+                : PersonMaterializationFailure.NpcAlreadyBoundToDifferentPerson;
+            return false;
+        }
+
+        if (!DailyV1SelectedNpcPersonBindingOperation.TryPrepare(
+                graph, world.PersonStore, personId, npcRuntimeId, world.CurrentDay,
+                out DailyV1SelectedNpcPersonBindingPlan plan,
+                out DailyV1SelectedNpcPersonBindingFailure prepareFailure))
+        {
+            failure = MapSelectedBindingFailure(prepareFailure);
+            return false;
+        }
+
+        if (!npcRuntime.TryAssignPersonId(personId))
+        {
+            failure = PersonMaterializationFailure.NpcAlreadyBoundToDifferentPerson;
+            return false;
+        }
+        if (!npcRuntime.TryBindPersonRuntime(plan.Person))
+        {
+            npcRuntime.ClearPersonId();
+            failure = PersonMaterializationFailure.NpcAlreadyBoundToDifferentPerson;
+            return false;
+        }
+
+        bool committed = DailyV1SelectedNpcPersonBindingOperation.TryCommit(
+            graph, world.PersonStore, plan, world.CurrentDay,
+            out DailyV1SelectedNpcPersonBindingFailure commitFailure,
+            out int personStoreRevisionDelta,
+            out bool compensationFailed);
+        for (int i = 0; i < personStoreRevisionDelta; i++)
+            world.MarkNpcMembershipPersonStoreRevisionCommitted();
+
+        if (!committed)
+        {
+            npcRuntime.ClearPersonRuntime();
+            npcRuntime.ClearPersonId();
+            if (compensationFailed)
+                world.MarkNpcMembershipCensusCompensationFailed();
+            failure = MapSelectedBindingFailure(commitFailure);
+            return false;
+        }
+
+        failure = PersonMaterializationFailure.None;
+        return true;
+    }
+
+    private static PersonMaterializationFailure MapSelectedBindingFailure(
+        DailyV1SelectedNpcPersonBindingFailure failure)
+    {
+        switch (failure)
+        {
+            case DailyV1SelectedNpcPersonBindingFailure.None:
+                return PersonMaterializationFailure.None;
+            case DailyV1SelectedNpcPersonBindingFailure.InvalidPerson:
+                return PersonMaterializationFailure.InvalidPerson;
+            case DailyV1SelectedNpcPersonBindingFailure.InvalidNpcRuntimeId:
+                return PersonMaterializationFailure.InvalidRuntimeId;
+            case DailyV1SelectedNpcPersonBindingFailure.NpcNotRegistered:
+                return PersonMaterializationFailure.NpcNotRegistered;
+            case DailyV1SelectedNpcPersonBindingFailure.PersonNotRegistered:
+                return PersonMaterializationFailure.PersonNotRegistered;
+            case DailyV1SelectedNpcPersonBindingFailure.AlreadyMaterialized:
+                return PersonMaterializationFailure.AlreadyMaterialized;
+            case DailyV1SelectedNpcPersonBindingFailure.NpcAlreadyBoundToDifferentPerson:
+                return PersonMaterializationFailure.NpcAlreadyBoundToDifferentPerson;
+            case DailyV1SelectedNpcPersonBindingFailure.LifeStateConflict:
+                return PersonMaterializationFailure.LifeStateConflict;
+            case DailyV1SelectedNpcPersonBindingFailure.ResidenceConflict:
+                return PersonMaterializationFailure.ResidenceConflict;
+            case DailyV1SelectedNpcPersonBindingFailure.RevisionOverflow:
+                return PersonMaterializationFailure.RevisionOverflow;
+            default:
+                return PersonMaterializationFailure.RuntimeFaulted;
+        }
+    }
+
     private static PersonMaterializationFailure MapStoreFailure(PersonStoreFailure failure)
     {
         switch (failure)
