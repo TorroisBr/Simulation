@@ -594,6 +594,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         ReplaceOwnerSectionWithCurrentCensus(sections,
             graph.PersonStore.GetMembershipCensusWitness());
         ReplaceOwnerSectionWithCurrentCensus(sections,
+            new SimulationRecordSequenceCensusProvider(graph.RecordSequence).GetCurrentCensus());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
             graph.PersonStore.GetMaterializationBindingCensusWitness());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             new GenealogyCensusProvider(graph.GenealogyStore).GetCurrentCensus());
@@ -702,6 +704,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         ReplaceSelectedSpatialOwnerCensus(sections, graph);
         ReplaceOwnerSectionWithCurrentCensus(sections,
             graph.PersonStore.GetMembershipCensusWitness());
+        ReplaceOwnerSectionWithCurrentCensus(sections,
+            new SimulationRecordSequenceCensusProvider(graph.RecordSequence).GetCurrentCensus());
         ReplaceOwnerSectionWithCurrentCensus(sections,
             graph.PersonStore.GetMaterializationBindingCensusWitness());
         ReplaceOwnerSectionWithCurrentCensus(sections,
@@ -1000,15 +1004,10 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryBeginContinuationSaveOperation(
             session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
 
-        string hostOwnedSectionId = DailyV1SelectedOwnerSectionCensusContract.FixedRequired
-            .First(sectionId =>
-                !DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds
-                    .Contains(sectionId, StringComparer.Ordinal)
-                && sectionId != P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId
-                && sectionId != P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId
-                && sectionId != P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId
-                && sectionId != DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId
-                && sectionId != DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+        const string hostOwnedSectionId = "p8d.spatial-route-observations";
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds
+                .Contains(hostOwnedSectionId, StringComparer.Ordinal),
+            Is.False, "The changed-revision probe must mutate the host-owned exact-empty row, not a Core-bound identity.");
         int hostOwnedSectionIndex = Array.FindIndex(sections,
             section => section.SectionId == hostOwnedSectionId);
         Assert.That(hostOwnedSectionIndex, Is.GreaterThanOrEqualTo(0));
@@ -3940,6 +3939,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             null, out DailyV1ActiveRuntimeSession session, out _);
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
         ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
+        Assert.That(graph.RecordSequence,
+            Is.SameAs(session.ExecutionBoundaryState.SelectedRecordSequence));
         CrimeSocialAppraisalWorldState crimeSocial = graph.P12EOwners?.CrimeSocialAppraisal;
         Assert.That(crimeSocial, Is.Not.Null);
         Assert.That(crimeSocial.SimulationTime,
@@ -3969,6 +3970,17 @@ public sealed class DailyV1ApplicationSessionGateTests
             composed), Is.True);
         Assert.That(composed.Select(section => section.SectionId),
             Is.EquivalentTo(captured.Select(section => section.SectionId)));
+        OwnerSectionCensusSnapshot composedSequence = composed.Single(section =>
+            section.SectionId == SimulationRecordSequenceCensusProvider.SectionId);
+        OwnerSectionCensusWitness sequenceWitness =
+            new SimulationRecordSequenceCensusProvider(graph.RecordSequence).GetCurrentCensus();
+        Assert.That(composedSequence.OwnerInstanceIdentity,
+            Is.SameAs(sequenceWitness.OwnerInstanceIdentity));
+        Assert.That(SimulationRecordSequenceOwnerBridge.TryMatchCurrentCensus(
+            graph.RecordSequence, composedSequence.OwnerInstanceIdentity,
+            composedSequence.Revision, out _), Is.True);
+        Assert.That(composedSequence.Cardinality, Is.EqualTo(1));
+        Assert.That(composedSequence.Revision, Is.EqualTo(sequenceWitness.Revision));
         Assert.That(composed.Single(section => section.SectionId
                 == P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId).OwnerInstanceIdentity,
             Is.SameAs(crimeSocial.TheftOutcomes));
@@ -4012,6 +4024,19 @@ public sealed class DailyV1ApplicationSessionGateTests
                 out string rejectionDiagnostic), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(rejectionDiagnostic, Does.Contain("exact-zero"));
+
+        OwnerSectionCensusSnapshot[] staleRecordSequence = captured.Select(section =>
+            section.SectionId == SimulationRecordSequenceCensusProvider.SectionId
+                ? new OwnerSectionCensusSnapshot(section.SectionId, section.SchemaVersion,
+                    section.Role, section.OwnerInstanceIdentity, section.Cardinality,
+                    checked(section.Revision + 1L))
+                : section).ToArray();
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedDailyOwnerVector(
+                graph, actorChoices, staleRecordSequence, justiceProjectionIdentity, 0L,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> staleRejected,
+                out string staleDiagnostic), Is.False);
+        Assert.That(staleRejected, Is.Null);
+        Assert.That(staleDiagnostic, Does.Contain("record-sequence"));
     }
 
     [Test]

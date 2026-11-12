@@ -30,6 +30,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal PoliticalDecisionStore PoliticalDecisionStore { get; private set; }
     internal P12ECoreOwnerRestoreStage P12EOwners { get; private set; }
     internal RuntimeIdAllocator RuntimeIdAllocator { get; private set; }
+    internal SimulationRecordSequence RecordSequence { get; private set; }
 
     private DailyV1SelectedRuntimeOwnerGraph(
         DailyV1EffectiveDefinitions definitions,
@@ -174,6 +175,19 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         if (allocator == null) return false;
         if (RuntimeIdAllocator != null) return ReferenceEquals(RuntimeIdAllocator, allocator);
         RuntimeIdAllocator = allocator;
+        return true;
+    }
+
+    /// <summary>
+    /// Binds the exact selected record sequence shared with the execution
+    /// boundary, so P12 capture and restore read the same Core authority used
+    /// by daily writes.
+    /// </summary>
+    internal bool TryBindRecordSequence(SimulationRecordSequence sequence)
+    {
+        if (sequence == null) return false;
+        if (RecordSequence != null) return ReferenceEquals(RecordSequence, sequence);
+        RecordSequence = sequence;
         return true;
     }
 

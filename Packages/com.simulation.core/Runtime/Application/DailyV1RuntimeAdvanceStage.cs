@@ -615,6 +615,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         ExpeditionCensusProvider.SectionId,
         PoliticalKnowledgeStoreCensusProvider.SectionId,
         PoliticalDecisionStoreCensusProvider.SectionId,
+        SimulationRecordSequenceCensusProvider.SectionId,
         RuntimeIdAllocatorCensusProvider.EventsSectionId,
         RuntimeIdAllocatorCensusProvider.DecisionsSectionId,
         RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId
@@ -910,6 +911,18 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 out diagnostic))
             return false;
 
+        if (!TryRebindCoreOwnedRecordSequenceSection(
+                graph,
+                copiedHostSections,
+                out _,
+                out diagnostic)
+            || !hostBySectionId.ContainsKey(SimulationRecordSequenceCensusProvider.SectionId))
+        {
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The host census differs from the exact Core SimulationRecordSequence owner.";
+            return false;
+        }
+
         List<string> coreSectionIds = new List<string>(CoreOwnedSelectedRuntimeSectionIdValues.Length);
         HashSet<string> uniqueSectionIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (string sectionId in CoreOwnedSelectedRuntimeSectionIdValues)
@@ -939,7 +952,6 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             }
             coreSectionIds.Add(sectionId);
         }
-
         OwnerSectionCensusWitness politicalKnowledgeWitness;
         try
         {
@@ -1153,8 +1165,12 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 graph, completeCitySections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> completeP12EOwnerSections,
                 out diagnostic)
+            || !TryRebindCoreOwnedRecordSequenceSection(
+                graph, completeP12EOwnerSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeRecordSequenceSections,
+                out diagnostic)
             || !DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
-                completeP12EOwnerSections))
+                completeRecordSequenceSections))
         {
             completeOwnerSections = null;
             if (string.IsNullOrWhiteSpace(diagnostic))
@@ -1162,7 +1178,107 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
         }
 
-        completeOwnerSections = completeP12EOwnerSections;
+        completeOwnerSections = completeRecordSequenceSections;
+        return true;
+    }
+
+    /// <summary>
+    /// Re-reads the record-sequence census from the exact owner bound to the
+    /// Core graph and replaces the source row only after its identity, schema,
+    /// cardinality, and revision agree. The row remains in the complete
+    /// selected P12 vector, but its final facts come from Core's execution root.
+    /// </summary>
+    internal static bool TryRebindCoreOwnedRecordSequenceSection(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> sourceSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> composedSections,
+        out string diagnostic)
+    {
+        composedSections = null;
+        diagnostic = null;
+        SimulationRecordSequence sequence = graph?.RecordSequence;
+        if (sequence == null || sourceSections == null)
+        {
+            diagnostic = "The selected Core record-sequence census requires its exact graph-bound owner and complete source vector.";
+            return false;
+        }
+
+        OwnerSectionCensusWitness witness;
+        try
+        {
+            witness = new SimulationRecordSequenceCensusProvider(sequence).GetCurrentCensus();
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException)
+        {
+            diagnostic = "The Core record-sequence census provider could not read its exact owner.";
+            return false;
+        }
+
+        if (witness == null
+            || !string.Equals(witness.SectionId, SimulationRecordSequenceCensusProvider.SectionId,
+                StringComparison.Ordinal)
+            || witness.SchemaVersion != SimulationRecordSequenceCensusProvider.SchemaVersion
+            || witness.Cardinality != 1
+            || witness.Revision < 0L
+            || !SimulationRecordSequenceOwnerBridge.TryMatchCurrentCensus(
+                sequence, witness.OwnerInstanceIdentity, witness.Revision, out _))
+        {
+            diagnostic = "The Core record-sequence provider returned an invalid selected owner witness.";
+            return false;
+        }
+
+        List<OwnerSectionCensusSnapshot> composed = new List<OwnerSectionCensusSnapshot>(sourceSections.Count + 1);
+        int matches = 0;
+        for (int index = 0; index < sourceSections.Count; index++)
+        {
+            OwnerSectionCensusSnapshot section = sourceSections[index];
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId))
+            {
+                diagnostic = "The complete source census contains an invalid owner-section row.";
+                return false;
+            }
+            if (!string.Equals(section.SectionId, witness.SectionId, StringComparison.Ordinal))
+            {
+                composed.Add(section);
+                continue;
+            }
+
+            matches++;
+            if (section.Role != OwnerSectionRole.Required
+                || section.SchemaVersion != witness.SchemaVersion
+                || !ReferenceEquals(section.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+                || section.Cardinality != witness.Cardinality
+                || section.Revision != witness.Revision)
+            {
+                diagnostic = "The selected source census differs from the exact Core record-sequence owner.";
+                return false;
+            }
+            composed.Add(new OwnerSectionCensusSnapshot(
+                witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision));
+        }
+
+        if (matches > 1)
+        {
+            diagnostic = "The source census must not duplicate the record-sequence family.";
+            return false;
+        }
+
+        if (matches == 0)
+        {
+            OwnerSectionCensusSnapshot coreSection = new OwnerSectionCensusSnapshot(
+                witness.SectionId, witness.SchemaVersion, OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision);
+            int insertionIndex = composed.FindIndex(section =>
+                StringComparer.Ordinal.Compare(section.SectionId, witness.SectionId) > 0);
+            if (insertionIndex < 0)
+                composed.Add(coreSection);
+            else
+                composed.Insert(insertionIndex, coreSection);
+        }
+
+        composedSections = composed.AsReadOnly();
         return true;
     }
 
@@ -2386,17 +2502,47 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
 
         composed.Sort((left, right) =>
             StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+        if (!TryRebindCoreOwnedRecordSequenceSection(
+                graph,
+                composed,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> completeWithRecordSequence,
+                out diagnostic))
+            return false;
+
         // Preserve a structurally complete but stale host alias witness for
         // the existing exact token/image comparison. That later gate applies
         // IsCompleteSnapshot and reports the established stale-boundary
         // failure instead of reclassifying identity drift as missing coverage.
-        if (!DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(composed))
+        if (!DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+                completeWithRecordSequence))
         {
-            diagnostic = "The Core and host census sections do not compose the complete selected Daily-v1 owner vector.";
+            HashSet<string> composedIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (OwnerSectionCensusSnapshot section in completeWithRecordSequence)
+                if (section != null) composedIds.Add(section.SectionId);
+            List<string> missingFixed = new List<string>();
+            foreach (string sectionId in DailyV1SelectedOwnerSectionCensusContract.FixedRequired)
+                if (!composedIds.Contains(sectionId)) missingFixed.Add(sectionId);
+            foreach (string sectionId in DailyV1SelectedOwnerSectionCensusContract.FixedEmpty)
+                if (!composedIds.Contains(sectionId)) missingFixed.Add(sectionId);
+            int npcCount = CountFamilyRows(
+                composed, DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix);
+            int cityCount = CountFamilyRows(
+                completeWithRecordSequence, DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix);
+            int nonPersonNpcCount = CountFamilyRows(
+                completeWithRecordSequence, DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix);
+            int personCount = CountFamilyRows(
+                completeWithRecordSequence, DailyV1SelectedOwnerSectionCensusContract.PersonLifeResidencePrefix);
+            diagnostic = "The Core and host census sections do not compose the complete selected Daily-v1 owner vector. "
+                + "Rows=" + completeWithRecordSequence.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ", NPCs=" + npcCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ", Cities=" + cityCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ", non-Person NPCs=" + nonPersonNpcCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ", Persons=" + personCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ", missing fixed=" + string.Join(",", missingFixed) + ".";
             return false;
         }
 
-        completeOwnerSections = Array.AsReadOnly(composed.ToArray());
+        completeOwnerSections = completeWithRecordSequence;
         return true;
     }
 

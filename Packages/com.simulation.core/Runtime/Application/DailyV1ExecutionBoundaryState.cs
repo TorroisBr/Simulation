@@ -4513,7 +4513,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         {
             if (!ReferenceEquals(replacement.PersonStore, selectedActorChoiceStore?.PersonStore)
                 || selectedRuntimeIdAllocator == null
-                || !replacement.TryBindRuntimeIdAllocator(selectedRuntimeIdAllocator))
+                || selectedRecordSequence == null
+                || !replacement.TryBindRuntimeIdAllocator(selectedRuntimeIdAllocator)
+                || !replacement.TryBindRecordSequence(selectedRecordSequence))
                 return false;
             try
             {
@@ -4761,6 +4763,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         {
             if (selectedRuntimeIdAllocator == null
                 || !replacementGraph.TryBindRuntimeIdAllocator(selectedRuntimeIdAllocator)
+                || selectedRecordSequence == null
+                || !replacementGraph.TryBindRecordSequence(selectedRecordSequence)
                 || selectedActorChoiceStore == null
                 || !ReferenceEquals(replacementGraph.PersonStore, selectedActorChoiceStore.PersonStore))
                 return false;
@@ -4840,6 +4844,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         if (selectedRuntimeExecutionRootsBound)
             return ReferenceEquals(selectedRuntimeIdAllocator, runtimeIdAllocator)
                 && ReferenceEquals(selectedRuntimeOwnerGraph.RuntimeIdAllocator, runtimeIdAllocator)
+                && ReferenceEquals(selectedRuntimeOwnerGraph.RecordSequence, recordSequence)
                 && ReferenceEquals(selectedRandomSource, randomSource)
                 && ReferenceEquals(selectedRecordSequence, recordSequence)
                 && ReferenceEquals(selectedDecisionStore, decisionStore)
@@ -4854,10 +4859,11 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         {
             selectedRuntimeActorTurnCoreRoots = new DailyV1ActorTurnCoreRoots(
                 this, selectedRuntimeOwnerGraph);
-            if (!selectedRuntimeOwnerGraph.TryBindRuntimeIdAllocator(runtimeIdAllocator))
+            if (!selectedRuntimeOwnerGraph.TryBindRuntimeIdAllocator(runtimeIdAllocator)
+                || !selectedRuntimeOwnerGraph.TryBindRecordSequence(recordSequence))
                 throw new ArgumentException(
-                    "The selected owner graph is already bound to a different runtime ID allocator.",
-                    nameof(runtimeIdAllocator));
+                    "The selected owner graph is already bound to a different execution identity root.",
+                    nameof(recordSequence));
         }
         catch (ArgumentException)
         {
