@@ -3399,6 +3399,113 @@ public sealed class SimulationBootstrapCompositionTests
     }
 
     [Test]
+    public void SelectedDailyV1MembershipPublishesCoreGraphRosterAndDynamicCensus()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject simulationObject = new GameObject("selected-daily-v1-core-membership-transaction-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+
+        simulation.Start();
+
+        SimulationRuntime runtime = simulation.Bootstrap.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graphBefore = runtime.SelectedRuntimeOwnerGraph;
+        DailyV1ExecutionBoundaryState executionState = ReadPrivateField<DailyV1ExecutionBoundaryState>(
+            runtime, "dailyExecutionBoundary");
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> rosterBefore =
+            executionState.SelectedRuntimeActorRoster;
+        IReadOnlyList<IOwnerSectionCensusProvider> identityProviders =
+            simulation.Bootstrap.RuntimeIdentityCensusProviders;
+        OwnerSectionCensusWitness[] identityBefore = identityProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        Assert.That(identityBefore[0].Cardinality, Is.EqualTo(10));
+        Assert.That(identityBefore[0].Revision, Is.EqualTo(16L));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochBefore, out _), Is.True);
+        AssertSelectedDailyNpcOwnerFamilies(runtime);
+
+        DailyV1EffectiveDefinitions selectedDefinitions =
+            ReadPrivateField<DailyV1EffectiveDefinitions>(simulation, "selectedDefinitions");
+        DailyV1DefinitionAdapter.SelectedBindings selectedBindings =
+            ReadPrivateField<DailyV1DefinitionAdapter.SelectedBindings>(simulation, "selectedDefinitionBindings");
+        DailyV1NpcDefinition selectedNpcDefinition = selectedDefinitions.Npcs.Values
+            .OrderBy(definition => definition.DefinitionId, System.StringComparer.Ordinal)
+            .First();
+        NpcRuntime added = NpcRuntime.CreateSelectedDailyV1(
+            "daily-dynamic-selected-membership-npc", selectedNpcDefinition, selectedDefinitions,
+            selectedBindings, null, 0f);
+
+        Assert.That(runtime.TryRegisterNpc(added, out WorldNpcRegistryFailure addFailure), Is.True,
+            addFailure.ToString());
+        DailyV1SelectedRuntimeOwnerGraph graphAfterAdd = runtime.SelectedRuntimeOwnerGraph;
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> rosterAfterAdd =
+            executionState.SelectedRuntimeActorRoster;
+        Assert.That(graphAfterAdd, Is.Not.SameAs(graphBefore));
+        Assert.That(graphAfterAdd.Npcs, Has.Count.EqualTo(graphBefore.Npcs.Count + 1));
+        Assert.That(graphAfterAdd.ContainsExactNpcOwner(added.SelectedRuntimeOwners), Is.True,
+            "The Core graph must publish this exact selected NPC owner instance.");
+        Assert.That(rosterAfterAdd, Is.Not.SameAs(rosterBefore));
+        Assert.That(rosterAfterAdd, Has.Count.EqualTo(rosterBefore.Count + 1));
+        Assert.That(rosterAfterAdd.Any(member => member != null
+            && member.RuntimeId == added.RuntimeId && member.PersonId == null), Is.True,
+            "Core's ordered roster must carry the selected actor identity and its current Person binding.");
+        Assert.That(runtime.TryGetNpcRuntime(added.RuntimeId, out NpcRuntime registered), Is.True);
+        Assert.That(registered, Is.SameAs(added));
+        Assert.That(simulation.TryGetNpcRuntime(added.RuntimeId, out NpcRuntime projected), Is.True);
+        Assert.That(projected, Is.SameAs(added));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochAfterAdd, out _), Is.True);
+        Assert.That(epochAfterAdd, Is.EqualTo(epochBefore + 1L));
+        AssertSelectedDailyNpcOwnerFamilies(runtime);
+
+        OwnerSectionCensusWitness[] identityAfterAdd = identityProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        Assert.That(identityAfterAdd[0].Cardinality, Is.EqualTo(11));
+        Assert.That(identityAfterAdd[0].Revision, Is.EqualTo(identityBefore[0].Revision + 1L));
+        for (int index = 0; index < identityAfterAdd.Length; index++)
+            Assert.That(identityAfterAdd[index].OwnerInstanceIdentity,
+                Is.SameAs(identityBefore[index].OwnerInstanceIdentity));
+
+        Assert.That(runtime.TryUnregisterNpc(added.RuntimeId, out WorldNpcRegistryFailure removeFailure), Is.True,
+            removeFailure.ToString());
+        DailyV1SelectedRuntimeOwnerGraph graphAfterRemove = runtime.SelectedRuntimeOwnerGraph;
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> rosterAfterRemove =
+            executionState.SelectedRuntimeActorRoster;
+        Assert.That(graphAfterRemove, Is.Not.SameAs(graphAfterAdd));
+        Assert.That(graphAfterRemove.ContainsExactNpcOwner(added.SelectedRuntimeOwners), Is.False,
+            "The exact selected owner must leave the Core graph on unregister.");
+        Assert.That(rosterAfterRemove, Is.Not.SameAs(rosterAfterAdd));
+        Assert.That(rosterAfterRemove.Any(member => member != null
+            && member.RuntimeId == added.RuntimeId), Is.False,
+            "The actor roster must stop admitting the removed selected NPC.");
+        Assert.That(runtime.TryGetNpcRuntime(added.RuntimeId, out _), Is.False);
+        Assert.That(simulation.TryGetNpcRuntime(added.RuntimeId, out NpcRuntime retainedIdentity), Is.True);
+        Assert.That(retainedIdentity, Is.SameAs(added),
+            "P12 identity census intentionally retains the NPC identity after active-roster removal.");
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochAfterRemove, out _), Is.True);
+        Assert.That(epochAfterRemove, Is.EqualTo(epochAfterAdd + 1L));
+        AssertSelectedDailyNpcOwnerFamilies(runtime);
+
+        OwnerSectionCensusWitness[] identityAfterRemove = identityProviders
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+        Assert.That(identityAfterRemove[0].Cardinality, Is.EqualTo(identityAfterAdd[0].Cardinality));
+        Assert.That(identityAfterRemove.Select(witness => witness.Revision),
+            Is.EqualTo(identityAfterAdd.Select(witness => witness.Revision)));
+        for (int index = 0; index < identityAfterRemove.Length; index++)
+            Assert.That(identityAfterRemove[index].OwnerInstanceIdentity,
+                Is.SameAs(identityAfterAdd[index].OwnerInstanceIdentity));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure), Is.True,
+            censusFailure.ToString());
+    }
+
+    [Test]
     public void MixedDailyV1RosterBindsLegacyNpcThroughCompatibilityPath()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(

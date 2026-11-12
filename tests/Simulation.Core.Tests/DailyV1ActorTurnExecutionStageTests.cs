@@ -223,6 +223,62 @@ public sealed class DailyV1ActorTurnExecutionStageTests
     }
 
     [Test]
+    public void SelectedNpcMembershipChangePublishesAndRollsBackGraphAndRosterTogether()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners first);
+        ActorChoiceStore choices = new ActorChoiceStore(new PersonStore());
+        DailyV1ExecutionBoundaryState state = CreateActorTurnExecutionState(
+            graph, choices, new RuntimeIdAllocator(), new DeterministicRandomSource(5),
+            new SimulationRecordSequence(), new NpcDecisionStore());
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> initialRoster =
+            state.SelectedRuntimeActorRoster;
+        DailyV1NpcDefinition addedDefinition = graph.Definitions.Npcs.Values.First(
+            definition => !string.Equals(
+                definition.DefinitionId, first.Definition.DefinitionId, StringComparison.Ordinal));
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
+            "npc/selected-membership-transaction", graph.Definitions, addedDefinition, 0f,
+            out DailyV1NpcRuntimeOwners addedOwner), Is.True);
+        DailyV1ActorTurnRosterProjection addedActor =
+            new DailyV1ActorTurnRosterProjection(addedOwner.RuntimeId, null);
+
+        Assert.That(DailyV1SelectedNpcMembershipChange.TryPrepareAddition(
+            state, addedOwner, addedActor,
+            out DailyV1SelectedNpcMembershipChange preparedAddition), Is.True);
+        Assert.That(state.SelectedRuntimeOwnerGraph, Is.SameAs(graph),
+            "Preparing membership must not publish a partial owner-graph change.");
+        Assert.That(state.SelectedRuntimeActorRoster, Is.SameAs(initialRoster),
+            "Preparing membership must not publish a partial actor-roster change.");
+        Assert.That(preparedAddition.TryPublish(), Is.True);
+        DailyV1SelectedRuntimeOwnerGraph addedGraph = state.SelectedRuntimeOwnerGraph;
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> addedRoster =
+            state.SelectedRuntimeActorRoster;
+        Assert.That(addedGraph.ContainsExactNpcOwner(addedOwner), Is.True);
+        Assert.That(addedRoster.Any(member => member != null
+            && string.Equals(member.RuntimeId, addedOwner.RuntimeId, StringComparison.Ordinal)), Is.True);
+        Assert.That(state.SelectedRuntimeActorTurnCoreRoots.IsBoundToGraph(addedGraph), Is.True);
+
+        Assert.That(preparedAddition.TryRollback(), Is.True);
+        Assert.That(state.SelectedRuntimeOwnerGraph, Is.SameAs(graph));
+        Assert.That(state.SelectedRuntimeActorRoster.Select(member => member?.RuntimeId),
+            Is.EqualTo(initialRoster.Select(member => member?.RuntimeId)));
+        Assert.That(state.SelectedRuntimeActorTurnCoreRoots.IsBoundToGraph(graph), Is.True);
+
+        Assert.That(DailyV1SelectedNpcMembershipChange.TryPrepareAddition(
+            state, addedOwner, addedActor,
+            out DailyV1SelectedNpcMembershipChange committedAddition), Is.True);
+        Assert.That(committedAddition.TryPublish(), Is.True);
+        Assert.That(DailyV1SelectedNpcMembershipChange.TryPrepareRemoval(
+            state, addedOwner,
+            out DailyV1SelectedNpcMembershipChange preparedRemoval), Is.True);
+        Assert.That(preparedRemoval.TryPublish(), Is.True);
+        Assert.That(state.SelectedRuntimeOwnerGraph.ContainsExactNpcOwner(addedOwner), Is.False);
+        Assert.That(state.SelectedRuntimeActorRoster.Any(member => member != null
+            && string.Equals(member.RuntimeId, addedOwner.RuntimeId, StringComparison.Ordinal)), Is.False);
+        Assert.That(state.SelectedRuntimeActorTurnCoreRoots.IsBoundToGraph(
+            state.SelectedRuntimeOwnerGraph), Is.True);
+    }
+
+    [Test]
     public void FailedCoreMembershipReplacementPreservesGraphRosterAndActorTurnRoots()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);

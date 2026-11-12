@@ -8382,6 +8382,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         IReadOnlyList<DailyV1ActorTurnRosterProjection> selectedRosterBeforeMembership = null;
         IReadOnlyList<DailyV1ActorTurnRosterProjection> selectedRosterAfterMembership = null;
         DailyV1SelectedRuntimeOwnerGraph selectedGraphForMembership = null;
+        DailyV1SelectedNpcMembershipChange selectedMembershipChange = null;
         bool replaceSelectedOwnerGraph = false;
         if (!isComposingNpcRoster)
         {
@@ -8397,18 +8398,31 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             if (npcRuntime.UsesSelectedDailyV1Definitions)
             {
                 if (selectedGraphBeforeMembership == null
-                    || !selectedGraphBeforeMembership.TryCreateWithAddedNpc(
-                        npcRuntime.SelectedRuntimeOwners,
-                        out selectedGraphAfterMembership))
+                    || (selectedRosterBeforeMembership != null
+                        && !DailyV1SelectedNpcMembershipChange.TryPrepareAddition(
+                            dailyExecutionBoundary,
+                            npcRuntime.SelectedRuntimeOwners,
+                            new DailyV1ActorTurnRosterProjection(npcRuntime.RuntimeId, npcRuntime.PersonId),
+                            out selectedMembershipChange))
+                    || (selectedRosterBeforeMembership == null
+                        && !selectedGraphBeforeMembership.TryCreateWithAddedNpc(
+                            npcRuntime.SelectedRuntimeOwners,
+                            out selectedGraphAfterMembership)))
                 {
                     failure = WorldNpcRegistryFailure.InvalidNpc;
                     return false;
+                }
+                if (selectedMembershipChange != null)
+                {
+                    selectedGraphAfterMembership = selectedMembershipChange.ReplacementGraph;
+                    selectedRosterAfterMembership = selectedMembershipChange.ReplacementRoster;
                 }
                 replaceSelectedOwnerGraph = true;
             }
             if (selectedGraphAfterMembership != null)
                 selectedGraphForMembership = selectedGraphAfterMembership;
             if (selectedRosterBeforeMembership != null
+                && selectedMembershipChange == null
                 && !dailyExecutionBoundary.TryCreateSelectedRuntimeActorRosterWithAppendedMember(
                     new DailyV1ActorTurnRosterProjection(npcRuntime.RuntimeId, npcRuntime.PersonId),
                     selectedGraphForMembership,
@@ -8426,7 +8440,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         }
 
         bool selectedMembershipPublished = false;
-        if (selectedRosterBeforeMembership != null)
+        if (selectedMembershipChange != null)
+        {
+            selectedMembershipPublished = selectedMembershipChange.TryPublish();
+        }
+        else if (selectedRosterBeforeMembership != null)
         {
             selectedMembershipPublished = dailyExecutionBoundary.TryReplaceSelectedRuntimeMembership(
                 selectedGraphBeforeMembership,
@@ -8457,7 +8475,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         {
             if (!npcRuntime.TryBindSelectedRuntimeOwnerGraphProvider(selectedRuntimeOwnerGraphProvider))
             {
-                bool restored = selectedRosterBeforeMembership != null
+                bool restored = selectedMembershipChange != null
+                    ? selectedMembershipChange.TryRollback()
+                    : selectedRosterBeforeMembership != null
                     ? dailyExecutionBoundary.TryReplaceSelectedRuntimeMembership(
                         selectedGraphForMembership,
                         selectedGraphBeforeMembership,
@@ -8480,7 +8500,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         {
             if (boundSelectedOwnerGraphProvider)
                 npcRuntime.UnbindSelectedRuntimeOwnerGraphProvider(selectedRuntimeOwnerGraphProvider);
-            bool restored = selectedRosterBeforeMembership != null
+            bool restored = selectedMembershipChange != null
+                ? selectedMembershipChange.TryRollback()
+                : selectedRosterBeforeMembership != null
                 ? dailyExecutionBoundary.TryReplaceSelectedRuntimeMembership(
                     selectedGraphForMembership,
                     selectedGraphBeforeMembership,
@@ -8569,6 +8591,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         IReadOnlyList<DailyV1ActorTurnRosterProjection> selectedRosterBeforeMembership = null;
         IReadOnlyList<DailyV1ActorTurnRosterProjection> selectedRosterAfterMembership = null;
         DailyV1SelectedRuntimeOwnerGraph selectedGraphForMembership = null;
+        DailyV1SelectedNpcMembershipChange selectedMembershipChange = null;
         bool replaceSelectedOwnerGraph = false;
         selectedGraphBeforeMembership = SelectedRuntimeOwnerGraph;
         selectedRosterBeforeMembership = dailyExecutionBoundary.SelectedRuntimeActorRoster;
@@ -8582,17 +8605,29 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         if (npcRuntime.UsesSelectedDailyV1Definitions)
         {
             if (selectedGraphBeforeMembership == null
-                || !selectedGraphBeforeMembership.TryCreateWithoutNpc(
-                    npcRuntime.SelectedRuntimeOwners,
-                    out selectedGraphAfterMembership))
+                || (selectedRosterBeforeMembership != null
+                    && !DailyV1SelectedNpcMembershipChange.TryPrepareRemoval(
+                        dailyExecutionBoundary,
+                        npcRuntime.SelectedRuntimeOwners,
+                        out selectedMembershipChange))
+                || (selectedRosterBeforeMembership == null
+                    && !selectedGraphBeforeMembership.TryCreateWithoutNpc(
+                        npcRuntime.SelectedRuntimeOwners,
+                        out selectedGraphAfterMembership)))
             {
                 failure = WorldNpcRegistryFailure.RuntimeFaulted;
                 return false;
+            }
+            if (selectedMembershipChange != null)
+            {
+                selectedGraphAfterMembership = selectedMembershipChange.ReplacementGraph;
+                selectedRosterAfterMembership = selectedMembershipChange.ReplacementRoster;
             }
             replaceSelectedOwnerGraph = true;
             selectedGraphForMembership = selectedGraphAfterMembership;
         }
         if (selectedRosterBeforeMembership != null
+            && selectedMembershipChange == null
             && !dailyExecutionBoundary.TryCreateSelectedRuntimeActorRosterWithoutMember(
                 runtimeId,
                 selectedGraphForMembership,
@@ -8604,7 +8639,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         }
 
         bool selectedMembershipPublished = false;
-        if (selectedRosterBeforeMembership != null)
+        if (selectedMembershipChange != null)
+        {
+            selectedMembershipPublished = selectedMembershipChange.TryPublish();
+        }
+        else if (selectedRosterBeforeMembership != null)
         {
             selectedMembershipPublished = dailyExecutionBoundary.TryReplaceSelectedRuntimeMembership(
                 selectedGraphBeforeMembership,
@@ -8631,7 +8670,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         if (npcRuntime.CurrentCity != null
             && !npcRuntime.SetCurrentPresence(null, null))
         {
-            bool restored = selectedRosterBeforeMembership != null
+            bool restored = selectedMembershipChange != null
+                ? selectedMembershipChange.TryRollback()
+                : selectedRosterBeforeMembership != null
                 ? dailyExecutionBoundary.TryReplaceSelectedRuntimeMembership(
                     selectedGraphForMembership,
                     selectedGraphBeforeMembership,
