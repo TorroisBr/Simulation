@@ -991,9 +991,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     StringComparison.Ordinal))
                 return false;
 
-            boundary = new SelectedCrimeActionBoundaryAdapter(
-                this, runtime, exactActor, graph.JusticeRecordsOwner);
-            return true;
+            SelectedCrimeActionBoundaryAdapter hostProjection =
+                new SelectedCrimeActionBoundaryAdapter(
+                    this, runtime, exactActor, graph.JusticeRecordsOwner);
+            if (runtime.runtimeAdmissionContext == null)
+            {
+                boundary = hostProjection;
+                return true;
+            }
+
+            return DailyV1SelectedCrimeActionExecutionStage
+                .DailyV1CoreSelectedCrimeActionBoundary.TryCreate(
+                    runtime.ExecutionBoundaryState,
+                    graph,
+                    actor,
+                    action,
+                    hostProjection,
+                    new SelectedDailyV1ExecutionBoundary(runtime),
+                    out boundary);
         }
 
         public bool TryGetMarketBoundaries(
