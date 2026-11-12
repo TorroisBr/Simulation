@@ -487,10 +487,8 @@ internal static class DailyV1SelectedActionExecutionStage
         bool ExecuteWithinOperation(Func<bool> operation);
     }
 
-    internal interface ISelectedGuardArrestActionBoundary : ISelectedNpcOwnerMutationBoundary
+    internal interface ISelectedGuardArrestActionProjectionBoundary : ISelectedNpcOwnerMutationBoundary
     {
-        DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
-        bool ExecuteWithinOperation(Func<bool> operation);
         bool TryPrepareSentenceProjection(
             DailyV1NpcRuntimeOwners target,
             DailyV1CityRuntimeOwners city,
@@ -503,6 +501,13 @@ internal static class DailyV1SelectedActionExecutionStage
             DailyV1NpcRuntimeOwners target,
             DailyV1CityRuntimeOwners city,
             string originDecisionId);
+    }
+
+    internal interface ISelectedGuardArrestActionBoundary
+        : ISelectedGuardArrestActionProjectionBoundary
+    {
+        DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
+        bool ExecuteWithinOperation(Func<bool> operation);
     }
 
     internal sealed class SelectedGuardArrestActionResult

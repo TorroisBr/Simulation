@@ -278,6 +278,94 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
     }
 
     [Test]
+    public void CoreGuardArrestBoundaryOwnsExactParticipantsAndJusticeReceiptScope()
+    {
+        CoreGuardBoundaryFixture fixture = CreateCoreGuardBoundaryFixture();
+        bool operationRan = false;
+
+        Assert.That(fixture.Boundary.ExecuteWithinOperation(() =>
+        {
+            operationRan = true;
+            Assert.That(fixture.Coordinator.CanBeginDailyMutation(), Is.False,
+                "The Core P12 operation remains active across all selected Guard Arrest owner writes.");
+            Assert.That(fixture.Boundary.JusticeRecordsOwner,
+                Is.SameAs(fixture.Graph.JusticeRecordsOwner));
+            Assert.That(fixture.Boundary.CanProjectStatusChanges(
+                fixture.Guard, Array.Empty<DailyV1StatusDefinition>()), Is.True);
+            Assert.That(fixture.Boundary.CanProjectStatusChanges(
+                fixture.Target, Array.Empty<DailyV1StatusDefinition>()), Is.True);
+            Assert.That(fixture.Boundary.CanProjectStatusChanges(
+                fixture.Graph.Npcs[2], Array.Empty<DailyV1StatusDefinition>()), Is.False,
+                "An unrelated owner in the same graph is outside this exact Guard Arrest operation.");
+            return true;
+        }), Is.True);
+
+        Assert.That(operationRan, Is.True);
+        Assert.That(fixture.Coordinator.CanBeginDailyMutation(), Is.True);
+        Assert.That(fixture.Protocol.ValidatedSections, Is.EqualTo(new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract
+                .NpcStatusCrimeSectionIdFor(fixture.Guard.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract
+                .NpcStatusCrimeSectionIdFor(fixture.Target.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId
+        }));
+        Assert.That(fixture.Protocol.Faulted, Is.False);
+        Assert.That(fixture.HostPort.BindingRequests, Is.GreaterThan(1),
+            "Core rechecks the host census binding at the exact operation boundary.");
+    }
+
+    [Test]
+    public void CoreGuardArrestBoundaryRejectsReplacedHostBindingBeforeOpeningP12Scope()
+    {
+        CoreGuardBoundaryFixture fixture = CreateCoreGuardBoundaryFixture();
+        RecordingP12Protocol replacementProtocol = new RecordingP12Protocol();
+        object replacementCrimeIdentity = new object();
+        object replacementJusticeIdentity = new object();
+        fixture.HostPort.Binding = new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+            replacementProtocol,
+            replacementCrimeIdentity, replacementCrimeIdentity, fixture.Graph.JusticeRecordsOwner,
+            replacementJusticeIdentity, replacementJusticeIdentity, fixture.Graph.JusticeRecordsOwner,
+            admissionEnabled: true);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            fixture.Boundary.ExecuteWithinOperation(() =>
+            {
+                Assert.Fail("A replaced host binding must not enter the selected Guard Arrest operation.");
+                return true;
+            }));
+        Assert.That(fixture.Protocol.ValidatedSections, Is.Null);
+        Assert.That(fixture.Protocol.Faulted, Is.True);
+        Assert.That(replacementProtocol.Faulted, Is.True);
+    }
+
+    [Test]
+    public void CoreGuardArrestBoundaryRejectsStaleActionBeforeOpeningP12Scope()
+    {
+        CoreGuardBoundaryFixture fixture = CreateCoreGuardBoundaryFixture();
+        DailyV1ActionDefinition replacementAction = ActionOfType(
+            fixture.Guard.Definitions, DailyV1NpcDefinitionRules.HideActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            fixture.Guard.Definitions, replacementAction, null, null, null,
+            0, 0f, 1f, NpcTravelReason.None, 0f, null, null, null, null,
+            out DailyV1NpcActionPayloadOwner replacementPayload), Is.True);
+        Assert.That(fixture.Graph.TryCommitCurrentActionSlot(
+            fixture.Guard, replacementAction, replacementPayload, null), Is.True);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            fixture.Boundary.ExecuteWithinOperation(() =>
+            {
+                Assert.Fail("A replaced Guard action must not enter its P12 operation.");
+                return true;
+            }));
+        Assert.That(fixture.Protocol.ValidatedSections, Is.Null,
+            "A stale Guard action is rejected before census baselines are queried.");
+        Assert.That(fixture.Protocol.Faulted, Is.True);
+    }
+
+    [Test]
     public void SelectedHideUsesCoreWarrantAndKeepsHiddenTimerAndStatusWritesSeparate()
     {
         CrimeFixture fixture = CreateFixture();
@@ -554,6 +642,54 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             graph, actor, destination, protocol, hostPort, projection, boundary, coordinator);
     }
 
+    private static CoreGuardBoundaryFixture CreateCoreGuardBoundaryFixture()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition,
+                out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        Assert.That(graph.Npcs.Count, Is.GreaterThanOrEqualTo(3));
+        DailyV1NpcRuntimeOwners guard = graph.Npcs[0];
+        DailyV1NpcRuntimeOwners target = graph.Npcs[1];
+        DailyV1ActionDefinition action = ActionOfType(definitions,
+            DailyV1NpcDefinitionRules.ArrestActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, action, target.RuntimeId, null, null,
+            0, 0f, 1f, NpcTravelReason.None, 0f,
+            "decision/guard-arrest", null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(guard, action, payload, null), Is.True);
+
+        RecordingP12Protocol protocol = new RecordingP12Protocol();
+        object crimeIdentity = new object();
+        object justiceIdentity = new object();
+        DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding =
+            new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+                protocol,
+                crimeIdentity, crimeIdentity, graph.JusticeRecordsOwner,
+                justiceIdentity, justiceIdentity, graph.JusticeRecordsOwner,
+                admissionEnabled: true);
+        RecordingCrimeMutationHostPort hostPort =
+            new RecordingCrimeMutationHostPort(hostBinding);
+        RecordingGuardProjection projection = new RecordingGuardProjection();
+        Assert.That(DailyV1SelectedCrimeActionExecutionStage
+            .DailyV1CoreSelectedGuardArrestActionBoundary.TryCreate(
+                composition.ExecutionBoundaryState, graph, guard, action, target,
+                projection, hostPort,
+                out DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary boundary), Is.True);
+        Assert.That(composition.ExecutionBoundaryState
+            .TryBindSelectedP12CrimeJusticeMutationProtocol(
+                protocol, graph,
+                out DailyV1P12CrimeJusticeMutationCoordinator coordinator), Is.True);
+        return new CoreGuardBoundaryFixture(
+            graph, guard, target, protocol, hostPort, boundary, coordinator);
+    }
+
     private sealed class CoreFleeBoundaryFixture
     {
         internal DailyV1SelectedRuntimeOwnerGraph Graph { get; }
@@ -581,6 +717,35 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             Protocol = protocol;
             HostPort = hostPort;
             Projection = projection;
+            Boundary = boundary;
+            Coordinator = coordinator;
+        }
+    }
+
+    private sealed class CoreGuardBoundaryFixture
+    {
+        internal DailyV1SelectedRuntimeOwnerGraph Graph { get; }
+        internal DailyV1NpcRuntimeOwners Guard { get; }
+        internal DailyV1NpcRuntimeOwners Target { get; }
+        internal RecordingP12Protocol Protocol { get; }
+        internal RecordingCrimeMutationHostPort HostPort { get; }
+        internal DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary Boundary { get; }
+        internal DailyV1P12CrimeJusticeMutationCoordinator Coordinator { get; }
+
+        internal CoreGuardBoundaryFixture(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners guard,
+            DailyV1NpcRuntimeOwners target,
+            RecordingP12Protocol protocol,
+            RecordingCrimeMutationHostPort hostPort,
+            DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary boundary,
+            DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+        {
+            Graph = graph;
+            Guard = guard;
+            Target = target;
+            Protocol = protocol;
+            HostPort = hostPort;
             Boundary = boundary;
             Coordinator = coordinator;
         }
@@ -901,6 +1066,31 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             DailyV1CityRuntimeOwners destination,
             float travelCost,
             string originDecisionId) => PublicationCalls++;
+    }
+
+    private sealed class RecordingGuardProjection
+        : DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionProjectionBoundary
+    {
+        public bool CanProjectStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => owner != null;
+        public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner) { }
+        public void NotifyStatusMutationCommitted(
+            DailyV1NpcRuntimeOwners owner, DailyV1StatusDefinition status, bool added) { }
+        public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner) { }
+        public bool TryPrepareSentenceProjection(
+            DailyV1NpcRuntimeOwners target,
+            DailyV1CityRuntimeOwners city,
+            DailyV1JusticeWantedRecordOwner warrant,
+            DailyV1JusticeSentenceOwner sentence) =>
+            target != null && city != null && warrant != null && sentence != null;
+        public void DiscardPreparedSentenceProjection(DailyV1JusticeSentenceOwner sentence) { }
+        public bool CommitPreparedSentenceProjection(DailyV1JusticeSentenceOwner sentence) => sentence != null;
+        public void PublishArrest(
+            DailyV1NpcRuntimeOwners guard,
+            DailyV1NpcRuntimeOwners target,
+            DailyV1CityRuntimeOwners city,
+            string originDecisionId) { }
     }
 
     private sealed class RecordingP12Protocol : IDailyV1P12CrimeJusticeMutationProtocol

@@ -819,9 +819,25 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 || !ReferenceEquals(exactTarget, actionRuntime.TargetNpc))
                 return false;
 
-            boundary = new SelectedGuardArrestActionBoundaryAdapter(
-                this, runtime, exactGuard, exactTarget, graph.JusticeRecordsOwner);
-            return true;
+            SelectedGuardArrestActionBoundaryAdapter hostProjection =
+                new SelectedGuardArrestActionBoundaryAdapter(
+                    this, runtime, exactGuard, exactTarget, graph.JusticeRecordsOwner);
+            if (runtime.runtimeAdmissionContext == null)
+            {
+                boundary = hostProjection;
+                return true;
+            }
+
+            return DailyV1SelectedCrimeActionExecutionStage
+                .DailyV1CoreSelectedGuardArrestActionBoundary.TryCreate(
+                    runtime.ExecutionBoundaryState,
+                    graph,
+                    actor,
+                    action,
+                    exactTarget?.SelectedRuntimeOwners,
+                    hostProjection,
+                    new SelectedDailyV1ExecutionBoundary(runtime),
+                    out boundary);
         }
 
         public bool TryGetStealActionBoundary(
