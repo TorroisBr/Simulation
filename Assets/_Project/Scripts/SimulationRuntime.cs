@@ -884,10 +884,27 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     out _))
                 return false;
 
-            boundary = new SelectedStealActionBoundaryAdapter(
-                this, runtime, exactActor, exactTarget, exactCity,
-                graph.JusticeRecordsOwner, socialWorld);
-            return true;
+            SelectedStealActionBoundaryAdapter hostProjection =
+                new SelectedStealActionBoundaryAdapter(
+                    this, runtime, exactActor, exactTarget, exactCity,
+                    graph.JusticeRecordsOwner, socialWorld);
+            if (runtime.runtimeAdmissionContext == null)
+            {
+                boundary = hostProjection;
+                return true;
+            }
+
+            return DailyV1SelectedCrimeActionExecutionStage
+                .DailyV1CoreSelectedStealActionBoundary.TryCreate(
+                    runtime.ExecutionBoundaryState,
+                    graph,
+                    actor,
+                    targetOwner,
+                    exactCity,
+                    action,
+                    hostProjection,
+                    new SelectedDailyV1ExecutionBoundary(runtime),
+                    out boundary);
         }
 
         public bool TryGetCrimeActionBoundary(

@@ -683,6 +683,344 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
         }
     }
 
+    internal static class DailyV1CoreSelectedStealActionBoundary
+    {
+        internal static bool TryCreate(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners perpetrator,
+            DailyV1NpcRuntimeOwners victim,
+            DailyV1CityRuntimeOwners city,
+            DailyV1ActionDefinition expectedAction,
+            DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary hostProjection,
+            IDailyV1SelectedCrimeJusticeDailyMutationHostPort hostBindingPort,
+            out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary boundary)
+        {
+            boundary = null;
+            if (executionState == null || graph == null || perpetrator == null
+                || victim == null || city == null || expectedAction == null
+                || hostProjection == null || hostBindingPort == null
+                || !executionState.HasAdmittedSelectedDailyExecution
+                || executionState.AdmissionContext == null
+                || !executionState.AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                || !IsExactNpc(graph, perpetrator)
+                || !IsExactNpc(graph, victim)
+                || !graph.ContainsExactCityOwner(city)
+                || !ReferenceEquals(city.Definitions, graph.Definitions)
+                || !ReferenceEquals(perpetrator.ActionSlot?.CurrentAction, expectedAction)
+                || !ReferenceEquals(perpetrator.ActionSlot?.CurrentPayload?.Action, expectedAction)
+                || expectedAction.Values.actionType?.Value
+                    != DailyV1NpcDefinitionRules.StealActionTypeValue
+                || !string.Equals(perpetrator.Travel?.CurrentCityRuntimeId,
+                    city.RuntimeId, StringComparison.Ordinal)
+                || !ReferenceEquals(hostProjection.JusticeRecordsOwner, graph.JusticeRecordsOwner))
+                return false;
+
+            DailyV1NpcActionPayloadOwner expectedPayload = perpetrator.ActionSlot.CurrentPayload;
+            if (expectedPayload == null
+                || string.IsNullOrWhiteSpace(expectedPayload.TargetNpcRuntimeId)
+                || !string.Equals(expectedPayload.TargetNpcRuntimeId,
+                    victim.RuntimeId, StringComparison.Ordinal)
+                || expectedPayload.TargetItem != null
+                || expectedPayload.TargetCityRuntimeId != null)
+                return false;
+
+            if (!hostBindingPort.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostCandidate)
+                || hostCandidate == null || !hostCandidate.AdmissionEnabled
+                || hostCandidate.JusticeOwnerIdentity == null
+                || hostCandidate.CrimeOwnerIdentity == null
+                || !ReferenceEquals(hostCandidate.JusticeRecordsOwner, graph.JusticeRecordsOwner)
+                || !executionState.TryBindSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, hostCandidate)
+                || !executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding)
+                || !hostBinding.HasSameSessionBinding(hostCandidate)
+                || !executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    hostBinding.Protocol, graph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+                || coordinator == null)
+            {
+                executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+                return false;
+            }
+
+            boundary = new CoreStealBoundary(
+                executionState, graph, perpetrator, victim, city,
+                expectedAction, expectedPayload, hostBinding, coordinator,
+                hostProjection, hostBindingPort,
+                hostProjection.SocialAppraisalWorldState,
+                hostProjection.TheftOutcomeSink);
+            return true;
+        }
+
+        private sealed class CoreStealBoundary
+            : DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary
+        {
+            private readonly DailyV1ExecutionBoundaryState executionState;
+            private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+            private readonly DailyV1NpcRuntimeOwners perpetrator;
+            private readonly DailyV1NpcRuntimeOwners victim;
+            private readonly DailyV1CityRuntimeOwners city;
+            private readonly DailyV1ActionDefinition expectedAction;
+            private readonly DailyV1NpcActionPayloadOwner expectedPayload;
+            private readonly DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding;
+            private readonly DailyV1P12CrimeJusticeMutationCoordinator coordinator;
+            private readonly DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary hostProjection;
+            private readonly IDailyV1SelectedCrimeJusticeDailyMutationHostPort hostBindingPort;
+            private readonly CrimeSocialAppraisalWorldState socialWorld;
+            private readonly ITheftOutcomeSink theftOutcomeSink;
+
+            internal CoreStealBoundary(
+                DailyV1ExecutionBoundaryState executionState,
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                DailyV1NpcRuntimeOwners perpetrator,
+                DailyV1NpcRuntimeOwners victim,
+                DailyV1CityRuntimeOwners city,
+                DailyV1ActionDefinition expectedAction,
+                DailyV1NpcActionPayloadOwner expectedPayload,
+                DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding,
+                DailyV1P12CrimeJusticeMutationCoordinator coordinator,
+                DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary hostProjection,
+                IDailyV1SelectedCrimeJusticeDailyMutationHostPort hostBindingPort,
+                CrimeSocialAppraisalWorldState socialWorld,
+                ITheftOutcomeSink theftOutcomeSink)
+            {
+                this.executionState = executionState;
+                this.graph = graph;
+                this.perpetrator = perpetrator;
+                this.victim = victim;
+                this.city = city;
+                this.expectedAction = expectedAction;
+                this.expectedPayload = expectedPayload;
+                this.hostBinding = hostBinding;
+                this.coordinator = coordinator;
+                this.hostProjection = hostProjection;
+                this.hostBindingPort = hostBindingPort;
+                this.socialWorld = socialWorld;
+                this.theftOutcomeSink = theftOutcomeSink;
+            }
+
+            public CrimeSocialAppraisalWorldState SocialAppraisalWorldState => socialWorld;
+            public ITheftOutcomeSink TheftOutcomeSink => theftOutcomeSink;
+            public DailyV1JusticeRecordsOwner JusticeRecordsOwner => graph.JusticeRecordsOwner;
+
+            public bool ExecuteWithinOperation(Func<bool> operation)
+            {
+                if (operation == null) throw new ArgumentNullException(nameof(operation));
+                if (!IsCurrentSession())
+                {
+                    coordinator.FaultSelected(executionState);
+                    throw new InvalidOperationException(
+                        "The selected Steal action lost its exact admitted Core session.");
+                }
+
+                if (!coordinator.TryBeginSelectedStealMutation(
+                        graph, perpetrator, victim, hostBinding.JusticeOwnerIdentity,
+                        includeCrimeReceiptSection: hostBinding.CrimeOwnerIdentity != null,
+                        out IDisposable scope)
+                    || scope == null)
+                    throw new InvalidOperationException(
+                        "P12 Core could not admit the selected Steal participants and receipt sections.");
+
+                using (scope) return operation();
+            }
+
+            public EconomyTransactionResult ExecuteMoneyTransferWithinOperation(
+                DailyV1NpcRuntimeOwners source,
+                DailyV1NpcRuntimeOwners destination,
+                Func<EconomyTransactionResult> operation)
+            {
+                if (operation == null || !IsExactParticipant(source)
+                    || !IsExactParticipant(destination)
+                    || ReferenceEquals(source, destination))
+                {
+                    if (!IsCurrentSession()) coordinator.FaultSelected(executionState);
+                    return EconomyTransactionResult.CreateFailure(
+                        EconomyTransactionType.MoneyTransfer,
+                        MoneyEffect.Transfer,
+                        EconomyTransactionFailureReason.InvalidInput,
+                        source?.RuntimeId,
+                        destination?.RuntimeId);
+                }
+
+                if (!IsCurrentSession())
+                {
+                    coordinator.FaultSelected(executionState);
+                    return EconomyTransactionResult.CreateFailure(
+                        EconomyTransactionType.MoneyTransfer,
+                        MoneyEffect.Transfer,
+                        EconomyTransactionFailureReason.TransactionCommitFailed,
+                        source.RuntimeId,
+                        destination.RuntimeId);
+                }
+
+                return hostProjection.ExecuteMoneyTransferWithinOperation(
+                    source, destination, operation);
+            }
+
+            public bool CanProjectStatusChanges(
+                DailyV1NpcRuntimeOwners owner,
+                System.Collections.Generic.IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
+                IsExactPerpetrator(owner) && IsCurrentSession()
+                && hostProjection.CanProjectStatusChanges(owner, statusToAdd);
+
+            public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner)
+            {
+                if (!IsExactPerpetrator(owner) || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected Steal status owner is outside its exact admitted Core operation.");
+                hostProjection.EnsureMutationAllowed(owner);
+            }
+
+            public void NotifyStatusMutationCommitted(
+                DailyV1NpcRuntimeOwners owner,
+                DailyV1StatusDefinition status,
+                bool added)
+            {
+                if (!IsExactPerpetrator(owner) || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected Steal status owner changed outside its exact Core operation.");
+                hostProjection.NotifyStatusMutationCommitted(owner, status, added);
+            }
+
+            public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
+            {
+                if (!IsExactPerpetrator(owner) || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected Steal hidden-state owner changed outside its exact Core operation.");
+                hostProjection.NotifyHiddenMutationCommitted(owner);
+            }
+
+            public bool TryProjectWantedRecord(
+                DailyV1NpcRuntimeOwners target,
+                DailyV1CityRuntimeOwners candidateCity,
+                DailyV1JusticeWantedRecordOwner record) =>
+                IsExactWarrantTargetAndCity(target, candidateCity, record)
+                && IsCurrentSession()
+                && graph.JusticeRecordsOwner.ContainsWantedRecord(record)
+                && hostProjection.TryProjectWantedRecord(target, candidateCity, record);
+
+            public bool TryPrepareWantedRecordProjection(
+                DailyV1NpcRuntimeOwners target,
+                DailyV1CityRuntimeOwners candidateCity,
+                DailyV1JusticeWantedRecordOwner record) =>
+                IsExactWarrantTargetAndCity(target, candidateCity, record)
+                && IsCurrentSession()
+                && hostProjection.TryPrepareWantedRecordProjection(target, candidateCity, record);
+
+            public void DiscardPreparedWantedRecordProjection(
+                DailyV1JusticeWantedRecordOwner record)
+            {
+                if (!IsExactWarrant(record) || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The prepared Steal warrant left its exact Core session.");
+                hostProjection.DiscardPreparedWantedRecordProjection(record);
+            }
+
+            public void PublishTheft(
+                DailyV1NpcRuntimeOwners candidatePerpetrator,
+                DailyV1NpcRuntimeOwners candidateVictim,
+                int amount)
+            {
+                if (!ReferenceEquals(candidatePerpetrator, perpetrator)
+                    || !ReferenceEquals(candidateVictim, victim)
+                    || !IsExactParticipant(candidatePerpetrator)
+                    || !IsExactParticipant(candidateVictim)
+                    || amount <= 0 || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected Steal result left its exact Core participants.");
+                hostProjection.PublishTheft(candidatePerpetrator, candidateVictim, amount);
+            }
+
+            public void LogCompensationFailure()
+            {
+                if (!IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected Steal compensation left its exact Core session.");
+                hostProjection.LogCompensationFailure();
+            }
+
+            public void PublishWantedRecord(
+                DailyV1NpcRuntimeOwners target,
+                DailyV1CityRuntimeOwners candidateCity,
+                DailyV1JusticeWantedRecordOwner record)
+            {
+                if (!IsExactWarrantTargetAndCity(target, candidateCity, record)
+                    || !graph.JusticeRecordsOwner.ContainsWantedRecord(record)
+                    || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The committed Steal warrant left its exact Core owner graph.");
+                hostProjection.PublishWantedRecord(target, candidateCity, record);
+            }
+
+            private bool IsExactWarrantTargetAndCity(
+                DailyV1NpcRuntimeOwners target,
+                DailyV1CityRuntimeOwners candidateCity,
+                DailyV1JusticeWantedRecordOwner record) =>
+                IsExactPerpetrator(target)
+                && ReferenceEquals(candidateCity, city)
+                && graph.ContainsExactCityOwner(candidateCity)
+                && ReferenceEquals(candidateCity.Definitions, graph.Definitions)
+                && IsExactWarrant(record);
+
+            private bool IsExactWarrant(DailyV1JusticeWantedRecordOwner record) =>
+                record != null
+                && string.Equals(record.TargetRuntimeId, perpetrator.RuntimeId,
+                    StringComparison.Ordinal)
+                && string.Equals(record.CityRuntimeId, city.RuntimeId,
+                    StringComparison.Ordinal);
+
+            private bool IsExactParticipant(DailyV1NpcRuntimeOwners owner) =>
+                (ReferenceEquals(owner, perpetrator) || ReferenceEquals(owner, victim))
+                && IsExactNpc(graph, owner);
+
+            private bool IsExactPerpetrator(DailyV1NpcRuntimeOwners owner) =>
+                ReferenceEquals(owner, perpetrator) && IsExactNpc(graph, owner);
+
+            private bool IsCurrentSession() =>
+                executionState.HasAdmittedSelectedDailyExecution
+                && executionState.AdmissionContext != null
+                && executionState.AdmissionContext.IsOwnedByCurrentThread()
+                && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                && IsExactNpc(graph, perpetrator)
+                && IsExactNpc(graph, victim)
+                && graph.ContainsExactCityOwner(city)
+                && ReferenceEquals(city.Definitions, graph.Definitions)
+                && ReferenceEquals(perpetrator.ActionSlot?.CurrentAction, expectedAction)
+                && ReferenceEquals(perpetrator.ActionSlot?.CurrentPayload, expectedPayload)
+                && ReferenceEquals(expectedPayload?.Action, expectedAction)
+                && string.Equals(expectedPayload.TargetNpcRuntimeId,
+                    victim.RuntimeId, StringComparison.Ordinal)
+                && string.Equals(perpetrator.Travel?.CurrentCityRuntimeId,
+                    city.RuntimeId, StringComparison.Ordinal)
+                && ReferenceEquals(hostProjection.JusticeRecordsOwner, graph.JusticeRecordsOwner)
+                && ReferenceEquals(hostProjection.SocialAppraisalWorldState, socialWorld)
+                && ReferenceEquals(hostProjection.TheftOutcomeSink, theftOutcomeSink)
+                && hostBindingPort.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding currentCandidate)
+                && currentCandidate != null
+                && executionState.TryBindSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, currentCandidate)
+                && executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding currentBinding)
+                && ReferenceEquals(currentBinding, hostBinding)
+                && currentBinding.HasSameSessionBinding(currentCandidate)
+                && executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    hostBinding.Protocol, graph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator currentCoordinator)
+                && ReferenceEquals(currentCoordinator, coordinator);
+        }
+
+        private static bool IsExactNpc(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners owner) =>
+            graph != null && owner != null
+            && graph.ContainsExactNpcOwner(owner)
+            && ReferenceEquals(owner.Definitions, graph.Definitions);
+    }
+
     internal sealed class Result
     {
         internal bool ActionRollSucceeded { get; }

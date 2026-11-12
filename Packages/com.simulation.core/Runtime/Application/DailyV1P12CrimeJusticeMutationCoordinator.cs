@@ -477,6 +477,62 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
     }
 
     /// <summary>
+    /// Builds the existing selected Steal Crime/Justice action scope from its
+    /// exact Core participants. Core derives participant, Justice, and receipt
+    /// section identities; money-transfer and Crime/Social scopes remain their
+    /// existing separate operations.
+    /// </summary>
+    internal bool TryBeginSelectedStealMutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners perpetrator,
+        DailyV1NpcRuntimeOwners victim,
+        object justiceCensusOwnerIdentity,
+        bool includeCrimeReceiptSection,
+        out IDisposable scope)
+    {
+        scope = null;
+        if (!isAdmissionEnabled()) return true;
+
+        if (graph == null || graph.Definitions == null || perpetrator == null
+            || victim == null || justiceCensusOwnerIdentity == null
+            || !graph.ContainsExactNpcOwner(perpetrator)
+            || !ReferenceEquals(perpetrator.Definitions, graph.Definitions)
+            || !graph.ContainsExactNpcOwner(victim)
+            || !ReferenceEquals(victim.Definitions, graph.Definitions)
+            || graph.JusticeRecordsOwner == null)
+        {
+            faultAdmission();
+            return false;
+        }
+
+        List<DailyV1P12CrimeJusticeOwnerBinding> owners =
+            new List<DailyV1P12CrimeJusticeOwnerBinding>(3);
+        List<string> sections = new List<string>(5);
+        HashSet<DailyV1NpcRuntimeOwners> uniqueNpcs =
+            new HashSet<DailyV1NpcRuntimeOwners>(ReferenceIdentityComparer.Instance);
+
+        foreach (DailyV1NpcRuntimeOwners npc in new[] { perpetrator, victim })
+        {
+            if (!uniqueNpcs.Add(npc)) continue;
+            DailyV1P12CrimeJusticeOwnerBinding binding =
+                DailyV1P12CrimeJusticeOwnerBinding.ForNpcStatusOwner(npc);
+            owners.Add(binding);
+            sections.Add(binding.SectionId);
+        }
+
+        DailyV1P12CrimeJusticeOwnerBinding justiceBinding =
+            DailyV1P12CrimeJusticeOwnerBinding.ForJusticeRecordsOwner(
+                justiceCensusOwnerIdentity, graph.JusticeRecordsOwner);
+        owners.Add(justiceBinding);
+        sections.Add(justiceBinding.SectionId);
+        sections.Add(DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+        if (includeCrimeReceiptSection)
+            sections.Add(DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId);
+
+        return TryBeginImmediateMutation(owners, sections, out scope);
+    }
+
+    /// <summary>
     /// Builds an ordinary selected Crime action's Justice/receipt operation
     /// from the exact Core actor and the already-pinned host Justice census
     /// identity. Core derives every owner binding and section; the host does

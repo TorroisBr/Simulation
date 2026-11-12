@@ -366,6 +366,104 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
     }
 
     [Test]
+    public void CoreStealBoundaryOwnsExactParticipantsAndJusticeReceiptScope()
+    {
+        CoreStealBoundaryFixture fixture = CreateCoreStealBoundaryFixture();
+        bool operationRan = false;
+
+        Assert.That(fixture.Boundary.ExecuteWithinOperation(() =>
+        {
+            operationRan = true;
+            Assert.That(fixture.Coordinator.CanBeginDailyMutation(), Is.False,
+                "The Core P12 operation remains active while the selected Steal writes its owners.");
+            Assert.That(fixture.Boundary.JusticeRecordsOwner,
+                Is.SameAs(fixture.Graph.JusticeRecordsOwner));
+            Assert.That(fixture.Boundary.CanProjectStatusChanges(
+                fixture.Perpetrator, Array.Empty<DailyV1StatusDefinition>()), Is.True);
+            Assert.That(fixture.Boundary.CanProjectStatusChanges(
+                fixture.Victim, Array.Empty<DailyV1StatusDefinition>()), Is.False,
+                "The victim participates in admission but is not the selected status writer.");
+            Assert.That(fixture.Boundary.CanProjectStatusChanges(
+                fixture.Unrelated, Array.Empty<DailyV1StatusDefinition>()), Is.False,
+                "An unrelated graph owner is outside this exact Steal operation.");
+
+            EconomyTransactionResult nested = fixture.Boundary.ExecuteMoneyTransferWithinOperation(
+                fixture.Perpetrator, fixture.Victim, () => null);
+            Assert.That(nested, Is.Null);
+            return true;
+        }), Is.True);
+
+        Assert.That(operationRan, Is.True);
+        Assert.That(fixture.Coordinator.CanBeginDailyMutation(), Is.True);
+        Assert.That(fixture.Protocol.ValidatedSections, Is.EqualTo(new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract
+                .NpcStatusCrimeSectionIdFor(fixture.Perpetrator.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract
+                .NpcStatusCrimeSectionIdFor(fixture.Victim.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId
+        }));
+        Assert.That(fixture.Protocol.Faulted, Is.False);
+        Assert.That(fixture.HostPort.BindingRequests, Is.GreaterThan(1),
+            "Core rechecks the exact host census binding at the operation boundary.");
+        Assert.That(fixture.Projection.LegacyOperationCalls, Is.Zero,
+            "The admitted path opens the mutation scope through Core.");
+        Assert.That(fixture.Projection.TransferCalls, Is.EqualTo(1));
+        Assert.That(fixture.Projection.TransferSource, Is.SameAs(fixture.Perpetrator));
+        Assert.That(fixture.Projection.TransferDestination, Is.SameAs(fixture.Victim));
+    }
+
+    [Test]
+    public void CoreStealBoundaryRejectsReplacedHostBindingBeforeOpeningP12Scope()
+    {
+        CoreStealBoundaryFixture fixture = CreateCoreStealBoundaryFixture();
+        RecordingP12Protocol replacementProtocol = new RecordingP12Protocol();
+        object replacementCrimeIdentity = new object();
+        object replacementJusticeIdentity = new object();
+        fixture.HostPort.Binding = new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+            replacementProtocol,
+            replacementCrimeIdentity, replacementCrimeIdentity, fixture.Graph.JusticeRecordsOwner,
+            replacementJusticeIdentity, replacementJusticeIdentity, fixture.Graph.JusticeRecordsOwner,
+            admissionEnabled: true);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            fixture.Boundary.ExecuteWithinOperation(() =>
+            {
+                Assert.Fail("A replaced host binding must not enter the selected Steal operation.");
+                return true;
+            }));
+        Assert.That(fixture.Protocol.ValidatedSections, Is.Null);
+        Assert.That(fixture.Protocol.Faulted, Is.True);
+        Assert.That(replacementProtocol.Faulted, Is.True);
+    }
+
+    [Test]
+    public void CoreStealBoundaryRejectsStaleActionBeforeOpeningP12Scope()
+    {
+        CoreStealBoundaryFixture fixture = CreateCoreStealBoundaryFixture();
+        DailyV1ActionDefinition replacementAction = ActionOfType(
+            fixture.Perpetrator.Definitions, DailyV1NpcDefinitionRules.HideActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            fixture.Perpetrator.Definitions, replacementAction, null, null, null,
+            0, 0f, 1f, NpcTravelReason.None, 0f, null, null, null, null,
+            out DailyV1NpcActionPayloadOwner replacementPayload), Is.True);
+        Assert.That(fixture.Graph.TryCommitCurrentActionSlot(
+            fixture.Perpetrator, replacementAction, replacementPayload, null), Is.True);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            fixture.Boundary.ExecuteWithinOperation(() =>
+            {
+                Assert.Fail("A replaced Steal action must not enter its P12 operation.");
+                return true;
+            }));
+        Assert.That(fixture.Protocol.ValidatedSections, Is.Null,
+            "A stale action is rejected before the P12 census baseline is queried.");
+        Assert.That(fixture.Protocol.Faulted, Is.True);
+    }
+
+    [Test]
     public void SelectedHideUsesCoreWarrantAndKeepsHiddenTimerAndStatusWritesSeparate()
     {
         CrimeFixture fixture = CreateFixture();
@@ -690,6 +788,78 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             graph, guard, target, protocol, hostPort, boundary, coordinator);
     }
 
+    private static CoreStealBoundaryFixture CreateCoreStealBoundaryFixture()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition,
+                out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners perpetrator = graph.Npcs[0];
+        string cityRuntimeId = perpetrator.Travel.CurrentCityRuntimeId;
+        DailyV1CityRuntimeOwners city = graph.Cities.FirstOrDefault(
+            candidate => string.Equals(candidate.RuntimeId, cityRuntimeId, StringComparison.Ordinal));
+        Assert.That(city, Is.Not.Null);
+        DailyV1NpcRuntimeOwners victim = graph.Npcs.FirstOrDefault(candidate =>
+            !ReferenceEquals(candidate, perpetrator)
+            && string.Equals(candidate.Travel?.CurrentCityRuntimeId,
+                cityRuntimeId, StringComparison.Ordinal));
+        Assert.That(victim, Is.Not.Null,
+            "The selected fixture must contain an exact co-located victim owner.");
+
+        DailyV1ActionDefinition action = ActionOfType(definitions,
+            DailyV1NpcDefinitionRules.StealActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, action, victim.RuntimeId, null, null, 17, 1f, 1f,
+            NpcTravelReason.None, 0f, "decision/core-steal", "theft/core-boundary",
+            null, null, out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(perpetrator, action, payload, null), Is.True);
+
+        RecordingP12Protocol protocol = new RecordingP12Protocol();
+        object crimeIdentity = new object();
+        object justiceIdentity = new object();
+        DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding =
+            new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+                protocol,
+                crimeIdentity, crimeIdentity, graph.JusticeRecordsOwner,
+                justiceIdentity, justiceIdentity, graph.JusticeRecordsOwner,
+                admissionEnabled: true);
+        RecordingCrimeMutationHostPort hostPort =
+            new RecordingCrimeMutationHostPort(hostBinding);
+        PersonStore persons = new PersonStore();
+        PersonId perpetratorPersonId = new PersonId("person/core-steal-perpetrator");
+        PersonId victimPersonId = new PersonId("person/core-steal-victim");
+        Assert.That(persons.TryRegister(new PersonRuntime(perpetratorPersonId), out _), Is.True);
+        Assert.That(persons.TryRegister(new PersonRuntime(victimPersonId), out _), Is.True);
+        Assert.That(persons.TryBindMaterializedNpc(perpetratorPersonId,
+            perpetrator.RuntimeId, out _), Is.True);
+        Assert.That(persons.TryBindMaterializedNpc(victimPersonId,
+            victim.RuntimeId, out _), Is.True);
+        CrimeSocialAppraisalWorldState socialWorld = new CrimeSocialAppraisalWorldState(
+            persons, new InstitutionStore(), new SimulationTime(41L));
+        RecordingStealProjection projection = new RecordingStealProjection(
+            socialWorld, graph.JusticeRecordsOwner);
+
+        Assert.That(DailyV1SelectedCrimeActionExecutionStage
+            .DailyV1CoreSelectedStealActionBoundary.TryCreate(
+                composition.ExecutionBoundaryState, graph, perpetrator, victim, city,
+                action, projection, hostPort,
+                out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary boundary),
+            Is.True);
+        Assert.That(composition.ExecutionBoundaryState
+            .TryBindSelectedP12CrimeJusticeMutationProtocol(
+                protocol, graph,
+                out DailyV1P12CrimeJusticeMutationCoordinator coordinator), Is.True);
+        return new CoreStealBoundaryFixture(
+            graph, perpetrator, victim, graph.Npcs.First(candidate =>
+                !ReferenceEquals(candidate, perpetrator) && !ReferenceEquals(candidate, victim)),
+            protocol, hostPort, projection, boundary, coordinator);
+    }
+
     private sealed class CoreFleeBoundaryFixture
     {
         internal DailyV1SelectedRuntimeOwnerGraph Graph { get; }
@@ -746,6 +916,41 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             Target = target;
             Protocol = protocol;
             HostPort = hostPort;
+            Boundary = boundary;
+            Coordinator = coordinator;
+        }
+    }
+
+    private sealed class CoreStealBoundaryFixture
+    {
+        internal DailyV1SelectedRuntimeOwnerGraph Graph { get; }
+        internal DailyV1NpcRuntimeOwners Perpetrator { get; }
+        internal DailyV1NpcRuntimeOwners Victim { get; }
+        internal DailyV1NpcRuntimeOwners Unrelated { get; }
+        internal RecordingP12Protocol Protocol { get; }
+        internal RecordingCrimeMutationHostPort HostPort { get; }
+        internal RecordingStealProjection Projection { get; }
+        internal DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary Boundary { get; }
+        internal DailyV1P12CrimeJusticeMutationCoordinator Coordinator { get; }
+
+        internal CoreStealBoundaryFixture(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners perpetrator,
+            DailyV1NpcRuntimeOwners victim,
+            DailyV1NpcRuntimeOwners unrelated,
+            RecordingP12Protocol protocol,
+            RecordingCrimeMutationHostPort hostPort,
+            RecordingStealProjection projection,
+            DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary boundary,
+            DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+        {
+            Graph = graph;
+            Perpetrator = perpetrator;
+            Victim = victim;
+            Unrelated = unrelated;
+            Protocol = protocol;
+            HostPort = hostPort;
+            Projection = projection;
             Boundary = boundary;
             Coordinator = coordinator;
         }
@@ -1091,6 +1296,81 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             DailyV1NpcRuntimeOwners target,
             DailyV1CityRuntimeOwners city,
             string originDecisionId) { }
+    }
+
+    private sealed class RecordingStealProjection
+        : DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary
+    {
+        internal int LegacyOperationCalls { get; private set; }
+        internal int TransferCalls { get; private set; }
+        internal DailyV1NpcRuntimeOwners TransferSource { get; private set; }
+        internal DailyV1NpcRuntimeOwners TransferDestination { get; private set; }
+        public CrimeSocialAppraisalWorldState SocialAppraisalWorldState { get; }
+        public ITheftOutcomeSink TheftOutcomeSink => SocialAppraisalWorldState.Integration;
+        public DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
+
+        internal RecordingStealProjection(
+            CrimeSocialAppraisalWorldState socialWorld,
+            DailyV1JusticeRecordsOwner justiceRecordsOwner)
+        {
+            SocialAppraisalWorldState = socialWorld;
+            JusticeRecordsOwner = justiceRecordsOwner;
+        }
+
+        public bool ExecuteWithinOperation(Func<bool> operation)
+        {
+            LegacyOperationCalls++;
+            return operation != null && operation();
+        }
+
+        public EconomyTransactionResult ExecuteMoneyTransferWithinOperation(
+            DailyV1NpcRuntimeOwners source,
+            DailyV1NpcRuntimeOwners destination,
+            Func<EconomyTransactionResult> operation)
+        {
+            TransferCalls++;
+            TransferSource = source;
+            TransferDestination = destination;
+            return operation?.Invoke();
+        }
+
+        public bool TryProjectWantedRecord(
+            DailyV1NpcRuntimeOwners target,
+            DailyV1CityRuntimeOwners city,
+            DailyV1JusticeWantedRecordOwner record) => record != null;
+
+        public bool TryPrepareWantedRecordProjection(
+            DailyV1NpcRuntimeOwners target,
+            DailyV1CityRuntimeOwners city,
+            DailyV1JusticeWantedRecordOwner record) => record != null;
+
+        public void DiscardPreparedWantedRecordProjection(
+            DailyV1JusticeWantedRecordOwner record) { }
+
+        public bool CanProjectStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => owner?.Status != null;
+
+        public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner) { }
+
+        public void NotifyStatusMutationCommitted(
+            DailyV1NpcRuntimeOwners owner,
+            DailyV1StatusDefinition status,
+            bool added) { }
+
+        public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner) { }
+
+        public void PublishTheft(
+            DailyV1NpcRuntimeOwners perpetrator,
+            DailyV1NpcRuntimeOwners victim,
+            int amount) { }
+
+        public void LogCompensationFailure() { }
+
+        public void PublishWantedRecord(
+            DailyV1NpcRuntimeOwners target,
+            DailyV1CityRuntimeOwners city,
+            DailyV1JusticeWantedRecordOwner record) { }
     }
 
     private sealed class RecordingP12Protocol : IDailyV1P12CrimeJusticeMutationProtocol
