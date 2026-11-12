@@ -463,9 +463,8 @@ internal static class DailyV1SelectedActionExecutionStage
         }
     }
 
-    internal interface ISelectedFleeCityActionBoundary
+    internal interface ISelectedFleeCityActionProjectionBoundary
     {
-        bool ExecuteWithinOperation(Func<bool> operation);
         /// <summary>Preflights exact Unity projections without admitting or mutating Core owners.</summary>
         bool CanPrepareTravelPlanProjection(
             DailyV1NpcRuntimeOwners actor,
@@ -480,6 +479,12 @@ internal static class DailyV1SelectedActionExecutionStage
             DailyV1CityRuntimeOwners destination,
             float travelCost,
             string originDecisionId);
+    }
+
+    internal interface ISelectedFleeCityActionBoundary
+        : ISelectedFleeCityActionProjectionBoundary
+    {
+        bool ExecuteWithinOperation(Func<bool> operation);
     }
 
     internal interface ISelectedGuardArrestActionBoundary : ISelectedNpcOwnerMutationBoundary

@@ -29,6 +29,184 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
         bool ExecuteWithinOperation(Func<bool> operation);
     }
 
+    internal static class DailyV1CoreSelectedFleeCityActionBoundary
+    {
+        internal static bool TryCreate(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition expectedAction,
+            DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionProjectionBoundary projection,
+            IDailyV1SelectedCrimeJusticeDailyMutationHostPort hostBindingPort,
+            out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary boundary)
+        {
+            boundary = null;
+            if (executionState == null || graph == null || actor == null
+                || expectedAction == null || projection == null || hostBindingPort == null
+                || !executionState.HasAdmittedSelectedDailyExecution
+                || executionState.AdmissionContext == null
+                || !executionState.AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                || !graph.ContainsExactNpcOwner(actor)
+                || !ReferenceEquals(actor.Definitions, graph.Definitions)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentAction, expectedAction)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentPayload?.Action, expectedAction)
+                || expectedAction.Values.actionType?.Value
+                    != DailyV1NpcDefinitionRules.FleeCityActionTypeValue
+                || graph.JusticeRecordsOwner == null)
+                return false;
+
+            DailyV1NpcActionPayloadOwner expectedPayload = actor.ActionSlot.CurrentPayload;
+            if (expectedPayload == null
+                || string.IsNullOrWhiteSpace(expectedPayload.TargetCityRuntimeId)
+                || expectedPayload.TargetNpcRuntimeId != null
+                || expectedPayload.TargetItem != null
+                || expectedPayload.Amount != 0)
+                return false;
+
+            if (!hostBindingPort.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostCandidate)
+                || hostCandidate == null || !hostCandidate.AdmissionEnabled
+                || hostCandidate.JusticeOwnerIdentity == null
+                || !ReferenceEquals(hostCandidate.JusticeRecordsOwner, graph.JusticeRecordsOwner)
+                || !executionState.TryBindSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, hostCandidate)
+                || !executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding)
+                || !hostBinding.HasSameSessionBinding(hostCandidate)
+                || !executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    hostBinding.Protocol, graph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+                || coordinator == null)
+            {
+                executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+                return false;
+            }
+
+            boundary = new CoreFleeCityBoundary(
+                executionState, graph, actor, expectedAction, expectedPayload,
+                hostBinding, coordinator, projection, hostBindingPort);
+            return true;
+        }
+
+        private sealed class CoreFleeCityBoundary
+            : DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary
+        {
+            private readonly DailyV1ExecutionBoundaryState executionState;
+            private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+            private readonly DailyV1NpcRuntimeOwners actor;
+            private readonly DailyV1ActionDefinition expectedAction;
+            private readonly DailyV1NpcActionPayloadOwner expectedPayload;
+            private readonly DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding;
+            private readonly DailyV1P12CrimeJusticeMutationCoordinator coordinator;
+            private readonly DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionProjectionBoundary projection;
+            private readonly IDailyV1SelectedCrimeJusticeDailyMutationHostPort hostBindingPort;
+
+            internal CoreFleeCityBoundary(
+                DailyV1ExecutionBoundaryState executionState,
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1ActionDefinition expectedAction,
+                DailyV1NpcActionPayloadOwner expectedPayload,
+                DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding,
+                DailyV1P12CrimeJusticeMutationCoordinator coordinator,
+                DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionProjectionBoundary projection,
+                IDailyV1SelectedCrimeJusticeDailyMutationHostPort hostBindingPort)
+            {
+                this.executionState = executionState;
+                this.graph = graph;
+                this.actor = actor;
+                this.expectedAction = expectedAction;
+                this.expectedPayload = expectedPayload;
+                this.hostBinding = hostBinding;
+                this.coordinator = coordinator;
+                this.projection = projection;
+                this.hostBindingPort = hostBindingPort;
+            }
+
+            public bool ExecuteWithinOperation(Func<bool> operation)
+            {
+                if (operation == null) throw new ArgumentNullException(nameof(operation));
+                if (!IsCurrentSession())
+                {
+                    coordinator.FaultSelected(executionState);
+                    throw new InvalidOperationException(
+                        "The selected FleeCity action lost its exact admitted Core session.");
+                }
+
+                if (!coordinator.TryBeginSelectedCrimeActionMutation(
+                        graph, actor, hostBinding.JusticeOwnerIdentity,
+                        includeCrimeReceiptSection: hostBinding.CrimeOwnerIdentity != null,
+                        out IDisposable scope)
+                    || scope == null)
+                    throw new InvalidOperationException(
+                        "P12 Core could not admit the selected FleeCity actor, Justice, and receipt sections.");
+
+                using (scope) return operation();
+            }
+
+            public bool CanPrepareTravelPlanProjection(
+                DailyV1NpcRuntimeOwners candidateActor,
+                DailyV1CityRuntimeOwners destination,
+                float travelCost,
+                string originDecisionId) =>
+                IsExactActor(candidateActor)
+                && graph.ContainsExactCityOwner(destination)
+                && ReferenceEquals(destination.Definitions, graph.Definitions)
+                && IsCurrentSession()
+                && projection.CanPrepareTravelPlanProjection(
+                    candidateActor, destination, travelCost, originDecisionId);
+
+            public bool CanAdmitTravelPlanMutation() =>
+                IsCurrentSession() && projection.CanAdmitTravelPlanMutation();
+
+            public void PublishCommittedTravelPlan(
+                DailyV1NpcRuntimeOwners candidateActor,
+                DailyV1CityRuntimeOwners destination,
+                float travelCost,
+                string originDecisionId)
+            {
+                if (!IsExactActor(candidateActor)
+                    || !graph.ContainsExactCityOwner(destination)
+                    || !ReferenceEquals(destination.Definitions, graph.Definitions)
+                    || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected FleeCity TravelPlan projection left its exact Core session.");
+                projection.PublishCommittedTravelPlan(
+                    candidateActor, destination, travelCost, originDecisionId);
+            }
+
+            private bool IsExactActor(DailyV1NpcRuntimeOwners candidate) =>
+                ReferenceEquals(candidate, actor)
+                && graph.ContainsExactNpcOwner(candidate)
+                && ReferenceEquals(candidate.Definitions, graph.Definitions);
+
+            private bool IsCurrentSession() =>
+                executionState.HasAdmittedSelectedDailyExecution
+                && executionState.AdmissionContext != null
+                && executionState.AdmissionContext.IsOwnedByCurrentThread()
+                && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                && graph.ContainsExactNpcOwner(actor)
+                && ReferenceEquals(actor.Definitions, graph.Definitions)
+                && ReferenceEquals(actor.ActionSlot?.CurrentAction, expectedAction)
+                && ReferenceEquals(actor.ActionSlot?.CurrentPayload, expectedPayload)
+                && ReferenceEquals(expectedPayload?.Action, expectedAction)
+                && hostBindingPort.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding currentCandidate)
+                && currentCandidate != null
+                && executionState.TryBindSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, currentCandidate)
+                && executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding currentBinding)
+                && ReferenceEquals(currentBinding, hostBinding)
+                && currentBinding.HasSameSessionBinding(currentCandidate)
+                && executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    hostBinding.Protocol, graph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator currentCoordinator)
+                && ReferenceEquals(currentCoordinator, coordinator);
+        }
+    }
+
     /// <summary>
     /// Binds selected Hide/Escape to the exact admitted Core session. Core
     /// derives and opens the P12 actor/Justice/receipt scope; Unity contributes

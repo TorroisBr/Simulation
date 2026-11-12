@@ -477,8 +477,8 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
     }
 
     /// <summary>
-    /// Builds the ordinary selected Hide/Escape Crime/Justice operation from
-    /// the exact Core actor and the already-pinned host Justice census
+    /// Builds an ordinary selected Crime action's Justice/receipt operation
+    /// from the exact Core actor and the already-pinned host Justice census
     /// identity. Core derives every owner binding and section; the host does
     /// not assemble a mutable section list for this selected operation.
     /// </summary>

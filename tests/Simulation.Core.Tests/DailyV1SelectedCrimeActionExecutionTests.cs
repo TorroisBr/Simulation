@@ -189,6 +189,95 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
     }
 
     [Test]
+    public void CoreFleeBoundaryOwnsExactP12ActorJusticeAndReceiptScope()
+    {
+        CoreFleeBoundaryFixture fixture = CreateCoreFleeBoundaryFixture();
+        bool projectionPublished = false;
+        bool operationRan = false;
+
+        Assert.That(fixture.Boundary.ExecuteWithinOperation(() =>
+        {
+            operationRan = true;
+            Assert.That(fixture.Coordinator.CanBeginDailyMutation(), Is.False,
+                "The Core P12 operation remains active while FleeCity commits and projects its owner write.");
+            Assert.That(fixture.Boundary.CanPrepareTravelPlanProjection(
+                fixture.Actor, fixture.Destination, 3f, "decision/flee-city"), Is.True);
+            Assert.That(fixture.Boundary.CanAdmitTravelPlanMutation(), Is.True);
+            fixture.Boundary.PublishCommittedTravelPlan(
+                fixture.Actor, fixture.Destination, 3f, "decision/flee-city");
+            projectionPublished = true;
+            return true;
+        }), Is.True);
+
+        Assert.That(operationRan, Is.True);
+        Assert.That(projectionPublished, Is.True);
+        Assert.That(fixture.Projection.PreflightCalls, Is.EqualTo(1));
+        Assert.That(fixture.Projection.AdmissionCalls, Is.EqualTo(1));
+        Assert.That(fixture.Projection.PublicationCalls, Is.EqualTo(1));
+        Assert.That(fixture.Coordinator.CanBeginDailyMutation(), Is.True,
+            "Disposing the Core-owned scope releases the selected P12 operation.");
+        Assert.That(fixture.Protocol.ValidatedSections, Is.EqualTo(new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract
+                .NpcStatusCrimeSectionIdFor(fixture.Actor.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId
+        }));
+        Assert.That(fixture.Protocol.Faulted, Is.False);
+        Assert.That(fixture.HostPort.BindingRequests, Is.GreaterThan(1),
+            "Core rechecks the host census binding at the exact operation boundary.");
+    }
+
+    [Test]
+    public void CoreFleeBoundaryRejectsReplacedHostBindingBeforeOpeningP12Scope()
+    {
+        CoreFleeBoundaryFixture fixture = CreateCoreFleeBoundaryFixture();
+        RecordingP12Protocol replacementProtocol = new RecordingP12Protocol();
+        object replacementCrimeIdentity = new object();
+        object replacementJusticeIdentity = new object();
+        fixture.HostPort.Binding = new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+            replacementProtocol,
+            replacementCrimeIdentity, replacementCrimeIdentity, fixture.Graph.JusticeRecordsOwner,
+            replacementJusticeIdentity, replacementJusticeIdentity, fixture.Graph.JusticeRecordsOwner,
+            admissionEnabled: true);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            fixture.Boundary.ExecuteWithinOperation(() =>
+            {
+                Assert.Fail("A replaced host binding must not enter the selected FleeCity operation.");
+                return true;
+            }));
+        Assert.That(fixture.Protocol.ValidatedSections, Is.Null);
+        Assert.That(fixture.Protocol.Faulted, Is.True);
+        Assert.That(replacementProtocol.Faulted, Is.True);
+    }
+
+    [Test]
+    public void CoreFleeBoundaryRejectsStaleActionBeforeOpeningP12Scope()
+    {
+        CoreFleeBoundaryFixture fixture = CreateCoreFleeBoundaryFixture();
+        DailyV1ActionDefinition replacementAction = ActionOfType(
+            fixture.Actor.Definitions, DailyV1NpcDefinitionRules.HideActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            fixture.Actor.Definitions, replacementAction, null, null, null,
+            0, 0f, 1f, NpcTravelReason.None, 0f, null, null, null, null,
+            out DailyV1NpcActionPayloadOwner replacementPayload), Is.True);
+        Assert.That(fixture.Graph.TryCommitCurrentActionSlot(
+            fixture.Actor, replacementAction, replacementPayload, null), Is.True);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            fixture.Boundary.ExecuteWithinOperation(() =>
+            {
+                Assert.Fail("A replaced Core action slot must not enter the selected FleeCity operation.");
+                return true;
+            }));
+        Assert.That(fixture.Protocol.ValidatedSections, Is.Null,
+            "A stale FleeCity action is rejected before census baselines are queried.");
+        Assert.That(fixture.Protocol.Faulted, Is.True);
+    }
+
+    [Test]
     public void SelectedHideUsesCoreWarrantAndKeepsHiddenTimerAndStatusWritesSeparate()
     {
         CrimeFixture fixture = CreateFixture();
@@ -417,6 +506,85 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
     private static DailyV1ActionDefinition ActionOfType(
         DailyV1EffectiveDefinitions definitions, int actionType) =>
         definitions.Actions.Values.Single(value => value.Values.actionType?.Value == actionType);
+
+    private static CoreFleeBoundaryFixture CreateCoreFleeBoundaryFixture()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition,
+                out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1CityRuntimeOwners destination = graph.Cities[0];
+        DailyV1ActionDefinition action = ActionOfType(definitions,
+            DailyV1NpcDefinitionRules.FleeCityActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, action, null, destination.RuntimeId, null,
+            0, 0f, 1f, NpcTravelReason.None, 0f,
+            "decision/flee-city", null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, action, payload, null), Is.True);
+
+        RecordingP12Protocol protocol = new RecordingP12Protocol();
+        object crimeIdentity = new object();
+        object justiceIdentity = new object();
+        DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding =
+            new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+                protocol,
+                crimeIdentity, crimeIdentity, graph.JusticeRecordsOwner,
+                justiceIdentity, justiceIdentity, graph.JusticeRecordsOwner,
+                admissionEnabled: true);
+        RecordingCrimeMutationHostPort hostPort =
+            new RecordingCrimeMutationHostPort(hostBinding);
+        RecordingFleeProjection projection = new RecordingFleeProjection();
+        Assert.That(DailyV1SelectedCrimeActionExecutionStage
+            .DailyV1CoreSelectedFleeCityActionBoundary.TryCreate(
+                composition.ExecutionBoundaryState, graph, actor, action,
+                projection, hostPort,
+                out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary boundary), Is.True);
+        Assert.That(composition.ExecutionBoundaryState
+            .TryBindSelectedP12CrimeJusticeMutationProtocol(
+                protocol, graph,
+                out DailyV1P12CrimeJusticeMutationCoordinator coordinator), Is.True);
+        return new CoreFleeBoundaryFixture(
+            graph, actor, destination, protocol, hostPort, projection, boundary, coordinator);
+    }
+
+    private sealed class CoreFleeBoundaryFixture
+    {
+        internal DailyV1SelectedRuntimeOwnerGraph Graph { get; }
+        internal DailyV1NpcRuntimeOwners Actor { get; }
+        internal DailyV1CityRuntimeOwners Destination { get; }
+        internal RecordingP12Protocol Protocol { get; }
+        internal RecordingCrimeMutationHostPort HostPort { get; }
+        internal RecordingFleeProjection Projection { get; }
+        internal DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary Boundary { get; }
+        internal DailyV1P12CrimeJusticeMutationCoordinator Coordinator { get; }
+
+        internal CoreFleeBoundaryFixture(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination,
+            RecordingP12Protocol protocol,
+            RecordingCrimeMutationHostPort hostPort,
+            RecordingFleeProjection projection,
+            DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary boundary,
+            DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+        {
+            Graph = graph;
+            Actor = actor;
+            Destination = destination;
+            Protocol = protocol;
+            HostPort = hostPort;
+            Projection = projection;
+            Boundary = boundary;
+            Coordinator = coordinator;
+        }
+    }
 
     private static void CommitAction(
         CrimeFixture fixture,
@@ -703,6 +871,36 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             bool hadActiveSentence,
             float bountyAfterPenalty,
             string originDecisionId) { }
+    }
+
+    private sealed class RecordingFleeProjection
+        : DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionProjectionBoundary
+    {
+        internal int PreflightCalls { get; private set; }
+        internal int AdmissionCalls { get; private set; }
+        internal int PublicationCalls { get; private set; }
+
+        public bool CanPrepareTravelPlanProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination,
+            float travelCost,
+            string originDecisionId)
+        {
+            PreflightCalls++;
+            return actor != null && destination != null && travelCost > 0f;
+        }
+
+        public bool CanAdmitTravelPlanMutation()
+        {
+            AdmissionCalls++;
+            return true;
+        }
+
+        public void PublishCommittedTravelPlan(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination,
+            float travelCost,
+            string originDecisionId) => PublicationCalls++;
     }
 
     private sealed class RecordingP12Protocol : IDailyV1P12CrimeJusticeMutationProtocol

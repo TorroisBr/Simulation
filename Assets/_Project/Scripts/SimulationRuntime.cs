@@ -771,9 +771,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     out _))
                 return false;
 
-            boundary = new SelectedFleeCityActionBoundaryAdapter(
-                this, runtime, exactActor, actionRuntime.TargetCity, targetCityOwner);
-            return true;
+            SelectedFleeCityActionBoundaryAdapter hostProjection =
+                new SelectedFleeCityActionBoundaryAdapter(
+                    this, runtime, exactActor, actionRuntime.TargetCity, targetCityOwner);
+            if (runtime.runtimeAdmissionContext == null)
+            {
+                boundary = hostProjection;
+                return true;
+            }
+
+            return DailyV1SelectedCrimeActionExecutionStage
+                .DailyV1CoreSelectedFleeCityActionBoundary.TryCreate(
+                    runtime.ExecutionBoundaryState,
+                    graph,
+                    actor,
+                    action,
+                    hostProjection,
+                    new SelectedDailyV1ExecutionBoundary(runtime),
+                    out boundary);
         }
 
         public bool TryGetGuardArrestActionBoundary(
