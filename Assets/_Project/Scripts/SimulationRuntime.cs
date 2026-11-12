@@ -10669,6 +10669,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             failure = PersonResidenceMembershipFailure.PersonNotRegistered;
             return false;
         }
+        if (IsMutationFaulted)
+        {
+            failure = PersonResidenceMembershipFailure.RuntimeFaulted;
+            return false;
+        }
 
         if (runtimeAdmissionContext != null)
         {
@@ -10685,11 +10690,56 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
             using (p12Scope)
             {
-                bool bound = PersonResidenceMembershipSystem.TryBindExistingResident(
-                    person,
-                    settlement,
-                    this,
-                    out failure);
+                bool hasUnselectedRuntimeMember = npcRuntimes != null
+                    && npcRuntimes.Any(runtime => runtime != null
+                        && !runtime.UsesSelectedDailyV1Definitions);
+                bool settlementIsExactWorldProjection = settlement != null
+                    && cities != null
+                    && cities.Any(candidate => ReferenceEquals(candidate, settlement));
+                bool useCoreSelectedOperation = IsDailyCaptureProfile
+                    && !hasUnselectedRuntimeMember
+                    && settlementIsExactWorldProjection
+                    && settlement.SelectedRuntimeOwners != null;
+
+                bool bound;
+                if (useCoreSelectedOperation)
+                {
+                    DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+                    if (graph == null || !ReferenceEquals(graph.PersonStore, personStore))
+                    {
+                        failure = PersonResidenceMembershipFailure.RuntimeFaulted;
+                        bound = false;
+                    }
+                    else if (!DailyV1SelectedPersonResidenceBindingOperation.TryPrepare(
+                            graph,
+                            personStore,
+                            person,
+                            settlement.SelectedRuntimeOwners,
+                            out DailyV1SelectedPersonResidenceBindingPlan plan,
+                            out DailyV1SelectedPersonResidenceBindingFailure prepareFailure))
+                    {
+                        failure = ToPersonResidenceMembershipFailure(prepareFailure);
+                        bound = false;
+                    }
+                    else
+                    {
+                        bound = DailyV1SelectedPersonResidenceBindingOperation.TryCommit(
+                            graph,
+                            personStore,
+                            plan,
+                            out DailyV1SelectedPersonResidenceBindingFailure commitFailure);
+                        failure = ToPersonResidenceMembershipFailure(commitFailure);
+                    }
+                }
+                else
+                {
+                    bound = PersonResidenceMembershipSystem.TryBindExistingResident(
+                        person,
+                        settlement,
+                        this,
+                        out failure);
+                }
+
                 p12Scope?.Complete(bound);
                 return bound;
             }
@@ -10700,6 +10750,32 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             settlement,
             this,
             out failure);
+    }
+
+    private static PersonResidenceMembershipFailure ToPersonResidenceMembershipFailure(
+        DailyV1SelectedPersonResidenceBindingFailure failure)
+    {
+        switch (failure)
+        {
+            case DailyV1SelectedPersonResidenceBindingFailure.None:
+                return PersonResidenceMembershipFailure.None;
+            case DailyV1SelectedPersonResidenceBindingFailure.InvalidPerson:
+                return PersonResidenceMembershipFailure.InvalidPerson;
+            case DailyV1SelectedPersonResidenceBindingFailure.InvalidSettlement:
+                return PersonResidenceMembershipFailure.InvalidSettlement;
+            case DailyV1SelectedPersonResidenceBindingFailure.SettlementNotInGraph:
+                return PersonResidenceMembershipFailure.SettlementNotInWorld;
+            case DailyV1SelectedPersonResidenceBindingFailure.PersonNotRegistered:
+                return PersonResidenceMembershipFailure.PersonNotRegistered;
+            case DailyV1SelectedPersonResidenceBindingFailure.PersonDead:
+                return PersonResidenceMembershipFailure.PersonDead;
+            case DailyV1SelectedPersonResidenceBindingFailure.ResidenceAlreadyAssigned:
+                return PersonResidenceMembershipFailure.ResidenceAlreadyAssigned;
+            case DailyV1SelectedPersonResidenceBindingFailure.AggregateCapacityExceeded:
+                return PersonResidenceMembershipFailure.AggregateCapacityExceeded;
+            default:
+                return PersonResidenceMembershipFailure.RuntimeFaulted;
+        }
     }
 
     /// <summary>

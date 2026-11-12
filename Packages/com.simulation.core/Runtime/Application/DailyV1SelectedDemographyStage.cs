@@ -98,6 +98,218 @@ internal static class DailyV1SelectedResidentCensus
         return true;
     }
 }
+internal enum DailyV1SelectedPersonResidenceBindingFailure
+{
+    None = 0,
+    InvalidOwnerGraph = 1,
+    InvalidPerson = 2,
+    InvalidSettlement = 3,
+    SettlementNotInGraph = 4,
+    PersonNotRegistered = 5,
+    PersonDead = 6,
+    ResidenceAlreadyAssigned = 7,
+    AggregateCapacityExceeded = 8,
+    InvalidResidentCensus = 9,
+    RevisionOverflow = 10,
+    StaleState = 11,
+    MutationRejected = 12
+}
+
+internal sealed class DailyV1SelectedPersonResidenceBindingPlan
+{
+    internal PersonRuntime Person { get; }
+    internal DailyV1CityRuntimeOwners City { get; }
+    internal string ResidenceBefore { get; }
+    internal long ResidenceRevision { get; }
+    internal int NamedResidentsBefore { get; }
+    internal long PopulationRevision { get; }
+    internal int PopulationBefore { get; }
+    internal bool IsIdempotent { get; }
+
+    internal DailyV1SelectedPersonResidenceBindingPlan(
+        PersonRuntime person,
+        DailyV1CityRuntimeOwners city,
+        string residenceBefore,
+        long residenceRevision,
+        int namedResidentsBefore,
+        long populationRevision,
+        int populationBefore,
+        bool isIdempotent)
+    {
+        Person = person ?? throw new ArgumentNullException(nameof(person));
+        City = city ?? throw new ArgumentNullException(nameof(city));
+        ResidenceBefore = residenceBefore;
+        ResidenceRevision = residenceRevision;
+        NamedResidentsBefore = namedResidentsBefore;
+        PopulationRevision = populationRevision;
+        PopulationBefore = populationBefore;
+        IsIdempotent = isIdempotent;
+    }
+}
+
+internal static class DailyV1SelectedPersonResidenceBindingOperation
+{
+    internal static bool TryPrepare(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        PersonRuntime person,
+        DailyV1CityRuntimeOwners city,
+        out DailyV1SelectedPersonResidenceBindingPlan plan,
+        out DailyV1SelectedPersonResidenceBindingFailure failure)
+    {
+        plan = null;
+        failure = DailyV1SelectedPersonResidenceBindingFailure.InvalidOwnerGraph;
+        if (graph == null || personStore == null
+            || !ReferenceEquals(graph.PersonStore, personStore))
+            return false;
+
+        if (person == null || person.PersonId == null)
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.InvalidPerson;
+            return false;
+        }
+        if (city == null || string.IsNullOrWhiteSpace(city.RuntimeId))
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.InvalidSettlement;
+            return false;
+        }
+        if (!graph.ContainsExactCityOwner(city))
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.SettlementNotInGraph;
+            return false;
+        }
+        if (!ReferenceEquals(city.Definitions, graph.Definitions))
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.InvalidOwnerGraph;
+            return false;
+        }
+        if (!personStore.TryGet(person.PersonId, out PersonRuntime registeredPerson)
+            || !ReferenceEquals(registeredPerson, person))
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.PersonNotRegistered;
+            return false;
+        }
+        if (person.DeathAbsoluteDay.HasValue)
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.PersonDead;
+            return false;
+        }
+
+        string residence = person.ResidenceSettlementRuntimeId;
+        long residenceRevision = PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person);
+        if (!string.IsNullOrWhiteSpace(residence))
+        {
+            if (!string.Equals(residence, city.RuntimeId, StringComparison.Ordinal))
+            {
+                failure = DailyV1SelectedPersonResidenceBindingFailure.ResidenceAlreadyAssigned;
+                return false;
+            }
+
+            plan = new DailyV1SelectedPersonResidenceBindingPlan(
+                person, city, residence, residenceRevision, 0, 0L, 0, true);
+            failure = DailyV1SelectedPersonResidenceBindingFailure.None;
+            return true;
+        }
+
+        SettlementPopulationRuntime population = city.Population;
+        if (population == null
+            || !string.Equals(population.SettlementRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.InvalidOwnerGraph;
+            return false;
+        }
+        if (!DailyV1SelectedResidentCensus.TryCountNamedResidents(
+                graph, city.RuntimeId, out int namedResidents))
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.InvalidResidentCensus;
+            return false;
+        }
+        if (namedResidents >= population.CurrentPopulation)
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.AggregateCapacityExceeded;
+            return false;
+        }
+        if (residenceRevision == long.MaxValue
+            || !PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(person, 1))
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.RevisionOverflow;
+            return false;
+        }
+
+        plan = new DailyV1SelectedPersonResidenceBindingPlan(
+            person,
+            city,
+            residence,
+            residenceRevision,
+            namedResidents,
+            population.Revision,
+            population.CurrentPopulation,
+            false);
+        failure = DailyV1SelectedPersonResidenceBindingFailure.None;
+        return true;
+    }
+
+    internal static bool TryCommit(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        DailyV1SelectedPersonResidenceBindingPlan plan,
+        out DailyV1SelectedPersonResidenceBindingFailure failure)
+    {
+        failure = DailyV1SelectedPersonResidenceBindingFailure.StaleState;
+        if (graph == null || personStore == null || plan == null
+            || !ReferenceEquals(graph.PersonStore, personStore)
+            || !graph.ContainsExactCityOwner(plan.City)
+            || !ReferenceEquals(plan.City.Definitions, graph.Definitions)
+            || plan.Person.PersonId == null
+            || !personStore.TryGet(plan.Person.PersonId, out PersonRuntime registeredPerson)
+            || !ReferenceEquals(registeredPerson, plan.Person)
+            || plan.Person.DeathAbsoluteDay.HasValue
+            || !string.Equals(
+                plan.Person.ResidenceSettlementRuntimeId,
+                plan.ResidenceBefore,
+                StringComparison.Ordinal)
+            || PersonRuntimeOwnerBridge.GetLifeResidenceRevision(plan.Person)
+                != plan.ResidenceRevision)
+            return false;
+
+        if (plan.IsIdempotent)
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.None;
+            return true;
+        }
+
+        SettlementPopulationRuntime population = plan.City.Population;
+        if (population == null
+            || population.Revision != plan.PopulationRevision
+            || population.CurrentPopulation != plan.PopulationBefore
+            || !string.IsNullOrWhiteSpace(plan.ResidenceBefore))
+            return false;
+        if (!DailyV1SelectedResidentCensus.TryCountNamedResidents(
+                graph, plan.City.RuntimeId, out int currentNamedResidents)
+            || currentNamedResidents != plan.NamedResidentsBefore
+            || currentNamedResidents >= population.CurrentPopulation)
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.StaleState;
+            return false;
+        }
+        if (plan.ResidenceRevision == long.MaxValue
+            || !PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(plan.Person, 1))
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.RevisionOverflow;
+            return false;
+        }
+        if (!PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+                plan.Person, plan.City.RuntimeId))
+        {
+            failure = DailyV1SelectedPersonResidenceBindingFailure.MutationRejected;
+            return false;
+        }
+
+        failure = DailyV1SelectedPersonResidenceBindingFailure.None;
+        return true;
+    }
+}
+
 /// <summary>
 /// Immutable expected-state witness for one selected Person death. The
 /// captured object references are the exact Core owners in the admitted

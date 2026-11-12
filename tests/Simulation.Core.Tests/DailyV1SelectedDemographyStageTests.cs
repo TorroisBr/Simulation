@@ -44,6 +44,173 @@ public sealed class DailyV1SelectedDemographyStageTests
     }
 
     [Test]
+    public void SelectedPersonResidenceBindingChangesOnlyPersonOwnerAndPreservesIdempotency()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph();
+        PersonStore people = new PersonStore();
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
+        DailyV1CityRuntimeOwners city = graph.Cities[0];
+        PersonRuntime person = new PersonRuntime(
+            new PersonId("selected-person-residence-binding"), 0L);
+        Assert.That(people.TryRegister(person, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(city.Population.CurrentPopulation, Is.GreaterThan(0));
+        Assert.That(DailyV1SelectedResidentCensus.TryCountNamedResidents(
+            graph, city.RuntimeId, out int residentsBefore), Is.True);
+
+        long personRevisionBefore =
+            PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person);
+        long populationRevisionBefore = city.Population.Revision;
+        int populationBefore = city.Population.CurrentPopulation;
+        Assert.That(DailyV1SelectedPersonResidenceBindingOperation.TryPrepare(
+            graph, people, person, city,
+            out DailyV1SelectedPersonResidenceBindingPlan plan,
+            out DailyV1SelectedPersonResidenceBindingFailure prepareFailure),
+            Is.True, prepareFailure.ToString());
+
+        Assert.That(DailyV1SelectedPersonResidenceBindingOperation.TryCommit(
+            graph, people, plan,
+            out DailyV1SelectedPersonResidenceBindingFailure commitFailure),
+            Is.True, commitFailure.ToString());
+
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person),
+            Is.EqualTo(personRevisionBefore + 1L));
+        Assert.That(city.Population.CurrentPopulation, Is.EqualTo(populationBefore));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevisionBefore));
+        Assert.That(DailyV1SelectedResidentCensus.TryCountNamedResidents(
+            graph, city.RuntimeId, out int residentsAfter), Is.True);
+        Assert.That(residentsAfter, Is.EqualTo(residentsBefore + 1));
+
+        Assert.That(DailyV1SelectedPersonResidenceBindingOperation.TryPrepare(
+            graph, people, person, city,
+            out DailyV1SelectedPersonResidenceBindingPlan idempotentPlan,
+            out DailyV1SelectedPersonResidenceBindingFailure idempotentPrepareFailure),
+            Is.True, idempotentPrepareFailure.ToString());
+        Assert.That(idempotentPlan.IsIdempotent, Is.True);
+        Assert.That(DailyV1SelectedPersonResidenceBindingOperation.TryCommit(
+            graph, people, idempotentPlan,
+            out DailyV1SelectedPersonResidenceBindingFailure idempotentCommitFailure),
+            Is.True, idempotentCommitFailure.ToString());
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person),
+            Is.EqualTo(personRevisionBefore + 1L));
+
+        PersonRuntime stalePerson = new PersonRuntime(
+            new PersonId("selected-person-residence-binding-stale"), 0L);
+        Assert.That(people.TryRegister(stalePerson, out registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(DailyV1SelectedPersonResidenceBindingOperation.TryPrepare(
+            graph, people, stalePerson, city, out DailyV1SelectedPersonResidenceBindingPlan stalePlan,
+            out DailyV1SelectedPersonResidenceBindingFailure stalePrepareFailure),
+            Is.True, stalePrepareFailure.ToString());
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            stalePerson, "city/external-writer"), Is.True);
+        long staleRevision = PersonRuntimeOwnerBridge.GetLifeResidenceRevision(stalePerson);
+        Assert.That(DailyV1SelectedPersonResidenceBindingOperation.TryCommit(
+            graph, people, stalePlan,
+            out DailyV1SelectedPersonResidenceBindingFailure staleCommitFailure), Is.False);
+        Assert.That(staleCommitFailure,
+            Is.EqualTo(DailyV1SelectedPersonResidenceBindingFailure.StaleState));
+        Assert.That(stalePerson.ResidenceSettlementRuntimeId, Is.EqualTo("city/external-writer"));
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(stalePerson),
+            Is.EqualTo(staleRevision));
+    }
+
+    [Test]
+    public void SelectedPersonResidenceBindingRejectsInvalidIdentityDeadPersonAndCapacity()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph();
+        DailyV1SelectedRuntimeOwnerGraph foreignGraph = CreateGraph();
+        PersonStore people = new PersonStore();
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
+        DailyV1CityRuntimeOwners city = graph.Cities[0];
+
+        PersonRuntime foreignCityPerson = new PersonRuntime(
+            new PersonId("selected-person-residence-binding-foreign-city"), 0L);
+        Assert.That(people.TryRegister(foreignCityPerson, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(DailyV1SelectedPersonResidenceBindingOperation.TryPrepare(
+            graph, people, foreignCityPerson, foreignGraph.Cities[0],
+            out DailyV1SelectedPersonResidenceBindingPlan foreignPlan,
+            out DailyV1SelectedPersonResidenceBindingFailure foreignFailure), Is.False);
+        Assert.That(foreignPlan, Is.Null);
+        Assert.That(foreignFailure,
+            Is.EqualTo(DailyV1SelectedPersonResidenceBindingFailure.SettlementNotInGraph));
+
+        PersonRuntime deadPerson = new PersonRuntime(
+            new PersonId("selected-person-residence-binding-dead"), 0L);
+        Assert.That(PersonRuntimeOwnerBridge.TryRecordDeath(deadPerson, 1L), Is.True);
+        Assert.That(people.TryRegister(deadPerson, out registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(DailyV1SelectedPersonResidenceBindingOperation.TryPrepare(
+            graph, people, deadPerson, city,
+            out DailyV1SelectedPersonResidenceBindingPlan deadPlan,
+            out DailyV1SelectedPersonResidenceBindingFailure deadFailure), Is.False);
+        Assert.That(deadPlan, Is.Null);
+        Assert.That(deadFailure,
+            Is.EqualTo(DailyV1SelectedPersonResidenceBindingFailure.PersonDead));
+
+        PersonRuntime assignedPerson = new PersonRuntime(
+            new PersonId("selected-person-residence-binding-assigned"), 0L);
+        Assert.That(people.TryRegister(assignedPerson, out registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            assignedPerson, "city/another-residence"), Is.True);
+        Assert.That(DailyV1SelectedPersonResidenceBindingOperation.TryPrepare(
+            graph, people, assignedPerson, city,
+            out DailyV1SelectedPersonResidenceBindingPlan assignedPlan,
+            out DailyV1SelectedPersonResidenceBindingFailure assignedFailure), Is.False);
+        Assert.That(assignedPlan, Is.Null);
+        Assert.That(assignedFailure,
+            Is.EqualTo(DailyV1SelectedPersonResidenceBindingFailure.ResidenceAlreadyAssigned));
+
+        PersonRuntime saturatedPerson = PersonRuntimeOwnerBridge.CreateForOwnerSnapshot(
+            new PersonId("selected-person-residence-binding-saturated"),
+            0L,
+            null,
+            null,
+            null,
+            long.MaxValue);
+        Assert.That(people.TryRegister(saturatedPerson, out registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(DailyV1SelectedPersonResidenceBindingOperation.TryPrepare(
+            graph, people, saturatedPerson, city,
+            out DailyV1SelectedPersonResidenceBindingPlan saturatedPlan,
+            out DailyV1SelectedPersonResidenceBindingFailure saturatedFailure), Is.False);
+        Assert.That(saturatedPlan, Is.Null);
+        Assert.That(saturatedFailure,
+            Is.EqualTo(DailyV1SelectedPersonResidenceBindingFailure.RevisionOverflow));
+
+        Assert.That(DailyV1SelectedResidentCensus.TryCountNamedResidents(
+            graph, city.RuntimeId, out int namedResidents), Is.True);
+        int nextResident = 0;
+        while (namedResidents < city.Population.CurrentPopulation)
+        {
+            PersonRuntime resident = new PersonRuntime(
+                new PersonId("selected-person-residence-binding-capacity-" + nextResident++), 0L);
+            Assert.That(people.TryRegister(resident, out registerFailure),
+                Is.True, registerFailure.ToString());
+            Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+                resident, city.RuntimeId), Is.True);
+            namedResidents++;
+        }
+
+        PersonRuntime overCapacityPerson = new PersonRuntime(
+            new PersonId("selected-person-residence-binding-over-capacity"), 0L);
+        Assert.That(people.TryRegister(overCapacityPerson, out registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(DailyV1SelectedPersonResidenceBindingOperation.TryPrepare(
+            graph, people, overCapacityPerson, city,
+            out DailyV1SelectedPersonResidenceBindingPlan overCapacityPlan,
+            out DailyV1SelectedPersonResidenceBindingFailure capacityFailure), Is.False);
+        Assert.That(overCapacityPlan, Is.Null);
+        Assert.That(capacityFailure,
+            Is.EqualTo(DailyV1SelectedPersonResidenceBindingFailure.AggregateCapacityExceeded));
+        Assert.That(overCapacityPerson.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(overCapacityPerson), Is.Zero);
+    }
+
+    [Test]
     public void NamedMortalityUsesPersonStoreBeforeFloorSnapshotAndAggregatePolicy()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph();
