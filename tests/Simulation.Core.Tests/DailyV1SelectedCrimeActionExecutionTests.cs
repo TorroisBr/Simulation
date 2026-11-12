@@ -6,6 +6,189 @@ using NUnit.Framework;
 public sealed class DailyV1SelectedCrimeActionExecutionTests
 {
     [Test]
+    public void CoreCrimeBoundaryOwnsExactP12ActorJusticeAndReceiptScope()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition,
+                out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1ActionDefinition action = ActionOfType(definitions,
+            DailyV1NpcDefinitionRules.HideActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, action, null, null, null, 0, 0f, 1f,
+            NpcTravelReason.None, 0f, null, null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, action, payload, null), Is.True);
+
+        RecordingP12Protocol protocol = new RecordingP12Protocol();
+        object crimeIdentity = new object();
+        object justiceIdentity = new object();
+        DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding =
+            new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+                protocol,
+                crimeIdentity, crimeIdentity, graph.JusticeRecordsOwner,
+                justiceIdentity, justiceIdentity, graph.JusticeRecordsOwner,
+                admissionEnabled: true);
+        RecordingCrimeProjection projection = new RecordingCrimeProjection();
+        RecordingCrimeMutationHostPort hostPort =
+            new RecordingCrimeMutationHostPort(hostBinding);
+        Assert.That(DailyV1SelectedCrimeActionExecutionStage
+            .DailyV1CoreSelectedCrimeActionBoundary.TryCreate(
+                composition.ExecutionBoundaryState, graph, actor, action,
+                projection, hostPort, out DailyV1SelectedCrimeActionExecutionStage
+                    .ISelectedCrimeActionBoundary boundary), Is.True);
+        Assert.That(composition.ExecutionBoundaryState
+            .TryBindSelectedP12CrimeJusticeMutationProtocol(
+                protocol, graph,
+                out DailyV1P12CrimeJusticeMutationCoordinator coordinator), Is.True);
+
+        bool operationRan = false;
+        Assert.That(boundary.ExecuteWithinOperation(() =>
+        {
+            operationRan = true;
+            Assert.That(coordinator.CanBeginDailyMutation(), Is.False,
+                "The Core P12 operation remains active for the complete selected action.");
+            return true;
+        }), Is.True);
+
+        Assert.That(operationRan, Is.True);
+        Assert.That(coordinator.CanBeginDailyMutation(), Is.True,
+            "Disposing the Core-owned action scope releases the shared coordinator.");
+        Assert.That(protocol.ValidatedSections, Is.EqualTo(new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract
+                .NpcStatusCrimeSectionIdFor(actor.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId
+        }));
+        Assert.That(protocol.Faulted, Is.False);
+        Assert.That(hostPort.BindingRequests, Is.GreaterThan(1),
+            "Core obtains the exact host binding and rechecks it at operation use.");
+    }
+
+    [Test]
+    public void CoreCrimeBoundaryRejectsReplacedHostBindingBeforeOpeningP12Scope()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition,
+                out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1ActionDefinition action = ActionOfType(definitions,
+            DailyV1NpcDefinitionRules.HideActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, action, null, null, null, 0, 0f, 1f,
+            NpcTravelReason.None, 0f, null, null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, action, payload, null), Is.True);
+
+        RecordingP12Protocol protocol = new RecordingP12Protocol();
+        object crimeIdentity = new object();
+        object justiceIdentity = new object();
+        DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding =
+            new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+                protocol,
+                crimeIdentity, crimeIdentity, graph.JusticeRecordsOwner,
+                justiceIdentity, justiceIdentity, graph.JusticeRecordsOwner,
+                admissionEnabled: true);
+        RecordingCrimeMutationHostPort hostPort =
+            new RecordingCrimeMutationHostPort(binding);
+        Assert.That(DailyV1SelectedCrimeActionExecutionStage
+            .DailyV1CoreSelectedCrimeActionBoundary.TryCreate(
+                composition.ExecutionBoundaryState, graph, actor, action,
+                new RecordingCrimeProjection(), hostPort,
+                out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary), Is.True);
+
+        RecordingP12Protocol replacementProtocol = new RecordingP12Protocol();
+        hostPort.Binding = new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+            replacementProtocol,
+            crimeIdentity, crimeIdentity, graph.JusticeRecordsOwner,
+            justiceIdentity, justiceIdentity, graph.JusticeRecordsOwner,
+            admissionEnabled: true);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            boundary.ExecuteWithinOperation(() =>
+            {
+                Assert.Fail("A replaced host binding must not enter its P12 operation.");
+                return true;
+            }));
+        Assert.That(protocol.ValidatedSections, Is.Null);
+        Assert.That(protocol.Faulted, Is.True);
+        Assert.That(replacementProtocol.Faulted, Is.True);
+    }
+
+    [Test]
+    public void CoreCrimeBoundaryRejectsStaleActionBeforeOpeningP12Scope()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition,
+                out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1ActionDefinition action = ActionOfType(definitions,
+            DailyV1NpcDefinitionRules.HideActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, action, null, null, null, 0, 0f, 1f,
+            NpcTravelReason.None, 0f, null, null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, action, payload, null), Is.True);
+
+        RecordingP12Protocol protocol = new RecordingP12Protocol();
+        object justiceIdentity = new object();
+        DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding =
+            new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+                protocol,
+                null, null, null,
+                justiceIdentity, justiceIdentity, graph.JusticeRecordsOwner,
+                admissionEnabled: true);
+        Assert.That(composition.ExecutionBoundaryState
+            .TryBindSelectedCrimeJusticeDailyMutationHostBinding(graph, hostBinding), Is.True);
+        Assert.That(DailyV1SelectedCrimeActionExecutionStage
+            .DailyV1CoreSelectedCrimeActionBoundary.TryCreate(
+                composition.ExecutionBoundaryState, graph, actor, action,
+                new RecordingCrimeProjection(),
+                new RecordingCrimeMutationHostPort(hostBinding),
+                out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary), Is.True);
+
+        DailyV1ActionDefinition replacementAction = ActionOfType(definitions,
+            DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, replacementAction, null, null, null, 0, 0f, 1f,
+            NpcTravelReason.None, 0f, null, null, null, null,
+            out DailyV1NpcActionPayloadOwner replacementPayload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(
+            actor, replacementAction, replacementPayload, null), Is.True);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            boundary.ExecuteWithinOperation(() =>
+            {
+                Assert.Fail("A stale action must not enter its P12 operation.");
+                return true;
+            }));
+        Assert.That(protocol.ValidatedSections, Is.Null,
+            "A replaced Core action slot is rejected before census baselines are queried.");
+        Assert.That(protocol.Faulted, Is.True,
+            "Losing the exact admitted operation identity faults the bound census protocol.");
+    }
+
+    [Test]
     public void SelectedHideUsesCoreWarrantAndKeepsHiddenTimerAndStatusWritesSeparate()
     {
         CrimeFixture fixture = CreateFixture();
@@ -478,6 +661,68 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
         public void PublishEscaped(DailyV1NpcRuntimeOwners actor,
             DailyV1CityRuntimeOwners eventCity, bool hadActiveSentence,
             float bountyAfterPenalty, string originDecisionId) => Order.Add("escape-event");
+    }
+
+    private sealed class RecordingCrimeMutationHostPort
+        : IDailyV1SelectedCrimeJusticeDailyMutationHostPort
+    {
+        internal DailyV1SelectedCrimeJusticeDailyMutationHostBinding Binding { get; set; }
+        internal int BindingRequests { get; private set; }
+
+        internal RecordingCrimeMutationHostPort(
+            DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding) =>
+            Binding = binding ?? throw new ArgumentNullException(nameof(binding));
+
+        public bool TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1SelectedCrimeJusticeDailyMutationHostBinding result)
+        {
+            BindingRequests++;
+            result = Binding;
+            return Binding != null && Binding.HasExactCoreOwnerRelationships(graph);
+        }
+    }
+
+    private sealed class RecordingCrimeProjection
+        : DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionProjectionBoundary
+    {
+        public bool CanProjectStatusChanges(
+            DailyV1NpcRuntimeOwners actor,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => actor?.Status != null;
+        public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners actor) { }
+        public void NotifyStatusMutationCommitted(
+            DailyV1NpcRuntimeOwners actor, DailyV1StatusDefinition status, bool added) { }
+        public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners actor) { }
+        public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence) => true;
+        public void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence) { }
+        public void PublishHidden(DailyV1NpcRuntimeOwners actor) { }
+        public void PublishFailedEscape(DailyV1NpcRuntimeOwners actor, int sentencePenalty) { }
+        public void PublishEscaped(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners eventCity,
+            bool hadActiveSentence,
+            float bountyAfterPenalty,
+            string originDecisionId) { }
+    }
+
+    private sealed class RecordingP12Protocol : IDailyV1P12CrimeJusticeMutationProtocol
+    {
+        internal IReadOnlyList<string> ValidatedSections { get; private set; }
+        internal bool Faulted { get; private set; }
+
+        public void FaultClosed() => Faulted = true;
+        public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds)
+        {
+            ValidatedSections = sectionIds?.ToArray();
+            return sectionIds != null;
+        }
+        public bool TryReserveMutationEpoch(out object reservation)
+        { reservation = null; return false; }
+        public bool TryNotifyReservedCommittedMutations(
+            object reservation, IReadOnlyCollection<string> sectionIds) => false;
+        public void ReleaseMutationEpoch(object reservation) { }
+        public bool TryValidateMutationEpochCapacity() => true;
+        public bool NotifyCommittedMutation(string sectionId) => true;
     }
 
     private sealed class RecordingDecisionBoundary : IDailyV1SelectedNpcActionDecisionBoundary

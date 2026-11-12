@@ -476,6 +476,55 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         return TryBeginImmediateMutation(owners, sections, out scope);
     }
 
+    /// <summary>
+    /// Builds the ordinary selected Hide/Escape Crime/Justice operation from
+    /// the exact Core actor and the already-pinned host Justice census
+    /// identity. Core derives every owner binding and section; the host does
+    /// not assemble a mutable section list for this selected operation.
+    /// </summary>
+    internal bool TryBeginSelectedCrimeActionMutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        object justiceCensusOwnerIdentity,
+        bool includeCrimeReceiptSection,
+        out IDisposable scope)
+    {
+        scope = null;
+        if (!isAdmissionEnabled()) return true;
+
+        if (graph == null || graph.Definitions == null || actor == null
+            || justiceCensusOwnerIdentity == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(actor.Definitions, graph.Definitions)
+            || graph.JusticeRecordsOwner == null)
+        {
+            faultAdmission();
+            return false;
+        }
+
+        DailyV1P12CrimeJusticeOwnerBinding actorBinding =
+            DailyV1P12CrimeJusticeOwnerBinding.ForNpcStatusOwner(actor);
+        DailyV1P12CrimeJusticeOwnerBinding justiceBinding =
+            DailyV1P12CrimeJusticeOwnerBinding.ForJusticeRecordsOwner(
+                justiceCensusOwnerIdentity, graph.JusticeRecordsOwner);
+        List<DailyV1P12CrimeJusticeOwnerBinding> owners =
+            new List<DailyV1P12CrimeJusticeOwnerBinding>(2)
+            {
+                actorBinding,
+                justiceBinding
+            };
+        List<string> sections = new List<string>(includeCrimeReceiptSection ? 4 : 3)
+        {
+            actorBinding.SectionId,
+            justiceBinding.SectionId,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId
+        };
+        if (includeCrimeReceiptSection)
+            sections.Add(DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId);
+
+        return TryBeginImmediateMutation(owners, sections, out scope);
+    }
+
     internal bool CanReuseImmediateMutation(
         IReadOnlyList<DailyV1P12CrimeJusticeOwnerBinding> owners,
         IReadOnlyList<string> sectionIds)

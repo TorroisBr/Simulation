@@ -7,11 +7,9 @@ using System;
 /// </summary>
 internal static class DailyV1SelectedCrimeActionExecutionStage
 {
-    internal interface ISelectedCrimeActionBoundary
+    internal interface ISelectedCrimeActionProjectionBoundary
         : DailyV1SelectedActionExecutionStage.ISelectedNpcOwnerMutationBoundary
     {
-        DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
-        bool ExecuteWithinOperation(Func<bool> operation);
         bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence);
         void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence);
         void PublishHidden(DailyV1NpcRuntimeOwners actor);
@@ -22,6 +20,234 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
             bool hadActiveSentence,
             float bountyAfterPenalty,
             string originDecisionId);
+    }
+
+    internal interface ISelectedCrimeActionBoundary
+        : ISelectedCrimeActionProjectionBoundary
+    {
+        DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
+        bool ExecuteWithinOperation(Func<bool> operation);
+    }
+
+    /// <summary>
+    /// Binds selected Hide/Escape to the exact admitted Core session. Core
+    /// derives and opens the P12 actor/Justice/receipt scope; Unity contributes
+    /// only exact projection checks and publication callbacks.
+    /// </summary>
+    internal static class DailyV1CoreSelectedCrimeActionBoundary
+    {
+        internal static bool TryCreate(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition expectedAction,
+            ISelectedCrimeActionProjectionBoundary projection,
+            IDailyV1SelectedCrimeJusticeDailyMutationHostPort hostBindingPort,
+            out ISelectedCrimeActionBoundary boundary)
+        {
+            boundary = null;
+            if (executionState == null || graph == null || actor == null
+                || expectedAction == null || projection == null || hostBindingPort == null
+                || !executionState.HasAdmittedSelectedDailyExecution
+                || executionState.AdmissionContext == null
+                || !executionState.AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                || !graph.ContainsExactNpcOwner(actor)
+                || !ReferenceEquals(actor.Definitions, graph.Definitions)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentAction, expectedAction)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentPayload?.Action, expectedAction)
+                || (expectedAction.Values.actionType?.Value
+                    != DailyV1NpcDefinitionRules.HideActionTypeValue
+                    && expectedAction.Values.actionType?.Value
+                        != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)
+                || graph.JusticeRecordsOwner == null)
+                return false;
+
+            if (!hostBindingPort.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostCandidate)
+                || hostCandidate == null || !hostCandidate.AdmissionEnabled
+                || !executionState.TryBindSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, hostCandidate)
+                || !executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding)
+                || !hostBinding.HasSameSessionBinding(hostCandidate)
+                || hostBinding.JusticeOwnerIdentity == null
+                || !executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    hostBinding.Protocol, graph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+                || coordinator == null)
+            {
+                executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+                return false;
+            }
+
+            boundary = new CoreBoundary(
+                executionState, graph, actor, expectedAction,
+                hostBinding, coordinator, projection, hostBindingPort);
+            return true;
+        }
+
+        private sealed class CoreBoundary : ISelectedCrimeActionBoundary
+        {
+            private readonly DailyV1ExecutionBoundaryState executionState;
+            private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+            private readonly DailyV1NpcRuntimeOwners actor;
+            private readonly DailyV1ActionDefinition expectedAction;
+            private readonly DailyV1NpcActionPayloadOwner expectedPayload;
+            private readonly DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding;
+            private readonly DailyV1P12CrimeJusticeMutationCoordinator coordinator;
+            private readonly ISelectedCrimeActionProjectionBoundary projection;
+            private readonly IDailyV1SelectedCrimeJusticeDailyMutationHostPort hostBindingPort;
+
+            internal CoreBoundary(
+                DailyV1ExecutionBoundaryState executionState,
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1ActionDefinition expectedAction,
+                DailyV1SelectedCrimeJusticeDailyMutationHostBinding hostBinding,
+                DailyV1P12CrimeJusticeMutationCoordinator coordinator,
+                ISelectedCrimeActionProjectionBoundary projection,
+                IDailyV1SelectedCrimeJusticeDailyMutationHostPort hostBindingPort)
+            {
+                this.executionState = executionState;
+                this.graph = graph;
+                this.actor = actor;
+                this.expectedAction = expectedAction;
+                expectedPayload = actor.ActionSlot.CurrentPayload;
+                this.hostBinding = hostBinding;
+                this.coordinator = coordinator;
+                this.projection = projection;
+                this.hostBindingPort = hostBindingPort;
+            }
+
+            public DailyV1JusticeRecordsOwner JusticeRecordsOwner => graph.JusticeRecordsOwner;
+
+            public bool ExecuteWithinOperation(Func<bool> operation)
+            {
+                if (operation == null) throw new ArgumentNullException(nameof(operation));
+                if (!IsCurrentSession())
+                {
+                    coordinator.FaultSelected(executionState);
+                    throw new InvalidOperationException(
+                        "The selected Crime/Justice action lost its exact admitted Core session.");
+                }
+
+                if (!coordinator.TryBeginSelectedCrimeActionMutation(
+                        graph, actor, hostBinding.JusticeOwnerIdentity,
+                        includeCrimeReceiptSection: hostBinding.CrimeOwnerIdentity != null,
+                        out IDisposable scope)
+                    || scope == null)
+                    throw new InvalidOperationException(
+                        "P12 Core could not admit the selected Crime/Justice action owners and receipt sections.");
+
+                using (scope)
+                    return operation();
+            }
+
+            public bool CanProjectStatusChanges(
+                DailyV1NpcRuntimeOwners owner,
+                System.Collections.Generic.IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
+                IsExactActor(owner) && IsCurrentSession()
+                && projection.CanProjectStatusChanges(owner, statusToAdd);
+
+            public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner)
+            {
+                if (!IsExactActor(owner) || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected Crime owner is outside its exact admitted Core operation.");
+                projection.EnsureMutationAllowed(owner);
+            }
+
+            public void NotifyStatusMutationCommitted(
+                DailyV1NpcRuntimeOwners owner,
+                DailyV1StatusDefinition status,
+                bool added)
+            {
+                if (!IsExactActor(owner) || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected Crime status owner changed outside its exact admitted Core operation.");
+                projection.NotifyStatusMutationCommitted(owner, status, added);
+            }
+
+            public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
+            {
+                if (!IsExactActor(owner) || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected Crime hidden-state owner changed outside its exact admitted Core operation.");
+                projection.NotifyHiddenMutationCommitted(owner);
+            }
+
+            public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence) =>
+                IsCurrentSession() && projection.CanRemoveSentenceProjection(sentence);
+
+            public void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence)
+            {
+                if (!IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected Crime sentence projection changed outside its exact Core operation.");
+                projection.CommitSentenceProjectionRemoval(sentence);
+            }
+
+            public void PublishHidden(DailyV1NpcRuntimeOwners owner)
+            {
+                EnsureCurrentActor(owner);
+                projection.PublishHidden(owner);
+            }
+
+            public void PublishFailedEscape(DailyV1NpcRuntimeOwners owner, int sentencePenalty)
+            {
+                EnsureCurrentActor(owner);
+                projection.PublishFailedEscape(owner, sentencePenalty);
+            }
+
+            public void PublishEscaped(
+                DailyV1NpcRuntimeOwners owner,
+                DailyV1CityRuntimeOwners eventCity,
+                bool hadActiveSentence,
+                float bountyAfterPenalty,
+                string originDecisionId)
+            {
+                EnsureCurrentActor(owner);
+                projection.PublishEscaped(
+                    owner, eventCity, hadActiveSentence, bountyAfterPenalty, originDecisionId);
+            }
+
+            private bool IsExactActor(DailyV1NpcRuntimeOwners candidate) =>
+                ReferenceEquals(candidate, actor)
+                && graph.ContainsExactNpcOwner(candidate)
+                && ReferenceEquals(candidate.Definitions, graph.Definitions);
+
+            private void EnsureCurrentActor(DailyV1NpcRuntimeOwners candidate)
+            {
+                if (!IsExactActor(candidate) || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected Crime action lost its exact owner before publication.");
+            }
+
+            private bool IsCurrentSession() =>
+                executionState.HasAdmittedSelectedDailyExecution
+                && executionState.AdmissionContext != null
+                && executionState.AdmissionContext.IsOwnedByCurrentThread()
+                && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                && graph.ContainsExactNpcOwner(actor)
+                && ReferenceEquals(actor.Definitions, graph.Definitions)
+                && ReferenceEquals(actor.ActionSlot?.CurrentAction, expectedAction)
+                && ReferenceEquals(actor.ActionSlot?.CurrentPayload, expectedPayload)
+                && ReferenceEquals(expectedPayload?.Action, expectedAction)
+                && hostBindingPort.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding currentHostCandidate)
+                && currentHostCandidate != null
+                && executionState.TryBindSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, currentHostCandidate)
+                && executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding currentBinding)
+                && ReferenceEquals(currentBinding, hostBinding)
+                && currentBinding.HasSameSessionBinding(currentHostCandidate)
+                && executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    hostBinding.Protocol, graph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator currentCoordinator)
+                && ReferenceEquals(currentCoordinator, coordinator);
+        }
     }
 
     internal sealed class Result
