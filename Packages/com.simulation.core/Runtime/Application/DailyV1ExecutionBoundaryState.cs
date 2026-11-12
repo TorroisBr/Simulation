@@ -1347,7 +1347,18 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
 
         DailyV1OwnerSectionCensusCaptureResult result;
-        if (captureSource == null)
+        if (hostPorts is IDailyV1SelectedRuntimeOwnerCensusProviderPort providerPort)
+        {
+            if (!DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+                    this, providerPort, allowedOuterScope,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> coreCapturedSections,
+                    out long coreMutationEpoch,
+                    out failure))
+                return false;
+            result = DailyV1OwnerSectionCensusCaptureResult.Captured(
+                coreCapturedSections, coreMutationEpoch);
+        }
+        else if (captureSource == null)
         {
             if (hostPorts == null
                 || !hostPorts.TryCaptureOwnerSectionCensus(
@@ -1442,34 +1453,102 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         mutationEpoch = 0L;
         diagnostic = null;
         Func<DailyV1CaptureScopeAllowance, DailyV1OwnerSectionCensusCaptureResult> captureSource;
+        IDailyV1SelectedRuntimeOwnerCensusProviderPort providerPort = null;
+        DailyV1SelectedRuntimeOwnerGraph captureOwnerGraph = null;
+        ActorChoiceStore captureActorChoiceStore = null;
         lock (operationSyncRoot)
         {
             if (!IsEligibleForUnadmittedRestoredOwnerCensus(out diagnostic))
                 return false;
 
-            if (selectedRuntimeOwnerCensusSourceIdentity == null
-                || selectedRuntimeOwnerCensusSource == null)
+            if (hostPorts is IDailyV1SelectedRuntimeOwnerCensusProviderPort coreCapturePort)
             {
-                if (hostPorts == null)
+                if (selectedRuntimeOwnerCensusSourceIdentity == null
+                    || !ReferenceEquals(selectedRuntimeOwnerCensusSourceIdentity,
+                        hostPorts.SelectedRuntimeOwnerCensusSourceIdentity))
                 {
-                    diagnostic = "The exact Core execution state has no bound selected-owner census source.";
+                    diagnostic = "The restored Core census is not bound to the exact selected host provider registry.";
                     return false;
                 }
-                if (!hostPorts.TryCaptureUnadmittedRestoredDailyOwnerVector(
-                        out ownerSections, out mutationEpoch, out diagnostic))
-                    return false;
-                if (!IsEligibleForUnadmittedRestoredOwnerCensus(out diagnostic)
-                    || mutationEpoch != mutationEpochState.CurrentEpoch)
+                providerPort = coreCapturePort;
+                captureOwnerGraph = selectedRuntimeOwnerGraph;
+                captureActorChoiceStore = selectedActorChoiceStore;
+                captureSource = null;
+            }
+            else
+            {
+                if (selectedRuntimeOwnerCensusSourceIdentity == null
+                    || selectedRuntimeOwnerCensusSource == null)
                 {
-                    ownerSections = null;
-                    mutationEpoch = 0L;
+                    if (hostPorts == null)
+                    {
+                        diagnostic = "The exact Core execution state has no bound selected-owner census source.";
+                        return false;
+                    }
+                    if (!hostPorts.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                            out ownerSections, out mutationEpoch, out diagnostic))
+                        return false;
+                    if (!IsEligibleForUnadmittedRestoredOwnerCensus(out diagnostic)
+                        || mutationEpoch != mutationEpochState.CurrentEpoch)
+                    {
+                        ownerSections = null;
+                        mutationEpoch = 0L;
+                        if (string.IsNullOrWhiteSpace(diagnostic))
+                            diagnostic = DailyCaptureEligibilityFailure.OperationInProgress.ToString();
+                        return false;
+                    }
+                    return true;
+                }
+                captureSource = selectedRuntimeOwnerCensusSource;
+            }
+        }
+
+        if (providerPort != null)
+        {
+            if (!DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+                    this, providerPort, DailyV1CaptureScopeAllowance.None,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> sourceSections,
+                    out long capturedEpoch,
+                    out DailyCaptureEligibilityFailure captureFailure))
+            {
+                diagnostic = captureFailure.ToString();
+                return false;
+            }
+
+            string compositionDiagnostic = null;
+            if (!hostPorts.TryGetExactJusticeRecordsCensusProjectionIdentity(
+                    captureOwnerGraph?.JusticeRecordsOwner,
+                    out object justiceProjectionIdentity,
+                    out long p18ReceiptRevision)
+                || !DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedDailyOwnerVector(
+                    captureOwnerGraph,
+                    captureActorChoiceStore,
+                    sourceSections,
+                    justiceProjectionIdentity,
+                    p18ReceiptRevision,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> composedSections,
+                    out compositionDiagnostic))
+            {
+                diagnostic = string.IsNullOrWhiteSpace(compositionDiagnostic)
+                    ? "The Core owner graph could not compose the restored target census."
+                    : compositionDiagnostic;
+                return false;
+            }
+
+            lock (operationSyncRoot)
+            {
+                if (!IsEligibleForUnadmittedRestoredOwnerCensus(out diagnostic)
+                    || capturedEpoch != mutationEpochState.CurrentEpoch)
+                {
                     if (string.IsNullOrWhiteSpace(diagnostic))
                         diagnostic = DailyCaptureEligibilityFailure.OperationInProgress.ToString();
                     return false;
                 }
-                return true;
             }
-            captureSource = selectedRuntimeOwnerCensusSource;
+
+            ownerSections = composedSections;
+            mutationEpoch = capturedEpoch;
+            return true;
         }
 
         DailyV1OwnerSectionCensusCaptureResult result = captureSource(DailyV1CaptureScopeAllowance.None);

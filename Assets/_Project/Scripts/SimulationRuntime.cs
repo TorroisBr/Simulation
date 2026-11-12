@@ -81,7 +81,8 @@ public sealed class SimulationRuntimeSpatialInvariantReport
 }
 
 public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
-    IDailyV1RuntimeAdvanceBoundary, IDailyV1SelectedRuntimeAdvanceHostPorts
+    IDailyV1RuntimeAdvanceBoundary, IDailyV1SelectedRuntimeAdvanceHostPorts,
+    IDailyV1SelectedRuntimeOwnerCensusProviderPort
 {
     [ThreadStatic]
     private static DailyGameplayExecutionProbeForTest activeDailyGameplayExecutionProbeForTest;
@@ -12673,6 +12674,64 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
         hostPorts = new SelectedDailyV1ExecutionBoundary(this);
         return true;
+    }
+
+    bool IDailyV1SelectedRuntimeOwnerCensusProviderPort.TryGetQuiescentOwnerSectionCensusProviders(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
+        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> providers,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        providers = null;
+        ContinuationCensusProtocol census = npcRosterCensusProtocol;
+        if (census == null)
+        {
+            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+            return false;
+        }
+
+        if (!census.TryGetQuiescentOwnerSectionCensusProviders(
+                allowedOuterScope,
+                out providers,
+                out ContinuationCensusFailure censusFailure))
+        {
+            failure = MapDailyCaptureFailure(censusFailure);
+            return false;
+        }
+
+        failure = DailyCaptureEligibilityFailure.None;
+        return true;
+    }
+
+    bool IDailyV1SelectedRuntimeOwnerCensusProviderPort.TryValidateQuiescentOwnerSectionCensusSnapshot(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
+        IReadOnlyList<OwnerSectionCensusSnapshot> coreCapturedSections,
+        long coreObservedMutationEpoch,
+        out DailyCaptureEligibilityFailure failure)
+    {
+        ContinuationCensusProtocol census = npcRosterCensusProtocol;
+        if (census == null)
+        {
+            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+            return false;
+        }
+
+        if (!census.TryValidateQuiescentOwnerSectionCensusSnapshot(
+                allowedOuterScope,
+                coreCapturedSections,
+                coreObservedMutationEpoch,
+                out ContinuationCensusFailure censusFailure))
+        {
+            failure = MapDailyCaptureFailure(censusFailure);
+            return false;
+        }
+
+        failure = DailyCaptureEligibilityFailure.None;
+        return true;
+    }
+
+    void IDailyV1SelectedRuntimeOwnerCensusProviderPort.FaultOwnerSectionCensusProviderProtocol()
+    {
+        npcRosterCensusProtocol?.FaultClosed();
     }
 
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCaptureOwnerSectionCensus(

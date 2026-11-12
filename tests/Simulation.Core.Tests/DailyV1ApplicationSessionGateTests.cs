@@ -68,6 +68,130 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
     }
 
+    private sealed class SnapshotOwnerSectionCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly OwnerSectionCensusSnapshot snapshot;
+        private readonly Action onRead;
+        private readonly string sectionIdOverride;
+
+        internal SnapshotOwnerSectionCensusProvider(
+            OwnerSectionCensusSnapshot snapshot,
+            Action onRead = null,
+            string sectionIdOverride = null)
+        {
+            this.snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
+            this.onRead = onRead;
+            this.sectionIdOverride = sectionIdOverride;
+        }
+
+        internal int ReadCount { get; private set; }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            ReadCount++;
+            onRead?.Invoke();
+            return new OwnerSectionCensusWitness(
+                sectionIdOverride ?? snapshot.SectionId,
+                snapshot.SchemaVersion,
+                snapshot.OwnerInstanceIdentity,
+                snapshot.Cardinality,
+                snapshot.Revision);
+        }
+    }
+
+    private sealed class CoreOwnerSectionCensusProviderPort
+        : IDailyV1SelectedRuntimeOwnerCensusProviderPort
+    {
+        private readonly IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations;
+        private readonly DailyV1ExecutionBoundaryState executionState;
+        private readonly IReadOnlyList<OwnerSectionCensusSnapshot> expectedRows;
+        private readonly long expectedMutationEpoch;
+        private readonly Action duringValidation;
+        private bool faulted;
+
+        internal CoreOwnerSectionCensusProviderPort(
+            DailyV1ExecutionBoundaryState executionState,
+            IReadOnlyList<OwnerSectionCensusSnapshot> rows,
+            Action duringValidation = null,
+            bool corruptFirstWitness = false)
+        {
+            this.executionState = executionState
+                ?? throw new ArgumentNullException(nameof(executionState));
+            expectedMutationEpoch = executionState.MutationEpochState.CurrentEpoch;
+            if (rows == null) throw new ArgumentNullException(nameof(rows));
+            expectedRows = rows.OrderBy(row => row.SectionId, StringComparer.Ordinal).ToArray();
+            this.duringValidation = duringValidation;
+            List<DailyV1OwnerSectionCensusProviderRegistration> built =
+                new List<DailyV1OwnerSectionCensusProviderRegistration>(expectedRows.Count);
+            for (int index = 0; index < expectedRows.Count; index++)
+            {
+                OwnerSectionCensusSnapshot row = expectedRows[index];
+                built.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                    row.SectionId, row.SchemaVersion, row.Role,
+                    new SnapshotOwnerSectionCensusProvider(
+                        row,
+                        sectionIdOverride: corruptFirstWitness && index == 0
+                            ? row.SectionId + ".invalid"
+                            : null)));
+            }
+            registrations = built.AsReadOnly();
+        }
+
+        internal int ValidationCount { get; private set; }
+        internal IReadOnlyList<OwnerSectionCensusSnapshot> ValidatedRows { get; private set; }
+
+        public bool TryGetQuiescentOwnerSectionCensusProviders(
+            DailyV1CaptureScopeAllowance allowedOuterScope,
+            out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> providers,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            providers = faulted ? null : registrations;
+            failure = faulted
+                ? DailyCaptureEligibilityFailure.OwnerCoverageIncomplete
+                : DailyCaptureEligibilityFailure.None;
+            return !faulted;
+        }
+
+        public bool TryValidateQuiescentOwnerSectionCensusSnapshot(
+            DailyV1CaptureScopeAllowance allowedOuterScope,
+            IReadOnlyList<OwnerSectionCensusSnapshot> coreCapturedSections,
+            long coreObservedMutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            if (faulted)
+            {
+                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+            ValidationCount++;
+            ValidatedRows = coreCapturedSections;
+            duringValidation?.Invoke();
+            bool matches = coreCapturedSections != null
+                && coreCapturedSections.Count == expectedRows.Count
+                && coreObservedMutationEpoch == expectedMutationEpoch
+                && !executionState.MutationEpochState.HasActiveReservation;
+            for (int index = 0; matches && index < expectedRows.Count; index++)
+            {
+                OwnerSectionCensusSnapshot actual = coreCapturedSections[index];
+                OwnerSectionCensusSnapshot expected = expectedRows[index];
+                matches = actual != null && expected != null
+                    && string.Equals(actual.SectionId, expected.SectionId, StringComparison.Ordinal)
+                    && actual.SchemaVersion == expected.SchemaVersion
+                    && actual.Role == expected.Role
+                    && ReferenceEquals(actual.OwnerInstanceIdentity, expected.OwnerInstanceIdentity)
+                    && actual.Cardinality == expected.Cardinality
+                    && actual.Revision == expected.Revision;
+            }
+
+            failure = matches
+                ? DailyCaptureEligibilityFailure.None
+                : DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+            return matches;
+        }
+
+        public void FaultOwnerSectionCensusProviderProtocol() => faulted = true;
+    }
+
     private sealed class SelectedDailyExecutionHostPorts : IDailyV1SelectedDailyExecutionHostPorts
     {
         public void BeginLoggerDay(long absoluteDay) { }
@@ -3903,6 +4027,93 @@ public sealed class DailyV1ApplicationSessionGateTests
             Is.EqualTo(expectedHostRemainder.Select(section => section.SectionId)));
         for (int index = 0; index < expectedHostRemainder.Length; index++)
             Assert.That(hostRemainder[index], Is.SameAs(expectedHostRemainder[index]));
+    }
+
+    [Test]
+    public void CoreOwnerCensusCaptureReadsRegisteredProvidersAndUsesItsSharedEpoch()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session, out _);
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        OwnerSectionCensusSnapshot[] sourceRows =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        CoreOwnerSectionCensusProviderPort providerPort =
+            new CoreOwnerSectionCensusProviderPort(state, sourceRows);
+
+        bool captured = DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, providerPort, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> actualRows,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure);
+
+        Assert.That(captured, Is.True, failure.ToString());
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+            actualRows), Is.True);
+        Assert.That(actualRows.Select(row => row.SectionId),
+            Is.EqualTo(sourceRows.Select(row => row.SectionId).OrderBy(id => id, StringComparer.Ordinal)));
+        Assert.That(mutationEpoch, Is.EqualTo(state.MutationEpochState.CurrentEpoch));
+        Assert.That(providerPort.ValidationCount, Is.EqualTo(1));
+        Assert.That(providerPort.ValidatedRows, Is.SameAs(actualRows));
+    }
+
+    [Test]
+    public void CoreOwnerCensusCaptureRejectsEpochDriftDuringHostBaselineValidation()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session, out _);
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        OwnerSectionCensusSnapshot[] sourceRows =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        CoreOwnerSectionCensusProviderPort providerPort =
+            new CoreOwnerSectionCensusProviderPort(
+                state, sourceRows,
+                () => Assert.That(state.MutationEpochState.TryAdvanceCommittedMutation(), Is.True));
+
+        bool captured = DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, providerPort, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> actualRows,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure);
+
+        Assert.That(captured, Is.False);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
+        Assert.That(actualRows, Is.Null);
+        Assert.That(mutationEpoch, Is.Zero);
+        Assert.That(providerPort.ValidationCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void CoreOwnerCensusCaptureFaultsProviderProtocolAfterMalformedWitness()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session, out _);
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        OwnerSectionCensusSnapshot[] sourceRows =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        CoreOwnerSectionCensusProviderPort providerPort =
+            new CoreOwnerSectionCensusProviderPort(
+                state, sourceRows, corruptFirstWitness: true);
+
+        bool firstCaptured = DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, providerPort, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> firstRows,
+            out long firstEpoch,
+            out DailyCaptureEligibilityFailure firstFailure);
+        bool retried = DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, providerPort, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> retriedRows,
+            out long retriedEpoch,
+            out DailyCaptureEligibilityFailure retryFailure);
+
+        Assert.That(firstCaptured, Is.False);
+        Assert.That(firstFailure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
+        Assert.That(firstRows, Is.Null);
+        Assert.That(firstEpoch, Is.Zero);
+        Assert.That(retried, Is.False);
+        Assert.That(retryFailure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
+        Assert.That(retriedRows, Is.Null);
+        Assert.That(retriedEpoch, Is.Zero);
+        Assert.That(providerPort.ValidationCount, Is.Zero);
     }
 
     [Test]

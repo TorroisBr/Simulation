@@ -2469,6 +2469,179 @@ public sealed class ContinuationCensusProtocol
             out failure);
 
     /// <summary>
+    /// Supplies the sealed provider registry to the Core capture transaction.
+    /// It exposes live readers only; Core reads their values and samples the
+    /// exact shared mutation epoch itself.
+    /// </summary>
+    internal bool TryGetQuiescentOwnerSectionCensusProviders(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
+        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> providers,
+        out ContinuationCensusFailure failure)
+    {
+        providers = null;
+        if (!TryPrepareQuiescentOwnerSectionCapture(allowedOuterScope, out failure))
+            return false;
+
+        List<OwnerSectionContract> orderedContracts =
+            new List<OwnerSectionContract>(expectedSections.Values);
+        orderedContracts.Sort((left, right) =>
+            StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+        List<DailyV1OwnerSectionCensusProviderRegistration> registrations =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(orderedContracts.Count);
+        foreach (OwnerSectionContract contract in orderedContracts)
+        {
+            if (contract == null
+                || !registeredSections.TryGetValue(contract.SectionId, out RegisteredSection section)
+                || section == null || section.Provider == null
+                || !ReferenceEquals(section.Contract, contract))
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+
+            try
+            {
+                registrations.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                    contract.SectionId,
+                    contract.SchemaVersion,
+                    contract.Role,
+                    section.Provider));
+            }
+            catch
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+        }
+
+        providers = Array.AsReadOnly(registrations.ToArray());
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    /// <summary>
+    /// Confirms that the snapshot Core read came from the exact sealed host
+    /// provider registrations and still matches their committed baselines.
+    /// No values or epoch are supplied by this protocol callback.
+    /// </summary>
+    internal bool TryValidateQuiescentOwnerSectionCensusSnapshot(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
+        IReadOnlyList<OwnerSectionCensusSnapshot> coreCapturedSections,
+        long coreObservedMutationEpoch,
+        out ContinuationCensusFailure failure)
+    {
+        failure = ContinuationCensusFailure.None;
+        if (coreCapturedSections == null || coreObservedMutationEpoch < 0L
+            || !TryPrepareQuiescentOwnerSectionCapture(allowedOuterScope, out failure))
+        {
+            if (failure == ContinuationCensusFailure.None)
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        List<OwnerSectionContract> orderedContracts =
+            new List<OwnerSectionContract>(expectedSections.Values);
+        orderedContracts.Sort((left, right) =>
+            StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+        if (coreCapturedSections.Count != orderedContracts.Count)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        for (int index = 0; index < orderedContracts.Count; index++)
+        {
+            OwnerSectionContract contract = orderedContracts[index];
+            OwnerSectionCensusSnapshot captured = coreCapturedSections[index];
+            if (contract == null || captured == null
+                || !registeredSections.TryGetValue(contract.SectionId, out RegisteredSection section)
+                || !section.HasBaseline
+                || !string.Equals(captured.SectionId, contract.SectionId, StringComparison.Ordinal)
+                || captured.SchemaVersion != contract.SchemaVersion
+                || captured.Role != contract.Role
+                || !TryReadAndValidate(section, allowRevisionAdvance: false,
+                    out OwnerSectionCensusWitness current, out failure)
+                || current == null
+                || !string.Equals(captured.SectionId, current.SectionId, StringComparison.Ordinal)
+                || captured.SchemaVersion != current.SchemaVersion
+                || !ReferenceEquals(captured.OwnerInstanceIdentity, current.OwnerInstanceIdentity)
+                || captured.Cardinality != current.Cardinality
+                || captured.Revision != current.Revision)
+            {
+                Fault();
+                if (failure == ContinuationCensusFailure.None)
+                    failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+        }
+
+        if (mutationEpochState.CurrentEpoch != coreObservedMutationEpoch
+            || !TryPrepareQuiescentOwnerSectionCapture(allowedOuterScope, out failure))
+        {
+            if (failure == ContinuationCensusFailure.None)
+                failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    private bool TryPrepareQuiescentOwnerSectionCapture(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
+        out ContinuationCensusFailure failure)
+    {
+        if (IsFaulted())
+        {
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+        if (!Enum.IsDefined(typeof(DailyV1CaptureScopeAllowance), allowedOuterScope)
+            || !expectedSectionsSealed
+            || !providersSealed
+            || expectedSections.Count == 0
+            || !operationsSealed
+            || !hasExpectedOperationInventory)
+        {
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        if (!TryRequireOwnerThread(out failure)) return false;
+        if (!HasExpectedProtocolOperationCount(allowedOuterScope)
+            || activeMutationEpochReservation != null
+            || (sharedExecutionState != null
+                && !sharedExecutionState.TryAssessCaptureScope(allowedOuterScope))
+            || (sharedExecutionState == null
+                && allowedOuterScope != DailyV1CaptureScopeAllowance.None))
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        bool dynamicFamiliesMatch =
+            (spatialKnowledgeRoster == null || TryValidateSpatialKnowledgeFamilyMatchesRoster(out failure))
+            && (npcTravelStateRoster == null || TryValidateNpcTravelStateFamilyMatchesRoster(out failure))
+            && (inventoryRoster == null || TryValidateInventoryFamilyMatchesRoster(out failure))
+            && (moneyAccountRoster == null || TryValidateMoneyAccountFamilyMatchesRoster(out failure))
+            && (npcKnowledgeRoster == null || TryValidateNpcKnowledgeFamilyMatchesRoster(out failure))
+            && (npcPlanRoster == null || TryValidateNpcPlanFamilyMatchesRoster(out failure))
+            && (npcReceiptOwnerRoster == null
+                || TryValidateNpcReceiptOwnerFamilyMatchesRoster(out failure));
+        if (!dynamicFamiliesMatch || registeredSections.Count != expectedSections.Count)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    /// <summary>
     /// Reads a copied, ordinal census with protocol operations idle and only
     /// the explicitly authorized outer application scope, if any.
     /// </summary>
