@@ -103,6 +103,20 @@ public static class PersonMaterializationSystem
         {
             return false;
         }
+        DailyV1SelectedNpcMaterializationBindingPlan selectedBindingPlan = null;
+        if (candidate.UsesSelectedDailyV1Definitions)
+        {
+            DailyV1SelectedRuntimeOwnerGraph selectedGraph = world.SelectedRuntimeOwnerGraph;
+            if (!DailyV1SelectedNpcMaterializationBindingOperation.TryPrepare(
+                    selectedGraph, world.PersonStore, personId, candidate.SelectedRuntimeOwners,
+                    out selectedBindingPlan,
+                    out DailyV1SelectedNpcPersonBindingFailure prepareFailure))
+            {
+                failure = MapSelectedMaterializationBindingFailure(prepareFailure);
+                return false;
+            }
+        }
+
         if (candidate.TryAssignPersonId(personId) == false)
         {
             failure = PersonMaterializationFailure.NpcAlreadyBoundToDifferentPerson;
@@ -116,20 +130,52 @@ public static class PersonMaterializationSystem
             return false;
         }
 
-        if (world.PersonStore.TryBindMaterializedNpc(
-                personId,
-                runtimeId,
-                out PersonStoreFailure storeFailure) == false)
+        if (selectedBindingPlan != null)
         {
-            failure = MapStoreFailure(storeFailure);
-            return false;
+            if (!DailyV1SelectedNpcMaterializationBindingOperation.TryCommit(
+                    world.SelectedRuntimeOwnerGraph, world.PersonStore, selectedBindingPlan,
+                    out DailyV1SelectedNpcPersonBindingFailure commitFailure,
+                    out int selectedRevisionDelta))
+            {
+                candidate.ClearPersonRuntime();
+                candidate.ClearPersonId();
+                failure = MapSelectedMaterializationBindingFailure(commitFailure);
+                return false;
+            }
+            for (int i = 0; i < selectedRevisionDelta; i++)
+                world.MarkNpcMembershipPersonStoreRevisionCommitted();
         }
-        world.MarkNpcMembershipPersonStoreRevisionCommitted();
-
+        else
+        {
+            if (world.PersonStore.TryBindMaterializedNpc(
+                    personId,
+                    runtimeId,
+                    out PersonStoreFailure storeFailure) == false)
+            {
+                candidate.ClearPersonRuntime();
+                candidate.ClearPersonId();
+                failure = MapStoreFailure(storeFailure);
+                return false;
+            }
+            world.MarkNpcMembershipPersonStoreRevisionCommitted();
+        }
         if (world.TryRegisterNpc(candidate, out WorldNpcRegistryFailure registryFailure) == false)
         {
-            bool bindingRestored = world.PersonStore.TryRollbackMaterializedNpcBinding(personId, runtimeId);
-            if (bindingRestored) world.MarkNpcMembershipPersonStoreRevisionCommitted();
+            bool bindingRestored;
+            if (selectedBindingPlan != null)
+            {
+                bindingRestored = DailyV1SelectedNpcMaterializationBindingOperation.TryRollback(
+                    selectedBindingPlan,
+                    out _,
+                    out int selectedRollbackRevisionDelta);
+                for (int i = 0; i < selectedRollbackRevisionDelta; i++)
+                    world.MarkNpcMembershipPersonStoreRevisionCommitted();
+            }
+            else
+            {
+                bindingRestored = world.PersonStore.TryRollbackMaterializedNpcBinding(personId, runtimeId);
+                if (bindingRestored) world.MarkNpcMembershipPersonStoreRevisionCommitted();
+            }
             candidate.ClearPersonRuntime();
             candidate.ClearPersonId();
             if (!bindingRestored) world.MarkNpcMembershipCensusCompensationFailed();
@@ -144,8 +190,21 @@ public static class PersonMaterializationSystem
             startingCity.AddImportantNpc(candidate);
             if (candidate.CurrentCity != startingCity)
             {
-                bool bindingRestored = world.PersonStore.TryRollbackMaterializedNpcBinding(personId, runtimeId);
-                if (bindingRestored) world.MarkNpcMembershipPersonStoreRevisionCommitted();
+                bool bindingRestored;
+                if (selectedBindingPlan != null)
+                {
+                    bindingRestored = DailyV1SelectedNpcMaterializationBindingOperation.TryRollback(
+                        selectedBindingPlan,
+                        out _,
+                        out int selectedRollbackRevisionDelta);
+                    for (int i = 0; i < selectedRollbackRevisionDelta; i++)
+                        world.MarkNpcMembershipPersonStoreRevisionCommitted();
+                }
+                else
+                {
+                    bindingRestored = world.PersonStore.TryRollbackMaterializedNpcBinding(personId, runtimeId);
+                    if (bindingRestored) world.MarkNpcMembershipPersonStoreRevisionCommitted();
+                }
                 candidate.ClearPersonRuntime();
                 candidate.ClearPersonId();
                 bool npcUnregistered = world.TryUnregisterNpc(runtimeId, out _);
@@ -379,6 +438,31 @@ public static class PersonMaterializationSystem
         }
     }
 
+    private static PersonMaterializationFailure MapSelectedMaterializationBindingFailure(
+        DailyV1SelectedNpcPersonBindingFailure failure)
+    {
+        switch (failure)
+        {
+            case DailyV1SelectedNpcPersonBindingFailure.None:
+                return PersonMaterializationFailure.None;
+            case DailyV1SelectedNpcPersonBindingFailure.InvalidPerson:
+                return PersonMaterializationFailure.InvalidPerson;
+            case DailyV1SelectedNpcPersonBindingFailure.InvalidNpcRuntimeId:
+                return PersonMaterializationFailure.InvalidRuntimeId;
+            case DailyV1SelectedNpcPersonBindingFailure.PersonNotRegistered:
+                return PersonMaterializationFailure.PersonNotRegistered;
+            case DailyV1SelectedNpcPersonBindingFailure.AlreadyMaterialized:
+                return PersonMaterializationFailure.AlreadyMaterialized;
+            case DailyV1SelectedNpcPersonBindingFailure.NpcAlreadyBoundToDifferentPerson:
+                return PersonMaterializationFailure.NpcAlreadyBoundToDifferentPerson;
+            case DailyV1SelectedNpcPersonBindingFailure.RevisionOverflow:
+                return PersonMaterializationFailure.RevisionOverflow;
+            case DailyV1SelectedNpcPersonBindingFailure.MutationRejected:
+                return PersonMaterializationFailure.RuntimeFaulted;
+            default:
+                return PersonMaterializationFailure.RosterRegistrationFailed;
+        }
+    }
     private static PersonMaterializationFailure MapStoreFailure(PersonStoreFailure failure)
     {
         switch (failure)

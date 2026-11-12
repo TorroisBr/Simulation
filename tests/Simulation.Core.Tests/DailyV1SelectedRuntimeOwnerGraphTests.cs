@@ -93,6 +93,69 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
     }
 
     [Test]
+    public void SelectedNpcMaterializationBindingPreparesCommitsAndCompensatesWithinCore()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        PersonStore personStore = graph.PersonStore;
+        if (personStore == null)
+        {
+            personStore = new PersonStore();
+            Assert.That(graph.TryBindPersonStore(personStore), Is.True);
+        }
+
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        Assert.That(graph.TryCreateWithoutNpc(npc,
+            out DailyV1SelectedRuntimeOwnerGraph graphBeforeMaterialization), Is.True);
+        PersonId personId = new PersonId("selected-npc-materialization-core");
+        PersonRuntime person = new PersonRuntime(personId, 0L);
+        Assert.That(personStore.TryRegister(person, out PersonStoreFailure registerFailure), Is.True,
+            registerFailure.ToString());
+
+        Assert.That(DailyV1SelectedNpcMaterializationBindingOperation.TryPrepare(
+                graphBeforeMaterialization, personStore, personId, npc,
+                out DailyV1SelectedNpcMaterializationBindingPlan stalePlan,
+                out DailyV1SelectedNpcPersonBindingFailure prepareFailure), Is.True,
+            prepareFailure.ToString());
+        Assert.That(person.IsMaterialized, Is.False);
+        Assert.That(graphBeforeMaterialization.TryGetNpcOwner(npc.RuntimeId, out _), Is.False);
+
+        PersonRuntime intervening = new PersonRuntime(
+            new PersonId("selected-npc-materialization-intervening"), 0L);
+        Assert.That(personStore.TryRegister(intervening, out PersonStoreFailure interveningFailure), Is.True,
+            interveningFailure.ToString());
+        Assert.That(DailyV1SelectedNpcMaterializationBindingOperation.TryCommit(
+                graphBeforeMaterialization, personStore, stalePlan,
+                out DailyV1SelectedNpcPersonBindingFailure staleFailure, out int staleDelta), Is.False);
+        Assert.That(staleFailure, Is.EqualTo(DailyV1SelectedNpcPersonBindingFailure.StaleState));
+        Assert.That(staleDelta, Is.Zero);
+        Assert.That(person.IsMaterialized, Is.False);
+
+        Assert.That(DailyV1SelectedNpcMaterializationBindingOperation.TryPrepare(
+                graphBeforeMaterialization, personStore, personId, npc,
+                out DailyV1SelectedNpcMaterializationBindingPlan plan,
+                out prepareFailure), Is.True, prepareFailure.ToString());
+        long revisionBeforeCommit = personStore.Revision;
+        Assert.That(DailyV1SelectedNpcMaterializationBindingOperation.TryCommit(
+                graphBeforeMaterialization, personStore, plan,
+                out DailyV1SelectedNpcPersonBindingFailure commitFailure,
+                out int commitDelta), Is.True, commitFailure.ToString());
+        Assert.That(commitDelta, Is.EqualTo(1));
+        Assert.That(personStore.Revision, Is.EqualTo(revisionBeforeCommit + 1L));
+        Assert.That(person.MaterializedNpcRuntimeId, Is.EqualTo(npc.RuntimeId));
+        Assert.That(graphBeforeMaterialization.TryGetNpcOwner(npc.RuntimeId, out _), Is.False,
+            "The host publishes the prepared Core owner graph and actor roster only after the PersonStore binding is ready.");
+
+        Assert.That(DailyV1SelectedNpcMaterializationBindingOperation.TryRollback(
+                plan, out DailyV1SelectedNpcPersonBindingFailure rollbackFailure,
+                out int rollbackDelta), Is.True, rollbackFailure.ToString());
+        Assert.That(rollbackDelta, Is.EqualTo(1));
+        Assert.That(personStore.Revision, Is.EqualTo(revisionBeforeCommit + 2L));
+        Assert.That(person.IsMaterialized, Is.False);
+        Assert.That(personStore.TryGetByMaterializedNpcRuntimeId(npc.RuntimeId, out _), Is.False);
+    }
+    [Test]
     public void SelectedNpcPersonBindingRejectsStalePlansWithoutOwnerMutation()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
