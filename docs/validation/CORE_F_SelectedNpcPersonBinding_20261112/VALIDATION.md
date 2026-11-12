@@ -35,3 +35,7 @@ The verified full EditMode result package includes the focused regression and al
 - The approved packager verified the archive against the protected original run manifest (`runs=1`, `entries=1`). The archive contains normalized result XML only; no raw logs are published.
 
 `git diff --check` passed. The change preserves the existing outer P12 `runtime.npc-membership` reservation and mixed/unselected compatibility path. It does not complete CORE-F, change P12 protocol identity, or claim Core canonical promotion.
+
+## Candidate checkpoint identity
+
+The validated source and test files were committed unchanged at `b12cfb2d79905632f7cc0bc24d2c9c71d1e359bd` (tree `3cc3f47bcf77d2e37f26bbd714e5b57b5f6ee44a`). The runners captured the pre-commit worktree at base `126998ab8c4030c6408bfeaf976104bc86c50ff5`; the committed implementation/test blobs are byte-identical to the files used by those runs. The Unity inventory also captured the pre-existing local `ProjectSettings/ProjectSettings.asset` modification. That protected change remains uncommitted and was excluded from this candidate; the review should account for it as a validation-environment input. Other unrelated local changes and private evidence were not staged.
