@@ -35,6 +35,6 @@ An initial CoreValidation invocation from a non-project working directory failed
 
 ## Independent review and promotion
 
-Exact-tip independent review: pending.
+Exact-tip independent review: **PASS**, no actionable findings, for commit `a1b16a1deac1e7695592cca5f0159d1843b8d021` and tree `9657f269086757492e86e1bbea5a30d23a448819`. See `docs/reviews/CORE_F_CoreSelectedDailyPreflight_A1B16A1D_INDEPENDENT_REVIEW.md`.
 
 This candidate has not been promoted to Core canonical. The complete CORE-F application/host package remains in progress.
