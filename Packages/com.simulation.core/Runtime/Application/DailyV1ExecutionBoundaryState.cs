@@ -5348,8 +5348,10 @@ internal sealed class DailyV1SelectedNpcMembershipChange
         this.executionState = executionState ?? throw new ArgumentNullException(nameof(executionState));
         this.expectedGraph = expectedGraph ?? throw new ArgumentNullException(nameof(expectedGraph));
         this.replacementGraph = replacementGraph ?? throw new ArgumentNullException(nameof(replacementGraph));
-        this.expectedRoster = expectedRoster ?? throw new ArgumentNullException(nameof(expectedRoster));
-        preparedReplacementRoster = replacementRoster ?? throw new ArgumentNullException(nameof(replacementRoster));
+        this.expectedRoster = expectedRoster;
+        preparedReplacementRoster = replacementRoster;
+        if ((expectedRoster == null) != (replacementRoster == null))
+            throw new ArgumentException("A Core membership transaction must publish either both roster snapshots or neither.");
     }
 
     internal static bool TryPrepareAddition(
@@ -5367,12 +5369,15 @@ internal sealed class DailyV1SelectedNpcMembershipChange
         DailyV1SelectedRuntimeOwnerGraph currentGraph = executionState.SelectedRuntimeOwnerGraph;
         IReadOnlyList<DailyV1ActorTurnRosterProjection> currentRoster =
             executionState.SelectedRuntimeActorRoster;
-        if (currentGraph == null || currentRoster == null
+        if (currentGraph == null
             || !currentGraph.TryCreateWithAddedNpc(npcOwners,
-                out DailyV1SelectedRuntimeOwnerGraph replacementGraph)
-            || !executionState.TryCreateSelectedRuntimeActorRosterWithAppendedMember(
-                actor, replacementGraph,
-                out IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster))
+                out DailyV1SelectedRuntimeOwnerGraph replacementGraph))
+            return false;
+
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster = null;
+        if (currentRoster != null
+            && !executionState.TryCreateSelectedRuntimeActorRosterWithAppendedMember(
+                actor, replacementGraph, out replacementRoster))
             return false;
 
         change = new DailyV1SelectedNpcMembershipChange(
@@ -5393,12 +5398,15 @@ internal sealed class DailyV1SelectedNpcMembershipChange
         DailyV1SelectedRuntimeOwnerGraph currentGraph = executionState.SelectedRuntimeOwnerGraph;
         IReadOnlyList<DailyV1ActorTurnRosterProjection> currentRoster =
             executionState.SelectedRuntimeActorRoster;
-        if (currentGraph == null || currentRoster == null
+        if (currentGraph == null
             || !currentGraph.TryCreateWithoutNpc(npcOwners,
-                out DailyV1SelectedRuntimeOwnerGraph replacementGraph)
-            || !executionState.TryCreateSelectedRuntimeActorRosterWithoutMember(
-                npcOwners.RuntimeId, replacementGraph,
-                out IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster))
+                out DailyV1SelectedRuntimeOwnerGraph replacementGraph))
+            return false;
+
+        IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster = null;
+        if (currentRoster != null
+            && !executionState.TryCreateSelectedRuntimeActorRosterWithoutMember(
+                npcOwners.RuntimeId, replacementGraph, out replacementRoster))
             return false;
 
         change = new DailyV1SelectedNpcMembershipChange(
@@ -5408,29 +5416,40 @@ internal sealed class DailyV1SelectedNpcMembershipChange
 
     internal bool TryPublish()
     {
-        if (published
-            || !executionState.TryReplaceSelectedRuntimeMembership(
-                expectedGraph, replacementGraph, expectedRoster, preparedReplacementRoster))
-            return false;
+        if (published) return false;
 
-        publishedReplacementRoster = executionState.SelectedRuntimeActorRoster;
-        published = publishedReplacementRoster != null;
+        if (expectedRoster != null)
+        {
+            if (!executionState.TryReplaceSelectedRuntimeMembership(
+                    expectedGraph, replacementGraph, expectedRoster, preparedReplacementRoster))
+                return false;
+            publishedReplacementRoster = executionState.SelectedRuntimeActorRoster;
+            published = publishedReplacementRoster != null;
+        }
+        else
+        {
+            published = executionState.TryReplaceSelectedRuntimeOwnerGraph(
+                expectedGraph, replacementGraph);
+        }
         return published;
     }
 
     internal bool TryRollback()
     {
-        if (!published
-            || !executionState.TryReplaceSelectedRuntimeMembership(
-                replacementGraph, expectedGraph, publishedReplacementRoster, expectedRoster))
-            return false;
+        if (!published) return false;
+
+        bool restored = expectedRoster != null
+            ? executionState.TryReplaceSelectedRuntimeMembership(
+                replacementGraph, expectedGraph, publishedReplacementRoster, expectedRoster)
+            : executionState.TryReplaceSelectedRuntimeOwnerGraph(
+                replacementGraph, expectedGraph);
+        if (!restored) return false;
 
         published = false;
         publishedReplacementRoster = null;
         return true;
     }
 }
-
 /// <summary>
 /// Idempotent handle for one runtime advance window. Disposing an older handle
 /// cannot release a later lease from the same boundary state.

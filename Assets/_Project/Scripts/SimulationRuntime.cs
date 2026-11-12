@@ -8389,25 +8389,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             selectedGraphBeforeMembership = SelectedRuntimeOwnerGraph;
             selectedRosterBeforeMembership = dailyExecutionBoundary.SelectedRuntimeActorRoster;
             selectedGraphForMembership = selectedGraphBeforeMembership;
-            if (selectedGraphBeforeMembership != null && selectedRosterBeforeMembership == null)
-            {
-                FaultNpcMembershipCensusBoundary();
-                failure = WorldNpcRegistryFailure.RuntimeFaulted;
-                return false;
-            }
+
             if (npcRuntime.UsesSelectedDailyV1Definitions)
             {
                 if (selectedGraphBeforeMembership == null
-                    || (selectedRosterBeforeMembership != null
-                        && !DailyV1SelectedNpcMembershipChange.TryPrepareAddition(
-                            dailyExecutionBoundary,
-                            npcRuntime.SelectedRuntimeOwners,
-                            new DailyV1ActorTurnRosterProjection(npcRuntime.RuntimeId, npcRuntime.PersonId),
-                            out selectedMembershipChange))
-                    || (selectedRosterBeforeMembership == null
-                        && !selectedGraphBeforeMembership.TryCreateWithAddedNpc(
-                            npcRuntime.SelectedRuntimeOwners,
-                            out selectedGraphAfterMembership)))
+                    || !DailyV1SelectedNpcMembershipChange.TryPrepareAddition(
+                        dailyExecutionBoundary,
+                        npcRuntime.SelectedRuntimeOwners,
+                        new DailyV1ActorTurnRosterProjection(npcRuntime.RuntimeId, npcRuntime.PersonId),
+                        out selectedMembershipChange))
                 {
                     failure = WorldNpcRegistryFailure.InvalidNpc;
                     return false;
@@ -8596,24 +8586,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         selectedGraphBeforeMembership = SelectedRuntimeOwnerGraph;
         selectedRosterBeforeMembership = dailyExecutionBoundary.SelectedRuntimeActorRoster;
         selectedGraphForMembership = selectedGraphBeforeMembership;
-        if (selectedGraphBeforeMembership != null && selectedRosterBeforeMembership == null)
-        {
-            FaultNpcMembershipCensusBoundary();
-            failure = WorldNpcRegistryFailure.RuntimeFaulted;
-            return false;
-        }
+
         if (npcRuntime.UsesSelectedDailyV1Definitions)
         {
             if (selectedGraphBeforeMembership == null
-                || (selectedRosterBeforeMembership != null
-                    && !DailyV1SelectedNpcMembershipChange.TryPrepareRemoval(
-                        dailyExecutionBoundary,
-                        npcRuntime.SelectedRuntimeOwners,
-                        out selectedMembershipChange))
-                || (selectedRosterBeforeMembership == null
-                    && !selectedGraphBeforeMembership.TryCreateWithoutNpc(
-                        npcRuntime.SelectedRuntimeOwners,
-                        out selectedGraphAfterMembership)))
+                || !DailyV1SelectedNpcMembershipChange.TryPrepareRemoval(
+                    dailyExecutionBoundary,
+                    npcRuntime.SelectedRuntimeOwners,
+                    out selectedMembershipChange))
             {
                 failure = WorldNpcRegistryFailure.RuntimeFaulted;
                 return false;
