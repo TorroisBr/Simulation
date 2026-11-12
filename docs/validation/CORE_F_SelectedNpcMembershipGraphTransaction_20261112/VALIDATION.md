@@ -22,3 +22,6 @@ CoreValidation discovered the new SelectedNpcMembershipChangePublishesAndRollsBa
 The full Unity EditMode run had a stable source-input snapshot. Its privacy-normalized package is UnityFull/coref-selected-npc-membership-graph-68699734.zip with manifest UnityFull/coref-selected-npc-membership-graph-68699734.manifest.json. Archive SHA-256: 9c0aad5fa693b4a36f45747f316e88a5d75146fe745dd22bdbed9eabde66b84e. The official verifier accepted it against the protected run manifest (runs=1, entries=1). Original XML and raw logs remain private under .private-unity-validation/e0325aa28af94cc6afdddcc450ded71f.
 
 The five filtered Smoke identities also occur in the full EditMode report. An exploratory PlayMode filter returned zero cases and is not counted as validation.
+## Independent review
+
+Exact-tip independent review: PASS at bdfc406056bee8836b0d815349aa6a4cf4bcf9b4; see docs/reviews/CORE_F_SelectedNpcMembershipGraphTransaction_BDFC4060_INDEPENDENT_REVIEW.md. The review records private Core TRX/log availability and the graph-only Unity composition evidence limit.
