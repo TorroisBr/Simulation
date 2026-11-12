@@ -306,10 +306,8 @@ internal static class DailyV1SelectedActionExecutionStage
         return true;
     }
 
-    internal interface ISelectedSoloTravelActionBoundary
+    internal interface ISelectedSoloTravelActionProjectionBoundary
     {
-        /// <summary>Runs the complete travel operation inside the existing host P12 scope.</summary>
-        bool ExecuteWithinOperation(Func<bool> operation);
         bool CanStartTradeReposition();
         void LogTradeReposition();
         /// <summary>Preserves host guards/projection checks before Core charges the owner.</summary>
@@ -330,6 +328,139 @@ internal static class DailyV1SelectedActionExecutionStage
         bool CanAdmitTravelPlanClear(DailyV1NpcRuntimeOwners actor);
         /// <summary>Projects Core's committed clear and then publishes exactly one P12 notification.</summary>
         void PublishCommittedTravelPlanClear(DailyV1NpcRuntimeOwners actor);
+    }
+
+    internal interface ISelectedSoloTravelActionBoundary
+        : ISelectedSoloTravelActionProjectionBoundary
+    {
+        /// <summary>Runs the complete travel operation inside the Core-owned P12 scope.</summary>
+        bool ExecuteWithinOperation(Func<bool> operation);
+    }
+
+    /// <summary>
+    /// Binds selected solo travel to the exact Core session and makes Core own
+    /// the P12 operation lifetime. The host contributes only the prepared
+    /// census projection and Unity-facing callbacks.
+    /// </summary>
+    internal static class DailyV1CoreSelectedSoloTravelActionBoundary
+    {
+        internal static bool TryCreate(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition expectedAction,
+            IDailyV1SelectedP12SoloTravelStartProtocol protocol,
+            ISelectedSoloTravelActionProjectionBoundary hostProjection,
+            out ISelectedSoloTravelActionBoundary boundary)
+        {
+            boundary = null;
+            if (executionState == null || graph == null || actor == null
+                || expectedAction == null || protocol == null || hostProjection == null
+                || !executionState.HasAdmittedSelectedDailyExecution
+                || executionState.AdmissionContext == null
+                || !executionState.AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                || !graph.ContainsExactNpcOwner(actor)
+                || !ReferenceEquals(actor.Definitions, graph.Definitions)
+                || graph.TravelParties == null
+                || !ReferenceEquals(actor.ActionSlot?.CurrentAction, expectedAction)
+                || expectedAction.Values.actionType?.Value
+                    != DailyV1NpcDefinitionRules.TravelActionTypeValue
+                || !ReferenceEquals(actor.ActionSlot?.CurrentPayload?.Action, expectedAction))
+                return false;
+
+            boundary = new CoreBoundary(
+                executionState, graph, actor, expectedAction, protocol, hostProjection);
+            return true;
+        }
+
+        private sealed class CoreBoundary : ISelectedSoloTravelActionBoundary
+        {
+            private readonly DailyV1ExecutionBoundaryState executionState;
+            private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+            private readonly DailyV1NpcRuntimeOwners actor;
+            private readonly DailyV1ActionDefinition expectedAction;
+            private readonly DailyV1NpcActionPayloadOwner expectedPayload;
+            private readonly IDailyV1SelectedP12SoloTravelStartProtocol protocol;
+            private readonly ISelectedSoloTravelActionProjectionBoundary hostProjection;
+
+            internal CoreBoundary(
+                DailyV1ExecutionBoundaryState executionState,
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1ActionDefinition expectedAction,
+                IDailyV1SelectedP12SoloTravelStartProtocol protocol,
+                ISelectedSoloTravelActionProjectionBoundary hostProjection)
+            {
+                this.executionState = executionState;
+                this.graph = graph;
+                this.actor = actor;
+                this.expectedAction = expectedAction;
+                expectedPayload = actor.ActionSlot.CurrentPayload;
+                this.protocol = protocol;
+                this.hostProjection = hostProjection;
+            }
+
+            public bool ExecuteWithinOperation(Func<bool> operation)
+            {
+                if (operation == null) throw new ArgumentNullException(nameof(operation));
+                if (!IsCurrentSession())
+                {
+                    protocol.FaultClosed();
+                    throw new InvalidOperationException(
+                        "The selected solo-travel action lost its exact admitted Core session.");
+                }
+
+                if (!protocol.TryBeginOperation(
+                        graph, actor, out IDisposable operationScope)
+                    || operationScope == null)
+                    throw new InvalidOperationException(
+                        "P12 solo travel-start could not be admitted by the exact Core session.");
+
+                using (operationScope)
+                    return operation();
+            }
+
+            public bool CanStartTradeReposition() => hostProjection.CanStartTradeReposition();
+            public void LogTradeReposition() => hostProjection.LogTradeReposition();
+            public bool CanCommitPreparedTransition(
+                DailyV1SelectedTravelTransitionPlan plan, SpatialRouteRuntime route, float travelCost) =>
+                hostProjection.CanCommitPreparedTransition(plan, route, travelCost);
+            public bool TryPrepareTransitionProjection(DailyV1SelectedTravelTransitionPlan plan) =>
+                hostProjection.TryPrepareTransitionProjection(plan);
+            public bool CanAdmitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan) =>
+                hostProjection.CanAdmitPreparedTransition(plan);
+            public void PublishCommittedTransition(DailyV1SelectedTravelTransitionPlan plan) =>
+                hostProjection.PublishCommittedTransition(plan);
+            public void PublishTravelStarted(DailyV1SelectedActionExecutionStage.SoloTravelResult result) =>
+                hostProjection.PublishTravelStarted(result);
+            public void LogCommercialScouting() => hostProjection.LogCommercialScouting();
+            public bool CanProjectTravelPlanClear(DailyV1NpcRuntimeOwners currentActor) =>
+                ReferenceEquals(currentActor, actor)
+                && hostProjection.CanProjectTravelPlanClear(currentActor);
+            public bool CanAdmitTravelPlanClear(DailyV1NpcRuntimeOwners currentActor) =>
+                ReferenceEquals(currentActor, actor)
+                && IsCurrentSession()
+                && hostProjection.CanAdmitTravelPlanClear(currentActor);
+            public void PublishCommittedTravelPlanClear(DailyV1NpcRuntimeOwners currentActor)
+            {
+                if (!ReferenceEquals(currentActor, actor) || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected TravelPlan clear is outside its exact Core owner operation.");
+                hostProjection.PublishCommittedTravelPlanClear(currentActor);
+            }
+
+            private bool IsCurrentSession() =>
+                executionState.HasAdmittedSelectedDailyExecution
+                && executionState.AdmissionContext != null
+                && executionState.AdmissionContext.IsOwnedByCurrentThread()
+                && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                && graph.ContainsExactNpcOwner(actor)
+                && ReferenceEquals(actor.Definitions, graph.Definitions)
+                && ReferenceEquals(actor.ActionSlot?.CurrentAction, expectedAction)
+                && ReferenceEquals(actor.ActionSlot?.CurrentPayload, expectedPayload)
+                && ReferenceEquals(expectedPayload?.Action, expectedAction);
+        }
     }
 
     internal interface ISelectedFleeCityActionBoundary
@@ -1507,9 +1638,9 @@ internal static class DailyV1SelectedActionExecutionStage
 }
 
 /// <summary>
-/// Host-owned ports needed to admit and publish selected-action operations.
-/// The host resolves the exact Unity projections and P12 operation adapters;
-/// action routing and domain execution stay in Simulation.Core.
+    /// Host-owned ports needed to project selected-action operations.
+    /// The host resolves exact Unity projections; Simulation.Core owns action
+    /// routing, domain execution, and selected P12 operation lifetime.
 /// </summary>
 internal interface IDailyV1SelectedActionDispatchBoundary
 {

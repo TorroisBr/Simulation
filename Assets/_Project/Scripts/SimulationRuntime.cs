@@ -351,10 +351,41 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         : IDailyV1SelectedP12SoloTravelStartProtocol
     {
         private readonly SimulationRuntime runtime;
+        private readonly NpcRuntime npc;
+        private readonly TravelActionProvider actionProvider;
 
-        internal SelectedSoloTravelStartP12ProtocolAdapter(SimulationRuntime runtime)
+        internal SelectedSoloTravelStartP12ProtocolAdapter(
+            SimulationRuntime runtime,
+            NpcRuntime npc,
+            TravelActionProvider actionProvider)
         {
             this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+            this.npc = npc ?? throw new ArgumentNullException(nameof(npc));
+            this.actionProvider = actionProvider
+                ?? throw new ArgumentNullException(nameof(actionProvider));
+        }
+
+        public bool TryBeginOperation(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            out IDisposable operationScope)
+        {
+            operationScope = null;
+            if (!ReferenceEquals(actor, npc.SelectedRuntimeOwners)
+                || !ReferenceEquals(graph, npc.SelectedRuntimeOwnerGraph)
+                || !ReferenceEquals(graph, runtime.SelectedRuntimeOwnerGraph))
+            {
+                runtime.FaultRuntimeAdmission();
+                return false;
+            }
+
+            if (!runtime.TryBeginP12SoloTravelStartOperation(
+                    npc, actionProvider,
+                    out P12SoloTravelStartOperationScope scope)
+                || scope == null)
+                return false;
+            operationScope = scope;
+            return true;
         }
 
         public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
@@ -703,9 +734,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 || !ReferenceEquals(graph.TravelParties, travelProvider.SelectedTravelPartyStore))
                 return false;
 
-            boundary = runtime.CreateSelectedSoloTravelActionBoundary(
-                exactActor, travelProvider, actionRuntime);
-            return boundary != null;
+            DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary hostBoundary =
+                runtime.CreateSelectedSoloTravelActionBoundary(
+                    exactActor, travelProvider, actionRuntime, coreOwnsP12Operation: true);
+            return hostBoundary != null
+                && DailyV1SelectedActionExecutionStage.DailyV1CoreSelectedSoloTravelActionBoundary.TryCreate(
+                    runtime.dailyExecutionBoundary,
+                    graph,
+                    actor,
+                    action,
+                    new SelectedSoloTravelStartP12ProtocolAdapter(
+                        runtime, exactActor, travelProvider),
+                    hostBoundary,
+                    out boundary);
         }
 
         public bool TryGetFleeCityActionBoundary(
@@ -6044,12 +6085,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             FaultRuntimeAdmission();
     }
 
-    private bool TryBeginP12SoloTravelStartOperation(
+    private bool TryCreateP12SoloTravelStartHostPreflightSectionIds(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actorOwners,
         NpcRuntime npc,
         TravelActionProvider actionProvider,
-        out P12SoloTravelStartOperationScope scope)
+        out IReadOnlyList<string> sectionIds)
     {
-        scope = null;
+        sectionIds = null;
         if (runtimeAdmissionContext == null) return false;
         if (!IsRuntimeAdmissionOwnerThreadCurrent()
             || npcRosterCensusProtocol == null
@@ -6064,13 +6107,20 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             || activeP12MerchantOperationContext != null
             || activeP12TravelPartyAdvanceOperationContext != null
             || dailyExecutionBoundary.HasSelectedP12TravelPartyAdvanceInProgress
-            || activeP12SoloTravelStartOperationContext != null)
+            || activeP12SoloTravelStartOperationContext != null
+            || (dailyExecutionBoundary.HasAdmittedSelectedDailyExecution
+                && actorOwners != null
+                && (graph == null
+                    || !ReferenceEquals(npc.SelectedRuntimeOwners, actorOwners)
+                    || !ReferenceEquals(npc.SelectedRuntimeOwnerGraph, graph)
+                    || !graph.ContainsExactNpcOwner(actorOwners)
+                    || !ReferenceEquals(graph.TravelParties, actionProvider.SelectedTravelPartyStore))))
         {
             FaultRuntimeAdmission();
             return false;
         }
 
-        List<string> sectionIds = new List<string>();
+        List<string> preparedSectionIds = new List<string>();
         try
         {
             if (!TryResolveNpcMoneyAccountSection(npc, out string accountSectionId)
@@ -6078,7 +6128,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     npc,
                     out P12NpcOwnerMutationBinding travelStateBinding))
                 throw new InvalidOperationException();
-            sectionIds.Add(accountSectionId);
+            preparedSectionIds.Add(accountSectionId);
 
             List<CityRuntime> changedCities = new List<CityRuntime>();
             CityRuntime sourceCity = npc.CurrentCity;
@@ -6100,7 +6150,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 changedCities);
             if (travelStateSectionIds == null || travelStateSectionIds.Length == 0)
                 throw new InvalidOperationException();
-            sectionIds.AddRange(travelStateSectionIds);
+            preparedSectionIds.AddRange(travelStateSectionIds);
 
             NpcTravelPlanRuntime travelPlan = npc.ExistingTravelPlan;
             if (travelPlan == null
@@ -6111,7 +6161,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 || travelPlanBinding.SectionIds.Length != 1
                 || !IsCurrentP12MerchantOwnerBinding(travelPlanBinding))
                 throw new InvalidOperationException();
-            sectionIds.AddRange(travelPlanBinding.SectionIds);
+            preparedSectionIds.AddRange(travelPlanBinding.SectionIds);
 
             SpatialKnowledgeRuntime spatialKnowledge = npc.ExistingSpatialKnowledge;
             if (spatialKnowledge == null
@@ -6122,7 +6172,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 || spatialKnowledgeBinding.SectionIds.Length != 2
                 || !IsCurrentP12MerchantOwnerBinding(spatialKnowledgeBinding))
                 throw new InvalidOperationException();
-            sectionIds.AddRange(spatialKnowledgeBinding.SectionIds);
+            preparedSectionIds.AddRange(spatialKnowledgeBinding.SectionIds);
 
             OwnerSectionCensusWitness eventCounterWitness =
                 runtimeIdAllocatorEventCounterCensusProvider?.GetCurrentCensus();
@@ -6141,7 +6191,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     eventCounterWitness.Revision,
                     out _))
                 throw new InvalidOperationException();
-            sectionIds.Add(RuntimeIdAllocatorCensusProvider.EventsSectionId);
+            preparedSectionIds.Add(RuntimeIdAllocatorCensusProvider.EventsSectionId);
 
             OwnerSectionCensusWitness sequenceWitness = simulationRecordSequenceCensusProvider?.GetCurrentCensus();
             if (simulationRecordSequence == null
@@ -6158,7 +6208,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     sequenceWitness.Revision,
                     out _))
                 throw new InvalidOperationException();
-            sectionIds.Add(SimulationRecordSequenceCensusProvider.SectionId);
+            preparedSectionIds.Add(SimulationRecordSequenceCensusProvider.SectionId);
         }
         catch
         {
@@ -6166,13 +6216,30 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         }
 
-        HashSet<string> distinctSections = new HashSet<string>(sectionIds, StringComparer.Ordinal);
-        if (distinctSections.Count != sectionIds.Count)
+        HashSet<string> distinct = new HashSet<string>(preparedSectionIds, StringComparer.Ordinal);
+        if (distinct.Count != preparedSectionIds.Count)
         {
             FaultRuntimeAdmission();
             return false;
         }
 
+        sectionIds = Array.AsReadOnly(preparedSectionIds.ToArray());
+        return true;
+    }
+    private bool TryBeginP12SoloTravelStartOperation(
+        NpcRuntime npc,
+        TravelActionProvider actionProvider,
+        out P12SoloTravelStartOperationScope scope)
+    {
+        scope = null;
+        if (!TryCreateP12SoloTravelStartHostPreflightSectionIds(
+                SelectedRuntimeOwnerGraph,
+                npc?.SelectedRuntimeOwners,
+                npc,
+                actionProvider,
+                out IReadOnlyList<string> sectionIds))
+            return false;
+        HashSet<string> distinctSections = new HashSet<string>(sectionIds, StringComparer.Ordinal);
         DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
         bool coreExecutionAdmitted = dailyExecutionBoundary.HasAdmittedSelectedDailyExecution;
         if (coreExecutionAdmitted
@@ -6202,7 +6269,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     selectedGraph,
                     npc.SelectedRuntimeOwners,
                     sectionIds,
-                    new SelectedSoloTravelStartP12ProtocolAdapter(this),
+                    new SelectedSoloTravelStartP12ProtocolAdapter(this, npc, actionProvider),
                     out operationScope)
                 || operationScope == null)
             {
@@ -16917,7 +16984,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     private SelectedSoloTravelActionBoundaryAdapter CreateSelectedSoloTravelActionBoundary(
         NpcRuntime exactActor,
         TravelActionProvider travelProvider,
-        NpcActionRuntime actionRuntime)
+        NpcActionRuntime actionRuntime,
+        bool coreOwnsP12Operation = false)
     {
         DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
         if (exactActor == null || travelProvider == null || actionRuntime == null
@@ -16941,16 +17009,18 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             null, null, NpcTravelReason.None, 0f, 0f, null);
 
         return new SelectedSoloTravelActionBoundaryAdapter(
-            operation =>
-            {
-                if (runtimeAdmissionContext == null) return operation();
-                if (!TryBeginP12SoloTravelStartOperation(
-                        exactActor, travelProvider,
-                        out P12SoloTravelStartOperationScope travelStartScope))
-                    throw new InvalidOperationException(
-                        "The P12 solo travel-start owner operation could not be admitted.");
-                using (travelStartScope) return operation();
-            },
+            coreOwnsP12Operation
+                ? operation => operation()
+                : operation =>
+                {
+                    if (runtimeAdmissionContext == null) return operation();
+                    if (!TryBeginP12SoloTravelStartOperation(
+                            exactActor, travelProvider,
+                            out P12SoloTravelStartOperationScope travelStartScope))
+                        throw new InvalidOperationException(
+                            "The P12 solo travel-start owner operation could not be admitted.");
+                    using (travelStartScope) return operation();
+                },
             () => travelSystem != null
                 && travelSystem.CanStartTravel(exactActor, actionRuntime.TargetCity, out _, out _),
             () => merchantSystem?.LogTradeRepositionDecision(

@@ -1207,6 +1207,15 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
         internal Action DuringNextValidation;
         internal IReadOnlyCollection<string> NotifiedSections;
 
+        public bool TryBeginOperation(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            out IDisposable operationScope)
+        {
+            operationScope = null;
+            return false;
+        }
+
         public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds)
         {
             ValidationCalls++;

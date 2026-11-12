@@ -97,6 +97,10 @@ internal enum DailyV1RestoredBoundaryFinalizationFailure : byte
 /// </summary>
 internal interface IDailyV1SelectedP12SoloTravelStartProtocol
 {
+    bool TryBeginOperation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        out IDisposable operationScope);
     bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
     bool TryValidateMutationEpochCapacity();
     bool TryEnterOperation(out IDisposable operationScope);
