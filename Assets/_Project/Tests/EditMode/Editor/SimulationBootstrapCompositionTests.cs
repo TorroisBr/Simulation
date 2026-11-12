@@ -3399,6 +3399,55 @@ public sealed class SimulationBootstrapCompositionTests
     }
 
     [Test]
+    public void MixedDailyV1RosterBindsLegacyNpcThroughCompatibilityPath()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject simulationObject = new GameObject("mixed-daily-v1-legacy-person-binding-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+
+        simulation.Start();
+
+        SimulationRuntime runtime = simulation.Bootstrap.Runtime;
+        NpcRuntime legacyNpc = new NpcRuntime(
+            "mixed-daily-v1-legacy-binding-npc",
+            SimulationTestFactory.CreateNpc("mixed-daily-v1-legacy-binding-definition"));
+        Assert.That(runtime.TryRegisterNpc(legacyNpc, out WorldNpcRegistryFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(legacyNpc.UsesSelectedDailyV1Definitions, Is.False);
+
+        PersonId personId = new PersonId("mixed-daily-v1-legacy-binding-person");
+        PersonRuntime person = new PersonRuntime(personId, runtime.CurrentDay);
+        Assert.That(runtime.TryRegisterPerson(person, out PersonStoreFailure personFailure),
+            Is.True, personFailure.ToString());
+        long personStoreRevision = runtime.PersonStore.Revision;
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochBeforeBinding, out _), Is.True);
+
+        Assert.That(runtime.TryBindExistingNpcToPerson(
+            personId,
+            legacyNpc.RuntimeId,
+            out PersonMaterializationFailure bindingFailure), Is.True, bindingFailure.ToString());
+
+        Assert.That(runtime.IsMutationFaulted, Is.False,
+            "A compatibility NPC absent from the selected Core roster must reach the established Unity fallback.");
+        Assert.That(bindingFailure, Is.EqualTo(PersonMaterializationFailure.None));
+        Assert.That(legacyNpc.PersonId, Is.EqualTo(personId));
+        Assert.That(ReadNonPublicProperty(legacyNpc, "BoundPersonRuntime"), Is.SameAs(person));
+        Assert.That(runtime.PersonStore.Revision, Is.EqualTo(personStoreRevision + 1L));
+        Assert.That(runtime.PersonStore.TryGetByMaterializedNpcRuntimeId(
+            legacyNpc.RuntimeId, out PersonRuntime boundPerson), Is.True);
+        Assert.That(boundPerson, Is.SameAs(person));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochAfterBinding, out _), Is.True);
+        Assert.That(epochAfterBinding, Is.EqualTo(epochBeforeBinding + 1L));
+    }
+
+    [Test]
     public void SelectedP12CurrentActionReplacementRejectionRestoresPreviousCoreAndUnityOwners()
     {
         SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(

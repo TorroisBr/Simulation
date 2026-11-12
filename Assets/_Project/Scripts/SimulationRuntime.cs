@@ -10718,7 +10718,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 && personId != null
                 && personStore.TryGet(personId, out PersonRuntime registeredPerson)
                 && TryGetNpcRuntime(npcRuntimeId, out NpcRuntime registeredNpc)
-                && registeredNpc.PersonId == null)
+                && registeredNpc.PersonId == null
+                && registeredNpc.UsesSelectedDailyV1Definitions
+                && selectedGraph.TryGetNpcOwner(npcRuntimeId, out DailyV1NpcRuntimeOwners selectedNpcOwner)
+                && ReferenceEquals(selectedNpcOwner, registeredNpc.SelectedRuntimeOwners))
             {
                 if (!dailyExecutionBoundary.TryCreateSelectedRuntimeActorRosterWithPersonBinding(
                         npcRuntimeId,
