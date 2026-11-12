@@ -12731,12 +12731,18 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         public void BeginSimulationDay() => runtime.BeginSimulationDay();
         public void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph) =>
             runtime.EnsureSelectedEconomyCanRun(graph);
+        public void EnsureSelectedEconomyProjectionCanRun(DailyV1SelectedRuntimeOwnerGraph graph) =>
+            runtime.EnsureSelectedEconomyProjectionCanRun(graph);
         public void LogSelectedDailyEconomy(
             DailyV1CityRuntimeOwners owner,
             SimulationLogCategory category,
             string message) => runtime.LogSelectedDailyEconomy(owner, category, message);
         public void EnsureSelectedLocalKnowledgeCanRun(DailyV1SelectedRuntimeOwnerGraph graph) =>
             runtime.EnsureSelectedLocalKnowledgeCanRun(graph);
+        public void EnsureSelectedLocalKnowledgeProjectionCanRun(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            bool merchantTradeEnabled) =>
+            runtime.EnsureSelectedLocalKnowledgeProjectionCanRun(graph, merchantTradeEnabled);
         public bool TryCreateSelectedActorTurnContext(
             DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedActorTurnExecutionContext context) =>
@@ -16417,6 +16423,22 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 "The selected Core economy stage could not admit its exact runtime owner graph.");
     }
 
+    private void EnsureSelectedEconomyProjectionCanRun(DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph == null || !ReferenceEquals(graph, SelectedRuntimeOwnerGraph)
+            || cities == null || cities.Count != graph.Cities.Count)
+            throw new InvalidOperationException(
+                "The Unity CityRuntime projection does not match the admitted Core economy owners.");
+
+        for (int index = 0; index < cities.Count; index++)
+        {
+            CityRuntime city = cities[index];
+            if (city == null || !ReferenceEquals(city.SelectedRuntimeOwners, graph.Cities[index]))
+                throw new InvalidOperationException(
+                    "The Unity CityRuntime projection does not retain the exact admitted Core City owner.");
+        }
+    }
+
     private bool CanRunSelectedEconomy(DailyV1SelectedRuntimeOwnerGraph graph)
     {
         if (graph == null || !ReferenceEquals(graph, SelectedRuntimeOwnerGraph)
@@ -16512,6 +16534,38 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 "The selected local-knowledge stage received an incomplete runtime NPC owner roster.");
 
         bool merchantTradeEnabled = graph.Definitions.EffectiveConfiguration?.MerchantTrade?.Enabled == true;
+        if (merchantTradeEnabled && merchantSystem != null)
+            merchantSystem.EnsureCanAdvanceSelectedTradeState();
+        if (merchantTradeEnabled && commercialKnowledgeSharingSystem != null)
+            commercialKnowledgeSharingSystem.EnsureCanShare();
+    }
+
+    private void EnsureSelectedLocalKnowledgeProjectionCanRun(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        bool merchantTradeEnabled)
+    {
+        if (graph == null || !ReferenceEquals(graph, SelectedRuntimeOwnerGraph))
+            throw new InvalidOperationException(
+                "The Unity NPC projection requires the current Core owner graph.");
+
+        List<DailyV1NpcRuntimeOwners> owners = new List<DailyV1NpcRuntimeOwners>();
+        foreach (NpcRuntime runtime in npcRuntimes)
+        {
+            if (runtime == null || !runtime.UsesSelectedDailyV1Definitions) continue;
+            DailyV1NpcRuntimeOwners owner = runtime.SelectedRuntimeOwners;
+            if (owner == null
+                || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, graph)
+                || !graph.ContainsExactNpcOwner(owner)
+                || !string.Equals(runtime.RuntimeId, owner.RuntimeId, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "The Unity NPC projection does not retain the exact admitted Core owner roster.");
+            owners.Add(owner);
+        }
+
+        if (!graph.MatchesExactOwnerInstances(graph.Cities, owners))
+            throw new InvalidOperationException(
+                "The Unity NPC projection is incomplete for the admitted Core owner graph.");
+
         if (merchantTradeEnabled && merchantSystem != null)
             merchantSystem.EnsureCanAdvanceSelectedTradeState();
         if (merchantTradeEnabled && commercialKnowledgeSharingSystem != null)

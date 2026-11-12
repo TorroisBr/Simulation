@@ -81,10 +81,11 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
         public void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result) { }
         public void BeginSimulationDay() { }
-        public void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph) { }
+        public void EnsureSelectedEconomyProjectionCanRun(DailyV1SelectedRuntimeOwnerGraph graph) { }
         public void LogSelectedDailyEconomy(
             DailyV1CityRuntimeOwners owner, SimulationLogCategory category, string message) { }
-        public void EnsureSelectedLocalKnowledgeCanRun(DailyV1SelectedRuntimeOwnerGraph graph) { }
+        public void EnsureSelectedLocalKnowledgeProjectionCanRun(
+            DailyV1SelectedRuntimeOwnerGraph graph, bool merchantTradeEnabled) { }
         public bool TryCreateSelectedActorTurnHostPorts(
             DailyV1SelectedRuntimeOwnerGraph graph,
             out IDailyV1SelectedActorTurnHostPorts hostPorts)

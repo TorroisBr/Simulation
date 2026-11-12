@@ -843,6 +843,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(actorContext.ActorChoiceStore, Is.SameAs(state.SelectedActorChoiceStore));
         Assert.That(actorContext.CoreRoots.IdAllocator, Is.SameAs(state.SelectedRuntimeIdAllocator));
         Assert.That(actorContext.CoreRoots.RecordSequence, Is.SameAs(state.SelectedRecordSequence));
+        selectedBoundary.EnsureSelectedEconomyCanRun(graph);
+        selectedBoundary.EnsureSelectedLocalKnowledgeCanRun(graph);
+        Assert.That(hostPorts.Calls, Does.Contain("economy-projection-preflight"));
+        Assert.That(hostPorts.Calls, Does.Contain("knowledge-projection-preflight"));
+        Assert.That(hostPorts.LastMerchantTradeEnabled,
+            Is.EqualTo(graph.Definitions.EffectiveConfiguration.MerchantTrade.Enabled));
         Assert.That(hostPorts.Calls, Does.Not.Contain("execution-boundary"),
             "Core creates its selected execution boundary instead of asking the host to manufacture one.");
 
@@ -1396,6 +1402,11 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             Assert.That(graph, Is.Not.Null);
             Calls.Add("economy-preflight");
         }
+        public void EnsureSelectedEconomyProjectionCanRun(DailyV1SelectedRuntimeOwnerGraph graph)
+        {
+            Assert.That(graph, Is.Not.Null);
+            Calls.Add("economy-projection-preflight");
+        }
         public void LogSelectedDailyEconomy(
             DailyV1CityRuntimeOwners owner,
             SimulationLogCategory category,
@@ -1407,6 +1418,15 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             Assert.That(graph, Is.Not.Null);
             Calls.Add("knowledge-preflight");
+        }
+        internal bool? LastMerchantTradeEnabled { get; private set; }
+        public void EnsureSelectedLocalKnowledgeProjectionCanRun(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            bool merchantTradeEnabled)
+        {
+            Assert.That(graph, Is.Not.Null);
+            LastMerchantTradeEnabled = merchantTradeEnabled;
+            Calls.Add("knowledge-projection-preflight");
         }
         public bool TryCreateSelectedActorTurnContext(
             DailyV1SelectedRuntimeOwnerGraph graph,

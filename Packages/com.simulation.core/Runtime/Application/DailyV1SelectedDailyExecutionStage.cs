@@ -77,12 +77,16 @@ internal interface IDailyV1SelectedDailyExecutionHostPorts
     /// roster that contains runtime members outside the admitted Core graph.
     /// </summary>
     void BeginSimulationDay();
-    void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph);
+    /// <summary>Validates only the Unity CityRuntime projections for Core's admitted owners.</summary>
+    void EnsureSelectedEconomyProjectionCanRun(DailyV1SelectedRuntimeOwnerGraph graph);
     void LogSelectedDailyEconomy(
         DailyV1CityRuntimeOwners owner,
         SimulationLogCategory category,
         string message);
-    void EnsureSelectedLocalKnowledgeCanRun(DailyV1SelectedRuntimeOwnerGraph graph);
+    /// <summary>Validates Unity NPC/system projections after Core validates its owner graph.</summary>
+    void EnsureSelectedLocalKnowledgeProjectionCanRun(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        bool merchantTradeEnabled);
     bool TryCreateSelectedActorTurnHostPorts(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedActorTurnHostPorts hostPorts);
@@ -242,7 +246,23 @@ internal sealed class DailyV1CoreSelectedDailyExecutionBoundary
     public void EnsureSelectedEconomyCanRun(DailyV1SelectedRuntimeOwnerGraph graph)
     {
         EnsureBoundTo(graph);
-        hostPorts.EnsureSelectedEconomyCanRun(ownerGraph);
+        if (executionState.CalendarIdentity == null)
+        {
+            for (int index = 0; index < ownerGraph.Cities.Count; index++)
+                if (ownerGraph.Cities[index]?.HasLocalDailyMaterialFlow == true)
+                    throw new InvalidOperationException(
+                        "The selected Core economy stage requires its admitted calendar for local material flow.");
+        }
+
+        for (int index = 0; index < ownerGraph.Cities.Count; index++)
+        {
+            DailyV1CityRuntimeOwners city = ownerGraph.Cities[index];
+            if (city == null || !ownerGraph.ContainsExactCityOwner(city))
+                throw new InvalidOperationException(
+                    "The selected Core economy stage could not admit its exact City owner graph.");
+        }
+
+        hostPorts.EnsureSelectedEconomyProjectionCanRun(ownerGraph);
     }
 
     public void LogSelectedDailyEconomy(
@@ -267,7 +287,14 @@ internal sealed class DailyV1CoreSelectedDailyExecutionBoundary
     public void EnsureSelectedLocalKnowledgeCanRun(DailyV1SelectedRuntimeOwnerGraph graph)
     {
         EnsureBoundTo(graph);
-        hostPorts.EnsureSelectedLocalKnowledgeCanRun(ownerGraph);
+        if (ownerGraph.Cities == null || ownerGraph.Npcs == null
+            || !ownerGraph.MatchesExactOwnerInstances(ownerGraph.Cities, ownerGraph.Npcs))
+            throw new InvalidOperationException(
+                "The selected Core local-knowledge stage requires its exact City/NPC owner graph.");
+
+        bool merchantTradeEnabled = ownerGraph.Definitions.EffectiveConfiguration.MerchantTrade?.Enabled == true;
+        hostPorts.EnsureSelectedLocalKnowledgeProjectionCanRun(
+            ownerGraph, merchantTradeEnabled);
     }
 
     public bool TryCreateSelectedActorTurnContext(
