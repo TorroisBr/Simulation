@@ -400,7 +400,7 @@ public sealed class DomainEventAuthorityCoreTests
         Assert.That(graph.TravelParties.Revision, Is.EqualTo(2L));
         Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1),
             "Only the initial full-vector baseline should be validated through the host protocol.");
-        Assert.That(protocol.LastNotifiedMutationSectionIds,
+        Assert.That(protocol.LastRefreshedMutationSectionIds,
             Does.Contain(TravelPartyCensusProvider.SectionId));
         Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
         Assert.That(state.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.True);
@@ -504,9 +504,9 @@ public sealed class DomainEventAuthorityCoreTests
         Assert.That(npc.SpatialKnowledge.KnownRouteRuntimeIds.Count, Is.EqualTo(initialRouteCount));
         Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1),
             "Only the initial complete owner-vector validation should use the host unchanged-row protocol.");
-        Assert.That(protocol.LastNotifiedMutationSectionIds, Does.Contain(travelSection));
-        Assert.That(protocol.LastNotifiedMutationSectionIds, Does.Contain(locationsSection));
-        Assert.That(protocol.LastNotifiedMutationSectionIds, Does.Contain(routesSection));
+        Assert.That(protocol.LastRefreshedMutationSectionIds, Does.Contain(travelSection));
+        Assert.That(protocol.LastRefreshedMutationSectionIds, Does.Contain(locationsSection));
+        Assert.That(protocol.LastRefreshedMutationSectionIds, Does.Contain(routesSection));
     }
 
     [Test]
@@ -586,7 +586,7 @@ public sealed class DomainEventAuthorityCoreTests
         Assert.That(city.NpcPresence.Revision, Is.EqualTo(initialRevision + 2L));
         Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1),
             "The complete host vector is validated at operation entry; selected City presence receipts are checked by Core.");
-        Assert.That(protocol.LastNotifiedMutationSectionIds, Does.Contain(sectionId));
+        Assert.That(protocol.LastRefreshedMutationSectionIds, Does.Contain(sectionId));
         Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
     }
 
@@ -773,8 +773,8 @@ public sealed class DomainEventAuthorityCoreTests
         Assert.That(new SimulationRecordSequenceCensusProvider(sequence)
             .GetCurrentCensus().Revision, Is.EqualTo(initialSequenceRevision + 1L));
         Assert.That(protocol.UnchangedSectionValidationCalls, Is.EqualTo(1));
-        Assert.That(protocol.LastNotifiedMutationSectionIds, Does.Contain(eventSection));
-        Assert.That(protocol.LastNotifiedMutationSectionIds, Does.Contain(sequenceSection));
+        Assert.That(protocol.LastRefreshedMutationSectionIds, Does.Contain(eventSection));
+        Assert.That(protocol.LastRefreshedMutationSectionIds, Does.Contain(sequenceSection));
         Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
     }
 
@@ -1532,7 +1532,7 @@ public sealed class DomainEventAuthorityCoreTests
         : IDailyV1SelectedP12TravelPartyAdvanceProtocol
     {
         internal int UnchangedSectionValidationCalls { get; private set; }
-        internal string[] LastNotifiedMutationSectionIds { get; private set; }
+        internal string[] LastRefreshedMutationSectionIds { get; private set; }
 
         public bool TryValidateOwnerSections(
             DailyV1SelectedRuntimeOwnerGraph graph,
@@ -1546,10 +1546,17 @@ public sealed class DomainEventAuthorityCoreTests
             return sectionIds != null;
         }
 
+        public bool TryRefreshCommittedMutationBaselines(
+            System.Collections.Generic.IReadOnlyCollection<string> sectionIds)
+        {
+            LastRefreshedMutationSectionIds = sectionIds?.ToArray();
+            return sectionIds != null;
+        }
+
         public bool NotifyCommittedMutations(
             System.Collections.Generic.IReadOnlyCollection<string> sectionIds)
         {
-            LastNotifiedMutationSectionIds = sectionIds?.ToArray();
+            LastRefreshedMutationSectionIds = sectionIds?.ToArray();
             return sectionIds != null;
         }
 

@@ -346,7 +346,8 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
                 graph, members, originCity, sectionIds, protocol, out scope), Is.True);
             Assert.That(scope, Is.Not.Null);
             Assert.That(protocol.ValidationCalls, Is.EqualTo(1));
-            Assert.That(protocol.CapacityChecks, Is.EqualTo(1));
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero,
+                "An admitted operation does not publish an epoch before a committed owner mutation.");
             Assert.That(protocol.EnterCalls, Is.EqualTo(1));
 
             Assert.That(state.TryCanCommitSelectedP12TravelPartyStartMutation(
@@ -378,7 +379,8 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
             scope.Dispose();
             string[] expectedNotified = { changed, partyCounterSection };
             Array.Sort(expectedNotified, StringComparer.Ordinal);
-            Assert.That(protocol.NotifiedSections, Is.EqualTo(expectedNotified));
+            Assert.That(protocol.RefreshedSections, Is.EqualTo(expectedNotified));
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L));
             Assert.That(protocol.ScopeDisposed, Is.True);
             Assert.That(protocol.Faulted, Is.False);
         }
@@ -444,7 +446,9 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
             scope = null;
             Assert.That(graph.TravelParties.ActiveParties.Count, Is.EqualTo(initialCardinality));
             Assert.That(graph.TravelParties.Revision, Is.EqualTo(initialRevision + 2));
-            Assert.That(protocol.NotifiedSections, Is.EqualTo(new[] { storeSection }));
+            Assert.That(protocol.RefreshedSections, Is.EqualTo(new[] { storeSection }));
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L),
+                "A compensating remove/add sequence is one outer operation and publishes one epoch.");
             Assert.That(protocol.ScopeDisposed, Is.True);
             Assert.That(protocol.Faulted, Is.False);
         }
@@ -539,7 +543,7 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
                 graph, actor, sectionIds, protocol, out IDisposable scope), Is.True);
             Assert.That(scope, Is.Not.Null);
             Assert.That(protocol.ValidationCalls, Is.EqualTo(1));
-            Assert.That(protocol.CapacityChecks, Is.EqualTo(1));
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero);
             Assert.That(protocol.EnterCalls, Is.EqualTo(1));
 
             Assert.That(state.TryCanCommitSelectedP12SoloTravelStartMutation(
@@ -565,7 +569,9 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
 
             scope.Dispose();
             scope.Dispose();
-            Assert.That(protocol.NotifiedSections, Is.EqualTo(new[] { changed }));
+            Assert.That(protocol.RefreshedSections, Is.EqualTo(new[] { changed }));
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L),
+                "Core publishes one shared epoch only after the host census witness refresh succeeds.");
             Assert.That(protocol.ScopeDisposed, Is.True);
             Assert.That(protocol.Faulted, Is.False);
             Assert.That(state.TryCanCommitSelectedP12SoloTravelStartMutation(
@@ -766,9 +772,43 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
             Is.EqualTo(locationCountBefore + 1));
         Assert.That(actor.SpatialKnowledge.KnownRouteRuntimeIds.Count,
             Is.EqualTo(routeCountBefore + 1));
-        Assert.That(protocol.NotifiedSections, Is.EquivalentTo(
+        Assert.That(protocol.RefreshedSections, Is.EquivalentTo(
             new[] { travelSection, locationsSection, routesSection }));
+        Assert.That(protocol.RefreshCalls, Is.EqualTo(1),
+            "The complete changed owner set is refreshed atomically once at the outer operation boundary.");
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L),
+            "Multiple committed owner sections in one operation publish one Core mutation epoch.");
         Assert.That(protocol.Faulted, Is.False);
+    }
+
+    [Test]
+    public void CoreLeavesMutationEpochUnchangedForAnAdmittedNoOpOperation()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        TestProtocol protocol = new TestProtocol();
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out IDisposable scope), Is.True);
+            scope.Dispose();
+            Assert.That(protocol.RefreshCalls, Is.Zero,
+                "An admitted no-op must not emit a host baseline refresh.");
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero,
+                "An admitted no-op must not advance the Core-owned epoch.");
+            Assert.That(protocol.Faulted, Is.False);
+        }
+        finally
+        {
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
     }
 
     [Test]
@@ -863,8 +903,10 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
             composition.RuntimeIdAllocator).GetCurrentCensus().Revision, Is.EqualTo(eventRevision + 1L));
         Assert.That(new SimulationRecordSequenceCensusProvider(
             composition.RecordSequence).GetCurrentCensus().Revision, Is.EqualTo(sequenceRevision + 1L));
-        Assert.That(protocol.NotifiedSections, Is.EquivalentTo(
+        Assert.That(protocol.RefreshedSections, Is.EquivalentTo(
             new[] { moneyId, planId, cityId, eventsId, sequenceId }));
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L),
+            "The selected Core travel start publishes one epoch for its complete changed section union.");
         Assert.That(protocol.Faulted, Is.False);
     }
 
@@ -1200,12 +1242,12 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
         }
 
         internal int ValidationCalls;
-        internal int CapacityChecks;
         internal int EnterCalls;
+        internal int RefreshCalls;
         internal bool Faulted;
         internal bool ScopeDisposed;
         internal Action DuringNextValidation;
-        internal IReadOnlyCollection<string> NotifiedSections;
+        internal IReadOnlyCollection<string> RefreshedSections;
 
         public bool TryBeginOperation(
             DailyV1SelectedRuntimeOwnerGraph graph,
@@ -1225,12 +1267,6 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
             return sectionIds != null;
         }
 
-        public bool TryValidateMutationEpochCapacity()
-        {
-            CapacityChecks++;
-            return true;
-        }
-
         public bool TryEnterOperation(out IDisposable operationScope)
         {
             EnterCalls++;
@@ -1238,9 +1274,10 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
             return true;
         }
 
-        public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds)
+        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds)
         {
-            NotifiedSections = sectionIds?.ToArray();
+            RefreshCalls++;
+            RefreshedSections = sectionIds?.ToArray();
             return sectionIds != null;
         }
 

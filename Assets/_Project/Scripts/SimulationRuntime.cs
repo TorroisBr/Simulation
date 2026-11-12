@@ -393,10 +393,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             runtime.npcRosterCensusProtocol != null
             && runtime.npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _);
 
-        public bool TryValidateMutationEpochCapacity() =>
-            runtime.npcRosterCensusProtocol != null
-            && runtime.npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _);
-
         public bool TryEnterOperation(out IDisposable operationScope)
         {
             operationScope = null;
@@ -409,9 +405,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return true;
         }
 
-        public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) =>
+        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) =>
             runtime.npcRosterCensusProtocol != null
-            && runtime.npcRosterCensusProtocol.NotifyCommittedMutations(sectionIds, out _);
+            && runtime.npcRosterCensusProtocol.TryRefreshCommittedMutationBaselines(sectionIds, out _);
 
         public void FaultClosed() => runtime.FaultRuntimeAdmission();
     }
@@ -442,10 +438,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             runtime.npcRosterCensusProtocol != null
             && runtime.npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _);
 
-        public bool TryValidateMutationEpochCapacity() =>
-            runtime.npcRosterCensusProtocol != null
-            && runtime.npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _);
-
         public bool TryEnterOperation(out IDisposable operationScope)
         {
             operationScope = null;
@@ -458,9 +450,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return true;
         }
 
-        public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) =>
+        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) =>
             runtime.npcRosterCensusProtocol != null
-            && runtime.npcRosterCensusProtocol.NotifyCommittedMutations(sectionIds, out _);
+            && runtime.npcRosterCensusProtocol.TryRefreshCommittedMutationBaselines(sectionIds, out _);
 
         public void FaultClosed() => runtime.FaultRuntimeAdmission();
     }

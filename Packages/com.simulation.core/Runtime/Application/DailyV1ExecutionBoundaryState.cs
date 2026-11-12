@@ -102,9 +102,8 @@ internal interface IDailyV1SelectedP12SoloTravelStartProtocol
         DailyV1NpcRuntimeOwners actor,
         out IDisposable operationScope);
     bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
-    bool TryValidateMutationEpochCapacity();
     bool TryEnterOperation(out IDisposable operationScope);
-    bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds);
+    bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds);
     void FaultClosed();
 }
 
@@ -116,9 +115,8 @@ internal interface IDailyV1SelectedP12SoloTravelStartProtocol
 internal interface IDailyV1SelectedP12TravelPartyStartProtocol
 {
     bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
-    bool TryValidateMutationEpochCapacity();
     bool TryEnterOperation(out IDisposable operationScope);
-    bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds);
+    bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds);
     void FaultClosed();
 }
 
@@ -136,9 +134,8 @@ internal interface IDailyV1SelectedP12MerchantDailyTradeProtocol
         DailyV1NpcRuntimeOwners actor,
         IReadOnlyList<string> sectionIds);
     bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
-    bool TryValidateMutationEpochCapacity();
     bool TryEnterOperation(out IDisposable operationScope);
-    bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds);
+    bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds);
     void FaultClosed();
 }
 
@@ -582,6 +579,27 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     internal bool SelectedCoreOwnerMutationGuardAuthoritiesBound =>
         selectedCoreOwnerMutationGuardAuthoritiesBound;
     internal bool IsFactualReadWorldPublished => factualReadWorldPublished;
+
+    private bool CanAdvanceSelectedMutationEpoch =>
+        !mutationEpochState.HasActiveReservation && mutationEpochState.CanAdvance;
+
+    /// <summary>
+    /// The census host validates and refreshes its registered owner witnesses;
+    /// the Core execution state is the sole publisher of this selected
+    /// operation's shared mutation epoch.
+    /// </summary>
+    private bool TryRefreshAndAdvanceSelectedMutationEpoch(
+        IReadOnlyCollection<string> changedSectionIds,
+        Func<IReadOnlyCollection<string>, bool> refreshCommittedBaselines)
+    {
+        if (changedSectionIds == null || changedSectionIds.Count == 0
+            || refreshCommittedBaselines == null
+            || !CanAdvanceSelectedMutationEpoch
+            || !refreshCommittedBaselines(changedSectionIds))
+            return false;
+
+        return mutationEpochState.TryAdvanceCommittedMutation();
+    }
 
     /// <summary>
     /// Binds the exact selected Core graph before the host is asked to bind
@@ -1683,7 +1701,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             {
                 if (!protocol.TryValidateOwnerSections(graph, actor, sectionIds)
                     || !protocol.TryValidateUnchangedSections(sectionIds)
-                    || !protocol.TryValidateMutationEpochCapacity()
+                    || !CanAdvanceSelectedMutationEpoch
                     || !protocol.TryEnterOperation(out protocolScope)
                     || protocolScope == null)
                 {
@@ -1815,8 +1833,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 if (!IsCurrentSelectedMerchantDailyTradeContext(context))
                     FaultSelectedMerchantDailyTrade(context?.Protocol);
                 else if (context.ChangedSectionIds.Count != 0
-                    && !context.Protocol.NotifyCommittedMutations(
-                        ToOrderedSectionArray(context.ChangedSectionIds)))
+                    && !TryRefreshAndAdvanceSelectedMutationEpoch(
+                        ToOrderedSectionArray(context.ChangedSectionIds),
+                        context.Protocol.TryRefreshCommittedMutationBaselines))
                     FaultSelectedMerchantDailyTrade(context.Protocol);
             }
             catch { FaultSelectedMerchantDailyTrade(context?.Protocol); }
@@ -1870,7 +1889,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || !AdmissionContext.IsOwnedByCurrentThread()
                 || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
                 || selectedP12TravelPartyAdvanceContext != null
-                || mutationEpochState.HasActiveReservation)
+                || !CanAdvanceSelectedMutationEpoch)
             {
                 FaultSelectedTravelPartyAdvance(protocol);
                 return false;
@@ -1989,6 +2008,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || selectedP12SoloTravelStartContext != null
                 || selectedP12TravelPartyAdvanceContext != null
                 || activeOperationCount <= 0
+                || !CanAdvanceSelectedMutationEpoch
                 || !AreRequiredSelectedP12Sections(expectedSectionIds))
             {
                 FaultSelectedSoloTravelStart(protocol);
@@ -2008,7 +2028,6 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                         out Dictionary<string, SelectedP12OwnerSectionBaseline> coreBaselinesAfter)
                     || !HaveSameSelectedP12OwnerSectionBaselines(
                         coreBaselinesBefore, coreBaselinesAfter)
-                    || !protocol.TryValidateMutationEpochCapacity()
                     || !protocol.TryEnterOperation(out protocolScope)
                     || protocolScope == null)
                 {
@@ -2241,7 +2260,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || selectedP12TravelPartyStartContext != null
                 || selectedP12TravelPartyAdvanceContext != null
                 || selectedP12SoloTravelStartContext != null
-                || mutationEpochState.HasActiveReservation
+                || !CanAdvanceSelectedMutationEpoch
                 || !AreRequiredSelectedP12Sections(expectedSectionIds))
             {
                 FaultSelectedTravelPartyStart(protocol);
@@ -2255,7 +2274,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                         expectedSectionIds,
                         out Dictionary<string, SelectedP12OwnerSectionBaseline> coreBaselinesBefore)
                     || !protocol.TryValidateUnchangedSections(expectedSectionIds)
-                    || !protocol.TryValidateMutationEpochCapacity()
+                    || !CanAdvanceSelectedMutationEpoch
                     || !TryCaptureSelectedTravelPartyStartCoreOwnerSectionBaselines(
                         graph, members, originCity, selectedRuntimeIdAllocator, selectedRecordSequence,
                         expectedSectionIds,
@@ -2404,8 +2423,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     || !TryValidateSelectedTravelPartyStartAllOwnerBaselines(context))
                     FaultSelectedTravelPartyStart(context?.Protocol);
                 else if (context.ChangedSectionIds.Count != 0
-                    && !context.Protocol.NotifyCommittedMutations(
-                        ToOrderedSectionArray(context.ChangedSectionIds)))
+                    && !TryRefreshAndAdvanceSelectedMutationEpoch(
+                        ToOrderedSectionArray(context.ChangedSectionIds),
+                        context.Protocol.TryRefreshCommittedMutationBaselines))
                     FaultSelectedTravelPartyStart(context.Protocol);
             }
             catch { FaultSelectedTravelPartyStart(context?.Protocol); }
@@ -2565,8 +2585,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 if (!IsCurrentSelectedSoloTravelStartContext(context))
                     FaultSelectedSoloTravelStart(context?.Protocol);
                 else if (context.ChangedSectionIds.Count != 0
-                    && !context.Protocol.NotifyCommittedMutations(
-                        ToOrderedSectionArray(context.ChangedSectionIds)))
+                    && !TryRefreshAndAdvanceSelectedMutationEpoch(
+                        ToOrderedSectionArray(context.ChangedSectionIds),
+                        context.Protocol.TryRefreshCommittedMutationBaselines))
                     FaultSelectedSoloTravelStart(context.Protocol);
             }
             catch { FaultSelectedSoloTravelStart(context?.Protocol); }
@@ -4181,8 +4202,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 if (!IsCurrentSelectedTravelPartyAdvanceContext(context))
                     FaultSelectedTravelPartyAdvance(context?.Protocol);
                 else if (context.ChangedSectionIds.Count != 0
-                    && !context.Protocol.NotifyCommittedMutations(
-                        ToOrderedSectionArray(context.ChangedSectionIds)))
+                    && !TryRefreshAndAdvanceSelectedMutationEpoch(
+                        ToOrderedSectionArray(context.ChangedSectionIds),
+                        context.Protocol.TryRefreshCommittedMutationBaselines))
                     FaultSelectedTravelPartyAdvance(context.Protocol);
             }
             catch { FaultSelectedTravelPartyAdvance(context?.Protocol); }

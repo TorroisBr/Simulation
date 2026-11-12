@@ -1446,6 +1446,26 @@ public sealed class ContinuationCensusProtocol
         return NotifyCommittedMutationsCore(sectionIds, out failure);
     }
 
+    /// <summary>
+    /// Validates one selected Core operation's changed witnesses and refreshes
+    /// their provider baselines without publishing the shared mutation epoch.
+    /// The Core execution boundary publishes that epoch after this all-rows
+    /// validation succeeds. Legacy and mixed-roster callers continue to use
+    /// <see cref="NotifyCommittedMutations(IEnumerable{string}, out ContinuationCensusFailure)"/>.
+    /// </summary>
+    internal bool TryRefreshCommittedMutationBaselines(
+        IEnumerable<string> sectionIds,
+        out ContinuationCensusFailure failure)
+    {
+        if (activeMutationEpochReservation != null)
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        return NotifyCommittedMutationsCore(sectionIds, out failure, advanceEpoch: false);
+    }
+
     private bool NotifyCommittedMutationsCore(
         IEnumerable<string> sectionIds,
         out ContinuationCensusFailure failure,

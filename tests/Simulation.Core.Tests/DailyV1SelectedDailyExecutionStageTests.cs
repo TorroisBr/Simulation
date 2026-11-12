@@ -1619,6 +1619,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
 
             public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) => sectionIds != null;
 
+            public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) => sectionIds != null;
+
             public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) => sectionIds != null;
             public void FaultClosed() { }
         }

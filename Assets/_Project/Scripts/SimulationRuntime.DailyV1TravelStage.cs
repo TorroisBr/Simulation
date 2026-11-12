@@ -289,6 +289,11 @@ public sealed partial class SimulationRuntime
                 || (runtime.npcRosterCensusProtocol != null
                     && runtime.npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _));
 
+        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) =>
+            runtime.runtimeAdmissionContext == null
+                || (runtime.npcRosterCensusProtocol != null
+                    && runtime.npcRosterCensusProtocol.TryRefreshCommittedMutationBaselines(sectionIds, out _));
+
         public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) =>
             runtime.runtimeAdmissionContext == null
                 || (runtime.npcRosterCensusProtocol != null

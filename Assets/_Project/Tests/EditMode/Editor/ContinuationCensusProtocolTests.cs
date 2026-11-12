@@ -133,6 +133,32 @@ public sealed class ContinuationCensusProtocolTests
     }
 
     [Test]
+    public void CoreOwnedCommitRefreshesProviderBaselineWithoutHostEpochAdvance()
+    {
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        ContinuationCensusProtocol protocol = CreateProtocol(
+            records.DecisionRecorder, OwnerSectionRole.Required);
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out _), Is.True);
+        Assert.That(protocol.TryEnterOperation(
+            "bootstrap.publish", out SimulationOperationScope scope, out _), Is.True);
+
+        RecordOccurrence(records.DecisionRecorder, "core-owned-epoch-boundary");
+        Assert.That(protocol.TryRefreshCommittedMutationBaselines(
+            new[] { ReceiptSectionId }, out ContinuationCensusFailure refreshFailure), Is.True,
+            refreshFailure.ToString());
+        Assert.That(protocol.TryReadMutationEpoch(out long epoch, out _), Is.True);
+        Assert.That(epoch, Is.Zero,
+            "The Unity census adapter refreshes exact provider witnesses but cannot publish a Core-owned epoch.");
+
+        scope.Dispose();
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure assessmentFailure), Is.True,
+            assessmentFailure.ToString());
+        Assert.That(protocol.TryReadMutationEpoch(out epoch, out _), Is.True);
+        Assert.That(epoch, Is.Zero,
+            "Witness-baseline refresh alone must not advance the shared mutation epoch.");
+    }
+
+    [Test]
     public void InvalidLaterOwnerFaultsBatchWithoutPublishingEpoch()
     {
         object firstOwner = new object();

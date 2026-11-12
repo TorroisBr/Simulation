@@ -1953,8 +1953,6 @@ public sealed class SimulationRuntimeAdmissionTests
         public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
             sectionIds != null && sectionIds.Count > 0;
 
-        public bool TryValidateMutationEpochCapacity() => true;
-
         public bool TryEnterOperation(out IDisposable operationScope)
         {
             EnterCount++;
@@ -1962,7 +1960,7 @@ public sealed class SimulationRuntimeAdmissionTests
             return true;
         }
 
-        public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds)
+        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds)
         {
             if (sectionIds == null) return false;
             Notifications.Add(new List<string>(sectionIds).ToArray());
