@@ -94,7 +94,15 @@ public static class PersonMaterializationSystem
             return false;
         }
 
-        NpcRuntime candidate = new NpcRuntime(runtimeId, npcData, null, initialMoney);
+        if (world.TryCreateNpcMaterializationCandidate(
+                npcData,
+                runtimeId,
+                initialMoney,
+                out NpcRuntime candidate,
+                out failure) == false)
+        {
+            return false;
+        }
         if (candidate.TryAssignPersonId(personId) == false)
         {
             failure = PersonMaterializationFailure.NpcAlreadyBoundToDifferentPerson;

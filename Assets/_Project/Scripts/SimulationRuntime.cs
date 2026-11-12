@@ -10531,6 +10531,120 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         return genealogyStore.IsAncestorOf(ancestorId, descendantId);
     }
 
+    internal bool TryCreateNpcMaterializationCandidate(
+        NpcData npcData,
+        string runtimeId,
+        float initialMoney,
+        out NpcRuntime candidate,
+        out PersonMaterializationFailure failure)
+    {
+        candidate = null;
+        failure = PersonMaterializationFailure.None;
+
+        bool selectedDailyV1Roster = IsDailyCaptureProfile
+            && cities.All(city => city != null && city.SelectedRuntimeOwners != null)
+            && npcRuntimes.All(npc => npc != null && npc.UsesSelectedDailyV1Definitions);
+        if (!selectedDailyV1Roster)
+        {
+            // Mixed and unselected compatibility rosters keep the established Unity constructor path.
+            candidate = new NpcRuntime(runtimeId, npcData, null, initialMoney);
+            return true;
+        }
+
+        DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+        if (graph == null
+            || !graph.MatchesExactOwnerInstances(
+                cities.Select(city => city?.SelectedRuntimeOwners),
+                npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners)))
+        {
+            failure = PersonMaterializationFailure.InvalidNpcDefinition;
+            return false;
+        }
+
+        DailyV1DefinitionAdapter.SelectedBindings bindings = null;
+        foreach (CityRuntime city in cities)
+        {
+            DailyV1DefinitionAdapter.SelectedBindings cityBindings = city?.SelectedDefinitionBindings;
+            if (cityBindings == null
+                || !ReferenceEquals(city.SelectedDailyV1DefinitionGraph, graph.Definitions)
+                || !ReferenceEquals(cityBindings.Definitions, graph.Definitions)
+                || (bindings != null && !ReferenceEquals(bindings, cityBindings)))
+            {
+                failure = PersonMaterializationFailure.InvalidNpcDefinition;
+                return false;
+            }
+            bindings = cityBindings;
+        }
+        foreach (NpcRuntime npc in npcRuntimes)
+        {
+            DailyV1DefinitionAdapter.SelectedBindings npcBindings = npc?.SelectedDefinitionBindings;
+            if (npcBindings == null
+                || !ReferenceEquals(npc.SelectedDailyV1DefinitionGraph, graph.Definitions)
+                || !ReferenceEquals(npcBindings.Definitions, graph.Definitions)
+                || (bindings != null && !ReferenceEquals(bindings, npcBindings)))
+            {
+                failure = PersonMaterializationFailure.InvalidNpcDefinition;
+                return false;
+            }
+            bindings = npcBindings;
+        }
+
+        if (bindings == null
+            || !ReferenceEquals(bindings.Definitions, graph.Definitions)
+            || !bindings.TryGet(npcData, graph.Definitions, out DailyV1NpcDefinition definition)
+            || definition == null)
+        {
+            failure = PersonMaterializationFailure.InvalidNpcDefinition;
+            return false;
+        }
+
+        try
+        {
+            // Keep this candidate unpublished; City membership commits later in the enclosing P12 operation.
+            candidate = NpcRuntime.CreateSelectedDailyV1(
+                runtimeId, npcData, definition, graph.Definitions, bindings, null, initialMoney);
+        }
+        catch (ArgumentException)
+        {
+            candidate = null;
+            failure = PersonMaterializationFailure.InvalidNpcDefinition;
+            return false;
+        }
+
+        if (!candidate.TryBindSelectedDailyV1Definition(
+                definition,
+                graph.Definitions,
+                bindings,
+                cityRuntimeId => ResolveSelectedCityProjection(graph, cityRuntimeId)))
+        {
+            candidate = null;
+            failure = PersonMaterializationFailure.InvalidNpcDefinition;
+            return false;
+        }
+        return true;
+    }
+
+    private CityRuntime ResolveSelectedCityProjection(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string cityRuntimeId)
+    {
+        if (graph == null || string.IsNullOrWhiteSpace(cityRuntimeId)) return null;
+        CityRuntime resolved = null;
+        foreach (CityRuntime city in cities)
+        {
+            if (city == null || !string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal))
+                continue;
+            if (resolved != null
+                || !TryGetExactSelectedCityOwner(graph, city, out DailyV1CityRuntimeOwners owner)
+                || graph.SpatialNetwork == null
+                || !graph.SpatialNetwork.TryGetLocation(owner.LocationRuntimeId, out SpatialLocationRuntime location)
+                || !ReferenceEquals(city.Location, location))
+                return null;
+            resolved = city;
+        }
+        return resolved;
+    }
+
     public bool TryMaterializePerson(
         PersonId personId,
         NpcData npcData,

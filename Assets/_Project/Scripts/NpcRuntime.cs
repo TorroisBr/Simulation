@@ -101,6 +101,7 @@ public class NpcRuntime : ICapabilityConditionSource
         : npcData != null ? npcData.DefinitionId : string.Empty;
     internal DailyV1NpcDefinition SelectedDailyV1Definition => selectedDailyV1Definition;
     internal DailyV1EffectiveDefinitions SelectedDailyV1DefinitionGraph => selectedDefinitionGraph;
+    internal DailyV1DefinitionAdapter.SelectedBindings SelectedDefinitionBindings => selectedDefinitionBindings;
     internal DailyV1NpcRuntimeOwners SelectedRuntimeOwners => selectedRuntimeOwners;
     internal object SelectedCensusOwnerIdentity => (object)selectedRuntimeOwners ?? this;
     internal DailyV1SelectedRuntimeOwnerGraph SelectedRuntimeOwnerGraph => selectedRuntimeOwnerGraphProvider?.Invoke();

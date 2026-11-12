@@ -4632,15 +4632,47 @@ public sealed class SimulationBootstrapCompositionTests
             out long initialMutationEpoch,
             out ContinuationCensusFailure initialEpochFailure), Is.True, initialEpochFailure.ToString());
 
+        NpcRuntime selectedDefinitionSource = runtime.NpcRuntimes
+            .FirstOrDefault(npc => npc != null && npc.UsesSelectedDailyV1Definitions);
+        Assert.That(selectedDefinitionSource, Is.Not.Null);
+        NpcData selectedNpcAsset = selectedDefinitionSource.NpcData;
+        DailyV1NpcDefinition expectedDefinition = selectedDefinitionSource.SelectedDailyV1Definition;
+        DailyV1EffectiveDefinitions expectedDefinitions = selectedDefinitionSource.SelectedDailyV1DefinitionGraph;
+        long registeredPersonRevision = runtime.PersonStore.Revision;
+        int registeredNpcCount = runtime.NpcRuntimes.Count;
         Assert.That(runtime.TryMaterializePerson(
             personId,
-            SimulationTestFactory.CreateNpc("daily-dynamic-owner-person-definition"),
+            SimulationTestFactory.CreateNpc("daily-dynamic-owner-unadmitted-definition"),
+            "daily-dynamic-owner-person-unadmitted-npc",
+            startingCity,
+            0f,
+            out _,
+            out PersonMaterializationFailure unadmittedFailure), Is.False);
+        Assert.That(unadmittedFailure, Is.EqualTo(PersonMaterializationFailure.InvalidNpcDefinition));
+        Assert.That(runtime.PersonStore.Revision, Is.EqualTo(registeredPersonRevision));
+        Assert.That(runtime.NpcRuntimes.Count, Is.EqualTo(registeredNpcCount));
+        Assert.That(startingCity.ImportantNpcs.Count, Is.EqualTo(initialCityPresenceCardinality));
+        Assert.That(startingCity.ImportantNpcRevision, Is.EqualTo(initialCityPresenceRevision));
+        Assert.That(censusProtocol.TryReadMutationEpoch(
+            out long rejectedMutationEpoch,
+            out ContinuationCensusFailure rejectedEpochFailure), Is.True, rejectedEpochFailure.ToString());
+        Assert.That(rejectedMutationEpoch, Is.EqualTo(initialMutationEpoch));
+
+        Assert.That(runtime.TryMaterializePerson(
+            personId,
+            selectedNpcAsset,
             "daily-dynamic-owner-person-npc",
             startingCity,
             0f,
             out NpcRuntime materializedNpc,
             out PersonMaterializationFailure failure), Is.True, failure.ToString());
         Assert.That(ReadNonPublicProperty(materializedNpc, "BoundPersonRuntime"), Is.SameAs(person));
+        Assert.That(materializedNpc.UsesSelectedDailyV1Definitions, Is.True);
+        Assert.That(materializedNpc.NpcData, Is.SameAs(selectedNpcAsset));
+        Assert.That(materializedNpc.SelectedDailyV1Definition, Is.SameAs(expectedDefinition));
+        Assert.That(materializedNpc.SelectedDailyV1DefinitionGraph, Is.SameAs(expectedDefinitions));
+        Assert.That(materializedNpc.SelectedRuntimeOwners.Definition, Is.SameAs(expectedDefinition));
+        Assert.That(materializedNpc.SelectedRuntimeOwners.Definitions, Is.SameAs(expectedDefinitions));
         Assert.That(materializedNpc.CurrentCity, Is.SameAs(startingCity));
         Assert.That(startingCity.ImportantNpcs, Has.Member(materializedNpc));
         AssertSelectedDailyNpcOwnerFamilies(runtime);

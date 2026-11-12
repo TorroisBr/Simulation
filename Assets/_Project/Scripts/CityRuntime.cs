@@ -57,6 +57,7 @@ public class CityRuntime
         : cityData != null ? cityData.DefinitionId : string.Empty;
     internal DailyV1CityDefinition SelectedDailyV1Definition => selectedDailyV1Definition;
     internal DailyV1EffectiveDefinitions SelectedDailyV1DefinitionGraph => selectedDefinitionGraph;
+    internal DailyV1DefinitionAdapter.SelectedBindings SelectedDefinitionBindings => selectedDefinitionBindings;
     internal DailyV1CityRuntimeOwners SelectedRuntimeOwners => selectedRuntimeOwners;
     internal IReadOnlyList<DailyV1MarketItemConfig> SelectedDailyV1MarketInputs =>
         selectedDailyV1Definition?.Values?.marketItems;
