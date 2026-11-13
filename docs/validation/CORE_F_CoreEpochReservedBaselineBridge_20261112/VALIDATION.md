@@ -21,9 +21,12 @@ hydration, or claim a Core-owned census. It does not complete CORE-F or establis
 - Candidate branch: `codex/core/CORE-F-restore-stage-transaction`.
 - Validated source was based on candidate commit `a001664f55f8e7d4659d6729d9a69bb7f95d67a3`.
 - Core canonical at validation: `a07402faa4739d0bb276d3bc4aa24e6ed7bd6cea`.
-- The working source was unchanged during each run. CoreValidation input digest:
-  `e2e0cbb074de59e44380d3c92bd63859ba798341af9116d469a0fc8c4292cb5e`
-  (541 inputs). Unity input digest: `7bd3217c1bfc5a667cc9d2584180b93c332f560be3408a0e106209945166074d`
+- The exact-source CoreValidation recheck ran at commit
+  `040ad0aae03340fd78b4d2272010c32504d4b6c8`, tree
+  `a4fd703e5898ba0566eefd76afb9c44563ad5f90`, with a stable working-input
+  digest of `e2e0cbb074de59e44380d3c92bd63859ba798341af9116d469a0fc8c4292cb5e`
+  (541 inputs). A previously reported local run manifest could not be found and
+  is not relied on by this record. Unity input digest: `7bd3217c1bfc5a667cc9d2584180b93c332f560be3408a0e106209945166074d`
   (1,982 inputs). The Unity snapshot also records committed base tree
   `2552fe3bb111025a4361502ae5a2d38c99fe335c`; the separate input digest binds
   the tested working source.
@@ -43,8 +46,8 @@ hydration, or claim a Core-owned census. It does not complete CORE-F or establis
 
 | Gate | Result | Evidence |
 |---|---:|---|
-| Official CoreValidation cold | 1,122/1,122 passed | Run `441de4b81b124ec8ada182232c265361`; private manifest SHA-256 `1edd030cc52cc02895e0b5e15d478c29a918cd40014ea9635b0d4c40578014e5`; original cold TRX SHA-256 `e84377e60a749e2b8bfce8a699b574fd03b5fa77014ba48cbfc04280c1a4f276`. |
-| Official CoreValidation warm | 1,122/1,122 passed | Same run; original warm TRX SHA-256 `372224268bb693afbbaeb904827431f716f90d072d07b419d7a332bf49f01237`. |
+| Official CoreValidation cold | 1,122/1,122 passed | Exact-source recheck run `08fab9f52f7d4d2d84e271d09ddfc027` (TRX run `ed2b6195-692c-44dc-a0e9-4bb17920620c`); private manifest SHA-256 `acfb2269b365c57c022f39b7c52f6fc2f904387e6157ac7c61fdc87efd31881f`; original cold TRX SHA-256 `2cb7b7d7420deee2b643ab5deffdc9b7589e13979a66b79b87f1a422e3eb428b`. |
+| Official CoreValidation warm | 1,122/1,122 passed | Same run (TRX run `a9ebd729-7a4a-4e5c-bf86-2be1634ec481`); original warm TRX SHA-256 `ac1244d0b461b21a5a73236fee0a6297bd96d012230f1afcdea70117d464a9ac`. |
 | Focused production census regression | 1/1 passed | Unity run `3eab8a9a89ec410f8bc431fdc4e7074c`; original XML SHA-256 `844a06dc82d05446c340e2c170e27090e1192d7218dfee0820253c36a4de7eef`. |
 | Full official Unity EditMode | 3,320/3,320 passed | Stable run `57b8a1dfceeb4ec9b679bfa27aa2402a`; original XML SHA-256 `672d3b47db35ab63f05dd5ed56b2ad3a692189575dcbcfd04d878782acc2c41b`; raw log SHA-256 `217a9e45f47cf8fef59371e35f08828ccef91e41dcac17ac1ef952d5042302e4`. The new regression and all existing LongRun tests are in this report. |
 | Official EditMode Smoke filter | 5/5 passed | Run `74a697180d3b41168d7776c4874d1433`; XML SHA-256 `11d308773f9d19bff308f7480d591a92d9ff280c4523c38420ac6cb4cd013993`. All five cases also occur in the full EditMode report. |
