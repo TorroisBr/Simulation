@@ -159,6 +159,43 @@ public sealed class ContinuationCensusProtocolTests
     }
 
     [Test]
+    public void CoreReservationRefreshesProductionCensusBeforeSingleEpochCompletion()
+    {
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        DailyV1ExecutionBoundaryState runtimeState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(), admission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(System.Guid.NewGuid()));
+        ContinuationCensusProtocol protocol = CreateOperationProtocol(runtimeState, out RecordFixture records);
+
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure initial), Is.True,
+            initial.ToString());
+        RecordOccurrence(records.DecisionRecorder, "core-reserved-epoch-boundary");
+        Assert.That(runtimeState.MutationEpochState.TryReserve(
+            out DailyV1MutationEpochReservation reservation), Is.True);
+
+        Assert.That(protocol.TryRefreshCommittedMutationBaselines(
+            new[] { ReceiptSectionId }, out ContinuationCensusFailure unreservedFailure), Is.False,
+            "The ordinary path cannot refresh while any epoch reservation is active.");
+        Assert.That(unreservedFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(protocol.TryRefreshCommittedMutationBaselinesForReservation(
+            new object(), new[] { ReceiptSectionId }, out ContinuationCensusFailure wrongTokenFailure), Is.False,
+            "A different operation cannot borrow the active reservation.");
+        Assert.That(wrongTokenFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+
+        Assert.That(protocol.TryRefreshCommittedMutationBaselinesForReservation(
+            reservation.Token, new[] { ReceiptSectionId }, out ContinuationCensusFailure refreshFailure), Is.True,
+            refreshFailure.ToString());
+        Assert.That(runtimeState.MutationEpochState.CurrentEpoch, Is.Zero,
+            "The census adapter refreshes witnesses but never publishes the Core-owned epoch.");
+        Assert.That(runtimeState.MutationEpochState.TryComplete(reservation, committedMutation: true), Is.True);
+        Assert.That(runtimeState.MutationEpochState.CurrentEpoch, Is.EqualTo(1L),
+            "The exact reserved operation publishes one epoch after successful baseline refresh.");
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure complete), Is.True,
+            complete.ToString());
+    }
+
+    [Test]
     public void InvalidLaterOwnerFaultsBatchWithoutPublishingEpoch()
     {
         object firstOwner = new object();
@@ -871,9 +908,15 @@ public sealed class ContinuationCensusProtocolTests
     }
 
     private static ContinuationCensusProtocol CreateOperationProtocol(
-        DailyV1ExecutionBoundaryState sharedExecutionState = null, bool hasTravelSystem = false)
+        DailyV1ExecutionBoundaryState sharedExecutionState = null, bool hasTravelSystem = false) =>
+        CreateOperationProtocol(sharedExecutionState, out _, hasTravelSystem);
+
+    private static ContinuationCensusProtocol CreateOperationProtocol(
+        DailyV1ExecutionBoundaryState sharedExecutionState,
+        out RecordFixture records,
+        bool hasTravelSystem = false)
     {
-        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        records = SimulationTestFactory.CreateRecordFixture();
         ContinuationCensusProtocol protocol = new ContinuationCensusProtocol(sharedExecutionState);
         Assert.That(protocol.RegisterExpectedSection(new OwnerSectionContract(
             ReceiptSectionId, NpcDecisionRecorder.OccurrenceReceiptSectionSchemaVersion,

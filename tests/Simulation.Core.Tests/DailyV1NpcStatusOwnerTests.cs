@@ -231,9 +231,11 @@ public sealed class DailyV1NpcStatusOwnerTests
             .NpcStatusCrimeSectionIdFor(actor.RuntimeId);
         string targetSection = DailyV1SelectedOwnerSectionCensusContract
             .NpcStatusCrimeSectionIdFor(target.RuntimeId);
-        Assert.That(protocol.Calls.Where(call => call.StartsWith("notify:", StringComparison.Ordinal)),
-            Is.EqualTo(new[] { "notify:" + actorSection, "notify:" + targetSection }),
-            "The Core session commits each exact P12 owner section after its matching revision write.");
+        Assert.That(protocol.Calls.Where(call => call.StartsWith("refresh:", StringComparison.Ordinal)),
+            Is.EqualTo(new[] { "refresh:" + actorSection, "refresh:" + targetSection }),
+            "The census adapter refreshes each exact owner baseline after its Core revision write.");
+        Assert.That(composition.ExecutionBoundaryState.MutationEpochState.CurrentEpoch, Is.EqualTo(2L),
+            "Each successful immediate selected owner commit advances the Core epoch once.");
         Assert.That(protocol.Calls, Does.Contain("validate:" + actorSection + "|" + targetSection),
             "Core derives one operation scope from the exact actor and target owners.");
         Assert.That(protocol.Calls, Does.Not.Contain("reserve"),
@@ -426,6 +428,20 @@ public sealed class DailyV1NpcStatusOwnerTests
         {
             Calls.Add("validate:" + string.Join("|", sectionIds));
             return !RejectSectionValidation;
+        }
+
+        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds)
+        {
+            Calls.Add("refresh:" + string.Join("|", sectionIds));
+            return true;
+        }
+
+        public bool TryRefreshCommittedMutationBaselinesForReservation(
+            object reservationToken,
+            IReadOnlyCollection<string> sectionIds)
+        {
+            Calls.Add("reserved-refresh:" + string.Join("|", sectionIds));
+            return reservationToken != null && sectionIds != null && sectionIds.Count > 0;
         }
 
         public bool TryReserveMutationEpoch(out object reservation)

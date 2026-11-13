@@ -2747,6 +2747,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         try
         {
             return protocol.TryValidateOwnerSection(graph, owner, sectionId)
+                && CanAdvanceSelectedMutationEpoch
                 && protocol.TryValidateUnchangedSections(sectionIds);
         }
         catch
@@ -2778,7 +2779,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             try
             {
                 if (protocol.TryValidateOwnerSection(graph, owner, expectedSectionId)
-                    && protocol.NotifyCommittedMutations(sectionIds))
+                    && TryRefreshAndAdvanceSelectedMutationEpoch(
+                        sectionIds, protocol.TryRefreshCommittedMutationBaselines))
                     return true;
             }
             catch { }
@@ -4258,7 +4260,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                         () => AdmissionContext != null
                             && AdmissionContext.IsOwnedByCurrentThread(),
                         protocol.FaultClosed,
-                        protocol);
+                        protocol,
+                        mutationEpochState);
                 selectedP12CrimeJusticeMutationProtocol = protocol;
                 coordinator = selectedP12CrimeJusticeMutationCoordinator;
                 return true;

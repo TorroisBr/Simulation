@@ -1384,6 +1384,14 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             ValidatedSections = sectionIds?.ToArray();
             return sectionIds != null;
         }
+        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) =>
+            sectionIds != null;
+
+        public bool TryRefreshCommittedMutationBaselinesForReservation(
+            object reservationToken,
+            IReadOnlyCollection<string> sectionIds) =>
+            reservationToken != null && sectionIds != null;
+
         public bool TryReserveMutationEpoch(out object reservation)
         { reservation = null; return false; }
         public bool TryNotifyReservedCommittedMutations(

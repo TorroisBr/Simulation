@@ -843,7 +843,7 @@ internal interface IDailyV1SelectedP12NpcActionOwnerMutationProtocol
         DailyV1NpcRuntimeOwners owner,
         string sectionId);
     bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
-    bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds);
+    bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds);
     void FaultClosed();
 }
 

@@ -37,6 +37,15 @@ public sealed partial class SimulationRuntime
         public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
             resolveProtocol()?.TryValidateUnchangedSections(sectionIds, out _) == true;
 
+        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) =>
+            resolveProtocol()?.TryRefreshCommittedMutationBaselines(sectionIds, out _) == true;
+
+        public bool TryRefreshCommittedMutationBaselinesForReservation(
+            object reservationToken,
+            IReadOnlyCollection<string> sectionIds) =>
+            resolveProtocol()?.TryRefreshCommittedMutationBaselinesForReservation(
+                reservationToken, sectionIds, out _) == true;
+
         public bool TryReserveMutationEpoch(out object reservation)
         {
             reservation = null;

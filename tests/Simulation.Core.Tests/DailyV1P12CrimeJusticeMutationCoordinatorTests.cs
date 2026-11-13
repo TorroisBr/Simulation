@@ -74,6 +74,38 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
     }
 
     [Test]
+    public void CoreReservedDailyCommitRefreshesBaselinesWithItsExactReservationToken()
+    {
+        DailyV1MutationEpochState epochState = new DailyV1MutationEpochState();
+        FakeProtocol protocol = new FakeProtocol { CoreMutationEpochState = epochState };
+        DailyV1P12CrimeJusticeMutationCoordinator coordinator =
+            new DailyV1P12CrimeJusticeMutationCoordinator(
+                () => true, () => true, () => { }, protocol, epochState);
+        object owner = new object();
+        long revision = 4L;
+
+        coordinator.ExecuteDailyMutation(
+            new[] { Binding(owner, NpcSection, () => revision) },
+            new[] { NpcSection },
+            () =>
+            {
+                revision++;
+                coordinator.NotifyCommitted(owner, NpcSection);
+            });
+
+        Assert.That(protocol.ReservedRefreshMatchedActiveCoreReservation, Is.True,
+            "The production adapter receives the exact opaque token for the Core reservation it holds.");
+        Assert.That(protocol.Calls, Is.EqualTo(new[]
+        {
+            "validate:" + NpcSection,
+            "reserved-refresh:" + NpcSection
+        }));
+        Assert.That(epochState.CurrentEpoch, Is.EqualTo(1L),
+            "Core completes one epoch only after the reserved baseline refresh succeeds.");
+        Assert.That(epochState.HasActiveReservation, Is.False);
+    }
+
+    [Test]
     public void NpcStatusBindingUsesExactCoreCompositeAndItsPersistedRevision()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -307,16 +339,100 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
             .OrderBy(section => section, StringComparer.Ordinal));
         Assert.That(protocol.Calls[0], Is.EqualTo("validate:" + string.Join("|", expectedSections)),
             "The selected mutation validates the exact selected-owner inventory and preserves the established section order.");
-        Assert.That(protocol.Calls, Does.Contain("reserved-commit:" + string.Join("|",
+        Assert.That(protocol.Calls, Does.Contain("reserved-refresh:" + string.Join("|",
             new[]
             {
                 changedNpcSection,
                 DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId
             }.OrderBy(section => section, StringComparer.Ordinal))));
+        Assert.That(composition.ExecutionBoundaryState.MutationEpochState.CurrentEpoch, Is.EqualTo(1L),
+            "Core completes one shared epoch for the changed selected daily owner set.");
+        Assert.That(protocol.Calls, Does.Not.Contain("reserve"),
+            "The host supplies census validation and baseline refresh, not epoch reservation.");
         Assert.That(justiceOwner.Revision, Is.EqualTo(1L),
             "Justice revision is read from the exact Core graph owner, not a host callback.");
         Assert.That(protocol.Calls, Does.Not.Contain("fault"));
         Assert.That(coordinator.CanBeginDailyMutation(), Is.True);
+    }
+
+    [Test]
+    public void SelectedImmediateOwnerMutationRefreshesHostBaselineAndAdvancesCoreEpochOnce()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition,
+                out string diagnostic), Is.True, diagnostic);
+
+        FakeProtocol protocol = new FakeProtocol();
+        Assert.That(composition.ExecutionBoundaryState
+                .TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    protocol, composition.OwnerGraph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator coordinator), Is.True);
+        DailyV1NpcRuntimeOwners owner = composition.OwnerGraph.Npcs[0];
+        string section = DailyV1SelectedOwnerSectionCensusContract
+            .NpcStatusCrimeSectionIdFor(owner.RuntimeId);
+        Assert.That(coordinator.TryBeginSelectedNpcStatusMutation(
+            composition.OwnerGraph, new[] { owner }, out IDisposable scope), Is.True);
+        using (scope)
+        {
+            composition.ExecutionBoundaryState.EnsureSelectedP12CrimeJusticeOwnerMutationAllowed(owner);
+            composition.ExecutionBoundaryState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
+        }
+
+        Assert.That(owner.CrimeJusticeRevision, Is.EqualTo(1L));
+        Assert.That(composition.ExecutionBoundaryState.MutationEpochState.CurrentEpoch, Is.EqualTo(1L));
+        Assert.That(protocol.Calls, Does.Contain("refresh:" + section));
+        Assert.That(protocol.Calls, Does.Not.Contain("capacity"));
+        Assert.That(protocol.Calls, Does.Not.Contain("notify:" + section));
+    }
+
+    [Test]
+    public void SelectedDailyBaselineRefreshFailureReleasesCoreEpochAndFaultsSession()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition,
+                out string diagnostic), Is.True, diagnostic);
+
+        FakeProtocol protocol = new FakeProtocol { RejectBaselineRefresh = true };
+        Assert.That(composition.ExecutionBoundaryState
+                .TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    protocol, composition.OwnerGraph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator coordinator), Is.True);
+        DailyV1NpcRuntimeOwners owner = composition.OwnerGraph.Npcs[0];
+        object crimeIdentity = new object();
+        object justiceIdentity = new object();
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            composition.ExecutionBoundaryState.ExecuteSelectedP12CrimeJusticeDailyMutation(
+                protocol,
+                coordinator,
+                composition.OwnerGraph,
+                DailyV1SelectedCrimeJusticeDailyPhase.ClearArrestedToday,
+                crimeIdentity, crimeIdentity, justiceIdentity, justiceIdentity,
+                includeCrimeReceiptSection: true,
+                includeJusticeReceiptSection: true,
+                mutation: () =>
+                {
+                    composition.ExecutionBoundaryState
+                        .EnsureSelectedP12CrimeJusticeOwnerMutationAllowed(owner);
+                    composition.ExecutionBoundaryState
+                        .NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
+                }));
+
+        Assert.That(failure, Is.Not.Null);
+        Assert.That(owner.CrimeJusticeRevision, Is.EqualTo(1L),
+            "The failed post-commit witness refresh is fault-closed and cannot pretend the owner write rolled back.");
+        Assert.That(composition.ExecutionBoundaryState.MutationEpochState.CurrentEpoch, Is.Zero,
+            "Core does not publish an epoch whose complete changed baseline set could not be refreshed.");
+        Assert.That(composition.ExecutionBoundaryState.MutationEpochState.HasActiveReservation, Is.False,
+            "The failed census refresh releases Core's reservation before the session is faulted.");
+        Assert.That(protocol.Calls, Does.Contain("fault"));
     }
 
     [Test]
@@ -685,12 +801,16 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
             protocol, coordinator, composition.OwnerGraph), Is.True,
             "Daily execution retains both the exact coordinator and protocol for subsequent owner writes.");
 
-        Assert.That(protocol.Calls.Count(call => call == "reserve"), Is.EqualTo(4),
-            "Each established Crime/Justice phase owns a separate epoch reservation.");
-        Assert.That(protocol.Calls.Count(call => call == "release"), Is.EqualTo(4),
-            "Each no-op phase releases only its own reservation.");
+        Assert.That(protocol.Calls.Count(call => call == "reserve"), Is.Zero,
+            "The selected Core session, not the Unity census adapter, owns epoch reservation.");
+        Assert.That(protocol.Calls.Count(call => call == "release"), Is.Zero,
+            "No-op selected phases release their Core reservations without host epoch calls.");
+        Assert.That(protocol.Calls.Count(call => call.StartsWith("refresh:", StringComparison.Ordinal)), Is.Zero,
+            "No-op phases do not refresh or publish changed owner baselines.");
         Assert.That(protocol.Calls.Count(call => call.StartsWith("validate:", StringComparison.Ordinal)),
             Is.EqualTo(4));
+        Assert.That(composition.ExecutionBoundaryState.MutationEpochState.CurrentEpoch, Is.Zero,
+            "No-op daily phases release Core reservations without advancing the epoch.");
 
         FakeProtocol replacement = new FakeProtocol();
         DailyV1P12CrimeJusticeMutationCoordinator replacementCoordinator =
@@ -710,7 +830,8 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
                 mutation: () => Assert.Fail("A replacement census protocol must not run the mutation.")));
         Assert.That(replacement.Calls, Is.EqualTo(new[] { "fault" }),
             "One Core execution session retains the exact protocol identity bound to its P12 coordinator.");
-        Assert.That(protocol.Calls.Count(call => call == "reserve"), Is.EqualTo(4));
+        Assert.That(protocol.Calls.Count(call => call == "reserve"), Is.Zero,
+            "A replacement coordinator cannot divert a selected session back to host-owned epoch reservations.");
 
         DailyV1P12CrimeJusticeMutationCoordinator replacementCoordinatorForSameProtocol =
             CreateCoordinator(protocol, () => { });
@@ -752,6 +873,9 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
     private sealed class FakeProtocol : IDailyV1P12CrimeJusticeMutationProtocol
     {
         internal readonly List<string> Calls = new List<string>();
+        internal bool RejectBaselineRefresh;
+        internal DailyV1MutationEpochState CoreMutationEpochState;
+        internal bool ReservedRefreshMatchedActiveCoreReservation;
 
         public void FaultClosed() => Calls.Add("fault");
 
@@ -759,6 +883,27 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
         {
             Calls.Add("validate:" + string.Join("|", sectionIds));
             return true;
+        }
+
+        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds)
+        {
+            Calls.Add("refresh:" + string.Join("|", sectionIds.OrderBy(value => value, StringComparer.Ordinal)));
+            return !RejectBaselineRefresh;
+        }
+
+        public bool TryRefreshCommittedMutationBaselinesForReservation(
+            object reservationToken,
+            IReadOnlyCollection<string> sectionIds)
+        {
+            Calls.Add("reserved-refresh:" + string.Join("|", sectionIds.OrderBy(
+                value => value, StringComparer.Ordinal)));
+            ReservedRefreshMatchedActiveCoreReservation = CoreMutationEpochState?.ActiveReservation != null
+                && ReferenceEquals(CoreMutationEpochState.ActiveReservation.Token, reservationToken);
+            return !RejectBaselineRefresh
+                && reservationToken != null
+                && sectionIds != null
+                && sectionIds.Count > 0
+                && (CoreMutationEpochState == null || ReservedRefreshMatchedActiveCoreReservation);
         }
 
         public bool TryReserveMutationEpoch(out object reservation)

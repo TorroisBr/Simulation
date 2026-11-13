@@ -1466,13 +1466,37 @@ public sealed class ContinuationCensusProtocol
         return NotifyCommittedMutationsCore(sectionIds, out failure, advanceEpoch: false);
     }
 
+    /// <summary>
+    /// Refreshes provider baselines for the exact Core-owned daily mutation
+    /// reservation. The reservation remains owned by Core, which publishes
+    /// its epoch only after every changed section has refreshed successfully.
+    /// Unreserved and legacy callers must continue to use the ordinary path.
+    /// </summary>
+    internal bool TryRefreshCommittedMutationBaselinesForReservation(
+        object reservationToken,
+        IEnumerable<string> sectionIds,
+        out ContinuationCensusFailure failure)
+    {
+        if (!TryRequireOwnerThread(out failure)) return false;
+        DailyV1MutationEpochReservation reservation = activeMutationEpochReservation;
+        if (reservationToken == null
+            || reservation == null
+            || !ReferenceEquals(reservationToken, reservation.Token))
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        return NotifyCommittedMutationsCore(sectionIds, out failure, advanceEpoch: false);
+    }
+
     private bool NotifyCommittedMutationsCore(
         IEnumerable<string> sectionIds,
         out ContinuationCensusFailure failure,
         bool advanceEpoch = true)
     {
         if (!TryRequireOwnerThread(out failure)) return false;
-        if (!mutationEpochState.CanAdvance)
+        if (advanceEpoch && !mutationEpochState.CanAdvance)
         {
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;

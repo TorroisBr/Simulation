@@ -159,8 +159,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
 
         Assert.That(boundary.LegacyCrimeJusticeDailyMutations, Is.Zero,
             "The admitted Crime/Justice stages must not delegate their P12 reservation to the Unity host boundary.");
-        Assert.That(boundary.CoreCrimeJusticeDailyReservations, Is.EqualTo(4),
-            "Core owns all four ordered Crime/Justice daily P12 reservations.");
+        Assert.That(boundary.CoreCrimeJusticeDailyReservations, Is.Zero,
+            "Selected execution does not delegate Crime/Justice epoch reservation to the host adapter.");
         Assert.That(boundary.Calls, Does.Not.Contain("begin-day"));
         Assert.That(boundary.Calls, Does.Not.Contain("day-start-context"),
             "The admitted selected stage derives its day-start inputs from the same Core-bound actor context.");
@@ -680,8 +680,19 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             dailyBoundary.RejectActionSlotOwnerValidation = false;
             Assert.That(coreBoundary.CanCommitSelectedActionSlotP12Mutation(
                 graph, graph.Npcs[0]), Is.True);
-            Assert.That(dailyBoundary.ActionSlotOwnerValidationCount, Is.EqualTo(2));
-            Assert.That(dailyBoundary.ActionSlotUnchangedValidationCount, Is.EqualTo(1));
+            DailyV1ActionDefinition action = graph.Definitions.Actions.Values.First();
+            string actionSection = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+                + graph.Npcs[0].RuntimeId;
+            Assert.That(graph.TryCommitCurrentActionSlot(
+                graph.Npcs[0], action, null,
+                () => coreBoundary.CanCommitSelectedActionSlotP12Mutation(graph, graph.Npcs[0])), Is.True);
+            Assert.That(coreBoundary.NotifySelectedActionSlotP12MutationCommitted(
+                graph, graph.Npcs[0], actionSection, graph.Npcs[0].ActionSlot.Revision), Is.True);
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L),
+                "Core publishes one selected action-slot epoch after the owner revision and host baseline refresh.");
+            Assert.That(dailyBoundary.ActionSlotBaselineRefreshCount, Is.EqualTo(1));
+            Assert.That(dailyBoundary.ActionSlotOwnerValidationCount, Is.EqualTo(4));
+            Assert.That(dailyBoundary.ActionSlotUnchangedValidationCount, Is.EqualTo(2));
             Assert.That(dailyBoundary.LastActionSlotSectionId,
                 Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
                     + graph.Npcs[0].RuntimeId));
@@ -1338,6 +1349,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool RejectActionSlotOwnerValidation { get; set; }
         internal int ActionSlotOwnerValidationCount { get; set; }
         internal int ActionSlotUnchangedValidationCount { get; set; }
+        internal int ActionSlotBaselineRefreshCount { get; set; }
         internal string LastActionSlotSectionId { get; set; }
         internal int DecisionOwnerLookupCount { get; private set; }
         internal int SelectedActionDispatchLookupCount { get; private set; }
@@ -1620,7 +1632,6 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) => sectionIds != null;
 
             public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) => sectionIds != null;
-
             public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) => sectionIds != null;
             public void FaultClosed() { }
         }
@@ -1791,8 +1802,11 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 return sectionIds != null && sectionIds.Count == 1;
             }
 
-            public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) =>
-                sectionIds != null && sectionIds.Count == 1;
+            public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds)
+            {
+                owner.ActionSlotBaselineRefreshCount++;
+                return sectionIds != null && sectionIds.Count == 1;
+            }
 
             public void FaultClosed() { }
         }
@@ -1975,6 +1989,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 public void FaultClosed() { }
                 public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
                     sectionIds != null && sectionIds.Count > 0;
+                public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) =>
+                    sectionIds != null && sectionIds.Count > 0;
+                public bool TryRefreshCommittedMutationBaselinesForReservation(
+                    object reservationToken,
+                    IReadOnlyCollection<string> sectionIds) =>
+                    reservationToken != null && sectionIds != null && sectionIds.Count > 0;
                 public bool TryReserveMutationEpoch(out object reservation)
                 {
                     if (Owner != null) Owner.CoreCrimeJusticeDailyReservations++;

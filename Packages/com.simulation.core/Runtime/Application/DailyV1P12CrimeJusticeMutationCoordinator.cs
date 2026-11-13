@@ -59,6 +59,10 @@ internal interface IDailyV1P12CrimeJusticeMutationProtocol
 {
     void FaultClosed();
     bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
+    bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds);
+    bool TryRefreshCommittedMutationBaselinesForReservation(
+        object reservationToken,
+        IReadOnlyCollection<string> sectionIds);
     bool TryReserveMutationEpoch(out object reservation);
     bool TryNotifyReservedCommittedMutations(object reservation, IReadOnlyCollection<string> sectionIds);
     void ReleaseMutationEpoch(object reservation);
@@ -96,6 +100,7 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         internal HashSet<string> AllowedSections;
         internal HashSet<string> ChangedSections = new HashSet<string>(StringComparer.Ordinal);
         internal object EpochReservation;
+        internal DailyV1MutationEpochReservation CoreEpochReservation;
         internal DailyV1ExecutionBoundaryState ExecutionState;
 
         internal bool IsOwnedByCurrentThread() => ReferenceEquals(OwnerThread, Thread.CurrentThread)
@@ -125,18 +130,21 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
     private readonly Func<bool> isOwnerThreadCurrent;
     private readonly Action faultAdmission;
     private readonly IDailyV1P12CrimeJusticeMutationProtocol protocol;
+    private readonly DailyV1MutationEpochState mutationEpochState;
     private Context activeContext;
 
     internal DailyV1P12CrimeJusticeMutationCoordinator(
         Func<bool> isAdmissionEnabled,
         Func<bool> isOwnerThreadCurrent,
         Action faultAdmission,
-        IDailyV1P12CrimeJusticeMutationProtocol protocol)
+        IDailyV1P12CrimeJusticeMutationProtocol protocol,
+        DailyV1MutationEpochState mutationEpochState = null)
     {
         this.isAdmissionEnabled = isAdmissionEnabled ?? throw new ArgumentNullException(nameof(isAdmissionEnabled));
         this.isOwnerThreadCurrent = isOwnerThreadCurrent ?? throw new ArgumentNullException(nameof(isOwnerThreadCurrent));
         this.faultAdmission = faultAdmission ?? throw new ArgumentNullException(nameof(faultAdmission));
         this.protocol = protocol ?? throw new ArgumentNullException(nameof(protocol));
+        this.mutationEpochState = mutationEpochState;
     }
 
     internal bool IsBoundToProtocol(IDailyV1P12CrimeJusticeMutationProtocol candidate) =>
@@ -194,21 +202,38 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
                 out Context context)
             || !IsOwnerThreadCurrent(context)
             || activeContext != null
-            || sectionIds.Count == 0)
+            || sectionIds.Count == 0
+            || (executionState != null
+                && !ReferenceEquals(executionState.MutationEpochState, mutationEpochState)))
         {
             Reject("P12 Crime/Justice daily mutation scope is unavailable.", executionState);
             return;
         }
 
-        if (!protocol.TryValidateUnchangedSections(sectionIds)
-            || !protocol.TryReserveMutationEpoch(out object reservation)
-            || reservation == null)
+        if (!protocol.TryValidateUnchangedSections(sectionIds))
+        {
+            Reject("P12 Crime/Justice daily mutation could not validate its owner baseline.", executionState);
+            return;
+        }
+
+        if (mutationEpochState != null)
+        {
+            if (!mutationEpochState.TryReserve(out DailyV1MutationEpochReservation coreReservation))
+            {
+                Reject("P12 Crime/Justice daily mutation could not reserve the Core mutation epoch.", executionState);
+                return;
+            }
+            context.CoreEpochReservation = coreReservation;
+        }
+        else if (!protocol.TryReserveMutationEpoch(out object reservation) || reservation == null)
         {
             Reject("P12 Crime/Justice daily mutation could not reserve its owner baseline and epoch.", executionState);
             return;
         }
-
-        context.EpochReservation = reservation;
+        else
+        {
+            context.EpochReservation = reservation;
+        }
         activeContext = context;
         Exception originalException = null;
         try
@@ -628,13 +653,18 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
 
         if (context.Mode == ScopeMode.DailyReserved)
         {
-            return context.EpochReservation != null
+            return ((context.CoreEpochReservation != null
+                    && mutationEpochState != null
+                    && mutationEpochState.Owns(context.CoreEpochReservation))
+                || context.EpochReservation != null)
                 && (context.ChangedSections.Contains(sectionId)
                     || protocol.TryValidateUnchangedSections(new[] { sectionId }));
         }
         if (context.Mode != ScopeMode.ActionImmediate
             || !protocol.TryValidateUnchangedSections(new[] { sectionId })
-            || !protocol.TryValidateMutationEpochCapacity())
+            || (mutationEpochState != null
+                ? mutationEpochState.HasActiveReservation || !mutationEpochState.CanAdvance
+                : !protocol.TryValidateMutationEpochCapacity()))
         {
             Fault(context);
             return false;
@@ -658,29 +688,86 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
             context.ChangedSections.Add(sectionId);
             return;
         }
-        if (context.Mode != ScopeMode.ActionImmediate
-            || !protocol.NotifyCommittedMutation(sectionId))
+        bool notified;
+        if (context.Mode != ScopeMode.ActionImmediate)
+        {
             Fault(context);
+            return;
+        }
+
+        try
+        {
+            if (mutationEpochState != null)
+            {
+                notified = protocol.TryRefreshCommittedMutationBaselines(new[] { sectionId })
+                    && mutationEpochState.TryAdvanceCommittedMutation();
+            }
+            else
+            {
+                notified = protocol.NotifyCommittedMutation(sectionId);
+            }
+        }
+        catch { notified = false; }
+        if (!notified) Fault(context);
     }
 
     private bool EndDailyScope(Context context)
     {
+        bool coreReservation = context?.CoreEpochReservation != null;
         bool valid = context != null
             && context.Mode == ScopeMode.DailyReserved
             && IsOwnerThreadCurrent(context)
             && ReferenceEquals(activeContext, context)
-            && context.EpochReservation != null;
+            && (coreReservation
+                ? mutationEpochState != null && mutationEpochState.Owns(context.CoreEpochReservation)
+                : context.EpochReservation != null);
         if (!valid)
         {
             Fault(context);
-            if (context != null && context.EpochReservation != null)
+            if (context != null && context.CoreEpochReservation != null)
+            {
+                if (!TryReleaseCore(mutationEpochState, context.CoreEpochReservation))
+                    Fault(context);
+            }
+            else if (context != null && context.EpochReservation != null)
+            {
                 TryRelease(context.EpochReservation);
+            }
             if (ReferenceEquals(activeContext, context)) activeContext = null;
             return false;
         }
 
         bool notified;
-        if (context.ChangedSections.Count == 0)
+        if (context.CoreEpochReservation != null)
+        {
+            if (context.ChangedSections.Count == 0)
+            {
+                notified = TryReleaseCore(mutationEpochState, context.CoreEpochReservation);
+            }
+            else
+            {
+                bool refreshed = false;
+                try
+                {
+                    refreshed = protocol.TryRefreshCommittedMutationBaselinesForReservation(
+                        context.CoreEpochReservation.Token,
+                        ToOrderedSectionIds(context.ChangedSections));
+                }
+                catch { }
+
+                if (!refreshed)
+                {
+                    bool released = TryReleaseCore(mutationEpochState, context.CoreEpochReservation);
+                    notified = false;
+                    if (!released) Fault(context);
+                }
+                else
+                {
+                    notified = mutationEpochState.TryComplete(context.CoreEpochReservation, true);
+                }
+            }
+        }
+        else if (context.ChangedSections.Count == 0)
         {
             try
             {
@@ -694,9 +781,33 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
             notified = protocol.TryNotifyReservedCommittedMutations(
                 context.EpochReservation, context.ChangedSections);
         }
-        if (!notified) Fault(context);
+        if (!notified)
+        {
+            if (context.CoreEpochReservation != null
+                && mutationEpochState != null
+                && mutationEpochState.Owns(context.CoreEpochReservation))
+                TryReleaseCore(mutationEpochState, context.CoreEpochReservation);
+            Fault(context);
+        }
         activeContext = null;
         return notified;
+    }
+
+    private static string[] ToOrderedSectionIds(HashSet<string> sectionIds)
+    {
+        if (sectionIds == null || sectionIds.Count == 0) return Array.Empty<string>();
+        string[] ordered = new string[sectionIds.Count];
+        sectionIds.CopyTo(ordered);
+        Array.Sort(ordered, StringComparer.Ordinal);
+        return ordered;
+    }
+
+    private static bool TryReleaseCore(
+        DailyV1MutationEpochState state,
+        DailyV1MutationEpochReservation reservation)
+    {
+        try { return state != null && state.TryRelease(reservation); }
+        catch { return false; }
     }
 
     private void EndImmediateScope(Context context)
