@@ -2487,7 +2487,9 @@ internal sealed class DailyV1Application
         // A Core session is not active until its exact execution boundary is
         // bound. Publishing an unbound genesis value creates a session that
         // cannot advance and leaves the application with no valid runtime.
-        if (candidate?.RuntimeAdvanceBoundary == null) return false;
+        if (candidate?.RuntimeAdvanceBoundary == null
+            || !candidate.ExecutionBoundaryState.TryValidateSelectedRuntimeCensusForPublication())
+            return false;
         lock (activeSessionGate.SyncRoot)
         {
             if (preparedInitialSession != null)
@@ -5211,7 +5213,8 @@ internal sealed class DailyV1Application
         DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation operation,
         DailyV1ActiveRuntimeSession candidate)
     {
-        if (candidate?.RuntimeAdvanceBoundary == null) return false;
+        if (candidate?.RuntimeAdvanceBoundary == null
+            || !candidate.ExecutionBoundaryState.TryValidateSelectedRuntimeCensusForPublication()) return false;
         lock (activeSessionGate.SyncRoot)
         {
             return bootstrapAdmissionContext != null
@@ -5224,7 +5227,8 @@ internal sealed class DailyV1Application
         DailyV1ActiveRuntimeSession expectedSession,
         DailyV1ActiveRuntimeSession candidate)
     {
-        if (candidate?.RuntimeAdvanceBoundary == null) return false;
+        if (candidate?.RuntimeAdvanceBoundary == null
+            || !candidate.ExecutionBoundaryState.TryValidateSelectedRuntimeCensusForPublication()) return false;
         lock (activeSessionGate.SyncRoot)
         {
             return bootstrapAdmissionContext != null

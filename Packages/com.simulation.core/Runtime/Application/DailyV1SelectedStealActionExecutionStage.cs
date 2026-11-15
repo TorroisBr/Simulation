@@ -13,12 +13,15 @@ internal static class DailyV1SelectedStealActionExecutionStage
         CrimeSocialAppraisalWorldState SocialAppraisalWorldState { get; }
         ITheftOutcomeSink TheftOutcomeSink { get; }
         DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
+        string LastJusticeAdmissionRejection { get; }
 
         bool ExecuteWithinOperation(Func<bool> operation);
         EconomyTransactionResult ExecuteMoneyTransferWithinOperation(
             DailyV1NpcRuntimeOwners source,
             DailyV1NpcRuntimeOwners destination,
             Func<EconomyTransactionResult> operation);
+        void RefreshStatusProjection(DailyV1NpcRuntimeOwners owner);
+        void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners owner);
         bool TryProjectWantedRecord(
             DailyV1NpcRuntimeOwners target,
             DailyV1CityRuntimeOwners city,
@@ -204,7 +207,8 @@ internal static class DailyV1SelectedStealActionExecutionStage
         {
             if (!justice.CanCommitMutation())
                 throw new InvalidOperationException(
-                    "The selected Steal Justice owner could not admit its warrant write.");
+                    "The selected Steal Justice owner could not admit its warrant write. P12 rejection: "
+                    + (boundary.LastJusticeAdmissionRejection ?? "not recorded") + ".");
             warrant = new DailyV1JusticeWantedRecordOwner(
                 perpetrator.RuntimeId, city.RuntimeId, settings.bounty, settings.sentenceDays);
             if (!boundary.TryPrepareWantedRecordProjection(perpetrator, city, warrant))

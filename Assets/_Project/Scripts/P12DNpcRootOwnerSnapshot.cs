@@ -219,14 +219,6 @@ internal static class P12DNpcRootOwnerSnapshot
             }
         }
 
-        bool useSelectedCoreInventoryCensus = true;
-        foreach (NpcRuntime candidate in roster)
-        {
-            if (candidate?.SelectedRuntimeOwners != null) continue;
-            useSelectedCoreInventoryCensus = false;
-            break;
-        }
-
         if (!P12DCityNpcProjectionCaptureEvidence.TryCreate(
                 token, captureStamp, ownerSectionVector, roster,
                 out P12DCityNpcProjectionCaptureEvidence evidence, out _))
@@ -263,7 +255,7 @@ internal static class P12DNpcRootOwnerSnapshot
             }
 
             if (!TryCaptureNpc(npc, runtime.SelectedRuntimeOwnerGraph, token,
-                    useSelectedCoreInventoryCensus, evidence,
+                    evidence,
                     inventoryOwners, accountOwners, merchantPlanOwners, travelPlanOwners,
                     commercialOwners, spatialOwners, siteKnowledgeOwners, adventureOwners,
                     actionOwners, selectedActionPayloadOwners, cityOwners,
@@ -297,7 +289,6 @@ internal static class P12DNpcRootOwnerSnapshot
         NpcRuntime npc,
         DailyV1SelectedRuntimeOwnerGraph selectedGraph,
         DailyCaptureEligibilityToken token,
-        bool useSelectedCoreInventoryCensus,
         P12DCityNpcProjectionCaptureEvidence evidence,
         HashSet<object> inventoryOwners,
         HashSet<object> accountOwners,
@@ -388,12 +379,11 @@ internal static class P12DNpcRootOwnerSnapshot
         int currentActionCardinality = npc.UsesSelectedDailyV1Definitions
             ? (npc.SelectedRuntimeOwners?.ActionSlot?.CurrentAction == null ? 0 : 1)
             : npc.CurrentActionRuntime == null ? 0 : 1;
-        object inventoryCensusOwnerIdentity = useSelectedCoreInventoryCensus
-            ? (object)npc.SelectedRuntimeOwners?.Inventory
-            : inventory;
+        DailyV1InventoryOwner selectedInventoryOwner = npc.SelectedRuntimeOwners?.Inventory;
+        object inventoryCensusOwnerIdentity = (object)selectedInventoryOwner ?? inventory;
         if (inventoryCensusOwnerIdentity == null
-            || (useSelectedCoreInventoryCensus
-                && !ReferenceEquals(inventory.SelectedDailyV1Owner, inventoryCensusOwnerIdentity))
+            || (selectedInventoryOwner != null
+                && !ReferenceEquals(inventory.SelectedDailyV1Owner, selectedInventoryOwner))
             || !TryRequireNpcSections(npc, token, inventory, inventoryCensusOwnerIdentity, account, merchantPlanAuthority,
                 merchantPlan.Revision,
                 travelPlan, commercial, spatial, siteKnowledge, localTopology, adventure,

@@ -1,9 +1,44 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 
 public sealed class DailyV1ExecutionBoundaryStateTests
 {
+    private sealed class MutableCensusProvider : IOwnerSectionCensusProvider
+    {
+        internal MutableCensusProvider(OwnerSectionCensusSnapshot snapshot)
+        {
+            Witness = new OwnerSectionCensusWitness(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.OwnerInstanceIdentity,
+                snapshot.Cardinality, snapshot.Revision);
+        }
+
+        internal OwnerSectionCensusWitness Witness { get; set; }
+        public OwnerSectionCensusWitness GetCurrentCensus() => Witness;
+    }
+
+    private sealed class CensusRegistryFixture
+    {
+        internal DailyV1ExecutionBoundaryState State;
+        internal readonly List<DailyV1OwnerSectionContractIdentity> Contracts =
+            new List<DailyV1OwnerSectionContractIdentity>();
+        internal readonly Dictionary<string, MutableCensusProvider> Providers =
+            new Dictionary<string, MutableCensusProvider>(StringComparer.Ordinal);
+        internal readonly Dictionary<string, DailyV1OwnerSectionCensusProviderRegistration> Registrations =
+            new Dictionary<string, DailyV1OwnerSectionCensusProviderRegistration>(StringComparer.Ordinal);
+
+        internal List<DailyV1OwnerSectionCensusProviderRegistration> OrderedRegistrations()
+        {
+            List<string> ids = new List<string>(Registrations.Keys);
+            ids.Sort(StringComparer.Ordinal);
+            List<DailyV1OwnerSectionCensusProviderRegistration> result =
+                new List<DailyV1OwnerSectionCensusProviderRegistration>(ids.Count);
+            foreach (string id in ids) result.Add(Registrations[id]);
+            return result;
+        }
+    }
+
     private sealed class AdmissionEvidenceBoundary : IDailyV1RuntimeAdvanceBoundary
     {
         private readonly DailyV1ExecutionBoundaryState state;
@@ -449,6 +484,407 @@ public sealed class DailyV1ExecutionBoundaryStateTests
         sections[index] = new OwnerSectionCensusSnapshot(original.SectionId,
             original.SchemaVersion, original.Role, original.OwnerInstanceIdentity, 1, original.Revision);
         Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(sections), Is.False);
+    }
+
+    [Test]
+    public void CoreOwnedSelectedCensusRegistryCapturesTheSealedFullOwnerVector()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture();
+
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            fixture.State, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+        Assert.That(captured.Count, Is.EqualTo(fixture.Registrations.Count));
+        Assert.That(mutationEpoch, Is.Zero);
+
+        string firstId = captured[0].SectionId;
+        MutableCensusProvider provider = fixture.Providers[firstId];
+        OwnerSectionCensusWitness original = provider.Witness;
+        provider.Witness = new OwnerSectionCensusWitness(
+            original.SectionId, original.SchemaVersion, original.OwnerInstanceIdentity,
+            original.Cardinality, original.Revision + 1L);
+
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            fixture.State, DailyV1CaptureScopeAllowance.None, out _, out _, out failure), Is.False);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
+        Assert.That(fixture.State.IsSelectedRuntimeCensusProtocolFaulted, Is.True,
+            "An unannounced provider change faults the Core census authority closed.");
+    }
+
+    [Test]
+    public void CoreOwnedSelectedCensusRefreshRequiresExactReservationAndCompletesOneEpoch()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture();
+        DailyV1ExecutionBoundaryState state = fixture.State;
+        string changedId = DailyV1SelectedOwnerSectionCensusContract.FixedRequired[0];
+        MutableCensusProvider changedProvider = fixture.Providers[changedId];
+        OwnerSectionCensusWitness prior = changedProvider.Witness;
+        changedProvider.Witness = new OwnerSectionCensusWitness(
+            prior.SectionId, prior.SchemaVersion, prior.OwnerInstanceIdentity,
+            prior.Cardinality, prior.Revision + 1L);
+        fixture.Registrations[changedId] = CreateRegistration(changedProvider);
+
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcMembership), Is.True);
+        Assert.That(state.MutationEpochState.TryReserve(
+            out DailyV1MutationEpochReservation reservation), Is.True);
+        DailyV1MutationEpochState otherEpoch = new DailyV1MutationEpochState();
+        Assert.That(otherEpoch.TryReserve(out DailyV1MutationEpochReservation wrongReservation), Is.True);
+
+        Assert.That(state.TryRefreshSelectedOwnerSectionCensusBaselines(
+            fixture.OrderedRegistrations(), new[] { changedId }, wrongReservation), Is.False,
+            "A reservation from another runtime cannot authorize the baseline replacement.");
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None, out _, out _, out _), Is.False,
+            "Capture is rejected while a mutation reservation is active.");
+
+        Assert.That(state.TryRefreshSelectedOwnerSectionCensusBaselines(
+            fixture.OrderedRegistrations(), new[] { changedId }, reservation), Is.True);
+        Assert.That(state.MutationEpochState.TryComplete(reservation, committedMutation: true), Is.True);
+        Assert.That(otherEpoch.TryRelease(wrongReservation), Is.True);
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+        Assert.That(mutationEpoch, Is.EqualTo(1L));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+    }
+
+    [Test]
+    public void CoreOwnedDynamicRosterReplacementSwapsFullCensusAndEpochTogether()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture();
+        DailyV1ExecutionBoundaryState state = fixture.State;
+        List<OwnerSectionCensusSnapshot> expanded = CreateSnapshotWithSecondNpc();
+        foreach (OwnerSectionCensusSnapshot snapshot in expanded)
+        {
+            if (fixture.Registrations.ContainsKey(snapshot.SectionId)) continue;
+            MutableCensusProvider provider = new MutableCensusProvider(snapshot);
+            fixture.Providers.Add(snapshot.SectionId, provider);
+            fixture.Registrations.Add(snapshot.SectionId, CreateRegistration(provider));
+        }
+
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(expanded), Is.True);
+        List<DailyV1OwnerSectionContractIdentity> contracts = new List<DailyV1OwnerSectionContractIdentity>();
+        foreach (OwnerSectionCensusSnapshot snapshot in expanded)
+            contracts.Add(new DailyV1OwnerSectionContractIdentity(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role));
+
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcMembership), Is.True);
+        Assert.That(state.MutationEpochState.TryReserve(
+            out DailyV1MutationEpochReservation reservation), Is.True);
+        Assert.That(state.TryReplaceSelectedOwnerSectionCensusRegistryDuringRuntimeOperation(
+            contracts, fixture.OrderedRegistrations(), Array.Empty<string>(), reservation,
+            committedMutation: true), Is.True);
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.False,
+            "The Core transaction completes the exact reservation with the registry swap.");
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+        Assert.That(mutationEpoch, Is.EqualTo(1L));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+        Assert.That(captured.Count, Is.EqualTo(expanded.Count));
+        Assert.That(captured.Count, Is.EqualTo(61 + 22 * 2 + 4));
+
+        List<OwnerSectionCensusSnapshot> reduced =
+            new List<OwnerSectionCensusSnapshot>(CreateCompleteSnapshot());
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
+        {
+            string id = prefix + "npc-2";
+            fixture.Registrations.Remove(id);
+            fixture.Providers.Remove(id);
+        }
+        List<DailyV1OwnerSectionContractIdentity> reducedContracts =
+            new List<DailyV1OwnerSectionContractIdentity>();
+        foreach (OwnerSectionCensusSnapshot snapshot in reduced)
+            reducedContracts.Add(new DailyV1OwnerSectionContractIdentity(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role));
+
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcMembership), Is.True);
+        Assert.That(state.MutationEpochState.TryReserve(
+            out DailyV1MutationEpochReservation removalReservation), Is.True);
+        Assert.That(state.TryReplaceSelectedOwnerSectionCensusRegistryDuringRuntimeOperation(
+            reducedContracts, fixture.OrderedRegistrations(), Array.Empty<string>(), removalReservation,
+            committedMutation: true), Is.True,
+            "A roster removal removes the whole keyed family while retaining the complete selected contract.");
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out captured, out mutationEpoch, out failure), Is.True, failure.ToString());
+        Assert.That(mutationEpoch, Is.EqualTo(2L));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+        Assert.That(captured.Count, Is.EqualTo(reduced.Count));
+        Assert.That(captured.Count, Is.EqualTo(61 + 22 + 4));
+    }
+
+    [Test]
+    public void CoreRejectsDynamicCensusAddWithoutCommittedMutationAndKeepsReservationOpen()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture();
+        DailyV1ExecutionBoundaryState state = fixture.State;
+        List<OwnerSectionCensusSnapshot> expanded = AddSecondNpcToFixture(fixture);
+        List<DailyV1OwnerSectionContractIdentity> contracts = CreateContracts(expanded);
+
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcMembership), Is.True);
+        Assert.That(state.MutationEpochState.TryReserve(
+            out DailyV1MutationEpochReservation reservation), Is.True);
+        Assert.That(state.TryReplaceSelectedOwnerSectionCensusRegistryDuringRuntimeOperation(
+            contracts, fixture.OrderedRegistrations(), Array.Empty<string>(), reservation,
+            committedMutation: false), Is.False,
+            "Core must require one committed epoch when the complete dynamic vector adds owner keys.");
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.True,
+            "A rejected replacement leaves the exact reservation to its caller for rollback/release.");
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero);
+        Assert.That(state.MutationEpochState.TryRelease(reservation), Is.True);
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+        Assert.That(captured.Count, Is.EqualTo(61 + 22 + 4),
+            "A rejected addition leaves the original full census registry published.");
+        Assert.That(mutationEpoch, Is.Zero);
+    }
+
+    [Test]
+    public void CoreRejectsDynamicCensusRemovalWithoutCommittedMutationAndKeepsPriorVector()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture();
+        DailyV1ExecutionBoundaryState state = fixture.State;
+        List<OwnerSectionCensusSnapshot> expanded = AddSecondNpcToFixture(fixture);
+        List<DailyV1OwnerSectionContractIdentity> expandedContracts = CreateContracts(expanded);
+
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcMembership), Is.True);
+        Assert.That(state.MutationEpochState.TryReserve(
+            out DailyV1MutationEpochReservation addReservation), Is.True);
+        Assert.That(state.TryReplaceSelectedOwnerSectionCensusRegistryDuringRuntimeOperation(
+            expandedContracts, fixture.OrderedRegistrations(), Array.Empty<string>(), addReservation,
+            committedMutation: true), Is.True);
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L));
+
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
+        {
+            string id = prefix + "npc-2";
+            fixture.Registrations.Remove(id);
+            fixture.Providers.Remove(id);
+        }
+        List<OwnerSectionCensusSnapshot> reduced =
+            new List<OwnerSectionCensusSnapshot>(CreateCompleteSnapshot());
+
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcMembership), Is.True);
+        Assert.That(state.MutationEpochState.TryReserve(
+            out DailyV1MutationEpochReservation removeReservation), Is.True);
+        Assert.That(state.TryReplaceSelectedOwnerSectionCensusRegistryDuringRuntimeOperation(
+            CreateContracts(reduced), fixture.OrderedRegistrations(), Array.Empty<string>(), removeReservation,
+            committedMutation: false), Is.False,
+            "Core must require one committed epoch when the complete dynamic vector removes owner keys.");
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.True);
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L));
+        Assert.That(state.MutationEpochState.TryRelease(removeReservation), Is.True);
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+        Assert.That(captured.Count, Is.EqualTo(61 + 22 * 2 + 4),
+            "A rejected removal leaves the previously committed two-owner vector published.");
+        Assert.That(mutationEpoch, Is.EqualTo(1L));
+    }
+
+    [Test]
+    public void CoreRejectsRetainedDynamicWitnessChangeWithoutIncreasingRevision()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture();
+        DailyV1ExecutionBoundaryState state = fixture.State;
+        string changedId = DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes[0] + "npc-1";
+        MutableCensusProvider provider = fixture.Providers[changedId];
+        OwnerSectionCensusWitness prior = provider.Witness;
+        provider.Witness = new OwnerSectionCensusWitness(
+            prior.SectionId, prior.SchemaVersion, prior.OwnerInstanceIdentity,
+            prior.Cardinality + 1, prior.Revision);
+        fixture.Registrations[changedId] = CreateRegistration(provider);
+
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcMembership), Is.True);
+        Assert.That(state.MutationEpochState.TryReserve(
+            out DailyV1MutationEpochReservation reservation), Is.True);
+        Assert.That(state.TryReplaceSelectedOwnerSectionCensusRegistryDuringRuntimeOperation(
+            fixture.Contracts, fixture.OrderedRegistrations(), Array.Empty<string>(), reservation,
+            committedMutation: true), Is.False,
+            "A committed roster transaction cannot change a retained dynamic owner without advancing its revision.");
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.True,
+            "Rejecting the non-monotonic witness leaves the exact reservation available to the caller.");
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero,
+            "A rejected dynamic row change does not consume the shared epoch.");
+        Assert.That(state.MutationEpochState.TryRelease(reservation), Is.True);
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+
+        Assert.That(state.TryGetSelectedOwnerSectionCensusRegistry(
+            DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registered,
+            out _, out _, out _), Is.True);
+        DailyV1OwnerSectionCensusProviderRegistration retained =
+            registered.Single(section => section.SectionId == changedId);
+        Assert.That(retained.BaselineCardinality, Is.EqualTo(prior.Cardinality));
+        Assert.That(retained.BaselineRevision, Is.EqualTo(prior.Revision));
+        Assert.That(retained.Provider, Is.SameAs(provider));
+    }
+    [Test]
+    public void CoreRejectsRetainedDynamicWitnessChangeWithoutCommittedMutation()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture();
+        DailyV1ExecutionBoundaryState state = fixture.State;
+        string changedId = DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes[0] + "npc-1";
+        MutableCensusProvider changedProvider = fixture.Providers[changedId];
+        OwnerSectionCensusWitness prior = changedProvider.Witness;
+        changedProvider.Witness = new OwnerSectionCensusWitness(
+            prior.SectionId, prior.SchemaVersion, prior.OwnerInstanceIdentity,
+            prior.Cardinality + 1, prior.Revision + 1L);
+        fixture.Registrations[changedId] = CreateRegistration(changedProvider);
+
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcMembership), Is.True);
+        Assert.That(state.MutationEpochState.TryReserve(
+            out DailyV1MutationEpochReservation reservation), Is.True);
+        Assert.That(state.TryReplaceSelectedOwnerSectionCensusRegistryDuringRuntimeOperation(
+            fixture.Contracts, fixture.OrderedRegistrations(), Array.Empty<string>(), reservation,
+            committedMutation: false), Is.False,
+            "Core must require one committed epoch for a retained dynamic row's cardinality/revision change.");
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.True);
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero);
+        Assert.That(state.MutationEpochState.TryRelease(reservation), Is.True);
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+
+        Assert.That(state.TryGetSelectedOwnerSectionCensusRegistry(
+            DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registered,
+            out _, out _, out _), Is.True);
+        DailyV1OwnerSectionCensusProviderRegistration retained =
+            registered.Single(provider => provider.SectionId == changedId);
+        Assert.That(retained.BaselineCardinality, Is.EqualTo(prior.Cardinality));
+        Assert.That(retained.BaselineRevision, Is.EqualTo(prior.Revision),
+            "A rejected dynamic replacement does not publish the staged witness baseline.");
+    }
+
+    private static List<OwnerSectionCensusSnapshot> AddSecondNpcToFixture(
+        CensusRegistryFixture fixture)
+    {
+        List<OwnerSectionCensusSnapshot> expanded = CreateSnapshotWithSecondNpc();
+        foreach (OwnerSectionCensusSnapshot snapshot in expanded)
+        {
+            if (fixture.Registrations.ContainsKey(snapshot.SectionId)) continue;
+            MutableCensusProvider provider = new MutableCensusProvider(snapshot);
+            fixture.Providers.Add(snapshot.SectionId, provider);
+            fixture.Registrations.Add(snapshot.SectionId, CreateRegistration(provider));
+        }
+        return expanded;
+    }
+
+    private static List<DailyV1OwnerSectionContractIdentity> CreateContracts(
+        IEnumerable<OwnerSectionCensusSnapshot> snapshots)
+    {
+        List<DailyV1OwnerSectionContractIdentity> contracts =
+            new List<DailyV1OwnerSectionContractIdentity>();
+        foreach (OwnerSectionCensusSnapshot snapshot in snapshots)
+            contracts.Add(new DailyV1OwnerSectionContractIdentity(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role));
+        return contracts;
+    }
+
+    private static CensusRegistryFixture CreateCensusRegistryFixture()
+    {
+        CensusRegistryFixture fixture = new CensusRegistryFixture();
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        fixture.State = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(), admission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(Guid.NewGuid()));
+        Assert.That(fixture.State.TryBindRuntimeConfiguration(
+            SimulationConfigurationResolver.ResolveOrThrow(),
+            new SimulationCalendar(new CalendarDefinition(1, 1, 1))), Is.True);
+
+        foreach (OwnerSectionCensusSnapshot snapshot in CreateCompleteSnapshot())
+        {
+            MutableCensusProvider provider = new MutableCensusProvider(snapshot);
+            fixture.Providers.Add(snapshot.SectionId, provider);
+            fixture.Registrations.Add(snapshot.SectionId, CreateRegistration(provider));
+            fixture.Contracts.Add(new DailyV1OwnerSectionContractIdentity(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role));
+        }
+
+        Assert.That(fixture.State.TryReplaceSelectedOwnerSectionCensusRegistryBeforeSeal(
+            fixture.Contracts, fixture.OrderedRegistrations()), Is.True);
+        Assert.That(fixture.State.TrySealExpectedOwnerSectionContractInventory(), Is.True);
+        Assert.That(fixture.State.TrySealSelectedOwnerSectionCensusRegistry(
+            fixture.OrderedRegistrations()), Is.True);
+
+        foreach (string operationContractId
+            in DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                hasRuntimeAdmission: true, hasTravelPartySystem: false, hasTravelSystem: false))
+            Assert.That(fixture.State.TryRegisterRuntimeProtocolOperationContract(operationContractId), Is.True);
+        Assert.That(fixture.State.TrySealRuntimeProtocolOperationInventory(), Is.True);
+        Assert.That(fixture.State.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
+        return fixture;
+    }
+
+    private static DailyV1OwnerSectionCensusProviderRegistration CreateRegistration(
+        MutableCensusProvider provider) =>
+        new DailyV1OwnerSectionCensusProviderRegistration(
+            provider.Witness.SectionId,
+            provider.Witness.SchemaVersion,
+            RoleForSection(provider.Witness.SectionId),
+            provider,
+            provider.Witness.OwnerInstanceIdentity,
+            provider.Witness.Cardinality,
+            provider.Witness.Revision,
+            hasBaseline: true);
+
+    private static OwnerSectionRole RoleForSection(string sectionId)
+    {
+        foreach (string id in DailyV1SelectedOwnerSectionCensusContract.FixedEmpty)
+            if (string.Equals(id, sectionId, StringComparison.Ordinal)) return OwnerSectionRole.ExplicitlyEmpty;
+        return OwnerSectionRole.Required;
+    }
+
+    private static List<OwnerSectionCensusSnapshot> CreateSnapshotWithSecondNpc()
+    {
+        List<OwnerSectionCensusSnapshot> result =
+            new List<OwnerSectionCensusSnapshot>(CreateCompleteSnapshot());
+        Dictionary<string, object> identities = new Dictionary<string, object>(StringComparer.Ordinal);
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
+        {
+            string sectionId = prefix + "npc-2";
+            string alias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(sectionId);
+            if (alias == null) alias = "unique/" + sectionId;
+            if (!identities.TryGetValue(alias, out object identity))
+                identities.Add(alias, identity = new object());
+            result.Add(new OwnerSectionCensusSnapshot(
+                sectionId, 1, OwnerSectionRole.Required, identity, 1, 1L));
+        }
+        return result;
     }
 
     internal static OwnerSectionCensusSnapshot[] CreateCompleteSnapshot()

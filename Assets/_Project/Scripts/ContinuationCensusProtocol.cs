@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 public enum ContinuationCensusFailure
@@ -37,6 +38,8 @@ internal sealed class ContinuationMutationEpochReservation
     internal readonly DailyV1MutationEpochReservation EpochReservation;
     internal object Token => EpochReservation.Token;
     internal readonly Thread OwnerThread;
+
+    internal bool CoreFinalized;
 
     internal ContinuationMutationEpochReservation(
         ContinuationCensusProtocol owner,
@@ -223,16 +226,46 @@ public sealed class ContinuationCensusProtocol
     private bool operationsSealed;
     private OwnerThreadBinding ownerThreadBinding;
     private readonly DailyV1ExecutionBoundaryState sharedExecutionState;
+    private readonly bool requiresSelectedCoreOwnerCensus;
     private int standaloneActiveOperationCount;
     private int activeOperationCount => sharedExecutionState != null
         ? sharedExecutionState.ActiveRuntimeOperationCount
         : standaloneActiveOperationCount;
     internal int ActiveOperationCount => activeOperationCount;
+    private static List<DailyV1OwnerSectionCensusProviderRegistration> CreateCoreOwnerSectionCensusRegistrations(
+        Dictionary<string, RegisteredSection> sections)
+    {
+        if (sections == null) return null;
+        List<string> orderedIds = new List<string>(sections.Keys);
+        orderedIds.Sort(StringComparer.Ordinal);
+        List<DailyV1OwnerSectionCensusProviderRegistration> registrations =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(orderedIds.Count);
+        foreach (string sectionId in orderedIds)
+        {
+            RegisteredSection section = sections[sectionId];
+            if (section == null || section.Contract == null || section.Provider == null) return null;
+            registrations.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                section.Contract.SectionId,
+                section.Contract.SchemaVersion,
+                section.Contract.Role,
+                section.Provider,
+                section.OwnerInstanceIdentity,
+                section.LastCardinality,
+                section.LastRevision,
+                section.HasBaseline));
+        }
+        return registrations;
+    }
     private bool TryCommitExpectedSectionInventory(
         Dictionary<string, OwnerSectionContract> stagedExpected,
-        bool runtimeProtocolTransition = false)
+        Dictionary<string, RegisteredSection> stagedRegistered,
+        bool runtimeProtocolTransition = false,
+        DailyV1MutationEpochReservation reservation = null,
+        IEnumerable<string> changedFixedSectionIds = null,
+        bool committedMutation = false,
+        ContinuationMutationEpochReservation reservationContext = null)
     {
-        if (stagedExpected == null) return false;
+        if (stagedExpected == null || stagedRegistered == null) return false;
         if (sharedExecutionState != null)
         {
             List<DailyV1OwnerSectionContractIdentity> identities =
@@ -243,17 +276,52 @@ public sealed class ContinuationCensusProtocol
                 identities.Add(new DailyV1OwnerSectionContractIdentity(
                     contract.SectionId, contract.SchemaVersion, contract.Role));
             }
-            bool committed = runtimeProtocolTransition
-                ? sharedExecutionState.TryReplaceExpectedOwnerSectionContractInventoryDuringRuntimeOperation(identities)
-                : sharedExecutionState.TryReplaceExpectedOwnerSectionContractInventoryBeforeSeal(identities);
+
+            bool committed;
+            if (requiresSelectedCoreOwnerCensus)
+            {
+                List<DailyV1OwnerSectionCensusProviderRegistration> providers =
+                    new List<DailyV1OwnerSectionCensusProviderRegistration>(stagedRegistered.Count);
+                List<string> orderedIds = new List<string>(stagedRegistered.Keys);
+                orderedIds.Sort(StringComparer.Ordinal);
+                foreach (string sectionId in orderedIds)
+                {
+                    RegisteredSection section = stagedRegistered[sectionId];
+                    if (section == null || section.Contract == null || section.Provider == null)
+                        return false;
+                    providers.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                        section.Contract.SectionId,
+                        section.Contract.SchemaVersion,
+                        section.Contract.Role,
+                        section.Provider,
+                        section.OwnerInstanceIdentity,
+                        section.LastCardinality,
+                        section.LastRevision,
+                        section.HasBaseline));
+                }
+
+                committed = runtimeProtocolTransition
+                    ? sharedExecutionState.TryReplaceSelectedOwnerSectionCensusRegistryDuringRuntimeOperation(
+                        identities, providers, changedFixedSectionIds, reservation, committedMutation)
+                    : sharedExecutionState.TryReplaceSelectedOwnerSectionCensusRegistryBeforeSeal(
+                        identities, providers);
+                if (committed && runtimeProtocolTransition && reservationContext != null)
+                    reservationContext.CoreFinalized = true;
+            }
+            else
+                committed = runtimeProtocolTransition
+                    ? sharedExecutionState.TryReplaceExpectedOwnerSectionContractInventoryDuringRuntimeOperation(
+                        identities)
+                    : sharedExecutionState.TryReplaceExpectedOwnerSectionContractInventoryBeforeSeal(
+                        identities);
             if (!committed) return false;
             expectedSectionsSealed = sharedExecutionState.ExpectedOwnerSectionContractInventorySealed;
         }
-        // In shared mode this is a provider-facing projection of Core state.
+        // In shared mode these are projections for compatibility operations;
+        // Core has already atomically committed the owner/provider baseline.
         expectedSections = stagedExpected;
         return true;
     }
-
     private void RefreshExpectedSectionProjectionFromCore()
     {
         IReadOnlyList<DailyV1OwnerSectionContractIdentity> contracts =
@@ -288,9 +356,13 @@ public sealed class ContinuationCensusProtocol
     private DailyV1MutationEpochReservation activeMutationEpochReservation =>
         mutationEpochState.ActiveReservation;
     private int protocolFaulted;
+    private string firstFaultSource;
+    private string firstFaultDetail;
+    internal string FirstFaultSource => Volatile.Read(ref firstFaultSource);
+    internal string FirstFaultDetail => Volatile.Read(ref firstFaultDetail);
 
     public ContinuationCensusProtocol()
-        : this(null)
+        : this(null, requireSelectedCoreOwnerCensus: false)
     {
     }
 
@@ -301,8 +373,25 @@ public sealed class ContinuationCensusProtocol
     /// active-session gate and completed-boundary state.
     /// </summary>
     internal ContinuationCensusProtocol(DailyV1ExecutionBoundaryState sharedExecutionState)
+        : this(sharedExecutionState, requireSelectedCoreOwnerCensus: sharedExecutionState != null)
     {
+    }
+
+    /// <summary>
+    /// Selects whether this adapter composes the canonical Core owner census
+    /// or retains identity-only inventory behavior for a compatibility runtime
+    /// that has not admitted the complete selected owner graph. Shared-state
+    /// callers are strict by default; the runtime may opt into compatibility
+    /// only when its exact Core graph and execution roots are not admitted.
+    /// </summary>
+    internal ContinuationCensusProtocol(
+        DailyV1ExecutionBoundaryState sharedExecutionState,
+        bool requireSelectedCoreOwnerCensus)
+    {
+        if (requireSelectedCoreOwnerCensus && sharedExecutionState == null)
+            throw new ArgumentNullException(nameof(sharedExecutionState));
         this.sharedExecutionState = sharedExecutionState;
+        requiresSelectedCoreOwnerCensus = requireSelectedCoreOwnerCensus;
         mutationEpochState = sharedExecutionState?.MutationEpochState
             ?? new DailyV1MutationEpochState();
         if (sharedExecutionState != null)
@@ -488,7 +577,7 @@ public sealed class ContinuationCensusProtocol
             stagedProviders[i] = candidate.Provider;
         }
 
-        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -540,7 +629,7 @@ public sealed class ContinuationCensusProtocol
             providers[i] = candidate.Provider;
         }
 
-        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -581,7 +670,7 @@ public sealed class ContinuationCensusProtocol
             owners.Add(c.SectionId, c.NpcOwner);
             providers[i] = c.Provider;
         }
-        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -626,7 +715,7 @@ public sealed class ContinuationCensusProtocol
             providers[i] = candidate.Provider;
         }
 
-        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -664,7 +753,7 @@ public sealed class ContinuationCensusProtocol
             stagedRegistered.Add(c.SectionId, section); owners.Add(c.SectionId, c.NpcOwner);
             providers[i] = c.Provider;
         }
-        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -714,7 +803,7 @@ public sealed class ContinuationCensusProtocol
             providers[i] = candidate.Provider;
         }
 
-        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -776,7 +865,7 @@ public sealed class ContinuationCensusProtocol
             stagedProviders[i] = candidate.Provider;
         }
 
-        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -828,7 +917,7 @@ public sealed class ContinuationCensusProtocol
             stagedProviders[i] = candidate.Provider;
         }
 
-        if (!TryCommitExpectedSectionInventory(stagedExpected))
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -1117,6 +1206,8 @@ public sealed class ContinuationCensusProtocol
                     || !ReferenceEquals(p.NpcOwner.ExistingInventory, p.InventoryOwner)
                     || (selectedOwners != null
                         && !ReferenceEquals(p.InventoryOwner.SelectedDailyV1Owner, selectedOwners.Inventory))
+                    || (selectedOwners == null
+                        && p.InventoryOwner.SelectedDailyV1Owner != null)
                     || (p.UsesSelectedCoreOwner && selectedOwners == null)
                     || !ReferenceEquals(w.OwnerInstanceIdentity, inventoryOwnerIdentity)
                     || !IsWitnessValidForContract(contract, w)) return false;
@@ -1282,13 +1373,8 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
         }
-        if (sharedExecutionState != null
-            && !sharedExecutionState.TryMarkSelectedRuntimeCensusProtocolReady())
-        {
-            Fault();
-            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
-            return false;
-        }
+        // Core census readiness is published only after TryAssessOwnerSectionInventory
+        // has read and sealed the exact selected-profile owner registry.
         return true;
     }
 
@@ -1357,6 +1443,23 @@ public sealed class ContinuationCensusProtocol
         foreach (PendingSectionBaseline observed in observedSections)
             SetBaseline(observed.Section, observed.Witness);
 
+        if (requiresSelectedCoreOwnerCensus
+            && !sharedExecutionState.TrySealSelectedOwnerSectionCensusRegistry(
+                CreateCoreOwnerSectionCensusRegistrations(registeredSections)))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        if (requiresSelectedCoreOwnerCensus
+            && !sharedExecutionState.TryMarkSelectedRuntimeCensusProtocolReady())
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
         failure = ContinuationCensusFailure.None;
         return true;
     }
@@ -1384,6 +1487,7 @@ public sealed class ContinuationCensusProtocol
         if (!TryRequireOwnerThread(out failure)) return false;
         if (sectionIds == null)
         {
+            RecordFirstFaultDetail("UnchangedSectionIdsNull");
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1401,6 +1505,8 @@ public sealed class ContinuationCensusProtocol
                     || !section.HasBaseline
                     || !TryReadAndValidate(section, allowRevisionAdvance: false, out _, out failure))
                 {
+                    RecordFirstFaultDetail("UnchangedSectionRejected:"
+                        + (sectionId ?? "<null>") + ":" + failure);
                     Fault();
                     if (failure == ContinuationCensusFailure.None)
                         failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -1412,6 +1518,7 @@ public sealed class ContinuationCensusProtocol
         }
         catch
         {
+            RecordFirstFaultDetail("UnchangedSectionEnumerationFailed");
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1419,6 +1526,7 @@ public sealed class ContinuationCensusProtocol
 
         if (validatedCount == 0)
         {
+            RecordFirstFaultDetail("UnchangedSectionSetEmpty");
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1487,17 +1595,19 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        return NotifyCommittedMutationsCore(sectionIds, out failure, advanceEpoch: false);
+        return NotifyCommittedMutationsCore(sectionIds, out failure, advanceEpoch: false, reservation: reservation);
     }
 
     private bool NotifyCommittedMutationsCore(
         IEnumerable<string> sectionIds,
         out ContinuationCensusFailure failure,
-        bool advanceEpoch = true)
+        bool advanceEpoch = true,
+        DailyV1MutationEpochReservation reservation = null)
     {
         if (!TryRequireOwnerThread(out failure)) return false;
         if (advanceEpoch && !mutationEpochState.CanAdvance)
         {
+            RecordFirstFaultDetail("MutationEpochCapacity");
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
@@ -1505,6 +1615,7 @@ public sealed class ContinuationCensusProtocol
 
         if (sectionIds == null)
         {
+            RecordFirstFaultDetail("ChangedSectionsMissing");
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1520,6 +1631,7 @@ public sealed class ContinuationCensusProtocol
                     || !changedSectionIds.Add(sectionId)
                     || !registeredSections.TryGetValue(sectionId, out RegisteredSection section))
                 {
+                    RecordFirstFaultDetail("ChangedSectionInvalidOrUnregistered");
                     Fault();
                     failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
                     return false;
@@ -1530,6 +1642,7 @@ public sealed class ContinuationCensusProtocol
         }
         catch
         {
+            RecordFirstFaultDetail("ChangedSectionEnumerationFailed");
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1537,6 +1650,7 @@ public sealed class ContinuationCensusProtocol
 
         if (changedSections.Count == 0)
         {
+            RecordFirstFaultDetail("ChangedSectionsEmpty");
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1550,12 +1664,14 @@ public sealed class ContinuationCensusProtocol
             if (!TryReadAndValidate(section, allowRevisionAdvance: true,
                     out OwnerSectionCensusWitness witness, out failure))
             {
+                RecordFirstFaultDetail("ChangedSectionWitness:" + failure);
                 Fault();
                 return false;
             }
 
             if (hadBaseline && witness.Revision == priorRevision)
             {
+                RecordFirstFaultDetail("ChangedOwnerRevisionNotAdvanced");
                 Fault();
                 failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
                 return false;
@@ -1564,11 +1680,63 @@ public sealed class ContinuationCensusProtocol
             observedSections.Add(new PendingSectionBaseline(section, witness));
         }
 
+        Dictionary<string, RegisteredSection> stagedRegistered =
+            new Dictionary<string, RegisteredSection>(registeredSections.Count, StringComparer.Ordinal);
+        foreach (KeyValuePair<string, RegisteredSection> pair in registeredSections)
+        {
+            RegisteredSection prior = pair.Value;
+            if (prior == null || prior.Contract == null || prior.Provider == null)
+            {
+                RecordFirstFaultDetail("RegisteredSectionStructureInvalid");
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+            RegisteredSection staged = new RegisteredSection(prior.Contract, prior.Provider);
+            if (prior.HasBaseline)
+                SetBaseline(staged, new OwnerSectionCensusWitness(
+                    prior.Contract.SectionId,
+                    prior.Contract.SchemaVersion,
+                    prior.OwnerInstanceIdentity,
+                    prior.LastCardinality,
+                    prior.LastRevision));
+            stagedRegistered.Add(pair.Key, staged);
+        }
         foreach (PendingSectionBaseline observed in observedSections)
-            SetBaseline(observed.Section, observed.Witness);
+        {
+            if (!stagedRegistered.TryGetValue(observed.Section.Contract.SectionId,
+                    out RegisteredSection staged))
+            {
+                RecordFirstFaultDetail("StagedSectionMissing");
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+            SetBaseline(staged, observed.Witness);
+        }
+
+        if (requiresSelectedCoreOwnerCensus
+            && !sharedExecutionState.TryRefreshSelectedOwnerSectionCensusBaselines(
+                CreateCoreOwnerSectionCensusRegistrations(stagedRegistered),
+                changedSectionIds,
+                reservation))
+        {
+            RecordFirstFaultDetail("CoreOwnerSectionBaselineRefreshRejected:"
+                + (sharedExecutionState.LastSelectedOwnerSectionCensusRefreshRejection
+                    ?? "Unspecified"));
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+
+        // Publish the compatibility registry only after Core has accepted the
+        // complete staged 89-family baseline vector. On rejection, the caller
+        // faults closed and the host projection remains at its prior commit.
+        registeredSections = stagedRegistered;
 
         if (advanceEpoch && !mutationEpochState.TryAdvanceCommittedMutation())
         {
+            RecordFirstFaultDetail("MutationEpochCommitRejected");
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
@@ -2227,7 +2395,17 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        if (!TryCommitExpectedSectionInventory(stagedExpected, runtimeProtocolTransition: true))
+        HashSet<string> stagedChangedFixedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string changedId in changedIds)
+            if (!DailyV1ExecutionBoundaryState.IsSelectedDynamicOwnerSectionId(changedId))
+                stagedChangedFixedSectionIds.Add(changedId);
+
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered,
+                runtimeProtocolTransition: true,
+                reservation: epochReservation?.EpochReservation,
+                changedFixedSectionIds: stagedChangedFixedSectionIds,
+                committedMutation: anySectionChanged,
+                reservationContext: epochReservation))
         {
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
@@ -2263,12 +2441,14 @@ public sealed class ContinuationCensusProtocol
             npcReceiptOwnerFamilyProviders = Array.AsReadOnly(stagedNpcReceiptOwnerProviders);
         if (lifecycleChanged)
             lifecycleFamilyProviders = Array.AsReadOnly(stagedLifecycleProviders);
-        if (epochReservation != null)
+        if (epochReservation != null && !epochReservation.CoreFinalized)
         {
             if (!TryCompleteMutationEpochReservation(epochReservation, anySectionChanged, out failure))
                 return false;
         }
-        else if (anySectionChanged && !mutationEpochState.TryAdvanceCommittedMutation())
+        else if (epochReservation == null
+            && anySectionChanged
+            && !mutationEpochState.TryAdvanceCommittedMutation())
         {
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
@@ -2350,7 +2530,11 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        bool notified = NotifyCommittedMutationsCore(sectionIds, out failure, advanceEpoch: false);
+        bool notified = NotifyCommittedMutationsCore(
+            sectionIds,
+            out failure,
+            advanceEpoch: false,
+            reservation: reservation.EpochReservation);
         if (!mutationEpochState.TryComplete(reservation.EpochReservation, notified))
         {
             Fault();
@@ -2511,128 +2695,6 @@ public sealed class ContinuationCensusProtocol
             out snapshots,
             out observedMutationEpoch,
             out failure);
-
-    /// <summary>
-    /// Supplies the sealed provider registry to the Core capture transaction.
-    /// It exposes live readers only; Core reads their values and samples the
-    /// exact shared mutation epoch itself.
-    /// </summary>
-    internal bool TryGetQuiescentOwnerSectionCensusProviders(
-        DailyV1CaptureScopeAllowance allowedOuterScope,
-        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> providers,
-        out ContinuationCensusFailure failure)
-    {
-        providers = null;
-        if (!TryPrepareQuiescentOwnerSectionCapture(allowedOuterScope, out failure))
-            return false;
-
-        List<OwnerSectionContract> orderedContracts =
-            new List<OwnerSectionContract>(expectedSections.Values);
-        orderedContracts.Sort((left, right) =>
-            StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
-        List<DailyV1OwnerSectionCensusProviderRegistration> registrations =
-            new List<DailyV1OwnerSectionCensusProviderRegistration>(orderedContracts.Count);
-        foreach (OwnerSectionContract contract in orderedContracts)
-        {
-            if (contract == null
-                || !registeredSections.TryGetValue(contract.SectionId, out RegisteredSection section)
-                || section == null || section.Provider == null
-                || !ReferenceEquals(section.Contract, contract))
-            {
-                Fault();
-                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
-                return false;
-            }
-
-            try
-            {
-                registrations.Add(new DailyV1OwnerSectionCensusProviderRegistration(
-                    contract.SectionId,
-                    contract.SchemaVersion,
-                    contract.Role,
-                    section.Provider));
-            }
-            catch
-            {
-                Fault();
-                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
-                return false;
-            }
-        }
-
-        providers = Array.AsReadOnly(registrations.ToArray());
-        failure = ContinuationCensusFailure.None;
-        return true;
-    }
-
-    /// <summary>
-    /// Confirms that the snapshot Core read came from the exact sealed host
-    /// provider registrations and still matches their committed baselines.
-    /// No values or epoch are supplied by this protocol callback.
-    /// </summary>
-    internal bool TryValidateQuiescentOwnerSectionCensusSnapshot(
-        DailyV1CaptureScopeAllowance allowedOuterScope,
-        IReadOnlyList<OwnerSectionCensusSnapshot> coreCapturedSections,
-        long coreObservedMutationEpoch,
-        out ContinuationCensusFailure failure)
-    {
-        failure = ContinuationCensusFailure.None;
-        if (coreCapturedSections == null || coreObservedMutationEpoch < 0L
-            || !TryPrepareQuiescentOwnerSectionCapture(allowedOuterScope, out failure))
-        {
-            if (failure == ContinuationCensusFailure.None)
-                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-
-        List<OwnerSectionContract> orderedContracts =
-            new List<OwnerSectionContract>(expectedSections.Values);
-        orderedContracts.Sort((left, right) =>
-            StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
-        if (coreCapturedSections.Count != orderedContracts.Count)
-        {
-            Fault();
-            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-
-        for (int index = 0; index < orderedContracts.Count; index++)
-        {
-            OwnerSectionContract contract = orderedContracts[index];
-            OwnerSectionCensusSnapshot captured = coreCapturedSections[index];
-            if (contract == null || captured == null
-                || !registeredSections.TryGetValue(contract.SectionId, out RegisteredSection section)
-                || !section.HasBaseline
-                || !string.Equals(captured.SectionId, contract.SectionId, StringComparison.Ordinal)
-                || captured.SchemaVersion != contract.SchemaVersion
-                || captured.Role != contract.Role
-                || !TryReadAndValidate(section, allowRevisionAdvance: false,
-                    out OwnerSectionCensusWitness current, out failure)
-                || current == null
-                || !string.Equals(captured.SectionId, current.SectionId, StringComparison.Ordinal)
-                || captured.SchemaVersion != current.SchemaVersion
-                || !ReferenceEquals(captured.OwnerInstanceIdentity, current.OwnerInstanceIdentity)
-                || captured.Cardinality != current.Cardinality
-                || captured.Revision != current.Revision)
-            {
-                Fault();
-                if (failure == ContinuationCensusFailure.None)
-                    failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
-                return false;
-            }
-        }
-
-        if (mutationEpochState.CurrentEpoch != coreObservedMutationEpoch
-            || !TryPrepareQuiescentOwnerSectionCapture(allowedOuterScope, out failure))
-        {
-            if (failure == ContinuationCensusFailure.None)
-                failure = ContinuationCensusFailure.OperationInProgress;
-            return false;
-        }
-
-        failure = ContinuationCensusFailure.None;
-        return true;
-    }
 
     private bool TryPrepareQuiescentOwnerSectionCapture(
         DailyV1CaptureScopeAllowance allowedOuterScope,
@@ -3438,10 +3500,18 @@ public sealed class ContinuationCensusProtocol
 
     private bool IsOwnerThreadBound() => Volatile.Read(ref ownerThreadBinding) != null;
 
-    internal void FaultClosed() => Fault();
+    internal void FaultClosed([CallerMemberName] string sourceMember = null) => Fault(sourceMember);
 
-    private void Fault()
+    private void RecordFirstFaultDetail(string detail)
     {
+        if (!string.IsNullOrWhiteSpace(detail))
+            Interlocked.CompareExchange(ref firstFaultDetail, detail, null);
+    }
+
+    private void Fault([CallerMemberName] string sourceMember = null)
+    {
+        if (!string.IsNullOrWhiteSpace(sourceMember))
+            Interlocked.CompareExchange(ref firstFaultSource, sourceMember, null);
         if (sharedExecutionState != null)
             sharedExecutionState.MarkSelectedRuntimeCensusProtocolFaulted();
         else

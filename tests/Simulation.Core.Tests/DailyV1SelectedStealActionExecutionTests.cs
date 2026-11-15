@@ -291,6 +291,7 @@ public sealed class DailyV1SelectedStealActionExecutionTests
         internal IReadOnlyList<string> Order => order;
         internal CrimeSocialAppraisalWorldState SocialWorld { get; }
         public DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
+        public string LastJusticeAdmissionRejection => null;
         internal int TransferCalls { get; private set; }
         internal bool InjectDuplicateAfterFirstTransfer { get; set; }
         internal bool FailRollback { get; set; }
@@ -362,6 +363,10 @@ public sealed class DailyV1SelectedStealActionExecutionTests
 
         public bool CanProjectStatusChanges(DailyV1NpcRuntimeOwners target,
             IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => target?.Status != null;
+
+        public void RefreshStatusProjection(DailyV1NpcRuntimeOwners target) { }
+
+        public void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners target) { }
 
         public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners target) { }
 

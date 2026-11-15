@@ -2033,6 +2033,8 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         }
         public bool CanProjectStatusChanges(DailyV1NpcRuntimeOwners owner,
             IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => owner?.Status != null;
+        public void RefreshStatusProjection(DailyV1NpcRuntimeOwners owner) { }
+        public void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners owner) { }
         public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner) { }
         public void NotifyStatusMutationCommitted(DailyV1NpcRuntimeOwners owner,
             DailyV1StatusDefinition status, bool added) { }

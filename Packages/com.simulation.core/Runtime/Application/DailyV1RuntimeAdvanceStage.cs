@@ -149,14 +149,13 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 }
 
 /// <summary>
-/// Host-owned ports for the selected Daily-v1 session. Census capture returns
-/// the complete quiescent source vector and shared mutation epoch unchanged;
-/// Core validates and classifies selected owner rows against its admitted
-/// owner graph. During restoration Core binds its selected owner authorities
-/// before asking the host to bind runtime projections. Core owns the
-/// owner-thread check and runtime-operation quiescence through its operation
-/// registry. This intentionally excludes clocks, whole-day advancement, and
-/// intraday timeline selection.
+/// Host-owned projection and compatibility ports for a selected Daily-v1
+/// session. The complete selected owner census is read and validated by the
+/// Core execution state's sealed provider registry; the capture methods below
+/// remain only for unselected/legacy host paths. During restoration Core binds
+/// its selected owner authorities before asking the host to bind runtime
+/// projections. This intentionally excludes clocks, whole-day advancement,
+/// and intraday timeline selection.
 /// </summary>
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
@@ -171,9 +170,9 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IDailyV1SelectedDailyExecutionHostPorts hostPorts);
     /// <summary>
-    /// Captures the full quiescent source vector and shared mutation epoch.
-    /// The host must return the source rows unchanged; Core alone decides which
-    /// exact rows bind to its selected owner graph and composes the P12 vector.
+    /// Captures a legacy/unselected host-owned census source. A selected
+    /// Daily-v1 session must use the sealed registry in its Core execution
+    /// state and does not call this method for capture.
     /// </summary>
     bool TryCaptureOwnerSectionCensus(
         DailyV1CaptureScopeAllowance allowedOuterScope,
@@ -182,9 +181,9 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
         out DailyCaptureEligibilityFailure failure);
     bool TryBindRestoredCandidateMutationGuard(out string diagnostic);
     /// <summary>
-    /// Captures the complete private target source vector and shared mutation
-    /// epoch unchanged. Core composes the exact selected owner graph before
-    /// validating the full P12 target vector.
+    /// Captures a legacy/unselected private target source. A selected restored
+    /// Daily-v1 session is recaptured through the same sealed Core registry
+    /// used for live capture.
     /// </summary>
     bool TryCaptureUnadmittedRestoredDailyOwnerVector(
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
@@ -193,30 +192,9 @@ internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 }
 
 /// <summary>
-/// Provider registry and baseline-validation port for the selected P12 census.
-/// The host may register the actual compatibility/Unity owner readers, but it
-/// does not capture or return section values or an epoch. Core reads the
-/// providers, composes the full owner vector, and samples its own shared epoch.
-/// </summary>
-internal interface IDailyV1SelectedRuntimeOwnerCensusProviderPort
-{
-    bool TryGetQuiescentOwnerSectionCensusProviders(
-        DailyV1CaptureScopeAllowance allowedOuterScope,
-        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> providers,
-        out DailyCaptureEligibilityFailure failure);
-
-    bool TryValidateQuiescentOwnerSectionCensusSnapshot(
-        DailyV1CaptureScopeAllowance allowedOuterScope,
-        IReadOnlyList<OwnerSectionCensusSnapshot> coreCapturedSections,
-        long coreObservedMutationEpoch,
-        out DailyCaptureEligibilityFailure failure);
-
-    void FaultOwnerSectionCensusProviderProtocol();
-}
-
-/// <summary>
-/// Contract metadata plus a live reader registered by the host adapter. The
-/// registration carries no captured value or mutation-epoch claim.
+/// Core-owned sealed census binding. The provider is a live source adapter;
+/// the section contract and last committed witness are stored with the Core
+/// execution state and participate in the same roster transition transaction.
 /// </summary>
 internal sealed class DailyV1OwnerSectionCensusProviderRegistration
 {
@@ -224,25 +202,39 @@ internal sealed class DailyV1OwnerSectionCensusProviderRegistration
         string sectionId,
         int schemaVersion,
         OwnerSectionRole role,
-        IOwnerSectionCensusProvider provider)
+        IOwnerSectionCensusProvider provider,
+        object baselineOwnerInstanceIdentity = null,
+        int baselineCardinality = 0,
+        long baselineRevision = 0L,
+        bool hasBaseline = false)
     {
         if (string.IsNullOrWhiteSpace(sectionId))
             throw new ArgumentException("The owner census section identity is required.", nameof(sectionId));
         if (schemaVersion <= 0) throw new ArgumentOutOfRangeException(nameof(schemaVersion));
         if (!Enum.IsDefined(typeof(OwnerSectionRole), role))
             throw new ArgumentOutOfRangeException(nameof(role));
+        if (baselineCardinality < 0 || baselineRevision < 0L
+            || (hasBaseline && baselineOwnerInstanceIdentity == null))
+            throw new ArgumentOutOfRangeException(nameof(baselineCardinality));
         SectionId = sectionId;
         SchemaVersion = schemaVersion;
         Role = role;
         Provider = provider ?? throw new ArgumentNullException(nameof(provider));
+        BaselineOwnerInstanceIdentity = baselineOwnerInstanceIdentity;
+        BaselineCardinality = baselineCardinality;
+        BaselineRevision = baselineRevision;
+        HasBaseline = hasBaseline;
     }
 
     internal string SectionId { get; }
     internal int SchemaVersion { get; }
     internal OwnerSectionRole Role { get; }
     internal IOwnerSectionCensusProvider Provider { get; }
+    internal object BaselineOwnerInstanceIdentity { get; }
+    internal int BaselineCardinality { get; }
+    internal long BaselineRevision { get; }
+    internal bool HasBaseline { get; }
 }
-
 /// <summary>
 /// Core executes the read transaction over the host's sealed provider registry.
 /// Owner-thread, quiescence, full 89-family shape, dynamic-key and shared-epoch
@@ -253,7 +245,6 @@ internal static class DailyV1CoreOwnerSectionCensusCapture
 {
     internal static bool TryCapture(
         DailyV1ExecutionBoundaryState executionState,
-        IDailyV1SelectedRuntimeOwnerCensusProviderPort hostPort,
         DailyV1CaptureScopeAllowance allowedOuterScope,
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
         out long mutationEpoch,
@@ -262,72 +253,58 @@ internal static class DailyV1CoreOwnerSectionCensusCapture
         ownerSections = null;
         mutationEpoch = 0L;
         failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
-        if (executionState == null || hostPort == null
+        if (executionState == null
             || !Enum.IsDefined(typeof(DailyV1CaptureScopeAllowance), allowedOuterScope))
             return false;
 
-        SimulationRuntimeAdmissionContext admissionContext = executionState.AdmissionContext;
-        if (admissionContext == null || !admissionContext.IsOwnedByCurrentThread())
-        {
-            failure = DailyCaptureEligibilityFailure.WrongOwnerThread;
-            return false;
-        }
-        if (!executionState.TryAssessCaptureScope(allowedOuterScope)
-            || executionState.MutationEpochState.HasActiveReservation)
-        {
-            failure = DailyCaptureEligibilityFailure.OperationInProgress;
-            return false;
-        }
-
-        long startingEpoch = executionState.MutationEpochState.CurrentEpoch;
-        if (!hostPort.TryGetQuiescentOwnerSectionCensusProviders(
+        if (!executionState.TryGetSelectedOwnerSectionCensusRegistry(
                 allowedOuterScope,
                 out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+                out long registryRevision,
+                out long startingEpoch,
                 out failure))
             return false;
         if (registrations == null || registrations.Count == 0)
         {
-            hostPort.FaultOwnerSectionCensusProviderProtocol();
+            executionState.MarkSelectedRuntimeCensusProtocolFaulted();
             failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
             return false;
         }
 
-        List<DailyV1OwnerSectionCensusProviderRegistration> ordered =
-            new List<DailyV1OwnerSectionCensusProviderRegistration>(registrations.Count);
-        HashSet<string> registeredIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in registrations)
-        {
-            if (registration == null
-                || string.IsNullOrWhiteSpace(registration.SectionId)
-                || registration.SchemaVersion <= 0
-                || !Enum.IsDefined(typeof(OwnerSectionRole), registration.Role)
-                || registration.Provider == null
-                || !registeredIds.Add(registration.SectionId))
-            {
-                hostPort.FaultOwnerSectionCensusProviderProtocol();
-                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-                return false;
-            }
-            ordered.Add(registration);
-        }
-        ordered.Sort((left, right) =>
-            StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
-
         List<OwnerSectionCensusSnapshot> captured =
-            new List<OwnerSectionCensusSnapshot>(ordered.Count);
+            new List<OwnerSectionCensusSnapshot>(registrations.Count);
+        HashSet<string> registeredIds = new HashSet<string>(StringComparer.Ordinal);
         try
         {
-            foreach (DailyV1OwnerSectionCensusProviderRegistration registration in ordered)
+            foreach (DailyV1OwnerSectionCensusProviderRegistration registration in registrations)
             {
+                if (registration == null
+                    || string.IsNullOrWhiteSpace(registration.SectionId)
+                    || registration.SchemaVersion <= 0
+                    || !Enum.IsDefined(typeof(OwnerSectionRole), registration.Role)
+                    || registration.Provider == null
+                    || !registration.HasBaseline
+                    || registration.BaselineOwnerInstanceIdentity == null
+                    || !registeredIds.Add(registration.SectionId))
+                {
+                    executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+                    failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                    return false;
+                }
+
                 OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
                 if (witness == null
                     || !string.Equals(witness.SectionId, registration.SectionId, StringComparison.Ordinal)
                     || witness.SchemaVersion != registration.SchemaVersion
                     || witness.OwnerInstanceIdentity == null
                     || witness.Cardinality < 0
-                    || witness.Revision < 0L)
+                    || witness.Revision < 0L
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity,
+                        registration.BaselineOwnerInstanceIdentity)
+                    || witness.Cardinality != registration.BaselineCardinality
+                    || witness.Revision != registration.BaselineRevision)
                 {
-                    hostPort.FaultOwnerSectionCensusProviderProtocol();
+                    executionState.MarkSelectedRuntimeCensusProtocolFaulted();
                     failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
                     return false;
                 }
@@ -343,7 +320,7 @@ internal static class DailyV1CoreOwnerSectionCensusCapture
         }
         catch
         {
-            hostPort.FaultOwnerSectionCensusProviderProtocol();
+            executionState.MarkSelectedRuntimeCensusProtocolFaulted();
             failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
             return false;
         }
@@ -353,29 +330,13 @@ internal static class DailyV1CoreOwnerSectionCensusCapture
         if (!DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
                 immutableCapture))
         {
-            hostPort.FaultOwnerSectionCensusProviderProtocol();
+            executionState.MarkSelectedRuntimeCensusProtocolFaulted();
             failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
             return false;
         }
-
-        if (executionState.MutationEpochState.CurrentEpoch != startingEpoch
-            || executionState.MutationEpochState.HasActiveReservation
-            || !executionState.TryAssessCaptureScope(allowedOuterScope))
-        {
-            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+        if (!executionState.TryValidateSelectedOwnerSectionCensusCapture(
+                allowedOuterScope, registryRevision, startingEpoch, out failure))
             return false;
-        }
-        if (!hostPort.TryValidateQuiescentOwnerSectionCensusSnapshot(
-                allowedOuterScope, immutableCapture, startingEpoch, out failure))
-            return false;
-
-        if (executionState.MutationEpochState.CurrentEpoch != startingEpoch
-            || executionState.MutationEpochState.HasActiveReservation
-            || !executionState.TryAssessCaptureScope(allowedOuterScope))
-        {
-            failure = DailyCaptureEligibilityFailure.OperationInProgress;
-            return false;
-        }
 
         ownerSections = immutableCapture;
         mutationEpoch = startingEpoch;
@@ -383,8 +344,6 @@ internal static class DailyV1CoreOwnerSectionCensusCapture
         return true;
     }
 }
-
-/// <summary>
 /// <summary>
 /// Legacy boundary for callers that still own their own day or intraday
 /// implementation. Selected Daily-v1 application sessions use the Core
@@ -5584,6 +5543,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             return false;
         }
 
+
         if (IsDailyCaptureProfile)
         {
             if (!CanMutate)
@@ -5821,6 +5781,15 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         bool allowLegacyAdvance,
         out SimulationRuntimeAdvanceFailure failure)
     {
+        if (IsDailyCaptureProfile && HasAdmittedSelectedDailyExecution
+            && HasSealedSelectedOwnerSectionCensusRegistry
+            && !TryValidateCurrentSelectedOwnerSectionCensusBaselines())
+        {
+            boundary.FaultRuntimeAdmission();
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
         IDailyV1RuntimeAdvanceBoundary legacyBoundary =
             allowLegacyAdvance ? boundary as IDailyV1RuntimeAdvanceBoundary : null;
         if (preferIntradayTimeline && legacyBoundary?.HasIntradayTimeline == true)

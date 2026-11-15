@@ -492,6 +492,33 @@ public class NpcRuntime : ICapabilityConditionSource
         RefreshSelectedStatusProjection();
     }
 
+    /// <summary>
+    /// Detaches a stale Unity action projection while retaining the exact
+    /// authoritative Core action slot. Projection-independent selected Normal
+    /// dispatch reads its actor and target from that slot; leaving a mismatched
+    /// compatibility object installed would make the P12 current-action
+    /// witness reject an otherwise exact Core owner vector.
+    /// </summary>
+    internal bool TryClearMismatchedSelectedActionProjection(
+        DailyV1NpcRuntimeOwners owner,
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        if (!ReferenceEquals(selectedRuntimeOwners, owner)
+            || payload == null
+            || !ReferenceEquals(owner.ActionSlot?.CurrentAction, payload.Action)
+            || !ReferenceEquals(owner.ActionSlot?.CurrentPayload, payload))
+            return false;
+
+        NpcActionRuntime previous = currentActionRuntime;
+        if (previous == null && currentAction == null) return true;
+        if (previous != null && !previous.UnbindP12Owner(this)) return false;
+
+        previous?.UnbindSelectedOwner();
+        currentActionRuntime = null;
+        currentAction = null;
+        return true;
+    }
+
     internal void SyncCoreSelectedDailyV1HiddenProjection(DailyV1NpcRuntimeOwners owner)
     {
         if (!ReferenceEquals(selectedRuntimeOwners, owner)
@@ -2690,10 +2717,11 @@ public class NpcRuntime : ICapabilityConditionSource
     private void NotifyP12CrimeJusticeMutationCommitted()
     {
         if (p12CrimeJusticeMutationAdmission == null) return;
-        if (selectedRuntimeOwners != null)
-            selectedRuntimeOwners.NotifyCrimeJusticeMutationCommitted();
-        else
+        if (selectedRuntimeOwners == null)
             p12CrimeJusticeRevision++;
+        // A selected P12 status/hidden owner is revised by the Core execution
+        // boundary invoked below. Keep this Unity compatibility bridge from
+        // incrementing the same Core owner a second time.
         try { p12CrimeJusticeMutationCommitted?.Invoke(this); }
         catch { }
     }

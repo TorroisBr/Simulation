@@ -374,14 +374,26 @@ public sealed class DailyV1P12CrimeJusticeMutationCoordinatorTests
         DailyV1NpcRuntimeOwners owner = composition.OwnerGraph.Npcs[0];
         string section = DailyV1SelectedOwnerSectionCensusContract
             .NpcStatusCrimeSectionIdFor(owner.RuntimeId);
+        Assert.That(composition.ExecutionBoundaryState.TryAssessCaptureScope(
+            DailyV1CaptureScopeAllowance.None), Is.True,
+            "The selected state begins quiescent before the immediate owner mutation.");
+        Assert.That(composition.ExecutionBoundaryState.TryBeginOperation(
+            DailyV1OperationScopeKind.P12CrimeJusticeMutation), Is.False,
+            "Only the exact coordinator retained by this Core state may register its mutation scope.");
         Assert.That(coordinator.TryBeginSelectedNpcStatusMutation(
             composition.OwnerGraph, new[] { owner }, out IDisposable scope), Is.True);
         using (scope)
         {
+            Assert.That(composition.ExecutionBoundaryState.TryAssessCaptureScope(
+                DailyV1CaptureScopeAllowance.None), Is.False,
+                "Capture is ineligible while a selected P12 owner mutation is active.");
             composition.ExecutionBoundaryState.EnsureSelectedP12CrimeJusticeOwnerMutationAllowed(owner);
             composition.ExecutionBoundaryState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
         }
 
+        Assert.That(composition.ExecutionBoundaryState.TryAssessCaptureScope(
+            DailyV1CaptureScopeAllowance.None), Is.True,
+            "Disposing the exact Core mutation scope restores quiescent capture eligibility.");
         Assert.That(owner.CrimeJusticeRevision, Is.EqualTo(1L));
         Assert.That(composition.ExecutionBoundaryState.MutationEpochState.CurrentEpoch, Is.EqualTo(1L));
         Assert.That(protocol.Calls, Does.Contain("refresh:" + section));

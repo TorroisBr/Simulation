@@ -70,9 +70,7 @@ public sealed class DailyV1ApplicationSessionGateTests
 
     private sealed class SnapshotOwnerSectionCensusProvider : IOwnerSectionCensusProvider
     {
-        private readonly OwnerSectionCensusSnapshot snapshot;
-        private readonly Action onRead;
-        private readonly string sectionIdOverride;
+        private OwnerSectionCensusSnapshot snapshot;
 
         internal SnapshotOwnerSectionCensusProvider(
             OwnerSectionCensusSnapshot snapshot,
@@ -80,116 +78,29 @@ public sealed class DailyV1ApplicationSessionGateTests
             string sectionIdOverride = null)
         {
             this.snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
-            this.onRead = onRead;
-            this.sectionIdOverride = sectionIdOverride;
+            OnRead = onRead;
+            SectionIdOverride = sectionIdOverride;
         }
 
         internal int ReadCount { get; private set; }
+        internal Action OnRead { get; set; }
+        internal string SectionIdOverride { get; set; }
+        internal OwnerSectionCensusSnapshot Snapshot => snapshot;
+
+        internal void ReplaceSnapshot(OwnerSectionCensusSnapshot replacement) =>
+            snapshot = replacement ?? throw new ArgumentNullException(nameof(replacement));
 
         public OwnerSectionCensusWitness GetCurrentCensus()
         {
             ReadCount++;
-            onRead?.Invoke();
+            OnRead?.Invoke();
             return new OwnerSectionCensusWitness(
-                sectionIdOverride ?? snapshot.SectionId,
+                SectionIdOverride ?? snapshot.SectionId,
                 snapshot.SchemaVersion,
                 snapshot.OwnerInstanceIdentity,
                 snapshot.Cardinality,
                 snapshot.Revision);
         }
-    }
-
-    private sealed class CoreOwnerSectionCensusProviderPort
-        : IDailyV1SelectedRuntimeOwnerCensusProviderPort
-    {
-        private readonly IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations;
-        private readonly DailyV1ExecutionBoundaryState executionState;
-        private readonly IReadOnlyList<OwnerSectionCensusSnapshot> expectedRows;
-        private readonly long expectedMutationEpoch;
-        private readonly Action duringValidation;
-        private bool faulted;
-
-        internal CoreOwnerSectionCensusProviderPort(
-            DailyV1ExecutionBoundaryState executionState,
-            IReadOnlyList<OwnerSectionCensusSnapshot> rows,
-            Action duringValidation = null,
-            bool corruptFirstWitness = false)
-        {
-            this.executionState = executionState
-                ?? throw new ArgumentNullException(nameof(executionState));
-            expectedMutationEpoch = executionState.MutationEpochState.CurrentEpoch;
-            if (rows == null) throw new ArgumentNullException(nameof(rows));
-            expectedRows = rows.OrderBy(row => row.SectionId, StringComparer.Ordinal).ToArray();
-            this.duringValidation = duringValidation;
-            List<DailyV1OwnerSectionCensusProviderRegistration> built =
-                new List<DailyV1OwnerSectionCensusProviderRegistration>(expectedRows.Count);
-            for (int index = 0; index < expectedRows.Count; index++)
-            {
-                OwnerSectionCensusSnapshot row = expectedRows[index];
-                built.Add(new DailyV1OwnerSectionCensusProviderRegistration(
-                    row.SectionId, row.SchemaVersion, row.Role,
-                    new SnapshotOwnerSectionCensusProvider(
-                        row,
-                        sectionIdOverride: corruptFirstWitness && index == 0
-                            ? row.SectionId + ".invalid"
-                            : null)));
-            }
-            registrations = built.AsReadOnly();
-        }
-
-        internal int ValidationCount { get; private set; }
-        internal IReadOnlyList<OwnerSectionCensusSnapshot> ValidatedRows { get; private set; }
-
-        public bool TryGetQuiescentOwnerSectionCensusProviders(
-            DailyV1CaptureScopeAllowance allowedOuterScope,
-            out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> providers,
-            out DailyCaptureEligibilityFailure failure)
-        {
-            providers = faulted ? null : registrations;
-            failure = faulted
-                ? DailyCaptureEligibilityFailure.OwnerCoverageIncomplete
-                : DailyCaptureEligibilityFailure.None;
-            return !faulted;
-        }
-
-        public bool TryValidateQuiescentOwnerSectionCensusSnapshot(
-            DailyV1CaptureScopeAllowance allowedOuterScope,
-            IReadOnlyList<OwnerSectionCensusSnapshot> coreCapturedSections,
-            long coreObservedMutationEpoch,
-            out DailyCaptureEligibilityFailure failure)
-        {
-            if (faulted)
-            {
-                failure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-                return false;
-            }
-            ValidationCount++;
-            ValidatedRows = coreCapturedSections;
-            duringValidation?.Invoke();
-            bool matches = coreCapturedSections != null
-                && coreCapturedSections.Count == expectedRows.Count
-                && coreObservedMutationEpoch == expectedMutationEpoch
-                && !executionState.MutationEpochState.HasActiveReservation;
-            for (int index = 0; matches && index < expectedRows.Count; index++)
-            {
-                OwnerSectionCensusSnapshot actual = coreCapturedSections[index];
-                OwnerSectionCensusSnapshot expected = expectedRows[index];
-                matches = actual != null && expected != null
-                    && string.Equals(actual.SectionId, expected.SectionId, StringComparison.Ordinal)
-                    && actual.SchemaVersion == expected.SchemaVersion
-                    && actual.Role == expected.Role
-                    && ReferenceEquals(actual.OwnerInstanceIdentity, expected.OwnerInstanceIdentity)
-                    && actual.Cardinality == expected.Cardinality
-                    && actual.Revision == expected.Revision;
-            }
-
-            failure = matches
-                ? DailyCaptureEligibilityFailure.None
-                : DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
-            return matches;
-        }
-
-        public void FaultOwnerSectionCensusProviderProtocol() => faulted = true;
     }
 
     private sealed class SelectedDailyExecutionHostPorts : IDailyV1SelectedDailyExecutionHostPorts
@@ -237,6 +148,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         private Exception continuationSaveCaptureException;
         private Action<int> onContinuationSaveEvidenceCapture;
         private Action<DailyV1CaptureScopeAllowance> onOwnerSectionCensusCapture;
+        private readonly Dictionary<string, SnapshotOwnerSectionCensusProvider> coreCensusProviders =
+            new Dictionary<string, SnapshotOwnerSectionCensusProvider>(StringComparer.Ordinal);
 
         internal ApplicationAdvanceBoundary(
             DailyV1ExecutionBoundaryState state,
@@ -273,6 +186,25 @@ public sealed class DailyV1ApplicationSessionGateTests
         internal void SetOwnerSectionCensusCaptureCallback(
             Action<DailyV1CaptureScopeAllowance> callback) =>
             onOwnerSectionCensusCapture = callback;
+        internal void RegisterCoreCensusProvider(
+            string sectionId, SnapshotOwnerSectionCensusProvider provider) =>
+            coreCensusProviders.Add(sectionId, provider);
+        internal bool TryGetCoreCensusProvider(
+            string sectionId, out SnapshotOwnerSectionCensusProvider provider) =>
+            coreCensusProviders.TryGetValue(sectionId, out provider);
+        internal void SetCoreCensusProviderReadCallback(Action callback)
+        {
+            foreach (SnapshotOwnerSectionCensusProvider provider in coreCensusProviders.Values)
+                provider.OnRead = callback;
+        }
+        internal void MutateCoreCensusProviderSnapshot(
+            string sectionId,
+            Func<OwnerSectionCensusSnapshot, OwnerSectionCensusSnapshot> mutate)
+        {
+            if (!coreCensusProviders.TryGetValue(sectionId, out SnapshotOwnerSectionCensusProvider provider))
+                throw new InvalidOperationException("The Core census fixture has no provider for " + sectionId + ".");
+            provider.ReplaceSnapshot(mutate(provider.Snapshot));
+        }
         internal void SetAdmissionEvidence(
             IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
             long mutationEpoch)
@@ -468,10 +400,25 @@ public sealed class DailyV1ApplicationSessionGateTests
             return true;
         }
 
+        private bool restoredCandidateMutationGuardBound;
+
         public bool TryBindRestoredCandidateMutationGuard(out string diagnostic)
         {
             diagnostic = "The session-gate test boundary does not compose restored candidates.";
-            return false;
+            if (restoredCandidateMutationGuardBound
+                || state.AdmissionContext?.IsRestoredContinuation != true
+                || !state.AdmissionContext.IsOwnedByCurrentThread())
+                return false;
+
+            if (!state.TryMarkCoreMutationGuardAuthoritiesBound())
+            {
+                diagnostic = "The session-gate host fixture could not complete the restored guard binding.";
+                return false;
+            }
+
+            restoredCandidateMutationGuardBound = true;
+            diagnostic = null;
+            return true;
         }
 
         public bool TryCaptureUnadmittedRestoredDailyOwnerVector(
@@ -542,6 +489,61 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
     }
 
+    private static void BindCoreSelectedCensusRegistryForTests(
+        DailyV1ExecutionBoundaryState state,
+        IEnumerable<OwnerSectionCensusSnapshot> sourceSections,
+        Action onProviderRead = null,
+        ApplicationAdvanceBoundary boundary = null,
+        Dictionary<string, SnapshotOwnerSectionCensusProvider> boundProviders = null)
+    {
+        Assert.That(state, Is.Not.Null);
+        Assert.That(sourceSections, Is.Not.Null);
+        OwnerSectionCensusSnapshot[] ordered = sourceSections
+            .OrderBy(section => section.SectionId, StringComparer.Ordinal).ToArray();
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(ordered), Is.True,
+            "The test fixture binds the complete selected Daily-v1 census shape before readiness.");
+        List<DailyV1OwnerSectionContractIdentity> contracts =
+            new List<DailyV1OwnerSectionContractIdentity>(ordered.Length);
+        List<DailyV1OwnerSectionCensusProviderRegistration> providers =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(ordered.Length);
+        foreach (OwnerSectionCensusSnapshot section in ordered)
+        {
+            SnapshotOwnerSectionCensusProvider provider =
+                new SnapshotOwnerSectionCensusProvider(section, onProviderRead);
+            boundProviders?.Add(section.SectionId, provider);
+            boundary?.RegisterCoreCensusProvider(section.SectionId, provider);
+            contracts.Add(new DailyV1OwnerSectionContractIdentity(
+                section.SectionId, section.SchemaVersion, section.Role));
+            providers.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                section.SectionId, section.SchemaVersion, section.Role, provider,
+                section.OwnerInstanceIdentity, section.Cardinality, section.Revision,
+                hasBaseline: true));
+        }
+
+        Assert.That(state.TryReplaceSelectedOwnerSectionCensusRegistryBeforeSeal(
+            contracts, providers), Is.True);
+        Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.True);
+        Assert.That(state.TrySealSelectedOwnerSectionCensusRegistry(providers), Is.True);
+    }
+
+    internal static OwnerSectionCensusSnapshot[] BindCoreSelectedCensusRegistryAndMarkReadyForTests(
+        DailyV1ActiveRuntimeSession session)
+        => BindCoreSelectedCensusRegistryAndMarkReadyForTests(session, null);
+
+    private static OwnerSectionCensusSnapshot[] BindCoreSelectedCensusRegistryAndMarkReadyForTests(
+        DailyV1ActiveRuntimeSession session,
+        ApplicationAdvanceBoundary boundary)
+    {
+        Assert.That(session, Is.Not.Null);
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        EnsureRuntimeProtocolInventory(state);
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCompleteOwnerSectionVector(session);
+        BindCoreSelectedCensusRegistryForTests(state, sections, boundary: boundary);
+        Assert.That(state.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True,
+            "Selected publication requires the complete Core census registry and operation inventory.");
+        return sections;
+    }
+
     private static DailyV1Application CreateApplicationWithAdvanceBoundary(
         Action onOperationEntry,
         out DailyV1ActiveRuntimeSession session,
@@ -549,7 +551,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1EffectiveDefinitions definitions = null,
         bool publishWorld = true,
         bool markCensusProtocolReady = true,
-        bool bindAdvanceBoundary = true)
+        bool bindAdvanceBoundary = true,
+        Action onCensusProviderRead = null)
     {
         DailyV1Application application = new DailyV1Application();
         definitions ??= DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -561,14 +564,29 @@ public sealed class DailyV1ApplicationSessionGateTests
         if (publishWorld)
             Assert.That(session.ExecutionBoundaryState.TryMarkFactualReadWorldPublished(), Is.True);
         EnsureRuntimeProtocolInventory(session.ExecutionBoundaryState);
+        OwnerSectionCensusSnapshot[] initialOwnerSections =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        boundary = new ApplicationAdvanceBoundary(
+            session.ExecutionBoundaryState, onOperationEntry, initialOwnerSections,
+            session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch);
         if (markCensusProtocolReady)
+        {
+            BindCoreSelectedCensusRegistryForTests(
+                session.ExecutionBoundaryState,
+                initialOwnerSections,
+                onCensusProviderRead,
+                boundary);
             Assert.That(session.ExecutionBoundaryState.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True,
-                "The Core boundary fixture models a successfully bound census protocol.");
-        boundary = new ApplicationAdvanceBoundary(session.ExecutionBoundaryState, onOperationEntry);
+                "The Core boundary fixture seals its full owner registry before census readiness.");
+        }
         if (bindAdvanceBoundary)
         {
             Assert.That(application.TryBindRuntimeAdvanceBoundary(session, boundary), Is.True);
-            Assert.That(application.TryPublishInitial(session), Is.True);
+            if (markCensusProtocolReady)
+                Assert.That(application.TryPublishInitial(session), Is.True);
+            else
+                Assert.That(application.TryPublishInitial(session), Is.False,
+                    "Core must keep Genesis private until its complete selected census registry is sealed and ready.");
         }
         return application;
     }
@@ -767,6 +785,8 @@ public sealed class DailyV1ApplicationSessionGateTests
     {
         Assert.That(graph, Is.Not.Null);
         Assert.That(graph.PersonStore, Is.Not.Null);
+        if (graph.PoliticalKnowledgeStore != null)
+            return graph.PoliticalKnowledgeStore;
         InstitutionStore institutions = new InstitutionStore();
         PoliticalKnowledgeStore store = new PoliticalKnowledgeStore(
             graph.PersonStore,
@@ -783,7 +803,42 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1ActiveRuntimeSession session)
     {
         OwnerSectionCensusSnapshot[] existing = CreateCoreBoundP12FSectionVectorWithoutCity(session);
-        return RebindCoreJusticeOwnerSectionVector(session.OwnerGraph, ReplaceCityOwnerSectionVector(session, existing));
+        OwnerSectionCensusSnapshot[] selected = RebindCoreJusticeOwnerSectionVector(
+            session.OwnerGraph, ReplaceCityOwnerSectionVector(session, existing));
+        return RebindToSealedCoreCensusBaseline(session, selected);
+    }
+
+    private static OwnerSectionCensusSnapshot[] RebindToSealedCoreCensusBaseline(
+        DailyV1ActiveRuntimeSession session,
+        OwnerSectionCensusSnapshot[] sections)
+    {
+        DailyV1ExecutionBoundaryState state = session?.ExecutionBoundaryState;
+        if (state == null || sections == null
+            || !state.TryGetSelectedOwnerSectionCensusRegistry(
+                DailyV1CaptureScopeAllowance.None,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+                out _, out _, out _))
+            return sections;
+
+        Dictionary<string, DailyV1OwnerSectionCensusProviderRegistration> byId =
+            registrations.ToDictionary(registration => registration.SectionId, StringComparer.Ordinal);
+        Assert.That(sections.Length, Is.EqualTo(byId.Count));
+        OwnerSectionCensusSnapshot[] rebound = new OwnerSectionCensusSnapshot[sections.Length];
+        for (int index = 0; index < sections.Length; index++)
+        {
+            OwnerSectionCensusSnapshot section = sections[index];
+            Assert.That(byId.TryGetValue(section.SectionId,
+                out DailyV1OwnerSectionCensusProviderRegistration registration), Is.True,
+                "The fixture cannot invent a row outside the sealed Core census registry.");
+            Assert.That(registration.HasBaseline, Is.True);
+            rebound[index] = new OwnerSectionCensusSnapshot(
+                registration.SectionId, registration.SchemaVersion, registration.Role,
+                registration.BaselineOwnerInstanceIdentity,
+                registration.BaselineCardinality, registration.BaselineRevision);
+        }
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(rebound), Is.True,
+            "The fixture must retain the exact complete 89-family Core census shape.");
+        return rebound;
     }
 
     private static OwnerSectionCensusSnapshot[] RebindCoreJusticeOwnerSectionVector(
@@ -810,7 +865,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         return sections;
     }
 
-    private static OwnerSectionCensusSnapshot[] CreateCoreBoundCompleteOwnerSectionVector(
+    internal static OwnerSectionCensusSnapshot[] CreateCoreBoundCompleteOwnerSectionVector(
         DailyV1ActiveRuntimeSession session)
         => CreateCoreBoundCityAndP12FSectionVector(session);
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundCompleteOwnerSectionVector(
@@ -1099,10 +1154,9 @@ public sealed class DailyV1ApplicationSessionGateTests
         try
         {
             OwnerSectionCensusSnapshot original = sections[0];
-            sections[0] = new OwnerSectionCensusSnapshot(
-                original.SectionId, original.SchemaVersion, original.Role,
-                original.OwnerInstanceIdentity, original.Cardinality, original.Revision + 1L);
-            boundary.SetAdmissionEvidence(sections, 0L);
+            boundary.MutateCoreCensusProviderSnapshot(original.SectionId, current =>
+                new OwnerSectionCensusSnapshot(current.SectionId, current.SchemaVersion, current.Role,
+                    current.OwnerInstanceIdentity, current.Cardinality, current.Revision + 1L));
 
             Assert.That(DailyV1P12GCoreBoundCausalRootSources.TryCapture(
                 operation, out DailyV1P12GCoreBoundCausalRootSources sources,
@@ -1136,13 +1190,13 @@ public sealed class DailyV1ApplicationSessionGateTests
             section => section.SectionId == hostOwnedSectionId);
         Assert.That(hostOwnedSectionIndex, Is.GreaterThanOrEqualTo(0));
         OwnerSectionCensusSnapshot original = sections[hostOwnedSectionIndex];
-        sections[hostOwnedSectionIndex] = new OwnerSectionCensusSnapshot(
-            original.SectionId, original.SchemaVersion, original.Role,
-            original.OwnerInstanceIdentity, original.Cardinality, original.Revision + 1L);
-        boundary.SetAdmissionEvidence(sections, 0L);
+        boundary.MutateCoreCensusProviderSnapshot(original.SectionId, current =>
+            new OwnerSectionCensusSnapshot(current.SectionId, current.SchemaVersion, current.Role,
+                current.OwnerInstanceIdentity, current.Cardinality, current.Revision + 1L));
 
         Assert.That(operation.TryRevalidate(out DailyCaptureEligibilityFailure failure), Is.False);
-        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken));
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete),
+            "A provider witness outside Core's committed registry baseline is incomplete, not merely a token mismatch.");
         operation.Dispose();
         Assert.That(application.ActiveOperationCount, Is.Zero);
     }
@@ -1161,7 +1215,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void ContinuationSaveCaptureExceptionClosesRegisteredScopeAndPreservesOriginalException()
+    public void ContinuationSaveProviderExceptionFaultsCensusAndClosesRegisteredScope()
     {
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(
             onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
@@ -1169,13 +1223,30 @@ public sealed class DailyV1ApplicationSessionGateTests
         InstallCompletedBoundaryToken(session, boundary);
         InvalidOperationException expected = new InvalidOperationException(
             "Synthetic continuation-save evidence failure.");
-        boundary.ThrowOnContinuationSaveCapture(expected);
+        bool throwOnNextCoreProviderRead = false;
+        bool providerFailureObserved = false;
+        boundary.SetCoreCensusProviderReadCallback(() =>
+        {
+            if (throwOnNextCoreProviderRead)
+            {
+                throwOnNextCoreProviderRead = false;
+                providerFailureObserved = true;
+                throw expected;
+            }
+        });
+        throwOnNextCoreProviderRead = true;
 
-        InvalidOperationException actual = Assert.Throws<InvalidOperationException>(() =>
-            application.TryBeginContinuationSaveOperation(
-                session, out DailyV1P12GContinuationSaveOperation _, out _));
+        bool started = application.TryBeginContinuationSaveOperation(
+            session, out DailyV1P12GContinuationSaveOperation operation,
+            out DailyCaptureEligibilityFailure failure);
 
-        Assert.That(actual, Is.SameAs(expected));
+        Assert.That(providerFailureObserved, Is.True,
+            "Selected continuation-save evidence must read the Core-sealed providers.");
+        Assert.That(started, Is.False);
+        Assert.That(operation, Is.Null);
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
+        Assert.That(session.ExecutionBoundaryState.IsSelectedRuntimeCensusProtocolFaulted, Is.True,
+            "A provider exception faults the sealed census protocol closed.");
         Assert.That(application.ActiveOperationCount, Is.Zero);
     }
 
@@ -1258,14 +1329,17 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryBeginContinuationSaveOperation(
             session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
 
-        int invalidateAt = boundary.ContinuationSaveEvidenceCaptureCount + 1;
-        boundary.SetContinuationSaveEvidenceCaptureCallback(captureCount =>
+        bool invalidated = false;
+        boundary.SetCoreCensusProviderReadCallback(() =>
         {
-            if (captureCount != invalidateAt) return;
             OwnerSectionCensusSnapshot current = sections[0];
-            sections[0] = new OwnerSectionCensusSnapshot(
-                current.SectionId, current.SchemaVersion, current.Role,
-                current.OwnerInstanceIdentity, current.Cardinality, current.Revision + 1L);
+            if (invalidated) return;
+            invalidated = true;
+            boundary.MutateCoreCensusProviderSnapshot(current.SectionId, providerSnapshot =>
+                new OwnerSectionCensusSnapshot(providerSnapshot.SectionId,
+                    providerSnapshot.SchemaVersion, providerSnapshot.Role,
+                    providerSnapshot.OwnerInstanceIdentity, providerSnapshot.Cardinality,
+                    providerSnapshot.Revision + 1L));
         });
 
         Assert.That(DailyV1P12GCoreBoundOwnerSources.TryCapture(
@@ -1432,10 +1506,9 @@ public sealed class DailyV1ApplicationSessionGateTests
                         13, session.OwnerGraph.Npcs[0].RuntimeId), StringComparison.Ordinal));
             Assert.That(npcInventorySection, Is.GreaterThanOrEqualTo(0));
             OwnerSectionCensusSnapshot original = sections[npcInventorySection];
-            sections[npcInventorySection] = new OwnerSectionCensusSnapshot(
-                original.SectionId, original.SchemaVersion, original.Role,
-                original.OwnerInstanceIdentity, original.Cardinality, original.Revision + 1L);
-            boundary.SetAdmissionEvidence(sections, 0L);
+            boundary.MutateCoreCensusProviderSnapshot(original.SectionId, current =>
+                new OwnerSectionCensusSnapshot(current.SectionId, current.SchemaVersion, current.Role,
+                    current.OwnerInstanceIdentity, current.Cardinality, current.Revision + 1L));
 
             Assert.That(DailyV1P12GCoreBoundNpcOwnerSources.TryCapture(
                 operation, out DailyV1P12GCoreBoundNpcOwnerSources staleSources,
@@ -1467,17 +1540,15 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryBeginContinuationSaveOperation(
             session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
 
-        int invalidateAt = boundary.ContinuationSaveEvidenceCaptureCount + 1;
-        boundary.SetContinuationSaveEvidenceCaptureCallback(captureCount =>
+        bool invalidated = false;
+        boundary.SetCoreCensusProviderReadCallback(() =>
         {
-            if (captureCount != invalidateAt) return;
-            int index = Array.FindIndex(sections, section =>
-                section.SectionId == P12ASpatialNetworkOwnerCodec.LocationsSectionId);
-            Assert.That(index, Is.GreaterThanOrEqualTo(0));
-            OwnerSectionCensusSnapshot current = sections[index];
-            sections[index] = new OwnerSectionCensusSnapshot(
-                current.SectionId, current.SchemaVersion, current.Role,
-                current.OwnerInstanceIdentity, current.Cardinality, current.Revision + 1L);
+            if (invalidated) return;
+            invalidated = true;
+            boundary.MutateCoreCensusProviderSnapshot(
+                P12ASpatialNetworkOwnerCodec.LocationsSectionId, current =>
+                    new OwnerSectionCensusSnapshot(current.SectionId, current.SchemaVersion, current.Role,
+                        current.OwnerInstanceIdentity, current.Cardinality, current.Revision + 1L));
         });
 
         Assert.That(DailyV1P12GCoreBoundSpatialOwnerSources.TryCapture(
@@ -1501,15 +1572,22 @@ public sealed class DailyV1ApplicationSessionGateTests
             onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
             out ApplicationAdvanceBoundary boundary);
         OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCityAndP12FSectionVector(session);
-        InstallCompletedBoundaryToken(session, boundary, sections);
-
         int membershipIndex = Array.FindIndex(sections,
             section => section.SectionId == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);
+        int bindingIndex = Array.FindIndex(sections,
+            section => section.SectionId == DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId);
         Assert.That(membershipIndex, Is.GreaterThanOrEqualTo(0));
+        Assert.That(bindingIndex, Is.GreaterThanOrEqualTo(0));
+        object foreignPersonStoreIdentity = new object();
         OwnerSectionCensusSnapshot membership = sections[membershipIndex];
         sections[membershipIndex] = new OwnerSectionCensusSnapshot(
             membership.SectionId, membership.SchemaVersion, membership.Role,
-            new object(), membership.Cardinality, membership.Revision);
+            foreignPersonStoreIdentity, membership.Cardinality, membership.Revision);
+        OwnerSectionCensusSnapshot bindings = sections[bindingIndex];
+        sections[bindingIndex] = new OwnerSectionCensusSnapshot(
+            bindings.SectionId, bindings.SchemaVersion, bindings.Role,
+            foreignPersonStoreIdentity, bindings.Cardinality, bindings.Revision);
+        InstallCompletedBoundaryToken(session, boundary, sections);
 
         Assert.That(application.TryBeginContinuationSaveOperation(
             session, out DailyV1P12GContinuationSaveOperation operation,
@@ -1659,7 +1737,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             session, out DailyV1P12GContinuationSaveOperation operation,
             out DailyCaptureEligibilityFailure failure), Is.False);
         Assert.That(operation, Is.Null);
-        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.StaleToken),
+            "The sealed Core registry recaptures the exact City owner identity and rejects the altered token as stale.");
         Assert.That(application.ActiveOperationCount, Is.Zero);
     }
 
@@ -1673,14 +1752,17 @@ public sealed class DailyV1ApplicationSessionGateTests
         InstallCompletedBoundaryToken(session, boundary, sections);
         Assert.That(application.TryBeginContinuationSaveOperation(
             session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
-        int invalidateAt = boundary.ContinuationSaveEvidenceCaptureCount + 1;
-        boundary.SetContinuationSaveEvidenceCaptureCallback(captureCount =>
+        bool invalidated = false;
+        boundary.SetCoreCensusProviderReadCallback(() =>
         {
-            if (captureCount != invalidateAt) return;
             OwnerSectionCensusSnapshot current = sections[0];
-            sections[0] = new OwnerSectionCensusSnapshot(current.SectionId,
-                current.SchemaVersion, current.Role, current.OwnerInstanceIdentity,
-                current.Cardinality, current.Revision + 1L);
+            if (invalidated) return;
+            invalidated = true;
+            boundary.MutateCoreCensusProviderSnapshot(current.SectionId, providerSnapshot =>
+                new OwnerSectionCensusSnapshot(providerSnapshot.SectionId,
+                    providerSnapshot.SchemaVersion, providerSnapshot.Role,
+                    providerSnapshot.OwnerInstanceIdentity, providerSnapshot.Cardinality,
+                    providerSnapshot.Revision + 1L));
         });
 
         Assert.That(DailyV1P12GCoreBoundCityOwnerSources.TryCapture(
@@ -1841,13 +1923,14 @@ public sealed class DailyV1ApplicationSessionGateTests
             out string diagnostic), Is.True, diagnostic);
         DailyV1ExecutionBoundaryState sourceState = sourceSession.ExecutionBoundaryState;
         EnsureRuntimeProtocolInventory(sourceState);
-        Assert.That(sourceState.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
-        Assert.That(sourceState.TryMarkFactualReadWorldPublished(), Is.True);
         OwnerSectionCensusSnapshot[] sourceOwners =
             CreateCoreBoundCompleteOwnerSectionVector(sourceSession);
         long sourceEpoch = sourceState.MutationEpochState.CurrentEpoch;
         ApplicationAdvanceBoundary sourceBoundary = new ApplicationAdvanceBoundary(
             sourceState, null, sourceOwners, sourceEpoch);
+        BindCoreSelectedCensusRegistryForTests(sourceState, sourceOwners, boundary: sourceBoundary);
+        Assert.That(sourceState.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
+        Assert.That(sourceState.TryMarkFactualReadWorldPublished(), Is.True);
         TestHostProjection sourceProjection = new TestHostProjection();
         Assert.That(application.TryPublishInitialWithHostProjection(
             sourceSession, sourceProjection, sourceBoundary), Is.True);
@@ -1886,9 +1969,14 @@ public sealed class DailyV1ApplicationSessionGateTests
                 == PoliticalDecisionStoreCensusProvider.SectionId).OwnerInstanceIdentity,
                 Is.SameAs(candidateComposition.OwnerGraph.PoliticalDecisionStore),
                 "The restored token fixture starts with the exact P12-E Core owner identity.");
+            EnsureRuntimeProtocolInventory(candidateState);
             long candidateEpoch = candidateState.MutationEpochState.CurrentEpoch;
             ApplicationAdvanceBoundary candidateBoundary = new ApplicationAdvanceBoundary(
                 candidateState, null, candidateOwners, candidateEpoch);
+            BindCoreSelectedCensusRegistryForTests(
+                candidateState, candidateOwners, boundary: candidateBoundary);
+            Assert.That(candidateState.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True,
+                "A private restored target seals its full Core census before its continuation token is admitted.");
             Assert.That(candidateState.TryBindSelectedRuntimeOwnerCensusSource(
                 candidateBoundary.SelectedRuntimeOwnerCensusSourceIdentity,
                 allowedOuterScope => candidateBoundary.TryCaptureOwnerSectionCensus(
@@ -1929,12 +2017,10 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(candidateState.ActiveOperationCount, Is.EqualTo(0));
             TestHostProjection candidateProjection = new TestHostProjection();
 
-            List<OwnerSectionCensusSnapshot> staleSourceOwners = new List<OwnerSectionCensusSnapshot>(sourceOwners);
-            OwnerSectionCensusSnapshot first = staleSourceOwners[0];
-            staleSourceOwners[0] = new OwnerSectionCensusSnapshot(
-                first.SectionId, first.SchemaVersion, first.Role, new object(),
-                first.Cardinality, first.Revision);
-            sourceBoundary.SetAdmissionEvidence(staleSourceOwners, sourceEpoch);
+            OwnerSectionCensusSnapshot first = sourceOwners[0];
+            sourceBoundary.MutateCoreCensusProviderSnapshot(first.SectionId, current =>
+                new OwnerSectionCensusSnapshot(current.SectionId, current.SchemaVersion, current.Role,
+                    new object(), current.Cardinality, current.Revision));
             Assert.That(application.TryCommitRestoredCandidateWithHostProjection(
                 sourceSession, candidate, sourceProjection, candidateProjection,
                 candidateBoundary, replacementOperation, out diagnostic), Is.False);
@@ -1951,16 +2037,139 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(candidateState.HasValidRestoredDailyBoundaryAdmission(candidateBoundary), Is.True,
                 "Rejecting stale source evidence must leave the candidate continuation token and census unchanged.");
             Assert.That(candidateState.ActiveOperationCount, Is.EqualTo(0));
+            Assert.That(application.ActiveSession, Is.SameAs(sourceSession),
+                "The failed Core recapture faults closed without publishing the candidate.");
+            Assert.That(application.TryGetPublishedHostProjection(candidate, out _), Is.False);
+            Assert.That(sourceBoundary.OwnerCensusCaptureCount, Is.Zero,
+                "The stale source is rejected by Core's provider registry, not a host-provided vector.");
+        }
+    }
+
+    [Test]
+    public void CoreRestoreReplacementRecapturesUnpublishedTargetThroughCoreRegistry()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext bootstrapAdmission), Is.True);
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out DailyV1GenesisComposition sourceComposition,
+            out DailyV1ActiveRuntimeSession sourceSession,
+            out string diagnostic), Is.True, diagnostic);
+        DailyV1ExecutionBoundaryState sourceState = sourceSession.ExecutionBoundaryState;
+        EnsureRuntimeProtocolInventory(sourceState);
+        OwnerSectionCensusSnapshot[] sourceOwners =
+            CreateCoreBoundCompleteOwnerSectionVector(sourceSession);
+        long sourceEpoch = sourceState.MutationEpochState.CurrentEpoch;
+        ApplicationAdvanceBoundary sourceBoundary = new ApplicationAdvanceBoundary(
+            sourceState, null, sourceOwners, sourceEpoch);
+        BindCoreSelectedCensusRegistryForTests(sourceState, sourceOwners, boundary: sourceBoundary);
+        Assert.That(sourceState.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
+        Assert.That(sourceState.TryMarkFactualReadWorldPublished(), Is.True);
+        TestHostProjection sourceProjection = new TestHostProjection();
+        Assert.That(application.TryPublishInitialWithHostProjection(
+            sourceSession, sourceProjection, sourceBoundary), Is.True);
+        Assert.That(application.ActiveSession, Is.SameAs(sourceSession));
+        Assert.That(application.TryGetPublishedHostProjection(sourceSession,
+            out IDailyV1ApplicationHostProjection publishedSourceProjection), Is.True);
+        Assert.That(publishedSourceProjection, Is.SameAs(sourceProjection));
+        Assert.That(InstallCompletedBoundaryToken(
+            sourceSession, sourceBoundary, sourceOwners, sourceEpoch), Is.Not.Null);
+
+        Assert.That(application.TryCreateRestoredContinuationAdmissionContext(
+            sourceSession, null, out SimulationRuntimeAdmissionContext unreservedReplacementAdmission,
+            out diagnostic), Is.False);
+        Assert.That(unreservedReplacementAdmission, Is.Null);
+
+        Assert.That(application.TryBeginExclusiveOperation(sourceSession, out var replacementOperation), Is.True);
+        using (replacementOperation)
+        {
+            Assert.That(application.TryCreateRestoredContinuationAdmissionContext(
+                sourceSession, replacementOperation,
+                out SimulationRuntimeAdmissionContext candidateAdmission,
+                out diagnostic), Is.True, diagnostic);
+            Assert.That(candidateAdmission.IsRestoredContinuation, Is.True);
+
+            Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions, bootstrapAdmission,
+                out DailyV1GenesisComposition candidateComposition,
+                out diagnostic), Is.True, diagnostic);
+
+            DailyV1ExecutionBoundaryState candidateState =
+                CreateBoundaryWithAdmission(candidateComposition, candidateAdmission);
+            OwnerSectionCensusSnapshot[] candidateOwners =
+            CreateCoreBoundCompleteOwnerSectionVector(
+                candidateComposition.OwnerGraph, candidateComposition.ActorChoiceStore);
+            Assert.That(candidateOwners.First(section => section.SectionId
+                == PoliticalDecisionStoreCensusProvider.SectionId).OwnerInstanceIdentity,
+                Is.SameAs(candidateComposition.OwnerGraph.PoliticalDecisionStore),
+                "The restored token fixture starts with the exact P12-E Core owner identity.");
+            EnsureRuntimeProtocolInventory(candidateState);
+            long candidateEpoch = candidateState.MutationEpochState.CurrentEpoch;
+            ApplicationAdvanceBoundary candidateBoundary = new ApplicationAdvanceBoundary(
+                candidateState, null, candidateOwners, candidateEpoch);
+            BindCoreSelectedCensusRegistryForTests(
+                candidateState, candidateOwners, boundary: candidateBoundary);
+            Assert.That(candidateState.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True,
+                "A private restored target seals its full Core census before its continuation token is admitted.");
+            Assert.That(candidateState.TryBindSelectedRuntimeOwnerCensusSource(
+                candidateBoundary.SelectedRuntimeOwnerCensusSourceIdentity,
+                allowedOuterScope => candidateBoundary.TryCaptureOwnerSectionCensus(
+                        allowedOuterScope,
+                        out IReadOnlyList<OwnerSectionCensusSnapshot> capturedOwnerSections,
+                        out long capturedEpoch,
+                        out DailyCaptureEligibilityFailure captureFailure)
+                    ? DailyV1OwnerSectionCensusCaptureResult.Captured(
+                        capturedOwnerSections, capturedEpoch)
+                    : DailyV1OwnerSectionCensusCaptureResult.Rejected(
+                        captureFailure, "The restore fixture census source rejected capture.")), Is.True,
+                "The restored candidate binds its exact host census before issuing a capture token.");
+
+            Assert.That(application.TryCreateRestoredActiveRuntimeSession(
+                candidateState, definitions, 0L, replacementOperation,
+                out DailyV1ActiveRuntimeSession candidate, out diagnostic), Is.True, diagnostic);
+
+            Assert.That(bootstrapAdmission.IsOwnedByCurrentThread(), Is.True,
+                "The restore commit runs on the application's bootstrap owner thread.");
+            Assert.That(candidateAdmission.IsOwnedByCurrentThread(), Is.True,
+                "The restored continuation admission belongs to the current owner thread.");
+            Assert.That(candidateState.IsFactualReadWorldPublished, Is.False,
+                "The restored target remains private until Core finishes its exact target recapture.");
+            Assert.That(candidateState.ActiveOperationCount, Is.Zero);
+            TestHostProjection candidateProjection = new TestHostProjection();
+
+            Assert.That(application.TryFinalizeRestoredCandidateBoundary(
+                candidate, candidateBoundary, candidateState.WorldId,
+                candidateState.SimulationTime.AbsoluteDay, 2L,
+                candidateOwners, candidateEpoch, sourceSession, replacementOperation,
+                stageObserver: null,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedOwners,
+                out long recapturedEpoch,
+                out DailyV1RestoredBoundaryFinalizationFailure finalizationFailure,
+                out diagnostic), Is.True, diagnostic);
+            Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(recapturedOwners), Is.True);
+            Assert.That(recapturedEpoch, Is.EqualTo(candidateEpoch));
+            Assert.That(candidateState.IsFactualReadWorldPublished, Is.True,
+                "The Core private-target finalizer publishes only after its two recaptures and restored-token admission.");
+            Assert.That(candidateState.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+            Assert.That(candidateState.HasValidRestoredDailyBoundaryAdmission(candidate.RuntimeAdvanceBoundary), Is.True);
+            Assert.That(candidateState.ActiveOperationCount, Is.Zero);
             Assert.That(application.TryCommitRestoredCandidateWithHostProjection(
                 sourceSession, candidate, sourceProjection, candidateProjection,
                 candidateBoundary, replacementOperation, out diagnostic), Is.True, diagnostic);
             Assert.That(application.ActiveSession, Is.SameAs(candidate));
+            Assert.That(candidateState.IsFactualReadWorldPublished, Is.True,
+                "Core publishes factual-read state only after both target recaptures and restored-token admission succeed.");
+            Assert.That(candidateState.HasValidRestoredDailyBoundaryAdmission(
+                candidate.RuntimeAdvanceBoundary), Is.True);
             Assert.That(application.TryGetPublishedHostProjection(candidate,
-                out IDailyV1ApplicationHostProjection publishedCandidateProjection), Is.True);
-            Assert.That(publishedCandidateProjection, Is.SameAs(candidateProjection));
-            Assert.That(application.TryGetPublishedHostProjection(sourceSession, out _), Is.False,
-                "A successful replacement must retire the former host projection with its Core session.");
-            Assert.That(sourceBoundary.RequestedSessionReplacement, Is.EqualTo(true));
+                out IDailyV1ApplicationHostProjection retainedCandidateProjection), Is.True);
+            Assert.That(retainedCandidateProjection, Is.SameAs(candidateProjection));
+            Assert.That(application.TryGetPublishedHostProjection(sourceSession, out _), Is.False);
+            Assert.That(candidateBoundary.OwnerCensusCaptureCount, Is.Zero,
+                "Selected restore recapture reads the sealed Core registry rather than asking the host for an owner vector.");
         }
     }
 
@@ -2027,6 +2236,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         TestHostProjection projection = new TestHostProjection();
         ApplicationAdvanceBoundary hostBoundary = new ApplicationAdvanceBoundary(
             candidate.ExecutionBoundaryState, null);
+        BindCoreSelectedCensusRegistryAndMarkReadyForTests(candidate, hostBoundary);
         Assert.That(application.TryGetPublishedHostProjection(candidate, out _), Is.False,
             "A private prepared session cannot expose its host projection before publication.");
         Assert.That(application.TryPublishInitialWithHostProjection(
@@ -2061,7 +2271,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1Application application = preparation.Application;
         DailyV1ActiveRuntimeSession candidate = preparation.CoreSession;
         Assert.That(application.ActiveSession, Is.Null);
-        EnsureRuntimeProtocolInventory(candidate.ExecutionBoundaryState);
+        BindCoreSelectedCensusRegistryAndMarkReadyForTests(candidate);
         TestHostProjection projection = new TestHostProjection();
         ApplicationAdvanceBoundary foreignBoundary = new ApplicationAdvanceBoundary(
             new DailyV1ExecutionBoundaryState(), null);
@@ -2110,6 +2320,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             "A prepared Core session without a runtime boundary cannot become active.");
         var boundary = new ApplicationAdvanceBoundary(prepared.ExecutionBoundaryState, null);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(prepared, boundary), Is.True);
+        Assert.That(application.TryPublishInitial(prepared), Is.False,
+            "A selected session cannot publish without a sealed complete Core census registry.");
+        BindCoreSelectedCensusRegistryAndMarkReadyForTests(prepared);
         Assert.That(application.TryPublishInitial(prepared), Is.True);
 
         DailyV1ActiveRuntimeSession session = application.ActiveSession;
@@ -2168,6 +2381,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryPublishInitial(unrelatedSession), Is.False,
             "A host cannot publish a different Core candidate after preparing this application's genesis.");
         Assert.That(application.ActiveSession, Is.Null);
+        BindCoreSelectedCensusRegistryAndMarkReadyForTests(prepared);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(
             prepared, new ApplicationAdvanceBoundary(prepared.ExecutionBoundaryState, null)), Is.True);
         Assert.That(application.TryPublishInitial(prepared), Is.True,
@@ -2220,6 +2434,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             "Only the exact candidate returned by preparation may publish after the host projection checks.");
         Assert.That(application.TryBindRuntimeAdvanceBoundary(
             prepared, new ApplicationAdvanceBoundary(prepared.ExecutionBoundaryState, null)), Is.True);
+        BindCoreSelectedCensusRegistryAndMarkReadyForTests(prepared);
         Assert.That(application.TryPublishInitial(prepared), Is.True);
         Assert.That(application.ActiveSession, Is.SameAs(prepared));
         Assert.That(application.ActiveSession.OwnerGraph, Is.SameAs(composition.OwnerGraph));
@@ -2422,6 +2637,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             "Binding the same adapter is idempotent for retry-safe publication.");
         Assert.That(application.TryBindRuntimeAdvanceBoundary(session, replacement), Is.False,
             "A session cannot switch host mutation and capture authorities after binding.");
+        BindCoreSelectedCensusRegistryAndMarkReadyForTests(session);
         Assert.That(application.TryPublishInitial(session), Is.True);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(session, replacement), Is.False,
             "A published session cannot replace its exact host adapter.");
@@ -2584,10 +2800,12 @@ public sealed class DailyV1ApplicationSessionGateTests
     [Test]
     public void CoreAdvanceRequiresBoundCensusProtocolBeforeOpeningItsScope()
     {
-        CreateApplicationWithAdvanceBoundary(
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session,
             out ApplicationAdvanceBoundary hostPorts,
             markCensusProtocolReady: false);
+        Assert.That(application.ActiveSession, Is.Null,
+            "A candidate without a sealed complete census registry must remain private.");
         DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
             session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
 
@@ -2685,7 +2903,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void CoreSelectsAndRechecksExactP12CaptureScopeBeforeUsingHostCensusPort()
+    public void CoreSelectsAndRechecksExactP12CaptureScopeWithoutUsingHostCensusPort()
     {
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session,
@@ -2693,10 +2911,11 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
             session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
         Assert.That(coreBoundary, Is.Not.Null);
-        IReadOnlyList<OwnerSectionCensusSnapshot> completeHostVector =
+        OwnerSectionCensusSnapshot[] completeCoreVector =
             CreateCoreBoundCompleteOwnerSectionVector(session);
-        hostPorts.SetAdmissionEvidence(completeHostVector,
+        hostPorts.SetAdmissionEvidence(Array.Empty<OwnerSectionCensusSnapshot>(),
             mutationEpoch: session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch);
+        hostPorts.CensusFailure = DailyCaptureEligibilityFailure.RuntimeFaulted;
 
         Assert.That(coreBoundary.TryCaptureCompletedDailyCaptureEvidence(
             out _, out _, out DailyCaptureEligibilityFailure failure), Is.False,
@@ -2709,11 +2928,10 @@ public sealed class DailyV1ApplicationSessionGateTests
             sessionReplacement: false,
             out IReadOnlyList<OwnerSectionCensusSnapshot> admittedSections,
             out _, out failure), Is.True);
-        Assert.That(hostPorts.LastCapturedOwnerSections, Has.Count.EqualTo(completeHostVector.Count),
-            "The host port supplies the complete census; Core owns exact selected-source validation and filtering.");
-        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds.All(coreOwnedId =>
-                hostPorts.LastCapturedOwnerSections.Any(section => section.SectionId == coreOwnedId)), Is.True,
-            "The Unity host cannot omit rows before Core checks the bound owner identities.");
+        AssertOwnerSectionSnapshotsMatch(completeCoreVector.OrderBy(
+                section => section.SectionId, StringComparer.Ordinal).ToArray(), admittedSections);
+        Assert.That(hostPorts.LastCapturedOwnerSections, Is.Null,
+            "Selected capture must not consume a host-provided census projection.");
         OwnerSectionCensusSnapshot genealogySection =
             admittedSections.Single(section => section.SectionId == GenealogyCensusProvider.SectionId);
         Assert.That(genealogySection.OwnerInstanceIdentity,
@@ -2733,8 +2951,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(admittedSections.Single(section => section.SectionId
                 == ExpeditionCensusProvider.SectionId).OwnerInstanceIdentity,
             Is.SameAs(session.OwnerGraph.Expeditions));
-        Assert.That(hostPorts.RequestedCaptureScopeAllowance,
-            Is.EqualTo(DailyV1CaptureScopeAllowance.None));
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero);
 
         DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
         Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
@@ -2743,16 +2960,16 @@ public sealed class DailyV1ApplicationSessionGateTests
         {
             Assert.That(coreBoundary.TryCaptureCompletedDailyCaptureEvidence(
                 out _, out _, out failure), Is.True);
-            Assert.That(hostPorts.RequestedCaptureScopeAllowance,
-                Is.EqualTo(DailyV1CaptureScopeAllowance.DailyAdvance));
+            Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero,
+                "A completed Core daily boundary reads the sealed provider registry directly.");
         }
         Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
 
         Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
         Assert.That(coreBoundary.TryCaptureContinuationSaveEvidence(
             out _, out _, out failure), Is.True);
-        Assert.That(hostPorts.RequestedCaptureScopeAllowance,
-            Is.EqualTo(DailyV1CaptureScopeAllowance.ContinuationSave));
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero,
+            "Continuation save recapture remains Core-owned for the selected profile.");
         Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
 
         Assert.That(application.TryBeginExclusiveOperation(session, out var replacement), Is.True);
@@ -2760,11 +2977,11 @@ public sealed class DailyV1ApplicationSessionGateTests
         {
             Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
                 sessionReplacement: true, out _, out _, out failure), Is.True);
-            Assert.That(hostPorts.RequestedCaptureScopeAllowance,
-                Is.EqualTo(DailyV1CaptureScopeAllowance.SessionReplacementValidation));
+            Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero,
+                "Detached replacement validation recaptures through the same Core registry.");
         }
 
-        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(4));
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero);
     }
 
     [Test]
@@ -2777,108 +2994,52 @@ public sealed class DailyV1ApplicationSessionGateTests
             session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
         Assert.That(coreBoundary, Is.Not.Null);
         OwnerSectionCensusSnapshot[] baseline = CreateCoreBoundCompleteOwnerSectionVector(session);
-        OwnerSectionCensusSnapshot baselineRecords = baseline.Single(section => string.Equals(
-            section.SectionId, DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId, StringComparison.Ordinal));
-        OwnerSectionCensusSnapshot baselineReceipts = baseline.Single(section => string.Equals(
-            section.SectionId, DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId, StringComparison.Ordinal));
-        object hostNeutralProjectionIdentity = new object();
+        OwnerSectionCensusSnapshot baselineRecords = baseline.Single(section =>
+            section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+        OwnerSectionCensusSnapshot baselineReceipts = baseline.Single(section =>
+            section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+        Assert.That(baselineRecords.OwnerInstanceIdentity, Is.SameAs(baselineReceipts.OwnerInstanceIdentity),
+            "The existing P12 compatibility identity is shared by records and receipt rows.");
+        Assert.That(hostPorts.TryGetExactJusticeRecordsCensusProjectionIdentity(
+                session.OwnerGraph.JusticeRecordsOwner, out object projectionIdentity,
+                out long projectionReceiptRevision), Is.True);
+        Assert.That(baselineRecords.OwnerInstanceIdentity, Is.SameAs(projectionIdentity));
+        Assert.That(projectionReceiptRevision, Is.EqualTo(baselineReceipts.Revision));
+
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedJusticeSections(
-                session.OwnerGraph, hostNeutralProjectionIdentity, 1L,
+                session.OwnerGraph, projectionIdentity, 1L,
                 out IReadOnlyList<OwnerSectionCensusWitness> nonzeroReceiptWitnesses,
                 out string nonzeroReceiptDiagnostic),
             Is.False,
             "The selected UnityBootstrap-Daily-v1 profile admits only the exact-empty Justice P18 receipt sentinel.");
         Assert.That(nonzeroReceiptWitnesses, Is.Null);
         Assert.That(nonzeroReceiptDiagnostic, Does.Contain("exact-zero P18 receipt"));
-        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedJusticeSections(
-                session.OwnerGraph, hostNeutralProjectionIdentity, baselineReceipts.Revision,
-                out IReadOnlyList<OwnerSectionCensusWitness> coreJusticeWitnesses, out string witnessDiagnostic),
-            Is.True, witnessDiagnostic);
-        Assert.That(coreJusticeWitnesses, Has.Count.EqualTo(2));
-        int baselineRecordsIndex = Array.FindIndex(baseline, section => string.Equals(
-            section.SectionId, DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId, StringComparison.Ordinal));
-        int baselineReceiptsIndex = Array.FindIndex(baseline, section => string.Equals(
-            section.SectionId, DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId, StringComparison.Ordinal));
-        Assert.That(baselineRecordsIndex, Is.GreaterThanOrEqualTo(0));
-        Assert.That(baselineReceiptsIndex, Is.GreaterThanOrEqualTo(0));
-        baseline[baselineRecordsIndex] = new OwnerSectionCensusSnapshot(
-            coreJusticeWitnesses[0].SectionId,
-            coreJusticeWitnesses[0].SchemaVersion,
-            OwnerSectionRole.Required,
-            coreJusticeWitnesses[0].OwnerInstanceIdentity,
-            coreJusticeWitnesses[0].Cardinality,
-            coreJusticeWitnesses[0].Revision);
-        baseline[baselineReceiptsIndex] = new OwnerSectionCensusSnapshot(
-            coreJusticeWitnesses[1].SectionId,
-            coreJusticeWitnesses[1].SchemaVersion,
-            OwnerSectionRole.Required,
-            coreJusticeWitnesses[1].OwnerInstanceIdentity,
-            coreJusticeWitnesses[1].Cardinality,
-            coreJusticeWitnesses[1].Revision);
-        baselineRecords = baseline[baselineRecordsIndex];
-        baselineReceipts = baseline[baselineReceiptsIndex];
-        Assert.That(baselineRecords.OwnerInstanceIdentity, Is.SameAs(baselineReceipts.OwnerInstanceIdentity));
-        Assert.That(baselineRecords.OwnerInstanceIdentity, Is.SameAs(hostNeutralProjectionIdentity));
-        Assert.That(baselineRecords.OwnerInstanceIdentity,
-            Is.Not.SameAs(session.OwnerGraph.JusticeRecordsOwner),
-            "The Core validator accepts one host-local opaque identity while deriving owner facts from the exact Core owner.");
-        long sharedEpoch = session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch;
-        hostPorts.SetAdmissionEvidence(baseline, mutationEpoch: sharedEpoch);
 
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(false,
             out IReadOnlyList<OwnerSectionCensusSnapshot> admitted, out long admittedEpoch,
-            out DailyCaptureEligibilityFailure failure), Is.True);
-        Assert.That(admittedEpoch, Is.EqualTo(sharedEpoch));
+            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+        Assert.That(admittedEpoch, Is.EqualTo(session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch));
+        Assert.That(admitted.Single(section => section.SectionId
+                == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId).OwnerInstanceIdentity,
+            Is.SameAs(projectionIdentity));
         Assert.That(admitted.Single(section => section.SectionId
                 == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId).Cardinality,
             Is.EqualTo(session.OwnerGraph.JusticeRecordsOwner.WantedRecords.Count
                 + session.OwnerGraph.JusticeRecordsOwner.Sentences.Count));
-        Assert.That(admitted.Single(section => section.SectionId
-                == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId).Revision,
-            Is.EqualTo(session.OwnerGraph.JusticeRecordsOwner.Revision));
 
-        void Reject(Action<List<OwnerSectionCensusSnapshot>> mutate, string reason)
-        {
-            List<OwnerSectionCensusSnapshot> candidate = baseline.ToList();
-            mutate(candidate);
-            hostPorts.SetAdmissionEvidence(candidate.ToArray(), mutationEpoch: sharedEpoch);
-            bool captured = coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(false,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> rejected, out long rejectedEpoch, out failure);
-            Assert.That(captured, Is.False, reason);
-            Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete), reason);
-            Assert.That(rejected, Is.Null, reason);
-            Assert.That(rejectedEpoch, Is.Zero, reason);
-        }
-
-        void Replace(List<OwnerSectionCensusSnapshot> rows, string id,
-            Func<OwnerSectionCensusSnapshot, OwnerSectionCensusSnapshot> rewrite)
-        {
-            int index = rows.FindIndex(section => string.Equals(section.SectionId, id, StringComparison.Ordinal));
-            Assert.That(index, Is.GreaterThanOrEqualTo(0), id);
-            rows[index] = rewrite(rows[index]);
-        }
-
-        OwnerSectionCensusSnapshot Change(OwnerSectionCensusSnapshot row,
-            int? schema = null, OwnerSectionRole? role = null, object identity = null,
-            bool replaceIdentity = false, int? cardinality = null, long? revision = null) =>
-            new OwnerSectionCensusSnapshot(row.SectionId, schema ?? row.SchemaVersion,
-                role ?? row.Role, replaceIdentity ? identity : row.OwnerInstanceIdentity,
-                cardinality ?? row.Cardinality, revision ?? row.Revision);
-
-        string recordsId = DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId;
-        string receiptsId = DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId;
-        Reject(rows => rows.RemoveAll(section => section.SectionId == recordsId), "Missing Justice records row.");
-        Reject(rows => rows.Add(rows.Single(section => section.SectionId == recordsId)), "Duplicate Justice records row.");
-        Reject(rows => Replace(rows, recordsId, row => Change(row, schema: row.SchemaVersion + 1)), "Wrong Justice schema.");
-        Reject(rows => Replace(rows, recordsId, row => Change(row, role: OwnerSectionRole.ExplicitlyEmpty)), "Wrong Justice role.");
-        Reject(rows => Replace(rows, recordsId, row => Change(row, identity: new object(), replaceIdentity: true)), "Wrong Justice owner identity.");
-        Reject(rows => Replace(rows, recordsId, row => Change(row, cardinality: row.Cardinality + 1)), "Wrong Justice cardinality.");
-        Reject(rows => Replace(rows, recordsId, row => Change(row, revision: row.Revision + 1L)), "Stale Justice revision.");
-        Reject(rows => rows.RemoveAll(section => section.SectionId == receiptsId), "Missing Justice receipt row.");
-        Reject(rows => rows.Add(rows.Single(section => section.SectionId == receiptsId)), "Duplicate Justice receipt row.");
-        Reject(rows => Replace(rows, receiptsId, row => Change(row, identity: new object(), replaceIdentity: true)), "Wrong Justice receipt alias.");
-        Reject(rows => Replace(rows, receiptsId, row => Change(row, cardinality: row.Cardinality + 1)), "Wrong Justice receipt cardinality.");
-        Reject(rows => Replace(rows, receiptsId, row => Change(row, revision: row.Revision + 1L)), "Stale Justice receipt revision.");
+        hostPorts.MutateCoreCensusProviderSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId, current =>
+                new OwnerSectionCensusSnapshot(current.SectionId, current.SchemaVersion, current.Role,
+                    new object(), current.Cardinality, current.Revision));
+        Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(false,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> rejected, out long rejectedEpoch,
+            out failure), Is.False,
+            "A changed provider identity cannot be substituted for the pinned Justice projection identity.");
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
+        Assert.That(rejected, Is.Null);
+        Assert.That(rejectedEpoch, Is.Zero);
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero,
+            "The selected vector is read from Core registrations, not returned by the Unity host callback.");
     }
 
     [Test]
@@ -3976,7 +4137,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             "The existing exact-witness gate rejects a foreign P12-F owner identity.");
     }
     [Test]
-    public void CoreBoundCensusCaptureOwnsHostRemainderSelectionAfterEpochValidation()
+    public void CoreOwnedCensusCaptureUsesTheSealedRegistryBeforeHostRemainderSelection()
     {
         CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session, out _, bindAdvanceBoundary: false);
@@ -4021,128 +4182,36 @@ public sealed class DailyV1ApplicationSessionGateTests
                 out IReadOnlyList<OwnerSectionCensusSnapshot> hostRemainder,
                 out long capturedEpoch, out DailyCaptureEligibilityFailure failure),
             Is.True, failure.ToString());
-        Assert.That(sourceCalled, Is.True);
+        Assert.That(sourceCalled, Is.False,
+            "A selected Daily-v1 capture reads the Core registry and does not call the legacy host source.");
         Assert.That(capturedEpoch, Is.EqualTo(currentEpoch));
-        Assert.That(hostRemainder.Select(section => section.SectionId),
-            Is.EqualTo(expectedHostRemainder.Select(section => section.SectionId)));
-        for (int index = 0; index < expectedHostRemainder.Length; index++)
-            Assert.That(hostRemainder[index], Is.SameAs(expectedHostRemainder[index]));
+        AssertOwnerSectionSnapshotsMatch(expectedHostRemainder.OrderBy(
+            section => section.SectionId, StringComparer.Ordinal).ToArray(), hostRemainder);
     }
 
     [Test]
-    public void CoreOwnerCensusCaptureReadsRegisteredProvidersAndUsesItsSharedEpoch()
+    public void CoreOwnedCensusCaptureRejectsEpochDriftDuringProviderRead()
     {
+        DailyV1ExecutionBoundaryState state = null;
+        bool injectEpochDrift = false;
         CreateApplicationWithAdvanceBoundary(
-            null, out DailyV1ActiveRuntimeSession session, out _);
-        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
-        OwnerSectionCensusSnapshot[] sourceRows =
-            CreateCoreBoundCompleteOwnerSectionVector(session);
-        CoreOwnerSectionCensusProviderPort providerPort =
-            new CoreOwnerSectionCensusProviderPort(state, sourceRows);
+            null, out DailyV1ActiveRuntimeSession session, out _, bindAdvanceBoundary: false,
+            onCensusProviderRead: () =>
+            {
+                if (injectEpochDrift)
+                    Assert.That(state.MutationEpochState.TryAdvanceCommittedMutation(), Is.True);
+            });
+        state = session.ExecutionBoundaryState;
+        injectEpochDrift = true;
 
-        bool captured = DailyV1CoreOwnerSectionCensusCapture.TryCapture(
-            state, providerPort, DailyV1CaptureScopeAllowance.None,
-            out IReadOnlyList<OwnerSectionCensusSnapshot> actualRows,
-            out long mutationEpoch,
-            out DailyCaptureEligibilityFailure failure);
-
-        Assert.That(captured, Is.True, failure.ToString());
-        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
-            actualRows), Is.True);
-        Assert.That(actualRows.Select(row => row.SectionId),
-            Is.EqualTo(sourceRows.Select(row => row.SectionId).OrderBy(id => id, StringComparer.Ordinal)));
-        Assert.That(mutationEpoch, Is.EqualTo(state.MutationEpochState.CurrentEpoch));
-        Assert.That(providerPort.ValidationCount, Is.EqualTo(1));
-        Assert.That(providerPort.ValidatedRows, Is.SameAs(actualRows));
-    }
-
-    [Test]
-    public void CoreOwnerCensusCaptureRejectsEpochDriftDuringHostBaselineValidation()
-    {
-        CreateApplicationWithAdvanceBoundary(
-            null, out DailyV1ActiveRuntimeSession session, out _);
-        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
-        OwnerSectionCensusSnapshot[] sourceRows =
-            CreateCoreBoundCompleteOwnerSectionVector(session);
-        CoreOwnerSectionCensusProviderPort providerPort =
-            new CoreOwnerSectionCensusProviderPort(
-                state, sourceRows,
-                () => Assert.That(state.MutationEpochState.TryAdvanceCommittedMutation(), Is.True));
-
-        bool captured = DailyV1CoreOwnerSectionCensusCapture.TryCapture(
-            state, providerPort, DailyV1CaptureScopeAllowance.None,
-            out IReadOnlyList<OwnerSectionCensusSnapshot> actualRows,
-            out long mutationEpoch,
-            out DailyCaptureEligibilityFailure failure);
-
-        Assert.That(captured, Is.False);
-        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
-        Assert.That(actualRows, Is.Null);
-        Assert.That(mutationEpoch, Is.Zero);
-        Assert.That(providerPort.ValidationCount, Is.EqualTo(1));
-    }
-
-    [Test]
-    public void CoreOwnerCensusCaptureFaultsProviderProtocolAfterMalformedWitness()
-    {
-        CreateApplicationWithAdvanceBoundary(
-            null, out DailyV1ActiveRuntimeSession session, out _);
-        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
-        OwnerSectionCensusSnapshot[] sourceRows =
-            CreateCoreBoundCompleteOwnerSectionVector(session);
-        CoreOwnerSectionCensusProviderPort providerPort =
-            new CoreOwnerSectionCensusProviderPort(
-                state, sourceRows, corruptFirstWitness: true);
-
-        bool firstCaptured = DailyV1CoreOwnerSectionCensusCapture.TryCapture(
-            state, providerPort, DailyV1CaptureScopeAllowance.None,
-            out IReadOnlyList<OwnerSectionCensusSnapshot> firstRows,
-            out long firstEpoch,
-            out DailyCaptureEligibilityFailure firstFailure);
-        bool retried = DailyV1CoreOwnerSectionCensusCapture.TryCapture(
-            state, providerPort, DailyV1CaptureScopeAllowance.None,
-            out IReadOnlyList<OwnerSectionCensusSnapshot> retriedRows,
-            out long retriedEpoch,
-            out DailyCaptureEligibilityFailure retryFailure);
-
-        Assert.That(firstCaptured, Is.False);
-        Assert.That(firstFailure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
-        Assert.That(firstRows, Is.Null);
-        Assert.That(firstEpoch, Is.Zero);
-        Assert.That(retried, Is.False);
-        Assert.That(retryFailure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
-        Assert.That(retriedRows, Is.Null);
-        Assert.That(retriedEpoch, Is.Zero);
-        Assert.That(providerPort.ValidationCount, Is.Zero);
-    }
-
-    [Test]
-    public void CoreBoundCensusCaptureRejectsEpochDriftBeforeRemainderProjection()
-    {
-        CreateApplicationWithAdvanceBoundary(
-            null, out DailyV1ActiveRuntimeSession session, out _, bindAdvanceBoundary: false);
-        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
-        OwnerSectionCensusSnapshot[] completeHostVector =
-            CreateCoreBoundCompleteOwnerSectionVector(session);
-        OwnerSectionCensusSnapshot[] duplicateHostVector = completeHostVector
-            .Concat(new[] { completeHostVector[0] }).ToArray();
-        long wrongEpoch = checked(state.MutationEpochState.CurrentEpoch + 1L);
-        Assert.That(state.TryBindSelectedRuntimeOwnerCensusSource(new object(), _ =>
-            DailyV1OwnerSectionCensusCaptureResult.Captured(
-                Array.AsReadOnly(duplicateHostVector), wrongEpoch)), Is.True);
-
-        // The duplicate row makes remainder projection fail with OwnerCoverageIncomplete.
-        // The epoch mismatch must be classified first as OperationInProgress.
         Assert.That(state.TryCaptureBoundOwnerSectionCensus(
                 null, DailyV1CaptureScopeAllowance.None,
-                out IReadOnlyList<OwnerSectionCensusSnapshot> hostRemainder,
-                out long capturedEpoch, out DailyCaptureEligibilityFailure failure),
-            Is.False);
+                out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+                out long capturedEpoch, out DailyCaptureEligibilityFailure failure), Is.False);
         Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
-        Assert.That(hostRemainder, Is.Null);
-        Assert.That(capturedEpoch, Is.EqualTo(0L));
+        Assert.That(captured, Is.Null);
+        Assert.That(capturedEpoch, Is.Zero);
     }
-
     [Test]
     public void CoreSharedDailyOwnerVectorComposerPreservesCompleteHostCensusAndJusticeAlias()
     {
@@ -4684,48 +4753,48 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void CoreDropsCensusEvidenceWhenHostFailsOrScopeChangesDuringCapture()
+    public void CoreIgnoresHostCensusFailureAndRejectsScopeChangesDuringProviderCapture()
     {
+        DailyV1ExecutionBoundaryState state = null;
+        bool injectScopeChange = false;
+        bool scopeChangeAttempted = false;
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session,
-            out ApplicationAdvanceBoundary hostPorts);
+            out ApplicationAdvanceBoundary hostPorts,
+            onCensusProviderRead: () =>
+            {
+                if (!injectScopeChange || scopeChangeAttempted) return;
+                scopeChangeAttempted = true;
+                Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.Application), Is.True,
+                    "The provider fixture simulates a reentrant scope opening during Core census capture.");
+            });
+        state = session.ExecutionBoundaryState;
         DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary =
             session.RuntimeAdvanceBoundary as DailyV1CoreSelectedRuntimeAdvanceBoundary;
         Assert.That(coreBoundary, Is.Not.Null);
-        IReadOnlyList<OwnerSectionCensusSnapshot> expectedSections =
-            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
-        hostPorts.SetAdmissionEvidence(expectedSections, mutationEpoch: 23L);
 
+        hostPorts.SetAdmissionEvidence(Array.Empty<OwnerSectionCensusSnapshot>(), mutationEpoch: 23L);
         hostPorts.ReturnPartialOwnerEvidenceThenFail = true;
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
             sessionReplacement: false,
-            out IReadOnlyList<OwnerSectionCensusSnapshot> rejectedSections,
-            out long rejectedEpoch,
-            out DailyCaptureEligibilityFailure failure), Is.False);
-        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.RuntimeFaulted));
-        Assert.That(rejectedSections, Is.Null,
-            "A failing host census cannot leak a partially populated owner vector through Core.");
-        Assert.That(rejectedEpoch, Is.Zero);
+            out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+            out long capturedEpoch,
+            out DailyCaptureEligibilityFailure failure), Is.True,
+            "Selected capture is sourced from the sealed Core registry, not the failing host projection.");
+        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.None));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero);
 
-        hostPorts.ReturnPartialOwnerEvidenceThenFail = false;
-        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
-        hostPorts.SetOwnerSectionCensusCaptureCallback(allowance =>
-        {
-            Assert.That(allowance, Is.EqualTo(DailyV1CaptureScopeAllowance.None));
-            Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.Application), Is.True,
-                "The fake host simulates a reentrant scope opening during census capture.");
-        });
-
+        injectScopeChange = true;
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
-            sessionReplacement: false,
-            out rejectedSections,
-            out rejectedEpoch,
-            out failure), Is.False,
-            "Core must reject a census if its allowed outer scope changes during the host read.");
+            sessionReplacement: false, out captured, out capturedEpoch, out failure), Is.False,
+            "Core rejects a census if its allowed outer scope changes during a provider read.");
         Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
-        Assert.That(rejectedSections, Is.Null);
-        Assert.That(rejectedEpoch, Is.Zero);
+        Assert.That(captured, Is.Null);
+        Assert.That(capturedEpoch, Is.Zero);
+        Assert.That(scopeChangeAttempted, Is.True);
         Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.Application), Is.True);
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero);
     }
 
     [Test]
@@ -4793,29 +4862,23 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
         Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero);
         Assert.That(session.ExecutionBoundaryState.TryEndRuntimeProtocolOperation(), Is.True);
-        hostPorts.CensusFailure = DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
         Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
-            sessionReplacement: false, out sections, out epoch, out failure), Is.False);
+            sessionReplacement: false, out sections, out epoch, out failure), Is.True, failure.ToString());
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(sections), Is.True);
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero,
+            "Selected census capture does not consume host failure or projection callbacks.");
+
+        OwnerSectionCensusSnapshot providerRow = sections[0];
+        hostPorts.MutateCoreCensusProviderSnapshot(providerRow.SectionId, current =>
+            new OwnerSectionCensusSnapshot(current.SectionId, current.SchemaVersion, current.Role,
+                current.OwnerInstanceIdentity, current.Cardinality, current.Revision + 1L));
+        Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+            sessionReplacement: false, out sections, out epoch, out failure), Is.False,
+            "Core rejects an unannounced change from a sealed owner provider.");
         Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
         Assert.That(sections, Is.Null);
         Assert.That(epoch, Is.Zero);
-        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(1));
-
-        hostPorts.CensusFailure = DailyCaptureEligibilityFailure.None;
-        bool operationOpenedDuringCapture = false;
-        hostPorts.SetOwnerSectionCensusCaptureCallback(_ =>
-            operationOpenedDuringCapture = session.ExecutionBoundaryState.TryBeginRuntimeProtocolOperation(
-                DailyV1RuntimeProtocolOperationContracts.NpcMembership));
-        Assert.That(coreBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
-            sessionReplacement: false, out sections, out epoch, out failure), Is.False,
-            "Core must discard evidence if a P12 runtime operation enters the shared registry during the census read.");
-        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
-        Assert.That(sections, Is.Null);
-        Assert.That(epoch, Is.Zero);
-        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.EqualTo(2));
-        Assert.That(operationOpenedDuringCapture, Is.True);
-        Assert.That(session.ExecutionBoundaryState.TryEndRuntimeProtocolOperation(), Is.True);
-        hostPorts.SetOwnerSectionCensusCaptureCallback(null);
+        Assert.That(hostPorts.OwnerCensusCaptureCount, Is.Zero);
     }
 
     [Test]
@@ -4827,6 +4890,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryPrepareInitialGenesis(
             definitions, allocateWorldId: null, stageCompleted: null,
             out _, out DailyV1ActiveRuntimeSession candidate, out string diagnostic), Is.True, diagnostic);
+        BindCoreSelectedCensusRegistryAndMarkReadyForTests(candidate);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(
             candidate, new ApplicationAdvanceBoundary(candidate.ExecutionBoundaryState, null)), Is.True);
         Assert.That(application.TryPublishInitial(candidate), Is.True);
@@ -4879,6 +4943,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             "An application must capture its bootstrap lineage before publishing a selected session.");
         Assert.That(application.TryPublishInitial(foreignSession), Is.False,
             "Initial publication must reject another application's session.");
+        BindCoreSelectedCensusRegistryAndMarkReadyForTests(session);
         Assert.That(application.TryPublishInitial(session), Is.True);
         Assert.That(application.TryPublishReplacement(session, foreignSession), Is.False,
             "Replacement publication must reject another application's session even when the profile matches.");
@@ -5031,6 +5096,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             replacementComposition.ExecutionBoundaryState, definitions, 0L,
             out DailyV1ActiveRuntimeSession replacement, out diagnostic), Is.True, diagnostic);
 
+        BindCoreSelectedCensusRegistryAndMarkReadyForTests(first);
+        BindCoreSelectedCensusRegistryAndMarkReadyForTests(replacement);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(
             first, new ApplicationAdvanceBoundary(first.ExecutionBoundaryState, null)), Is.True);
         Assert.That(application.TryPublishInitial(first), Is.True);
@@ -5068,6 +5135,140 @@ public sealed class DailyV1ApplicationSessionGateTests
         application.EndOperation(DailyV1OperationScopeKind.Application);
     }
 
+    [Test]
+    public void InitialPublicationRejectsAChangedSealedSelectedCensusBaseline()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admission), Is.True);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, admission,
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            composition.ExecutionBoundaryState, definitions, 0L,
+            out DailyV1ActiveRuntimeSession candidate, out diagnostic), Is.True, diagnostic);
+
+        DailyV1ExecutionBoundaryState state = candidate.ExecutionBoundaryState;
+        EnsureRuntimeProtocolInventory(state);
+        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCompleteOwnerSectionVector(candidate);
+        Dictionary<string, SnapshotOwnerSectionCensusProvider> providers =
+            new Dictionary<string, SnapshotOwnerSectionCensusProvider>(StringComparer.Ordinal);
+        BindCoreSelectedCensusRegistryForTests(
+            state, sections, boundProviders: providers);
+        Assert.That(state.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(
+            candidate, new ApplicationAdvanceBoundary(state, null)), Is.True);
+
+        OwnerSectionCensusSnapshot prior = sections[0];
+        providers[prior.SectionId].ReplaceSnapshot(new OwnerSectionCensusSnapshot(
+            prior.SectionId, prior.SchemaVersion, prior.Role,
+            prior.OwnerInstanceIdentity, prior.Cardinality, prior.Revision + 1L));
+
+        Assert.That(application.TryPublishInitial(candidate), Is.False,
+            "A sealed but stale 89-family provider vector cannot be published as the active runtime.");
+        Assert.That(application.ActiveSession, Is.Null);
+        Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.True,
+            "Unannounced census drift faults the unpublished selected runtime closed.");
+    }
+    [Test]
+    public void ReplacementPublicationRejectsAChangedSealedSelectedCensusBaseline()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admission), Is.True);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, admission,
+            out DailyV1GenesisComposition currentComposition,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, admission,
+            out DailyV1GenesisComposition replacementComposition,
+            out diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            currentComposition.ExecutionBoundaryState, definitions, 0L,
+            out DailyV1ActiveRuntimeSession current, out diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            replacementComposition.ExecutionBoundaryState, definitions, 0L,
+            out DailyV1ActiveRuntimeSession replacement, out diagnostic), Is.True, diagnostic);
+
+        Dictionary<string, SnapshotOwnerSectionCensusProvider> replacementProviders =
+            new Dictionary<string, SnapshotOwnerSectionCensusProvider>(StringComparer.Ordinal);
+        foreach (DailyV1ActiveRuntimeSession session in new[] { current, replacement })
+        {
+            DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+            EnsureRuntimeProtocolInventory(state);
+            OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCompleteOwnerSectionVector(session);
+            Dictionary<string, SnapshotOwnerSectionCensusProvider> providers =
+                ReferenceEquals(session, replacement) ? replacementProviders
+                    : new Dictionary<string, SnapshotOwnerSectionCensusProvider>(StringComparer.Ordinal);
+            BindCoreSelectedCensusRegistryForTests(
+                state, sections, boundProviders: providers);
+            Assert.That(state.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
+            Assert.That(application.TryBindRuntimeAdvanceBoundary(
+                session, new ApplicationAdvanceBoundary(state, null)), Is.True);
+        }
+
+        Assert.That(application.TryPublishInitial(current), Is.True);
+        OwnerSectionCensusSnapshot prior = CreateCoreBoundCompleteOwnerSectionVector(replacement)[0];
+        replacementProviders[prior.SectionId].ReplaceSnapshot(new OwnerSectionCensusSnapshot(
+            prior.SectionId, prior.SchemaVersion, prior.Role,
+            prior.OwnerInstanceIdentity, prior.Cardinality, prior.Revision + 1L));
+
+        Assert.That(application.TryPublishReplacement(current, replacement), Is.False,
+            "A restored candidate with stale sealed owner facts cannot replace the active session.");
+        Assert.That(application.ActiveSession, Is.SameAs(current),
+            "Failed census revalidation must leave the existing active session published.");
+        Assert.That(replacement.ExecutionBoundaryState.IsSelectedRuntimeCensusProtocolFaulted, Is.True);
+    }
+    [Test]
+    public void SelectedReplacementPublicationRequiresTheCompleteCoreCensusRegistry()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admission), Is.True);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, admission,
+            out DailyV1GenesisComposition currentComposition,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, admission,
+            out DailyV1GenesisComposition unreadyComposition,
+            out diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            currentComposition.ExecutionBoundaryState, definitions, 0L,
+            out DailyV1ActiveRuntimeSession current, out diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            unreadyComposition.ExecutionBoundaryState, definitions, 0L,
+            out DailyV1ActiveRuntimeSession unready, out diagnostic), Is.True, diagnostic);
+
+        BindCoreSelectedCensusRegistryAndMarkReadyForTests(current);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(
+            current, new ApplicationAdvanceBoundary(current.ExecutionBoundaryState, null)), Is.True);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(
+            unready, new ApplicationAdvanceBoundary(unready.ExecutionBoundaryState, null)), Is.True);
+        Assert.That(application.TryPublishInitial(current), Is.True);
+
+        Assert.That(unready.ExecutionBoundaryState.IsSelectedRuntimeCensusProtocolReadyForPublication, Is.False);
+        Assert.That(application.TryPublishReplacement(current, unready), Is.False,
+            "The expected-session overload cannot publish a selected candidate without its sealed 89-family Core census.");
+        Assert.That(application.ActiveSession, Is.SameAs(current));
+
+        Assert.That(application.TryBeginExclusiveOperation(current, out var exclusive), Is.True);
+        using (exclusive)
+        {
+            Assert.That(application.TryPublishReplacement(exclusive, unready), Is.False,
+                "The exclusive overload cannot bypass the selected Core census readiness requirement.");
+            Assert.That(application.ActiveSession, Is.SameAs(current));
+        }
+        Assert.That(application.ActiveSession, Is.SameAs(current));
+    }
     [Test]
     public void InitialPublicationIsSingleAndCannotReplaceAnExistingSession()
     {

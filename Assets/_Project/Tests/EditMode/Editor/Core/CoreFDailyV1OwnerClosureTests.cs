@@ -110,18 +110,55 @@ public sealed class CoreFDailyV1OwnerClosureTests
         CoreFDailyV1OwnerClosureVectors.AssertSameWitnesses(completedToken.OwnerSections, afterAdvance);
 
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long beforeRegistrationEpoch, out _), Is.True);
+        var initialInventoryProviders = runtime.InventoryCensusProviders
+            .Cast<NpcInventoryCensusProvider.INpcInventorySectionCensusProvider>()
+            .ToArray();
+        NpcRuntime misboundUnselected = new NpcRuntime("core-f-owner-closure-misbound-npc", null);
+        DailyV1InventoryOwner selectedInventoryOwner = runtime.NpcRuntimes[0].SelectedRuntimeOwners.Inventory;
+        ConstructorInfo inventoryProjectionConstructor = typeof(InventoryRuntime).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            types: new[] { selectedInventoryOwner.GetType() },
+            modifiers: null);
+        Assert.That(inventoryProjectionConstructor, Is.Not.Null);
+        InventoryRuntime borrowedInventoryProjection = (InventoryRuntime)inventoryProjectionConstructor.Invoke(
+            new object[] { selectedInventoryOwner });
+        typeof(NpcRuntime).GetField("inventory", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(misboundUnselected, borrowedInventoryProjection);
+        Assert.Throws<System.InvalidOperationException>(() =>
+            NpcInventoryCensusProvider.CreateProviders(new[] { misboundUnselected }));
+
         NpcRuntime added = new NpcRuntime("core-f-owner-closure-added-npc", null);
         Assert.That(runtime.TryRegisterNpc(added, out WorldNpcRegistryFailure registerFailure), Is.True,
             registerFailure.ToString());
+        int selectedInventoryOwnerCount = 0;
+        int compatibilityInventoryOwnerCount = 0;
         foreach (IOwnerSectionCensusProvider provider in runtime.InventoryCensusProviders)
         {
             Assert.That(provider, Is.InstanceOf<NpcInventoryCensusProvider.INpcInventorySectionCensusProvider>());
             var inventoryProvider = (NpcInventoryCensusProvider.INpcInventorySectionCensusProvider)provider;
-            Assert.That(inventoryProvider.UsesSelectedCoreOwner, Is.False,
-                "A mixed NPC roster retains the whole-family Unity projection fallback.");
-            Assert.That(provider.GetCurrentCensus().OwnerInstanceIdentity,
-                Is.SameAs(inventoryProvider.InventoryOwner));
+            if (ReferenceEquals(inventoryProvider.NpcOwner, added))
+            {
+                compatibilityInventoryOwnerCount++;
+                Assert.That(inventoryProvider.UsesSelectedCoreOwner, Is.False,
+                    "The unselected NPC contributes its required Unity compatibility owner row.");
+                Assert.That(provider.GetCurrentCensus().OwnerInstanceIdentity,
+                    Is.SameAs(inventoryProvider.InventoryOwner));
+            }
+            else
+            {
+                selectedInventoryOwnerCount++;
+                Assert.That(inventoryProvider.UsesSelectedCoreOwner, Is.True,
+                    "Existing selected rows retain their exact Core census provider across the roster transition.");
+                Assert.That(inventoryProvider, Is.SameAs(initialInventoryProviders.Single(prior =>
+                    string.Equals(prior.RuntimeId, inventoryProvider.RuntimeId, System.StringComparison.Ordinal))),
+                    "A stable selected section keeps its exact registered provider object during dynamic membership reconciliation.");
+                Assert.That(provider.GetCurrentCensus().OwnerInstanceIdentity,
+                    Is.SameAs(inventoryProvider.NpcOwner.SelectedRuntimeOwners.Inventory));
+            }
         }
+        Assert.That(selectedInventoryOwnerCount, Is.EqualTo(10));
+        Assert.That(compatibilityInventoryOwnerCount, Is.EqualTo(1));
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long afterRegistrationEpoch, out _), Is.True);
         Assert.That(afterRegistrationEpoch, Is.EqualTo(beforeRegistrationEpoch + 1L),
             "The reserved NPC lifecycle mutation publishes one shared mutation epoch for its registered owner batch.");

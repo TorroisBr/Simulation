@@ -564,6 +564,8 @@ public sealed class DailyV1ApplicationHostTests
             factoryPreparation = candidatePreparation;
             projection = new TestHostProjection(candidatePreparation.CoreSession);
             candidateProjection = projection;
+            DailyV1ApplicationSessionGateTests.BindCoreSelectedCensusRegistryAndMarkReadyForTests(
+                candidatePreparation.CoreSession);
             candidateHostPorts = new MinimalSelectedRuntimeAdvanceHostPorts(
                 candidatePreparation.CoreSession.ExecutionBoundaryState);
             diagnostic = null;
@@ -984,6 +986,7 @@ public sealed class DailyV1ApplicationHostTests
 
         MinimalSelectedRuntimeAdvanceHostPorts hostPorts =
             new MinimalSelectedRuntimeAdvanceHostPorts(session.ExecutionBoundaryState);
+        DailyV1ApplicationSessionGateTests.BindCoreSelectedCensusRegistryAndMarkReadyForTests(session);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(session, hostPorts), Is.True);
         Assert.That(application.TryPublishInitial(session), Is.True);
         DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
@@ -1125,6 +1128,8 @@ public sealed class DailyV1ApplicationHostTests
 
         var foreignPorts = new MinimalSelectedRuntimeAdvanceHostPorts(
             foreignPreparation.CoreSession.ExecutionBoundaryState);
+        DailyV1ApplicationSessionGateTests.BindCoreSelectedCensusRegistryAndMarkReadyForTests(
+            preparation.CoreSession);
         Assert.That(preparation.Application.TryCommitInitialStartWithHostProjection(
             preparation, foreignPreparation.CoreSession,
             new TestHostProjection(foreignPreparation.CoreSession), foreignPorts,

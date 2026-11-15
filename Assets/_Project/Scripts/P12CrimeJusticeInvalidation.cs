@@ -24,7 +24,8 @@ public sealed partial class SimulationRuntime
     private IDailyV1P12CrimeJusticeMutationProtocol p12CrimeJusticeMutationProtocol;
 
     private sealed class ContinuationCrimeJusticeMutationProtocolAdapter
-        : IDailyV1P12CrimeJusticeMutationProtocol
+        : IDailyV1P12CrimeJusticeMutationProtocol,
+          IDailyV1P12CrimeJusticeMutationDiagnosticProtocol
     {
         private readonly Func<ContinuationCensusProtocol> resolveProtocol;
 
@@ -36,6 +37,31 @@ public sealed partial class SimulationRuntime
 
         public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
             resolveProtocol()?.TryValidateUnchangedSections(sectionIds, out _) == true;
+
+        public bool TryValidateUnchangedSections(
+            IReadOnlyList<string> sectionIds,
+            out string failure)
+        {
+            ContinuationCensusProtocol protocol = resolveProtocol();
+            if (protocol == null)
+            {
+                failure = "ProtocolUnavailable";
+                return false;
+            }
+
+            bool valid = protocol.TryValidateUnchangedSections(
+                sectionIds, out ContinuationCensusFailure censusFailure);
+            failure = valid
+                ? null
+                : censusFailure + (censusFailure == ContinuationCensusFailure.ProtocolFaulted
+                    && !string.IsNullOrWhiteSpace(protocol.FirstFaultSource)
+                    ? " after " + protocol.FirstFaultSource
+                        + (string.IsNullOrWhiteSpace(protocol.FirstFaultDetail)
+                            ? string.Empty
+                            : " (" + protocol.FirstFaultDetail + ")")
+                    : string.Empty);
+            return valid;
+        }
 
         public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) =>
             resolveProtocol()?.TryRefreshCommittedMutationBaselines(sectionIds, out _) == true;
@@ -626,6 +652,23 @@ public sealed partial class SimulationRuntime
             FaultRuntimeAdmission();
             return;
         }
+
+        // Selected NPC status/hidden state is witnessed by the Core owner
+        // revision. Commit through the Core boundary so its revision advances
+        // before the same coordinator refreshes the census section. The
+        // unselected compatibility path retains its Unity-owned revision.
+        if (binding.OwnerIdentity is DailyV1NpcRuntimeOwners selectedOwner)
+        {
+            if (dailyExecutionBoundary == null)
+            {
+                FaultRuntimeAdmission();
+                return;
+            }
+            dailyExecutionBoundary.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(
+                selectedOwner);
+            return;
+        }
+
         P12CrimeJusticeMutationCoordinator.NotifyCommitted(
             binding.OwnerIdentity, binding.SectionId);
     }

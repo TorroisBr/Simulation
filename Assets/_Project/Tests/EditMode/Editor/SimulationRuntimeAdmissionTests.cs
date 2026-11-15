@@ -15,6 +15,122 @@ public sealed class SimulationRuntimeAdmissionTests
 {
     private readonly List<GameObject> simulationObjects = new List<GameObject>();
 
+    private static void WithSelectedDailyAdvanceAdmissionForTest(
+        SimulationRuntime runtime,
+        Action mutation)
+    {
+        Assert.That(runtime, Is.Not.Null);
+        Assert.That(mutation, Is.Not.Null);
+        DailyV1ExecutionBoundaryState executionState = runtime.ExecutionBoundaryState;
+        Assert.That(executionState.TryBeginSelectedRuntimeDailyAdvanceOperation(), Is.True,
+            "Selected fixture mutations must use the existing Core DailyAdvance contract.");
+        try
+        {
+            MethodInfo enterOperation = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(enterOperation, Is.Not.Null);
+            object[] operationArguments =
+            {
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+                null
+            };
+            Assert.That((bool)enterOperation.Invoke(runtime, operationArguments), Is.True,
+                "The fixture must register the census operation for its selected owner write.");
+            IDisposable operationScope = operationArguments[1] as IDisposable;
+            Assert.That(operationScope, Is.Not.Null);
+            try
+            {
+                mutation();
+            }
+            finally
+            {
+                operationScope.Dispose();
+            }
+        }
+        finally
+        {
+            Assert.That(executionState.TryEndRuntimeProtocolOperation(), Is.True,
+                "The fixture must close the exact Core DailyAdvance contract scope.");
+        }
+    }
+
+    private static void SetSelectedCurrentActionForAdmissionTest(
+        SimulationRuntime runtime,
+        NpcRuntime actor,
+        NpcActionRuntime actionProjection)
+    {
+        Assert.That(actor, Is.Not.Null);
+        Assert.That(actionProjection, Is.Not.Null);
+        WithSelectedDailyAdvanceAdmissionForTest(
+            runtime, () => actor.SetCurrentActionRuntime(actionProjection));
+    }
+
+    private static bool AddSelectedInventoryItemForAdmissionTest(
+        SimulationRuntime runtime,
+        NpcRuntime actor,
+        DailyV1ItemDefinition item,
+        int amount,
+        float unitCost)
+    {
+        bool added = false;
+        WithSelectedDailyAdvanceAdmissionForTest(
+            runtime, () => added = actor.Inventory.TryAddSelectedItem(item, amount, unitCost));
+        return added;
+    }
+
+    private static bool SetSelectedMerchantPlanForAdmissionTest(
+        SimulationRuntime runtime,
+        NpcRuntime actor,
+        ItemData item,
+        CityRuntime origin,
+        CityRuntime target,
+        int amount,
+        float unitPrice,
+        string decisionId)
+    {
+        bool installed = false;
+        WithSelectedDailyAdvanceAdmissionForTest(
+            runtime, () => installed = actor.TrySetSelectedMerchantTradePlan(
+                item, origin, target, amount, unitPrice, decisionId));
+        return installed;
+    }
+
+    private static bool StartSelectedTravelForAdmissionTest(
+        SimulationRuntime runtime,
+        NpcRuntime actor,
+        CityRuntime destination,
+        int travelDays,
+        string originDecisionId)
+    {
+        bool started = false;
+        WithSelectedDailyAdvanceAdmissionForTest(
+            runtime, () => started = actor.StartTravel(destination, travelDays, originDecisionId));
+        return started;
+    }
+
+    private static bool AdvanceSelectedSoloTravelsForAdmissionTest(
+        SimulationRuntime runtime,
+        TravelSystem travelSystem,
+        MethodInfo advanceSelectedSoloTravels,
+        object[] arguments)
+    {
+        Assert.That(travelSystem, Is.Not.Null);
+        Assert.That(advanceSelectedSoloTravels, Is.Not.Null);
+        Assert.That(arguments, Is.Not.Null);
+        bool advanced = false;
+        WithSelectedDailyAdvanceAdmissionForTest(
+            runtime, () => advanced = (bool)advanceSelectedSoloTravels.Invoke(travelSystem, arguments));
+        return advanced;
+    }
+
+    private static string P12Diagnostic(SimulationRuntime runtime)
+    {
+        ContinuationCensusProtocol protocol = runtime == null
+            ? null
+            : ReadPrivateField<ContinuationCensusProtocol>(runtime, "npcRosterCensusProtocol");
+        return protocol?.FirstFaultDetail ?? "no census fault detail recorded";
+    }
+
     private sealed class MissingInitialSlotOperations : IAtomicFileSlotOperations
     {
         public void CreateDirectory(string path) => throw new NotSupportedException();
@@ -307,24 +423,64 @@ public sealed class SimulationRuntimeAdmissionTests
                 effectStatus.DefinitionId, out DailyV1StatusDefinition selectedEffect), Is.True);
             Assert.That(actor.SelectedDailyV1StatusOwner.Statuses.Any(status =>
                 ReferenceEquals(status, selectedEffect)), Is.False);
-            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
-                actor.SelectedDailyV1DefinitionGraph,
-                selectedAction,
-                null, null, null, 0, 0f, 1f, NpcTravelReason.None, 0f,
-                "normal-actor-status-without-projection",
-                null, null, null,
-                out DailyV1NpcActionPayloadOwner payload), Is.True);
-            Assert.That(actor.SelectedRuntimeOwnerGraph.TryCommitCurrentActionSlot(
-                actor.SelectedRuntimeOwners, selectedAction, payload, () => true), Is.True);
+            var selectedActionProjection = new NpcActionRuntime(normalWithActorEffect);
+            DailyV1ExecutionBoundaryState executionState = runtime.ExecutionBoundaryState;
+            Assert.That(executionState.TryBeginSelectedRuntimeDailyAdvanceOperation(), Is.True,
+                "The fixture must enter the existing Core DailyAdvance contract before installing its Core action slot.");
+            try
+            {
+                MethodInfo enterOperation = typeof(SimulationRuntime).GetMethod(
+                    "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(enterOperation, Is.Not.Null);
+                object[] operationArguments =
+                {
+                    DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+                    null
+                };
+                Assert.That((bool)enterOperation.Invoke(runtime, operationArguments), Is.True,
+                    "The fixture must register the matching census operation under the existing DailyAdvance contract.");
+                IDisposable operationScope = operationArguments[1] as IDisposable;
+                Assert.That(operationScope, Is.Not.Null);
+                try
+                {
+                    actor.SetCurrentActionRuntime(selectedActionProjection);
+                    Assert.That(actor.SelectedRuntimeOwners.ActionSlot.CurrentAction,
+                        Is.SameAs(selectedAction));
+                }
+                finally
+                {
+                    operationScope.Dispose();
+                }
+            }
+            finally
+            {
+                Assert.That(executionState.TryEndRuntimeProtocolOperation(), Is.True,
+                    "The fixture must close the exact Core DailyAdvance contract scope.");
+            }
+            Assert.That(actor.SelectedRuntimeOwners.ActionSlot.CurrentAction,
+                Is.SameAs(selectedAction));
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure setupCensusFailure), Is.True,
+                setupCensusFailure.ToString(),
+                "The test's action-slot setup must leave all 89 census rows current before testing the action status commit.");
             Assert.That(DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
                 actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners, selectedAction), Is.True);
 
             long mutationEpochBefore = runtime.ExecutionBoundaryState
                 .MutationEpochState.CurrentEpoch;
+            long crimeJusticeRevisionBefore = actor.SelectedRuntimeOwners.CrimeJusticeRevision;
             WritePrivateField<NpcActionRuntime>(actor, "currentActionRuntime", null);
             WritePrivateField<NpcActionData>(actor, "currentAction", null);
             Assert.That(actor.CurrentActionRuntime, Is.Null,
                 "This path must execute without a Unity NpcActionRuntime projection.");
+            OwnerSectionCensusWitness coreActionWitness =
+                new NpcCurrentActionCensusProvider(actor).GetCurrentCensus();
+            Assert.That(coreActionWitness.Cardinality, Is.EqualTo(1),
+                "The P12 current-action row must read the admitted Core slot even when its Unity projection is absent.");
+            Assert.That(coreActionWitness.Revision,
+                Is.EqualTo(actor.SelectedRuntimeOwners.ActionSlot.Revision));
+            Assert.That(coreActionWitness.OwnerInstanceIdentity,
+                Is.SameAs(actor.SelectedCensusOwnerIdentity));
 
             MethodInfo execute = typeof(SimulationRuntime).GetMethod(
                 "TryExecuteSelectedCurrentAction", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -340,9 +496,19 @@ public sealed class SimulationRuntimeAdmissionTests
                 effectStatus.DefinitionId, out DailyV1StatusDefinition admittedEffect), Is.True);
             Assert.That(actor.SelectedDailyV1StatusOwner.Statuses.Single(value =>
                 value.DefinitionId == effectStatus.DefinitionId), Is.SameAs(admittedEffect));
-            Assert.That(runtime.ExecutionBoundaryState.MutationEpochState.CurrentEpoch,
+            long mutationEpochAfter = runtime.ExecutionBoundaryState.MutationEpochState.CurrentEpoch;
+            long crimeJusticeRevisionAfter = actor.SelectedRuntimeOwners.CrimeJusticeRevision;
+            Assert.That(crimeJusticeRevisionAfter,
+                Is.EqualTo(crimeJusticeRevisionBefore + 1L),
+                "The selected status owner revision must advance once for the committed action effect.");
+            Assert.That(mutationEpochAfter,
                 Is.EqualTo(mutationEpochBefore + 1L),
                 "The successful Core status-owner write must invalidate the runtime capture epoch.");
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                    out ContinuationCensusFailure censusFailureAfterAction),
+                Is.True,
+                censusFailureAfterAction.ToString(),
+                "The full selected-owner census must remain valid after the Core status commit.");
         }
         finally
         {
@@ -410,14 +576,15 @@ public sealed class SimulationRuntimeAdmissionTests
                 "normal-target-status-without-projection",
                 null, null, null,
                 out DailyV1NpcActionPayloadOwner payload), Is.True);
-            Assert.That(actor.SelectedRuntimeOwnerGraph.TryCommitCurrentActionSlot(
-                actor.SelectedRuntimeOwners, selectedAction, payload, () => true), Is.True);
+            CommitSelectedCurrentActionSlotForTest(runtime, actor, selectedAction, payload);
             Assert.That(DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalActionForExactTarget(
                 actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners, selectedAction,
                 target.SelectedRuntimeOwners), Is.True);
 
             long mutationEpochBefore = runtime.ExecutionBoundaryState
                 .MutationEpochState.CurrentEpoch;
+            long actorStatusRevisionBefore = actor.SelectedRuntimeOwners.CrimeJusticeRevision;
+            long targetStatusRevisionBefore = target.SelectedRuntimeOwners.CrimeJusticeRevision;
 
             // A projection can still match the payload's serialized RuntimeId
             // while pointing at a different runtime object. The log and any
@@ -452,8 +619,18 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(actor.SelectedDailyV1StatusOwner.Statuses.Any(status =>
                 ReferenceEquals(status, selectedEffect)), Is.False,
                 "The target effect must not be redirected to the actor owner.");
+            Assert.That(actor.SelectedRuntimeOwners.CrimeJusticeRevision,
+                Is.EqualTo(actorStatusRevisionBefore),
+                "A targeted status write must not revise the actor's unrelated status owner.");
+            Assert.That(target.SelectedRuntimeOwners.CrimeJusticeRevision,
+                Is.EqualTo(targetStatusRevisionBefore + 1L),
+                "A targeted status write must revise its exact Core owner once.");
             Assert.That(target.SelectedDailyV1StatusOwner.Statuses.Single(value =>
                 value.DefinitionId == effectStatus.DefinitionId), Is.SameAs(selectedEffect));
+            Assert.That(actor.CurrentActionRuntime, Is.Null,
+                "The stale Unity projection must be detached while its committed Core action slot remains authoritative.");
+            Assert.That(actor.SelectedRuntimeOwners.ActionSlot.CurrentAction, Is.SameAs(selectedAction));
+            Assert.That(actor.SelectedRuntimeOwners.ActionSlot.CurrentPayload, Is.SameAs(payload));
             Assert.That(runtime.ExecutionBoundaryState.MutationEpochState.CurrentEpoch,
                 Is.EqualTo(mutationEpochBefore + 1L),
                 "The successful Core target-status write must invalidate the runtime capture epoch once.");
@@ -1405,7 +1582,8 @@ public sealed class SimulationRuntimeAdmissionTests
         foreach (NpcRuntime npc in travelers)
         {
             CityRuntime destination = commonDestination;
-            Assert.That(npc.StartTravel(destination, 1, "p12-selected-arrival-" + npc.RuntimeId), Is.True,
+            Assert.That(StartSelectedTravelForAdmissionTest(
+                    runtime, npc, destination, 1, "p12-selected-arrival-" + npc.RuntimeId), Is.True,
                 "Starting travel must use the selected Core owner and admitted P12 boundary.");
             destinations.Add(npc, destination);
         }
@@ -1419,7 +1597,8 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(advanceSelectedSoloTravels, Is.Not.Null);
 
         object[] arguments = { runtime.SelectedRuntimeOwnerGraph, runtime.NpcRuntimes.ToList(), null };
-        Assert.That((bool)advanceSelectedSoloTravels.Invoke(travelSystem, arguments), Is.True,
+        Assert.That(AdvanceSelectedSoloTravelsForAdmissionTest(
+                runtime, travelSystem, advanceSelectedSoloTravels, arguments), Is.True,
             "The first boundary clears the established TravelStartedToday marker.");
         Assert.That(arguments[2] as IReadOnlyList<NpcRuntime>, Is.Empty);
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure clearedCensus), Is.True,
@@ -1464,7 +1643,8 @@ public sealed class SimulationRuntimeAdmissionTests
             city => city, city => city.SelectedRuntimeOwners.NpcPresence.Revision);
 
         arguments = new object[] { runtime.SelectedRuntimeOwnerGraph, runtime.NpcRuntimes.ToList(), null };
-        Assert.That((bool)advanceSelectedSoloTravels.Invoke(travelSystem, arguments), Is.True,
+        Assert.That(AdvanceSelectedSoloTravelsForAdmissionTest(
+                runtime, travelSystem, advanceSelectedSoloTravels, arguments), Is.True,
             "Each arrival must project reciprocal Core/Unity presence before its P12 census notification and before the next NPC commits.");
         IReadOnlyList<NpcRuntime> arrivals = arguments[2] as IReadOnlyList<NpcRuntime>;
         Assert.That(arrivals, Has.Count.EqualTo(2));
@@ -1550,13 +1730,15 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(traveler, Is.Not.Null);
         CityRuntime destination = runtime.Cities.First(city =>
             city != null && city.Location != null && !ReferenceEquals(city, traveler.CurrentCity));
-        Assert.That(traveler.StartTravel(destination, 2, "p12-destination-preflight"), Is.True);
+        Assert.That(StartSelectedTravelForAdmissionTest(
+            runtime, traveler, destination, 2, "p12-destination-preflight"), Is.True);
 
         TravelSystem travelSystem = ReadPrivateField<TravelSystem>(runtime, "travelSystem");
         MethodInfo advanceSelectedSoloTravels = typeof(TravelSystem).GetMethod(
             "TryAdvanceSelectedSoloTravels", BindingFlags.Instance | BindingFlags.NonPublic);
         object[] arguments = { runtime.SelectedRuntimeOwnerGraph, runtime.NpcRuntimes.ToList(), null };
-        Assert.That((bool)advanceSelectedSoloTravels.Invoke(travelSystem, arguments), Is.True,
+        Assert.That(AdvanceSelectedSoloTravelsForAdmissionTest(
+                runtime, travelSystem, advanceSelectedSoloTravels, arguments), Is.True,
             "The first boundary clears TravelStartedToday before testing the next travel day.");
         Assert.That(traveler.TravelDaysRemaining, Is.EqualTo(2));
 
@@ -1580,7 +1762,8 @@ public sealed class SimulationRuntimeAdmissionTests
             out long mutationEpoch, out ContinuationCensusFailure epochFailure), Is.True,
             epochFailure.ToString());
         arguments = new object[] { runtime.SelectedRuntimeOwnerGraph, runtime.NpcRuntimes.ToList(), null };
-        Assert.That((bool)advanceSelectedSoloTravels.Invoke(travelSystem, arguments), Is.True,
+        Assert.That(AdvanceSelectedSoloTravelsForAdmissionTest(
+                runtime, travelSystem, advanceSelectedSoloTravels, arguments), Is.True,
             "The stale Unity cache is not an authoritative travel precondition.");
         Assert.That(arguments[2] as IReadOnlyList<NpcRuntime>, Is.Empty,
             "A non-arrival must not report an arrival even when the ignored cache contains the traveler.");
@@ -4548,6 +4731,8 @@ public sealed class SimulationRuntimeAdmissionTests
             long sourceRevisionBeforeRequest = sourceSession.Runtime.ActorChoiceStore.CensusRevision;
             long sourceSequenceBeforeRequest = sourceSession.Runtime.ActorChoiceStore.NextInputSequence;
             int sourceCountBeforeRequest = sourceSession.Runtime.ActorChoiceStore.Count;
+            long sourceMutationEpochBeforeRequest =
+                sourceSession.Runtime.ExecutionBoundaryState.MutationEpochState.CurrentEpoch;
             Assert.That(sourceCountBeforeRequest, Is.Zero);
             OwnerSectionCensusSnapshot p11AtCompletedBoundary = sourceCompletedBoundary.OwnerSections.Single(
                 section => section.SectionId == ActorChoiceP11CensusProvider.SectionId);
@@ -4584,6 +4769,9 @@ public sealed class SimulationRuntimeAdmissionTests
                 Is.EqualTo(sourceRevisionBeforeRequest + 1L));
             Assert.That(sourceSession.Runtime.ActorChoiceStore.NextInputSequence,
                 Is.EqualTo(sourceSequenceBeforeRequest + 1L));
+            Assert.That(sourceSession.Runtime.ExecutionBoundaryState.MutationEpochState.CurrentEpoch,
+                Is.EqualTo(sourceMutationEpochBeforeRequest + 1L),
+                "One admitted P11 ActorChoice input must publish exactly one selected census epoch.");
             OwnerSectionCensusWitness p11WitnessAfterRequest =
                 sourceSession.Composition.ActorChoiceInputCensusProvider.GetCurrentCensus();
             Assert.That(p11WitnessAfterRequest.SectionId, Is.EqualTo(ActorChoiceP11CensusProvider.SectionId));
@@ -4839,6 +5027,8 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(runtime.HasExactSelectedRuntimeOwnerGraph(graph.Definitions), Is.True);
         Assert.That(runtime.CrimeSystemForWorldBoundary, Is.Not.Null);
         Assert.That(runtime.JusticeSystemForWorldBoundary, Is.Not.Null);
+        long selectedOwnerCrimeJusticeRevisionBefore =
+            selected.SelectedRuntimeOwners.CrimeJusticeRevision;
 
         MethodInfo beginScope = typeof(SimulationRuntime).GetMethod(
             "TryBeginP12CrimeJusticeActionScope", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -4853,6 +5043,9 @@ public sealed class SimulationRuntimeAdmissionTests
             selected.HideForDays(2);
         }
         Assert.That(selected.HiddenDaysRemaining, Is.EqualTo(3));
+        Assert.That(selected.SelectedRuntimeOwners.CrimeJusticeRevision,
+            Is.EqualTo(selectedOwnerCrimeJusticeRevisionBefore + 2L),
+            "Each selected status or hidden-state leaf commit must advance the exact Core owner revision once.");
 
         NpcRuntime unselected = new NpcRuntime(
             "p12-selected-crime-justice-unselected-fallback",
@@ -4903,7 +5096,17 @@ public sealed class SimulationRuntimeAdmissionTests
                     DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix,
                     StringComparison.Ordinal)),
             Is.EqualTo(runtime.NpcRuntimes.Count),
-            "A mixed roster keeps every selected and compatibility Inventory row in the whole-host vector.");
+            "A mixed roster keeps every selected and compatibility Inventory row in the complete host vector.");
+        OwnerSectionCensusSnapshot selectedInventorySection = mixedRosterHostSections.Single(section =>
+            section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + selected.RuntimeId);
+        Assert.That(selectedInventorySection.OwnerInstanceIdentity,
+            Is.SameAs(selected.SelectedRuntimeOwners.Inventory),
+            "Adding a compatibility NPC must retain the selected NPC's exact Core Inventory identity.");
+        OwnerSectionCensusSnapshot unselectedInventorySection = mixedRosterHostSections.Single(section =>
+            section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + unselected.RuntimeId);
+        Assert.That(unselectedInventorySection.OwnerInstanceIdentity,
+            Is.SameAs(unselected.ExistingInventory),
+            "The compatibility NPC keeps its own Unity InventoryRuntime identity.");
         Assert.That(mixedRosterHostSections.Count(section =>
                 section.SectionId.StartsWith(
                     DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
@@ -6990,6 +7193,13 @@ public sealed class SimulationRuntimeAdmissionTests
         hide.baseSuccessChance = 1f;
         hide.crimeSettings.hiddenDays = 2;
         config.Actions.Add(hide);
+        config.InitialWarrants.Add(new InitialWantedRecordConfig
+        {
+            target = actorConfig.npc,
+            city = actorConfig.startingCity,
+            bounty = 12f,
+            sentenceDays = 4
+        });
 
         GameObject hostObject = new GameObject("P12 selected Core Hide without action projection");
         simulationObjects.Add(hostObject);
@@ -7036,15 +7246,42 @@ public sealed class SimulationRuntimeAdmissionTests
 
             Assert.That(actor.CurrentActionRuntime, Is.Null);
             Assert.That(actor.CurrentAction, Is.Null);
-            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
-                graph.Definitions, actionDefinition, null, null, null, 0,
-                0f, 1f, NpcTravelReason.None, 0f, null, null, null, null,
-                out DailyV1NpcActionPayloadOwner payload), Is.True);
-            // The fixture installs an exact Core slot to exercise the already
-            // admitted action stage without manufacturing a Unity projection.
-            Assert.That(actorOwner.ActionSlot.TrySetCurrentAction(
-                actionDefinition, payload), Is.True);
-            actorOwner.ActionSlot.NotifyCurrentActionMutationCommitted();
+            // Use the normal selected writer to commit the action slot and its
+            // P12 epoch. The later dispatch assertions then remove only the
+            // transient Unity projection while retaining that exact Core slot.
+            DailyV1ExecutionBoundaryState executionState = runtime.ExecutionBoundaryState;
+            Assert.That(executionState.TryBeginSelectedRuntimeDailyAdvanceOperation(), Is.True);
+            try
+            {
+                MethodInfo enterOperation = typeof(SimulationRuntime).GetMethod(
+                    "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(enterOperation, Is.Not.Null);
+                object[] operationArguments =
+                {
+                    DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+                    null
+                };
+                Assert.That((bool)enterOperation.Invoke(runtime, operationArguments), Is.True);
+                IDisposable operationScope = operationArguments[1] as IDisposable;
+                Assert.That(operationScope, Is.Not.Null);
+                try
+                {
+                    actor.SetCurrentActionRuntime(new NpcActionRuntime(hide));
+                }
+                finally
+                {
+                    operationScope.Dispose();
+                }
+            }
+            finally
+            {
+                Assert.That(executionState.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            DailyV1NpcActionPayloadOwner payload = actorOwner.ActionSlot.CurrentPayload;
+            Assert.That(payload, Is.Not.Null);
+            Assert.That(actorOwner.ActionSlot.CurrentAction, Is.SameAs(actionDefinition));
+            Assert.That(actor.CurrentActionRuntime.SelectedOwner, Is.SameAs(payload));
+            Assert.That(actor.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
 
             MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
                 "TryCreateSelectedActorActionExecutionBoundary",
@@ -7154,22 +7391,9 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(actor.CurrentActionRuntime, Is.Null,
                 "Dispatch uses the exact Core action slot without reconstructing a Unity NpcActionRuntime.");
 
-            JusticeSystem justice = ReadPrivateField<JusticeSystem>(runtime, "justiceSystem");
-            MethodInfo beginCrimeJusticeScope = typeof(SimulationRuntime).GetMethod(
-                "TryBeginP12CrimeJusticeActionScope",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(justice, Is.Not.Null);
-            Assert.That(beginCrimeJusticeScope, Is.Not.Null);
-            object[] scopeArguments = { new[] { actor }, true, null };
-            Assert.That(beginCrimeJusticeScope.Invoke(runtime, scopeArguments),
-                Is.EqualTo(true));
-            IDisposable warrantScope = scopeArguments[2] as IDisposable;
-            Assert.That(warrantScope, Is.Not.Null);
-            using (warrantScope)
-                Assert.That(justice.CreateOrIncreaseWarrant(
-                    actor, actor.CurrentCity, 12f, 4), Is.Not.Null);
-
             long justiceRevisionBefore = graph.JusticeRecordsOwner.Revision;
+            Assert.That(graph.JusticeRecordsOwner.FindActiveWantedRecord(
+                actor.RuntimeId, actor.CurrentCity.RuntimeId), Is.Not.Null);
             long npcCrimeJusticeRevisionBefore = actorOwner.CrimeJusticeRevision;
             Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
                 out long mutationEpochBefore, out ContinuationCensusFailure epochBeforeFailure),
@@ -7994,7 +8218,7 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
     [Test]
-    public void SelectedDailyV1StealDispatchRebuildsProjectionFromExactCoreSlot()
+        public void SelectedDailyV1StealDispatchRebuildsProjectionFromExactCoreSlot()
     {
         SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
@@ -8092,14 +8316,10 @@ public sealed class SimulationRuntimeAdmissionTests
                 null,
                 null,
                 out DailyV1NpcActionPayloadOwner exactPayload), Is.True);
-            Assert.That(thiefOwner.ActionSlot.TrySetCurrentAction(
-                actionDefinition, exactPayload), Is.True);
-            thiefOwner.ActionSlot.NotifyCurrentActionMutationCommitted();
-
             NpcActionRuntime initialProjection = new NpcActionRuntime(steal, victimRuntime);
             Assert.That(initialProjection.TryUseSelectedPayload(
                 exactPayload, graph.Definitions), Is.True);
-            thiefRuntime.SetCurrentActionRuntime(initialProjection);
+            SetSelectedCurrentActionForAdmissionTest(runtime, thiefRuntime, initialProjection);
             Assert.That(thiefRuntime.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
             Assert.That(runtime.TryAssessNpcRosterCensus(
                 out ContinuationCensusFailure initialCensusFailure),
@@ -8353,8 +8573,11 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(item, Is.Not.Null);
             Assert.That(seller.TryGetSelectedDailyV1ItemAsset(item, out ItemData itemAsset), Is.True);
             Assert.That(itemAsset, Is.Not.Null);
-            Assert.That(seller.Inventory.TryAddSelectedItem(
-                item, 2, item.Values.basePrice), Is.True);
+            Assert.That(AddSelectedInventoryItemForAdmissionTest(
+                runtime, seller, item, 2, item.Values.basePrice), Is.True);
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                    out ContinuationCensusFailure inventorySetupCensusFailure), Is.True,
+                inventorySetupCensusFailure + "; " + P12Diagnostic(runtime));
             int inventoryBeforeSetup = sellerOwner.Inventory.GetAmount(item);
             int marketBeforeSetup = city.SelectedRuntimeOwners.Market.GetAmount(item);
             float balanceBeforeSetup = sellerOwner.MoneyAccount.Balance;
@@ -8390,15 +8613,11 @@ public sealed class SimulationRuntimeAdmissionTests
                 null,
                 null,
                 out DailyV1NpcActionPayloadOwner exactPayload), Is.True);
-            Assert.That(sellerOwner.ActionSlot.TrySetCurrentAction(
-                actionDefinition, exactPayload), Is.True);
-            sellerOwner.ActionSlot.NotifyCurrentActionMutationCommitted();
-
             NpcActionRuntime initialProjection = new NpcActionRuntime(
                 sell, city, itemAsset, exactPayload.Amount, exactPayload.ExpectedUnitPrice);
             Assert.That(initialProjection.TryUseSelectedPayload(
                 exactPayload, graph.Definitions), Is.True);
-            seller.SetCurrentActionRuntime(initialProjection);
+            SetSelectedCurrentActionForAdmissionTest(runtime, seller, initialProjection);
             Assert.That(seller.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
             Assert.That(runtime.TryAssessNpcRosterCensus(
                 out ContinuationCensusFailure initialCensusFailure),
@@ -8631,8 +8850,11 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(item, Is.Not.Null);
             Assert.That(seller.TryGetSelectedDailyV1ItemAsset(item, out ItemData itemAsset), Is.True);
             Assert.That(itemAsset, Is.Not.Null);
-            Assert.That(seller.Inventory.TryAddSelectedItem(
-                item, 2, item.Values.basePrice), Is.True);
+            Assert.That(AddSelectedInventoryItemForAdmissionTest(
+                runtime, seller, item, 2, item.Values.basePrice), Is.True);
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                    out ContinuationCensusFailure inventorySetupCensusFailure), Is.True,
+                inventorySetupCensusFailure + "; " + P12Diagnostic(runtime));
             int inventoryBeforeSetup = sellerOwner.Inventory.GetAmount(item);
             int marketBeforeSetup = city.SelectedRuntimeOwners.Market.GetAmount(item);
             float balanceBeforeSetup = sellerOwner.MoneyAccount.Balance;
@@ -8652,8 +8874,8 @@ public sealed class SimulationRuntimeAdmissionTests
                     Is.True, bindingFailure.ToString());
             }
 
-            Assert.That(seller.TrySetSelectedMerchantTradePlan(
-                itemAsset, city, city, 2, item.Values.basePrice,
+            Assert.That(SetSelectedMerchantPlanForAdmissionTest(
+                runtime, seller, itemAsset, city, city, 2, item.Values.basePrice,
                 "core-planned-sell-origin-" + sellerOwner.RuntimeId), Is.True);
             Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
                 graph.Definitions,
@@ -8671,15 +8893,11 @@ public sealed class SimulationRuntimeAdmissionTests
                 null,
                 null,
                 out DailyV1NpcActionPayloadOwner exactPayload), Is.True);
-            Assert.That(sellerOwner.ActionSlot.TrySetCurrentAction(
-                actionDefinition, exactPayload), Is.True);
-            sellerOwner.ActionSlot.NotifyCurrentActionMutationCommitted();
-
             NpcActionRuntime initialProjection = new NpcActionRuntime(
                 sell, city, itemAsset, exactPayload.Amount, exactPayload.ExpectedUnitPrice);
             Assert.That(initialProjection.TryUseSelectedPayload(
                 exactPayload, graph.Definitions), Is.True);
-            seller.SetCurrentActionRuntime(initialProjection);
+            SetSelectedCurrentActionForAdmissionTest(runtime, seller, initialProjection);
             Assert.That(seller.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
             Assert.That(runtime.TryAssessNpcRosterCensus(
                 out ContinuationCensusFailure initialCensusFailure),
@@ -8983,8 +9201,11 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(seller.TryGetSelectedDailyV1ItemAsset(
                 item, out ItemData itemAsset), Is.True);
             Assert.That(itemAsset, Is.Not.Null);
-            Assert.That(seller.Inventory.TryAddSelectedItem(
-                item, 2, item.Values.basePrice), Is.True);
+            Assert.That(AddSelectedInventoryItemForAdmissionTest(
+                runtime, seller, item, 2, item.Values.basePrice), Is.True);
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                    out ContinuationCensusFailure inventorySetupCensusFailure), Is.True,
+                inventorySetupCensusFailure + "; " + P12Diagnostic(runtime));
             int sellerInventoryBeforeSetup = sellerOwner.Inventory.GetAmount(item);
             int buyerInventoryBeforeSetup = buyerOwner.Inventory.GetAmount(item);
             int marketBeforeSetup = city.SelectedRuntimeOwners.Market.GetAmount(item);
@@ -9006,8 +9227,8 @@ public sealed class SimulationRuntimeAdmissionTests
                     Is.True, bindingFailure.ToString());
             }
 
-            Assert.That(seller.TrySetSelectedMerchantTradePlan(
-                itemAsset, city, city, 2, item.Values.basePrice,
+            Assert.That(SetSelectedMerchantPlanForAdmissionTest(
+                runtime, seller, itemAsset, city, city, 2, item.Values.basePrice,
                 "core-planned-npc-sell-origin-" + sellerOwner.RuntimeId), Is.True);
             Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
                 graph.Definitions,
@@ -9025,15 +9246,11 @@ public sealed class SimulationRuntimeAdmissionTests
                 null,
                 null,
                 out DailyV1NpcActionPayloadOwner exactPayload), Is.True);
-            Assert.That(sellerOwner.ActionSlot.TrySetCurrentAction(
-                actionDefinition, exactPayload), Is.True);
-            sellerOwner.ActionSlot.NotifyCurrentActionMutationCommitted();
-
             NpcActionRuntime initialProjection = new NpcActionRuntime(
                 sell, buyer, itemAsset, exactPayload.Amount, exactPayload.ExpectedUnitPrice);
             Assert.That(initialProjection.TryUseSelectedPayload(
                 exactPayload, graph.Definitions), Is.True);
-            seller.SetCurrentActionRuntime(initialProjection);
+            SetSelectedCurrentActionForAdmissionTest(runtime, seller, initialProjection);
             Assert.That(seller.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
             Assert.That(runtime.TryAssessNpcRosterCensus(
                 out ContinuationCensusFailure initialCensusFailure),
@@ -9361,15 +9578,11 @@ public sealed class SimulationRuntimeAdmissionTests
                 null,
                 null,
                 out DailyV1NpcActionPayloadOwner exactPayload), Is.True);
-            Assert.That(buyerOwner.ActionSlot.TrySetCurrentAction(
-                actionDefinition, exactPayload), Is.True);
-            buyerOwner.ActionSlot.NotifyCurrentActionMutationCommitted();
-
             NpcActionRuntime initialProjection = new NpcActionRuntime(
                 buy, city, itemAsset, exactPayload.Amount, exactPayload.ExpectedUnitPrice);
             Assert.That(initialProjection.TryUseSelectedPayload(
                 exactPayload, graph.Definitions), Is.True);
-            buyer.SetCurrentActionRuntime(initialProjection);
+            SetSelectedCurrentActionForAdmissionTest(runtime, buyer, initialProjection);
             Assert.That(buyer.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
             Assert.That(runtime.TryAssessNpcRosterCensus(
                 out ContinuationCensusFailure initialCensusFailure),
@@ -9717,16 +9930,12 @@ public sealed class SimulationRuntimeAdmissionTests
                 null,
                 null,
                 out DailyV1NpcActionPayloadOwner exactPayload), Is.True, "The selected cross-city payload must be valid.");
-            Assert.That(buyerOwner.ActionSlot.TrySetCurrentAction(
-                actionDefinition, exactPayload), Is.True, "The selected action slot must accept the payload.");
-            buyerOwner.ActionSlot.NotifyCurrentActionMutationCommitted();
-
             NpcActionRuntime initialProjection = new NpcActionRuntime(
                 buy, destinationCity, itemAsset, exactPayload.Amount,
                 exactPayload.ExpectedUnitPrice);
             Assert.That(initialProjection.TryUseSelectedPayload(
                 exactPayload, graph.Definitions), Is.True, "The initial action projection must match the selected payload.");
-            buyer.SetCurrentActionRuntime(initialProjection);
+            SetSelectedCurrentActionForAdmissionTest(runtime, buyer, initialProjection);
             Assert.That(buyer.CurrentActionRuntime.MatchesSelectedOwner(), Is.True, "The installed action must preserve payload identity.");
             Assert.That(runtime.TryAssessNpcRosterCensus(
                 out ContinuationCensusFailure initialCensusFailure),
@@ -10941,7 +11150,19 @@ public sealed class SimulationRuntimeAdmissionTests
             SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
             Assert.That(original, Is.Not.Null);
             Assert.That(original.Composition.Expeditions.Add(CreateUnsupportedDailyV1Expedition()), Is.True);
-            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.False);
+            SimulationRuntimeAdvanceFailure advanceFailure = SimulationRuntimeAdvanceFailure.None;
+            bool advanced = false;
+            try
+            {
+                advanced = original.Runtime.TryAdvanceDay(out advanceFailure);
+            }
+            catch (InvalidOperationException exception)
+            {
+                Assert.Fail("Unsupported populated Expedition state must reject the day without throwing: "
+                    + exception.Message + "; " + P12Diagnostic(original.Runtime));
+            }
+            Assert.That(advanced, Is.False,
+                "A populated unsupported Expedition must not produce a completed boundary.");
             Assert.That(advanceFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
             Assert.That(original.Runtime.TryGetCompletedDailyCaptureToken(
                     out _, out DailyCaptureEligibilityFailure tokenFailure), Is.False);
@@ -15702,12 +15923,15 @@ public sealed class SimulationRuntimeAdmissionTests
             WorldCommandAuthorityMode.Request, out ActorChoiceStoreFailureCode captureFailure),
             Is.True, captureFailure.ToString());
         ActorChoiceInput input = runtime.ActorChoiceStore.Inputs.Single(value => value.WorldCommandId == commandId);
-        Assert.That(runtime.ActorChoiceStore.TryMarkDispatchStarted(
-            input.InputId, runtime.CurrentDay, 0, decisionReference,
-            out ActorChoiceStoreFailureCode dispatchFailure), Is.True, dispatchFailure.ToString());
-        Assert.That(runtime.ActorChoiceStore.TryRecordAttemptReturned(
-            input.InputId, runtime.CurrentDay, 0, null,
-            out ActorChoiceStoreFailureCode attemptFailure), Is.True, attemptFailure.ToString());
+        RunSelectedApplicationOwnerOperation(runtime, () =>
+        {
+            Assert.That(runtime.ActorChoiceStore.TryMarkDispatchStarted(
+                input.InputId, runtime.CurrentDay, 0, decisionReference,
+                out ActorChoiceStoreFailureCode dispatchFailure), Is.True, dispatchFailure.ToString());
+            Assert.That(runtime.ActorChoiceStore.TryRecordAttemptReturned(
+                input.InputId, runtime.CurrentDay, 0, null,
+                out ActorChoiceStoreFailureCode attemptFailure), Is.True, attemptFailure.ToString());
+        });
     }
 
     private static void CaptureTerminalP11History(
@@ -15747,14 +15971,76 @@ public sealed class SimulationRuntimeAdmissionTests
         {
             ActorChoiceInput pending = runtime.ActorChoiceStore.Inputs.Single(
                 input => input.WorldCommandId == commandId);
-            Assert.That(runtime.ActorChoiceStore.TryReject(
-                    pending.InputId,
-                    runtime.CurrentDay,
-                    0,
-                    ActorChoiceFailure.ActionUnavailable,
-                    out ActorChoiceStoreFailureCode rejectFailure), Is.True,
-                rejectFailure.ToString());
+            RunSelectedApplicationOwnerOperation(runtime, () =>
+                Assert.That(runtime.ActorChoiceStore.TryReject(
+                        pending.InputId,
+                        runtime.CurrentDay,
+                        0,
+                        ActorChoiceFailure.ActionUnavailable,
+                        out ActorChoiceStoreFailureCode rejectFailure), Is.True,
+                    rejectFailure.ToString()));
         }
+    }
+
+    private static void RunSelectedApplicationOwnerOperation(
+        SimulationRuntime runtime,
+        Action mutation)
+    {
+        Assert.That(runtime, Is.Not.Null);
+        Assert.That(mutation, Is.Not.Null);
+        Assert.That(runtime.ExecutionBoundaryState.TryBeginOperation(
+                DailyV1OperationScopeKind.Application), Is.True,
+            "The fixture's direct P11 owner mutation must use the selected Core application scope.");
+        try
+        {
+            mutation();
+        }
+        finally
+        {
+            Assert.That(runtime.ExecutionBoundaryState.TryEndOperation(
+                    DailyV1OperationScopeKind.Application), Is.True,
+                "The fixture's selected Core application scope must close after the P11 owner mutation.");
+        }
+    }
+
+    private static void CommitSelectedCurrentActionSlotForTest(
+        SimulationRuntime runtime,
+        NpcRuntime actor,
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        Assert.That(runtime, Is.Not.Null);
+        Assert.That(actor, Is.Not.Null);
+        Assert.That(action, Is.Not.Null);
+        Assert.That(payload, Is.Not.Null);
+        string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+            + actor.RuntimeId;
+        MethodInfo canCommit = typeof(SimulationRuntime).GetMethod(
+            "CanCommitP12MutationSections", BindingFlags.Instance | BindingFlags.NonPublic);
+        MethodInfo notifyCommitted = typeof(SimulationRuntime).GetMethod(
+            "NotifyP12MutationSections", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(canCommit, Is.Not.Null);
+        Assert.That(notifyCommitted, Is.Not.Null);
+
+        // This direct slot setup stands in for the runtime's selected action
+        // operation. Admit and report the exact CurrentAction owner section so
+        // the following status mutation starts from a complete current vector.
+        RunSelectedApplicationOwnerOperation(runtime, () =>
+        {
+            bool admitted = false;
+            Assert.That(actor.SelectedRuntimeOwnerGraph.TryCommitCurrentActionSlot(
+                    actor.SelectedRuntimeOwners, action, payload, () =>
+                    {
+                        admitted = (bool)canCommit.Invoke(
+                            runtime, new object[] { new[] { sectionId } });
+                        return admitted;
+                    }), Is.True,
+                "The exact current-action owner write must pass P12 precommit admission.");
+            Assert.That(admitted, Is.True);
+            Assert.That((bool)notifyCommitted.Invoke(
+                    runtime, new object[] { new[] { sectionId } }), Is.True,
+                "The exact current-action owner write must refresh the complete P12 census and epoch.");
+        });
     }
 
     private static string CaptureSelectedDailyFacts(SimulationRuntime runtime)

@@ -1111,6 +1111,10 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             DailyV1NpcRuntimeOwners actor,
             IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => actor?.Status != null;
 
+        public void RefreshStatusProjection(DailyV1NpcRuntimeOwners actor) { }
+
+        public void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners actor) { }
+
         public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners actor) => MutationAdmissions++;
 
         public void NotifyStatusMutationCommitted(
@@ -1227,6 +1231,8 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
         public bool CanProjectStatusChanges(
             DailyV1NpcRuntimeOwners actor,
             IReadOnlyList<DailyV1StatusDefinition> statusToAdd) => actor?.Status != null;
+        public void RefreshStatusProjection(DailyV1NpcRuntimeOwners actor) { }
+        public void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners actor) { }
         public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners actor) { }
         public void NotifyStatusMutationCommitted(
             DailyV1NpcRuntimeOwners actor, DailyV1StatusDefinition status, bool added) { }
@@ -1308,6 +1314,7 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
         public CrimeSocialAppraisalWorldState SocialAppraisalWorldState { get; }
         public ITheftOutcomeSink TheftOutcomeSink => SocialAppraisalWorldState.Integration;
         public DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
+        public string LastJusticeAdmissionRejection => null;
 
         internal RecordingStealProjection(
             CrimeSocialAppraisalWorldState socialWorld,
@@ -1333,6 +1340,10 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             TransferDestination = destination;
             return operation?.Invoke();
         }
+
+        public void RefreshStatusProjection(DailyV1NpcRuntimeOwners owner) { }
+
+        public void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners owner) { }
 
         public bool TryProjectWantedRecord(
             DailyV1NpcRuntimeOwners target,

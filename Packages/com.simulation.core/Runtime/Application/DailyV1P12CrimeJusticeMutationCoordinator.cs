@@ -70,6 +70,14 @@ internal interface IDailyV1P12CrimeJusticeMutationProtocol
     bool NotifyCommittedMutation(string sectionId);
 }
 
+/// <summary>Optional failure detail for the selected host's P12 baseline adapter.</summary>
+internal interface IDailyV1P12CrimeJusticeMutationDiagnosticProtocol
+{
+    bool TryValidateUnchangedSections(
+        IReadOnlyList<string> sectionIds,
+        out string failure);
+}
+
 /// <summary>
 /// Core-owned admission and commit policy for the selected P12 Crime/Justice
 /// operations. The host retains exact census identity discovery, while this
@@ -102,6 +110,7 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         internal object EpochReservation;
         internal DailyV1MutationEpochReservation CoreEpochReservation;
         internal DailyV1ExecutionBoundaryState ExecutionState;
+        internal object CoreOperationScopeToken;
 
         internal bool IsOwnedByCurrentThread() => ReferenceEquals(OwnerThread, Thread.CurrentThread)
             && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
@@ -131,20 +140,26 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
     private readonly Action faultAdmission;
     private readonly IDailyV1P12CrimeJusticeMutationProtocol protocol;
     private readonly DailyV1MutationEpochState mutationEpochState;
+    private readonly DailyV1ExecutionBoundaryState executionState;
     private Context activeContext;
+    private string lastCanCommitRejection;
+
+    internal string LastCanCommitRejection => lastCanCommitRejection;
 
     internal DailyV1P12CrimeJusticeMutationCoordinator(
         Func<bool> isAdmissionEnabled,
         Func<bool> isOwnerThreadCurrent,
         Action faultAdmission,
         IDailyV1P12CrimeJusticeMutationProtocol protocol,
-        DailyV1MutationEpochState mutationEpochState = null)
+        DailyV1MutationEpochState mutationEpochState = null,
+        DailyV1ExecutionBoundaryState executionState = null)
     {
         this.isAdmissionEnabled = isAdmissionEnabled ?? throw new ArgumentNullException(nameof(isAdmissionEnabled));
         this.isOwnerThreadCurrent = isOwnerThreadCurrent ?? throw new ArgumentNullException(nameof(isOwnerThreadCurrent));
         this.faultAdmission = faultAdmission ?? throw new ArgumentNullException(nameof(faultAdmission));
         this.protocol = protocol ?? throw new ArgumentNullException(nameof(protocol));
         this.mutationEpochState = mutationEpochState;
+        this.executionState = executionState;
     }
 
     internal bool IsBoundToProtocol(IDailyV1P12CrimeJusticeMutationProtocol candidate) =>
@@ -379,6 +394,14 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
             || activeContext != null
             || sectionIds.Count == 0
             || !protocol.TryValidateUnchangedSections(sectionIds))
+        {
+            faultAdmission();
+            return false;
+        }
+
+        if (executionState != null
+            && !executionState.TryBeginSelectedP12CrimeJusticeMutationOperationScope(
+                this, out context.CoreOperationScopeToken))
         {
             faultAdmission();
             return false;
@@ -628,12 +651,14 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
 
     internal bool CanCommit(object ownerIdentity, string sectionId)
     {
+        lastCanCommitRejection = null;
         Context context = activeContext;
         if (!IsAdmissionEnabled(context)) return true;
         if (!TryGetBinding(context, ownerIdentity, sectionId,
                 out DailyV1P12CrimeJusticeOwnerBinding binding)
             || !IsOwnerThreadCurrent(context))
         {
+            lastCanCommitRejection = "OwnerBindingOrThread";
             Fault(context);
             return false;
         }
@@ -642,11 +667,13 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         try { revision = binding.ReadRevision(); }
         catch
         {
+            lastCanCommitRejection = "RevisionRead";
             Fault(context);
             return false;
         }
         if (revision == long.MaxValue)
         {
+            lastCanCommitRejection = "RevisionCapacity";
             Fault(context);
             return false;
         }
@@ -660,16 +687,52 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
                 && (context.ChangedSections.Contains(sectionId)
                     || protocol.TryValidateUnchangedSections(new[] { sectionId }));
         }
-        if (context.Mode != ScopeMode.ActionImmediate
-            || !protocol.TryValidateUnchangedSections(new[] { sectionId })
-            || (mutationEpochState != null
-                ? mutationEpochState.HasActiveReservation || !mutationEpochState.CanAdvance
-                : !protocol.TryValidateMutationEpochCapacity()))
+        if (context.Mode != ScopeMode.ActionImmediate)
         {
+            lastCanCommitRejection = "ScopeMode";
+            Fault(context);
+            return false;
+        }
+        if (!TryValidateUnchangedSections(new[] { sectionId }, out string baselineFailure))
+        {
+            lastCanCommitRejection = "OwnerSectionBaseline:" + baselineFailure;
+            Fault(context);
+            return false;
+        }
+        if (mutationEpochState != null)
+        {
+            if (mutationEpochState.HasActiveReservation)
+            {
+                lastCanCommitRejection = "MutationEpochReserved";
+                Fault(context);
+                return false;
+            }
+            if (!mutationEpochState.CanAdvance)
+            {
+                lastCanCommitRejection = "MutationEpochCapacity";
+                Fault(context);
+                return false;
+            }
+        }
+        else if (!protocol.TryValidateMutationEpochCapacity())
+        {
+            lastCanCommitRejection = "ProtocolEpochCapacity";
             Fault(context);
             return false;
         }
         return true;
+    }
+
+    private bool TryValidateUnchangedSections(
+        IReadOnlyList<string> sectionIds,
+        out string failure)
+    {
+        if (protocol is IDailyV1P12CrimeJusticeMutationDiagnosticProtocol diagnosticProtocol)
+            return diagnosticProtocol.TryValidateUnchangedSections(sectionIds, out failure);
+
+        bool valid = protocol.TryValidateUnchangedSections(sectionIds);
+        failure = valid ? null : "UnspecifiedProtocolFailure";
+        return valid;
     }
 
     internal void NotifyCommitted(object ownerIdentity, string sectionId)
@@ -816,7 +879,18 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         if (context.Mode != ScopeMode.ActionImmediate
             || !context.IsOwnedByCurrentThread()
             || !ReferenceEquals(activeContext, context))
+        {
             faultAdmission();
+        }
+        object coreScopeToken = context.CoreOperationScopeToken;
+        context.CoreOperationScopeToken = null;
+        if (coreScopeToken != null
+            && (executionState == null
+                || !executionState.TryEndSelectedP12CrimeJusticeMutationOperationScope(
+                    this, coreScopeToken)))
+        {
+            faultAdmission();
+        }
         if (ReferenceEquals(activeContext, context)) activeContext = null;
     }
 

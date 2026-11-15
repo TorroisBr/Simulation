@@ -8,8 +8,12 @@ using System;
 internal static class DailyV1SelectedCrimeActionExecutionStage
 {
     internal interface ISelectedCrimeActionProjectionBoundary
-        : DailyV1SelectedActionExecutionStage.ISelectedNpcOwnerMutationBoundary
     {
+        bool CanProjectStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            System.Collections.Generic.IReadOnlyList<DailyV1StatusDefinition> statusToAdd);
+        void RefreshStatusProjection(DailyV1NpcRuntimeOwners owner);
+        void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners owner);
         bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence);
         void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence);
         void PublishHidden(DailyV1NpcRuntimeOwners actor);
@@ -23,7 +27,8 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
     }
 
     internal interface ISelectedCrimeActionBoundary
-        : ISelectedCrimeActionProjectionBoundary
+        : ISelectedCrimeActionProjectionBoundary,
+          DailyV1SelectedActionExecutionStage.ISelectedNpcOwnerMutationBoundary
     {
         DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
         bool ExecuteWithinOperation(Func<bool> operation);
@@ -333,7 +338,7 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
                 if (!IsExactActor(owner) || !IsCurrentSession())
                     throw new InvalidOperationException(
                         "The selected Crime owner is outside its exact admitted Core operation.");
-                projection.EnsureMutationAllowed(owner);
+                executionState.EnsureSelectedP12CrimeJusticeOwnerMutationAllowed(owner);
             }
 
             public void NotifyStatusMutationCommitted(
@@ -344,7 +349,8 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
                 if (!IsExactActor(owner) || !IsCurrentSession())
                     throw new InvalidOperationException(
                         "The selected Crime status owner changed outside its exact admitted Core operation.");
-                projection.NotifyStatusMutationCommitted(owner, status, added);
+                executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
+                projection.RefreshStatusProjection(owner);
             }
 
             public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
@@ -352,7 +358,20 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
                 if (!IsExactActor(owner) || !IsCurrentSession())
                     throw new InvalidOperationException(
                         "The selected Crime hidden-state owner changed outside its exact admitted Core operation.");
-                projection.NotifyHiddenMutationCommitted(owner);
+                executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
+                projection.SyncHiddenStateProjection(owner);
+            }
+
+            public void RefreshStatusProjection(DailyV1NpcRuntimeOwners owner)
+            {
+                EnsureCurrentActor(owner);
+                projection.RefreshStatusProjection(owner);
+            }
+
+            public void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners owner)
+            {
+                EnsureCurrentActor(owner);
+                projection.SyncHiddenStateProjection(owner);
             }
 
             public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence) =>
@@ -805,6 +824,7 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
             public CrimeSocialAppraisalWorldState SocialAppraisalWorldState => socialWorld;
             public ITheftOutcomeSink TheftOutcomeSink => theftOutcomeSink;
             public DailyV1JusticeRecordsOwner JusticeRecordsOwner => graph.JusticeRecordsOwner;
+            public string LastJusticeAdmissionRejection => coordinator.LastCanCommitRejection;
 
             public bool ExecuteWithinOperation(Func<bool> operation)
             {
@@ -871,7 +891,7 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
                 if (!IsExactPerpetrator(owner) || !IsCurrentSession())
                     throw new InvalidOperationException(
                         "The selected Steal status owner is outside its exact admitted Core operation.");
-                hostProjection.EnsureMutationAllowed(owner);
+                executionState.EnsureSelectedP12CrimeJusticeOwnerMutationAllowed(owner);
             }
 
             public void NotifyStatusMutationCommitted(
@@ -882,7 +902,8 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
                 if (!IsExactPerpetrator(owner) || !IsCurrentSession())
                     throw new InvalidOperationException(
                         "The selected Steal status owner changed outside its exact Core operation.");
-                hostProjection.NotifyStatusMutationCommitted(owner, status, added);
+                executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
+                hostProjection.RefreshStatusProjection(owner);
             }
 
             public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
@@ -890,7 +911,24 @@ internal static class DailyV1SelectedCrimeActionExecutionStage
                 if (!IsExactPerpetrator(owner) || !IsCurrentSession())
                     throw new InvalidOperationException(
                         "The selected Steal hidden-state owner changed outside its exact Core operation.");
-                hostProjection.NotifyHiddenMutationCommitted(owner);
+                executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
+                hostProjection.SyncHiddenStateProjection(owner);
+            }
+
+            public void RefreshStatusProjection(DailyV1NpcRuntimeOwners owner)
+            {
+                if (!IsExactPerpetrator(owner) || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected Steal status projection left its exact Core operation.");
+                hostProjection.RefreshStatusProjection(owner);
+            }
+
+            public void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners owner)
+            {
+                if (!IsExactPerpetrator(owner) || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected Steal hidden-state projection left its exact Core operation.");
+                hostProjection.SyncHiddenStateProjection(owner);
             }
 
             public bool TryProjectWantedRecord(

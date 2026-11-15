@@ -81,8 +81,7 @@ public sealed class SimulationRuntimeSpatialInvariantReport
 }
 
 public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
-    IDailyV1RuntimeAdvanceBoundary, IDailyV1SelectedRuntimeAdvanceHostPorts,
-    IDailyV1SelectedRuntimeOwnerCensusProviderPort
+    IDailyV1RuntimeAdvanceBoundary, IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     [ThreadStatic]
     private static DailyGameplayExecutionProbeForTest activeDailyGameplayExecutionProbeForTest;
@@ -613,14 +612,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         {
             if (!TryGetExactParticipant(owner, out NpcRuntime exactRuntime))
                 throw new InvalidOperationException("The selected status owner lost its exact runtime projection after mutation.");
-            exactRuntime.NotifyCoreSelectedDailyV1StatusMutationCommitted(owner);
+            exactRuntime.RefreshCoreSelectedDailyV1StatusProjection(owner);
+            runtime.ExecutionBoundaryState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
         }
 
         public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
         {
             if (!TryGetExactParticipant(owner, out NpcRuntime exactRuntime))
                 throw new InvalidOperationException("The selected hidden-state owner lost its exact runtime projection after mutation.");
-            exactRuntime.NotifyCoreSelectedDailyV1HiddenMutationCommitted(owner);
+            exactRuntime.SyncCoreSelectedDailyV1HiddenProjection(owner);
+            runtime.ExecutionBoundaryState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
         }
 
         public void RefreshStatusProjection(DailyV1NpcRuntimeOwners owner)
@@ -1578,14 +1579,16 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             {
                 if (!TryGetExactTarget(target, out NpcRuntime exactTarget))
                     throw new InvalidOperationException("The selected Guard status owner lost its exact runtime projection after mutation.");
-                exactTarget.NotifyCoreSelectedDailyV1StatusMutationCommitted(target);
+                exactTarget.RefreshCoreSelectedDailyV1StatusProjection(target);
+                runtime.ExecutionBoundaryState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(target);
             }
 
             public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners target)
             {
                 if (!TryGetExactTarget(target, out NpcRuntime exactTarget))
                     throw new InvalidOperationException("The selected Guard hidden-state owner lost its exact runtime projection after mutation.");
-                exactTarget.NotifyCoreSelectedDailyV1HiddenMutationCommitted(target);
+                exactTarget.SyncCoreSelectedDailyV1HiddenProjection(target);
+                runtime.ExecutionBoundaryState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(target);
             }
 
             public void PublishArrest(
@@ -1685,14 +1688,30 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             {
                 if (!TryGetExactActor(actor, out NpcRuntime exactActor))
                     throw new InvalidOperationException("The selected Crime status owner lost its exact runtime projection after mutation.");
-                exactActor.NotifyCoreSelectedDailyV1StatusMutationCommitted(actor);
+                exactActor.RefreshCoreSelectedDailyV1StatusProjection(actor);
+                runtime.ExecutionBoundaryState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(actor);
             }
 
             public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners actor)
             {
                 if (!TryGetExactActor(actor, out NpcRuntime exactActor))
                     throw new InvalidOperationException("The selected Crime hidden-state owner lost its exact runtime projection after mutation.");
-                exactActor.NotifyCoreSelectedDailyV1HiddenMutationCommitted(actor);
+                exactActor.SyncCoreSelectedDailyV1HiddenProjection(actor);
+                runtime.ExecutionBoundaryState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(actor);
+            }
+
+            public void RefreshStatusProjection(DailyV1NpcRuntimeOwners actor)
+            {
+                if (!TryGetExactActor(actor, out NpcRuntime exactActor))
+                    throw new InvalidOperationException("The selected Crime status owner lost its exact runtime projection after mutation.");
+                exactActor.RefreshCoreSelectedDailyV1StatusProjection(actor);
+            }
+
+            public void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners actor)
+            {
+                if (!TryGetExactActor(actor, out NpcRuntime exactActor))
+                    throw new InvalidOperationException("The selected Crime hidden-state owner lost its exact runtime projection after mutation.");
+                exactActor.SyncCoreSelectedDailyV1HiddenProjection(actor);
             }
 
             public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence)
@@ -1797,6 +1816,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             public CrimeSocialAppraisalWorldState SocialAppraisalWorldState { get; }
             public ITheftOutcomeSink TheftOutcomeSink => runtime.crimeSystem?.TheftOutcomeSink;
             public DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
+            public string LastJusticeAdmissionRejection => null;
 
             internal SelectedStealActionBoundaryAdapter(
                 SelectedActionDispatchBoundaryAdapter dispatchBoundary,
@@ -1938,7 +1958,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 if (!TryResolveParticipant(target, out NpcRuntime exactTarget)
                     || !ReferenceEquals(exactTarget, perpetratorRuntime))
                     throw new InvalidOperationException("The selected Steal status owner lost its exact runtime projection after mutation.");
-                exactTarget.NotifyCoreSelectedDailyV1StatusMutationCommitted(target);
+                exactTarget.RefreshCoreSelectedDailyV1StatusProjection(target);
+                runtime.ExecutionBoundaryState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(target);
             }
 
             public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners target)
@@ -1946,7 +1967,24 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 if (!TryResolveParticipant(target, out NpcRuntime exactTarget)
                     || !ReferenceEquals(exactTarget, perpetratorRuntime))
                     throw new InvalidOperationException("The selected Steal hidden-state owner lost its exact runtime projection after mutation.");
-                exactTarget.NotifyCoreSelectedDailyV1HiddenMutationCommitted(target);
+                exactTarget.SyncCoreSelectedDailyV1HiddenProjection(target);
+                runtime.ExecutionBoundaryState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(target);
+            }
+
+            public void RefreshStatusProjection(DailyV1NpcRuntimeOwners target)
+            {
+                if (!TryResolveParticipant(target, out NpcRuntime exactTarget)
+                    || !ReferenceEquals(exactTarget, perpetratorRuntime))
+                    throw new InvalidOperationException("The selected Steal status owner lost its exact runtime projection after mutation.");
+                exactTarget.RefreshCoreSelectedDailyV1StatusProjection(target);
+            }
+
+            public void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners target)
+            {
+                if (!TryResolveParticipant(target, out NpcRuntime exactTarget)
+                    || !ReferenceEquals(exactTarget, perpetratorRuntime))
+                    throw new InvalidOperationException("The selected Steal hidden-state owner lost its exact runtime projection after mutation.");
+                exactTarget.SyncCoreSelectedDailyV1HiddenProjection(target);
             }
 
             public void PublishTheft(
@@ -3990,7 +4028,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     {
         npcRosterCensusProtocolInitializationFailure = null;
         ContinuationCensusProtocol protocol = runtimeAdmissionContext != null
-            ? new ContinuationCensusProtocol(dailyExecutionBoundary)
+            ? new ContinuationCensusProtocol(
+                dailyExecutionBoundary,
+                requireSelectedCoreOwnerCensus:
+                    dailyExecutionBoundary.HasAdmittedSelectedDailyExecution)
             : new ContinuationCensusProtocol();
         npcRosterCensusProtocol = protocol;
         bool RecordRegistration(bool registered, string registration)
@@ -5593,7 +5634,10 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         if (runtimeAdmissionContext == null) return true;
         if (binding == null
             || !IsRuntimeAdmissionOwnerThreadCurrent()
-            || npcRosterCensusProtocol == null)
+            || npcRosterCensusProtocol == null
+            || dailyExecutionBoundary == null
+            || (dailyExecutionBoundary.HasAdmittedSelectedDailyExecution
+                && dailyExecutionBoundary.ActiveOperationCount == 0))
         {
             FaultRuntimeAdmission();
             return false;
@@ -5672,6 +5716,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         if (runtimeAdmissionContext == null) return true;
         if (!IsRuntimeAdmissionOwnerThreadCurrent()
             || npcRosterCensusProtocol == null
+            || dailyExecutionBoundary == null
+            || (dailyExecutionBoundary.HasAdmittedSelectedDailyExecution
+                && dailyExecutionBoundary.ActiveOperationCount == 0)
             || !IsCurrentP12MerchantOwnerBinding(binding))
         {
             FaultRuntimeAdmission();
@@ -6079,6 +6126,15 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         IReadOnlyList<CityRuntime> changedCities)
     {
         if (runtimeAdmissionContext == null) return true;
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || dailyExecutionBoundary == null
+            || (dailyExecutionBoundary.HasAdmittedSelectedDailyExecution
+                && dailyExecutionBoundary.ActiveOperationCount == 0))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
         string[] ids = GetP12TravelMutationSectionIds(binding, travelStateChanged, changedCities);
         if (ids == null)
         {
@@ -12668,64 +12724,6 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         return true;
     }
 
-    bool IDailyV1SelectedRuntimeOwnerCensusProviderPort.TryGetQuiescentOwnerSectionCensusProviders(
-        DailyV1CaptureScopeAllowance allowedOuterScope,
-        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> providers,
-        out DailyCaptureEligibilityFailure failure)
-    {
-        providers = null;
-        ContinuationCensusProtocol census = npcRosterCensusProtocol;
-        if (census == null)
-        {
-            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
-            return false;
-        }
-
-        if (!census.TryGetQuiescentOwnerSectionCensusProviders(
-                allowedOuterScope,
-                out providers,
-                out ContinuationCensusFailure censusFailure))
-        {
-            failure = MapDailyCaptureFailure(censusFailure);
-            return false;
-        }
-
-        failure = DailyCaptureEligibilityFailure.None;
-        return true;
-    }
-
-    bool IDailyV1SelectedRuntimeOwnerCensusProviderPort.TryValidateQuiescentOwnerSectionCensusSnapshot(
-        DailyV1CaptureScopeAllowance allowedOuterScope,
-        IReadOnlyList<OwnerSectionCensusSnapshot> coreCapturedSections,
-        long coreObservedMutationEpoch,
-        out DailyCaptureEligibilityFailure failure)
-    {
-        ContinuationCensusProtocol census = npcRosterCensusProtocol;
-        if (census == null)
-        {
-            failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
-            return false;
-        }
-
-        if (!census.TryValidateQuiescentOwnerSectionCensusSnapshot(
-                allowedOuterScope,
-                coreCapturedSections,
-                coreObservedMutationEpoch,
-                out ContinuationCensusFailure censusFailure))
-        {
-            failure = MapDailyCaptureFailure(censusFailure);
-            return false;
-        }
-
-        failure = DailyCaptureEligibilityFailure.None;
-        return true;
-    }
-
-    void IDailyV1SelectedRuntimeOwnerCensusProviderPort.FaultOwnerSectionCensusProviderProtocol()
-    {
-        npcRosterCensusProtocol?.FaultClosed();
-    }
-
     bool IDailyV1SelectedRuntimeAdvanceHostPorts.TryCaptureOwnerSectionCensus(
         DailyV1CaptureScopeAllowance allowedOuterScope,
         out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
@@ -14592,6 +14590,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     graph, actor, actor.ActionSlot?.CurrentAction)
                 : DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalActionForExactTarget(
                     graph, actor, actor.ActionSlot?.CurrentAction, target);
+            if (projectionIndependentNormal
+                && !exactProjectedAction
+                && actionRuntime != null
+                && !exactRuntime.TryClearMismatchedSelectedActionProjection(
+                    actor, actor.ActionSlot?.CurrentPayload))
+                return false;
             bool projectionIndependentCoreCrime = !HasExactCurrentActionProjection(actor)
                 && IsExactSelectedCoreCrimeOrGuardActionSlot(actor);
             if (!exactProjectedAction && !projectionIndependentNormal
@@ -14809,15 +14813,52 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         WorldCommandAuthorityMode authority,
         out ActorChoiceStoreFailureCode failure)
     {
-        return actorChoiceStore.TryCapture(
-            worldCommandId,
-            personId,
-            actionDefinitionId,
-            origin,
-            authority,
-            CurrentDay,
-            out _,
-            out failure);
+        if (runtimeAdmissionContext == null)
+        {
+            return actorChoiceStore.TryCapture(
+                worldCommandId,
+                personId,
+                actionDefinitionId,
+                origin,
+                authority,
+                CurrentDay,
+                out _,
+                out failure);
+        }
+
+        // P11 input is a committed selected-owner mutation even though it is
+        // issued between completed daily boundaries. Keep the census refresh
+        // inside Core's owner-thread operation lifetime so the full selected
+        // owner vector and shared mutation epoch advance atomically.
+        if (dailyExecutionBoundary == null
+            || !dailyExecutionBoundary.TryBeginOperation(DailyV1OperationScopeKind.Application))
+        {
+            FaultRuntimeAdmission();
+            failure = ActorChoiceStoreFailureCode.RuntimeFaulted;
+            return false;
+        }
+
+        try
+        {
+            return actorChoiceStore.TryCapture(
+                worldCommandId,
+                personId,
+                actionDefinitionId,
+                origin,
+                authority,
+                CurrentDay,
+                out _,
+                out failure);
+        }
+        finally
+        {
+            if (!dailyExecutionBoundary.TryEndOperation(DailyV1OperationScopeKind.Application))
+            {
+                FaultRuntimeAdmission();
+                throw new InvalidOperationException(
+                    "The P12 ActorChoice input operation could not release its Core owner-thread scope.");
+            }
+        }
     }
 
     private bool TryDeferActorChoiceForSpatialTransit(NpcRuntime npcRuntime, int actorTurnRosterOrdinal)
@@ -18112,15 +18153,17 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 && !npcRuntime.TryGetSelectedDailyV1ActionNode(action, out selectedAction))
                 throw new InvalidOperationException("The admitted action status effects could not be resolved from the selected definition graph.");
 
+            var projectionBoundary = new SelectedActionStatusOperationBoundaryAdapter(
+                this, npcRuntime, targetRuntime, reuseForcedEscapeScope);
+            DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
             if (!DailyV1SelectedActionExecutionStage.TryApplyActionStatusPlanAfterDispatch(
                     actionSucceeded,
-                    SelectedRuntimeOwnerGraph,
+                    graph,
                     npcRuntime.SelectedRuntimeOwners,
                     selectedAction,
                     targetRuntime != null,
                     targetRuntime != null ? targetRuntime.SelectedRuntimeOwners : null,
-                    new SelectedActionStatusOperationBoundaryAdapter(
-                        this, npcRuntime, targetRuntime, reuseForcedEscapeScope),
+                    projectionBoundary,
                     out DailyV1SelectedActionStatusPlanResult statusResult))
                 throw new InvalidOperationException("The admitted action status effects could not be resolved from the selected definition graph.");
 

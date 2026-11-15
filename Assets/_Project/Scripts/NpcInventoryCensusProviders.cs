@@ -51,23 +51,25 @@ public static class NpcInventoryCensusProvider
     {
         if (roster == null) throw new ArgumentNullException(nameof(roster));
         List<NpcRuntime> ordered = new List<NpcRuntime>(roster.Count);
-        bool allSelected = true;
+        List<DailyV1NpcRuntimeOwners> selectedOwners = new List<DailyV1NpcRuntimeOwners>();
         foreach (NpcRuntime npc in roster)
         {
             if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId))
                 throw new InvalidOperationException("Inventory census requires installed NPCs with valid RuntimeIds.");
             InventoryRuntime owner = npc.ExistingInventory;
             if (owner == null) throw new InvalidOperationException("Inventory census requires an existing inventory owner.");
-            allSelected &= npc.SelectedRuntimeOwners != null;
+            if (npc.SelectedRuntimeOwners == null && owner.SelectedDailyV1Owner != null)
+                throw new InvalidOperationException(
+                    "An unselected NPC cannot register an Inventory projection already bound to a Core owner.");
+            if (npc.SelectedRuntimeOwners != null)
+                selectedOwners.Add(npc.SelectedRuntimeOwners);
             ordered.Add(npc);
         }
         ordered.Sort((left, right) => StringComparer.Ordinal.Compare(left.RuntimeId, right.RuntimeId));
         IOwnerSectionCensusProvider[] providers = new IOwnerSectionCensusProvider[ordered.Count];
         Dictionary<string, DailyV1NpcOwnerCensusProviders.IInventoryProvider> selectedProviders = null;
-        if (allSelected)
+        if (selectedOwners.Count != 0)
         {
-            DailyV1NpcRuntimeOwners[] selectedOwners = new DailyV1NpcRuntimeOwners[ordered.Count];
-            for (int i = 0; i < ordered.Count; i++) selectedOwners[i] = ordered[i].SelectedRuntimeOwners;
             IReadOnlyList<IOwnerSectionCensusProvider> coreProviders =
                 DailyV1NpcOwnerCensusProviders.CreateInventoryProviders(selectedOwners);
             selectedProviders = new Dictionary<string, DailyV1NpcOwnerCensusProviders.IInventoryProvider>(StringComparer.Ordinal);
@@ -85,9 +87,10 @@ public static class NpcInventoryCensusProvider
             if (string.Equals(previous, npc.RuntimeId, StringComparison.Ordinal))
                 throw new InvalidOperationException("Inventory census requires unique NPC RuntimeIds.");
             IOwnerSectionCensusProvider selectedProvider = null;
-            if (allSelected)
+            if (npc.SelectedRuntimeOwners != null)
             {
-                if (!selectedProviders.TryGetValue(npc.RuntimeId, out DailyV1NpcOwnerCensusProviders.IInventoryProvider coreProvider)
+                if (selectedProviders == null
+                    || !selectedProviders.TryGetValue(npc.RuntimeId, out DailyV1NpcOwnerCensusProviders.IInventoryProvider coreProvider)
                     || !ReferenceEquals(coreProvider.NpcOwner, npc.SelectedRuntimeOwners)
                     || !ReferenceEquals(coreProvider.InventoryOwner, npc.ExistingInventory.SelectedDailyV1Owner))
                     throw new InvalidOperationException("Selected Inventory census must use the exact Core owner bound to the Unity projection.");

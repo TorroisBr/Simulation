@@ -1250,14 +1250,13 @@ public sealed class SimulationBootstrapCompositionTests
         }
         IReadOnlyList<IOwnerSectionCensusProvider> inventoryProviders = simulation.Bootstrap.Runtime.InventoryCensusProviders;
         NpcRuntime[] inventoryOwners = runtime.NpcRuntimes.OrderBy(npc => npc.RuntimeId, System.StringComparer.Ordinal).ToArray();
-        bool useSelectedCoreInventoryOwners = inventoryOwners.All(npc => npc.SelectedRuntimeOwners != null);
         Assert.That(inventoryProviders.Count, Is.EqualTo(inventoryOwners.Length));
         for (int i = 0; i < inventoryOwners.Length; i++)
         {
             OwnerSectionCensusWitness inventoryWitness = inventoryProviders[i].GetCurrentCensus();
             Assert.That(inventoryWitness.SectionId, Is.EqualTo(NpcInventoryCensusProvider.SectionPrefix + inventoryOwners[i].RuntimeId));
             Assert.That(inventoryWitness.SchemaVersion, Is.EqualTo(NpcInventoryCensusProvider.SchemaVersion));
-            object expectedInventoryOwner = useSelectedCoreInventoryOwners
+            object expectedInventoryOwner = inventoryOwners[i].SelectedRuntimeOwners != null
                 ? (object)inventoryOwners[i].SelectedRuntimeOwners.Inventory
                 : inventoryOwners[i].Inventory;
             Assert.That(inventoryWitness.OwnerInstanceIdentity, Is.SameAs(expectedInventoryOwner));
@@ -3752,18 +3751,17 @@ public sealed class SimulationBootstrapCompositionTests
             .Select(provider => provider.GetCurrentCensus())
             .ToArray();
         Assert.That(inventoryWitnesses, Has.Length.EqualTo(roster.Length));
-        bool useSelectedCoreInventoryOwners = roster.All(npc => npc.SelectedRuntimeOwners != null);
         foreach (NpcRuntime npc in roster)
         {
             OwnerSectionCensusWitness witness = inventoryWitnesses.Single(candidate =>
                 candidate.SectionId == NpcInventoryCensusProvider.SectionPrefix + npc.RuntimeId);
             Assert.That(witness.SchemaVersion, Is.EqualTo(NpcInventoryCensusProvider.SchemaVersion));
-            object expectedOwnerIdentity = useSelectedCoreInventoryOwners
+            object expectedOwnerIdentity = npc.SelectedRuntimeOwners != null
                 ? (object)npc.SelectedRuntimeOwners.Inventory
                 : npc.Inventory;
             Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expectedOwnerIdentity));
             int censusCardinality;
-            bool hasCardinality = useSelectedCoreInventoryOwners
+            bool hasCardinality = npc.SelectedRuntimeOwners != null
                 ? npc.SelectedRuntimeOwners.Inventory.TryGetCensusCardinality(out censusCardinality)
                 : npc.Inventory.TryGetCensusCardinality(out censusCardinality);
             Assert.That(hasCardinality, Is.True);
@@ -4038,9 +4036,7 @@ public sealed class SimulationBootstrapCompositionTests
                 expected, NpcTravelStateCensusProvider.SectionIdFor(runtimeId), npc.SelectedCensusOwnerIdentity);
             AddExpectedDailyV1OwnerIdentity(
                 expected, NpcInventoryCensusProvider.SectionPrefix + runtimeId,
-                runtime.NpcRuntimes.All(candidate => candidate.SelectedRuntimeOwners != null)
-                    ? (object)selectedOwners?.Inventory
-                    : npc.Inventory);
+                (object)selectedOwners?.Inventory ?? npc.Inventory);
             AddExpectedDailyV1OwnerIdentity(
                 expected, NpcMoneyAccountCensusProvider.SectionPrefix + runtimeId, npc.MoneyAccount);
             AddExpectedDailyV1OwnerIdentity(
