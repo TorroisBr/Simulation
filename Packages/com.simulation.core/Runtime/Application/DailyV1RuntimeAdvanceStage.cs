@@ -236,10 +236,10 @@ internal sealed class DailyV1OwnerSectionCensusProviderRegistration
     internal bool HasBaseline { get; }
 }
 /// <summary>
-/// Core executes the read transaction over the host's sealed provider registry.
-/// Owner-thread, quiescence, full 89-family shape, dynamic-key and shared-epoch
-/// checks are performed here; the host only confirms that the same registered
-/// sources still match their prior committed baselines.
+/// Core reads its sealed provider registry as part of the capture transaction.
+/// Owner-thread, quiescence, full 89-family shape, dynamic-key, shared-epoch,
+/// and committed-baseline checks are performed here. The host supplies no
+/// second owner vector.
 /// </summary>
 internal static class DailyV1CoreOwnerSectionCensusCapture
 {
