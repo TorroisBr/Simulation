@@ -6126,11 +6126,23 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         IReadOnlyList<CityRuntime> changedCities)
     {
         if (runtimeAdmissionContext == null) return true;
+        bool selectedExecutionWithoutOperation = dailyExecutionBoundary != null
+            && dailyExecutionBoundary.HasAdmittedSelectedDailyExecution
+            && dailyExecutionBoundary.ActiveOperationCount == 0;
+        bool compatibilityTravelPartyPreparation = travelStateChanged
+            && p12TravelPartyStartCompatibilityFallback
+            && Volatile.Read(ref p12TravelPartyStartRequestActive) != 0
+            && ReferenceEquals(p12TravelPartyStartRequestThread, Thread.CurrentThread)
+            && binding?.Owner is NpcRuntime requestedMember
+            && p12TravelPartyStartRequestMembers != null
+            && p12TravelPartyStartRequestMembers.Contains(requestedMember);
+        bool unselectedPresenceOnly = !travelStateChanged
+            && binding?.Owner is NpcRuntime compatibilityNpc
+            && compatibilityNpc.SelectedRuntimeOwners == null;
         if (!IsRuntimeAdmissionOwnerThreadCurrent()
             || npcRosterCensusProtocol == null
             || dailyExecutionBoundary == null
-            || (dailyExecutionBoundary.HasAdmittedSelectedDailyExecution
-                && dailyExecutionBoundary.ActiveOperationCount == 0))
+            || (selectedExecutionWithoutOperation && !unselectedPresenceOnly && !compatibilityTravelPartyPreparation))
         {
             FaultRuntimeAdmission();
             return false;

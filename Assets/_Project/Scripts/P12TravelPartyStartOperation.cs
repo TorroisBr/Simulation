@@ -9,6 +9,8 @@ public sealed partial class SimulationRuntime
     private P12TravelPartyStartOperationContext activeP12TravelPartyStartOperationContext;
     private int p12TravelPartyStartRequestActive;
     private Thread p12TravelPartyStartRequestThread;
+    private HashSet<NpcRuntime> p12TravelPartyStartRequestMembers;
+    private bool p12TravelPartyStartCompatibilityFallback;
 
     private sealed class P12TravelPartyStartOperationContext
     {
@@ -127,16 +129,20 @@ public sealed partial class SimulationRuntime
         {
             if (travelPartySystem == null || context == null) return false;
             bool mixedOrUnselectedRoster = false;
+            HashSet<NpcRuntime> requestMembers = new HashSet<NpcRuntime>();
             foreach (ActionExecutionParticipant participant in context.Participants)
             {
                 if (participant == null
                     || !npcRegistryById.TryGetValue(participant.RuntimeId, out NpcRuntime member)
                     || member == null)
                     return false;
+                requestMembers.Add(member);
                 if (member.SelectedRuntimeOwners == null)
                     mixedOrUnselectedRoster = true;
             }
 
+            p12TravelPartyStartRequestMembers = requestMembers;
+            p12TravelPartyStartCompatibilityFallback = mixedOrUnselectedRoster;
             // Preserve the established whole-roster Unity compatibility path
             // only when at least one genuine unselected member is present.
             if (mixedOrUnselectedRoster)
@@ -152,6 +158,8 @@ public sealed partial class SimulationRuntime
         {
             P12TravelPartyStartOperationContext operation = activeP12TravelPartyStartOperationContext;
             if (operation != null) ExitP12TravelPartyStartOperation(operation);
+            p12TravelPartyStartRequestMembers = null;
+            p12TravelPartyStartCompatibilityFallback = false;
             p12TravelPartyStartRequestThread = null;
             Interlocked.Exchange(ref p12TravelPartyStartRequestActive, 0);
         }

@@ -533,7 +533,7 @@ public class NpcRuntime : ICapabilityConditionSource
             || !ReferenceEquals(selectedDailyV1StatusOwner, owner?.Status))
             throw new InvalidOperationException("The selected Core status owner changed during its admitted write.");
         RefreshSelectedStatusProjection();
-        NotifyP12CrimeJusticeMutationCommitted();
+        NotifyP12CrimeJusticeMutationCommitted(selectedCoreRevisionAlreadyAdvanced: true);
     }
 
     /// <summary>
@@ -567,7 +567,7 @@ public class NpcRuntime : ICapabilityConditionSource
             || !ReferenceEquals(owner?.HiddenState, selectedRuntimeOwners?.HiddenState))
             throw new InvalidOperationException("The selected Core hidden-state owner changed during its admitted write.");
         hiddenDaysRemaining = owner.HiddenState.RemainingDays;
-        NotifyP12CrimeJusticeMutationCommitted();
+        NotifyP12CrimeJusticeMutationCommitted(selectedCoreRevisionAlreadyAdvanced: true);
     }
 
     private bool CanProjectSelectedStatusChanges(IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
@@ -2714,14 +2714,22 @@ public class NpcRuntime : ICapabilityConditionSource
             throw new InvalidOperationException("NPC status or hidden state is outside an admitted P12 Crime/Justice boundary.");
     }
 
-    private void NotifyP12CrimeJusticeMutationCommitted()
+    private void NotifyP12CrimeJusticeMutationCommitted(
+        bool selectedCoreRevisionAlreadyAdvanced = false)
     {
         if (p12CrimeJusticeMutationAdmission == null) return;
         if (selectedRuntimeOwners == null)
             p12CrimeJusticeRevision++;
-        // A selected P12 status/hidden owner is revised by the Core execution
-        // boundary invoked below. Keep this Unity compatibility bridge from
-        // incrementing the same Core owner a second time.
+        else if (!selectedCoreRevisionAlreadyAdvanced)
+        {
+            // Direct Unity compatibility mutations still commit against the
+            // selected Core owner. Core action-stage callbacks pass true
+            // because that execution boundary has already advanced the same
+            // section revision before synchronizing this projection.
+            if (!selectedRuntimeOwners.CanAdvanceCrimeJusticeRevision(1))
+                throw new InvalidOperationException("The selected NPC Crime/Justice revision cannot advance.");
+            selectedRuntimeOwners.NotifyCrimeJusticeMutationCommitted();
+        }
         try { p12CrimeJusticeMutationCommitted?.Invoke(this); }
         catch { }
     }

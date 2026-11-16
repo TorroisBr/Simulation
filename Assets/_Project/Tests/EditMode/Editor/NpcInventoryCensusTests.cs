@@ -33,7 +33,7 @@ public sealed class NpcInventoryCensusTests
     }
 
     [Test]
-    public void SelectedDailyV1InventoryWitnessReadsCoreOwnerAndMixedRosterRetainsLegacyProjection()
+    public void SelectedDailyV1InventoryWitnessReadsCoreOwnerAndMixedRosterPreservesEachExactOwner()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         NpcRuntime selected = NpcRuntime.CreateSelectedDailyV1(
@@ -57,11 +57,15 @@ public sealed class NpcInventoryCensusTests
 
         NpcRuntime legacy = new NpcRuntime("z-legacy-inventory", null);
         var mixedProviders = NpcInventoryCensusProvider.CreateProviders(new[] { legacy, selected });
-        OwnerSectionCensusWitness mixedWitness = mixedProviders[0].GetCurrentCensus();
-        Assert.That(mixedWitness.OwnerInstanceIdentity, Is.SameAs(projection));
-        Assert.That(mixedWitness.OwnerInstanceIdentity, Is.Not.SameAs(coreOwner));
-        Assert.That(mixedWitness.Cardinality, Is.EqualTo(1));
-        Assert.That(mixedWitness.Revision, Is.EqualTo(afterMutation.Revision));
+        Assert.That(mixedProviders.Count, Is.EqualTo(2));
+        OwnerSectionCensusWitness selectedMixedWitness = mixedProviders[0].GetCurrentCensus();
+        OwnerSectionCensusWitness legacyMixedWitness = mixedProviders[1].GetCurrentCensus();
+        Assert.That(selectedMixedWitness.OwnerInstanceIdentity, Is.SameAs(coreOwner));
+        Assert.That(selectedMixedWitness.OwnerInstanceIdentity, Is.Not.SameAs(projection));
+        Assert.That(selectedMixedWitness.Cardinality, Is.EqualTo(1));
+        Assert.That(selectedMixedWitness.Revision, Is.EqualTo(afterMutation.Revision));
+        Assert.That(legacyMixedWitness.OwnerInstanceIdentity, Is.SameAs(legacy.ExistingInventory));
+        Assert.That(legacyMixedWitness.OwnerInstanceIdentity, Is.Not.SameAs(coreOwner));
     }
 
     [Test]

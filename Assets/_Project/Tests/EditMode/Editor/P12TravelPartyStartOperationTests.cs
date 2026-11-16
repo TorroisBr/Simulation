@@ -487,6 +487,8 @@ public sealed class P12TravelPartyStartOperationTests
         Assert.That(compatibilityMember.SelectedRuntimeOwners, Is.Null);
         Assert.That(runtime.TryGetNpcRuntime(compatibilityMember.RuntimeId, out NpcRuntime registeredCompatibilityMember), Is.True);
         Assert.That(registeredCompatibilityMember, Is.SameAs(compatibilityMember));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out _, out ContinuationCensusFailure registrationEpochFailure),
+            Is.True, "After compatibility registration: " + registrationEpochFailure);
         Assert.That(compatibilityMember.SetCurrentPresence(fixture.Origin.Location, fixture.Origin), Is.True,
             "The registered unselected member joins the admitted City presence owner through the normal runtime projection.");
 

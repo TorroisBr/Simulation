@@ -687,7 +687,7 @@ public sealed class SimulationRuntimeOrchestrationTests
     }
 
     [Test]
-    public void ApplicationBoundSimulationLoopPreservesTypedAdvanceFailureDiagnostic()
+    public void ApplicationDoesNotPublishCoreSessionWhenHostCannotCaptureSelectedCensus()
     {
         DailyV1Application application = new DailyV1Application();
         DailyV1EffectiveDefinitions definitions =
@@ -705,16 +705,8 @@ public sealed class SimulationRuntimeOrchestrationTests
         RejectedApplicationAdvanceBoundary boundary =
             new RejectedApplicationAdvanceBoundary(session.ExecutionBoundaryState);
         Assert.That(application.TryBindRuntimeAdvanceBoundary(session, boundary), Is.True);
-        Assert.That(application.TryPublishInitial(session), Is.True);
-
-        SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(0L), null, null, economyEnabled: false);
-        System.InvalidOperationException exception = Assert.Throws<System.InvalidOperationException>(
-            () => TesteSimulacao.AdvanceCoreSessionThroughApplication(application, runtime));
-
-        Assert.That(exception.Message,
-            Is.EqualTo("A faulted SimulationRuntime cannot advance its world."));
-        Assert.That(session.ExecutionBoundaryState.AdvanceLeaseHeld, Is.False);
+        Assert.That(application.TryPublishInitial(session), Is.False,
+            "Initial publication requires the complete selected census, which this advance-only test double deliberately cannot capture.");
         Assert.That(application.ActiveOperationCount, Is.Zero);
     }
 

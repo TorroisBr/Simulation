@@ -1404,7 +1404,11 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || AdmissionContext == null
                 || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                 || !AdmissionContext.IsOwnedByCurrentThread()
-                || activeOperationScopes.Count == 0
+                // A supported direct owner write may refresh the census from
+                // a quiescent selected session without inventing a protocol
+                // operation ID. An open advance lease still requires its
+                // admitted operation scope.
+                || (activeOperationScopes.Count == 0 && advanceLease != null)
                 || exclusiveSessionReplacementInProgress)
             {
                 lastSelectedOwnerSectionCensusRefreshRejection = "SessionOrQuiescence";
