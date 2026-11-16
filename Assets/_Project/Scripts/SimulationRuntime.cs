@@ -4251,19 +4251,22 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         {
             bool protocolBoundToExactExecutionState = protocol.IsBoundTo(dailyExecutionBoundary);
             bool censusSourceBound = protocolBoundToExactExecutionState
-                && dailyExecutionBoundary.TryBindSelectedRuntimeOwnerCensusSource(
-                    protocol,
-                    allowedOuterScope =>
-                    {
-                        if (!protocol.TryCaptureQuiescentOwnerSectionSnapshot(
-                                allowedOuterScope,
-                                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
-                                out long mutationEpoch,
-                                out ContinuationCensusFailure censusFailure))
-                            return DailyV1OwnerSectionCensusCaptureResult.Rejected(
-                                MapDailyCaptureFailure(censusFailure), censusFailure.ToString());
-                        return DailyV1OwnerSectionCensusCaptureResult.Captured(ownerSections, mutationEpoch);
-                    });
+                && (runtimeAdmissionContext.Profile
+                        == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                    ? dailyExecutionBoundary.TryBindCoreSelectedRuntimeOwnerCensusSource()
+                    : dailyExecutionBoundary.TryBindLegacyHostRuntimeOwnerCensusSource(
+                        protocol,
+                        allowedOuterScope =>
+                        {
+                            if (!protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+                                    allowedOuterScope,
+                                    out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+                                    out long mutationEpoch,
+                                    out ContinuationCensusFailure censusFailure))
+                                return DailyV1OwnerSectionCensusCaptureResult.Rejected(
+                                    MapDailyCaptureFailure(censusFailure), censusFailure.ToString());
+                            return DailyV1OwnerSectionCensusCaptureResult.Captured(ownerSections, mutationEpoch);
+                        }));
             if (!censusSourceBound)
             {
                 npcRosterCensusProtocolInitializationFailure = !protocolBoundToExactExecutionState

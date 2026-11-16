@@ -160,7 +160,8 @@ internal interface IDailyV1RuntimeAdvanceEvidenceBoundary
 internal interface IDailyV1SelectedRuntimeAdvanceHostPorts
 {
     DailyV1ExecutionBoundaryState ExecutionState { get; }
-    // Stable identity for the complete live/restored owner-census reader.
+    // Stable identity for a legacy/unselected host census reader. Selected
+    // Daily-v1 identity is the Core execution state and uses its sealed registry.
     object SelectedRuntimeOwnerCensusSourceIdentity { get; }
     bool TryGetExactJusticeRecordsCensusProjectionIdentity(
         DailyV1JusticeRecordsOwner owner,

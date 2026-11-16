@@ -860,7 +860,7 @@ public sealed class SimulationRuntimeAdmissionTests
         DailyV1ExecutionBoundaryState executionState = runtime.ExecutionBoundaryState;
         ContinuationCensusProtocol registeredProtocol =
             ReadPrivateField<ContinuationCensusProtocol>(runtime, "npcRosterCensusProtocol");
-        Assert.That(executionState.SelectedRuntimeOwnerCensusSourceIdentity, Is.SameAs(registeredProtocol));
+        Assert.That(executionState.SelectedRuntimeOwnerCensusSourceIdentity, Is.SameAs(executionState));
         Assert.That(registeredProtocol.IsBoundTo(executionState), Is.True);
 
         Assert.That(runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(

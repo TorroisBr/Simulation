@@ -1977,18 +1977,8 @@ public sealed class DailyV1ApplicationSessionGateTests
                 candidateState, candidateOwners, boundary: candidateBoundary);
             Assert.That(candidateState.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True,
                 "A private restored target seals its full Core census before its continuation token is admitted.");
-            Assert.That(candidateState.TryBindSelectedRuntimeOwnerCensusSource(
-                candidateBoundary.SelectedRuntimeOwnerCensusSourceIdentity,
-                allowedOuterScope => candidateBoundary.TryCaptureOwnerSectionCensus(
-                        allowedOuterScope,
-                        out IReadOnlyList<OwnerSectionCensusSnapshot> capturedOwnerSections,
-                        out long capturedEpoch,
-                        out DailyCaptureEligibilityFailure captureFailure)
-                    ? DailyV1OwnerSectionCensusCaptureResult.Captured(
-                        capturedOwnerSections, capturedEpoch)
-                    : DailyV1OwnerSectionCensusCaptureResult.Rejected(
-                        captureFailure, "The restore fixture census source rejected capture.")), Is.True,
-                "The restored candidate binds its exact host census before issuing a capture token.");
+            Assert.That(candidateState.TryBindCoreSelectedRuntimeOwnerCensusSource(), Is.True,
+                "The restored candidate binds census identity to its Core execution state before issuing a capture token.");
             Assert.That(candidateState.TryCreateRestoredContinuationToken(
                 candidateAdmission,
                 candidateState.ConfigurationIdentity,
@@ -2114,18 +2104,8 @@ public sealed class DailyV1ApplicationSessionGateTests
                 candidateState, candidateOwners, boundary: candidateBoundary);
             Assert.That(candidateState.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True,
                 "A private restored target seals its full Core census before its continuation token is admitted.");
-            Assert.That(candidateState.TryBindSelectedRuntimeOwnerCensusSource(
-                candidateBoundary.SelectedRuntimeOwnerCensusSourceIdentity,
-                allowedOuterScope => candidateBoundary.TryCaptureOwnerSectionCensus(
-                        allowedOuterScope,
-                        out IReadOnlyList<OwnerSectionCensusSnapshot> capturedOwnerSections,
-                        out long capturedEpoch,
-                        out DailyCaptureEligibilityFailure captureFailure)
-                    ? DailyV1OwnerSectionCensusCaptureResult.Captured(
-                        capturedOwnerSections, capturedEpoch)
-                    : DailyV1OwnerSectionCensusCaptureResult.Rejected(
-                        captureFailure, "The restore fixture census source rejected capture.")), Is.True,
-                "The restored candidate binds its exact host census before issuing a capture token.");
+            Assert.That(candidateState.TryBindCoreSelectedRuntimeOwnerCensusSource(), Is.True,
+                "The restored candidate binds census identity to its Core execution state before issuing a capture token.");
 
             Assert.That(application.TryCreateRestoredActiveRuntimeSession(
                 candidateState, definitions, 0L, replacementOperation,
@@ -2656,7 +2636,7 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void ApplicationRejectsHostPortsWhoseCensusSourceIsNotTheExactSessionBinding()
+    public void SelectedCoreSessionRejectsAnExternallyBoundCensusSource()
     {
         DailyV1Application application = new DailyV1Application();
         DailyV1EffectiveDefinitions definitions =
@@ -2668,34 +2648,32 @@ public sealed class DailyV1ApplicationSessionGateTests
             out _, out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);
 
         object boundCensusSource = new object();
-        Assert.That(session.ExecutionBoundaryState.TryBindSelectedRuntimeOwnerCensusSource(
+        Assert.That(session.ExecutionBoundaryState.TryBindLegacyHostRuntimeOwnerCensusSource(
             boundCensusSource,
             _ => DailyV1OwnerSectionCensusCaptureResult.Captured(
                 Array.Empty<OwnerSectionCensusSnapshot>(),
-                session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch)), Is.True,
-            "The candidate session first binds its exact census source under its Core state.");
+                session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch)), Is.False,
+            "A selected profile cannot bind an external census reader as its source of truth.");
 
         CensusIdentityApplicationAdvanceBoundary missingSource =
             new CensusIdentityApplicationAdvanceBoundary(
                 session.ExecutionBoundaryState, null);
-        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, missingSource), Is.False,
-            "A selected host boundary must expose the stable owner-census source identity.");
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, missingSource), Is.True,
+            "A selected Core session binds its census identity internally without requiring a host reader.");
 
-        CensusIdentityApplicationAdvanceBoundary wrongSource =
-            new CensusIdentityApplicationAdvanceBoundary(
-                session.ExecutionBoundaryState, new object());
-        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, wrongSource), Is.False,
-            "A host adapter cannot publish a runtime while naming a different census source.");
+        Assert.That(session.ExecutionBoundaryState.SelectedRuntimeOwnerCensusSourceIdentity,
+            Is.SameAs(session.ExecutionBoundaryState),
+            "The selected source identity is the Core execution state, regardless of an optional host reader.");
 
-        CensusIdentityApplicationAdvanceBoundary exactSource =
+        CensusIdentityApplicationAdvanceBoundary replacementSource =
             new CensusIdentityApplicationAdvanceBoundary(
                 session.ExecutionBoundaryState, boundCensusSource);
-        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, exactSource), Is.True,
-            "The shared application binds only the exact source that owns this session's P12 census.");
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, replacementSource), Is.False,
+            "A session cannot replace the runtime host adapter after it has been bound.");
     }
 
     [Test]
-    public void ApplicationBindsTheExactHostCensusSourceDuringRuntimeComposition()
+    public void ApplicationBindsSelectedCensusIdentityToCoreExecutionStateDuringComposition()
     {
         DailyV1Application application = new DailyV1Application();
         DailyV1EffectiveDefinitions definitions =
@@ -2712,13 +2690,13 @@ public sealed class DailyV1ApplicationSessionGateTests
                 session.ExecutionBoundaryState, censusSourceIdentity);
 
         Assert.That(session.ExecutionBoundaryState.SelectedRuntimeOwnerCensusSourceIdentity, Is.Null,
-            "The candidate is not pre-bound by a host during runtime initialization.");
+            "The candidate census identity is not bound before runtime composition.");
         Assert.That(application.TryBindRuntimeAdvanceBoundary(session, hostPorts), Is.True);
         Assert.That(session.ExecutionBoundaryState.SelectedRuntimeOwnerCensusSourceIdentity,
-            Is.SameAs(censusSourceIdentity),
-            "The Core application binds the exact host census source while composing the session boundary.");
+            Is.SameAs(session.ExecutionBoundaryState),
+            "Selected census authority belongs to the Core execution state, not a host reader.");
         Assert.That(application.TryBindRuntimeAdvanceBoundary(session, hostPorts), Is.True,
-            "Retrying the same boundary retains the original exact census-source binding.");
+            "Retrying the same boundary retains the Core census identity binding.");
     }
 
     [Test]
@@ -4167,23 +4145,15 @@ public sealed class DailyV1ApplicationSessionGateTests
         OwnerSectionCensusSnapshot[] expectedHostRemainder = completeHostVector
             .Where(section => !exactCoreIds.Contains(section.SectionId)).ToArray();
 
-        bool sourceCalled = false;
         long currentEpoch = state.MutationEpochState.CurrentEpoch;
-        Assert.That(state.TryBindSelectedRuntimeOwnerCensusSource(new object(), allowedOuterScope =>
-        {
-            sourceCalled = true;
-            Assert.That(allowedOuterScope, Is.EqualTo(DailyV1CaptureScopeAllowance.None));
-            return DailyV1OwnerSectionCensusCaptureResult.Captured(
-                Array.AsReadOnly(completeHostVector), currentEpoch);
-        }), Is.True);
+        Assert.That(state.TryBindCoreSelectedRuntimeOwnerCensusSource(), Is.True);
+        Assert.That(state.SelectedRuntimeOwnerCensusSourceIdentity, Is.SameAs(state));
 
         Assert.That(state.TryCaptureBoundOwnerSectionCensus(
                 null, DailyV1CaptureScopeAllowance.None,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> hostRemainder,
                 out long capturedEpoch, out DailyCaptureEligibilityFailure failure),
             Is.True, failure.ToString());
-        Assert.That(sourceCalled, Is.False,
-            "A selected Daily-v1 capture reads the Core registry and does not call the legacy host source.");
         Assert.That(capturedEpoch, Is.EqualTo(currentEpoch));
         AssertOwnerSectionSnapshotsMatch(expectedHostRemainder.OrderBy(
             section => section.SectionId, StringComparer.Ordinal).ToArray(), hostRemainder);

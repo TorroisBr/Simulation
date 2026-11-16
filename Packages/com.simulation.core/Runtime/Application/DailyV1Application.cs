@@ -4918,15 +4918,24 @@ internal sealed class DailyV1Application
         DailyV1ActiveRuntimeSession candidateSession,
         IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts)
     {
-        object censusSourceIdentity = hostPorts.SelectedRuntimeOwnerCensusSourceIdentity;
         DailyV1ExecutionBoundaryState executionState = candidateSession.ExecutionBoundaryState;
+        if (candidateSession.AdmissionContext?.Profile
+            == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+        {
+            object boundCoreIdentity = executionState.SelectedRuntimeOwnerCensusSourceIdentity;
+            if (boundCoreIdentity != null)
+                return ReferenceEquals(boundCoreIdentity, executionState);
+            return executionState.TryBindCoreSelectedRuntimeOwnerCensusSource();
+        }
+
+        object censusSourceIdentity = hostPorts.SelectedRuntimeOwnerCensusSourceIdentity;
         if (censusSourceIdentity == null) return false;
 
         object boundCensusSourceIdentity = executionState.SelectedRuntimeOwnerCensusSourceIdentity;
         if (boundCensusSourceIdentity != null)
             return ReferenceEquals(boundCensusSourceIdentity, censusSourceIdentity);
 
-        return executionState.TryBindSelectedRuntimeOwnerCensusSource(
+        return executionState.TryBindLegacyHostRuntimeOwnerCensusSource(
             censusSourceIdentity,
             allowedOuterScope =>
             {

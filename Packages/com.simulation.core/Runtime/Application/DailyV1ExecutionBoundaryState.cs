@@ -2021,16 +2021,43 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     }
 
     /// <summary>
-    /// Binds the selected profile's exact census source to this Core execution
-    /// state. The source supplies the existing registered owner readers; Core
-    /// owns the serialized invocation, allowed outer scope, and epoch check.
+    /// Binds a selected Daily-v1 session's census identity to this execution
+    /// state. Selected captures use the sealed Core provider registry; host
+    /// census readers remain available only to legacy/unselected profiles.
     /// </summary>
-    internal bool TryBindSelectedRuntimeOwnerCensusSource(
+    internal bool TryBindCoreSelectedRuntimeOwnerCensusSource()
+    {
+        if (AdmissionContext?.Profile
+                != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !runtimeIdentityBound || !runtimeConfigurationBound)
+            return false;
+
+        lock (operationSyncRoot)
+        {
+            if (activeOperationScopes.Count != 0 || advanceLease != null
+                || currentCaptureToken != null)
+                return false;
+            if (selectedRuntimeOwnerCensusSourceIdentity != null)
+                return ReferenceEquals(selectedRuntimeOwnerCensusSourceIdentity, this)
+                    && selectedRuntimeOwnerCensusSource == null;
+
+            selectedRuntimeOwnerCensusSourceIdentity = this;
+            selectedRuntimeOwnerCensusSource = null;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Binds a legacy/unselected host census reader to this Core execution
+    /// state. Selected Daily-v1 binds this state as its own census identity
+    /// and reads only through the sealed Core provider registry.
+    /// </summary>
+    internal bool TryBindLegacyHostRuntimeOwnerCensusSource(
         object sourceIdentity,
         Func<DailyV1CaptureScopeAllowance, DailyV1OwnerSectionCensusCaptureResult> captureSource)
     {
         if (sourceIdentity == null || captureSource == null
-            || AdmissionContext?.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || AdmissionContext?.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || !runtimeIdentityBound || !runtimeConfigurationBound)
             return false;
 
