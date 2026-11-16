@@ -3464,21 +3464,21 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         IDailyV1SelectedP12NpcActionOwnerMutationProtocol protocol)
     {
         if (AdmissionContext == null) return true;
-        if (protocol == null
-            || !TryGetSelectedNpcActionSlotMutationSection(
+        if (!TryGetSelectedNpcActionSlotMutationSection(
                 graph, owner, out string sectionId))
             return false;
 
         string[] sectionIds = { sectionId };
+        bool coreRegistrySealed = HasSealedSelectedOwnerSectionCensusRegistry;
+        if (protocol == null && !coreRegistrySealed)
+            return false;
+
         try
         {
-            if (!protocol.TryValidateOwnerSection(graph, owner, sectionId)
-                || !CanAdvanceSelectedMutationEpoch)
+            if (!CanAdvanceSelectedMutationEpoch
+                || (protocol != null
+                    && !protocol.TryValidateOwnerSection(graph, owner, sectionId)))
                 return false;
-
-            bool coreRegistrySealed;
-            lock (operationSyncRoot)
-                coreRegistrySealed = selectedOwnerSectionCensusRegistrySealed;
 
             if (!coreRegistrySealed)
                 return protocol.TryValidateUnchangedSections(sectionIds);
@@ -3509,30 +3509,38 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         IDailyV1SelectedP12NpcActionOwnerMutationProtocol protocol)
     {
         if (AdmissionContext == null) return true;
-        if (protocol != null
-            && TryGetSelectedNpcActionSlotMutationSection(
+        if (TryGetSelectedNpcActionSlotMutationSection(
                 graph, owner, out string expectedSectionId)
             && string.Equals(sectionId, expectedSectionId, StringComparison.Ordinal)
             && owner.ActionSlot?.Revision == committedRevision)
         {
             string[] sectionIds = { expectedSectionId };
+            bool coreRegistrySealed = HasSealedSelectedOwnerSectionCensusRegistry;
             try
             {
-                bool coreRegistrySealed;
-                lock (operationSyncRoot)
-                    coreRegistrySealed = selectedOwnerSectionCensusRegistrySealed;
+                if ((protocol != null
+                        && !protocol.TryValidateOwnerSection(graph, owner, expectedSectionId))
+                    || (protocol == null && !coreRegistrySealed))
+                    return FaultAndRejectSelectedNpcActionSlotCensus(protocol);
 
-                if (protocol.TryValidateOwnerSection(graph, owner, expectedSectionId)
-                    && (coreRegistrySealed
-                        ? TryRefreshAndAdvanceSelectedNpcActionSlotMutation(
-                            sectionIds, protocol.TryRefreshCompatibilityBaselines)
-                        : TryRefreshAndAdvanceSelectedMutationEpoch(
-                            sectionIds, protocol.TryRefreshCompatibilityBaselines)))
-                    return true;
+                Func<IReadOnlyCollection<string>, bool> synchronizeCompatibilityBaselines =
+                    protocol == null ? null : protocol.TryRefreshCompatibilityBaselines;
+                bool refreshed = coreRegistrySealed
+                    ? TryRefreshAndAdvanceSelectedNpcActionSlotMutation(
+                        sectionIds, synchronizeCompatibilityBaselines)
+                    : TryRefreshAndAdvanceSelectedMutationEpoch(
+                        sectionIds, synchronizeCompatibilityBaselines);
+                if (refreshed) return true;
             }
             catch { }
         }
 
+        return FaultAndRejectSelectedNpcActionSlotCensus(protocol);
+    }
+
+    private bool FaultAndRejectSelectedNpcActionSlotCensus(
+        IDailyV1SelectedP12NpcActionOwnerMutationProtocol protocol)
+    {
         FaultSelectedNpcActionSlotCensus(protocol);
         return false;
     }
@@ -3582,14 +3590,14 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         Func<IReadOnlyCollection<string>, bool> synchronizeCompatibilityBaselines)
     {
         if (changedSectionIds == null || changedSectionIds.Count != 1
-            || synchronizeCompatibilityBaselines == null
             || !CanAdvanceSelectedMutationEpoch)
             return false;
 
         return TryRefreshAndAdvanceSelectedMutationEpoch(
             changedSectionIds,
             changed => TryRefreshCoreSelectedNpcActionSlotCensusBaseline(changed)
-                && synchronizeCompatibilityBaselines(changed));
+                && (synchronizeCompatibilityBaselines == null
+                    || synchronizeCompatibilityBaselines(changed)));
     }
 
     private bool TryRefreshCoreSelectedNpcActionSlotCensusBaseline(

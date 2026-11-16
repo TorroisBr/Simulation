@@ -30,4 +30,4 @@ The runs used base commit `0454135ecfc47a625c075d138e50a1c83cf0f83d`, committed 
 
 ## Review and state
 
-Independent exact-tip review: PASS for implementation commit `ebd6406fea0ecb8a8e4c48842ad8cef3d7609f8a`, recorded in [`CORE_F_CORE_CURRENT_ACTION_CENSUS_REVIEW_EBD6406F.md`](../../../reviews/CORE_F_CORE_CURRENT_ACTION_CENSUS_REVIEW_EBD6406F.md). The review found no actionable implementation, contract, test-integrity, or evidence-package findings. This is an incremental CORE-F checkpoint only; it is not canonical promotion or CORE-F acceptance.
+Independent exact-tip review: PASS for implementation commit `ebd6406fea0ecb8a8e4c48842ad8cef3d7609f8a`, recorded in [`CORE_F_CORE_CURRENT_ACTION_CENSUS_REVIEW_EBD6406F.md`](../../reviews/CORE_F_CORE_CURRENT_ACTION_CENSUS_REVIEW_EBD6406F.md). The review found no actionable implementation, contract, test-integrity, or evidence-package findings. This is an incremental CORE-F checkpoint only; it is not canonical promotion or CORE-F acceptance.

@@ -5,6 +5,22 @@ using NUnit.Framework;
 
 public sealed class DailyV1SelectedDailyExecutionStageTests
 {
+    private sealed class MutableSelectedOwnerCensusProvider : IOwnerSectionCensusProvider
+    {
+        internal MutableSelectedOwnerCensusProvider(OwnerSectionCensusSnapshot snapshot) =>
+            Set(snapshot);
+
+        internal OwnerSectionCensusWitness Witness { get; private set; }
+        public OwnerSectionCensusWitness GetCurrentCensus() => Witness;
+
+        internal void Set(OwnerSectionCensusSnapshot snapshot)
+        {
+            Witness = new OwnerSectionCensusWitness(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.OwnerInstanceIdentity,
+                snapshot.Cardinality, snapshot.Revision);
+        }
+    }
+
     [Test]
     public void AdvanceRunsSelectedDailyPhasesInTheEstablishedOrder()
     {
@@ -135,6 +151,102 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "A non-admitted host binding is not pinned as the Core session's admitted P12 identity.");
         Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.False);
     }
+    [Test]
+    public void CoreActorTurnUsesSealedCoreActionCensusWithoutHostMutationProtocol()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            composition, 0L, out DailyV1ActiveRuntimeSession session,
+            out string diagnostic), Is.True, diagnostic);
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        OwnerSectionCensusSnapshot[] completeVector =
+            DailyV1ApplicationSessionGateTests.CreateCoreBoundCompleteOwnerSectionVector(session);
+        List<DailyV1OwnerSectionContractIdentity> contracts =
+            new List<DailyV1OwnerSectionContractIdentity>(completeVector.Length);
+        List<DailyV1OwnerSectionCensusProviderRegistration> registrations =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(completeVector.Length);
+        Dictionary<string, MutableSelectedOwnerCensusProvider> providers =
+            new Dictionary<string, MutableSelectedOwnerCensusProvider>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot snapshot in completeVector)
+        {
+            MutableSelectedOwnerCensusProvider provider =
+                new MutableSelectedOwnerCensusProvider(snapshot);
+            providers.Add(snapshot.SectionId, provider);
+            contracts.Add(new DailyV1OwnerSectionContractIdentity(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role));
+            registrations.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role, provider,
+                snapshot.OwnerInstanceIdentity, snapshot.Cardinality, snapshot.Revision,
+                hasBaseline: true));
+        }
+
+        Assert.That(state.TryReplaceSelectedOwnerSectionCensusRegistryBeforeSeal(
+            contracts, registrations), Is.True);
+        Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.True);
+        Assert.That(state.TrySealSelectedOwnerSectionCensusRegistry(registrations), Is.True);
+        Assert.That(state.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
+
+        FakeBoundary dailyBoundary = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore)
+        {
+            UseSelectedActionExecution = true,
+            OmitActionSlotP12MutationProtocol = true
+        };
+        Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreate(
+            state, graph, dailyBoundary,
+            out IDailyV1SelectedActorTurnExecutionContext actorContext), Is.True,
+            "The sealed Core census supplies action-slot P12 authority without a host protocol.");
+        DailyV1CoreSelectedActorTurnExecutionBoundary coreBoundary =
+            actorContext.Boundary as DailyV1CoreSelectedActorTurnExecutionBoundary;
+        Assert.That(coreBoundary, Is.Not.Null);
+        Assert.That(coreBoundary.OwnsSelectedActionSlotP12Mutation, Is.True);
+        Assert.That(dailyBoundary.LastActorTurnHostPorts.ActionSlotP12MutationProtocol, Is.Null);
+
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+            + actor.RuntimeId;
+        MutableSelectedOwnerCensusProvider actionProvider = providers[sectionId];
+        OwnerSectionCensusWitness before = actionProvider.Witness;
+        DailyV1ActionDefinition action = graph.Definitions.Actions.Values.First();
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(coreBoundary.CanCommitSelectedActionSlotP12Mutation(graph, actor), Is.True);
+            Assert.That(graph.TryCommitCurrentActionSlot(
+                actor, action, null,
+                () => coreBoundary.CanCommitSelectedActionSlotP12Mutation(graph, actor)), Is.True);
+            actionProvider.Set(new OwnerSectionCensusSnapshot(
+                sectionId,
+                before.SchemaVersion,
+                OwnerSectionRole.Required,
+                before.OwnerInstanceIdentity,
+                actor.ActionSlot.CurrentAction == null ? 0 : 1,
+                actor.ActionSlot.Revision));
+            Assert.That(coreBoundary.NotifySelectedActionSlotP12MutationCommitted(
+                graph, actor, sectionId, actor.ActionSlot.Revision), Is.True);
+        }
+        finally
+        {
+            Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+        }
+
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L));
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+            out long epoch,
+            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+        OwnerSectionCensusSnapshot refreshed = captured.Single(row => row.SectionId == sectionId);
+        Assert.That(refreshed.Revision, Is.EqualTo(before.Revision + 1L));
+        Assert.That(refreshed.Cardinality, Is.EqualTo(1));
+        Assert.That(epoch, Is.EqualTo(1L));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+    }
+
     [Test]
     public void StateBackedDayStartUsesCoreBoundRosterInsteadOfHostProjection()
     {
@@ -1343,6 +1455,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool CrimeJusticeProjectionOwnerBindingsMatch { get; set; } = true;
         internal bool CrimeJusticeAdmissionEnabled { get; set; } = true;
         internal bool UseSelectedActionExecution { get; set; }
+        internal bool OmitActionSlotP12MutationProtocol { get; set; }
         internal bool? ActorChoiceSelectedActionExecutionOverride { get; set; }
         internal bool FailDecisionRecordOwnerResolution { get; set; }
         internal IDailyV1SelectedActorTurnHostPorts LastActorTurnHostPorts { get; private set; }
@@ -1915,7 +2028,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 DailyV1NpcRuntimeOwners actor,
                 Func<bool> operation) => operation != null && operation();
             public IDailyV1SelectedP12NpcActionOwnerMutationProtocol ActionSlotP12MutationProtocol =>
-                actionSlotP12Protocol;
+                owner.OmitActionSlotP12MutationProtocol ? null : actionSlotP12Protocol;
             public bool IsSelectedActionSlotProjectionPrepared(
                 DailyV1SelectedRuntimeOwnerGraph graph,
                 DailyV1NpcRuntimeOwners actor) =>

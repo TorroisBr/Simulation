@@ -598,6 +598,41 @@ public sealed class DailyV1ExecutionBoundaryStateTests
     }
 
     [Test]
+    public void CoreActionSlotMutationAdvancesCompleteCensusWithoutHostMirror()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture();
+        DailyV1ExecutionBoundaryState state = fixture.State;
+        string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix + "npc-1";
+        MutableCensusProvider provider = fixture.Providers[sectionId];
+        OwnerSectionCensusWitness before = provider.Witness;
+        provider.Witness = new OwnerSectionCensusWitness(
+            before.SectionId,
+            before.SchemaVersion,
+            before.OwnerInstanceIdentity,
+            before.Cardinality,
+            before.Revision + 1L);
+
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
+        Assert.That(state.TryRefreshAndAdvanceSelectedNpcActionSlotMutation(
+            new[] { sectionId }, synchronizeCompatibilityBaselines: null), Is.True,
+            "The sealed Core registry publishes the owner row and epoch without a Unity mirror.");
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L));
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+        Assert.That(mutationEpoch, Is.EqualTo(1L));
+        OwnerSectionCensusSnapshot refreshed = captured.Single(row => row.SectionId == sectionId);
+        Assert.That(refreshed.Revision, Is.EqualTo(before.Revision + 1L));
+        Assert.That(refreshed.Cardinality, Is.EqualTo(before.Cardinality));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+    }
+
+    [Test]
     public void CoreActionSlotMutationRejectsUnchangedRevisionAndDoesNotAdvanceEpoch()
     {
         CensusRegistryFixture fixture = CreateCensusRegistryFixture();

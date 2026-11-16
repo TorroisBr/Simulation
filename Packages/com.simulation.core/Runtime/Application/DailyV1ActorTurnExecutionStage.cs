@@ -338,7 +338,9 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         if (hostPorts == null) return false;
         IDailyV1SelectedP12NpcActionOwnerMutationProtocol actionSlotP12MutationProtocol =
             hostPorts.ActionSlotP12MutationProtocol;
-        if (actionSlotP12MutationProtocol == null
+        bool hasSealedCoreCensus = executionState != null
+            && executionState.HasSealedSelectedOwnerSectionCensusRegistry;
+        if ((actionSlotP12MutationProtocol == null && !hasSealedCoreCensus)
             || executionState == null || graph == null || personStore == null
             || actorChoiceStore == null || coreRoots == null
             || !executionState.HasAdmittedSelectedDailyExecution
