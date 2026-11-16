@@ -249,7 +249,8 @@ public sealed partial class SimulationRuntime
             }
             if (!npc.TryBindP12CrimeJusticeMutationBoundary(
                     CanCommitP12NpcCrimeJusticeMutation,
-                    NotifyP12NpcCrimeJusticeMutation))
+                    NotifyP12NpcCrimeJusticeMutation,
+                    selectedCoreRevisionCommittedByBoundary: npc.SelectedRuntimeOwners != null))
                 return false;
             p12CrimeJusticeBoundNpcs.Add(npc);
         }

@@ -16,6 +16,7 @@ public class NpcRuntime : ICapabilityConditionSource
     [NonSerialized] private ReadOnlyCollection<NpcStatusData> currentStatusView;
     [NonSerialized] private Func<NpcRuntime, bool> p12CrimeJusticeMutationAdmission;
     [NonSerialized] private Action<NpcRuntime> p12CrimeJusticeMutationCommitted;
+    [NonSerialized] private bool p12CrimeJusticeBoundaryOwnsSelectedRevision;
     [NonSerialized] private Func<bool, IReadOnlyList<CityRuntime>, bool> p12TravelStateMutationAdmission;
     [NonSerialized] private Action<bool, IReadOnlyList<CityRuntime>> p12TravelStateMutationCommitted;
     [NonSerialized] private Func<NpcRuntime, bool, bool, bool, NpcActionRuntime, bool> p12LifecycleMutationAdmission;
@@ -2686,7 +2687,8 @@ public class NpcRuntime : ICapabilityConditionSource
 
     internal bool TryBindP12CrimeJusticeMutationBoundary(
         Func<NpcRuntime, bool> admission,
-        Action<NpcRuntime> committed)
+        Action<NpcRuntime> committed,
+        bool selectedCoreRevisionCommittedByBoundary = false)
     {
         if (admission == null || committed == null
             || p12CrimeJusticeMutationAdmission != null
@@ -2694,6 +2696,7 @@ public class NpcRuntime : ICapabilityConditionSource
             return false;
         p12CrimeJusticeMutationAdmission = admission;
         p12CrimeJusticeMutationCommitted = committed;
+        p12CrimeJusticeBoundaryOwnsSelectedRevision = selectedCoreRevisionCommittedByBoundary;
         return true;
     }
 
@@ -2720,7 +2723,8 @@ public class NpcRuntime : ICapabilityConditionSource
         if (p12CrimeJusticeMutationAdmission == null) return;
         if (selectedRuntimeOwners == null)
             p12CrimeJusticeRevision++;
-        else if (!selectedCoreRevisionAlreadyAdvanced)
+        else if (!selectedCoreRevisionAlreadyAdvanced
+            && !p12CrimeJusticeBoundaryOwnsSelectedRevision)
         {
             // Direct Unity compatibility mutations still commit against the
             // selected Core owner. Core action-stage callbacks pass true
