@@ -3472,9 +3472,22 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         string[] sectionIds = { sectionId };
         try
         {
-            return protocol.TryValidateOwnerSection(graph, owner, sectionId)
-                && CanAdvanceSelectedMutationEpoch
-                && protocol.TryValidateUnchangedSections(sectionIds);
+            if (!protocol.TryValidateOwnerSection(graph, owner, sectionId)
+                || !CanAdvanceSelectedMutationEpoch)
+                return false;
+
+            bool coreRegistrySealed;
+            lock (operationSyncRoot)
+                coreRegistrySealed = selectedOwnerSectionCensusRegistrySealed;
+
+            if (!coreRegistrySealed)
+                return protocol.TryValidateUnchangedSections(sectionIds);
+
+            if (TryValidateCoreSelectedActionSlotCensusBaseline(sectionId, owner))
+                return true;
+
+            FaultSelectedNpcActionSlotCensus(protocol);
+            return false;
         }
         catch
         {
@@ -3484,8 +3497,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
     /// <summary>
     /// Publishes the exact current-action owner invalidation after the Core
-    /// slot commit and successful host projection. A post-commit failure
-    /// faults admission and revokes the current capture token.
+    /// slot commit and successful host projection. Core replaces the selected
+    /// owner baseline and advances the shared epoch; the host updates only its
+    /// compatibility census mirror. A post-commit failure faults admission.
     /// </summary>
     internal bool TryRecordSelectedNpcActionSlotMutation(
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -3504,18 +3518,166 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             string[] sectionIds = { expectedSectionId };
             try
             {
+                bool coreRegistrySealed;
+                lock (operationSyncRoot)
+                    coreRegistrySealed = selectedOwnerSectionCensusRegistrySealed;
+
                 if (protocol.TryValidateOwnerSection(graph, owner, expectedSectionId)
-                    && TryRefreshAndAdvanceSelectedMutationEpoch(
-                        sectionIds, protocol.TryRefreshCommittedMutationBaselines))
+                    && (coreRegistrySealed
+                        ? TryRefreshAndAdvanceSelectedNpcActionSlotMutation(
+                            sectionIds, protocol.TryRefreshCompatibilityBaselines)
+                        : TryRefreshAndAdvanceSelectedMutationEpoch(
+                            sectionIds, protocol.TryRefreshCompatibilityBaselines)))
                     return true;
             }
             catch { }
         }
 
+        FaultSelectedNpcActionSlotCensus(protocol);
+        return false;
+    }
+
+    private bool TryValidateCoreSelectedActionSlotCensusBaseline(
+        string sectionId,
+        DailyV1NpcRuntimeOwners owner)
+    {
+        lock (operationSyncRoot)
+        {
+            if (!selectedRuntimeCensusProtocolReady
+                || selectedRuntimeCensusProtocolFaulted
+                || !selectedOwnerSectionCensusRegistrySealed
+                || !selectedOwnerSectionCensusProviders.TryGetValue(
+                    sectionId, out DailyV1OwnerSectionCensusProviderRegistration registration)
+                || registration == null
+                || registration.Role != OwnerSectionRole.Required
+                || !registration.HasBaseline
+                || !ReferenceEquals(registration.BaselineOwnerInstanceIdentity, owner))
+                return false;
+
+            try
+            {
+                OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
+                return witness != null
+                    && string.Equals(witness.SectionId, registration.SectionId, StringComparison.Ordinal)
+                    && witness.SchemaVersion == registration.SchemaVersion
+                    && ReferenceEquals(witness.OwnerInstanceIdentity,
+                        registration.BaselineOwnerInstanceIdentity)
+                    && witness.Cardinality == registration.BaselineCardinality
+                    && witness.Revision == registration.BaselineRevision;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Refreshes the single Core action-slot witness inside the sealed complete
+    /// owner vector, then publishes exactly one shared mutation epoch. The
+    /// Unity census protocol is updated afterward only as a compatibility mirror.
+    /// </summary>
+    internal bool TryRefreshAndAdvanceSelectedNpcActionSlotMutation(
+        IReadOnlyCollection<string> changedSectionIds,
+        Func<IReadOnlyCollection<string>, bool> synchronizeCompatibilityBaselines)
+    {
+        if (changedSectionIds == null || changedSectionIds.Count != 1
+            || synchronizeCompatibilityBaselines == null
+            || !CanAdvanceSelectedMutationEpoch)
+            return false;
+
+        return TryRefreshAndAdvanceSelectedMutationEpoch(
+            changedSectionIds,
+            changed => TryRefreshCoreSelectedNpcActionSlotCensusBaseline(changed)
+                && synchronizeCompatibilityBaselines(changed));
+    }
+
+    private bool TryRefreshCoreSelectedNpcActionSlotCensusBaseline(
+        IReadOnlyCollection<string> changedSectionIds)
+    {
+        if (changedSectionIds == null || changedSectionIds.Count != 1) return false;
+        string sectionId = null;
+        try
+        {
+            foreach (string candidate in changedSectionIds)
+            {
+                if (!string.IsNullOrWhiteSpace(sectionId)
+                    || string.IsNullOrWhiteSpace(candidate)
+                    || !candidate.StartsWith(
+                        DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix,
+                        StringComparison.Ordinal)
+                    || candidate.Length == DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix.Length)
+                    return false;
+                sectionId = candidate;
+            }
+        }
+        catch { return false; }
+        if (string.IsNullOrWhiteSpace(sectionId)) return false;
+
+        List<DailyV1OwnerSectionCensusProviderRegistration> staged;
+        lock (operationSyncRoot)
+        {
+            if (!selectedOwnerSectionCensusRegistrySealed
+                || !selectedRuntimeCensusProtocolReady
+                || selectedRuntimeCensusProtocolFaulted
+                || AdmissionContext == null
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !selectedOwnerSectionCensusProviders.TryGetValue(
+                    sectionId, out DailyV1OwnerSectionCensusProviderRegistration changed)
+                || changed == null
+                || changed.Role != OwnerSectionRole.Required
+                || !changed.HasBaseline)
+                return false;
+
+            OwnerSectionCensusWitness witness;
+            try { witness = changed.Provider.GetCurrentCensus(); }
+            catch { return false; }
+            if (witness == null
+                || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
+                || witness.SchemaVersion != changed.SchemaVersion
+                || !ReferenceEquals(witness.OwnerInstanceIdentity,
+                    changed.BaselineOwnerInstanceIdentity)
+                || witness.Cardinality < 0 || witness.Cardinality > 1
+                || witness.Revision <= changed.BaselineRevision)
+                return false;
+
+            List<string> orderedIds = new List<string>(selectedOwnerSectionCensusProviders.Keys);
+            orderedIds.Sort(StringComparer.Ordinal);
+            staged = new List<DailyV1OwnerSectionCensusProviderRegistration>(orderedIds.Count);
+            foreach (string id in orderedIds)
+            {
+                DailyV1OwnerSectionCensusProviderRegistration prior =
+                    selectedOwnerSectionCensusProviders[id];
+                if (string.Equals(id, sectionId, StringComparison.Ordinal))
+                {
+                    staged.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                        prior.SectionId,
+                        prior.SchemaVersion,
+                        prior.Role,
+                        prior.Provider,
+                        witness.OwnerInstanceIdentity,
+                        witness.Cardinality,
+                        witness.Revision,
+                        hasBaseline: true));
+                }
+                else
+                {
+                    staged.Add(prior);
+                }
+            }
+        }
+
+        return TryRefreshSelectedOwnerSectionCensusBaselines(
+            staged, changedSectionIds, reservation: null);
+    }
+
+    private void FaultSelectedNpcActionSlotCensus(
+        IDailyV1SelectedP12NpcActionOwnerMutationProtocol protocol)
+    {
+        MarkSelectedRuntimeCensusProtocolFaulted();
+        InvalidateCurrentCaptureToken();
         try { protocol?.FaultClosed(); }
         catch { }
-        InvalidateCurrentCaptureToken();
-        return false;
     }
 
     private bool TryGetSelectedNpcActionSlotMutationSection(

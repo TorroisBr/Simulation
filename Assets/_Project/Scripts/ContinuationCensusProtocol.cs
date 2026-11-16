@@ -1575,6 +1575,28 @@ public sealed class ContinuationCensusProtocol
     }
 
     /// <summary>
+    /// Synchronizes the legacy Unity census mirror after the Core execution
+    /// state has already accepted the exact owner baseline and advanced its
+    /// shared epoch. This method never republishes or changes Core authority.
+    /// </summary>
+    internal bool TryRefreshCompatibilityMirrorBaselines(
+        IEnumerable<string> sectionIds,
+        out ContinuationCensusFailure failure)
+    {
+        if (activeMutationEpochReservation != null)
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        return NotifyCommittedMutationsCore(
+            sectionIds,
+            out failure,
+            advanceEpoch: false,
+            refreshCoreOwnerSectionRegistry: false);
+    }
+
+    /// <summary>
     /// Refreshes provider baselines for the exact Core-owned daily mutation
     /// reservation. The reservation remains owned by Core, which publishes
     /// its epoch only after every changed section has refreshed successfully.
@@ -1602,7 +1624,8 @@ public sealed class ContinuationCensusProtocol
         IEnumerable<string> sectionIds,
         out ContinuationCensusFailure failure,
         bool advanceEpoch = true,
-        DailyV1MutationEpochReservation reservation = null)
+        DailyV1MutationEpochReservation reservation = null,
+        bool refreshCoreOwnerSectionRegistry = true)
     {
         if (!TryRequireOwnerThread(out failure)) return false;
         if (advanceEpoch && !mutationEpochState.CanAdvance)
@@ -1715,7 +1738,7 @@ public sealed class ContinuationCensusProtocol
             SetBaseline(staged, observed.Witness);
         }
 
-        if (requiresSelectedCoreOwnerCensus
+        if (requiresSelectedCoreOwnerCensus && refreshCoreOwnerSectionRegistry
             && !sharedExecutionState.TryRefreshSelectedOwnerSectionCensusBaselines(
                 CreateCoreOwnerSectionCensusRegistrations(stagedRegistered),
                 changedSectionIds,

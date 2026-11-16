@@ -831,10 +831,10 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
 }
 
 /// <summary>
-/// The Core action-slot stage owns the P12 current-action section transition.
-/// The host adapter supplies the registered census protocol, while Core
-/// decides when the exact section is admitted and when its committed write is
-/// published after the Unity projection succeeds.
+/// The Core action-slot stage owns P12 current-action census admission,
+/// committed-baseline publication, and the shared mutation epoch. The Unity
+/// adapter verifies its exact compatibility projection and synchronizes its
+/// legacy census mirror after Core accepts the owner write.
 /// </summary>
 internal interface IDailyV1SelectedP12NpcActionOwnerMutationProtocol
 {
@@ -843,7 +843,7 @@ internal interface IDailyV1SelectedP12NpcActionOwnerMutationProtocol
         DailyV1NpcRuntimeOwners owner,
         string sectionId);
     bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
-    bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds);
+    bool TryRefreshCompatibilityBaselines(IReadOnlyCollection<string> sectionIds);
     void FaultClosed();
 }
 

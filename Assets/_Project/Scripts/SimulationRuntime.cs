@@ -14780,9 +14780,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
                 boundary.runtime.CanCommitP12MutationSections(sectionIds);
 
-            public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) =>
+            public bool TryRefreshCompatibilityBaselines(IReadOnlyCollection<string> sectionIds) =>
                 boundary.runtime.npcRosterCensusProtocol != null
-                && boundary.runtime.npcRosterCensusProtocol.TryRefreshCommittedMutationBaselines(
+                && boundary.runtime.npcRosterCensusProtocol.TryRefreshCompatibilityMirrorBaselines(
                     sectionIds, out _);
 
             public bool NotifyCommittedMutations(IReadOnlyCollection<string> sectionIds) =>

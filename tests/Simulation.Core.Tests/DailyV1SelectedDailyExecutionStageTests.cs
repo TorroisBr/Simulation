@@ -1802,7 +1802,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 return sectionIds != null && sectionIds.Count == 1;
             }
 
-            public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds)
+            public bool TryRefreshCompatibilityBaselines(IReadOnlyCollection<string> sectionIds)
             {
                 owner.ActionSlotBaselineRefreshCount++;
                 return sectionIds != null && sectionIds.Count == 1;
