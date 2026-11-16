@@ -85,6 +85,7 @@ public sealed class DailyV1ApplicationHostTests
 
         public void Delete(string path)
         {
+            slots.Remove(path);
             temporaryBytes.Remove(path);
             if (temporaryStreams.TryGetValue(path, out MemoryStream stream))
             {
