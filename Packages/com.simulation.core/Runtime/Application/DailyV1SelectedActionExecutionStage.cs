@@ -93,8 +93,9 @@ internal static class DailyV1SelectedActionExecutionStage
             out ISelectedActionStatusOperationBoundary boundary)
         {
             boundary = null;
-            if (executionState == null || graph == null || protocol == null
-                || actor == null || projection == null
+            if (executionState == null || graph == null
+                || ((protocol == null) != (projection == null))
+                || actor == null
                 || !executionState.HasAdmittedSelectedDailyExecution
                 || executionState.AdmissionContext?.Profile
                     != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
@@ -107,11 +108,19 @@ internal static class DailyV1SelectedActionExecutionStage
                 || (target != null && target.Status == null))
                 return false;
 
-            if (!executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
-                    protocol, graph,
-                    out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
-                || coordinator == null)
+            DailyV1P12CrimeJusticeMutationCoordinator coordinator;
+            if (protocol == null)
+            {
+                if (!executionState.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+                        graph, out protocol, out coordinator))
+                    return false;
+            }
+            else if (!executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    protocol, graph, out coordinator))
+            {
                 return false;
+            }
+            if (coordinator == null) return false;
 
             boundary = new CoreSelectedActionStatusOperationBoundary(
                 executionState, graph, protocol, coordinator,
@@ -148,9 +157,20 @@ internal static class DailyV1SelectedActionExecutionStage
 
         public bool CanProjectStatusChanges(
             DailyV1NpcRuntimeOwners owner,
-            IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
-            IsParticipant(owner)
-            && projection.CanProjectStatusChanges(owner, statusToAdd);
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
+        {
+            if (!IsParticipant(owner)) return false;
+            if (projection != null)
+                return projection.CanProjectStatusChanges(owner, statusToAdd);
+            if (statusToAdd == null) return false;
+            foreach (DailyV1StatusDefinition status in statusToAdd)
+                if (status == null
+                    || !graph.Definitions.Statuses.TryGetValue(
+                        status.DefinitionId, out DailyV1StatusDefinition admitted)
+                    || !ReferenceEquals(admitted, status))
+                    return false;
+            return true;
+        }
 
         public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner)
         {
@@ -168,7 +188,7 @@ internal static class DailyV1SelectedActionExecutionStage
             if (!IsParticipant(owner) || !IsCurrentSession())
                 throw new InvalidOperationException(
                     "The selected status owner changed outside its exact admitted Core operation.");
-            projection.RefreshStatusProjection(owner);
+            projection?.RefreshStatusProjection(owner);
             executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
         }
 
@@ -177,7 +197,7 @@ internal static class DailyV1SelectedActionExecutionStage
             if (!IsParticipant(owner) || !IsCurrentSession())
                 throw new InvalidOperationException(
                     "The selected hidden-state owner changed outside its exact admitted Core operation.");
-            projection.SyncHiddenStateProjection(owner);
+            projection?.SyncHiddenStateProjection(owner);
             executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
         }
 

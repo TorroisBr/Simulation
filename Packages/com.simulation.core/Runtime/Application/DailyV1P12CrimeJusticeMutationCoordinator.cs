@@ -70,6 +70,106 @@ internal interface IDailyV1P12CrimeJusticeMutationProtocol
     bool NotifyCommittedMutation(string sectionId);
 }
 
+/// <summary>
+/// P12 Crime/Justice census adapter backed by the sealed Core owner registry.
+/// It is used by detached Core hosts that have no Unity census mirror. Core
+/// keeps the same operation coordinator, section identities, and mutation
+/// epoch; unsupported or stale witnesses fail closed.
+/// </summary>
+internal sealed class DailyV1CoreSelectedOwnerSectionMutationProtocol
+    : IDailyV1P12CrimeJusticeMutationProtocol
+{
+    private readonly DailyV1ExecutionBoundaryState executionState;
+    private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+
+    internal DailyV1CoreSelectedOwnerSectionMutationProtocol(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        this.executionState = executionState ?? throw new ArgumentNullException(nameof(executionState));
+        this.graph = graph ?? throw new ArgumentNullException(nameof(graph));
+    }
+
+    internal bool IsBoundTo(
+        DailyV1ExecutionBoundaryState candidateState,
+        DailyV1SelectedRuntimeOwnerGraph candidateGraph) =>
+        ReferenceEquals(executionState, candidateState)
+        && ReferenceEquals(graph, candidateGraph)
+        && executionState.HasAdmittedSelectedDailyExecution
+        && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph);
+
+    public void FaultClosed()
+    {
+        executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+        executionState.InvalidateCurrentCaptureToken();
+    }
+
+    public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
+        IsBoundTo(executionState, graph)
+        && executionState.TryValidateCoreSelectedOwnerSectionCensusRows(graph, sectionIds);
+
+    public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) =>
+        IsBoundTo(executionState, graph)
+        && executionState.TryRefreshCoreSelectedOwnerSectionCensusRows(graph, sectionIds, null);
+
+    public bool TryRefreshCommittedMutationBaselinesForReservation(
+        object reservationToken,
+        IReadOnlyCollection<string> sectionIds)
+    {
+        DailyV1MutationEpochReservation reservation = executionState.MutationEpochState.ActiveReservation;
+        return IsBoundTo(executionState, graph)
+            && reservation != null
+            && ReferenceEquals(reservation.Token, reservationToken)
+            && executionState.MutationEpochState.Owns(reservation)
+            && executionState.TryRefreshCoreSelectedOwnerSectionCensusRows(graph, sectionIds, reservation);
+    }
+
+    public bool TryReserveMutationEpoch(out object reservation)
+    {
+        reservation = null;
+        if (!IsBoundTo(executionState, graph)
+            || !executionState.MutationEpochState.TryReserve(
+                out DailyV1MutationEpochReservation coreReservation))
+            return false;
+        reservation = coreReservation;
+        return true;
+    }
+
+    public bool TryNotifyReservedCommittedMutations(
+        object reservation,
+        IReadOnlyCollection<string> sectionIds)
+    {
+        if (!(reservation is DailyV1MutationEpochReservation coreReservation)
+            || !executionState.MutationEpochState.Owns(coreReservation)
+            || !IsBoundTo(executionState, graph)
+            || !executionState.TryRefreshCoreSelectedOwnerSectionCensusRows(
+                graph, sectionIds, coreReservation))
+            return false;
+        return executionState.MutationEpochState.TryComplete(coreReservation, true);
+    }
+
+    public void ReleaseMutationEpoch(object reservation)
+    {
+        if (reservation is DailyV1MutationEpochReservation coreReservation
+            && executionState.MutationEpochState.Owns(coreReservation))
+            executionState.MutationEpochState.TryRelease(coreReservation);
+    }
+
+    public bool TryValidateMutationEpochCapacity() =>
+        IsBoundTo(executionState, graph)
+        && !executionState.MutationEpochState.HasActiveReservation
+        && executionState.MutationEpochState.CanAdvance;
+
+    public bool NotifyCommittedMutation(string sectionId)
+    {
+        if (string.IsNullOrWhiteSpace(sectionId)
+            || !IsBoundTo(executionState, graph)
+            || !executionState.TryRefreshCoreSelectedOwnerSectionCensusRows(
+                graph, new[] { sectionId }, null))
+            return false;
+        return executionState.MutationEpochState.TryAdvanceCommittedMutation();
+    }
+}
 /// <summary>Optional failure detail for the selected host's P12 baseline adapter.</summary>
 internal interface IDailyV1P12CrimeJusticeMutationDiagnosticProtocol
 {

@@ -593,8 +593,27 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         out string resultMessage)
     {
         resultMessage = null;
-        return TryGetExactActor(actor)
-            && hostPorts.TryCompleteDispatch(actor, dispatch, out resultMessage);
+        if (!TryGetExactActor(actor) || dispatch == null) return false;
+        if (hostPorts.TryCompleteDispatch(actor, dispatch, out resultMessage)) return true;
+        // Only the exact projection-independent Normal slot may complete
+        // without a Unity action object. Its status effects are committed
+        // separately through the exact Core P12 status-owner boundary.
+        if (hostPorts.RequiresActionProjection
+            || dispatch.Kind != DailyV1SelectedActionDispatchKind.Normal)
+            return false;
+
+        DailyV1ActionDefinition action = actor.ActionSlot?.CurrentAction;
+        if (DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
+                graph, actor, action))
+            return true;
+
+        DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
+        return !string.IsNullOrWhiteSpace(payload?.TargetNpcRuntimeId)
+            && graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
+                out DailyV1NpcRuntimeOwners target)
+            && DailyV1SelectedActorActionExecutionStage
+                .IsProjectionIndependentNormalActionForExactTarget(
+                    graph, actor, action, target);
     }
 
     public bool TryGetActionStatusBoundary(
@@ -607,8 +626,15 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         if (!TryGetExactActor(actor)
             || (target != null && !graph.ContainsExactNpcOwner(target)))
             return false;
-        return hostPorts.TryGetActionStatusBoundary(
-            actor, target, reuseExistingOperation, out boundary)
+        if (hostPorts.TryGetActionStatusBoundary(
+                actor, target, reuseExistingOperation, out boundary)
+            && boundary != null)
+            return true;
+        boundary = null;
+        return !reuseExistingOperation
+            && !hostPorts.RequiresActionProjection
+            && DailyV1SelectedActionExecutionStage.CoreSelectedActionStatusOperationBoundary.TryCreate(
+                executionState, graph, null, actor, target, null, out boundary)
             && boundary != null;
     }
 

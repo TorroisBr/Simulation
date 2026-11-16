@@ -1345,6 +1345,147 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    /// <summary>
+    /// Validates the exact requested rows in the sealed Core census before a
+    /// selected P12 operation. The registration identity and full baseline
+    /// vector remain Core-owned; only the requested owner rows are read here.
+    /// </summary>
+    internal bool TryValidateCoreSelectedOwnerSectionCensusRows(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<string> sectionIds)
+    {
+        if (sectionIds == null || sectionIds.Count == 0) return false;
+        HashSet<string> requested = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            foreach (string sectionId in sectionIds)
+                if (string.IsNullOrWhiteSpace(sectionId) || !requested.Add(sectionId))
+                    return false;
+        }
+        catch { return false; }
+
+        lock (operationSyncRoot)
+        {
+            if (!selectedOwnerSectionCensusRegistrySealed
+                || !selectedRuntimeCensusProtocolReady
+                || selectedRuntimeCensusProtocolFaulted
+                || AdmissionContext == null
+                || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+                || exclusiveSessionReplacementInProgress
+                || mutationEpochState.HasActiveReservation)
+                return false;
+
+            foreach (string sectionId in requested)
+            {
+                if (!selectedOwnerSectionCensusProviders.TryGetValue(
+                        sectionId, out DailyV1OwnerSectionCensusProviderRegistration registration)
+                    || registration == null || !registration.HasBaseline
+                    || registration.Role != OwnerSectionRole.Required)
+                    return false;
+                OwnerSectionCensusWitness witness;
+                try { witness = registration.Provider.GetCurrentCensus(); }
+                catch { return false; }
+                if (witness == null
+                    || !string.Equals(witness.SectionId, registration.SectionId, StringComparison.Ordinal)
+                    || witness.SchemaVersion != registration.SchemaVersion
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity,
+                        registration.BaselineOwnerInstanceIdentity)
+                    || witness.Cardinality != registration.BaselineCardinality
+                    || witness.Revision != registration.BaselineRevision)
+                    return false;
+            }
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Refreshes changed rows from their live Core census providers and
+    /// atomically replaces the full sealed baseline vector. Unchanged rows
+    /// must remain exact; changed required rows must retain owner identity and
+    /// advance revision. A reservation, when supplied, must be the exact Core
+    /// epoch reservation owned by this session.
+    /// </summary>
+    internal bool TryRefreshCoreSelectedOwnerSectionCensusRows(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IEnumerable<string> changedSectionIds,
+        DailyV1MutationEpochReservation reservation)
+    {
+        HashSet<string> changed = new HashSet<string>(StringComparer.Ordinal);
+        if (changedSectionIds == null) return false;
+        try
+        {
+            foreach (string sectionId in changedSectionIds)
+                if (string.IsNullOrWhiteSpace(sectionId) || !changed.Add(sectionId))
+                    return false;
+        }
+        catch { return false; }
+        if (changed.Count == 0) return false;
+
+        lock (operationSyncRoot)
+        {
+            if (!selectedOwnerSectionCensusRegistrySealed
+                || !selectedRuntimeCensusProtocolReady
+                || selectedRuntimeCensusProtocolFaulted
+                || AdmissionContext == null
+                || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+                || activeOperationScopes.Count == 0
+                || exclusiveSessionReplacementInProgress)
+                return false;
+
+            DailyV1MutationEpochReservation active = mutationEpochState.ActiveReservation;
+            if (active == null
+                ? reservation != null
+                : reservation == null || !mutationEpochState.Owns(reservation))
+                return false;
+
+            List<string> orderedIds = new List<string>(selectedOwnerSectionCensusProviders.Keys);
+            orderedIds.Sort(StringComparer.Ordinal);
+            List<DailyV1OwnerSectionCensusProviderRegistration> staged =
+                new List<DailyV1OwnerSectionCensusProviderRegistration>(orderedIds.Count);
+            foreach (string sectionId in orderedIds)
+            {
+                DailyV1OwnerSectionCensusProviderRegistration prior =
+                    selectedOwnerSectionCensusProviders[sectionId];
+                OwnerSectionCensusWitness witness;
+                try { witness = prior.Provider.GetCurrentCensus(); }
+                catch { return false; }
+                if (witness == null
+                    || !string.Equals(witness.SectionId, prior.SectionId, StringComparison.Ordinal)
+                    || witness.SchemaVersion != prior.SchemaVersion
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity,
+                        prior.BaselineOwnerInstanceIdentity)
+                    || witness.Cardinality < 0 || witness.Revision < 0L)
+                    return false;
+
+                if (changed.Contains(sectionId))
+                {
+                    if (prior.Role != OwnerSectionRole.Required
+                        || witness.Revision <= prior.BaselineRevision)
+                        return false;
+                    staged.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                        prior.SectionId, prior.SchemaVersion, prior.Role, prior.Provider,
+                        witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision,
+                        hasBaseline: true));
+                }
+                else
+                {
+                    if (witness.Cardinality != prior.BaselineCardinality
+                        || witness.Revision != prior.BaselineRevision)
+                        return false;
+                    staged.Add(prior);
+                }
+            }
+
+            foreach (string sectionId in changed)
+                if (!selectedOwnerSectionCensusProviders.ContainsKey(sectionId)) return false;
+            return TryRefreshSelectedOwnerSectionCensusBaselines(
+                staged, changed, reservation);
+        }
+    }
     internal static bool IsSelectedDynamicOwnerSectionId(string sectionId)
     {
         if (string.IsNullOrWhiteSpace(sectionId)) return false;
@@ -5135,7 +5276,6 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         DailyV1SelectedRuntimeOwnerGraph graph,
         out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
     {
-        if (protocol == null) throw new ArgumentNullException(nameof(protocol));
         coordinator = null;
         lock (operationSyncRoot)
         {
@@ -5144,8 +5284,31 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || !AdmissionContext.IsOwnedByCurrentThread()
                 || !ReferenceEquals(selectedRuntimeOwnerGraph, graph))
             {
-                protocol.FaultClosed();
+                try { protocol?.FaultClosed(); }
+                catch { }
                 return false;
+            }
+
+            if (protocol == null)
+            {
+                if (!selectedOwnerSectionCensusRegistrySealed
+                    || !selectedRuntimeCensusProtocolReady
+                    || selectedRuntimeCensusProtocolFaulted)
+                    return false;
+
+                if (selectedP12CrimeJusticeMutationCoordinator == null)
+                {
+                    protocol = new DailyV1CoreSelectedOwnerSectionMutationProtocol(this, graph);
+                }
+                else
+                {
+                    protocol = selectedP12CrimeJusticeMutationProtocol
+                        as DailyV1CoreSelectedOwnerSectionMutationProtocol;
+                    if (protocol == null
+                        || !((DailyV1CoreSelectedOwnerSectionMutationProtocol)protocol)
+                            .IsBoundTo(this, graph))
+                        return false;
+                }
             }
 
             if (selectedP12CrimeJusticeMutationCoordinator == null)
@@ -5178,6 +5341,25 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    internal bool TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1P12CrimeJusticeMutationProtocol protocol,
+        out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+    {
+        protocol = null;
+        coordinator = null;
+        if (!TryBindSelectedP12CrimeJusticeMutationProtocol(null, graph, out coordinator))
+            return false;
+        lock (operationSyncRoot)
+        {
+            protocol = selectedP12CrimeJusticeMutationProtocol
+                as DailyV1CoreSelectedOwnerSectionMutationProtocol;
+            return protocol != null
+                && coordinator != null
+                && ((DailyV1CoreSelectedOwnerSectionMutationProtocol)protocol)
+                    .IsBoundTo(this, graph);
+        }
+    }
     /// <summary>
     /// Pins the selected Crime/Justice host compatibility identities and their
     /// Core owner relationships to this admitted execution session. Later

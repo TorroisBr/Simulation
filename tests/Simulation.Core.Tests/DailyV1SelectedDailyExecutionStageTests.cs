@@ -11,7 +11,25 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             Set(snapshot);
 
         internal OwnerSectionCensusWitness Witness { get; private set; }
-        public OwnerSectionCensusWitness GetCurrentCensus() => Witness;
+        private DailyV1NpcRuntimeOwners liveStatusOwner;
+        private OwnerSectionCensusSnapshot liveStatusBaseline;
+
+        public OwnerSectionCensusWitness GetCurrentCensus() => liveStatusOwner == null
+            ? Witness
+            : new OwnerSectionCensusWitness(
+                liveStatusBaseline.SectionId, liveStatusBaseline.SchemaVersion,
+                liveStatusBaseline.OwnerInstanceIdentity, liveStatusBaseline.Cardinality,
+                liveStatusOwner.CrimeJusticeRevision);
+
+        internal void BindNpcStatusOwner(
+            OwnerSectionCensusSnapshot baseline,
+            DailyV1NpcRuntimeOwners owner)
+        {
+            if (baseline == null || owner == null)
+                throw new ArgumentNullException(baseline == null ? nameof(baseline) : nameof(owner));
+            liveStatusBaseline = baseline;
+            liveStatusOwner = owner;
+        }
 
         internal void Set(OwnerSectionCensusSnapshot snapshot)
         {
@@ -160,6 +178,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             out string diagnostic), Is.True, diagnostic);
         DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
         OwnerSectionCensusSnapshot[] completeVector =
             DailyV1ApplicationSessionGateTests.CreateCoreBoundCompleteOwnerSectionVector(session);
         List<DailyV1OwnerSectionContractIdentity> contracts =
@@ -172,6 +191,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             MutableSelectedOwnerCensusProvider provider =
                 new MutableSelectedOwnerCensusProvider(snapshot);
+            if (string.Equals(snapshot.SectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(actor.RuntimeId),
+                    StringComparison.Ordinal))
+                provider.BindNpcStatusOwner(snapshot, actor);
             providers.Add(snapshot.SectionId, provider);
             contracts.Add(new DailyV1OwnerSectionContractIdentity(
                 snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role));
@@ -205,7 +228,6 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(coreBoundary.OwnsSelectedActionSlotP12Mutation, Is.True);
         Assert.That(dailyBoundary.LastActorTurnHostPorts.ActionSlotP12MutationProtocol, Is.Null);
 
-        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
         string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
             + actor.RuntimeId;
         MutableSelectedOwnerCensusProvider actionProvider = providers[sectionId];
@@ -244,6 +266,47 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(refreshed.Revision, Is.EqualTo(before.Revision + 1L));
         Assert.That(refreshed.Cardinality, Is.EqualTo(1));
         Assert.That(epoch, Is.EqualTo(1L));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+
+        DailyV1StatusDefinition statusToAdd = graph.Definitions.Statuses.Values.FirstOrDefault(
+            status => !actor.Status.Contains(status));
+        Assert.That(statusToAdd, Is.Not.Null,
+            "The selected actor needs an admitted status transition for the Core-owned mutation proof.");
+        long statusRevisionBefore = actor.CrimeJusticeRevision;
+        string statusSectionId = DailyV1SelectedOwnerSectionCensusContract
+            .NpcStatusCrimeSectionIdFor(actor.RuntimeId);
+        OwnerSectionCensusWitness statusWitnessBefore = providers[statusSectionId].GetCurrentCensus();
+        Assert.That(ReferenceEquals(statusWitnessBefore.OwnerInstanceIdentity, actor), Is.True);
+        dailyBoundary.RequiresActionProjection = false;
+        Assert.That(coreBoundary.TryGetActionStatusBoundary(actor, null,
+            reuseExistingOperation: true,
+            out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary nestedStatusBoundary), Is.False,
+            "A forced outcome that reuses an enclosing Crime/Justice operation must not fall back to a standalone Core status operation.");
+        Assert.That(nestedStatusBoundary, Is.Null);
+        Assert.That(coreBoundary.TryGetActionStatusBoundary(actor, null,
+            reuseExistingOperation: false,
+            out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary statusBoundary), Is.True,
+            "A detached Core host with no Unity mutation adapter uses the sealed census boundary.");
+        DailyV1SelectedActionStatusPlanResult statusResult = statusBoundary.ExecuteWithinOperation(
+            actor, null, () => DailyV1SelectedActionExecutionStage.TryApplySelectedStatusChanges(
+                actor, Array.Empty<DailyV1StatusDefinition>(), new[] { statusToAdd }, statusBoundary)
+                    ? DailyV1SelectedActionStatusPlanResult.Applied
+                    : DailyV1SelectedActionStatusPlanResult.ActorRejected);
+        Assert.That(statusResult, Is.EqualTo(DailyV1SelectedActionStatusPlanResult.Applied));
+        Assert.That(actor.Status.Contains(statusToAdd), Is.True);
+        Assert.That(actor.CrimeJusticeRevision, Is.EqualTo(statusRevisionBefore + 1L));
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(2L),
+            "The Core-owned status write advances the same epoch exactly once after the prior action-slot write.");
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out captured, out epoch, out failure), Is.True, failure.ToString());
+        OwnerSectionCensusSnapshot refreshedStatus = captured.Single(
+            row => row.SectionId == statusSectionId);
+        Assert.That(ReferenceEquals(refreshedStatus.OwnerInstanceIdentity,
+            statusWitnessBefore.OwnerInstanceIdentity), Is.True);
+        Assert.That(refreshedStatus.Cardinality, Is.EqualTo(statusWitnessBefore.Cardinality));
+        Assert.That(refreshedStatus.Revision, Is.EqualTo(statusWitnessBefore.Revision + 1L));
+        Assert.That(epoch, Is.EqualTo(2L));
         Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
     }
 
@@ -1455,6 +1518,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool CrimeJusticeProjectionOwnerBindingsMatch { get; set; } = true;
         internal bool CrimeJusticeAdmissionEnabled { get; set; } = true;
         internal bool UseSelectedActionExecution { get; set; }
+        internal bool RequiresActionProjection { get; set; } = true;
         internal bool OmitActionSlotP12MutationProtocol { get; set; }
         internal bool? ActorChoiceSelectedActionExecutionOverride { get; set; }
         internal bool FailDecisionRecordOwnerResolution { get; set; }
@@ -2125,7 +2189,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             }
 
             public IAuthoritativeRandomSource RandomSource => owner.randomSource;
-            public bool RequiresActionProjection => true;
+            public bool RequiresActionProjection => owner.RequiresActionProjection;
             public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) =>
                 selectedActionExecution ?? owner.UseSelectedActionExecution;
             public void LogSkippedDirective(ScheduledDirective directive, string reason) { }
