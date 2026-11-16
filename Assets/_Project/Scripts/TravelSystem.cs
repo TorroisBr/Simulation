@@ -219,6 +219,21 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    /// <summary>
+    /// Preflights only the Unity presence projection capacity needed by the
+    /// selected Core transition. Core owns eligibility, exact route/cost and
+    /// authoritative owner revision checks.
+    /// </summary>
+    internal bool CanPreflightSelectedSoloTravelProjection(
+        NpcRuntime npcRuntime,
+        DailyV1SelectedTravelTransitionPlan plan)
+    {
+        return npcRuntime != null
+            && plan != null
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwners, plan.Npc)
+            && npcRuntime.CanStartTravelPresenceTransition(1L);
+    }
+
     internal bool CanCommitSelectedSoloTravelTransition(
         NpcRuntime npcRuntime,
         DailyV1SelectedTravelTransitionPlan plan,

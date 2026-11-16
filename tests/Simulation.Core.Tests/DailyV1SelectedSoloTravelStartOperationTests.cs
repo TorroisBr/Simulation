@@ -625,6 +625,62 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
     }
 
     [Test]
+    public void CoreSoloTravelBoundaryUsesExactMutableSessionAndProjectionOnlyPreflight()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        Assert.That(TryCreateSoloTravelPreflightPlan(graph,
+            out DailyV1NpcRuntimeOwners actor,
+            out DailyV1SelectedTravelTransitionPlan plan,
+            out SpatialRouteRuntime route,
+            out float travelCost), Is.True);
+
+        DailyV1ActionDefinition travelAction = actor.Definitions.Actions.Values
+            .FirstOrDefault(candidate => candidate.Values.actionType?.Value
+                == DailyV1NpcDefinitionRules.TravelActionTypeValue);
+        Assert.That(travelAction, Is.Not.Null);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            graph.Definitions, travelAction, null, plan.DestinationCityRuntimeId,
+            null, 0, 0f, 1f, NpcTravelReason.None, 0f,
+            "decision/core-boundary-preflight", null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, travelAction, payload, null), Is.True);
+
+        RecordingSoloTravelProjectionBoundary projection =
+            new RecordingSoloTravelProjectionBoundary();
+        TestProtocol protocol = new TestProtocol();
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary;
+        try
+        {
+            Assert.That(state.CanMutate, Is.True);
+            Assert.That(DailyV1SelectedActionExecutionStage
+                .DailyV1CoreSelectedSoloTravelActionBoundary.TryCreate(
+                state, graph, actor, travelAction, protocol, projection,
+                out boundary), Is.True);
+
+            Assert.That(boundary.CanCommitPreparedTransition(plan, route, travelCost), Is.True);
+            Assert.That(projection.ProjectionPreflightCalls, Is.EqualTo(1),
+                "The Core boundary retains the host's projection-only revision-capacity check before charging.");
+            Assert.That(projection.LegacyDomainPreflightCalls, Is.Zero,
+                "Core owns route, cost, eligibility, and authoritative-owner validation.");
+        }
+        finally
+        {
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+
+        state.MutationGuard.MarkFaulted(AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+        Assert.That(state.CanMutate, Is.False);
+        Assert.That(boundary.CanCommitPreparedTransition(plan, route, travelCost), Is.False,
+            "A faulted exact session must fail closed before asking the host to preflight its projection.");
+        Assert.That(projection.ProjectionPreflightCalls, Is.EqualTo(1));
+        Assert.That(projection.LegacyDomainPreflightCalls, Is.Zero);
+        Assert.That(plan.IsCommitted, Is.False);
+    }
+
+    [Test]
     public void CoreRechecksTravelAndSpatialOwnerBaselinesAcrossTheHostVectorPreflight()
     {
         DailyV1GenesisComposition composition = Compose();
@@ -1386,5 +1442,40 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
         }
 
         public void FaultClosed() => Faulted = true;
+    }
+
+    private sealed class RecordingSoloTravelProjectionBoundary :
+        DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionProjectionBoundary
+    {
+        internal int LegacyDomainPreflightCalls { get; private set; }
+        internal int ProjectionPreflightCalls { get; private set; }
+
+        public bool CanStartTradeReposition() => true;
+        public void LogTradeReposition() { }
+
+        public bool CanCommitPreparedTransition(
+            DailyV1SelectedTravelTransitionPlan plan,
+            SpatialRouteRuntime route,
+            float travelCost)
+        {
+            LegacyDomainPreflightCalls++;
+            return true;
+        }
+
+        public bool CanPreflightProjectionCommit(DailyV1SelectedTravelTransitionPlan plan)
+        {
+            ProjectionPreflightCalls++;
+            return true;
+        }
+
+        public bool TryPrepareTransitionProjection(DailyV1SelectedTravelTransitionPlan plan) => true;
+        public bool CanAdmitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan) => true;
+        public void PublishCommittedTransition(DailyV1SelectedTravelTransitionPlan plan) { }
+        public void PublishTravelStarted(
+            DailyV1SelectedActionExecutionStage.SoloTravelResult result) { }
+        public void LogCommercialScouting() { }
+        public bool CanProjectTravelPlanClear(DailyV1NpcRuntimeOwners actor) => true;
+        public bool CanAdmitTravelPlanClear(DailyV1NpcRuntimeOwners actor) => true;
+        public void PublishCommittedTravelPlanClear(DailyV1NpcRuntimeOwners actor) { }
     }
 }

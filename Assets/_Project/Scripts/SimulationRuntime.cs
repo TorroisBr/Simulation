@@ -465,6 +465,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         private readonly Action logTradeReposition;
         private readonly Func<DailyV1SelectedTravelTransitionPlan, SpatialRouteRuntime, float, bool>
             canCommitPreparedTransition;
+        private readonly Func<DailyV1SelectedTravelTransitionPlan, bool>
+            canPreflightProjectionCommit;
         private readonly Func<DailyV1SelectedTravelTransitionPlan, bool> tryPrepareTransitionProjection;
         private readonly Func<DailyV1SelectedTravelTransitionPlan, bool> canAdmitPreparedTransition;
         private readonly Action<DailyV1SelectedTravelTransitionPlan> publishCommittedTransition;
@@ -480,6 +482,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             Action logTradeReposition,
             Func<DailyV1SelectedTravelTransitionPlan, SpatialRouteRuntime, float, bool>
                 canCommitPreparedTransition,
+            Func<DailyV1SelectedTravelTransitionPlan, bool> canPreflightProjectionCommit,
             Func<DailyV1SelectedTravelTransitionPlan, bool> tryPrepareTransitionProjection,
             Func<DailyV1SelectedTravelTransitionPlan, bool> canAdmitPreparedTransition,
             Action<DailyV1SelectedTravelTransitionPlan> publishCommittedTransition,
@@ -497,6 +500,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 ?? throw new ArgumentNullException(nameof(logTradeReposition));
             this.canCommitPreparedTransition = canCommitPreparedTransition
                 ?? throw new ArgumentNullException(nameof(canCommitPreparedTransition));
+            this.canPreflightProjectionCommit = canPreflightProjectionCommit
+                ?? throw new ArgumentNullException(nameof(canPreflightProjectionCommit));
             this.tryPrepareTransitionProjection = tryPrepareTransitionProjection
                 ?? throw new ArgumentNullException(nameof(tryPrepareTransitionProjection));
             this.canAdmitPreparedTransition = canAdmitPreparedTransition
@@ -521,6 +526,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         public bool CanCommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan,
             SpatialRouteRuntime route, float travelCost) =>
             canCommitPreparedTransition(plan, route, travelCost);
+        public bool CanPreflightProjectionCommit(DailyV1SelectedTravelTransitionPlan plan) =>
+            canPreflightProjectionCommit(plan);
         public bool TryPrepareTransitionProjection(DailyV1SelectedTravelTransitionPlan plan) =>
             tryPrepareTransitionProjection(plan);
         public bool CanAdmitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan) =>
@@ -17225,6 +17232,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             (plan, route, travelCost) => travelSystem != null
                 && travelSystem.CanCommitSelectedSoloTravelTransition(
                     exactActor, plan, route, travelCost, actionRuntime.TargetCity),
+            plan => travelSystem != null
+                && travelSystem.CanPreflightSelectedSoloTravelProjection(exactActor, plan),
             plan =>
             {
                 if (plan == null

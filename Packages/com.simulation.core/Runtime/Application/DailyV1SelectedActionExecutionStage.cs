@@ -333,6 +333,11 @@ internal static class DailyV1SelectedActionExecutionStage
         /// <summary>Retains the host-side preflight used only by the legacy non-Core boundary.</summary>
         bool CanCommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan,
             SpatialRouteRuntime route, float travelCost);
+        /// <summary>
+        /// Checks only host-projection revision capacity required before Core charges.
+        /// Domain eligibility and route/cost authority remain in Core.
+        /// </summary>
+        bool CanPreflightProjectionCommit(DailyV1SelectedTravelTransitionPlan plan);
         /// <summary>Runs the existing exact Unity projection preflight after Core's charge, as before.</summary>
         bool TryPrepareTransitionProjection(DailyV1SelectedTravelTransitionPlan plan);
         /// <summary>Supplies the existing immediate P12 admission before Core writes transition owners.</summary>
@@ -448,7 +453,10 @@ internal static class DailyV1SelectedActionExecutionStage
                 IsCurrentSession()
                 && executionState.CanMutate
                 && DailyV1SelectedActionExecutionStage.CanCommitPreparedSoloTravelTransition(
-                    graph, actor, plan, route, travelCost);
+                    graph, actor, plan, route, travelCost)
+                && CanPreflightProjectionCommit(plan);
+            public bool CanPreflightProjectionCommit(DailyV1SelectedTravelTransitionPlan plan) =>
+                hostProjection.CanPreflightProjectionCommit(plan);
             public bool TryPrepareTransitionProjection(DailyV1SelectedTravelTransitionPlan plan) =>
                 hostProjection.TryPrepareTransitionProjection(plan);
             public bool CanAdmitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan) =>

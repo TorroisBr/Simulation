@@ -1661,6 +1661,8 @@ public sealed class DailyV1SelectedRuntimeOwnerGraphTests
             SpatialRouteRuntime route, float travelCost)
         { order.Add("transition-preflight"); return true; }
 
+        public bool CanPreflightProjectionCommit(DailyV1SelectedTravelTransitionPlan plan) => true;
+
         public bool TryPrepareTransitionProjection(DailyV1SelectedTravelTransitionPlan plan)
         {
             order.Add("transition-projection-preflight");
