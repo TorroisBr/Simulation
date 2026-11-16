@@ -200,11 +200,12 @@ internal interface IDailyV1SelectedActorTurnHostPorts
 }
 
 /// <summary>
-/// Exact host-side census identities needed by the selected Crime/Justice
-/// operation. Core validates the exact Core Justice-owner relationships and
-/// pins this compatibility binding to the admitted execution session. The
-/// host contributes only its existing census protocol and opaque receipt-owner
-/// identities; operations do not ask Unity to select those identities again.
+/// Exact census identities needed by the selected Crime/Justice operation.
+/// Core validates the exact Core Justice-owner relationships and pins this
+/// compatibility binding to the admitted execution session. A host may supply
+/// its existing census binding; a Core-only turn derives the same opaque tokens
+/// from the sealed Core registry. Operations do not rediscover identities from
+/// Unity.
 /// </summary>
 internal sealed class DailyV1SelectedCrimeJusticeDailyMutationHostBinding
 {

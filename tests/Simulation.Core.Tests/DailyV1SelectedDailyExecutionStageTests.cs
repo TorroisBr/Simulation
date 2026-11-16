@@ -551,29 +551,15 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(state.TrySealSelectedOwnerSectionCensusRegistry(registrations), Is.True);
         Assert.That(state.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
 
-        Assert.That(state.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
-            graph,
-            out IDailyV1P12CrimeJusticeMutationProtocol crimeJusticeProtocol,
-            out _), Is.True,
-            "The detached Core stage uses the protocol already backed by its sealed census registry.");
         object crimeReceiptIdentity = initialVector.Single(row =>
             row.SectionId == DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId)
             .OwnerInstanceIdentity;
         object justiceReceiptIdentity = initialVector.Single(row =>
             row.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId)
             .OwnerInstanceIdentity;
-        Assert.That(state.TryBindSelectedCrimeJusticeDailyMutationHostBinding(
-            graph,
-            new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
-                crimeJusticeProtocol,
-                crimeReceiptIdentity,
-                crimeReceiptIdentity,
-                graph.JusticeRecordsOwner,
-                justiceReceiptIdentity,
-                justiceReceiptIdentity,
-                graph.JusticeRecordsOwner,
-                admissionEnabled: true)), Is.True,
-            "The day stage pins the exact receipt identities already present in the complete census.");
+        Assert.That(state.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+            graph, out _), Is.False,
+            "The Core-only session begins without a Unity-selected Crime/Justice receipt binding.");
 
         Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
         Assert.That(state.TryBeginAdvance(invalidateCaptureToken: false,
@@ -600,6 +586,18 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "The production daily stage must continue through its travel and completion phases.");
         Assert.That(dailyBoundary.Calls, Does.Contain("travel-observation"));
 
+        Assert.That(state.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+            graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding crimeJusticeBinding), Is.True,
+            "The Core-only actor-turn path derives the exact P12 binding from its sealed census.");
+        Assert.That(crimeJusticeBinding.CrimeOwnerIdentity, Is.SameAs(crimeReceiptIdentity));
+        Assert.That(crimeJusticeBinding.CrimeReceiptCensusOwnerIdentity, Is.SameAs(crimeReceiptIdentity));
+        Assert.That(crimeJusticeBinding.JusticeOwnerIdentity, Is.SameAs(justiceReceiptIdentity));
+        Assert.That(crimeJusticeBinding.JusticeReceiptCensusOwnerIdentity, Is.SameAs(justiceReceiptIdentity));
+        Assert.That(crimeJusticeBinding.JusticeRecordsOwner, Is.SameAs(graph.JusticeRecordsOwner));
+        Assert.That(crimeJusticeBinding.Protocol,
+            Is.TypeOf<DailyV1CoreSelectedOwnerSectionMutationProtocol>(),
+            "The standalone Core branch binds the Core protocol, not a host-created substitute.");
+
         Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
             state, DailyV1CaptureScopeAllowance.None,
             out IReadOnlyList<OwnerSectionCensusSnapshot> after,
@@ -607,6 +605,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
         Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(after), Is.True);
         Assert.That(after.Count, Is.EqualTo(initialVector.Length));
+        Assert.That(after.Single(row => row.SectionId ==
+                DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId)
+                .OwnerInstanceIdentity, Is.SameAs(crimeReceiptIdentity));
+        Assert.That(after.Single(row => row.SectionId ==
+                DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId)
+                .OwnerInstanceIdentity, Is.SameAs(justiceReceiptIdentity));
         OwnerSectionCensusSnapshot decisionBefore = before[
             RuntimeIdAllocatorCensusProvider.DecisionsSectionId];
         OwnerSectionCensusSnapshot sequenceBefore = before[

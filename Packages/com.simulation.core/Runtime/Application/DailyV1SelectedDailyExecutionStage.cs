@@ -640,7 +640,9 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
         out IDailyV1SelectedActorTurnExecutionContext context)
     {
         context = null;
-        if (!CanExecuteCoreOnlyActorTurn(executionState, graph)
+        if (executionState == null || graph == null
+            || !executionState.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(graph)
+            || !CanExecuteCoreOnlyActorTurn(executionState, graph)
             || graph.PersonStore == null
             || executionState.SelectedActorChoiceStore == null
             || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore))

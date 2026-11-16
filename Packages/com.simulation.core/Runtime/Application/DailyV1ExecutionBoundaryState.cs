@@ -5578,6 +5578,78 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    /// <summary>
+    /// Binds the Core Crime/Justice P12 operation from the sealed census
+    /// baselines when the selected actor turn has no host action-effect port.
+    /// The receipt identity tokens are read from the committed Core registry;
+    /// they are never reconstructed from Unity objects or current provider
+    /// reads. Existing host bindings remain authoritative and must match this
+    /// exact session if already installed.
+    /// </summary>
+    internal bool TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph == null) return false;
+        if (TryGetSelectedCrimeJusticeDailyMutationHostBinding(graph, out _))
+            return true;
+
+        if (!TryGetSelectedOwnerSectionCensusBaselineOwnerIdentity(
+                DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
+                graph, out object crimeReceiptOwnerIdentity)
+            || !TryGetSelectedOwnerSectionCensusBaselineOwnerIdentity(
+                DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+                graph, out object justiceReceiptOwnerIdentity)
+            || !TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+                graph, out IDailyV1P12CrimeJusticeMutationProtocol protocol, out _))
+            return false;
+
+        DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding =
+            new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+                protocol,
+                crimeReceiptOwnerIdentity,
+                crimeReceiptOwnerIdentity,
+                graph.JusticeRecordsOwner,
+                justiceReceiptOwnerIdentity,
+                justiceReceiptOwnerIdentity,
+                graph.JusticeRecordsOwner,
+                admissionEnabled: true);
+        return binding.HasExactCoreOwnerRelationships(graph)
+            && TryBindSelectedCrimeJusticeDailyMutationHostBinding(graph, binding);
+    }
+
+    private bool TryGetSelectedOwnerSectionCensusBaselineOwnerIdentity(
+        string sectionId,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out object ownerInstanceIdentity)
+    {
+        ownerInstanceIdentity = null;
+        if (string.IsNullOrWhiteSpace(sectionId) || graph == null) return false;
+
+        lock (operationSyncRoot)
+        {
+            if (!HasAdmittedSelectedDailyExecution
+                || AdmissionContext?.Profile
+                    != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+                || !selectedOwnerSectionCensusRegistrySealed
+                || !selectedRuntimeCensusProtocolReady
+                || selectedRuntimeCensusProtocolFaulted
+                || !expectedOwnerSectionContracts.TryGetValue(sectionId,
+                    out DailyV1OwnerSectionContractIdentity contract)
+                || !selectedOwnerSectionCensusProviders.TryGetValue(sectionId,
+                    out DailyV1OwnerSectionCensusProviderRegistration registration)
+                || registration == null || !registration.HasBaseline
+                || registration.BaselineOwnerInstanceIdentity == null
+                || registration.SchemaVersion != contract.SchemaVersion
+                || registration.Role != contract.Role)
+                return false;
+
+            ownerInstanceIdentity = registration.BaselineOwnerInstanceIdentity;
+            return true;
+        }
+    }
+
     private static void FaultSelectedCrimeJusticeBinding(
         DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
     {
