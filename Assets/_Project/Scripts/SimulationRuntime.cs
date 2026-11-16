@@ -348,7 +348,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     /// selection and committed-section tracking remain owned by Core.
     /// </summary>
     private sealed class SelectedSoloTravelStartP12ProtocolAdapter
-        : IDailyV1SelectedP12SoloTravelStartProtocol
+        : IDailyV1SelectedP12SoloTravelStartProtocol,
+            IDailyV1SelectedP12SoloTravelStartCensusPort
     {
         private readonly SimulationRuntime runtime;
         private readonly NpcRuntime npc;
@@ -731,16 +732,22 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary hostBoundary =
                 runtime.CreateSelectedSoloTravelActionBoundary(
                     exactActor, travelProvider, actionRuntime, coreOwnsP12Operation: true);
-            return hostBoundary != null
-                && DailyV1SelectedActionExecutionStage.DailyV1CoreSelectedSoloTravelActionBoundary.TryCreate(
-                    runtime.dailyExecutionBoundary,
-                    graph,
-                    actor,
-                    action,
-                    new SelectedSoloTravelStartP12ProtocolAdapter(
-                        runtime, exactActor, travelProvider),
-                    hostBoundary,
-                    out boundary);
+            if (hostBoundary == null) return false;
+
+            SelectedSoloTravelStartP12ProtocolAdapter censusAdapter =
+                new SelectedSoloTravelStartP12ProtocolAdapter(
+                    runtime, exactActor, travelProvider);
+            DailyV1CoreSelectedP12SoloTravelStartProtocol coreProtocol =
+                new DailyV1CoreSelectedP12SoloTravelStartProtocol(
+                    runtime.dailyExecutionBoundary, graph, censusAdapter);
+            return DailyV1SelectedActionExecutionStage.DailyV1CoreSelectedSoloTravelActionBoundary.TryCreate(
+                runtime.dailyExecutionBoundary,
+                graph,
+                actor,
+                action,
+                coreProtocol,
+                hostBoundary,
+                out boundary);
         }
 
         public bool TryGetFleeCityActionBoundary(

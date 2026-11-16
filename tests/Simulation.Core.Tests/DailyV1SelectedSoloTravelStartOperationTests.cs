@@ -535,14 +535,18 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
         RegisterAndSealRequiredSections(state, sectionIds);
         string changed = DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix + actor.RuntimeId;
         TestProtocol protocol = new TestProtocol();
+        DailyV1CoreSelectedP12SoloTravelStartProtocol coreProtocol =
+            new DailyV1CoreSelectedP12SoloTravelStartProtocol(state, graph, protocol);
 
         Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
         try
         {
-            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
-                graph, actor, sectionIds, protocol, out IDisposable scope), Is.True);
+            Assert.That(coreProtocol.TryBeginOperation(
+                graph, actor, out IDisposable scope), Is.True);
             Assert.That(scope, Is.Not.Null);
             Assert.That(protocol.ValidationCalls, Is.EqualTo(1));
+            Assert.That(protocol.ValidatedSections, Is.EqualTo(sectionIds),
+                "The Core wrapper derives and forwards the exact owner cut from its bound graph.");
             Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero);
             Assert.That(protocol.EnterCalls, Is.EqualTo(1));
 
@@ -1232,6 +1236,7 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
 
     private sealed class TestProtocol :
         IDailyV1SelectedP12SoloTravelStartProtocol,
+        IDailyV1SelectedP12SoloTravelStartCensusPort,
         IDailyV1SelectedP12TravelPartyStartProtocol
     {
         private sealed class Scope : IDisposable
@@ -1247,6 +1252,7 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
         internal bool Faulted;
         internal bool ScopeDisposed;
         internal Action DuringNextValidation;
+        internal IReadOnlyList<string> ValidatedSections;
         internal IReadOnlyCollection<string> RefreshedSections;
 
         public bool TryBeginOperation(
@@ -1261,6 +1267,7 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
         public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds)
         {
             ValidationCalls++;
+            ValidatedSections = sectionIds?.ToArray();
             Action callback = DuringNextValidation;
             DuringNextValidation = null;
             callback?.Invoke();

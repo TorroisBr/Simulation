@@ -91,10 +91,23 @@ internal enum DailyV1RestoredBoundaryFinalizationFailure : byte
 }
 
 /// <summary>
-/// Existing continuation-census operations required by one selected solo
-/// travel start. The Core session owns the exact section set, serialized
-/// operation lifetime, and committed-section receipt; the host only binds
-/// those operations to its registered live census protocol.
+/// Live compatibility-census operations used while Core owns a selected
+/// solo-travel operation. Implementations bind these calls to the host's
+/// already-registered census projection; Core still chooses the exact section
+/// cut, operation lifetime, mutation receipt, and epoch publication.
+/// </summary>
+internal interface IDailyV1SelectedP12SoloTravelStartCensusPort
+{
+    bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
+    bool TryEnterOperation(out IDisposable operationScope);
+    bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds);
+    void FaultClosed();
+}
+
+/// <summary>
+/// Core-facing selected solo-travel operation. The Core wrapper derives the
+/// exact P12 owner cut and opens the execution-state scope before delegating
+/// only census compatibility calls to the host.
 /// </summary>
 internal interface IDailyV1SelectedP12SoloTravelStartProtocol
 {
@@ -102,10 +115,77 @@ internal interface IDailyV1SelectedP12SoloTravelStartProtocol
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         out IDisposable operationScope);
-    bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds);
-    bool TryEnterOperation(out IDisposable operationScope);
-    bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds);
     void FaultClosed();
+}
+
+/// <summary>
+/// Composes a selected solo-travel P12 operation from Core-owned graph and
+/// execution state. The host census port validates and refreshes its existing
+/// compatibility vector, but cannot choose sections or start a different
+/// runtime operation.
+/// </summary>
+internal sealed class DailyV1CoreSelectedP12SoloTravelStartProtocol
+    : IDailyV1SelectedP12SoloTravelStartProtocol
+{
+    private readonly DailyV1ExecutionBoundaryState executionState;
+    private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+    private readonly IDailyV1SelectedP12SoloTravelStartCensusPort censusPort;
+
+    internal DailyV1CoreSelectedP12SoloTravelStartProtocol(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IDailyV1SelectedP12SoloTravelStartCensusPort censusPort)
+    {
+        this.executionState = executionState
+            ?? throw new ArgumentNullException(nameof(executionState));
+        this.graph = graph ?? throw new ArgumentNullException(nameof(graph));
+        this.censusPort = censusPort
+            ?? throw new ArgumentNullException(nameof(censusPort));
+    }
+
+    public bool TryBeginOperation(
+        DailyV1SelectedRuntimeOwnerGraph candidateGraph,
+        DailyV1NpcRuntimeOwners actor,
+        out IDisposable operationScope)
+    {
+        operationScope = null;
+        if (!ReferenceEquals(candidateGraph, graph)
+            || actor == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !executionState.TryCreateSelectedP12SoloTravelStartSectionIds(
+                graph, actor, out IReadOnlyList<string> sectionIds))
+        {
+            FaultClosed();
+            return false;
+        }
+
+        if (!executionState.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, censusPort, out operationScope))
+        {
+            operationScope = null;
+            return false;
+        }
+
+        if (operationScope != null) return true;
+        FaultClosed();
+        return false;
+    }
+
+    internal bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
+        censusPort.TryValidateUnchangedSections(sectionIds);
+
+    internal bool TryEnterOperation(out IDisposable operationScope) =>
+        censusPort.TryEnterOperation(out operationScope);
+
+    internal bool TryRefreshCommittedMutationBaselines(
+        IReadOnlyCollection<string> sectionIds) =>
+        censusPort.TryRefreshCommittedMutationBaselines(sectionIds);
+
+    public void FaultClosed()
+    {
+        executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+        censusPort.FaultClosed();
+    }
 }
 
 /// <summary>
@@ -443,7 +523,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     {
         internal readonly DailyV1SelectedRuntimeOwnerGraph Graph;
         internal readonly DailyV1NpcRuntimeOwners Actor;
-        internal readonly IDailyV1SelectedP12SoloTravelStartProtocol Protocol;
+        internal readonly IDailyV1SelectedP12SoloTravelStartCensusPort Protocol;
         internal readonly Thread OwnerThread;
         internal readonly int OwnerManagedThreadId;
         internal readonly HashSet<string> AllowedSectionIds;
@@ -455,7 +535,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         internal SelectedP12SoloTravelStartContext(
             DailyV1SelectedRuntimeOwnerGraph graph,
             DailyV1NpcRuntimeOwners actor,
-            IDailyV1SelectedP12SoloTravelStartProtocol protocol,
+            IDailyV1SelectedP12SoloTravelStartCensusPort protocol,
             IEnumerable<string> sectionIds,
             Dictionary<string, SelectedP12OwnerSectionBaseline> coreOwnerSectionBaselines,
             IDisposable protocolScope)
@@ -2844,18 +2924,19 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     /// <summary>
     /// Begins the selected solo-travel P12 operation for one exact Core NPC.
     /// Core derives the complete touched-section set from its active owner
-    /// graph, verifies the host's census preflight against that set, and owns
-    /// the serialized scope and committed-section notification.
+    /// graph, verifies that the supplied cut matches it, compares both Core
+    /// and host census witnesses, and owns the serialized scope and committed
+    /// section notification.
     /// </summary>
     internal bool TryBeginSelectedP12SoloTravelStart(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
-        IReadOnlyList<string> hostPreflightSectionIds,
-        IDailyV1SelectedP12SoloTravelStartProtocol protocol,
+        IReadOnlyList<string> operationSectionIds,
+        IDailyV1SelectedP12SoloTravelStartCensusPort protocol,
         out IDisposable operationScope)
     {
         operationScope = null;
-        if (graph == null || actor == null || hostPreflightSectionIds == null || protocol == null)
+        if (graph == null || actor == null || operationSectionIds == null || protocol == null)
             return false;
 
         if (!TryCreateSelectedP12SoloTravelStartSectionIds(
@@ -2868,7 +2949,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         HashSet<string> supplied = new HashSet<string>(StringComparer.Ordinal);
         try
         {
-            foreach (string sectionId in hostPreflightSectionIds)
+            foreach (string sectionId in operationSectionIds)
                 if (string.IsNullOrWhiteSpace(sectionId) || !supplied.Add(sectionId))
                     throw new InvalidOperationException();
         }
@@ -3494,7 +3575,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     }
 
     private static void FaultSelectedSoloTravelStart(
-        IDailyV1SelectedP12SoloTravelStartProtocol protocol)
+        IDailyV1SelectedP12SoloTravelStartCensusPort protocol)
     {
         try { protocol?.FaultClosed(); }
         catch { }
