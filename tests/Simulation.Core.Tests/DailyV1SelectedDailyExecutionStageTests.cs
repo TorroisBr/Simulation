@@ -11,6 +11,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             Set(snapshot);
 
         internal OwnerSectionCensusWitness Witness { get; private set; }
+        internal int? CurrentCardinalityOverride { get; set; }
+        internal long? CurrentRevisionOverride { get; set; }
         private DailyV1NpcRuntimeOwners liveStatusOwner;
         private OwnerSectionCensusSnapshot liveStatusBaseline;
 
@@ -18,8 +20,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             ? Witness
             : new OwnerSectionCensusWitness(
                 liveStatusBaseline.SectionId, liveStatusBaseline.SchemaVersion,
-                liveStatusBaseline.OwnerInstanceIdentity, liveStatusBaseline.Cardinality,
-                liveStatusOwner.CrimeJusticeRevision);
+                liveStatusBaseline.OwnerInstanceIdentity,
+                CurrentCardinalityOverride ?? liveStatusBaseline.Cardinality,
+                CurrentRevisionOverride ?? liveStatusOwner.CrimeJusticeRevision);
 
         internal void BindNpcStatusOwner(
             OwnerSectionCensusSnapshot baseline,
@@ -232,14 +235,21 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             + actor.RuntimeId;
         MutableSelectedOwnerCensusProvider actionProvider = providers[sectionId];
         OwnerSectionCensusWitness before = actionProvider.Witness;
-        DailyV1ActionDefinition action = graph.Definitions.Actions.Values.First();
+        DailyV1ActionDefinition action = graph.Definitions.Actions.Values.FirstOrDefault(candidate =>
+            candidate.Values.actionType?.Value != DailyV1NpcDefinitionRules.NormalActionTypeValue);
+        Assert.That(action, Is.Not.Null,
+            "The selected graph needs a non-Normal slot for the Core fallback rejection proof.");
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            graph.Definitions, action, null, null, null, 0, 0f, 1f,
+            NpcTravelReason.None, 0f, "decision/non-normal-core-test", null,
+            null, null, out DailyV1NpcActionPayloadOwner actionPayload), Is.True);
         Assert.That(state.TryBeginRuntimeProtocolOperation(
             DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
         try
         {
             Assert.That(coreBoundary.CanCommitSelectedActionSlotP12Mutation(graph, actor), Is.True);
             Assert.That(graph.TryCommitCurrentActionSlot(
-                actor, action, null,
+                actor, action, actionPayload,
                 () => coreBoundary.CanCommitSelectedActionSlotP12Mutation(graph, actor)), Is.True);
             actionProvider.Set(new OwnerSectionCensusSnapshot(
                 sectionId,
@@ -268,6 +278,54 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(epoch, Is.EqualTo(1L));
         Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
 
+        dailyBoundary.RequiresActionProjection = false;
+        DailyV1SelectedActionDispatchResult forgedNormalDispatch =
+            new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.Normal, true, true);
+        Assert.That(coreBoundary.TryCompleteDispatch(actor, forgedNormalDispatch,
+            out _), Is.False,
+            "A Normal result cannot complete a non-Normal exact action slot without the Unity projection.");
+        Assert.That(coreBoundary.TryGetActionStatusBoundary(actor, null,
+            reuseExistingOperation: true,
+            out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary nestedStatusBoundary), Is.False,
+            "A forced outcome that reuses an enclosing Crime/Justice operation must not fall back to a standalone Core status operation.");
+        Assert.That(nestedStatusBoundary, Is.Null);
+
+        DailyV1ActionDefinition normalAction = graph.Definitions.Actions["DESCANSAR"];
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            graph.Definitions, normalAction, null, null, null, 0, 0f, 1f,
+            NpcTravelReason.None, 0f, "decision/normal-core-test", null,
+            null, null, out DailyV1NpcActionPayloadOwner normalPayload), Is.True);
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
+        try
+        {
+            OwnerSectionCensusWitness actionWitness = actionProvider.GetCurrentCensus();
+            Assert.That(coreBoundary.CanCommitSelectedActionSlotP12Mutation(graph, actor), Is.True);
+            Assert.That(graph.TryCommitCurrentActionSlot(
+                actor, normalAction, normalPayload,
+                () => coreBoundary.CanCommitSelectedActionSlotP12Mutation(graph, actor)), Is.True);
+            actionProvider.Set(new OwnerSectionCensusSnapshot(
+                sectionId, actionWitness.SchemaVersion, OwnerSectionRole.Required,
+                actionWitness.OwnerInstanceIdentity, actionWitness.Cardinality,
+                actor.ActionSlot.Revision));
+            Assert.That(coreBoundary.NotifySelectedActionSlotP12MutationCommitted(
+                graph, actor, sectionId, actor.ActionSlot.Revision), Is.True);
+        }
+        finally
+        {
+            Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+        }
+        Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+            graph, actor, composition.RandomSource, 0L, coreBoundary,
+            out bool coreActionSucceeded, out NpcActionResultType? coreActionResult,
+            out string coreActionMessage), Is.True);
+        Assert.That(coreActionSucceeded, Is.True);
+        Assert.That(coreActionResult, Is.EqualTo(NpcActionResultType.Success));
+        Assert.That(coreActionMessage, Is.Null);
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(2L),
+            "Installing the projection-independent action advances the epoch once; its effect-free turn adds no mutation.");
+
         DailyV1StatusDefinition statusToAdd = graph.Definitions.Statuses.Values.FirstOrDefault(
             status => !actor.Status.Contains(status));
         Assert.That(statusToAdd, Is.Not.Null,
@@ -277,12 +335,27 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             .NpcStatusCrimeSectionIdFor(actor.RuntimeId);
         OwnerSectionCensusWitness statusWitnessBefore = providers[statusSectionId].GetCurrentCensus();
         Assert.That(ReferenceEquals(statusWitnessBefore.OwnerInstanceIdentity, actor), Is.True);
-        dailyBoundary.RequiresActionProjection = false;
-        Assert.That(coreBoundary.TryGetActionStatusBoundary(actor, null,
-            reuseExistingOperation: true,
-            out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary nestedStatusBoundary), Is.False,
-            "A forced outcome that reuses an enclosing Crime/Justice operation must not fall back to a standalone Core status operation.");
-        Assert.That(nestedStatusBoundary, Is.Null);
+        MutableSelectedOwnerCensusProvider statusProvider = providers[statusSectionId];
+        foreach (int invalidCardinality in new[] { 0, 2 })
+        {
+            statusProvider.CurrentCardinalityOverride = invalidCardinality;
+            statusProvider.CurrentRevisionOverride = statusRevisionBefore + 1L;
+            Assert.That(state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
+            try
+            {
+                Assert.That(state.TryRefreshCoreSelectedOwnerSectionCensusRows(
+                    graph, new[] { statusSectionId }, null), Is.False,
+                    "A changed NPC status census row must retain exactly one owner.");
+                Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(2L));
+            }
+            finally
+            {
+                Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+        }
+        statusProvider.CurrentCardinalityOverride = null;
+        statusProvider.CurrentRevisionOverride = null;
         Assert.That(coreBoundary.TryGetActionStatusBoundary(actor, null,
             reuseExistingOperation: false,
             out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary statusBoundary), Is.True,
@@ -295,8 +368,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(statusResult, Is.EqualTo(DailyV1SelectedActionStatusPlanResult.Applied));
         Assert.That(actor.Status.Contains(statusToAdd), Is.True);
         Assert.That(actor.CrimeJusticeRevision, Is.EqualTo(statusRevisionBefore + 1L));
-        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(2L),
-            "The Core-owned status write advances the same epoch exactly once after the prior action-slot write.");
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(3L),
+            "The Core-owned status write advances the same epoch once after the two prior action-slot writes.");
         Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
             state, DailyV1CaptureScopeAllowance.None,
             out captured, out epoch, out failure), Is.True, failure.ToString());
@@ -306,7 +379,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             statusWitnessBefore.OwnerInstanceIdentity), Is.True);
         Assert.That(refreshedStatus.Cardinality, Is.EqualTo(statusWitnessBefore.Cardinality));
         Assert.That(refreshedStatus.Revision, Is.EqualTo(statusWitnessBefore.Revision + 1L));
-        Assert.That(epoch, Is.EqualTo(2L));
+        Assert.That(epoch, Is.EqualTo(3L));
         Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
     }
 

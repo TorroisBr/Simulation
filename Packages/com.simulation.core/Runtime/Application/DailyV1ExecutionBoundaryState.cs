@@ -1392,7 +1392,11 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     || witness.SchemaVersion != registration.SchemaVersion
                     || !ReferenceEquals(witness.OwnerInstanceIdentity,
                         registration.BaselineOwnerInstanceIdentity)
+                    || !HasValidCoreSelectedOwnerSectionCardinality(
+                        sectionId, registration.BaselineCardinality)
                     || witness.Cardinality != registration.BaselineCardinality
+                    || !HasValidCoreSelectedOwnerSectionCardinality(
+                        sectionId, witness.Cardinality)
                     || witness.Revision != registration.BaselineRevision)
                     return false;
             }
@@ -1458,12 +1462,15 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     || witness.SchemaVersion != prior.SchemaVersion
                     || !ReferenceEquals(witness.OwnerInstanceIdentity,
                         prior.BaselineOwnerInstanceIdentity)
-                    || witness.Cardinality < 0 || witness.Revision < 0L)
+                    || witness.Cardinality < 0 || witness.Revision < 0L
+                    || !HasValidCoreSelectedOwnerSectionCardinality(
+                        sectionId, witness.Cardinality))
                     return false;
 
                 if (changed.Contains(sectionId))
                 {
                     if (prior.Role != OwnerSectionRole.Required
+                        || witness.Cardinality != prior.BaselineCardinality
                         || witness.Revision <= prior.BaselineRevision)
                         return false;
                     staged.Add(new DailyV1OwnerSectionCensusProviderRegistration(
@@ -1486,6 +1493,22 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 staged, changed, reservation);
         }
     }
+
+    private static bool HasValidCoreSelectedOwnerSectionCardinality(
+        string sectionId,
+        int cardinality)
+    {
+        if (string.IsNullOrWhiteSpace(sectionId) || cardinality < 0) return false;
+        if (!sectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix,
+                StringComparison.Ordinal))
+            return true;
+
+        string runtimeId = sectionId.Substring(
+            DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix.Length);
+        return !string.IsNullOrWhiteSpace(runtimeId) && cardinality == 1;
+    }
+
     internal static bool IsSelectedDynamicOwnerSectionId(string sectionId)
     {
         if (string.IsNullOrWhiteSpace(sectionId)) return false;
