@@ -491,8 +491,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "An attempted write outside the admitted mutation scope faults the selected census closed.");
     }
 
-    [Test]
-    public void CoreOnlyActorTurnExecutesTargetlessNormalActionWithCompleteP12Census()
+    [TestCase(false)]
+    [TestCase(true)]
+    public void CoreOnlyActorTurnExecutesTargetlessNormalActionWithCompleteP12Census(
+        bool prebindMismatchedCrimeReceiptIdentity)
     {
         DailyV1EffectiveDefinitions definitions = CopyWithConfiguredActions(
             CopyWithMerchantTradeEnabled(
@@ -557,6 +559,37 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         object justiceReceiptIdentity = initialVector.Single(row =>
             row.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId)
             .OwnerInstanceIdentity;
+
+        if (prebindMismatchedCrimeReceiptIdentity)
+        {
+            Assert.That(state.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+                graph,
+                out IDailyV1P12CrimeJusticeMutationProtocol mismatchedProtocol,
+                out _), Is.True);
+            object wrongCrimeReceiptIdentity = new object();
+            Assert.That(state.TryBindSelectedCrimeJusticeDailyMutationHostBinding(
+                graph,
+                new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+                    mismatchedProtocol,
+                    wrongCrimeReceiptIdentity,
+                    wrongCrimeReceiptIdentity,
+                    graph.JusticeRecordsOwner,
+                    justiceReceiptIdentity,
+                    justiceReceiptIdentity,
+                    graph.JusticeRecordsOwner,
+                    admissionEnabled: true)), Is.True,
+                "The setup models a structurally valid host binding whose Crime token differs from the sealed census.");
+            Assert.That(state.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(graph), Is.False,
+                "Core must reject an existing host token that does not match its committed baseline identity.");
+            Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.True,
+                "The identity mismatch faults the selected census protocol closed.");
+            Assert.That(graph.Npcs.All(owner => owner.ActionSlot.CurrentAction == null), Is.True,
+                "A mismatched receipt token is rejected before actor selection or mutation.");
+            Assert.That(state.SimulationTime.AbsoluteDay, Is.Zero,
+                "A mismatched receipt token is rejected before the day advances.");
+            return;
+        }
+
         Assert.That(state.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
             graph, out _), Is.False,
             "The Core-only session begins without a Unity-selected Crime/Justice receipt binding.");

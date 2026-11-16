@@ -5590,16 +5590,32 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         DailyV1SelectedRuntimeOwnerGraph graph)
     {
         if (graph == null) return false;
-        if (TryGetSelectedCrimeJusticeDailyMutationHostBinding(graph, out _))
-            return true;
-
         if (!TryGetSelectedOwnerSectionCensusBaselineOwnerIdentity(
                 DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
                 graph, out object crimeReceiptOwnerIdentity)
             || !TryGetSelectedOwnerSectionCensusBaselineOwnerIdentity(
                 DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
-                graph, out object justiceReceiptOwnerIdentity)
-            || !TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+                graph, out object justiceReceiptOwnerIdentity))
+            return false;
+
+        if (TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding existing))
+        {
+            bool exactCensusBinding =
+                ReferenceEquals(existing.CrimeOwnerIdentity, crimeReceiptOwnerIdentity)
+                && ReferenceEquals(existing.CrimeReceiptCensusOwnerIdentity, crimeReceiptOwnerIdentity)
+                && ReferenceEquals(existing.JusticeOwnerIdentity, justiceReceiptOwnerIdentity)
+                && ReferenceEquals(existing.JusticeReceiptCensusOwnerIdentity, justiceReceiptOwnerIdentity)
+                && ReferenceEquals(existing.CrimeJusticeRecordsOwner, graph.JusticeRecordsOwner)
+                && ReferenceEquals(existing.JusticeRecordsOwner, graph.JusticeRecordsOwner);
+            if (exactCensusBinding) return true;
+
+            FaultSelectedCrimeJusticeBinding(existing);
+            MarkSelectedRuntimeCensusProtocolFaulted();
+            return false;
+        }
+
+        if (!TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
                 graph, out IDailyV1P12CrimeJusticeMutationProtocol protocol, out _))
             return false;
 
