@@ -618,9 +618,13 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         out IDailyV1SelectedActionDispatchBoundary dispatchBoundary)
     {
         dispatchBoundary = null;
-        return TryGetExactActor(actor)
-            && RequireHostPorts().TryGetDispatchBoundary(actor, out dispatchBoundary)
-            && dispatchBoundary != null;
+        if (!TryGetExactActor(actor)) return false;
+        if (hostPorts != null)
+            return hostPorts.TryGetDispatchBoundary(actor, out dispatchBoundary)
+                && dispatchBoundary != null;
+        return !RequiresActionProjection
+            && DailyV1CoreOnlyHideActionDispatchBoundary.TryCreate(
+                executionState, graph, actor, out dispatchBoundary);
     }
 
     public bool TryCompleteDispatch(
@@ -632,19 +636,24 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         if (!TryGetExactActor(actor) || dispatch == null) return false;
         if (hostPorts != null
             && hostPorts.TryCompleteDispatch(actor, dispatch, out resultMessage)) return true;
-        // Only the exact projection-independent Normal slot may complete
-        // without a Unity action object. Its status effects are committed
-        // separately through the exact Core P12 status-owner boundary.
-        if (RequiresActionProjection
-            || dispatch.Kind != DailyV1SelectedActionDispatchKind.Normal)
-            return false;
+        if (RequiresActionProjection) return false;
 
         DailyV1ActionDefinition action = actor.ActionSlot?.CurrentAction;
+        DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
+        if (dispatch.Kind == DailyV1SelectedActionDispatchKind.Crime)
+            return dispatch.Crime != null
+                && dispatch.ActionRollSucceeded == dispatch.Crime.ActionRollSucceeded
+                && dispatch.Succeeded == dispatch.Crime.Succeeded
+                && DailyV1CoreOnlyHideActionDispatchBoundary.IsExactTargetlessHideSlot(
+                    graph, actor, action, payload);
+
+        if (dispatch.Kind != DailyV1SelectedActionDispatchKind.Normal) return false;
+        // Normal slot effects are committed separately through the exact Core
+        // P12 status-owner boundary.
         if (DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
                 graph, actor, action))
             return true;
 
-        DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
         return !string.IsNullOrWhiteSpace(payload?.TargetNpcRuntimeId)
             && graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
                 out DailyV1NpcRuntimeOwners target)
@@ -926,6 +935,216 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
 
     public void Log(SimulationLogCategory category, string message) => RequireHostPorts().Log(category, message);
     public void LogWarning(string message) => RequireHostPorts().LogWarning(message);
+}
+
+/// <summary>
+/// Hostless dispatch for the selected Hide action. Domain execution, exact
+/// owner writes and P12 reservation remain in Core; host callbacks are
+/// presentation-only no-ops, while every non-Hide dispatch path fails closed.
+/// </summary>
+internal sealed class DailyV1CoreOnlyHideActionDispatchBoundary :
+    IDailyV1SelectedActionDispatchBoundary,
+    DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionProjectionBoundary,
+    IDailyV1SelectedCrimeJusticeDailyMutationHostPort
+{
+    private readonly DailyV1ExecutionBoundaryState executionState;
+    private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+    private readonly DailyV1NpcRuntimeOwners actor;
+    private readonly DailyV1ActionDefinition action;
+    private readonly DailyV1NpcActionPayloadOwner payload;
+
+    private DailyV1CoreOnlyHideActionDispatchBoundary(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        this.executionState = executionState;
+        this.graph = graph;
+        this.actor = actor;
+        this.action = action;
+        this.payload = payload;
+    }
+
+    internal static bool TryCreate(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        out IDailyV1SelectedActionDispatchBoundary boundary)
+    {
+        boundary = null;
+        DailyV1ActionDefinition action = actor?.ActionSlot?.CurrentAction;
+        DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
+        if (executionState == null || graph == null || actor == null
+            || !IsExactTargetlessHideSlot(graph, actor, action, payload)
+            || !IsCurrentAdmittedCoreSession(executionState, graph, actor))
+            return false;
+
+        boundary = new DailyV1CoreOnlyHideActionDispatchBoundary(
+            executionState, graph, actor, action, payload);
+        return true;
+    }
+
+    internal static bool IsExactTargetlessHideSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload) =>
+        graph != null && actor != null && action != null && payload != null
+        && graph.ContainsExactNpcOwner(actor)
+        && ReferenceEquals(actor.Definitions, graph.Definitions)
+        && graph.Definitions.Actions.TryGetValue(action.DefinitionId,
+            out DailyV1ActionDefinition admittedAction)
+        && ReferenceEquals(action, admittedAction)
+        && action.Values.actionType?.Value == DailyV1NpcDefinitionRules.HideActionTypeValue
+        && DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+            graph.Definitions, action)
+        && ReferenceEquals(actor.ActionSlot?.CurrentAction, action)
+        && ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)
+        && ReferenceEquals(payload.Action, action)
+        && payload.TargetNpcRuntimeId == null
+        && payload.TargetCityRuntimeId == null
+        && payload.TargetItem == null
+        && payload.Amount == 0
+        && payload.ExpectedUnitPrice == 0f
+        && payload.TravelReason == NpcTravelReason.None
+        && payload.ExpectedNetValue == 0f
+        && payload.CommercialDecisionEvidence == null
+        && payload.CommercialScoutingEvidence == null;
+
+    private static bool IsCurrentAdmittedCoreSession(
+        DailyV1ExecutionBoundaryState state,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor) =>
+        state != null && graph != null && actor != null
+        && state.HasAdmittedSelectedDailyExecution
+        && state.AdmissionContext?.IsOwnedByCurrentThread() == true
+        && ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph)
+        && graph.ContainsExactNpcOwner(actor)
+        && ReferenceEquals(actor.Definitions, graph.Definitions);
+
+    private bool IsCurrent() =>
+        IsCurrentAdmittedCoreSession(executionState, graph, actor)
+        && IsExactTargetlessHideSlot(graph, actor, action, payload);
+
+    private bool IsExactActor(DailyV1NpcRuntimeOwners candidate) =>
+        ReferenceEquals(candidate, actor) && IsCurrent();
+
+    private void EnsureExactActor(DailyV1NpcRuntimeOwners candidate)
+    {
+        if (!IsExactActor(candidate))
+            throw new InvalidOperationException(
+                "The Core-only Hide adapter lost its exact admitted actor and action slot.");
+    }
+
+    public bool TryGetSoloTravelBoundary(
+        DailyV1NpcRuntimeOwners candidate,
+        DailyV1ActionDefinition expectedAction,
+        out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
+    { boundary = null; return false; }
+
+    public bool TryGetMarketBoundaries(
+        DailyV1NpcRuntimeOwners candidate,
+        out IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
+        out IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary)
+    { saleBoundary = null; purchaseBoundary = null; return false; }
+
+    public bool TryGetNpcTradeBoundary(
+        DailyV1NpcRuntimeOwners seller,
+        DailyV1NpcRuntimeOwners buyer,
+        out IDailyV1SelectedNpcTradeBoundary boundary)
+    { boundary = null; return false; }
+
+    public bool TryGetFleeCityActionBoundary(
+        DailyV1NpcRuntimeOwners candidate,
+        DailyV1ActionDefinition expectedAction,
+        out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary boundary)
+    { boundary = null; return false; }
+
+    public bool TryGetGuardArrestActionBoundary(
+        DailyV1NpcRuntimeOwners candidate,
+        DailyV1ActionDefinition expectedAction,
+        out DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary boundary)
+    { boundary = null; return false; }
+
+    public bool TryGetStealActionBoundary(
+        DailyV1NpcRuntimeOwners candidate,
+        DailyV1ActionDefinition expectedAction,
+        out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary boundary)
+    { boundary = null; return false; }
+
+    public bool TryGetCrimeActionBoundary(
+        DailyV1NpcRuntimeOwners candidate,
+        DailyV1ActionDefinition expectedAction,
+        out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
+    {
+        boundary = null;
+        if (!IsExactActor(candidate) || !ReferenceEquals(expectedAction, action)) return false;
+        return DailyV1SelectedCrimeActionExecutionStage.DailyV1CoreSelectedCrimeActionBoundary.TryCreate(
+            executionState, graph, actor, action, this, this, out boundary)
+            && boundary != null;
+    }
+
+    public bool TryGetForcedEscapeBoundary(
+        DailyV1NpcRuntimeOwners candidate,
+        DailyV1ActionDefinition expectedAction,
+        out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
+    { boundary = null; return false; }
+
+    public bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners candidate) => false;
+    public void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners candidate) =>
+        throw new InvalidOperationException("Merchant mutation is outside the Core-only Hide adapter.");
+    public bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners candidate) => false;
+    public void PublishTradeTravelPlanMutation(DailyV1NpcRuntimeOwners candidate) =>
+        throw new InvalidOperationException("Trade travel mutation is outside the Core-only Hide adapter.");
+    public void CompleteCrossCityBuy(
+        DailyV1NpcRuntimeOwners candidate,
+        DailyV1SelectedCrossCityBuyResult result) =>
+        throw new InvalidOperationException("Market completion is outside the Core-only Hide adapter.");
+
+    public bool TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+        DailyV1SelectedRuntimeOwnerGraph candidateGraph,
+        out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
+    {
+        binding = null;
+        return IsCurrent() && ReferenceEquals(candidateGraph, graph)
+            && executionState.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(graph)
+            && executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(graph, out binding)
+            && binding != null && binding.AdmissionEnabled
+            && binding.HasExactCoreOwnerRelationships(graph);
+    }
+
+    public bool CanProjectStatusChanges(
+        DailyV1NpcRuntimeOwners candidate,
+        IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
+    {
+        if (!IsExactActor(candidate) || statusToAdd == null || candidate.Status == null)
+            return false;
+        foreach (DailyV1StatusDefinition status in statusToAdd)
+            if (status == null
+                || !graph.Definitions.Statuses.TryGetValue(status.DefinitionId,
+                    out DailyV1StatusDefinition admittedStatus)
+                || !ReferenceEquals(status, admittedStatus))
+                return false;
+        return true;
+    }
+
+    public void RefreshStatusProjection(DailyV1NpcRuntimeOwners candidate) => EnsureExactActor(candidate);
+    public void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners candidate) => EnsureExactActor(candidate);
+    public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence) => false;
+    public void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence) =>
+        throw new InvalidOperationException("Sentence projection is outside the Core-only Hide adapter.");
+    public void PublishHidden(DailyV1NpcRuntimeOwners candidate) => EnsureExactActor(candidate);
+    public void PublishFailedEscape(DailyV1NpcRuntimeOwners candidate, int sentencePenalty) =>
+        throw new InvalidOperationException("Escape publication is outside the Core-only Hide adapter.");
+    public void PublishEscaped(
+        DailyV1NpcRuntimeOwners candidate,
+        DailyV1CityRuntimeOwners eventCity,
+        bool hadActiveSentence,
+        float bountyAfterPenalty,
+        string originDecisionId) =>
+        throw new InvalidOperationException("Escape publication is outside the Core-only Hide adapter.");
 }
 
 /// <summary>

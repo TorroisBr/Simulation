@@ -491,20 +491,35 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "An attempted write outside the admitted mutation scope faults the selected census closed.");
     }
 
-    [TestCase(false)]
-    [TestCase(true)]
-    public void CoreOnlyActorTurnExecutesTargetlessNormalActionWithCompleteP12Census(
-        bool prebindMismatchedCrimeReceiptIdentity)
+    [TestCase(false, false)]
+    [TestCase(true, false)]
+    [TestCase(false, true)]
+    public void CoreOnlyActorTurnExecutesAdmittedActionWithCompleteP12Census(
+        bool prebindMismatchedCrimeReceiptIdentity,
+        bool executeCoreOnlyHideAction)
     {
         DailyV1EffectiveDefinitions definitions = CopyWithConfiguredActions(
             CopyWithMerchantTradeEnabled(
                 DailyV1CapturedSelectedContentFixture.CreateDefinitions(), false),
-            new[] { "DESCANSAR" });
+            executeCoreOnlyHideAction ? new[] { "ESCONDER_SE" } : new[] { "DESCANSAR" });
+        if (executeCoreOnlyHideAction)
+            definitions = CopyWithGuaranteedSuccessfulHideAction(definitions);
         DailyV1GenesisComposition composition = CreateSelectedGenesis(definitions);
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
         DailyV1StatusDefinition hiddenStatus = definitions.Statuses[
             definitions.Configuration.hiddenStatus];
         DailyV1NpcRuntimeOwners staleHiddenActor = graph.Npcs[0];
+        DailyV1NpcRuntimeOwners hider = executeCoreOnlyHideAction ? graph.Npcs[1] : null;
+        long justiceRevisionBeforeTurn = -1L;
+        if (hider != null)
+        {
+            DailyV1CityRuntimeOwners hiderCity = graph.Cities.Single(city =>
+                string.Equals(city.RuntimeId, hider.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+            Assert.That(graph.JusticeRecordsOwner.TryAddWantedRecord(
+                new DailyV1JusticeWantedRecordOwner(hider.RuntimeId, hiderCity.RuntimeId, 12f, 4)), Is.True,
+                "The Core Hide proving actor receives one existing canonical Justice warrant before admission.");
+            justiceRevisionBeforeTurn = graph.JusticeRecordsOwner.Revision;
+        }
         Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero);
         Assert.That(staleHiddenActor.Status.TryAdd(hiddenStatus), Is.True,
             "The proving fixture starts with an expired hidden-status owner fact to exercise Core reconciliation.");
@@ -665,7 +680,26 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(staleHiddenAfter.Revision, Is.EqualTo(staleHiddenBefore.Revision + 1L),
             "The exact NPC Crime/Justice census row records the Core status write.");
         Assert.That(graph.Npcs.Any(owner => owner.ActionSlot.CurrentAction != null), Is.True,
-            "At least one exact admitted actor installed and executed the configured Normal action.");
+            "At least one exact admitted actor installed and executed a configured Core action.");
+        if (executeCoreOnlyHideAction)
+        {
+            Assert.That(hider.ActionSlot.CurrentAction.Values.actionType.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.HideActionTypeValue));
+            Assert.That(hider.HiddenState.RemainingDays, Is.EqualTo(2),
+                "The existing Core Hide transition installs the authored two-day duration.");
+            Assert.That(hider.Status.Contains(hiddenStatus), Is.True,
+                "The hidden-status fact is committed through the exact Core NPC owner.");
+            Assert.That(hider.Status.Contains(definitions.Statuses[definitions.Configuration.wantedStatus]), Is.True,
+                "The existing Justice daily stage synchronizes the actor's wanted status from the canonical warrant.");
+            Assert.That(graph.JusticeRecordsOwner.Revision, Is.EqualTo(justiceRevisionBeforeTurn),
+                "Hide consumes the exact warrant but does not write the Justice owner.");
+            string hiderCrimeSectionId =
+                DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(hider.RuntimeId);
+            OwnerSectionCensusSnapshot hiderBefore = before[hiderCrimeSectionId];
+            OwnerSectionCensusSnapshot hiderAfter = after.Single(row => row.SectionId == hiderCrimeSectionId);
+            Assert.That(hiderAfter.Revision, Is.EqualTo(hiderBefore.Revision + 3L),
+                "P12 records the Hide duration write, hidden-status write, and existing wanted-status synchronization.");
+        }
         Assert.That(epoch, Is.GreaterThan(0L),
             "The complete daily execution publishes its shared mutation epoch.");
         Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.False);
@@ -1683,6 +1717,64 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         return graph;
     }
 
+    private static DailyV1EffectiveDefinitions CopyWithGuaranteedSuccessfulHideAction(
+        DailyV1EffectiveDefinitions definitions)
+    {
+        List<DailyV1ActionDefinition> actions = new List<DailyV1ActionDefinition>();
+        bool replacedHide = false;
+        foreach (DailyV1ActionDefinition action in definitions.Actions.Values)
+        {
+            DailyV1NpcActionData values = action.Values;
+            if (values.actionType?.Value == DailyV1NpcDefinitionRules.HideActionTypeValue)
+            {
+                values = new DailyV1NpcActionData(
+                    values.id,
+                    values.statusNecessariosParaFazerAcao,
+                    values.actionName,
+                    values.normalActionLogText,
+                    values.actionCategory,
+                    values.actionType,
+                    values.baseUtility,
+                    values.statusModifiers,
+                    canFail: false,
+                    baseSuccessChance: 1f,
+                    values.statusToAdd,
+                    values.statusToRemove,
+                    values.targetStatusToAdd,
+                    values.targetStatusToRemove,
+                    values.crimeSettings);
+                actions.Add(new DailyV1ActionDefinition(action.TypeToken, action.DefinitionId, values));
+                replacedHide = true;
+            }
+            else
+            {
+                actions.Add(action);
+            }
+        }
+        Assert.That(replacedHide, Is.True, "The admitted proving graph contains its Hide action definition.");
+        return new DailyV1EffectiveDefinitions(
+            definitions.Configuration,
+            definitions.EffectiveConfiguration,
+            definitions.Calendar,
+            null,
+            definitions.Cities.Values,
+            definitions.Items.Values,
+            definitions.Npcs.Values,
+            definitions.Jobs.Values,
+            actions,
+            definitions.Statuses.Values,
+            null,
+            definitions.StageOrder,
+            definitions.ProfileContractIdentity,
+            definitions.GeographyProfileContractIdentity,
+            definitions.GeographyStageIdentity,
+            definitions.HexCoordinateConvention,
+            definitions.HexCoordinateCanonicalOrder,
+            null,
+            definitions.Traits.Values,
+            definitions.CapabilityAttributes.Values,
+            definitions.ExplorableSites.Values);
+    }
     private static DailyV1EffectiveDefinitions CopyWithConfiguredActions(
         DailyV1EffectiveDefinitions definitions,
         IReadOnlyList<string> actionIds)

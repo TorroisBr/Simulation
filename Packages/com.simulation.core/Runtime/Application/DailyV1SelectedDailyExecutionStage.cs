@@ -731,12 +731,13 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
 
         foreach (DailyV1ActionDefinition action in actions)
         {
+            int actionType = action?.Values.actionType?.Value ?? int.MinValue;
             if (action == null
                 || !graph.Definitions.Actions.TryGetValue(
                     action.DefinitionId, out DailyV1ActionDefinition admittedAction)
                 || !ReferenceEquals(admittedAction, action)
-                || action.Values.actionType?.Value
-                    != DailyV1NpcDefinitionRules.NormalActionTypeValue
+                || (actionType != DailyV1NpcDefinitionRules.NormalActionTypeValue
+                    && actionType != DailyV1NpcDefinitionRules.HideActionTypeValue)
                 || !DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
                     graph.Definitions, action)
                 || !DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
@@ -758,12 +759,31 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 if (actor.ActionSlot.CurrentPayload != null) return false;
                 continue;
             }
-            if (!DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
-                    graph, actor, installed))
-                return false;
+            if (DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
+                    graph, actor, installed)
+                || IsProjectionIndependentCoreHideAction(graph, actor, installed))
+                continue;
+            return false;
         }
 
         return true;
+    }
+
+    private static bool IsProjectionIndependentCoreHideAction(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action)
+    {
+        DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
+        return DailyV1CoreOnlyHideActionDispatchBoundary.IsExactTargetlessHideSlot(
+            graph, actor, action, payload)
+            && DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
+                graph.Definitions, action,
+                out _, out _,
+                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove,
+                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd)
+            && targetStatusToRemove.Count == 0
+            && targetStatusToAdd.Count == 0;
     }
 
     private static bool CanExecuteCoreOnlyCrimeJustice(
