@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using System.Text;
 using NUnit.Framework;
@@ -28,6 +29,82 @@ public sealed class DailyV1ApplicationHostTests
         public void Replace(string source, string destination) => throw new NotSupportedException();
         public void Move(string source, string destination) => throw new NotSupportedException();
         public void Delete(string path) => throw new NotSupportedException();
+    }
+
+    private sealed class InMemorySlotOperations : IAtomicFileSlotOperations
+    {
+        private readonly Dictionary<string, byte[]> slots = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        private readonly Dictionary<string, MemoryStream> temporaryStreams =
+            new Dictionary<string, MemoryStream>(StringComparer.Ordinal);
+        private readonly Dictionary<string, byte[]> temporaryBytes =
+            new Dictionary<string, byte[]>(StringComparer.Ordinal);
+
+        internal bool CorruptNextTemporaryRead { get; set; }
+        internal int CreateTemporaryCalls { get; private set; }
+
+        public void CreateDirectory(string path) { }
+        public bool Exists(string path) => slots.ContainsKey(path) || temporaryBytes.ContainsKey(path);
+
+        public Stream CreateNewTemporary(string path)
+        {
+            CreateTemporaryCalls++;
+            var stream = new MemoryStream();
+            temporaryStreams.Add(path, stream);
+            return stream;
+        }
+
+        public Stream OpenRead(string path)
+        {
+            byte[] bytes;
+            bool isTemporary = temporaryBytes.TryGetValue(path, out bytes);
+            if (!isTemporary && !slots.TryGetValue(path, out bytes))
+                throw new FileNotFoundException();
+
+            byte[] copy = (byte[])bytes.Clone();
+            if (isTemporary && CorruptNextTemporaryRead)
+            {
+                CorruptNextTemporaryRead = false;
+                if (copy.Length > 0) copy[0] ^= 0x80;
+            }
+            return new MemoryStream(copy, writable: false);
+        }
+
+        public void FlushToDisk(Stream stream)
+        {
+            foreach (KeyValuePair<string, MemoryStream> pair in temporaryStreams)
+            {
+                if (!ReferenceEquals(pair.Value, stream)) continue;
+                temporaryBytes[pair.Key] = pair.Value.ToArray();
+                return;
+            }
+            throw new IOException("The stream is not owned by this temporary slot fixture.");
+        }
+
+        public void Replace(string source, string destination) => Publish(source, destination);
+        public void Move(string source, string destination) => Publish(source, destination);
+
+        public void Delete(string path)
+        {
+            temporaryBytes.Remove(path);
+            if (temporaryStreams.TryGetValue(path, out MemoryStream stream))
+            {
+                temporaryStreams.Remove(path);
+                stream.Dispose();
+            }
+        }
+
+        internal byte[] ReadSlot(string path) =>
+            slots.TryGetValue(path, out byte[] bytes) ? (byte[])bytes.Clone() : null;
+
+        internal int TemporaryCount => temporaryBytes.Count;
+
+        private void Publish(string source, string destination)
+        {
+            if (!temporaryBytes.TryGetValue(source, out byte[] bytes))
+                throw new FileNotFoundException();
+            slots[destination] = (byte[])bytes.Clone();
+            Delete(source);
+        }
     }
     private sealed class CorruptSlotOperations : IAtomicFileSlotOperations
     {
@@ -1233,6 +1310,118 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(V2Header(unsupportedHost).IsValid, Is.False,
             "Encoding must not accept a descriptor that the .NET-v2 decoder will reject.");
 
+    }
+
+    [Test]
+    public void DotNetV2PortableStoreRoundTripsAndRejectsDifferentHostIdentity()
+    {
+        Assert.That(TryCreateDotNetV2StoreFixture(out DailyV1EffectiveDefinitions definitions,
+            out P12ACompatibilityDescriptorV2 descriptor, out P12ADailyV1SectionManifest manifest,
+            out byte[] bytes, out string diagnostic), Is.True, diagnostic);
+
+        var operations = new InMemorySlotOperations();
+        const string root = "portable-dotnet-v2-store";
+        Assert.That(P12AContinuationStore.TrySaveDotNetV2(bytes, manifest, descriptor,
+            root, operations, out P12AResult saveResult), Is.True, saveResult?.Code.ToString());
+        Assert.That(saveResult.Code, Is.EqualTo(P12AResultCode.Saved));
+
+        Assert.That(P12AContinuationStore.TryLoadDotNetV2(manifest, descriptor,
+            root, operations, out P12AContinuationImage loaded, out P12AResult loadResult),
+            Is.True, loadResult?.Code.ToString());
+        Assert.That(loadResult.Code, Is.EqualTo(P12AResultCode.Loaded));
+        Assert.That(loaded.Header.Compatibility, Is.Null);
+        Assert.That(loaded.Header.CompatibilityV2.CanonicalBytes, Is.EqualTo(descriptor.CanonicalBytes));
+        Assert.That(P12AContinuationCodec.TryEncode(loaded, manifest,
+            out byte[] reencoded, out P12AResult encodeResult), Is.True, encodeResult?.Code.ToString());
+        Assert.That(reencoded, Is.EqualTo(bytes), "The .NET-v2 slot must preserve deterministic frame bytes.");
+
+        var otherHost = new DailyV1HostEnvironmentIdentity(1,
+            descriptor.RuntimeFrameworkDescription, "8.0.2.0", descriptor.OperatingSystemDescription,
+            descriptor.RuntimeIdentifier, descriptor.ProcessArchitecture, descriptor.TargetFramework,
+            descriptor.Assemblies, descriptor.NumericProfileId, descriptor.NumericProfileVersion);
+        Assert.That(DailyV1CompatibilityDescriptorFactory.TryCreateDotNetV2(definitions,
+            otherHost, out P12ACompatibilityDescriptorV2 otherDescriptor, out diagnostic),
+            Is.True, diagnostic);
+        Assert.That(P12AContinuationStore.TryLoadDotNetV2(manifest, otherDescriptor,
+            root, operations, out P12AContinuationImage rejected, out P12AResult mismatch), Is.False);
+        Assert.That(rejected, Is.Null);
+        Assert.That(mismatch.Code, Is.EqualTo(P12AResultCode.IncompatibleBuildOrRuntime));
+    }
+
+    [Test]
+    public void DotNetV2PortableStoreRereadFailurePreservesPriorSlot()
+    {
+        Assert.That(TryCreateDotNetV2StoreFixture(out _,
+            out P12ACompatibilityDescriptorV2 descriptor, out P12ADailyV1SectionManifest manifest,
+            out byte[] original, out string diagnostic), Is.True, diagnostic);
+        Assert.That(TryCreateDotNetV2StoreFixture(out _, out _, out _,
+            out byte[] replacement, out diagnostic, new byte[] { 0xA5, 0x5A }), Is.True, diagnostic);
+
+        var operations = new InMemorySlotOperations();
+        const string root = "portable-dotnet-v2-atomic-store";
+        Assert.That(P12AContinuationStore.TrySaveDotNetV2(original, manifest, descriptor,
+            root, operations, out P12AResult initialSave), Is.True, initialSave?.Code.ToString());
+        string slotPath = P12AContinuationStore.SlotPath(root);
+        byte[] priorBytes = operations.ReadSlot(slotPath);
+        Assert.That(priorBytes, Is.EqualTo(original));
+
+        operations.CorruptNextTemporaryRead = true;
+        Assert.That(P12AContinuationStore.TrySaveDotNetV2(replacement, manifest, descriptor,
+            root, operations, out P12AResult failedSave), Is.False);
+        Assert.That(failedSave.Code, Is.EqualTo(P12AResultCode.StorageFailure));
+        Assert.That(operations.ReadSlot(slotPath), Is.EqualTo(priorBytes));
+        Assert.That(operations.TemporaryCount, Is.Zero,
+            "A failed reread must clean only its own temporary and leave the previous slot intact.");
+    }
+
+    // This fixture exercises the portable descriptor/codec/atomic-slot boundary only.
+    // It is not evidence that a reduced owner manifest satisfies the full Daily-v1 census.
+    private static bool TryCreateDotNetV2StoreFixture(
+        out DailyV1EffectiveDefinitions definitions,
+        out P12ACompatibilityDescriptorV2 descriptor,
+        out P12ADailyV1SectionManifest manifest,
+        out byte[] bytes,
+        out string diagnostic,
+        byte[] payload = null)
+    {
+        definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        descriptor = null;
+        manifest = null;
+        bytes = null;
+        diagnostic = null;
+        if (!DailyV1CompatibilityDescriptorFactory.TryCreateDotNetV2(
+                definitions, DotNetIdentity(), out descriptor, out diagnostic))
+            return false;
+        if (!DailyV1GenesisComposer.TryComposeSelectedOwners(definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition, out diagnostic))
+            return false;
+
+        manifest = new P12ADailyV1SectionManifest(new[]
+        {
+            new P12ASectionContract("portable.fixture.required", 1, 0,
+                OwnerSectionRole.Required, null)
+        });
+        var header = P12AContinuationHeader.ForDotNetV2(
+            composition.WorldId.Value, 0L, 1L, -1L,
+            composition.P9ManifestSnapshot.SelectedP9ContractIdentity,
+            composition.P9ManifestSnapshot.Fingerprint,
+            "P8-A", descriptor.P8Fingerprint, 0L, descriptor);
+        var roots = new P12ACausalRootPayload(composition.P9ManifestSnapshot,
+            ((DeterministicRandomSource)composition.RandomSource).CaptureSnapshot());
+        var section = new P12AOwnerSection("portable.fixture.required", 1, 0,
+            OwnerSectionRole.Required, null, 0L,
+            new[] { new P12AOwnerRow("portable-owner", 0L, payload ?? new byte[] { 0x31, 0x42 }) });
+        var image = new P12AContinuationImage(header, roots, new[] { section });
+        return P12AContinuationCodec.TryEncode(image, manifest, out bytes, out P12AResult result)
+            ? true
+            : Fail(result?.Code.ToString(), out diagnostic);
+    }
+
+    private static bool Fail(string message, out string diagnostic)
+    {
+        diagnostic = message;
+        return false;
     }
 
     private static DailyV1HostEnvironmentIdentity DotNetIdentity(ushort hostKind = 1) =>
