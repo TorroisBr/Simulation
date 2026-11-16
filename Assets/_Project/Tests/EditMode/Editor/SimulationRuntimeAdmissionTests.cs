@@ -17310,6 +17310,23 @@ public sealed class SimulationRuntimeAdmissionTests
                 "Core publishes the same session whose Unity host projection was prepared.");
             Assert.That(published.CoreRuntimeSession.Definitions, Is.SameAs(definitions),
                 "The published session remains bound to the exact admitted effective-definition graph.");
+            Assert.That(published.Runtime.SelectedRuntimeOwnerGraph,
+                Is.SameAs(published.CoreRuntimeSession.OwnerGraph),
+                "The Unity runtime projection must retain the exact Core-prepared owner graph.");
+            Assert.That(ReadPrivateField<DailyV1ExecutionBoundaryState>(published.Runtime, "dailyExecutionBoundary"),
+                Is.SameAs(published.CoreRuntimeSession.ExecutionBoundaryState),
+                "The Unity runtime projection must use the Core session's execution and admission boundary.");
+            Assert.That(ReadPrivateField<RuntimeIdAllocator>(published.Runtime, "runtimeIdAllocator"),
+                Is.SameAs(published.CoreRuntimeSession.GenesisComposition.RuntimeIdAllocator),
+                "The Unity runtime projection must not allocate a second runtime identity authority.");
+            Assert.That(ReadPrivateField<SimulationRecordSequence>(published.Runtime, "simulationRecordSequence"),
+                Is.SameAs(published.CoreRuntimeSession.GenesisComposition.RecordSequence),
+                "The Unity runtime projection must share the Core-prepared record sequence.");
+            Assert.That(published.Runtime.HasExactSelectedRuntimeOwnerGraph(definitions), Is.True,
+                "Projected City/NPC adapter instances must bind the complete Core owner graph without rebuilding it.");
+            Assert.That(ReadPrivateField<SimulationTime>(published.Runtime, "simulationTime"),
+                Is.SameAs(published.CoreRuntimeSession.SimulationTime),
+                "Unity must project the exact Core-prepared simulation clock.");
             Assert.That(application.TryGetPublishedHostProjection(
                 application.ActiveSession, out IDailyV1ApplicationHostProjection publishedProjection), Is.True);
             Assert.That(publishedProjection, Is.SameAs(published),

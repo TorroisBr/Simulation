@@ -592,30 +592,16 @@ public class TesteSimulacao : MonoBehaviour
             }
 
             pendingInitialStartHostProjection = null;
-            buildInitialStartHostProjection = true;
-            try
-            {
-                InitializeSimulation();
-            }
-            catch (Exception exception)
-            {
-                diagnostic = "Unity could not construct the host projection for the admitted Core genesis: "
-                    + exception.Message;
-                return false;
-            }
-            finally
-            {
-                buildInitialStartHostProjection = false;
-            }
-
-            SimulationActiveSession genesisProjection = pendingInitialStartHostProjection;
-            if (genesisProjection == null
+            if (!TryCreatePreparedCoreGenesisProjection(
+                    preparation, effective, calendar, definitions,
+                    out SimulationActiveSession genesisProjection, out diagnostic)
+                || genesisProjection == null
                 || !ReferenceEquals(genesisProjection.CoreRuntimeSession, preparation.CoreSession)
                 || !ReferenceEquals(genesisProjection.Configuration, simulationConfig)
                 || genesisProjection.Runtime == null)
             {
-                pendingInitialStartHostProjection = null;
-                diagnostic = "Unity did not return the projection bound to the exact prepared Core genesis.";
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "Unity did not return the projection bound to the exact prepared Core genesis.";
                 return false;
             }
 
@@ -652,6 +638,202 @@ public class TesteSimulacao : MonoBehaviour
         candidateProjection = restoredProjection;
         candidateHostPorts = restoredProjection.Runtime;
         return true;
+    }
+
+    /// <summary>
+    /// Builds only the Unity-facing adapters for a genesis graph that Core has
+    /// already completed. This path deliberately does not re-enter the genesis
+    /// stage pipeline: it binds the exact Core roots to their Unity projections,
+    /// validates those bindings, and returns the private host projection for
+    /// Core's serialized publication transaction.
+    /// </summary>
+    private bool TryCreatePreparedCoreGenesisProjection(
+        DailyV1ApplicationStartPreparation preparation,
+        EffectiveSimulationConfiguration effective,
+        CalendarDefinition calendar,
+        DailyV1EffectiveDefinitions definitions,
+        out SimulationActiveSession projection,
+        out string diagnostic)
+    {
+        projection = null;
+        diagnostic = null;
+        DailyV1GenesisComposition genesis = preparation?.GenesisComposition;
+        DailyV1ActiveRuntimeSession coreSession = preparation?.CoreSession;
+        Thread initializeThread = Thread.CurrentThread;
+        int initializeThreadId = initializeThread.ManagedThreadId;
+        if (preparation == null
+            || preparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+            || genesis == null || coreSession == null || effective == null
+            || calendar == null || definitions == null
+            || simulationConfig == null
+            || runtimeAdmissionContext == null
+            || runtimeAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !runtimeAdmissionContext.IsOwnedByCurrentThread()
+            || preparation.Logger == null
+            || !ReferenceEquals(genesis.Definitions, definitions)
+            || !ReferenceEquals(coreSession.Definitions, definitions)
+            || !ReferenceEquals(genesis.WorldId, coreSession.WorldId)
+            || !ReferenceEquals(genesis.SimulationTime, coreSession.SimulationTime)
+            || !ReferenceEquals(genesis.Calendar, coreSession.Calendar)
+            || !ReferenceEquals(genesis.EventAuthority, coreSession.EventAuthority)
+            || !ReferenceEquals(genesis.EffectiveConfiguration, effective)
+            || !ReferenceEquals(genesis.ExecutionBoundaryState, coreSession.ExecutionBoundaryState)
+            || !ReferenceEquals(genesis.OwnerGraph, coreSession.OwnerGraph)
+            || !ReferenceEquals(genesis.AdmissionContext, runtimeAdmissionContext)
+            || !ReferenceEquals(effectiveConfiguration, effective)
+            || !ReferenceEquals(calendarDefinition, calendar)
+            || !ReferenceEquals(selectedDefinitions, definitions)
+            || SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig)
+            || P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig))
+        {
+            diagnostic = "The Unity projection requires the exact admitted Core genesis and its supported Daily-v1 inputs.";
+            return false;
+        }
+
+        if (bootstrapFailed || pendingInitialStartHostProjection != null
+            || CaptureActiveSession() != null || draftComposition != null
+            || simulationRuntime != null || bootstrapPublicationScope != null)
+        {
+            diagnostic = "The Core genesis projection cannot replace or reuse an existing Unity runtime projection.";
+            return false;
+        }
+
+        try
+        {
+            logger = preparation.Logger;
+            lastEconomySnapshotDay = 0L;
+            enabledModules = new SimulationModuleSet(definitions.Configuration.enabledModules);
+            AppendScenarioDiagnostics(effective);
+
+            unpublishedWorldId = genesis.WorldId;
+            if (!genesis.ExecutionBoundaryState.TryBindSelectedRuntimeOwnerGraph(genesis.OwnerGraph))
+                throw new System.InvalidOperationException(
+                    "Core Daily-v1 genesis did not retain its exact selected owner graph.");
+            ProjectSelectedCoreGenesis(genesis);
+
+            RebuildSystems(effective, genesis.OwnerGraph.JusticeRecordsOwner);
+            selectedInitialRuntimeOwnerGraph = genesis.OwnerGraph;
+            if (!selectedInitialRuntimeOwnerGraph.TryBindExpeditionStore(expeditionStore))
+                throw new System.InvalidOperationException(
+                    "The Core selected owner graph could not bind the exact empty P10 ExpeditionStore.");
+
+            simulationRuntime = new SimulationRuntime(
+                simulationTime: simulationTime, cities: CityRuntimeList, npcRuntimes: NpcRuntimeList,
+                configuredActions: ConfiguredActions, scheduledDirectiveSystem: scheduledDirectiveSystem,
+                justiceSystem: justiceSystem, crimeSystem: crimeSystem, npcDecisionSystem: npcDecisionSystem,
+                travelSystem: travelSystem, travelPartySystem: travelPartySystem, merchantSystem: merchantSystem,
+                commercialKnowledgeSharingSystem: commercialKnowledgeSharingSystem, decisionRecorder: decisionRecorder,
+                logger: logger, explorableSiteStore: explorableSiteStore,
+                explorableSiteKnowledgeSystem: explorableSiteKnowledgeSystem, expeditionSystem: expeditionSystem,
+                configuration: effectiveConfiguration, randomSource: authoritativeRandomSource,
+                personStore: genesis.PersonStore,
+                genealogyStore: genesis.OwnerGraph.GenealogyStore,
+                p12CrimeSocialAppraisalWorldState: selectedInitialRuntimeOwnerGraph.P12EOwners?.CrimeSocialAppraisal,
+                institutionStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Institutions,
+                officeStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Offices,
+                propertyOwnershipStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.PropertyOwnership,
+                estateStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Estates,
+                politicalClaimStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.PoliticalClaims,
+                factionStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Factions,
+                politicalSupportStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.PoliticalSupport,
+                politicalDecisionStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.PoliticalDecisions,
+                armedForceStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.ArmedForces,
+                conflictStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Conflicts,
+                warStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Wars,
+                battleStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Battles,
+                armedForceSpatialStateStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Positions,
+                contingentManpowerStateStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Manpower,
+                actorChoiceStore: genesis.ActorChoiceStore,
+                calendarDefinition: calendarDefinition,
+                spatialAuthorityStore: genesisSpatialAuthority,
+                localTopologyStore: genesisLocalTopologyStore,
+                legacySpatialAnchorBindingStore: genesisLegacySpatialAnchorBindingStore,
+                runtimeAdmissionContext: runtimeAdmissionContext,
+                recordSequence: recordSequence,
+                worldId: unpublishedWorldId,
+                runtimeIdAllocator: runtimeIdAllocator,
+                economyTransactionService: economyTransactionService,
+                requireP12ReceiptCensusOwners: true,
+                runtimeIdentityRegistry: runtimeIdentityRegistry,
+                spatialNetworkRuntime: spatialNetwork,
+                requireP12RuntimeIdentitySpatialCensusOwners: true,
+                selectedExecutionBoundaryState: genesis.ExecutionBoundaryState,
+                selectedCalendar: genesis.Calendar);
+
+            if (!simulationRuntime.TryAdoptInitialSelectedRuntimeOwnerGraph(selectedInitialRuntimeOwnerGraph))
+                throw new System.InvalidOperationException(
+                    "The constructed runtime did not adopt the exact unpublished selected Core owner graph.");
+            if (!TryProjectInitialSelectedJusticeRows(selectedInitialRuntimeOwnerGraph))
+                throw new System.InvalidOperationException(
+                    "The selected Justice rows could not bind their exact Unity reference projections.");
+            simulationRuntime.BindP12EconomyTransactionService(economyTransactionService);
+            if (!simulationRuntime.TryBeginBootstrapPublicationScope(out bootstrapPublicationScope))
+                throw new System.InvalidOperationException(
+                    "The P12 bootstrap publication scope could not begin after the initial census baseline.");
+            ValidateCandidateProfile();
+
+            npcChronicleFormatter = DailyV1SelectedNpcChronicleFormatter.Create(genesis.OwnerGraph);
+            draftComposition = new SimulationBootstrapComposition(
+                unpublishedWorldId,
+                new SimulationGenesisManifest(
+                    simulationConfig, effectiveConfiguration, calendarDefinition,
+                    genesis.P9ProfileFingerprint, genesis.P9ProfileFingerprint,
+                    genesis.P9ProvenanceRecords,
+                    includeP10RuinLocalTopology: false,
+                    includeP10BGeneratedRuin: false,
+                    selectedDefinitions: definitions),
+                simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
+                historyStore, scheduledDirectiveStore, decisionStore, decisionRecorder,
+                recordSequence, economyTransactionService, npcChronicleService,
+                npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
+                runtimeIdentityRegistry, runtimeIdAllocator, explorableSiteStore,
+                expeditionStore, expeditionSystem, definitions);
+
+            if (draftComposition == null
+                || !ReferenceEquals(Thread.CurrentThread, initializeThread)
+                || Thread.CurrentThread.ManagedThreadId != initializeThreadId
+                || !IsBootstrapStartThreadCurrent())
+                throw new System.InvalidOperationException(
+                    "The Core genesis projection did not finish on its captured bootstrap thread.");
+
+            bootstrapPublicationScope.Dispose();
+            bootstrapPublicationScope = null;
+            if (!simulationRuntime.TryAssessNpcRosterCensus(out ContinuationCensusFailure closeFailure))
+                throw new System.InvalidOperationException(
+                    "The P12 bootstrap publication scope did not close with healthy registered-owner quiescence: "
+                    + closeFailure);
+            if (!simulationRuntime.TryMarkWorldPublishedForFactualRead())
+                throw new System.InvalidOperationException(
+                    "The FR-B factual-read surface could not bind to a healthy completed world publication.");
+
+            projection = new SimulationActiveSession(
+                draftComposition, logger, justiceSystem, runtimeIdentityRegistry, spatialNetwork,
+                cityRuntimeByLocation, simulationConfig, runtimeAdmissionContext,
+                authoritativeRandomSource, lastEconomySnapshotDay, coreSession);
+            unpublishedWorldId = null;
+            draftComposition = null;
+            return true;
+        }
+        catch (System.Exception exception)
+        {
+            bootstrapFailed = true;
+            unpublishedWorldId = null;
+            draftComposition = null;
+            if (runtimeAdmissionContext != null)
+                simulationRuntime?.FaultRuntimeAdmission();
+            projection = null;
+            diagnostic = "Unity could not project the exact Core-prepared genesis: " + exception.Message;
+            return false;
+        }
+        finally
+        {
+            if (bootstrapPublicationScope != null)
+            {
+                simulationRuntime?.FaultRuntimeAdmission();
+                bootstrapPublicationScope.Dispose();
+                bootstrapPublicationScope = null;
+            }
+        }
     }
 
     /// <summary>Saves the current completed Daily-v1 boundary to the single local continuation slot.</summary>
