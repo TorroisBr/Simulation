@@ -22,6 +22,13 @@ public static class SimulationRecordSequenceOwnerBridge
         sequence.BindP12MutationBoundary(admission, committed);
     }
 
+    internal static bool CanBindP12MutationBoundary(
+        SimulationRecordSequence sequence,
+        Func<bool> admission,
+        Action committed) =>
+        sequence != null
+        && sequence.CanBindP12MutationBoundary(admission, committed);
+
     /// <summary>Creates an unpublished sequence from its validated P12 snapshot.</summary>
     public static bool TryCreateStagedFromSnapshot(
         SimulationRecordSequenceSnapshot snapshot,

@@ -384,6 +384,257 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
+    public void CoreDecisionAndSequenceAllocationsRefreshTheirExactP12RowsAndEpoch()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            composition, 0L, out DailyV1ActiveRuntimeSession session,
+            out string diagnostic), Is.True, diagnostic);
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        OwnerSectionCensusSnapshot[] completeVector =
+            DailyV1ApplicationSessionGateTests.CreateCoreBoundCompleteOwnerSectionVector(session);
+        List<DailyV1OwnerSectionContractIdentity> contracts =
+            new List<DailyV1OwnerSectionContractIdentity>(completeVector.Length);
+        List<DailyV1OwnerSectionCensusProviderRegistration> registrations =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(completeVector.Length);
+        Dictionary<string, OwnerSectionCensusSnapshot> before =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
+
+        foreach (OwnerSectionCensusSnapshot snapshot in completeVector)
+        {
+            IOwnerSectionCensusProvider provider =
+                string.Equals(snapshot.SectionId,
+                    RuntimeIdAllocatorCensusProvider.DecisionsSectionId, StringComparison.Ordinal)
+                    ? RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(
+                        composition.RuntimeIdAllocator)
+                    : string.Equals(snapshot.SectionId,
+                        SimulationRecordSequenceCensusProvider.SectionId, StringComparison.Ordinal)
+                        ? new SimulationRecordSequenceCensusProvider(composition.RecordSequence)
+                        : new MutableSelectedOwnerCensusProvider(snapshot);
+            before.Add(snapshot.SectionId, snapshot);
+            contracts.Add(new DailyV1OwnerSectionContractIdentity(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role));
+            registrations.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role, provider,
+                snapshot.OwnerInstanceIdentity, snapshot.Cardinality, snapshot.Revision,
+                hasBaseline: true));
+        }
+
+        Assert.That(state.TryReplaceSelectedOwnerSectionCensusRegistryBeforeSeal(
+            contracts, registrations), Is.True);
+        Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.True);
+        Assert.That(state.TrySealSelectedOwnerSectionCensusRegistry(registrations), Is.True);
+        Assert.That(state.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
+        Assert.That(state.TryBindSelectedCoreDecisionMutationBoundaries(
+            composition.RuntimeIdAllocator, composition.RecordSequence), Is.False,
+            "Selected counter owners cannot be bound while the runtime is quiescent outside the admitted turn setup.");
+        Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.False,
+            "A rejected pre-bind attempt does not fault or mutate the admitted session.");
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        Assert.That(state.TryBeginAdvance(invalidateCaptureToken: false,
+            out DailyV1AdvanceLease lease), Is.True);
+        Assert.That(state.TryBeginSelectedRuntimeDailyAdvanceOperation(), Is.True);
+        try
+        {
+            Assert.That(state.IsSelectedDailyAdvanceCoreTurnActive, Is.True);
+            Assert.That(state.TryBindSelectedCoreDecisionMutationBoundaries(
+                composition.RuntimeIdAllocator, composition.RecordSequence), Is.True);
+
+            string decisionId = composition.RuntimeIdAllocator.AllocateDecisionId();
+            Assert.That(decisionId, Does.StartWith("decision-"));
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L),
+                "A successful decision allocation refreshes its census row and publishes one epoch.");
+
+            long sequence = composition.RecordSequence.Allocate();
+            Assert.That(sequence, Is.GreaterThan(0L));
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(2L),
+                "The record sequence allocation is a distinct committed owner write and advances once.");
+            Assert.That(state.TryValidateCurrentSelectedOwnerSectionCensusBaselines(), Is.True);
+        }
+        finally
+        {
+            Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            lease.Dispose();
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+            out long epoch,
+            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+        Assert.That(epoch, Is.EqualTo(2L));
+        OwnerSectionCensusSnapshot decisionAfter = captured.Single(row =>
+            row.SectionId == RuntimeIdAllocatorCensusProvider.DecisionsSectionId);
+        OwnerSectionCensusSnapshot sequenceAfter = captured.Single(row =>
+            row.SectionId == SimulationRecordSequenceCensusProvider.SectionId);
+        Assert.That(ReferenceEquals(decisionAfter.OwnerInstanceIdentity,
+            before[decisionAfter.SectionId].OwnerInstanceIdentity), Is.True);
+        Assert.That(decisionAfter.Cardinality, Is.EqualTo(before[decisionAfter.SectionId].Cardinality));
+        Assert.That(decisionAfter.Revision, Is.EqualTo(before[decisionAfter.SectionId].Revision + 1L));
+        Assert.That(ReferenceEquals(sequenceAfter.OwnerInstanceIdentity,
+            before[sequenceAfter.SectionId].OwnerInstanceIdentity), Is.True);
+        Assert.That(sequenceAfter.Cardinality, Is.EqualTo(before[sequenceAfter.SectionId].Cardinality));
+        Assert.That(sequenceAfter.Revision, Is.EqualTo(before[sequenceAfter.SectionId].Revision + 1L));
+
+        long decisionRevision = decisionAfter.Revision;
+        Assert.Throws<InvalidOperationException>(() =>
+            composition.RuntimeIdAllocator.AllocateDecisionId(),
+            "A bound selected allocator rejects writes outside the Core-owned DailyAdvance scope.");
+        Assert.That(composition.RuntimeIdAllocator.GetCensusRevision(
+            RuntimeIdAllocatorCensusCounter.Decisions), Is.EqualTo(decisionRevision),
+            "Rejected out-of-scope allocation does not change the owner revision.");
+        Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.True,
+            "An attempted write outside the admitted mutation scope faults the selected census closed.");
+    }
+
+    [Test]
+    public void CoreOnlyActorTurnExecutesTargetlessNormalActionWithCompleteP12Census()
+    {
+        DailyV1EffectiveDefinitions definitions = CopyWithConfiguredActions(
+            CopyWithMerchantTradeEnabled(
+                DailyV1CapturedSelectedContentFixture.CreateDefinitions(), false),
+            new[] { "DESCANSAR" });
+        DailyV1GenesisComposition composition = CreateSelectedGenesis(definitions);
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1StatusDefinition hiddenStatus = definitions.Statuses[
+            definitions.Configuration.hiddenStatus];
+        DailyV1NpcRuntimeOwners staleHiddenActor = graph.Npcs[0];
+        Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero);
+        Assert.That(staleHiddenActor.Status.TryAdd(hiddenStatus), Is.True,
+            "The proving fixture starts with an expired hidden-status owner fact to exercise Core reconciliation.");
+        staleHiddenActor.NotifyCrimeJusticeMutationCommitted();
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            composition, 0L, out DailyV1ActiveRuntimeSession session,
+            out string diagnostic), Is.True, diagnostic);
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        OwnerSectionCensusSnapshot[] initialVector =
+            DailyV1ApplicationSessionGateTests.CreateCoreBoundCompleteOwnerSectionVector(session);
+        Dictionary<string, OwnerSectionCensusSnapshot> before = initialVector.ToDictionary(
+            row => row.SectionId, StringComparer.Ordinal);
+        Dictionary<string, IOwnerSectionCensusProvider> liveRuntimeProviders =
+            DailyV1NpcOwnerCensusProviders.CreateRuntimeAuthorityProviders(graph)
+                .ToDictionary(provider => provider.GetCurrentCensus().SectionId,
+                    StringComparer.Ordinal);
+        List<DailyV1OwnerSectionContractIdentity> contracts =
+            new List<DailyV1OwnerSectionContractIdentity>(initialVector.Length);
+        List<DailyV1OwnerSectionCensusProviderRegistration> registrations =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(initialVector.Length);
+
+        foreach (OwnerSectionCensusSnapshot snapshot in initialVector)
+        {
+            IOwnerSectionCensusProvider provider;
+            if (string.Equals(snapshot.SectionId,
+                    RuntimeIdAllocatorCensusProvider.DecisionsSectionId, StringComparison.Ordinal))
+                provider = RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(
+                    composition.RuntimeIdAllocator);
+            else if (string.Equals(snapshot.SectionId,
+                         SimulationRecordSequenceCensusProvider.SectionId, StringComparison.Ordinal))
+                provider = new SimulationRecordSequenceCensusProvider(composition.RecordSequence);
+            else if (!liveRuntimeProviders.TryGetValue(snapshot.SectionId, out provider))
+                provider = new MutableSelectedOwnerCensusProvider(snapshot);
+
+            contracts.Add(new DailyV1OwnerSectionContractIdentity(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role));
+            registrations.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role, provider,
+                snapshot.OwnerInstanceIdentity, snapshot.Cardinality, snapshot.Revision,
+                hasBaseline: true));
+        }
+
+        Assert.That(state.TryReplaceSelectedOwnerSectionCensusRegistryBeforeSeal(
+            contracts, registrations), Is.True);
+        Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.True);
+        Assert.That(state.TrySealSelectedOwnerSectionCensusRegistry(registrations), Is.True);
+        Assert.That(state.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
+
+        Assert.That(state.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+            graph,
+            out IDailyV1P12CrimeJusticeMutationProtocol crimeJusticeProtocol,
+            out _), Is.True,
+            "The detached Core stage uses the protocol already backed by its sealed census registry.");
+        object crimeReceiptIdentity = initialVector.Single(row =>
+            row.SectionId == DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId)
+            .OwnerInstanceIdentity;
+        object justiceReceiptIdentity = initialVector.Single(row =>
+            row.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId)
+            .OwnerInstanceIdentity;
+        Assert.That(state.TryBindSelectedCrimeJusticeDailyMutationHostBinding(
+            graph,
+            new DailyV1SelectedCrimeJusticeDailyMutationHostBinding(
+                crimeJusticeProtocol,
+                crimeReceiptIdentity,
+                crimeReceiptIdentity,
+                graph.JusticeRecordsOwner,
+                justiceReceiptIdentity,
+                justiceReceiptIdentity,
+                graph.JusticeRecordsOwner,
+                admissionEnabled: true)), Is.True,
+            "The day stage pins the exact receipt identities already present in the complete census.");
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        Assert.That(state.TryBeginAdvance(invalidateCaptureToken: false,
+            out DailyV1AdvanceLease lease), Is.True);
+        Assert.That(state.TryBeginSelectedRuntimeDailyAdvanceOperation(), Is.True);
+        FakeBoundary dailyBoundary = new FakeBoundary
+        {
+            RejectActorTurnHostPorts = true
+        };
+        try
+        {
+            DailyV1SelectedDailyExecutionStage.Advance(state, graph, dailyBoundary);
+        }
+        finally
+        {
+            Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+            lease.Dispose();
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+
+        Assert.That(dailyBoundary.Calls, Does.Contain("actor-host-ports"),
+            "The production Daily-v1 preparation must attempt the normal host boundary.");
+        Assert.That(dailyBoundary.Calls, Does.Contain("travel-results"),
+            "The production daily stage must continue through its travel and completion phases.");
+        Assert.That(dailyBoundary.Calls, Does.Contain("travel-observation"));
+
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> after,
+            out long epoch,
+            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(after), Is.True);
+        Assert.That(after.Count, Is.EqualTo(initialVector.Length));
+        OwnerSectionCensusSnapshot decisionBefore = before[
+            RuntimeIdAllocatorCensusProvider.DecisionsSectionId];
+        OwnerSectionCensusSnapshot sequenceBefore = before[
+            SimulationRecordSequenceCensusProvider.SectionId];
+        OwnerSectionCensusSnapshot decisionAfter = after.Single(row =>
+            row.SectionId == RuntimeIdAllocatorCensusProvider.DecisionsSectionId);
+        OwnerSectionCensusSnapshot sequenceAfter = after.Single(row =>
+            row.SectionId == SimulationRecordSequenceCensusProvider.SectionId);
+        string staleHiddenSectionId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(
+                staleHiddenActor.RuntimeId);
+        OwnerSectionCensusSnapshot staleHiddenBefore = before[staleHiddenSectionId];
+        OwnerSectionCensusSnapshot staleHiddenAfter = after.Single(row =>
+            row.SectionId == staleHiddenSectionId);
+        Assert.That(decisionAfter.Revision, Is.GreaterThan(decisionBefore.Revision));
+        Assert.That(sequenceAfter.Revision, Is.GreaterThan(sequenceBefore.Revision));
+        Assert.That(staleHiddenActor.Status.Contains(hiddenStatus), Is.False,
+            "The Core-owned daily stage reconciles the expired hidden status against its exact NPC owner.");
+        Assert.That(staleHiddenAfter.Revision, Is.EqualTo(staleHiddenBefore.Revision + 1L),
+            "The exact NPC Crime/Justice census row records the Core status write.");
+        Assert.That(graph.Npcs.Any(owner => owner.ActionSlot.CurrentAction != null), Is.True,
+            "At least one exact admitted actor installed and executed the configured Normal action.");
+        Assert.That(epoch, Is.GreaterThan(0L),
+            "The complete daily execution publishes its shared mutation epoch.");
+        Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.False);
+    }
+
+    [Test]
     public void StateBackedDayStartUsesCoreBoundRosterInsteadOfHostProjection()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
@@ -1395,6 +1646,57 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         return graph;
     }
 
+    private static DailyV1EffectiveDefinitions CopyWithConfiguredActions(
+        DailyV1EffectiveDefinitions definitions,
+        IReadOnlyList<string> actionIds)
+    {
+        DailyV1SimulationConfigData current = definitions.Configuration;
+        DailyV1SimulationConfigData configuration = new DailyV1SimulationConfigData(
+            current.simulationName, current.calendar, current.enabledModules, current.cities,
+            current.explorableSites, current.npcs, actionIds, current.statuses, current.jobs,
+            current.initialWarrants, current.scheduledDirectives,
+            current.useAuthoredGeographyProfile, current.authoredHexId,
+            current.authoredHexQ, current.authoredHexR, current.authoredTerrainDefinitionId,
+            current.authoredTerrainRevisionToken, current.authoredLocationId,
+            current.authoredScaleConventionId, current.authoredScaleSourceIdentity,
+            current.authoredScaleSourceVersion, current.authoredDistancePerNeighborStep,
+            current.authoredScaleUnit, current.authoredP10RuinSite,
+            current.genesisProfileContractIdentity, current.p10bStableSiteKey,
+            current.travelCostPerDay, current.allowMerchantTradeRepositioning,
+            current.maxMerchantTradeAmount, current.localMerchantWholesalePriceMultiplier,
+            current.localMerchantReserveRatio, current.maxUnprofitablePlanWaitDays,
+            current.crimeAutonomousEnabled, current.commercialKnowledge,
+            current.useFixedSimulationSeed, current.simulationSeed,
+            current.includeEconomySnapshots, current.economySnapshotIntervalDays,
+            current.logSettings, current.naturalMortalityEnabled,
+            current.naturalMortalityAnnualProbability, current.aggregateDemographyEnabled,
+            current.aggregateAnnualBirthRate, current.aggregateAnnualDeathRate,
+            current.freeStatus, current.wantedStatus, current.arrestedStatus,
+            current.hiddenStatus);
+        return new DailyV1EffectiveDefinitions(
+            configuration,
+            definitions.EffectiveConfiguration,
+            definitions.Calendar,
+            null,
+            definitions.Cities.Values,
+            definitions.Items.Values,
+            definitions.Npcs.Values,
+            definitions.Jobs.Values,
+            definitions.Actions.Values,
+            definitions.Statuses.Values,
+            null,
+            definitions.StageOrder,
+            definitions.ProfileContractIdentity,
+            definitions.GeographyProfileContractIdentity,
+            definitions.GeographyStageIdentity,
+            definitions.HexCoordinateConvention,
+            definitions.HexCoordinateCanonicalOrder,
+            null,
+            definitions.Traits.Values,
+            definitions.CapabilityAttributes.Values,
+            definitions.ExplorableSites.Values);
+    }
+
     private static DailyV1EffectiveDefinitions CopyWithEconomyEnabled(
         DailyV1EffectiveDefinitions definitions,
         bool enabled)
@@ -1583,6 +1885,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool ThrowOnBeginDay { get; set; }
         internal bool SubstituteActorPersonStore { get; set; }
         internal bool UseSelectedDayStartContext { get; set; }
+        internal bool RejectActorTurnHostPorts { get; set; }
         internal bool HasUnselectedLiveRuntimeMember { get; set; }
         internal bool CrimeSystemPresent { get; set; }
         internal bool JusticeSystemPresent { get; set; }
@@ -1717,6 +2020,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             Assert.That(graph, Is.Not.Null);
             CurrentGraph = graph;
             Calls.Add("actor-host-ports");
+            if (RejectActorTurnHostPorts)
+            {
+                LastActorTurnHostPorts = null;
+                hostPorts = null;
+                return false;
+            }
             LastActorTurnHostPorts = new FakeActorTurnBoundary(this);
             hostPorts = LastActorTurnHostPorts;
             return true;

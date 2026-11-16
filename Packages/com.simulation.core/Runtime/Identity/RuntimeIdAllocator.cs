@@ -319,6 +319,13 @@ public sealed class RuntimeIdAllocator
         p12DecisionIdMutationCommitted = committed;
     }
 
+    internal bool CanBindP12DecisionIdMutationBoundary(
+        Func<bool> admission,
+        Action committed) =>
+        admission != null && committed != null
+        && p12DecisionIdMutationAdmission == null
+        && p12DecisionIdMutationCommitted == null;
+
     private bool CanCommitP12DecisionIdMutation()
     {
         try { return p12DecisionIdMutationAdmission(); }

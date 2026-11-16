@@ -585,10 +585,7 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             || executionState.SelectedRuntimeActorRoster == null
             || graph.PersonStore == null
             || executionState.SelectedActorChoiceStore == null
-            || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore)
-            || !hostBoundary.TryCreateSelectedActorTurnHostPorts(
-                graph, out IDailyV1SelectedActorTurnHostPorts actorHostPorts)
-            || actorHostPorts == null)
+            || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore))
             return false;
 
         DailyV1ActorTurnCoreRoots coreRoots = executionState.SelectedRuntimeActorTurnCoreRoots;
@@ -596,6 +593,11 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             || !coreRoots.IsBoundTo(
                 executionState, graph, graph.PersonStore, executionState.SelectedActorChoiceStore))
             return false;
+
+        if (!hostBoundary.TryCreateSelectedActorTurnHostPorts(
+                graph, out IDailyV1SelectedActorTurnHostPorts actorHostPorts)
+            || actorHostPorts == null)
+            return TryCreateCoreOnly(executionState, graph, out context);
 
         if (!DailyV1CoreSelectedActorTurnExecutionBoundary.TryCreate(
                 executionState, graph, graph.PersonStore,
@@ -622,6 +624,194 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             return false;
         }
         return true;
+    }
+
+    /// <summary>
+    /// Creates the bounded actor-turn context that needs no Unity host ports.
+    /// This path is intentionally narrower than the admitted Unity profile:
+    /// it requires a sealed full-owner census, the active DailyAdvance scope,
+    /// no Merchant/choice/directive work, and an action graph containing only
+    /// admitted targetless Normal actions. Unsupported profiles are rejected
+    /// before actor selection can consume deterministic RNG or mutate owners.
+    /// </summary>
+    internal static bool TryCreateCoreOnly(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IDailyV1SelectedActorTurnExecutionContext context)
+    {
+        context = null;
+        if (!CanExecuteCoreOnlyActorTurn(executionState, graph)
+            || graph.PersonStore == null
+            || executionState.SelectedActorChoiceStore == null
+            || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore))
+            return false;
+
+        DailyV1ActorTurnCoreRoots coreRoots = executionState.SelectedRuntimeActorTurnCoreRoots;
+        if (coreRoots == null
+            || !coreRoots.IsBoundTo(
+                executionState, graph, graph.PersonStore, executionState.SelectedActorChoiceStore)
+            || !executionState.TryBindSelectedCoreDecisionMutationBoundaries(
+                executionState.SelectedRuntimeIdAllocator,
+                executionState.SelectedRecordSequence)
+            || !DailyV1CoreSelectedActorTurnExecutionBoundary.TryCreateCoreOnly(
+                executionState, graph, graph.PersonStore,
+                executionState.SelectedActorChoiceStore, coreRoots,
+                out DailyV1CoreSelectedActorTurnExecutionBoundary actorBoundary))
+            return false;
+
+        if (!DailyV1ActorTurnExecutionStage.TryBuildRoster(
+                graph, executionState.SelectedRuntimeActorRoster,
+                out IReadOnlyList<DailyV1ActorTurnRosterEntry> roster))
+            return false;
+
+        context = new CoreSelectedActorTurnExecutionContext(
+            executionState.SelectedRuntimeActorRoster,
+            graph.PersonStore,
+            executionState.SelectedActorChoiceStore,
+            coreRoots,
+            actorBoundary,
+            merchantTradeBoundary: null);
+        return true;
+    }
+
+    private static bool CanExecuteCoreOnlyActorTurn(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (executionState == null || graph == null
+            || !executionState.HasAdmittedSelectedDailyExecution
+            || !executionState.SelectedRuntimeExecutionRootsBound
+            || !executionState.HasRuntimeProtocolOperationInventory
+            || executionState.AdmissionContext?.Profile
+                != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+            || !executionState.HasSealedSelectedOwnerSectionCensusRegistry
+            || executionState.IsSelectedRuntimeCensusProtocolFaulted
+            || !executionState.IsSelectedDailyAdvanceCoreTurnActive
+            || !executionState.TryValidateCurrentSelectedOwnerSectionCensusBaselines()
+            || executionState.SelectedRuntimeActorRoster == null
+            || executionState.SelectedActorChoiceStore == null
+            || graph.PersonStore == null
+            || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore)
+            || graph.ScheduledDirectives == null
+            || graph.ScheduledDirectives.HasPendingDirectives
+            || executionState.SelectedActorChoiceStore.PendingInputs.Count != 0
+            || graph.Definitions?.EffectiveConfiguration == null
+            || graph.Definitions.EffectiveConfiguration.MerchantTrade?.Enabled != false
+            || !DailyV1SelectedNpcActionDecisionStage.TryResolveConfiguredActions(
+                graph.Definitions, out IReadOnlyList<DailyV1ActionDefinition> actions)
+            || actions == null || actions.Count == 0
+            || !DailyV1ActorTurnExecutionStage.TryBuildRoster(
+                graph, executionState.SelectedRuntimeActorRoster,
+                out IReadOnlyList<DailyV1ActorTurnRosterEntry> roster))
+            return false;
+
+        if (!CanExecuteCoreOnlyCrimeJustice(executionState, graph)) return false;
+
+        foreach (DailyV1ActorTurnRosterProjection projection
+            in executionState.SelectedRuntimeActorRoster)
+        {
+            // Null roster positions remain valid ordering holes. A populated
+            // Unity-only member is not admitted to this host-neutral slice.
+            if (projection == null) continue;
+            if (string.IsNullOrWhiteSpace(projection.RuntimeId)
+                || !graph.TryGetNpcOwner(projection.RuntimeId,
+                    out DailyV1NpcRuntimeOwners exactOwner)
+                || exactOwner == null)
+                return false;
+        }
+
+        List<DailyV1NpcRuntimeOwners> rosterOwners = new List<DailyV1NpcRuntimeOwners>();
+        foreach (DailyV1ActorTurnRosterEntry entry in roster)
+            if (entry?.ActorOwner != null)
+                rosterOwners.Add(entry.ActorOwner);
+        if (!graph.MatchesExactOwnerInstances(graph.Cities, rosterOwners)) return false;
+
+        foreach (DailyV1ActionDefinition action in actions)
+        {
+            if (action == null
+                || !graph.Definitions.Actions.TryGetValue(
+                    action.DefinitionId, out DailyV1ActionDefinition admittedAction)
+                || !ReferenceEquals(admittedAction, action)
+                || action.Values.actionType?.Value
+                    != DailyV1NpcDefinitionRules.NormalActionTypeValue
+                || !DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+                    graph.Definitions, action)
+                || !DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
+                    graph.Definitions, action,
+                    out _, out _,
+                    out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove,
+                    out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd)
+                || targetStatusToRemove.Count != 0
+                || targetStatusToAdd.Count != 0)
+                return false;
+        }
+
+        foreach (DailyV1NpcRuntimeOwners actor in graph.Npcs)
+        {
+            if (actor?.ActionSlot == null) return false;
+            DailyV1ActionDefinition installed = actor.ActionSlot.CurrentAction;
+            if (installed == null)
+            {
+                if (actor.ActionSlot.CurrentPayload != null) return false;
+                continue;
+            }
+            if (!DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
+                    graph, actor, installed))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool CanExecuteCoreOnlyCrimeJustice(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        DailyV1JusticeRecordsOwner justice = graph.JusticeRecordsOwner;
+        if (justice == null || justice.Sentences.Count != 0
+            || !executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
+            || binding == null || !binding.AdmissionEnabled
+            || binding.CrimeOwnerIdentity == null || binding.JusticeOwnerIdentity == null
+            || !ReferenceEquals(binding.CrimeOwnerIdentity, binding.CrimeReceiptCensusOwnerIdentity)
+            || !ReferenceEquals(binding.JusticeOwnerIdentity, binding.JusticeReceiptCensusOwnerIdentity)
+            || !binding.HasExactCoreOwnerRelationships(graph)
+            || !TryResolveConfiguredStatus(graph.Definitions,
+                graph.Definitions.Configuration?.hiddenStatus, out _)
+            || !TryResolveConfiguredStatus(graph.Definitions,
+                graph.Definitions.Configuration?.arrestedStatus,
+                out DailyV1StatusDefinition arrestedStatus)
+            || !TryResolveConfiguredStatus(graph.Definitions,
+                graph.Definitions.Configuration?.freeStatus, out _)
+            || !TryResolveConfiguredStatus(graph.Definitions,
+                graph.Definitions.Configuration?.wantedStatus, out _))
+            return false;
+
+        foreach (DailyV1NpcRuntimeOwners actor in graph.Npcs)
+        {
+            if (actor?.Status == null || actor.HiddenState == null
+                || (arrestedStatus != null && actor.Status.Contains(arrestedStatus))
+                // Expiry emits a host presentation log. Keep this Core-only
+                // path within days whose selected Crime/Justice effects are
+                // owner mutations only, before RNG or any daily write begins.
+                || actor.HiddenState.RemainingDays == 1)
+                return false;
+        }
+        return true;
+    }
+
+    private static bool TryResolveConfiguredStatus(
+        DailyV1EffectiveDefinitions definitions,
+        string statusId,
+        out DailyV1StatusDefinition status)
+    {
+        status = null;
+        if (string.IsNullOrWhiteSpace(statusId)) return true;
+        return definitions?.Statuses != null
+            && definitions.Statuses.TryGetValue(statusId, out status)
+            && status != null
+            && string.Equals(status.DefinitionId, statusId, StringComparison.Ordinal);
     }
 
     private static bool TryCreateCoreMerchantBoundary(
@@ -711,8 +901,10 @@ internal static class DailyV1SelectedDailyExecutionStage
                 ?? throw new ArgumentNullException(nameof(runtimeRoster));
             CrimeJusticeBoundary = crimeJusticeBoundary
                 ?? throw new ArgumentNullException(nameof(crimeJusticeBoundary));
-            MerchantTradeBoundary = merchantTradeBoundary
-                ?? throw new ArgumentNullException(nameof(merchantTradeBoundary));
+            // The Merchant adapter is optional only when the admitted
+            // configuration disables MerchantTrade. PrepareCore and
+            // AdvanceCore enforce that relationship before a daily write.
+            MerchantTradeBoundary = merchantTradeBoundary;
         }
 
         public IReadOnlyList<DailyV1ActorTurnRosterProjection> RuntimeRoster { get; }
@@ -967,13 +1159,16 @@ internal static class DailyV1SelectedDailyExecutionStage
         bool dayStartContextPreflighted = false;
         if (admittedSelectedBoundariesPreflighted)
         {
+            EffectiveMerchantTradeConfiguration merchantTradeConfiguration =
+                graph.Definitions.EffectiveConfiguration?.MerchantTrade;
             if (!(actorTurnContext.Boundary
                     is IDailyV1SelectedCrimeJusticeDailyBoundary crimeJusticeBoundary)
-                || actorTurnContext.MerchantTradeBoundary == null
                 || !boundary.HasExactCrimeJusticeProjectionOwnerBindings(graph)
                 || !ReferenceEquals(graph.JusticeRecordsOwner,
                     crimeJusticeBoundary.JusticeRecordsOwner)
-                || graph.Definitions.EffectiveConfiguration?.MerchantTrade == null)
+                || merchantTradeConfiguration == null
+                || (merchantTradeConfiguration.Enabled
+                    && actorTurnContext.MerchantTradeBoundary == null))
                 throw new InvalidOperationException(
                     "The admitted Daily-v1 actor-turn boundary could not provide the exact Core day-start owner, Unity projection bindings, and operation contracts.");
 
@@ -1171,7 +1366,8 @@ internal static class DailyV1SelectedDailyExecutionStage
                     executionState?.SelectedRuntimeActorRoster ?? dayStartContext.RuntimeRoster;
                 if (dayStartRuntimeRoster == null
                     || crimeJusticeBoundary == null
-                    || dayStartContext.MerchantTradeBoundary == null
+                    || (selectedConfiguration.MerchantTrade?.Enabled == true
+                        && dayStartContext.MerchantTradeBoundary == null)
                     || !ReferenceEquals(graph.JusticeRecordsOwner,
                         crimeJusticeBoundary.JusticeRecordsOwner)
                     || graph.Definitions.EffectiveConfiguration?.MerchantTrade == null

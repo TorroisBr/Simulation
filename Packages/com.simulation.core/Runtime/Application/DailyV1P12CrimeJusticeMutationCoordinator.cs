@@ -77,7 +77,8 @@ internal interface IDailyV1P12CrimeJusticeMutationProtocol
 /// epoch; unsupported or stale witnesses fail closed.
 /// </summary>
 internal sealed class DailyV1CoreSelectedOwnerSectionMutationProtocol
-    : IDailyV1P12CrimeJusticeMutationProtocol
+    : IDailyV1P12CrimeJusticeMutationProtocol,
+      IDailyV1P12CrimeJusticeReservedBaselineProtocol
 {
     private readonly DailyV1ExecutionBoundaryState executionState;
     private readonly DailyV1SelectedRuntimeOwnerGraph graph;
@@ -107,6 +108,27 @@ internal sealed class DailyV1CoreSelectedOwnerSectionMutationProtocol
     public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
         IsBoundTo(executionState, graph)
         && executionState.TryValidateCoreSelectedOwnerSectionCensusRows(graph, sectionIds);
+
+    public bool TryValidateUnchangedSectionsDuringDailyReservation(
+        object reservationToken,
+        IReadOnlyList<string> sectionIds,
+        out string failure)
+    {
+        failure = null;
+        DailyV1MutationEpochReservation reservation =
+            executionState.MutationEpochState.ActiveReservation;
+        if (!IsBoundTo(executionState, graph)
+            || reservation == null
+            || !ReferenceEquals(reservation.Token, reservationToken)
+            || !executionState.MutationEpochState.Owns(reservation)
+            || !executionState.TryValidateCoreSelectedOwnerSectionCensusRows(
+                graph, sectionIds, reservation))
+        {
+            failure = "CoreDailyReservationOrOwnerBaseline";
+            return false;
+        }
+        return true;
+    }
 
     public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) =>
         IsBoundTo(executionState, graph)
@@ -174,6 +196,20 @@ internal sealed class DailyV1CoreSelectedOwnerSectionMutationProtocol
 internal interface IDailyV1P12CrimeJusticeMutationDiagnosticProtocol
 {
     bool TryValidateUnchangedSections(
+        IReadOnlyList<string> sectionIds,
+        out string failure);
+}
+
+/// <summary>
+/// Optional Core-only baseline read for an unchanged owner row while the exact
+/// daily epoch reservation is held. The reservation token proves that the
+/// caller is still inside the operation which validated the complete section
+/// set before acquiring its commit window.
+/// </summary>
+internal interface IDailyV1P12CrimeJusticeReservedBaselineProtocol
+{
+    bool TryValidateUnchangedSectionsDuringDailyReservation(
+        object reservationToken,
         IReadOnlyList<string> sectionIds,
         out string failure);
 }
@@ -780,12 +816,36 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
 
         if (context.Mode == ScopeMode.DailyReserved)
         {
-            return ((context.CoreEpochReservation != null
+            bool ownsReservation = (context.CoreEpochReservation != null
                     && mutationEpochState != null
                     && mutationEpochState.Owns(context.CoreEpochReservation))
-                || context.EpochReservation != null)
-                && (context.ChangedSections.Contains(sectionId)
-                    || protocol.TryValidateUnchangedSections(new[] { sectionId }));
+                || context.EpochReservation != null;
+            if (!ownsReservation)
+            {
+                lastCanCommitRejection = "DailyEpochReservationLost";
+                return false;
+            }
+            if (context.ChangedSections.Contains(sectionId)) return true;
+
+            bool baselineUnchanged;
+            string dailyFailure;
+            if (context.CoreEpochReservation != null
+                && protocol is IDailyV1P12CrimeJusticeReservedBaselineProtocol reservedProtocol)
+            {
+                baselineUnchanged = reservedProtocol.TryValidateUnchangedSectionsDuringDailyReservation(
+                    context.CoreEpochReservation.Token, new[] { sectionId }, out dailyFailure);
+            }
+            else
+            {
+                baselineUnchanged = TryValidateUnchangedSections(
+                    new[] { sectionId }, out dailyFailure);
+            }
+            if (!baselineUnchanged)
+            {
+                lastCanCommitRejection = "DailyOwnerSectionBaseline:" + dailyFailure;
+                return false;
+            }
+            return true;
         }
         if (context.Mode != ScopeMode.ActionImmediate)
         {

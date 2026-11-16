@@ -104,6 +104,11 @@ public sealed class SimulationRecordSequence
         p12MutationCommitted = committed;
     }
 
+    internal bool CanBindP12MutationBoundary(Func<bool> admission, Action committed) =>
+        admission != null && committed != null
+        && p12MutationAdmission == null
+        && p12MutationCommitted == null;
+
     private bool CanCommitP12Mutation()
     {
         try { return p12MutationAdmission(); }

@@ -273,6 +273,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private RuntimeIdAllocator selectedRuntimeIdAllocator;
     private IAuthoritativeRandomSource selectedRandomSource;
     private SimulationRecordSequence selectedRecordSequence;
+    private bool selectedCoreDecisionMutationBoundariesBound;
     private NpcDecisionStore selectedDecisionStore;
     private ActorChoiceStore selectedActorChoiceStore;
     private DomainEventRecorder selectedTravelPartyEventRecorder;
@@ -1025,6 +1026,48 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+    /// <summary>
+    /// True only while the admitted DailyAdvance is executing its registered
+    /// runtime-protocol operation. This is narrower than an open lease: callers
+    /// cannot use the host-neutral actor path during setup, capture, or an
+    /// unrelated selected operation.
+    /// </summary>
+    internal bool IsSelectedDailyAdvanceCoreTurnActive
+    {
+        get
+        {
+            lock (operationSyncRoot)
+                return IsSelectedDailyAdvanceCoreTurnActiveUnsafe();
+        }
+    }
+
+    private bool IsSelectedDailyAdvanceCoreTurnActiveUnsafe()
+    {
+        if (!selectedRuntimeCensusProtocolReady
+            || selectedRuntimeCensusProtocolFaulted
+            || !selectedOwnerSectionCensusRegistrySealed
+            || AdmissionContext?.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !AdmissionContext.IsOwnedByCurrentThread()
+            || exclusiveSessionReplacementInProgress
+            || advanceLease == null
+            || mutationEpochState.HasActiveReservation
+            || activeOperationScopes.Count != 2
+            || activeRuntimeProtocolOperationContracts.Count != 1
+            || !string.Equals(activeRuntimeProtocolOperationContracts[0],
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance, StringComparison.Ordinal))
+            return false;
+
+        int dailyAdvanceScopes = 0;
+        int runtimeProtocolScopes = 0;
+        foreach (DailyV1OperationScopeKind scope in activeOperationScopes)
+        {
+            if (scope == DailyV1OperationScopeKind.DailyAdvance) dailyAdvanceScopes++;
+            else if (scope == DailyV1OperationScopeKind.RuntimeProtocol) runtimeProtocolScopes++;
+            else return false;
+        }
+        return dailyAdvanceScopes == 1 && runtimeProtocolScopes == 1;
+    }
+
     internal void MarkSelectedRuntimeCensusProtocolFaulted()
     {
         lock (operationSyncRoot)
@@ -1432,7 +1475,13 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     /// </summary>
     internal bool TryValidateCoreSelectedOwnerSectionCensusRows(
         DailyV1SelectedRuntimeOwnerGraph graph,
-        IReadOnlyList<string> sectionIds)
+        IReadOnlyList<string> sectionIds) =>
+        TryValidateCoreSelectedOwnerSectionCensusRows(graph, sectionIds, null);
+
+    internal bool TryValidateCoreSelectedOwnerSectionCensusRows(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<string> sectionIds,
+        DailyV1MutationEpochReservation expectedReservation)
     {
         if (sectionIds == null || sectionIds.Count == 0) return false;
         HashSet<string> requested = new HashSet<string>(StringComparer.Ordinal);
@@ -1454,7 +1503,11 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || !AdmissionContext.IsOwnedByCurrentThread()
                 || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
                 || exclusiveSessionReplacementInProgress
-                || mutationEpochState.HasActiveReservation)
+                || (mutationEpochState.HasActiveReservation
+                    ? expectedReservation == null
+                        || !mutationEpochState.Owns(expectedReservation)
+                        || !ReferenceEquals(mutationEpochState.ActiveReservation, expectedReservation)
+                    : expectedReservation != null))
                 return false;
 
             foreach (string sectionId in requested)
@@ -5561,20 +5614,26 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             selectedP12CrimeJusticeMutationCoordinator;
         string sectionId = owner == null ? null
             : DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(owner.RuntimeId);
-        if (!HasAdmittedSelectedDailyExecution
-            || AdmissionContext == null
-            || !AdmissionContext.IsOwnedByCurrentThread()
-            || graph == null
-            || owner == null
-            || !graph.ContainsExactNpcOwner(owner)
-            || !ReferenceEquals(owner.Definitions, graph.Definitions)
-            || !owner.CanAdvanceCrimeJusticeRevision(1)
-            || coordinator == null
-            || !coordinator.CanCommit(owner, sectionId))
+        bool exactOwnerAndSession = HasAdmittedSelectedDailyExecution
+            && AdmissionContext != null
+            && AdmissionContext.IsOwnedByCurrentThread()
+            && graph != null
+            && owner != null
+            && graph.ContainsExactNpcOwner(owner)
+            && ReferenceEquals(owner.Definitions, graph.Definitions);
+        bool revisionCapacity = owner != null && owner.CanAdvanceCrimeJusticeRevision(1);
+        bool admittedByCoordinator = exactOwnerAndSession && revisionCapacity
+            && coordinator != null && coordinator.CanCommit(owner, sectionId);
+        if (!exactOwnerAndSession || !revisionCapacity || !admittedByCoordinator)
         {
+            string failure = coordinator == null ? "CoordinatorMissing"
+                : !exactOwnerAndSession ? "OwnerOrSessionMismatch"
+                : !revisionCapacity ? "RevisionCapacity"
+                : "P12:" + (coordinator.LastCanCommitRejection ?? "Rejected");
             if (coordinator != null) coordinator.FaultSelected(this);
             throw new InvalidOperationException(
-                "The selected Core NPC Crime/Justice mutation is outside its exact admitted P12 owner scope.");
+                "The selected Core NPC Crime/Justice mutation is outside its exact admitted P12 owner scope ("
+                + failure + ").");
         }
     }
 
@@ -6164,6 +6223,141 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
         selectedRuntimeExecutionRootsBound = true;
         return true;
+    }
+
+    /// <summary>
+    /// Binds the selected Decision-ID and record-sequence owners to the Core
+    /// P12 census authority for the bounded host-neutral actor turn. Each
+    /// successful allocation refreshes its exact required census row and
+    /// advances the shared epoch once. This does not grant those owners a
+    /// general-purpose mutation scope outside the selected DailyAdvance.
+    /// </summary>
+    internal bool TryBindSelectedCoreDecisionMutationBoundaries(
+        RuntimeIdAllocator allocator,
+        SimulationRecordSequence recordSequence)
+    {
+        lock (operationSyncRoot)
+        {
+            if (selectedCoreDecisionMutationBoundariesBound)
+                return ReferenceEquals(selectedRuntimeIdAllocator, allocator)
+                    && ReferenceEquals(selectedRecordSequence, recordSequence);
+
+            DailyV1SelectedRuntimeOwnerGraph graph = selectedRuntimeOwnerGraph;
+            if (!IsSelectedDailyAdvanceCoreTurnActiveUnsafe()
+                || !selectedRuntimeExecutionRootsBound
+                || allocator == null || recordSequence == null
+                || !ReferenceEquals(selectedRuntimeIdAllocator, allocator)
+                || !ReferenceEquals(selectedRecordSequence, recordSequence)
+                || !ReferenceEquals(graph?.RuntimeIdAllocator, allocator)
+                || !ReferenceEquals(graph?.RecordSequence, recordSequence))
+                return false;
+
+            string decisionSectionId = RuntimeIdAllocatorCensusProvider.DecisionsSectionId;
+            string sequenceSectionId = SimulationRecordSequenceCensusProvider.SectionId;
+            if (!TryValidateCurrentSelectedOwnerSectionCensusBaselines()
+                || !TryValidateCoreSelectedOwnerSectionCensusRows(
+                    graph, new[] { decisionSectionId, sequenceSectionId }))
+                return false;
+
+            Func<bool> decisionAdmission = () =>
+                CanCommitSelectedCoreDecisionMutation(allocator, decisionSectionId);
+            Action decisionCommitted = () =>
+                NotifySelectedCoreDecisionMutationCommitted(allocator, decisionSectionId);
+            Func<bool> sequenceAdmission = () =>
+                CanCommitSelectedCoreDecisionMutation(recordSequence, sequenceSectionId);
+            Action sequenceCommitted = () =>
+                NotifySelectedCoreDecisionMutationCommitted(recordSequence, sequenceSectionId);
+
+            if (!RuntimeIdAllocatorOwnerBridge.CanBindP12DecisionIdMutationBoundary(
+                    allocator, decisionAdmission, decisionCommitted)
+                || !SimulationRecordSequenceOwnerBridge.CanBindP12MutationBoundary(
+                    recordSequence, sequenceAdmission, sequenceCommitted))
+                return false;
+
+            try
+            {
+                RuntimeIdAllocatorOwnerBridge.BindP12DecisionIdMutationBoundary(
+                    allocator, decisionAdmission, decisionCommitted);
+                SimulationRecordSequenceOwnerBridge.BindP12MutationBoundary(
+                    recordSequence, sequenceAdmission, sequenceCommitted);
+                selectedCoreDecisionMutationBoundariesBound = true;
+                return true;
+            }
+            catch
+            {
+                FaultSelectedCoreDecisionMutationBoundary();
+                return false;
+            }
+        }
+    }
+
+    private bool CanCommitSelectedCoreDecisionMutation(
+        object expectedOwner,
+        string sectionId)
+    {
+        lock (operationSyncRoot)
+        {
+            if (selectedCoreDecisionMutationBoundariesBound
+                && IsSelectedDailyAdvanceCoreTurnActiveUnsafe()
+                && CanAdvanceSelectedMutationEpoch
+                && IsExactSelectedCoreDecisionMutationOwner(expectedOwner, sectionId)
+                && TryValidateCoreSelectedOwnerSectionCensusRows(
+                    selectedRuntimeOwnerGraph, new[] { sectionId }))
+                return true;
+
+            FaultSelectedCoreDecisionMutationBoundary();
+            return false;
+        }
+    }
+
+    private void NotifySelectedCoreDecisionMutationCommitted(
+        object expectedOwner,
+        string sectionId)
+    {
+        try
+        {
+            lock (operationSyncRoot)
+            {
+                if (!selectedCoreDecisionMutationBoundariesBound
+                    || !IsSelectedDailyAdvanceCoreTurnActiveUnsafe()
+                    || !CanAdvanceSelectedMutationEpoch
+                    || !IsExactSelectedCoreDecisionMutationOwner(expectedOwner, sectionId)
+                    || !TryRefreshCoreSelectedOwnerSectionCensusRows(
+                        selectedRuntimeOwnerGraph, new[] { sectionId }, reservation: null)
+                    || !mutationEpochState.TryAdvanceCommittedMutation())
+                    throw new InvalidOperationException(
+                        "The committed selected Decision/record-sequence owner write did not satisfy its Core P12 census boundary.");
+            }
+        }
+        catch (Exception exception)
+        {
+            FaultSelectedCoreDecisionMutationBoundary();
+            throw new InvalidOperationException(
+                "The committed selected Decision/record-sequence owner write could not refresh the Core census and mutation epoch.",
+                exception);
+        }
+    }
+
+    private bool IsExactSelectedCoreDecisionMutationOwner(
+        object expectedOwner,
+        string sectionId)
+    {
+        if (expectedOwner == null || string.IsNullOrWhiteSpace(sectionId)) return false;
+        if (string.Equals(sectionId, RuntimeIdAllocatorCensusProvider.DecisionsSectionId,
+                StringComparison.Ordinal))
+            return ReferenceEquals(expectedOwner, selectedRuntimeIdAllocator)
+                && ReferenceEquals(expectedOwner, selectedRuntimeOwnerGraph?.RuntimeIdAllocator);
+        if (string.Equals(sectionId, SimulationRecordSequenceCensusProvider.SectionId,
+                StringComparison.Ordinal))
+            return ReferenceEquals(expectedOwner, selectedRecordSequence)
+                && ReferenceEquals(expectedOwner, selectedRuntimeOwnerGraph?.RecordSequence);
+        return false;
+    }
+
+    private void FaultSelectedCoreDecisionMutationBoundary()
+    {
+        InvalidateCurrentCaptureToken();
+        MarkSelectedRuntimeCensusProtocolFaulted();
     }
 
     internal bool TryBindSelectedTravelEventRecorders(

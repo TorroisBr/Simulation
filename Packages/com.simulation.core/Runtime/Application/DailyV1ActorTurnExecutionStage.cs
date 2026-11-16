@@ -334,15 +334,42 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         IDailyV1SelectedActorTurnHostPorts hostPorts,
         out DailyV1CoreSelectedActorTurnExecutionBoundary boundary)
     {
+        return TryCreateCore(
+            executionState, graph, personStore, actorChoiceStore, coreRoots,
+            hostPorts, out boundary);
+    }
+
+    internal static bool TryCreateCoreOnly(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        ActorChoiceStore actorChoiceStore,
+        DailyV1ActorTurnCoreRoots coreRoots,
+        out DailyV1CoreSelectedActorTurnExecutionBoundary boundary)
+    {
+        return TryCreateCore(
+            executionState, graph, personStore, actorChoiceStore, coreRoots,
+            null, out boundary);
+    }
+
+    private static bool TryCreateCore(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        ActorChoiceStore actorChoiceStore,
+        DailyV1ActorTurnCoreRoots coreRoots,
+        IDailyV1SelectedActorTurnHostPorts hostPorts,
+        out DailyV1CoreSelectedActorTurnExecutionBoundary boundary)
+    {
         boundary = null;
-        if (hostPorts == null) return false;
         IDailyV1SelectedP12NpcActionOwnerMutationProtocol actionSlotP12MutationProtocol =
-            hostPorts.ActionSlotP12MutationProtocol;
+            hostPorts?.ActionSlotP12MutationProtocol;
         bool hasSealedCoreCensus = executionState != null
             && executionState.HasSealedSelectedOwnerSectionCensusRegistry;
         if ((actionSlotP12MutationProtocol == null && !hasSealedCoreCensus)
             || executionState == null || graph == null || personStore == null
             || actorChoiceStore == null || coreRoots == null
+            || (hostPorts == null && !hasSealedCoreCensus)
             || !executionState.HasAdmittedSelectedDailyExecution
             || !executionState.SelectedRuntimeExecutionRootsBound
             || !executionState.HasRuntimeProtocolOperationInventory
@@ -427,6 +454,12 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
                 "The admitted actor turn has no exact Core Merchant state boundary.");
     }
 
+    internal bool HasHostEffectPorts => hostPorts != null;
+
+    private IDailyV1SelectedActorTurnHostPorts RequireHostPorts() =>
+        hostPorts ?? throw new InvalidOperationException(
+            "This Core actor-turn boundary has no host effect ports for the requested operation.");
+
     // Core actor-turn policy. These legacy callbacks are deliberately not
     // delegated to the Unity effect adapter.
     public bool IsReservedToday(DailyV1NpcRuntimeOwners actor)
@@ -467,7 +500,7 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
     }
 
     public IAuthoritativeRandomSource RandomSource => coreRoots.RandomSource;
-    public bool RequiresActionProjection => hostPorts.RequiresActionProjection;
+    public bool RequiresActionProjection => hostPorts?.RequiresActionProjection ?? false;
     public bool UsesSelectedDailyV1ActionExecution(DailyV1NpcRuntimeOwners actor) =>
         TryGetExactActor(actor);
 
@@ -511,7 +544,7 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
 
     // Narrow host effect ports. Every call is fenced to the exact selected actor.
     public void LogSkippedDirective(ScheduledDirective directive, string reason) =>
-        hostPorts.LogSkippedDirective(directive, reason);
+        RequireHostPorts().LogSkippedDirective(directive, reason);
 
     public bool TryCreateActionProjectionBoundary(
         DailyV1NpcRuntimeOwners actor,
@@ -519,7 +552,7 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
     {
         projectionBoundary = null;
         return TryGetExactActor(actor)
-            && hostPorts.TryCreateActionProjectionBoundary(actor, out projectionBoundary)
+            && RequireHostPorts().TryCreateActionProjectionBoundary(actor, out projectionBoundary)
             && projectionBoundary != null;
     }
 
@@ -529,52 +562,54 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         IDailyV1SelectedActionProjectionBoundary projectionBoundary,
         DailyV1NpcActionPayloadOwner payload) =>
         TryGetExactActor(actor)
-        && hostPorts.TryPrepareSelectedActionProjection(
+        && RequireHostPorts().TryPrepareSelectedActionProjection(
             actor, selected, projectionBoundary, payload);
 
     public bool CanCommitSelectedActionSlot(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionPayloadOwner payload) =>
-        TryGetExactActor(actor) && hostPorts.CanCommitSelectedActionSlot(actor, payload);
+        TryGetExactActor(actor) && RequireHostPorts().CanCommitSelectedActionSlot(actor, payload);
 
     public bool TryPublishSelectedActionProjection(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionPayloadOwner payload) =>
-        TryGetExactActor(actor) && hostPorts.TryPublishSelectedActionProjection(actor, payload);
+        TryGetExactActor(actor) && RequireHostPorts().TryPublishSelectedActionProjection(actor, payload);
 
     public void CancelPreparedSelectedActionProjection(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionPayloadOwner payload)
     {
         RequireExactActor(actor);
-        hostPorts.CancelPreparedSelectedActionProjection(actor, payload);
+        RequireHostPorts().CancelPreparedSelectedActionProjection(actor, payload);
     }
 
     public void LogSelectedActionDecisionFailure(DailyV1NpcRuntimeOwners actor, string message)
     {
         RequireExactActor(actor);
-        hostPorts.LogSelectedActionDecisionFailure(actor, message);
+        if (hostPorts != null) hostPorts.LogSelectedActionDecisionFailure(actor, message);
     }
 
     public bool TryPrepareCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor) =>
-        TryGetExactActor(actor) && hostPorts.TryPrepareCurrentActionClearProjection(actor);
+        TryGetExactActor(actor) && RequireHostPorts().TryPrepareCurrentActionClearProjection(actor);
 
     public bool CanCommitCurrentActionClear(DailyV1NpcRuntimeOwners actor) =>
-        TryGetExactActor(actor) && hostPorts.CanCommitCurrentActionClear(actor);
+        TryGetExactActor(actor) && RequireHostPorts().CanCommitCurrentActionClear(actor);
 
     public bool TryPublishCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor) =>
-        TryGetExactActor(actor) && hostPorts.TryPublishCurrentActionClearProjection(actor);
+        TryGetExactActor(actor) && RequireHostPorts().TryPublishCurrentActionClearProjection(actor);
 
     public void CancelPreparedCurrentActionClearProjection(DailyV1NpcRuntimeOwners actor)
     {
         RequireExactActor(actor);
-        hostPorts.CancelPreparedCurrentActionClearProjection(actor);
+        RequireHostPorts().CancelPreparedCurrentActionClearProjection(actor);
     }
 
     public void LogChosenActionTarget(DailyV1NpcRuntimeOwners actor)
     {
         RequireExactActor(actor);
-        hostPorts.LogChosenActionTarget(actor);
+        // Targetless Core actions have no host projection to log. The Unity
+        // adapter uses the same no-op when it has no optional projection.
+        if (hostPorts != null) hostPorts.LogChosenActionTarget(actor);
     }
 
     public bool TryGetDispatchBoundary(
@@ -583,7 +618,7 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
     {
         dispatchBoundary = null;
         return TryGetExactActor(actor)
-            && hostPorts.TryGetDispatchBoundary(actor, out dispatchBoundary)
+            && RequireHostPorts().TryGetDispatchBoundary(actor, out dispatchBoundary)
             && dispatchBoundary != null;
     }
 
@@ -594,11 +629,12 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
     {
         resultMessage = null;
         if (!TryGetExactActor(actor) || dispatch == null) return false;
-        if (hostPorts.TryCompleteDispatch(actor, dispatch, out resultMessage)) return true;
+        if (hostPorts != null
+            && hostPorts.TryCompleteDispatch(actor, dispatch, out resultMessage)) return true;
         // Only the exact projection-independent Normal slot may complete
         // without a Unity action object. Its status effects are committed
         // separately through the exact Core P12 status-owner boundary.
-        if (hostPorts.RequiresActionProjection
+        if (RequiresActionProjection
             || dispatch.Kind != DailyV1SelectedActionDispatchKind.Normal)
             return false;
 
@@ -626,13 +662,13 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         if (!TryGetExactActor(actor)
             || (target != null && !graph.ContainsExactNpcOwner(target)))
             return false;
-        if (hostPorts.TryGetActionStatusBoundary(
+        if (hostPorts != null && hostPorts.TryGetActionStatusBoundary(
                 actor, target, reuseExistingOperation, out boundary)
             && boundary != null)
             return true;
         boundary = null;
         return !reuseExistingOperation
-            && !hostPorts.RequiresActionProjection
+            && !RequiresActionProjection
             && DailyV1SelectedActionExecutionStage.CoreSelectedActionStatusOperationBoundary.TryCreate(
                 executionState, graph, null, actor, target, null, out boundary)
             && boundary != null;
@@ -643,7 +679,7 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         DailyV1ActionDefinition action,
         DailyV1NpcActionPayloadOwner payload) =>
         TryGetExactActor(actor)
-        && hostPorts.TryPrepareForcedOutcomeActionProjection(actor, action, payload);
+        && RequireHostPorts().TryPrepareForcedOutcomeActionProjection(actor, action, payload);
 
     public bool TryGetForcedEscapeBoundary(
         DailyV1NpcRuntimeOwners actor,
@@ -652,40 +688,42 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
     {
         boundary = null;
         return TryGetExactActor(actor)
-            && hostPorts.TryGetForcedEscapeBoundary(actor, action, out boundary)
+            && RequireHostPorts().TryGetForcedEscapeBoundary(actor, action, out boundary)
             && boundary != null;
     }
 
     public bool TryPrepareRequestedActionProjection(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionPayloadOwner payload) =>
-        TryGetExactActor(actor) && hostPorts.TryPrepareRequestedActionProjection(actor, payload);
+        TryGetExactActor(actor) && RequireHostPorts().TryPrepareRequestedActionProjection(actor, payload);
 
     public bool TryRefreshRequestedActionProjection(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionPayloadOwner payload) =>
-        TryGetExactActor(actor) && hostPorts.TryRefreshRequestedActionProjection(actor, payload);
+        TryGetExactActor(actor) && RequireHostPorts().TryRefreshRequestedActionProjection(actor, payload);
 
     public bool CanCommitRequestedActionSlot(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionPayloadOwner payload) =>
-        TryGetExactActor(actor) && hostPorts.CanCommitRequestedActionSlot(actor, payload);
+        TryGetExactActor(actor) && RequireHostPorts().CanCommitRequestedActionSlot(actor, payload);
 
     public bool TryPublishRequestedActionProjection(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionPayloadOwner payload) =>
-        TryGetExactActor(actor) && hostPorts.TryPublishRequestedActionProjection(actor, payload);
+        TryGetExactActor(actor) && RequireHostPorts().TryPublishRequestedActionProjection(actor, payload);
 
     public void CancelPreparedRequestedActionProjection(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionPayloadOwner payload)
     {
         RequireExactActor(actor);
-        hostPorts.CancelPreparedRequestedActionProjection(actor, payload);
+        RequireHostPorts().CancelPreparedRequestedActionProjection(actor, payload);
     }
 
-    public void LogRequestedActionDecisionFailure(string message) =>
-        hostPorts.LogRequestedActionDecisionFailure(message);
+    public void LogRequestedActionDecisionFailure(string message)
+    {
+        if (hostPorts != null) hostPorts.LogRequestedActionDecisionFailure(message);
+    }
 
     public bool OwnsSelectedActionSlotP12Mutation =>
         executionState.AdmissionContext != null;
@@ -696,8 +734,8 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
     {
         if (!ReferenceEquals(expectedGraph, graph)
             || !TryGetExactActor(actor)
-            || (hostPorts.RequiresActionProjection
-                && !hostPorts.IsSelectedActionSlotProjectionPrepared(graph, actor)))
+            || (RequiresActionProjection
+                && !RequireHostPorts().IsSelectedActionSlotProjectionPrepared(graph, actor)))
             return false;
 
         return executionState.TryCanCommitSelectedNpcActionSlotMutation(
@@ -715,48 +753,48 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
             graph, actor, sectionId, revision, actionSlotP12MutationProtocol);
 
     public bool CanAdmitSelectedMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) =>
-        TryGetExactActor(actor) && hostPorts.CanAdmitSelectedMerchantPlanMutation(actor);
+        TryGetExactActor(actor) && RequireHostPorts().CanAdmitSelectedMerchantPlanMutation(actor);
 
     public bool NotifySelectedMerchantPlanMutationCommitted(
         DailyV1NpcRuntimeOwners actor,
         long revision) =>
         TryGetExactActor(actor)
-        && hostPorts.NotifySelectedMerchantPlanMutationCommitted(actor, revision);
+        && RequireHostPorts().NotifySelectedMerchantPlanMutationCommitted(actor, revision);
 
     public bool CanProjectSelectedMerchantTravelPlanMutation(
         DailyV1NpcRuntimeOwners actor,
         string targetLocationRuntimeId,
         string targetCityRuntimeId) =>
         TryGetExactActor(actor)
-        && hostPorts.CanProjectSelectedMerchantTravelPlanMutation(
+        && RequireHostPorts().CanProjectSelectedMerchantTravelPlanMutation(
             actor, targetLocationRuntimeId, targetCityRuntimeId);
 
     public bool CanAdmitSelectedMerchantTravelPlanMutation(DailyV1NpcRuntimeOwners actor) =>
         TryGetExactActor(actor)
-        && hostPorts.CanAdmitSelectedMerchantTravelPlanMutation(actor);
+        && RequireHostPorts().CanAdmitSelectedMerchantTravelPlanMutation(actor);
 
     public bool NotifySelectedMerchantTravelPlanMutationCommitted(
         DailyV1NpcRuntimeOwners actor,
         long revision) =>
         TryGetExactActor(actor)
-        && hostPorts.NotifySelectedMerchantTravelPlanMutationCommitted(actor, revision);
+        && RequireHostPorts().NotifySelectedMerchantTravelPlanMutationCommitted(actor, revision);
 
     public NpcDecisionRecord RecordTradeRedirect(
         DailyV1NpcRuntimeOwners actor,
         string targetLocationRuntimeId,
         CommercialDecisionEvidence evidence) =>
         TryGetExactActor(actor)
-            ? hostPorts.RecordTradeRedirect(actor, targetLocationRuntimeId, evidence)
+            ? RequireHostPorts().RecordTradeRedirect(actor, targetLocationRuntimeId, evidence)
             : throw new InvalidOperationException("A Merchant decision referenced an actor outside the Core roster.");
 
-    public void LogTradeDecisionFailure(string message) => hostPorts.LogTradeDecisionFailure(message);
-    public void LogTrade(string message) => hostPorts.LogTrade(message);
+    public void LogTradeDecisionFailure(string message) => RequireHostPorts().LogTradeDecisionFailure(message);
+    public void LogTrade(string message) => RequireHostPorts().LogTrade(message);
 
     public bool ExecuteWithinSelectedMerchantDailyOperation(
         DailyV1NpcRuntimeOwners actor,
         Func<bool> operation) =>
         TryGetExactActor(actor)
-        && hostPorts.ExecuteWithinSelectedMerchantDailyOperation(actor, operation);
+        && RequireHostPorts().ExecuteWithinSelectedMerchantDailyOperation(actor, operation);
 
     public DailyV1JusticeRecordsOwner JusticeRecordsOwner => graph.JusticeRecordsOwner;
 
@@ -770,7 +808,7 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         if (!executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
                 graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding))
         {
-            if (!hostPorts.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+            if (!RequireHostPorts().TryGetSelectedCrimeJusticeDailyMutationHostBinding(
                     graph, out binding)
                 || binding == null)
             {
@@ -824,13 +862,25 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
 
     public bool CanProjectStatusChanges(
         DailyV1NpcRuntimeOwners owner,
-        IReadOnlyList<DailyV1StatusDefinition> statusToAdd) =>
-        TryGetExactActor(owner) && hostPorts.CanProjectStatusChanges(owner, statusToAdd);
+        IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
+    {
+        if (!TryGetExactActor(owner) || statusToAdd == null) return false;
+        if (hostPorts != null)
+            return hostPorts.CanProjectStatusChanges(owner, statusToAdd);
+        foreach (DailyV1StatusDefinition status in statusToAdd)
+            if (!IsExactStatus(status)) return false;
+        return true;
+    }
 
     public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner)
     {
         RequireExactActor(owner);
-        hostPorts.EnsureMutationAllowed(owner);
+        if (hostPorts != null)
+        {
+            hostPorts.EnsureMutationAllowed(owner);
+            return;
+        }
+        executionState.EnsureSelectedP12CrimeJusticeOwnerMutationAllowed(owner);
     }
 
     public void NotifyStatusMutationCommitted(
@@ -839,23 +889,42 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         bool added)
     {
         RequireExactActor(owner);
-        hostPorts.NotifyStatusMutationCommitted(owner, status, added);
+        if (!IsExactStatus(status))
+            throw new InvalidOperationException(
+                "The Core actor-turn boundary received a status outside its admitted definition graph.");
+        if (hostPorts != null)
+        {
+            hostPorts.NotifyStatusMutationCommitted(owner, status, added);
+            return;
+        }
+        executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
     }
 
     public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
     {
         RequireExactActor(owner);
-        hostPorts.NotifyHiddenMutationCommitted(owner);
+        if (hostPorts != null)
+        {
+            hostPorts.NotifyHiddenMutationCommitted(owner);
+            return;
+        }
+        executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
     }
 
+    private bool IsExactStatus(DailyV1StatusDefinition status) =>
+        status != null
+        && graph.Definitions.Statuses.TryGetValue(
+            status.DefinitionId, out DailyV1StatusDefinition admitted)
+        && ReferenceEquals(admitted, status);
+
     public bool CanRemoveSentenceProjection(DailyV1JusticeSentenceOwner sentence) =>
-        hostPorts.CanRemoveSentenceProjection(sentence);
+        RequireHostPorts().CanRemoveSentenceProjection(sentence);
 
     public void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence) =>
-        hostPorts.CommitSentenceProjectionRemoval(sentence);
+        RequireHostPorts().CommitSentenceProjectionRemoval(sentence);
 
-    public void Log(SimulationLogCategory category, string message) => hostPorts.Log(category, message);
-    public void LogWarning(string message) => hostPorts.LogWarning(message);
+    public void Log(SimulationLogCategory category, string message) => RequireHostPorts().Log(category, message);
+    public void LogWarning(string message) => RequireHostPorts().LogWarning(message);
 }
 
 /// <summary>
