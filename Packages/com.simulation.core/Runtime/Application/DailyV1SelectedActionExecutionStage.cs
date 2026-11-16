@@ -330,7 +330,7 @@ internal static class DailyV1SelectedActionExecutionStage
     {
         bool CanStartTradeReposition();
         void LogTradeReposition();
-        /// <summary>Preserves host guards/projection checks before Core charges the owner.</summary>
+        /// <summary>Retains the host-side preflight used only by the legacy non-Core boundary.</summary>
         bool CanCommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan,
             SpatialRouteRuntime route, float travelCost);
         /// <summary>Runs the existing exact Unity projection preflight after Core's charge, as before.</summary>
@@ -445,7 +445,10 @@ internal static class DailyV1SelectedActionExecutionStage
             public void LogTradeReposition() => hostProjection.LogTradeReposition();
             public bool CanCommitPreparedTransition(
                 DailyV1SelectedTravelTransitionPlan plan, SpatialRouteRuntime route, float travelCost) =>
-                hostProjection.CanCommitPreparedTransition(plan, route, travelCost);
+                IsCurrentSession()
+                && executionState.CanMutate
+                && DailyV1SelectedActionExecutionStage.CanCommitPreparedSoloTravelTransition(
+                    graph, actor, plan, route, travelCost);
             public bool TryPrepareTransitionProjection(DailyV1SelectedTravelTransitionPlan plan) =>
                 hostProjection.TryPrepareTransitionProjection(plan);
             public bool CanAdmitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan) =>
@@ -1025,9 +1028,60 @@ internal static class DailyV1SelectedActionExecutionStage
         DailyV1NpcActionDecision.TryRollCurrentActionSlot(
             graph, actor, randomSource, currentAbsoluteDay, out succeeded);
 
+    /// <summary>
+    /// Validates a prepared solo-travel start against the exact Core graph,
+    /// route, owner revisions, and charge before any effect is committed.
+    /// </summary>
+    internal static bool CanCommitPreparedSoloTravelTransition(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1SelectedTravelTransitionPlan plan,
+        SpatialRouteRuntime route,
+        float travelCost)
+    {
+        if (graph == null || actor == null || plan == null || route == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !plan.IsPreparedFor(actor, graph)
+            || plan.IsCommitted || plan.IsNoOp || !plan.TravelRevisionChanges
+            || actor.Lifecycle?.LifeState != NpcLifeState.Alive
+            || actor.Travel == null || actor.Travel.IsTraveling
+            || graph.TravelParties == null
+            || graph.IsManagedByTravelParty(actor, graph.TravelParties)
+            || actor.MoneyAccount == null
+            || float.IsNaN(travelCost) || float.IsInfinity(travelCost) || travelCost < 0f
+            || !actor.MoneyAccount.CanDebit(travelCost)
+            || route.Origin == null || route.Destination == null || route.TravelDays <= 0
+            || !string.Equals(actor.Travel.CurrentLocationRuntimeId,
+                route.Origin.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(plan.RouteRuntimeId, route.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(plan.DestinationLocationRuntimeId,
+                route.Destination.RuntimeId, StringComparison.Ordinal)
+            || plan.TravelDaysTotal != route.TravelDays
+            || !graph.TryGetUniqueCityOwnerForLocation(
+                actor.Travel.CurrentLocationRuntimeId, out DailyV1CityRuntimeOwners originCity)
+            || !string.Equals(originCity.RuntimeId, actor.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal)
+            || !graph.TryGetUniqueCityOwnerForLocation(
+                route.Destination.RuntimeId, out DailyV1CityRuntimeOwners destinationCity)
+            || !string.Equals(plan.DestinationCityRuntimeId, destinationCity.RuntimeId,
+                StringComparison.Ordinal)
+            || !graph.TryPlanSelectedSoloTravel(actor,
+                route.Origin.RuntimeId, route.Destination.RuntimeId,
+                destinationCity.RuntimeId,
+                out SpatialRouteRuntime exactRoute, out float exactTravelCost)
+            || !ReferenceEquals(exactRoute, route)
+            || exactTravelCost != travelCost)
+            return false;
+
+        // Recheck stale state and revision capacity immediately before the
+        // projection/P12 gates. The owner install checks the same baseline
+        // again after those gates.
+        return plan.CanCommit();
+    }
+
     /// <summary>Prepares and charges the exact selected Travel slot using Core
-    /// route/cost/travel owners, then asks the host only to commit the already
-    /// prepared transition through its existing P12 projection boundary.</summary>
+    /// route/cost/travel owners, then commits through the existing P12 and
+    /// Unity projection boundaries.</summary>
     internal static bool TryExecuteSoloTravelSlot(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,

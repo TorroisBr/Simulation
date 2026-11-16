@@ -589,6 +589,42 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
     }
 
     [Test]
+    public void CoreSoloTravelPreflightUsesTheExactGraphRouteAndOwnerPlan()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        Assert.That(TryCreateSoloTravelPreflightPlan(graph,
+            out DailyV1NpcRuntimeOwners actor,
+            out DailyV1SelectedTravelTransitionPlan plan,
+            out SpatialRouteRuntime route,
+            out float travelCost), Is.True);
+
+        long travelRevision = actor.Travel.Revision;
+        long moneyRevision = actor.MoneyAccount.Revision;
+        Assert.That(DailyV1SelectedActionExecutionStage.CanCommitPreparedSoloTravelTransition(
+            graph, actor, plan, route, travelCost), Is.True);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.CanCommitPreparedSoloTravelTransition(
+            graph, actor, plan, route, travelCost + 1f), Is.False,
+            "The Core preflight must reject a cost that is not derived from the exact admitted route.");
+
+        DailyV1GenesisComposition foreignComposition = Compose();
+        SpatialRouteRuntime foreignRoute = foreignComposition.OwnerGraph.SpatialNetwork.Routes
+            .SingleOrDefault(candidate => string.Equals(
+                candidate.RuntimeId, route.RuntimeId, StringComparison.Ordinal));
+        Assert.That(foreignRoute, Is.Not.Null);
+        Assert.That(foreignRoute, Is.Not.SameAs(route));
+        Assert.That(DailyV1SelectedActionExecutionStage.CanCommitPreparedSoloTravelTransition(
+            graph, actor, plan, foreignRoute, travelCost), Is.False,
+            "A route with matching persisted identity from another graph is not the bound route object.");
+
+        Assert.That(actor.Travel.Revision, Is.EqualTo(travelRevision));
+        Assert.That(actor.MoneyAccount.Revision, Is.EqualTo(moneyRevision));
+        Assert.That(plan.IsCommitted, Is.False,
+            "Rejected preflights must not install the prepared transition or charge the owner.");
+    }
+
+    [Test]
     public void CoreRechecksTravelAndSpatialOwnerBaselinesAcrossTheHostVectorPreflight()
     {
         DailyV1GenesisComposition composition = Compose();
@@ -1212,6 +1248,67 @@ public sealed class DailyV1SelectedSoloTravelStartOperationTests
         }
         return false;
     }
+    private static bool TryCreateSoloTravelPreflightPlan(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out DailyV1NpcRuntimeOwners actor,
+        out DailyV1SelectedTravelTransitionPlan plan,
+        out SpatialRouteRuntime route,
+        out float travelCost)
+    {
+        actor = null;
+        plan = null;
+        route = null;
+        travelCost = -1f;
+        if (graph?.SpatialNetwork == null) return false;
+
+        foreach (DailyV1NpcRuntimeOwners candidateActor in graph.Npcs)
+        {
+            if (candidateActor?.Lifecycle?.LifeState != NpcLifeState.Alive
+                || candidateActor.Travel == null || candidateActor.Travel.IsTraveling
+                || string.IsNullOrWhiteSpace(candidateActor.Travel.CurrentLocationRuntimeId)
+                || !string.IsNullOrWhiteSpace(candidateActor.Travel.ActiveTravelPartyId)
+                || graph.IsManagedByTravelParty(candidateActor, graph.TravelParties)
+                || !graph.TryGetUniqueCityOwnerForLocation(
+                    candidateActor.Travel.CurrentLocationRuntimeId,
+                    out DailyV1CityRuntimeOwners originCity)
+                || !string.Equals(originCity.RuntimeId,
+                    candidateActor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal))
+                continue;
+
+            foreach (SpatialRouteRuntime candidateRoute in graph.SpatialNetwork.Routes)
+            {
+                if (candidateRoute?.Origin == null || candidateRoute.Destination == null
+                    || candidateRoute.TravelDays <= 0
+                    || !string.Equals(candidateRoute.Origin.RuntimeId,
+                        candidateActor.Travel.CurrentLocationRuntimeId, StringComparison.Ordinal)
+                    || !graph.TryGetUniqueCityOwnerForLocation(
+                        candidateRoute.Destination.RuntimeId,
+                        out DailyV1CityRuntimeOwners destinationCity)
+                    || ReferenceEquals(originCity, destinationCity)
+                    || !graph.TryPlanSelectedSoloTravel(candidateActor,
+                        candidateRoute.Origin.RuntimeId, candidateRoute.Destination.RuntimeId,
+                        destinationCity.RuntimeId,
+                        out SpatialRouteRuntime exactRoute, out float exactCost)
+                    || !ReferenceEquals(exactRoute, candidateRoute)
+                    || !candidateActor.MoneyAccount.CanDebit(exactCost)
+                    || !DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+                        candidateActor, originCity, candidateRoute.Origin.RuntimeId,
+                        candidateRoute.Destination.RuntimeId, destinationCity,
+                        candidateRoute.TravelDays, "decision/core-preflight-test",
+                        candidateRoute.RuntimeId,
+                        out DailyV1SelectedTravelTransitionPlan prepared))
+                    continue;
+
+                actor = candidateActor;
+                plan = prepared;
+                route = candidateRoute;
+                travelCost = exactCost;
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static DailyV1GenesisComposition Compose()
     {
         DailyV1EffectiveDefinitions definitions =
