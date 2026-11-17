@@ -491,12 +491,14 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "An attempted write outside the admitted mutation scope faults the selected census closed.");
     }
 
-    [TestCase(false, false)]
-    [TestCase(true, false)]
-    [TestCase(false, true)]
+    [TestCase(false, false, false)]
+    [TestCase(true, false, false)]
+    [TestCase(false, true, false)]
+    [TestCase(false, false, true)]
     public void CoreOnlyActorTurnExecutesAdmittedActionWithCompleteP12Census(
         bool prebindMismatchedCrimeReceiptIdentity,
-        bool executeCoreOnlyHideAction)
+        bool executeCoreOnlyHideAction,
+        bool expireCoreOnlyHiddenState)
     {
         DailyV1EffectiveDefinitions definitions = CopyWithConfiguredActions(
             CopyWithMerchantTradeEnabled(
@@ -521,6 +523,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             justiceRevisionBeforeTurn = graph.JusticeRecordsOwner.Revision;
         }
         Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero);
+        if (expireCoreOnlyHiddenState)
+            Assert.That(staleHiddenActor.HiddenState.TrySetRemainingDays(1), Is.True,
+                "The exact NPC begins with one admitted hidden day remaining.");
         Assert.That(staleHiddenActor.Status.TryAdd(hiddenStatus), Is.True,
             "The proving fixture starts with an expired hidden-status owner fact to exercise Core reconciliation.");
         staleHiddenActor.NotifyCrimeJusticeMutationCommitted();
@@ -677,8 +682,11 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(sequenceAfter.Revision, Is.GreaterThan(sequenceBefore.Revision));
         Assert.That(staleHiddenActor.Status.Contains(hiddenStatus), Is.False,
             "The Core-owned daily stage reconciles the expired hidden status against its exact NPC owner.");
-        Assert.That(staleHiddenAfter.Revision, Is.EqualTo(staleHiddenBefore.Revision + 1L),
-            "The exact NPC Crime/Justice census row records the Core status write.");
+        Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero,
+            "The Core-owned daily stage advances the exact hidden-day owner.");
+        Assert.That(staleHiddenAfter.Revision,
+            Is.EqualTo(staleHiddenBefore.Revision + (expireCoreOnlyHiddenState ? 2L : 1L)),
+            "P12 records hidden-day expiry and status reconciliation on the exact NPC owner.");
         Assert.That(graph.Npcs.Any(owner => owner.ActionSlot.CurrentAction != null), Is.True,
             "At least one exact admitted actor installed and executed a configured Core action.");
         if (executeCoreOnlyHideAction)

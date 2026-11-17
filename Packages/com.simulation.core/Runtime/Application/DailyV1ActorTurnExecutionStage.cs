@@ -933,7 +933,10 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
     public void CommitSentenceProjectionRemoval(DailyV1JusticeSentenceOwner sentence) =>
         RequireHostPorts().CommitSentenceProjectionRemoval(sentence);
 
-    public void Log(SimulationLogCategory category, string message) => RequireHostPorts().Log(category, message);
+    public void Log(SimulationLogCategory category, string message) {
+        // Core owns the selected Crime/Justice mutation. Logging is a host presentation effect.
+        if (hostPorts != null) hostPorts.Log(category, message);
+    }
     public void LogWarning(string message) => RequireHostPorts().LogWarning(message);
 }
 

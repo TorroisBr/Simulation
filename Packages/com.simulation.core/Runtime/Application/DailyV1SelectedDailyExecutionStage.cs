@@ -813,11 +813,7 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
         foreach (DailyV1NpcRuntimeOwners actor in graph.Npcs)
         {
             if (actor?.Status == null || actor.HiddenState == null
-                || (arrestedStatus != null && actor.Status.Contains(arrestedStatus))
-                // Expiry emits a host presentation log. Keep this Core-only
-                // path within days whose selected Crime/Justice effects are
-                // owner mutations only, before RNG or any daily write begins.
-                || actor.HiddenState.RemainingDays == 1)
+                || (arrestedStatus != null && actor.Status.Contains(arrestedStatus)))
                 return false;
         }
         return true;
