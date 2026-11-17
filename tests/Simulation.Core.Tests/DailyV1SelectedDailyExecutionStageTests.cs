@@ -42,6 +42,34 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         }
     }
 
+    private sealed class CoreJusticeRecordsCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly DailyV1JusticeRecordsOwner owner;
+        private readonly object censusOwnerIdentity;
+        private readonly int schemaVersion;
+
+        internal CoreJusticeRecordsCensusProvider(
+            DailyV1JusticeRecordsOwner owner,
+            OwnerSectionCensusSnapshot baseline)
+        {
+            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            if (baseline == null) throw new ArgumentNullException(nameof(baseline));
+            if (!string.Equals(baseline.SectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+                    StringComparison.Ordinal))
+                throw new ArgumentException("The Justice census baseline has the wrong section.", nameof(baseline));
+            censusOwnerIdentity = baseline.OwnerInstanceIdentity;
+            schemaVersion = baseline.SchemaVersion;
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus() => new OwnerSectionCensusWitness(
+            DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+            schemaVersion,
+            censusOwnerIdentity,
+            owner.WantedRecords.Count + owner.Sentences.Count,
+            owner.Revision);
+    }
+
     [Test]
     public void AdvanceRunsSelectedDailyPhasesInTheEstablishedOrder()
     {
@@ -491,14 +519,16 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "An attempted write outside the admitted mutation scope faults the selected census closed.");
     }
 
-    [TestCase(false, false, false)]
-    [TestCase(true, false, false)]
-    [TestCase(false, true, false)]
-    [TestCase(false, false, true)]
+    [TestCase(false, false, false, false)]
+    [TestCase(true, false, false, false)]
+    [TestCase(false, true, false, false)]
+    [TestCase(false, false, true, false)]
+    [TestCase(false, false, false, true)]
     public void CoreOnlyActorTurnExecutesAdmittedActionWithCompleteP12Census(
         bool prebindMismatchedCrimeReceiptIdentity,
         bool executeCoreOnlyHideAction,
-        bool expireCoreOnlyHiddenState)
+        bool expireCoreOnlyHiddenState,
+        bool executeCoreOnlyForcedEscape)
     {
         DailyV1EffectiveDefinitions definitions = CopyWithConfiguredActions(
             CopyWithMerchantTradeEnabled(
@@ -512,6 +542,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             definitions.Configuration.hiddenStatus];
         DailyV1NpcRuntimeOwners staleHiddenActor = graph.Npcs[0];
         DailyV1NpcRuntimeOwners hider = executeCoreOnlyHideAction ? graph.Npcs[1] : null;
+        DailyV1NpcRuntimeOwners forcedEscapeActor = null;
+        DailyV1JusticeSentenceOwner forcedEscapeSentence = null;
+        ScheduledDirective forcedEscapeDirective = null;
         long justiceRevisionBeforeTurn = -1L;
         if (hider != null)
         {
@@ -520,6 +553,40 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             Assert.That(graph.JusticeRecordsOwner.TryAddWantedRecord(
                 new DailyV1JusticeWantedRecordOwner(hider.RuntimeId, hiderCity.RuntimeId, 12f, 4)), Is.True,
                 "The Core Hide proving actor receives one existing canonical Justice warrant before admission.");
+            justiceRevisionBeforeTurn = graph.JusticeRecordsOwner.Revision;
+        }
+        if (executeCoreOnlyForcedEscape)
+        {
+            Assert.That(composition.SimulationTime.TryAdvanceDay(
+                out SimulationTimeAdvanceFailure dayAdvanceFailure), Is.True,
+                dayAdvanceFailure.ToString());
+            forcedEscapeActor = graph.Npcs.First(owner => !ReferenceEquals(owner, staleHiddenActor));
+            DailyV1StatusDefinition arrestedStatus = definitions.Statuses[
+                definitions.Configuration.arrestedStatus];
+            Assert.That(forcedEscapeActor.Status.TryAdd(arrestedStatus), Is.True,
+                "The scheduled Escape proving actor begins with its exact admitted arrested-status owner fact.");
+            forcedEscapeActor.NotifyCrimeJusticeMutationCommitted();
+            DailyV1CityRuntimeOwners escapeCity = graph.Cities.Single(city =>
+                string.Equals(city.RuntimeId, forcedEscapeActor.Travel.CurrentCityRuntimeId,
+                    StringComparison.Ordinal));
+            DailyV1JusticeWantedRecordOwner escapeWarrant = new DailyV1JusticeWantedRecordOwner(
+                forcedEscapeActor.RuntimeId, escapeCity.RuntimeId, 12f, 4);
+            Assert.That(graph.JusticeRecordsOwner.TryAddWantedRecord(escapeWarrant), Is.True);
+            forcedEscapeSentence = new DailyV1JusticeSentenceOwner(
+                forcedEscapeActor.RuntimeId, escapeCity.RuntimeId, escapeWarrant,
+                remainingDays: 4, failedEscapeAttempts: 0, wasArrestedToday: true);
+            Assert.That(graph.JusticeRecordsOwner.TryAddSentence(forcedEscapeSentence), Is.True,
+                "The selected Justice owner contains the exact active sentence/warrant relationship before admission.");
+            DailyV1ActionDefinition escapeAction = definitions.Actions.Values.Single(action =>
+                action.Values.actionType?.Value
+                    == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue);
+            forcedEscapeDirective = new ScheduledDirective(
+                "core-only-forced-escape", composition.SimulationTime.AbsoluteDay,
+                ScheduledDirectiveMode.ForceOutcome, ScheduledDirectiveOperation.EscapePrison,
+                forcedEscapeActor.RuntimeId, escapeAction.DefinitionId,
+                DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue);
+            Assert.That(graph.ScheduledDirectives.Add(forcedEscapeDirective), Is.True,
+                "The existing P12F scheduled-directive owner admits the bounded ForceOutcome input before the turn.");
             justiceRevisionBeforeTurn = graph.JusticeRecordsOwner.Revision;
         }
         Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero);
@@ -541,6 +608,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             DailyV1NpcOwnerCensusProviders.CreateRuntimeAuthorityProviders(graph)
                 .ToDictionary(provider => provider.GetCurrentCensus().SectionId,
                     StringComparer.Ordinal);
+        liveRuntimeProviders[ScheduledDirectiveStore.SectionId] =
+            new ScheduledDirectiveCensusProvider(graph.ScheduledDirectives);
+        OwnerSectionCensusSnapshot justiceRecordsBaseline = initialVector.Single(row =>
+            row.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+        liveRuntimeProviders[DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId] =
+            new CoreJusticeRecordsCensusProvider(graph.JusticeRecordsOwner, justiceRecordsBaseline);
         List<DailyV1OwnerSectionContractIdentity> contracts =
             new List<DailyV1OwnerSectionContractIdentity>(initialVector.Length);
         List<DailyV1OwnerSectionCensusProviderRegistration> registrations =
@@ -678,8 +751,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         OwnerSectionCensusSnapshot staleHiddenBefore = before[staleHiddenSectionId];
         OwnerSectionCensusSnapshot staleHiddenAfter = after.Single(row =>
             row.SectionId == staleHiddenSectionId);
-        Assert.That(decisionAfter.Revision, Is.GreaterThan(decisionBefore.Revision));
-        Assert.That(sequenceAfter.Revision, Is.GreaterThan(sequenceBefore.Revision));
+        Assert.That(decisionAfter.Revision, Is.GreaterThan(decisionBefore.Revision),
+            $"Decision revision must advance for this autonomous-action scenario; before={decisionBefore.Revision}, after={decisionAfter.Revision}, forcedEscape={executeCoreOnlyForcedEscape}.");
+        Assert.That(sequenceAfter.Revision, Is.GreaterThan(sequenceBefore.Revision),
+            $"Record sequence must advance for this autonomous-action scenario; before={sequenceBefore.Revision}, after={sequenceAfter.Revision}, forcedEscape={executeCoreOnlyForcedEscape}.");
         Assert.That(staleHiddenActor.Status.Contains(hiddenStatus), Is.False,
             "The Core-owned daily stage reconciles the expired hidden status against its exact NPC owner.");
         Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero,
@@ -707,6 +782,51 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             OwnerSectionCensusSnapshot hiderAfter = after.Single(row => row.SectionId == hiderCrimeSectionId);
             Assert.That(hiderAfter.Revision, Is.EqualTo(hiderBefore.Revision + 3L),
                 "P12 records the Hide duration write, hidden-status write, and existing wanted-status synchronization.");
+        }
+        if (executeCoreOnlyForcedEscape)
+        {
+            Assert.That(forcedEscapeDirective.State, Is.EqualTo(ScheduledDirectiveState.Succeeded),
+                forcedEscapeDirective.ResultReason);
+            Assert.That(forcedEscapeDirective.ProcessedDay,
+                Is.EqualTo(composition.SimulationTime.AbsoluteDay));
+            Assert.That(graph.JusticeRecordsOwner.ContainsSentence(forcedEscapeSentence), Is.False,
+                "The same Core Crime/Justice operation removes the exact active sentence owner.");
+            Assert.That(graph.JusticeRecordsOwner.ContainsWantedRecord(forcedEscapeSentence.Warrant), Is.True,
+                "Escape preserves the canonical warrant owner even after sentence removal.");
+            Assert.That(forcedEscapeActor.Status.Contains(definitions.Statuses[
+                definitions.Configuration.arrestedStatus]), Is.False);
+            Assert.That(forcedEscapeActor.Status.Contains(definitions.Statuses[
+                definitions.Configuration.freeStatus]), Is.True);
+            Assert.That(forcedEscapeActor.ActionSlot.CurrentAction.Values.actionType.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue));
+            Assert.That(forcedEscapeActor.ActionSlot.Revision,
+                Is.EqualTo(before[DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+                    + forcedEscapeActor.RuntimeId].Revision + 1L),
+                "The forced outcome installs one exact Core action-slot revision before its shared Crime/Justice operation.");
+            Assert.That(composition.DecisionStore.Decisions.Any(decision =>
+                string.Equals(decision.ActorRuntimeId, forcedEscapeActor.RuntimeId,
+                    StringComparison.Ordinal)), Is.False,
+                "ForceOutcome executes the selected actor without allocating an autonomous action decision.");
+            OwnerSectionCensusSnapshot directiveBefore = before[ScheduledDirectiveStore.SectionId];
+            OwnerSectionCensusSnapshot directiveAfter = after.Single(row =>
+                row.SectionId == ScheduledDirectiveStore.SectionId);
+            Assert.That(directiveAfter.Revision, Is.EqualTo(directiveBefore.Revision + 1L),
+                "P12F records exactly one terminal directive transition.");
+            OwnerSectionCensusSnapshot justiceRecordsBefore = before[
+                DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId];
+            OwnerSectionCensusSnapshot justiceRecordsAfter = after.Single(row =>
+                row.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+            Assert.That(justiceRecordsAfter.OwnerInstanceIdentity,
+                Is.SameAs(justiceRecordsBefore.OwnerInstanceIdentity),
+                "The Justice record census retains its exact shared identity while its row set changes.");
+            Assert.That(justiceRecordsAfter.Cardinality,
+                Is.EqualTo(justiceRecordsBefore.Cardinality - 1),
+                "Removing the exact sentence changes only the Justice record row cardinality; its warrant remains.");
+            Assert.That(justiceRecordsAfter.Revision,
+                Is.EqualTo(graph.JusticeRecordsOwner.Revision),
+                "P12 publishes the Justice owner's committed revision in its census witness.");
+            Assert.That(graph.JusticeRecordsOwner.Revision, Is.GreaterThan(justiceRevisionBeforeTurn),
+                "P12 captures the selected Justice sentence day and removal writes.");
         }
         Assert.That(epoch, Is.GreaterThan(0L),
             "The complete daily execution publishes its shared mutation epoch.");

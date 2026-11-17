@@ -64,6 +64,9 @@ internal static class DailyV1SelectedActionExecutionStage
         private readonly DailyV1NpcRuntimeOwners actor;
         private readonly DailyV1NpcRuntimeOwners target;
         private readonly ISelectedActionStatusProjectionBoundary projection;
+        private readonly DailyV1SelectedCrimeJusticeDailyMutationHostBinding reusedCrimeOperationBinding;
+        private readonly DailyV1ActionDefinition expectedForcedEscapeAction;
+        private readonly DailyV1NpcActionPayloadOwner expectedForcedEscapePayload;
 
         private CoreSelectedActionStatusOperationBoundary(
             DailyV1ExecutionBoundaryState executionState,
@@ -72,7 +75,10 @@ internal static class DailyV1SelectedActionExecutionStage
             DailyV1P12CrimeJusticeMutationCoordinator coordinator,
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcRuntimeOwners target,
-            ISelectedActionStatusProjectionBoundary projection)
+            ISelectedActionStatusProjectionBoundary projection,
+            DailyV1SelectedCrimeJusticeDailyMutationHostBinding reusedCrimeOperationBinding = null,
+            DailyV1ActionDefinition expectedForcedEscapeAction = null,
+            DailyV1NpcActionPayloadOwner expectedForcedEscapePayload = null)
         {
             this.executionState = executionState;
             this.graph = graph;
@@ -81,6 +87,9 @@ internal static class DailyV1SelectedActionExecutionStage
             this.actor = actor;
             this.target = target;
             this.projection = projection;
+            this.reusedCrimeOperationBinding = reusedCrimeOperationBinding;
+            this.expectedForcedEscapeAction = expectedForcedEscapeAction;
+            this.expectedForcedEscapePayload = expectedForcedEscapePayload;
         }
 
         internal static bool TryCreate(
@@ -128,6 +137,68 @@ internal static class DailyV1SelectedActionExecutionStage
             return true;
         }
 
+        internal static bool TryCreateForForcedEscapeScopeReuse(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            out ISelectedActionStatusOperationBoundary boundary)
+        {
+            boundary = null;
+            DailyV1ActionDefinition action = actor?.ActionSlot?.CurrentAction;
+            DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
+            // A request to reuse the enclosing operation is not applicable to
+            // ordinary actions or targeted status changes. Reject those
+            // probes without faulting the selected census; only the exact
+            // targetless Escape path below can own this nested boundary.
+            if (target != null || executionState == null || graph?.Definitions == null
+                || actor == null || action == null || payload == null
+                || action.Values.actionType?.Value
+                    != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)
+                return false;
+
+            if (!graph.Definitions.Actions.TryGetValue(
+                    action.DefinitionId, out DailyV1ActionDefinition admittedAction)
+                || !ReferenceEquals(action, admittedAction)
+                || !DailyV1NpcDefinitionRules.IsAdmittedAction(graph.Definitions, action)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentAction, action)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)
+                || !ReferenceEquals(payload.Action, action)
+                || payload.TargetNpcRuntimeId != null
+                || payload.TargetCityRuntimeId != null
+                || payload.TargetItem != null
+                || payload.Amount != 0
+                || payload.ExpectedUnitPrice != 0f
+                || payload.TravelReason != NpcTravelReason.None
+                || payload.ExpectedNetValue != 0f
+                || payload.CommercialDecisionEvidence != null
+                || payload.CommercialScoutingEvidence != null
+                || payload.OriginDecisionId != null
+                || !executionState.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(graph)
+                || !executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
+                || binding == null || !binding.AdmissionEnabled
+                || binding.JusticeOwnerIdentity == null
+                || !ReferenceEquals(binding.JusticeRecordsOwner, graph.JusticeRecordsOwner)
+                || !binding.HasExactCoreOwnerRelationships(graph)
+                || !ReferenceEquals(binding.CrimeOwnerIdentity, binding.CrimeReceiptCensusOwnerIdentity)
+                || !ReferenceEquals(binding.JusticeOwnerIdentity, binding.JusticeReceiptCensusOwnerIdentity)
+                || !executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    binding.Protocol, graph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+                || coordinator == null)
+            {
+                if (executionState != null && graph != null)
+                    executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+                return false;
+            }
+
+            boundary = new CoreSelectedActionStatusOperationBoundary(
+                executionState, graph, binding.Protocol, coordinator,
+                actor, target, null, binding, action, payload);
+            return true;
+        }
+
         public DailyV1SelectedActionStatusPlanResult ExecuteWithinOperation(
             DailyV1NpcRuntimeOwners operationActor,
             DailyV1NpcRuntimeOwners operationTarget,
@@ -141,6 +212,18 @@ internal static class DailyV1SelectedActionExecutionStage
             if (!IsCurrentSession())
                 throw new InvalidOperationException(
                     "The selected action-status operation lost its exact admitted Core session.");
+
+            if (reusedCrimeOperationBinding != null)
+            {
+                if (!coordinator.CanReuseSelectedCrimeActionMutation(
+                        graph, actor,
+                        reusedCrimeOperationBinding.JusticeOwnerIdentity,
+                        includeCrimeReceiptSection:
+                            reusedCrimeOperationBinding.CrimeOwnerIdentity != null))
+                    throw new InvalidOperationException(
+                        "P12 forced Escape status effects lost their exact admitted Crime/Justice operation scope.");
+                return operation();
+            }
 
             IReadOnlyList<DailyV1NpcRuntimeOwners> participants = target == null
                 ? new[] { actor }
@@ -207,7 +290,7 @@ internal static class DailyV1SelectedActionExecutionStage
 
         private bool IsCurrentSession()
         {
-            return executionState.HasAdmittedSelectedDailyExecution
+            bool current = executionState.HasAdmittedSelectedDailyExecution
                 && executionState.AdmissionContext != null
                 && executionState.AdmissionContext.IsOwnedByCurrentThread()
                 && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
@@ -217,6 +300,14 @@ internal static class DailyV1SelectedActionExecutionStage
                     protocol, graph,
                     out DailyV1P12CrimeJusticeMutationCoordinator currentCoordinator)
                 && ReferenceEquals(currentCoordinator, coordinator);
+            if (!current || reusedCrimeOperationBinding == null) return current;
+
+            return ReferenceEquals(actor.ActionSlot?.CurrentAction, expectedForcedEscapeAction)
+                && ReferenceEquals(actor.ActionSlot?.CurrentPayload, expectedForcedEscapePayload)
+                && executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding currentBinding)
+                && ReferenceEquals(currentBinding, reusedCrimeOperationBinding)
+                && currentBinding.HasExactCoreOwnerRelationships(graph);
         }
 
         private static bool IsExactOwner(

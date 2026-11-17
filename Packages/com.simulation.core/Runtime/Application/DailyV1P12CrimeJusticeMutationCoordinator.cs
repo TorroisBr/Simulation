@@ -731,7 +731,43 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
     {
         scope = null;
         if (!isAdmissionEnabled()) return true;
+        if (!TryBuildSelectedCrimeActionMutation(
+                graph, actor, justiceCensusOwnerIdentity, includeCrimeReceiptSection,
+                out List<DailyV1P12CrimeJusticeOwnerBinding> owners,
+                out List<string> sections))
+            return false;
+        return TryBeginImmediateMutation(owners, sections, out scope);
+    }
 
+    /// <summary>
+    /// Verifies that a forced Escape's nested status write reuses the exact
+    /// already-open Crime/Justice operation. It does not create a second scope
+    /// and admits no additional owner or section.
+    /// </summary>
+    internal bool CanReuseSelectedCrimeActionMutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        object justiceCensusOwnerIdentity,
+        bool includeCrimeReceiptSection)
+    {
+        if (!isAdmissionEnabled()) return true;
+        return TryBuildSelectedCrimeActionMutation(
+                graph, actor, justiceCensusOwnerIdentity, includeCrimeReceiptSection,
+                out List<DailyV1P12CrimeJusticeOwnerBinding> owners,
+                out List<string> sections)
+            && CanReuseImmediateMutation(owners, sections);
+    }
+
+    private bool TryBuildSelectedCrimeActionMutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        object justiceCensusOwnerIdentity,
+        bool includeCrimeReceiptSection,
+        out List<DailyV1P12CrimeJusticeOwnerBinding> owners,
+        out List<string> sections)
+    {
+        owners = null;
+        sections = null;
         if (graph == null || graph.Definitions == null || actor == null
             || justiceCensusOwnerIdentity == null
             || !graph.ContainsExactNpcOwner(actor)
@@ -747,13 +783,12 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         DailyV1P12CrimeJusticeOwnerBinding justiceBinding =
             DailyV1P12CrimeJusticeOwnerBinding.ForJusticeRecordsOwner(
                 justiceCensusOwnerIdentity, graph.JusticeRecordsOwner);
-        List<DailyV1P12CrimeJusticeOwnerBinding> owners =
-            new List<DailyV1P12CrimeJusticeOwnerBinding>(2)
-            {
-                actorBinding,
-                justiceBinding
-            };
-        List<string> sections = new List<string>(includeCrimeReceiptSection ? 4 : 3)
+        owners = new List<DailyV1P12CrimeJusticeOwnerBinding>(2)
+        {
+            actorBinding,
+            justiceBinding
+        };
+        sections = new List<string>(includeCrimeReceiptSection ? 4 : 3)
         {
             actorBinding.SectionId,
             justiceBinding.SectionId,
@@ -761,8 +796,7 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
         };
         if (includeCrimeReceiptSection)
             sections.Add(DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId);
-
-        return TryBeginImmediateMutation(owners, sections, out scope);
+        return true;
     }
 
     internal bool CanReuseImmediateMutation(

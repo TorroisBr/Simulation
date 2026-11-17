@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// Host ports for the selected Daily-v1 stage. Core owns the selected
@@ -183,9 +184,30 @@ internal sealed class DailyV1CoreSelectedDailyExecutionBoundary
         if (hostPorts is IDailyV1SelectedCrimeJusticeDailyMutationHostPort bindingPort)
         {
             if (!bindingPort.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
-                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
-                || !executionState.TryBindSelectedCrimeJusticeDailyMutationHostBinding(
-                    graph, binding))
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding))
+            {
+                executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+                return false;
+            }
+            if (binding == null || !binding.AdmissionEnabled)
+            {
+                executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+                return false;
+            }
+
+            bool hostProvidesCrimeJusticeOwnerIdentity =
+                binding.CrimeOwnerIdentity != null
+                || binding.CrimeReceiptCensusOwnerIdentity != null
+                || binding.CrimeJusticeRecordsOwner != null
+                || binding.JusticeOwnerIdentity != null
+                || binding.JusticeReceiptCensusOwnerIdentity != null
+                || binding.JusticeRecordsOwner != null;
+            bool exactBinding = hostProvidesCrimeJusticeOwnerIdentity
+                ? executionState.TryBindSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, binding)
+                : executionState.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(
+                    graph);
+            if (!exactBinding)
             {
                 executionState.MarkSelectedRuntimeCensusProtocolFaulted();
                 return false;
@@ -629,10 +651,11 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
     /// <summary>
     /// Creates the bounded actor-turn context that needs no Unity host ports.
     /// This path is intentionally narrower than the admitted Unity profile:
-    /// it requires a sealed full-owner census, the active DailyAdvance scope,
-    /// no Merchant/choice/directive work, and an action graph containing only
-    /// admitted targetless Normal actions. Unsupported profiles are rejected
-    /// before actor selection can consume deterministic RNG or mutate owners.
+    /// it requires a sealed full-owner census and the active DailyAdvance scope,
+    /// excludes Merchant and actor-choice inputs, and permits only the existing
+    /// targetless autonomous actions plus the admitted scheduled EscapePrison
+    /// ForceOutcome. Unsupported profiles are rejected before actor selection can
+    /// consume deterministic RNG or mutate owners.
     /// </summary>
     internal static bool TryCreateCoreOnly(
         DailyV1ExecutionBoundaryState executionState,
@@ -696,7 +719,6 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             || graph.PersonStore == null
             || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore)
             || graph.ScheduledDirectives == null
-            || graph.ScheduledDirectives.HasPendingDirectives
             || executionState.SelectedActorChoiceStore.PendingInputs.Count != 0
             || graph.Definitions?.EffectiveConfiguration == null
             || graph.Definitions.EffectiveConfiguration.MerchantTrade?.Enabled != false
@@ -708,7 +730,10 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 out IReadOnlyList<DailyV1ActorTurnRosterEntry> roster))
             return false;
 
-        if (!CanExecuteCoreOnlyCrimeJustice(executionState, graph)) return false;
+        if (!TryGetCoreOnlyForcedEscapeActorIds(
+                graph, out HashSet<string> forcedEscapeActorIds)
+            || !CanExecuteCoreOnlyCrimeJustice(executionState, graph, forcedEscapeActorIds))
+            return false;
 
         foreach (DailyV1ActorTurnRosterProjection projection
             in executionState.SelectedRuntimeActorRoster)
@@ -775,7 +800,7 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
         DailyV1ActionDefinition action)
     {
         DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
-        return DailyV1CoreOnlyHideActionDispatchBoundary.IsExactTargetlessHideSlot(
+        return DailyV1CoreOnlyCrimeActionBoundary.IsExactTargetlessHideSlot(
             graph, actor, action, payload)
             && DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
                 graph.Definitions, action,
@@ -788,10 +813,11 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
 
     private static bool CanExecuteCoreOnlyCrimeJustice(
         DailyV1ExecutionBoundaryState executionState,
-        DailyV1SelectedRuntimeOwnerGraph graph)
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        HashSet<string> forcedEscapeActorIds)
     {
         DailyV1JusticeRecordsOwner justice = graph.JusticeRecordsOwner;
-        if (justice == null || justice.Sentences.Count != 0
+        if (justice == null || forcedEscapeActorIds == null
             || !executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
                 graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
             || binding == null || !binding.AdmissionEnabled
@@ -810,12 +836,75 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 graph.Definitions.Configuration?.wantedStatus, out _))
             return false;
 
+        HashSet<string> activeSentenceTargets = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1JusticeSentenceOwner sentence in justice.Sentences)
+        {
+            if (sentence == null || !forcedEscapeActorIds.Contains(sentence.TargetRuntimeId)
+                || !graph.TryGetNpcOwner(sentence.TargetRuntimeId,
+                    out DailyV1NpcRuntimeOwners sentenceActor)
+                || sentenceActor == null
+                || sentence.Warrant == null
+                || !justice.ContainsWantedRecord(sentence.Warrant)
+                || !string.Equals(sentence.Warrant.TargetRuntimeId,
+                    sentence.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(sentence.Warrant.CityRuntimeId,
+                    sentence.CityRuntimeId, StringComparison.Ordinal)
+                || !graph.Cities.Any(city => city != null
+                    && graph.ContainsExactCityOwner(city)
+                    && string.Equals(city.RuntimeId, sentence.CityRuntimeId,
+                        StringComparison.Ordinal)))
+                return false;
+
+            if (sentence.IsActive
+                && (!activeSentenceTargets.Add(sentence.TargetRuntimeId)
+                    || sentence.Warrant.IsResolved))
+                return false;
+        }
+
         foreach (DailyV1NpcRuntimeOwners actor in graph.Npcs)
         {
             if (actor?.Status == null || actor.HiddenState == null
-                || (arrestedStatus != null && actor.Status.Contains(arrestedStatus)))
+                || (arrestedStatus != null && actor.Status.Contains(arrestedStatus)
+                    && !forcedEscapeActorIds.Contains(actor.RuntimeId)))
                 return false;
         }
+        return true;
+    }
+
+    private static bool TryGetCoreOnlyForcedEscapeActorIds(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out HashSet<string> actorRuntimeIds)
+    {
+        actorRuntimeIds = null;
+        if (graph?.ScheduledDirectives == null || graph.Definitions?.Actions == null)
+            return false;
+
+        HashSet<string> selected = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ScheduledDirective directive in graph.ScheduledDirectives.Directives)
+        {
+            if (directive == null) return false;
+            if (!directive.IsPending) continue;
+            if (directive.Mode != ScheduledDirectiveMode.ForceOutcome
+                || directive.Operation != ScheduledDirectiveOperation.EscapePrison
+                || string.IsNullOrWhiteSpace(directive.ActorRuntimeId)
+                || !graph.TryGetNpcOwner(directive.ActorRuntimeId,
+                    out DailyV1NpcRuntimeOwners actor)
+                || actor == null
+                || !graph.Definitions.Actions.TryGetValue(
+                    directive.ActionDefinitionId, out DailyV1ActionDefinition action)
+                || action == null
+                || !string.Equals(action.DefinitionId, directive.ActionDefinitionId,
+                    StringComparison.Ordinal)
+                || action.Values.actionType?.Value
+                    != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue
+                || !DailyV1NpcDefinitionRules.IsAdmittedAction(graph.Definitions, action)
+                || !DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
+                    graph.Definitions, action, out _, out _, out _, out _))
+                return false;
+            selected.Add(directive.ActorRuntimeId);
+        }
+
+        actorRuntimeIds = selected;
         return true;
     }
 
@@ -1179,11 +1268,15 @@ internal static class DailyV1SelectedDailyExecutionStage
         {
             EffectiveMerchantTradeConfiguration merchantTradeConfiguration =
                 graph.Definitions.EffectiveConfiguration?.MerchantTrade;
-            if (!(actorTurnContext.Boundary
-                    is IDailyV1SelectedCrimeJusticeDailyBoundary crimeJusticeBoundary)
-                || !boundary.HasExactCrimeJusticeProjectionOwnerBindings(graph)
+            bool hasCrimeJusticeBoundary = actorTurnContext.Boundary
+                is IDailyV1SelectedCrimeJusticeDailyBoundary;
+            bool hasExactProjectionBindings = hasCrimeJusticeBoundary
+                && boundary.HasExactCrimeJusticeProjectionOwnerBindings(graph);
+            IDailyV1SelectedCrimeJusticeDailyBoundary crimeJusticeBoundary =
+                actorTurnContext.Boundary as IDailyV1SelectedCrimeJusticeDailyBoundary;
+            if (!hasCrimeJusticeBoundary || !hasExactProjectionBindings
                 || !ReferenceEquals(graph.JusticeRecordsOwner,
-                    crimeJusticeBoundary.JusticeRecordsOwner)
+                    crimeJusticeBoundary?.JusticeRecordsOwner)
                 || merchantTradeConfiguration == null
                 || (merchantTradeConfiguration.Enabled
                     && actorTurnContext.MerchantTradeBoundary == null))

@@ -1541,8 +1541,10 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     /// Refreshes changed rows from their live Core census providers and
     /// atomically replaces the full sealed baseline vector. Unchanged rows
     /// must remain exact; changed required rows must retain owner identity and
-    /// advance revision. A reservation, when supplied, must be the exact Core
-    /// epoch reservation owned by this session.
+    /// advance revision. Cardinality changes are limited to section families
+    /// whose contract counts dynamic records (currently Justice records). A
+    /// reservation, when supplied, must be the exact Core epoch reservation
+    /// owned by this session.
     /// </summary>
     internal bool TryRefreshCoreSelectedOwnerSectionCensusRows(
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -1603,7 +1605,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 if (changed.Contains(sectionId))
                 {
                     if (prior.Role != OwnerSectionRole.Required
-                        || witness.Cardinality != prior.BaselineCardinality
+                        || (witness.Cardinality != prior.BaselineCardinality
+                            && !AllowsCoreSelectedOwnerSectionCardinalityTransition(sectionId))
                         || witness.Revision <= prior.BaselineRevision)
                         return false;
                     staged.Add(new DailyV1OwnerSectionCensusProviderRegistration(
@@ -1640,6 +1643,16 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         string runtimeId = sectionId.Substring(
             DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix.Length);
         return !string.IsNullOrWhiteSpace(runtimeId) && cardinality == 1;
+    }
+
+    private static bool AllowsCoreSelectedOwnerSectionCardinalityTransition(string sectionId)
+    {
+        // P12B Justice cardinality is the number of wanted-record plus
+        // sentence rows. The aggregate owner identity remains fixed while
+        // admitted daily/action operations can add or remove those rows.
+        return string.Equals(sectionId,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+            StringComparison.Ordinal);
     }
 
     internal static bool IsSelectedDynamicOwnerSectionId(string sectionId)
@@ -5537,6 +5550,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
         DailyV1SelectedCrimeJusticeDailyMutationHostBinding prior;
         bool mismatch;
+        bool bindJusticeMutationBoundary;
+        IDailyV1P12CrimeJusticeMutationProtocol justiceOwnerMutationProtocol;
         lock (operationSyncRoot)
         {
             bool exactSession = HasAdmittedSelectedDailyExecution
@@ -5544,18 +5559,73 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 && ReferenceEquals(selectedRuntimeOwnerGraph, graph)
                 && ReferenceEquals(binding.JusticeRecordsOwner, graph.JusticeRecordsOwner);
             prior = selectedCrimeJusticeDailyMutationHostBinding;
+            bool exactCoreProtocolWithSameOwnerBindings = prior?.Protocol
+                    is DailyV1CoreSelectedOwnerSectionMutationProtocol coreProtocol
+                && coreProtocol.IsBoundTo(this, graph)
+                && prior.HasSameOwnerBindings(binding);
             mismatch = !exactSession
-                || (prior != null && !prior.HasSameSessionBinding(binding));
+                || (prior != null && !prior.HasSameSessionBinding(binding)
+                    && !exactCoreProtocolWithSameOwnerBindings);
+            bindJusticeMutationBoundary = !mismatch
+                && prior == null
+                && binding.AdmissionEnabled
+                && binding.JusticeOwnerIdentity != null;
+            justiceOwnerMutationProtocol =
+                selectedP12CrimeJusticeMutationCoordinator != null
+                && selectedP12CrimeJusticeMutationProtocol
+                    is DailyV1CoreSelectedOwnerSectionMutationProtocol boundCoreProtocol
+                && boundCoreProtocol.IsBoundTo(this, graph)
+                    ? boundCoreProtocol
+                    : binding.Protocol;
             if (!mismatch && prior == null)
                 selectedCrimeJusticeDailyMutationHostBinding = binding;
         }
 
-        if (!mismatch) return true;
+        if (mismatch)
+        {
+            FaultSelectedCrimeJusticeBinding(prior);
+            FaultSelectedCrimeJusticeBinding(binding);
+            MarkSelectedRuntimeCensusProtocolFaulted();
+            return false;
+        }
 
-        FaultSelectedCrimeJusticeBinding(prior);
-        FaultSelectedCrimeJusticeBinding(binding);
-        MarkSelectedRuntimeCensusProtocolFaulted();
-        return false;
+        if (!bindJusticeMutationBoundary) return true;
+
+        // The Core Justice owner must publish its own revision through the
+        // same admitted section and coordinator as the surrounding operation.
+        // Without this binding, row mutations could refresh neither the
+        // Justice census revision nor the shared mutation epoch even though
+        // the action's P12 section scope had been admitted.
+        if (!TryBindSelectedP12CrimeJusticeMutationProtocol(
+                justiceOwnerMutationProtocol, graph,
+                out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+            || coordinator == null)
+        {
+            FaultSelectedCrimeJusticeBinding(binding);
+            MarkSelectedRuntimeCensusProtocolFaulted();
+            return false;
+        }
+
+        // Unity's established P12 bridge may already have installed callbacks
+        // on this exact owner. It resolves through the same session coordinator,
+        // so retain that binding instead of trying to replace it. Hostless Core
+        // graphs have no callback and bind the owner directly below.
+        if (graph.JusticeRecordsOwner.HasP12MutationBoundary) return true;
+
+        if (!graph.JusticeRecordsOwner.TryBindP12MutationBoundary(
+                () => coordinator.CanCommit(
+                    binding.JusticeOwnerIdentity,
+                    DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId),
+                () => coordinator.NotifyCommitted(
+                    binding.JusticeOwnerIdentity,
+                    DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId)))
+        {
+            FaultSelectedCrimeJusticeBinding(binding);
+            MarkSelectedRuntimeCensusProtocolFaulted();
+            return false;
+        }
+
+        return true;
     }
 
     internal bool TryGetSelectedCrimeJusticeDailyMutationHostBinding(
