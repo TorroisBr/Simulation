@@ -55,7 +55,7 @@ internal interface IDailyV1SelectedPersonDeathProjectionBoundary
 /// the operation and cannot publish its census epoch.
 /// </summary>
 internal sealed class DailyV1CoreSelectedPersonDeathBoundary
-    : IDailyV1SelectedPersonDeathBoundary
+    : IDailyV1SelectedDemographyBoundary
 {
     private sealed class OperationContext
     {
@@ -143,6 +143,7 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
     private readonly DailyV1ExecutionBoundaryState executionState;
     private readonly DailyV1SelectedRuntimeOwnerGraph ownerGraph;
     private readonly IDailyV1SelectedPersonDeathProjectionBoundary projection;
+    private readonly IDailyV1SelectedDemographyBoundary compatibilityBoundary;
     private readonly DailyV1CoreSelectedOwnerSectionMutationProtocol mutationProtocol;
     private OperationContext activeOperation;
     internal string LastPersonDeathCommitFailure { get; private set; }
@@ -157,6 +158,7 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
         this.ownerGraph = ownerGraph
             ?? throw new ArgumentNullException(nameof(ownerGraph));
         this.projection = projection;
+        compatibilityBoundary = projection as IDailyV1SelectedDemographyBoundary;
         mutationProtocol = new DailyV1CoreSelectedOwnerSectionMutationProtocol(
             executionState, ownerGraph);
     }
@@ -488,6 +490,15 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
             if (!string.Equals(expected[index], actual[index], StringComparison.Ordinal))
                 return false;
         return true;
+    }
+
+    public IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(
+        IReadOnlyCollection<string> selectedNpcRuntimeIds)
+    {
+        if (compatibilityBoundary != null)
+            return compatibilityBoundary.BuildCompatibilityResidentFloorSupplement(
+                selectedNpcRuntimeIds);
+        return new Dictionary<string, int>(StringComparer.Ordinal);
     }
 
     private static bool IsSupportedOperation(string operationId) =>

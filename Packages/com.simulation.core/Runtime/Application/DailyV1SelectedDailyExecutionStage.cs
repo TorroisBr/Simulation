@@ -6,10 +6,10 @@ using System.Linq;
 /// Host ports for the selected Daily-v1 stage. Core owns the selected
 /// Crime/Justice day-start, Merchant plan urgency, economy, local-knowledge,
 /// ordered actor-turn, directive-preparation, and travel algorithms, along
-/// with demographic ordering and aggregate-owner writes.
-/// The host contributes the existing person-death writer, represented-resident
-/// facts, P12 admission, and Unity projection. Place content and autonomous
-/// expedition production are outside this accepted profile.
+/// with demographic ordering, aggregate-owner writes, and selected Person-death
+/// P12 admission. The host contributes sample providers and optional Unity
+/// projection/compatibility facts. Place content and autonomous expedition
+/// production are outside this accepted profile.
 /// </summary>
 internal interface IDailyV1SelectedDailyExecutionBoundary
 {
@@ -61,8 +61,9 @@ internal interface IDailyV1SelectedDailyExecutionBoundary
 /// Narrow Unity-owned effects and adapters for one admitted selected runtime.
 /// Core, rather than the host, builds the selected execution boundary and
 /// derives actor, demography, day-start, and travel contexts from the exact
-/// execution state and owner graph. The host contributes projection, writer,
-/// logging, and P12 ports only.
+/// execution state and owner graph. The host contributes optional projection,
+/// demographic sample providers, logging, and compatibility facts only; Core
+/// composes the selected Person-death P12 boundary for its admitted graph.
 /// </summary>
 internal interface IDailyV1SelectedDailyExecutionHostPorts
 {
@@ -234,12 +235,16 @@ internal sealed class DailyV1CoreSelectedDailyExecutionBoundary
         selectedHostPorts = null;
         if (!IsBoundTo(graph)
             || !hostPorts.TryCreateSelectedDemographyHostPorts(
-                ownerGraph, out selectedHostPorts)
-            || selectedHostPorts?.Boundary == null)
-        {
-            selectedHostPorts = null;
+                ownerGraph, out IDailyV1SelectedDemographyHostPorts sourceHostPorts)
+            || sourceHostPorts == null)
             return false;
-        }
+
+        IDailyV1SelectedDemographyBoundary projection = sourceHostPorts.Boundary;
+        selectedHostPorts = new DailyV1CoreSelectedDemographyHostPorts(
+            sourceHostPorts.MortalitySamples,
+            sourceHostPorts.AggregateProvider,
+            new DailyV1CoreSelectedPersonDeathBoundary(
+                executionState, ownerGraph, projection));
         return true;
     }
 
@@ -411,8 +416,30 @@ internal interface IDailyV1SelectedDemographyHostPorts
 }
 
 /// <summary>
+/// Core-composed demographic ports. Providers remain host inputs, while the
+/// selected death boundary is created by Core for the admitted state and graph.
+/// </summary>
+internal sealed class DailyV1CoreSelectedDemographyHostPorts
+    : IDailyV1SelectedDemographyHostPorts
+{
+    internal DailyV1CoreSelectedDemographyHostPorts(
+        IPersonNaturalMortalitySampleProvider mortalitySamples,
+        IAggregateDemographyProvider aggregateProvider,
+        IDailyV1SelectedDemographyBoundary boundary)
+    {
+        MortalitySamples = mortalitySamples;
+        AggregateProvider = aggregateProvider;
+        Boundary = boundary ?? throw new ArgumentNullException(nameof(boundary));
+    }
+
+    public IPersonNaturalMortalitySampleProvider MortalitySamples { get; }
+    public IAggregateDemographyProvider AggregateProvider { get; }
+    public IDailyV1SelectedDemographyBoundary Boundary { get; }
+}
+
+/// <summary>
 /// Core-owned context for the admitted demographic stage. It binds host
-/// writers and sample providers to the exact Core calendar and owner graph.
+/// sample providers to the exact Core calendar and owner graph.
 /// </summary>
 internal sealed class DailyV1CoreSelectedDemographyExecutionContext
     : IDailyV1SelectedDemographyExecutionContext

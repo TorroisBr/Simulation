@@ -651,7 +651,7 @@ public sealed class DailyV1CoreSelectedPersonDeathBoundaryTests
         Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
     }
 
-    private static void BindCompleteCoreCensus(
+    internal static void BindCompleteCoreCensus(
         DailyV1ExecutionBoundaryState state,
         DailyV1ActiveRuntimeSession session,
         DailyV1SelectedPersonDeathPlan plan) =>
@@ -665,13 +665,16 @@ public sealed class DailyV1CoreSelectedPersonDeathBoundaryTests
     {
         personProvider = null;
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
-        foreach (string operationId in DailyV1RuntimeProtocolOperationContracts
-                     .GetExpectedOperationContractIds(
-                         hasRuntimeAdmission: true,
-                         hasTravelPartySystem: false,
-                         hasTravelSystem: false))
-            Assert.That(state.TryRegisterRuntimeProtocolOperationContract(operationId), Is.True, operationId);
-        Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
+        if (!state.HasRuntimeProtocolOperationInventory)
+        {
+            foreach (string operationId in DailyV1RuntimeProtocolOperationContracts
+                         .GetExpectedOperationContractIds(
+                             hasRuntimeAdmission: true,
+                             hasTravelPartySystem: false,
+                             hasTravelSystem: false))
+                Assert.That(state.TryRegisterRuntimeProtocolOperationContract(operationId), Is.True, operationId);
+            Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
+        }
 
         OwnerSectionCensusSnapshot[] snapshots =
             DailyV1ApplicationSessionGateTests.CreateCoreBoundCompleteOwnerSectionVector(session);

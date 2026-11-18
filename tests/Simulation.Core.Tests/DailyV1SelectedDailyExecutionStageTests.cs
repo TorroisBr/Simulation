@@ -1813,6 +1813,95 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
+    public void CoreDailyBoundaryExecutesResidentDeathWithoutUnityProjection()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            composition.ExecutionBoundaryState, composition.Definitions, 0L,
+            out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        DailyV1CityRuntimeOwners city = graph.Cities.FirstOrDefault(candidate =>
+            candidate?.Population?.CurrentPopulation > 0);
+        Assert.That(city, Is.Not.Null);
+
+        PersonRuntime person = new PersonRuntime(
+            new PersonId("detached-composed-resident-death"), state.SimulationTime.AbsoluteDay);
+        Assert.That(graph.PersonStore.TryRegister(person, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(graph.PersonStore.TryBindMaterializedNpc(
+            person.PersonId, npc.RuntimeId, out PersonStoreFailure bindFailure),
+            Is.True, bindFailure.ToString());
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            person, city.RuntimeId), Is.True);
+
+        DailyV1ActionDefinition action = composition.Definitions.Actions["DESCANSAR"];
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            composition.Definitions, action, null, null, null, 0,
+            0f, 1f, NpcTravelReason.None, 0f, "detached-composed-death/action",
+            null, null, null, out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(npc, action, payload, null), Is.True);
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryPrepare(
+            graph, graph.PersonStore, person, state.SimulationTime.AbsoluteDay,
+            out DailyV1SelectedPersonDeathPlan plan, out diagnostic), Is.True, diagnostic);
+        Assert.That(plan.MaterializedNpc, Is.SameAs(npc));
+        Assert.That(plan.ResidenceCity, Is.SameAs(city));
+
+        DailyV1CoreSelectedPersonDeathBoundaryTests.BindCompleteCoreCensus(state, session, plan);
+        FakeBoundary hostPorts = new FakeBoundary(
+            composition.RuntimeIdAllocator, composition.RandomSource,
+            composition.RecordSequence, composition.DecisionStore,
+            composition.ActorChoiceStore)
+        {
+            OmitDemographyBoundary = true
+        };
+        Assert.That(DailyV1CoreSelectedDailyExecutionBoundary.TryCreate(
+            state, graph, hostPorts,
+            out IDailyV1SelectedDailyExecutionBoundary selectedBoundary), Is.True);
+        Assert.That(selectedBoundary.TryCreateSelectedDemographyContext(
+            graph, out IDailyV1SelectedDemographyExecutionContext context), Is.True);
+        Assert.That(context.Boundary,
+            Is.TypeOf<DailyV1CoreSelectedPersonDeathBoundary>(),
+            "Core creates the selected P12 death authority even when a detached host has no Unity projection.");
+        Assert.That(hostPorts.Calls, Does.Contain("demography-host-ports"));
+
+        long priorEpoch = state.MutationEpochState.CurrentEpoch;
+        long personRevision = PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person);
+        long npcLifeRevision = npc.Lifecycle.LifeStateRevision;
+        long actionRevision = npc.ActionSlot.Revision;
+        long populationRevision = city.Population.Revision;
+        int populationBefore = city.Population.CurrentPopulation;
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryExecute(
+            graph, graph.PersonStore, plan,
+            DailyV1RuntimeProtocolOperationContracts.PopulationResidentDeath,
+            context.Boundary, out diagnostic), Is.True, diagnostic);
+
+        Assert.That(person.DeathAbsoluteDay, Is.EqualTo(plan.AbsoluteDay));
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person),
+            Is.EqualTo(personRevision + 2L));
+        Assert.That(npc.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Dead));
+        Assert.That(npc.Lifecycle.LifeStateRevision, Is.EqualTo(npcLifeRevision + 1L));
+        Assert.That(npc.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(npc.ActionSlot.CurrentPayload, Is.Null);
+        Assert.That(npc.ActionSlot.Revision, Is.EqualTo(actionRevision + 1L));
+        Assert.That(city.Population.CurrentPopulation, Is.EqualTo(populationBefore - 1));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevision + 1L));
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(priorEpoch + 1L));
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.False);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.False);
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+            out long capturedEpoch,
+            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+        Assert.That(capturedEpoch, Is.EqualTo(priorEpoch + 1L));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+    }
+
+    [Test]
     public void AdmittedActorTurnContextUsesOnlyCoreBoundRosterAndOwnerRoots()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
@@ -2421,6 +2510,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal int LegacyCrimeJusticeDailyMutations { get; set; }
         internal DailyV1SelectedDemographyResult PublishedDemographyResult { get; private set; }
         internal bool ThrowOnDemography { get; set; }
+        internal bool OmitDemographyBoundary { get; set; }
         internal bool ThrowOnBeginDay { get; set; }
         internal bool SubstituteActorPersonStore { get; set; }
         internal bool UseSelectedDayStartContext { get; set; }
@@ -2476,7 +2566,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 hostPorts = null;
                 throw new InvalidOperationException("demography failed");
             }
-            hostPorts = new FakeDemographyContext(graph);
+            hostPorts = new FakeDemographyContext(graph, OmitDemographyBoundary);
             return true;
         }
         public void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result)
@@ -2600,7 +2690,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         private sealed class FakeDemographyContext : IDailyV1SelectedDemographyExecutionContext,
             IDailyV1SelectedDemographyHostPorts
         {
-            internal FakeDemographyContext(DailyV1SelectedRuntimeOwnerGraph graph)
+            internal FakeDemographyContext(
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                bool omitBoundary = false)
             {
                 DailyV1CalendarDefinition definition = graph.Definitions.Calendar;
                 Calendar = definition.monthLengths != null && definition.monthLengths.Count > 0
@@ -2608,7 +2700,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                         new List<int>(definition.monthLengths), definition.daysPerWeek))
                     : new SimulationCalendar(new CalendarDefinition(
                         definition.monthsPerYear, definition.weeksPerMonth, definition.daysPerWeek));
-                Boundary = new FakeDemographyBoundary(graph);
+                Boundary = omitBoundary ? null : new FakeDemographyBoundary(graph);
             }
 
             public SimulationCalendar Calendar { get; }
