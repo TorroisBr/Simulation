@@ -99,9 +99,22 @@ internal static class DailyV1SelectedActionExecutionStage
             DailyV1NpcRuntimeOwners actor,
             DailyV1NpcRuntimeOwners target,
             ISelectedActionStatusProjectionBoundary projection,
-            out ISelectedActionStatusOperationBoundary boundary)
+            out ISelectedActionStatusOperationBoundary boundary) =>
+            TryCreate(executionState, graph, protocol, actor, target, projection,
+                out boundary, out _);
+
+        internal static bool TryCreate(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            IDailyV1P12CrimeJusticeMutationProtocol protocol,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            ISelectedActionStatusProjectionBoundary projection,
+            out ISelectedActionStatusOperationBoundary boundary,
+            out string rejection)
         {
             boundary = null;
+            rejection = null;
             if (executionState == null || graph == null
                 || ((protocol == null) != (projection == null))
                 || actor == null
@@ -115,21 +128,33 @@ internal static class DailyV1SelectedActionExecutionStage
                 || (target != null && !IsExactOwner(graph, target))
                 || actor.Status == null
                 || (target != null && target.Status == null))
+            {
+                rejection = "ExactOwnerOrAdmittedSession";
                 return false;
+            }
 
             DailyV1P12CrimeJusticeMutationCoordinator coordinator;
             if (protocol == null)
             {
                 if (!executionState.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
                         graph, out protocol, out coordinator))
+                {
+                    rejection = executionState.LastCoreSelectedP12CrimeJusticeBoundaryRejection
+                        ?? "CoreP12MutationBoundaryUnavailable";
                     return false;
+                }
             }
             else if (!executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
                     protocol, graph, out coordinator))
             {
+                rejection = "P12MutationProtocolBindingRejected";
                 return false;
             }
-            if (coordinator == null) return false;
+            if (coordinator == null)
+            {
+                rejection = "P12MutationCoordinatorUnavailable";
+                return false;
+            }
 
             boundary = new CoreSelectedActionStatusOperationBoundary(
                 executionState, graph, protocol, coordinator,
@@ -2071,7 +2096,6 @@ internal static class DailyV1SelectedActionDispatchStage
             DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult fleeResult = null;
             bool fleeSucceeded = fleeBoundary.ExecuteWithinOperation(() =>
             {
-                bool travelPlanChanged;
                 if (!DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
                         graph, actor, action,
                         out DailyV1SelectedActionExecutionStage.SelectedFleeCityPlan plan)

@@ -280,6 +280,13 @@ public sealed class RuntimeIdAllocator
         p12EventIdMutationCommitted = committed;
     }
 
+    internal bool CanBindP12EventIdMutationBoundary(
+        Func<bool> admission,
+        Action committed) =>
+        admission != null && committed != null
+        && p12EventIdMutationAdmission == null
+        && p12EventIdMutationCommitted == null;
+
     private bool CanCommitP12EventIdMutation()
     {
         try { return p12EventIdMutationAdmission(); }

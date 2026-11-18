@@ -23,6 +23,13 @@ public static class RuntimeIdAllocatorOwnerBridge
         allocator.BindP12EventIdMutationBoundary(admission, committed);
     }
 
+    internal static bool CanBindP12EventIdMutationBoundary(
+        RuntimeIdAllocator allocator,
+        Func<bool> admission,
+        Action committed) =>
+        allocator != null
+        && allocator.CanBindP12EventIdMutationBoundary(admission, committed);
+
     public static void BindP12DecisionIdMutationBoundary(
         RuntimeIdAllocator allocator,
         Func<bool> admission,

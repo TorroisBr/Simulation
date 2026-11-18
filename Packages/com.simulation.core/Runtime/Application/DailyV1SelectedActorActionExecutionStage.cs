@@ -746,13 +746,26 @@ internal static class DailyV1SelectedActorActionExecutionStage
         if (!boundary.TryGetActionStatusBoundary(actor, target,
                 reuseExistingOperation: false,
                 out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary statusBoundary)
-            || !DailyV1SelectedActionExecutionStage.TryApplyActionStatusPlanAfterDispatch(
+            || statusBoundary == null)
+        {
+            string rejection = boundary
+                    is DailyV1CoreSelectedActorTurnExecutionBoundary coreBoundary
+                ? coreBoundary.LastActionStatusBoundaryRejection
+                : null;
+            throw new InvalidOperationException(
+                "The selected Daily-v1 action could not bind its exact post-dispatch status-owner boundary"
+                + (string.IsNullOrWhiteSpace(rejection) ? "." : ": " + rejection + "."));
+        }
+        if (!DailyV1SelectedActionExecutionStage.TryApplyActionStatusPlanAfterDispatch(
                 true, graph, actor, action, targetExpected, target, statusBoundary,
-                out DailyV1SelectedActionStatusPlanResult statusResult)
-            || statusResult == DailyV1SelectedActionStatusPlanResult.ActorRejected
+                out DailyV1SelectedActionStatusPlanResult statusResult))
+            throw new InvalidOperationException(
+                "The selected Daily-v1 action could not create or execute its admitted post-dispatch status plan.");
+        if (statusResult == DailyV1SelectedActionStatusPlanResult.ActorRejected
             || statusResult == DailyV1SelectedActionStatusPlanResult.TargetRejected)
             throw new InvalidOperationException(
-                "The selected Daily-v1 action status plan could not commit through its existing owner boundary.");
+                "The selected Daily-v1 post-dispatch status plan rejected its exact owner: "
+                + statusResult + ".");
 
         return true;
     }

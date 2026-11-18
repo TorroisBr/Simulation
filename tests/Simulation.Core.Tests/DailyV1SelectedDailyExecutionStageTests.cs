@@ -519,29 +519,64 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "An attempted write outside the admitted mutation scope faults the selected census closed.");
     }
 
-    [TestCase(false, false, false, false)]
-    [TestCase(true, false, false, false)]
-    [TestCase(false, true, false, false)]
-    [TestCase(false, false, true, false)]
-    [TestCase(false, false, false, true)]
+    [TestCase(false, false, false, false, false, false)]
+    [TestCase(true, false, false, false, false, false)]
+    [TestCase(false, true, false, false, false, false)]
+    [TestCase(false, false, true, false, false, false)]
+    [TestCase(false, false, false, true, false, false)]
+    [TestCase(false, false, false, false, true, false)]
+    [TestCase(false, false, false, false, false, true)]
     public void CoreOnlyActorTurnExecutesAdmittedActionWithCompleteP12Census(
         bool prebindMismatchedCrimeReceiptIdentity,
         bool executeCoreOnlyHideAction,
         bool expireCoreOnlyHiddenState,
-        bool executeCoreOnlyForcedEscape)
+        bool executeCoreOnlyForcedEscape,
+        bool executeCoreOnlyGuardArrest,
+        bool executeCoreOnlyFleeCity)
     {
+        DailyV1EffectiveDefinitions configuredDefinitions = CopyWithMerchantTradeEnabled(
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(), false);
+        if (executeCoreOnlyFleeCity)
+            configuredDefinitions = CopyWithCrimeAutonomousEnabled(configuredDefinitions, true);
         DailyV1EffectiveDefinitions definitions = CopyWithConfiguredActions(
-            CopyWithMerchantTradeEnabled(
-                DailyV1CapturedSelectedContentFixture.CreateDefinitions(), false),
-            executeCoreOnlyHideAction ? new[] { "ESCONDER_SE" } : new[] { "DESCANSAR" });
+            configuredDefinitions,
+            executeCoreOnlyFleeCity ? new[] { "FUGIR_DA_CIDADE" }
+                : executeCoreOnlyHideAction ? new[] { "ESCONDER_SE" }
+                : executeCoreOnlyGuardArrest ? new[] { "PRENDER" }
+                : new[] { "DESCANSAR" });
         if (executeCoreOnlyHideAction)
-            definitions = CopyWithGuaranteedSuccessfulHideAction(definitions);
+            definitions = CopyWithGuaranteedSuccessfulAction(
+                definitions, DailyV1NpcDefinitionRules.HideActionTypeValue);
+        if (executeCoreOnlyGuardArrest)
+            definitions = CopyWithGuaranteedSuccessfulAction(
+                definitions, DailyV1NpcDefinitionRules.ArrestActionTypeValue);
+        if (executeCoreOnlyFleeCity)
+            definitions = CopyWithGuaranteedSuccessfulAction(
+                definitions, DailyV1NpcDefinitionRules.FleeCityActionTypeValue);
         DailyV1GenesisComposition composition = CreateSelectedGenesis(definitions);
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
         DailyV1StatusDefinition hiddenStatus = definitions.Statuses[
             definitions.Configuration.hiddenStatus];
-        DailyV1NpcRuntimeOwners staleHiddenActor = graph.Npcs[0];
+        DailyV1NpcRuntimeOwners guardArrestActor = executeCoreOnlyGuardArrest
+            ? graph.Npcs.First(owner => DailyV1NpcDefinitionRules.HasJobType(
+                owner.Definition, definitions, DailyV1NpcDefinitionRules.GuardJobTypeValue))
+            : null;
+        DailyV1NpcRuntimeOwners guardArrestTarget = executeCoreOnlyGuardArrest
+            ? graph.Npcs.First(owner => !ReferenceEquals(owner, guardArrestActor)
+                && string.Equals(owner.Travel.CurrentCityRuntimeId,
+                    guardArrestActor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal))
+            : null;
+        DailyV1NpcRuntimeOwners staleHiddenActor = executeCoreOnlyGuardArrest
+            ? graph.Npcs.First(owner => !ReferenceEquals(owner, guardArrestActor)
+                && !ReferenceEquals(owner, guardArrestTarget))
+            : graph.Npcs[0];
         DailyV1NpcRuntimeOwners hider = executeCoreOnlyHideAction ? graph.Npcs[1] : null;
+        DailyV1NpcRuntimeOwners fleeCityActor = executeCoreOnlyFleeCity ? graph.Npcs[1] : null;
+        DailyV1CityRuntimeOwners fleeCityDestination = null;
+        DailyV1ActionDefinition fleeCityAction = null;
+        float fleeCityExpectedTravelCost = 0f;
+        long fleeCityTravelPlanRevisionBefore = -1L;
+        DailyV1JusticeWantedRecordOwner guardArrestWarrant = null;
         DailyV1NpcRuntimeOwners forcedEscapeActor = null;
         DailyV1JusticeSentenceOwner forcedEscapeSentence = null;
         ScheduledDirective forcedEscapeDirective = null;
@@ -589,6 +624,62 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 "The existing P12F scheduled-directive owner admits the bounded ForceOutcome input before the turn.");
             justiceRevisionBeforeTurn = graph.JusticeRecordsOwner.Revision;
         }
+        if (executeCoreOnlyGuardArrest)
+        {
+            DailyV1CityRuntimeOwners guardCity = graph.Cities.Single(city =>
+                string.Equals(city.RuntimeId, guardArrestActor.Travel.CurrentCityRuntimeId,
+                    StringComparison.Ordinal));
+            Assert.That(guardArrestTarget.Travel.IsTraveling, Is.False);
+            Assert.That(guardArrestTarget.Status.Contains(definitions.Statuses[
+                definitions.Configuration.arrestedStatus]), Is.False);
+            Assert.That(graph.JusticeRecordsOwner.FindActiveWantedRecord(
+                guardArrestTarget.RuntimeId, guardCity.RuntimeId), Is.Null);
+            guardArrestWarrant = new DailyV1JusticeWantedRecordOwner(
+                guardArrestTarget.RuntimeId, guardCity.RuntimeId, 100f, 4);
+            Assert.That(graph.JusticeRecordsOwner.TryAddWantedRecord(guardArrestWarrant), Is.True,
+                "The proving target receives one exact active Justice warrant before selected-profile admission.");
+            justiceRevisionBeforeTurn = graph.JusticeRecordsOwner.Revision;
+        }
+        if (executeCoreOnlyFleeCity)
+        {
+            fleeCityDestination = graph.Cities.FirstOrDefault(candidate =>
+                candidate != null
+                && !string.Equals(candidate.RuntimeId, fleeCityActor.Travel?.CurrentCityRuntimeId,
+                    StringComparison.Ordinal)
+                && !string.Equals(candidate.LocationRuntimeId,
+                    fleeCityActor.Travel?.CurrentLocationRuntimeId, StringComparison.Ordinal)
+                && graph.TryPlanSelectedSoloTravel(fleeCityActor,
+                    fleeCityActor.Travel.CurrentLocationRuntimeId,
+                    candidate.LocationRuntimeId,
+                    candidate.RuntimeId,
+                    out SpatialRouteRuntime route,
+                    out float cost)
+                && route != null
+                && fleeCityActor.MoneyAccount?.CanDebit(cost) == true
+                && fleeCityActor.TravelPlan?.CanCommit(
+                    candidate.LocationRuntimeId, candidate.RuntimeId,
+                    NpcTravelReason.Flee, 80f, cost, "decision/flee-city") == true);
+            Assert.That(fleeCityDestination, Is.Not.Null,
+                "The admitted DailyAdvance fixture has a valid reachable FleeCity destination.");
+            Assert.That(graph.TryPlanSelectedSoloTravel(fleeCityActor,
+                fleeCityActor.Travel.CurrentLocationRuntimeId,
+                fleeCityDestination.LocationRuntimeId,
+                fleeCityDestination.RuntimeId,
+                out SpatialRouteRuntime fleeCityRoute,
+                out fleeCityExpectedTravelCost), Is.True);
+            Assert.That(fleeCityRoute, Is.Not.Null);
+            fleeCityAction = definitions.Actions.Values.Single(action =>
+                action.Values.actionType?.Value == DailyV1NpcDefinitionRules.FleeCityActionTypeValue);
+            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+                definitions, fleeCityAction, null, fleeCityDestination.RuntimeId, null,
+                0, 0f, 1f, NpcTravelReason.None, 0f,
+                "decision/flee-city", null, null, null,
+                out DailyV1NpcActionPayloadOwner fleeCityPayload), Is.True);
+            Assert.That(graph.TryCommitCurrentActionSlot(
+                fleeCityActor, fleeCityAction, fleeCityPayload, null), Is.True,
+                "The exact admitted Core FleeCity action slot is prepared before the P12 census baseline.");
+            fleeCityTravelPlanRevisionBefore = fleeCityActor.TravelPlan.Revision;
+        }
         Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero);
         if (expireCoreOnlyHiddenState)
             Assert.That(staleHiddenActor.HiddenState.TrySetRemainingDays(1), Is.True,
@@ -606,6 +697,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             row => row.SectionId, StringComparer.Ordinal);
         Dictionary<string, IOwnerSectionCensusProvider> liveRuntimeProviders =
             DailyV1NpcOwnerCensusProviders.CreateRuntimeAuthorityProviders(graph)
+                .Concat(DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph))
                 .ToDictionary(provider => provider.GetCurrentCensus().SectionId,
                     StringComparer.Ordinal);
         liveRuntimeProviders[ScheduledDirectiveStore.SectionId] =
@@ -623,6 +715,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             IOwnerSectionCensusProvider provider;
             if (string.Equals(snapshot.SectionId,
+                    RuntimeIdAllocatorCensusProvider.EventsSectionId, StringComparison.Ordinal))
+                provider = RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(
+                    composition.RuntimeIdAllocator);
+            else if (string.Equals(snapshot.SectionId,
                     RuntimeIdAllocatorCensusProvider.DecisionsSectionId, StringComparison.Ordinal))
                 provider = RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(
                     composition.RuntimeIdAllocator);
@@ -687,10 +783,31 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             graph, out _), Is.False,
             "The Core-only session begins without a Unity-selected Crime/Justice receipt binding.");
 
+        long mutationEpochBeforeTurn = state.MutationEpochState.CurrentEpoch;
+        bool coreOnlyFleeCityActionSucceeded = false;
         Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
         Assert.That(state.TryBeginAdvance(invalidateCaptureToken: false,
             out DailyV1AdvanceLease lease), Is.True);
         Assert.That(state.TryBeginSelectedRuntimeDailyAdvanceOperation(), Is.True);
+        if (executeCoreOnlyFleeCity)
+        {
+            Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreateCoreOnly(
+                    state, graph,
+                    out IDailyV1SelectedActorTurnExecutionContext actorTurnContext), Is.True,
+                "The normal Core-only actor-turn factory admits the exact FleeCity slot under DailyAdvance.");
+            Assert.That(actorTurnContext.Boundary,
+                Is.InstanceOf<DailyV1CoreSelectedActorTurnExecutionBoundary>());
+            Assert.That(actorTurnContext.Boundary,
+                Is.InstanceOf<IDailyV1CoreActorChoiceExecutionBoundary>());
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                    graph, fleeCityActor, state.SelectedRandomSource,
+                    state.SimulationTime.AbsoluteDay,
+                    (IDailyV1SelectedActorActionExecutionBoundary)actorTurnContext.Boundary,
+                    out coreOnlyFleeCityActionSucceeded, out _, out string fleeResultMessage), Is.True,
+                fleeResultMessage);
+            Assert.That(coreOnlyFleeCityActionSucceeded, Is.True,
+                "The admitted Core actor-turn boundary executes its exact FleeCity owner operation.");
+        }
         FakeBoundary dailyBoundary = new FakeBoundary
         {
             RejectActorTurnHostPorts = true
@@ -751,19 +868,60 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         OwnerSectionCensusSnapshot staleHiddenBefore = before[staleHiddenSectionId];
         OwnerSectionCensusSnapshot staleHiddenAfter = after.Single(row =>
             row.SectionId == staleHiddenSectionId);
-        Assert.That(decisionAfter.Revision, Is.GreaterThan(decisionBefore.Revision),
-            $"Decision revision must advance for this autonomous-action scenario; before={decisionBefore.Revision}, after={decisionAfter.Revision}, forcedEscape={executeCoreOnlyForcedEscape}.");
-        Assert.That(sequenceAfter.Revision, Is.GreaterThan(sequenceBefore.Revision),
-            $"Record sequence must advance for this autonomous-action scenario; before={sequenceBefore.Revision}, after={sequenceAfter.Revision}, forcedEscape={executeCoreOnlyForcedEscape}.");
+        if (executeCoreOnlyFleeCity)
+            Assert.That(decisionAfter.Revision, Is.EqualTo(decisionBefore.Revision),
+                "The preinstalled FleeCity action does not allocate an autonomous decision.");
+        else
+            Assert.That(decisionAfter.Revision, Is.GreaterThan(decisionBefore.Revision),
+                $"Decision revision must advance for this autonomous-action scenario; before={decisionBefore.Revision}, after={decisionAfter.Revision}, forcedEscape={executeCoreOnlyForcedEscape}.");
+        if (executeCoreOnlyFleeCity)
+            Assert.That(sequenceAfter.Revision, Is.EqualTo(sequenceBefore.Revision),
+                "The preinstalled FleeCity transition emits no decision or record-sequence entry.");
+        else
+            Assert.That(sequenceAfter.Revision, Is.GreaterThan(sequenceBefore.Revision),
+                $"Record sequence must advance for this autonomous-action scenario; before={sequenceBefore.Revision}, after={sequenceAfter.Revision}, forcedEscape={executeCoreOnlyForcedEscape}.");
         Assert.That(staleHiddenActor.Status.Contains(hiddenStatus), Is.False,
             "The Core-owned daily stage reconciles the expired hidden status against its exact NPC owner.");
         Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero,
             "The Core-owned daily stage advances the exact hidden-day owner.");
+        if (executeCoreOnlyFleeCity)
+        {
+            Assert.That(coreOnlyFleeCityActionSucceeded, Is.True,
+                "The Core-only actor-turn factory admitted and executed the exact installed FleeCity slot.");
+            Assert.That(fleeCityActor.TravelPlan.Revision,
+                Is.EqualTo(fleeCityTravelPlanRevisionBefore + 1L));
+            Assert.That(fleeCityActor.TravelPlan.Matches(
+                    fleeCityDestination.LocationRuntimeId,
+                    fleeCityDestination.RuntimeId,
+                    NpcTravelReason.Flee,
+                    80f,
+                    fleeCityExpectedTravelCost,
+                    "decision/flee-city"), Is.True);
+            string fleeTravelPlanSectionId =
+                DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind,
+                    fleeCityActor.RuntimeId);
+            OwnerSectionCensusSnapshot fleePlanBefore = before[fleeTravelPlanSectionId];
+            OwnerSectionCensusSnapshot fleePlanAfter = after.Single(row =>
+                row.SectionId == fleeTravelPlanSectionId);
+            Assert.That(fleePlanAfter.OwnerInstanceIdentity,
+                Is.SameAs(fleePlanBefore.OwnerInstanceIdentity));
+            Assert.That(fleePlanAfter.Cardinality, Is.EqualTo(fleePlanBefore.Cardinality));
+            Assert.That(fleePlanAfter.Revision, Is.EqualTo(fleePlanBefore.Revision + 1L),
+                "P12 refreshes the exact TravelPlan census row for Core FleeCity execution.");
+            Assert.That(epoch, Is.GreaterThan(mutationEpochBeforeTurn),
+                "Core FleeCity publishes its mutation within the active DailyAdvance epoch.");
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(epoch));
+        }
         Assert.That(staleHiddenAfter.Revision,
             Is.EqualTo(staleHiddenBefore.Revision + (expireCoreOnlyHiddenState ? 2L : 1L)),
             "P12 records hidden-day expiry and status reconciliation on the exact NPC owner.");
-        Assert.That(graph.Npcs.Any(owner => owner.ActionSlot.CurrentAction != null), Is.True,
-            "At least one exact admitted actor installed and executed a configured Core action.");
+        if (executeCoreOnlyFleeCity)
+            Assert.That(coreOnlyFleeCityActionSucceeded, Is.True,
+                "FleeCity completed through the Core actor-turn boundary; the subsequent autonomous pass may clear an ineligible plan slot.");
+        else
+            Assert.That(graph.Npcs.Any(owner => owner.ActionSlot.CurrentAction != null), Is.True,
+                "At least one exact admitted actor installed and executed a configured Core action.");
         if (executeCoreOnlyHideAction)
         {
             Assert.That(hider.ActionSlot.CurrentAction.Values.actionType.Value,
@@ -812,6 +970,24 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 row.SectionId == ScheduledDirectiveStore.SectionId);
             Assert.That(directiveAfter.Revision, Is.EqualTo(directiveBefore.Revision + 1L),
                 "P12F records exactly one terminal directive transition.");
+            NpcEscapedEvent escapedEvent = composition.EventAuthority.EventStore.Events
+                .OfType<NpcEscapedEvent>().Single();
+            Assert.That(escapedEvent.ActorRuntimeId, Is.EqualTo(forcedEscapeActor.RuntimeId));
+            Assert.That(escapedEvent.LocationRuntimeId,
+                Is.EqualTo(graph.Cities.Single(city => string.Equals(
+                    city.RuntimeId, forcedEscapeSentence.CityRuntimeId,
+                    StringComparison.Ordinal)).LocationRuntimeId));
+            Assert.That(escapedEvent.OriginDecisionId,
+                Is.EqualTo(forcedEscapeActor.ActionSlot.CurrentPayload.OriginDecisionId));
+            Assert.That(escapedEvent.AbsoluteDay, Is.EqualTo(composition.SimulationTime.AbsoluteDay));
+            OwnerSectionCensusSnapshot eventsBefore = before[
+                RuntimeIdAllocatorCensusProvider.EventsSectionId];
+            OwnerSectionCensusSnapshot eventsAfter = after.Single(row =>
+                row.SectionId == RuntimeIdAllocatorCensusProvider.EventsSectionId);
+            Assert.That(eventsAfter.OwnerInstanceIdentity,
+                Is.SameAs(eventsBefore.OwnerInstanceIdentity));
+            Assert.That(eventsAfter.Revision, Is.EqualTo(eventsBefore.Revision + 1L),
+                "P12 refreshes the exact Event-ID counter witness once for the Escape event.");
             OwnerSectionCensusSnapshot justiceRecordsBefore = before[
                 DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId];
             OwnerSectionCensusSnapshot justiceRecordsAfter = after.Single(row =>
@@ -827,6 +1003,71 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 "P12 publishes the Justice owner's committed revision in its census witness.");
             Assert.That(graph.JusticeRecordsOwner.Revision, Is.GreaterThan(justiceRevisionBeforeTurn),
                 "P12 captures the selected Justice sentence day and removal writes.");
+        }
+        if (executeCoreOnlyGuardArrest)
+        {
+            Assert.That(guardArrestActor.ActionSlot.CurrentAction.Values.actionType.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.ArrestActionTypeValue));
+            Assert.That(guardArrestActor.ActionSlot.CurrentPayload.TargetNpcRuntimeId,
+                Is.EqualTo(guardArrestTarget.RuntimeId));
+            DailyV1StatusDefinition arrestedStatus = definitions.Statuses[
+                definitions.Configuration.arrestedStatus];
+            DailyV1JusticeSentenceOwner sentence = graph.JusticeRecordsOwner.FindActiveSentence(
+                guardArrestTarget.RuntimeId);
+            Assert.That(sentence, Is.Not.Null);
+            Assert.That(sentence.Warrant, Is.SameAs(guardArrestWarrant));
+            Assert.That(sentence.CityRuntimeId, Is.EqualTo(guardArrestWarrant.CityRuntimeId));
+            Assert.That(guardArrestTarget.Status.Contains(arrestedStatus), Is.True,
+                "The Core Guard Arrest action commits the exact target's arrested status.");
+
+            NpcArrestedEvent arrestedEvent = composition.EventAuthority.EventStore.Events
+                .OfType<NpcArrestedEvent>().Single();
+            Assert.That(arrestedEvent.ActorRuntimeId, Is.EqualTo(guardArrestActor.RuntimeId));
+            Assert.That(arrestedEvent.TargetRuntimeId, Is.EqualTo(guardArrestTarget.RuntimeId));
+            Assert.That(arrestedEvent.LocationRuntimeId,
+                Is.EqualTo(graph.Cities.Single(city => string.Equals(
+                    city.RuntimeId, guardArrestWarrant.CityRuntimeId,
+                    StringComparison.Ordinal)).LocationRuntimeId),
+                "The event retains the canonical LocationId, not a City runtime ID.");
+            Assert.That(arrestedEvent.OriginDecisionId,
+                Is.EqualTo(guardArrestActor.ActionSlot.CurrentPayload.OriginDecisionId));
+            Assert.That(arrestedEvent.AbsoluteDay, Is.EqualTo(composition.SimulationTime.AbsoluteDay));
+            Assert.That(arrestedEvent.RecordSequence, Is.GreaterThan(0L));
+
+            OwnerSectionCensusSnapshot eventsBefore = before[
+                RuntimeIdAllocatorCensusProvider.EventsSectionId];
+            OwnerSectionCensusSnapshot eventsAfter = after.Single(row =>
+                row.SectionId == RuntimeIdAllocatorCensusProvider.EventsSectionId);
+            Assert.That(eventsAfter.OwnerInstanceIdentity,
+                Is.SameAs(eventsBefore.OwnerInstanceIdentity));
+            Assert.That(eventsAfter.Revision, Is.EqualTo(eventsBefore.Revision + 1L),
+                "P12 refreshes the exact Event-ID counter witness once for the arrest event.");
+
+            OwnerSectionCensusSnapshot justiceRecordsBefore = before[
+                DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId];
+            OwnerSectionCensusSnapshot justiceRecordsAfter = after.Single(row =>
+                row.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+            Assert.That(justiceRecordsAfter.OwnerInstanceIdentity,
+                Is.SameAs(justiceRecordsBefore.OwnerInstanceIdentity));
+            Assert.That(justiceRecordsAfter.Cardinality,
+                Is.EqualTo(justiceRecordsBefore.Cardinality + 1));
+            Assert.That(justiceRecordsAfter.Revision,
+                Is.EqualTo(graph.JusticeRecordsOwner.Revision));
+            Assert.That(graph.JusticeRecordsOwner.Revision,
+                Is.EqualTo(justiceRevisionBeforeTurn + 1L),
+                "The admitted arrest adds exactly one sentence to the shared Justice owner.");
+
+            string targetStatusSectionId =
+                DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(
+                    guardArrestTarget.RuntimeId);
+            OwnerSectionCensusSnapshot targetStatusBefore = before[targetStatusSectionId];
+            OwnerSectionCensusSnapshot targetStatusAfter = after.Single(row =>
+                row.SectionId == targetStatusSectionId);
+            Assert.That(targetStatusAfter.OwnerInstanceIdentity,
+                Is.SameAs(targetStatusBefore.OwnerInstanceIdentity));
+            Assert.That(targetStatusAfter.Revision,
+                Is.GreaterThan(targetStatusBefore.Revision),
+                "The selected P12 target-status owner records the admitted arrest writes.");
         }
         Assert.That(epoch, Is.GreaterThan(0L),
             "The complete daily execution publishes its shared mutation epoch.");
@@ -1845,15 +2086,16 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         return graph;
     }
 
-    private static DailyV1EffectiveDefinitions CopyWithGuaranteedSuccessfulHideAction(
-        DailyV1EffectiveDefinitions definitions)
+    private static DailyV1EffectiveDefinitions CopyWithGuaranteedSuccessfulAction(
+        DailyV1EffectiveDefinitions definitions,
+        int actionTypeValue)
     {
         List<DailyV1ActionDefinition> actions = new List<DailyV1ActionDefinition>();
-        bool replacedHide = false;
+        bool replacedAction = false;
         foreach (DailyV1ActionDefinition action in definitions.Actions.Values)
         {
             DailyV1NpcActionData values = action.Values;
-            if (values.actionType?.Value == DailyV1NpcDefinitionRules.HideActionTypeValue)
+            if (values.actionType?.Value == actionTypeValue)
             {
                 values = new DailyV1NpcActionData(
                     values.id,
@@ -1872,14 +2114,15 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                     values.targetStatusToRemove,
                     values.crimeSettings);
                 actions.Add(new DailyV1ActionDefinition(action.TypeToken, action.DefinitionId, values));
-                replacedHide = true;
+                replacedAction = true;
             }
             else
             {
                 actions.Add(action);
             }
         }
-        Assert.That(replacedHide, Is.True, "The admitted proving graph contains its Hide action definition.");
+        Assert.That(replacedAction, Is.True,
+            $"The admitted proving graph contains action type '{actionTypeValue}'.");
         return new DailyV1EffectiveDefinitions(
             definitions.Configuration,
             definitions.EffectiveConfiguration,
@@ -2053,6 +2296,45 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 currentMerchant.LocalWholesalePriceMultiplier,
                 currentMerchant.LocalReserveRatio,
                 currentMerchant.MaxUnprofitablePlanWaitDays),
+            current.CommercialKnowledge);
+        return new DailyV1EffectiveDefinitions(
+            definitions.Configuration,
+            configuration,
+            definitions.Calendar,
+            null,
+            definitions.Cities.Values,
+            definitions.Items.Values,
+            definitions.Npcs.Values,
+            definitions.Jobs.Values,
+            definitions.Actions.Values,
+            definitions.Statuses.Values,
+            null,
+            definitions.StageOrder,
+            definitions.ProfileContractIdentity,
+            definitions.GeographyProfileContractIdentity,
+            definitions.GeographyStageIdentity,
+            definitions.HexCoordinateConvention,
+            definitions.HexCoordinateCanonicalOrder,
+            null,
+            definitions.Traits.Values,
+            definitions.CapabilityAttributes.Values,
+            definitions.ExplorableSites.Values);
+    }
+
+    private static DailyV1EffectiveDefinitions CopyWithCrimeAutonomousEnabled(
+        DailyV1EffectiveDefinitions definitions,
+        bool enabled)
+    {
+        EffectiveSimulationConfiguration current = definitions.EffectiveConfiguration;
+        EffectiveSimulationConfiguration configuration = new EffectiveSimulationConfiguration(
+            current.Population,
+            current.Economy,
+            current.Travel,
+            new EffectiveCrimeConfiguration(current.Crime.Enabled, enabled),
+            current.GuardCrime,
+            current.NaturalMortality,
+            current.AggregateDemography,
+            current.MerchantTrade,
             current.CommercialKnowledge);
         return new DailyV1EffectiveDefinitions(
             definitions.Configuration,

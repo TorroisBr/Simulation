@@ -220,6 +220,9 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
         {
             DailyV1SelectedOwnerSectionCensusContract
                 .NpcStatusCrimeSectionIdFor(fixture.Actor.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind,
+                fixture.Actor.RuntimeId),
             DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
             DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
             DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId
@@ -230,6 +233,162 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
     }
 
     [Test]
+    public void CoreOnlyFleeCityDispatchCommitsTravelPlanAndExactP12Owner()
+    {
+        CoreOnlyFleeDispatchFixture fixture = CreateCoreOnlyFleeDispatchFixture();
+        long travelPlanRevisionBefore = fixture.Actor.TravelPlan.Revision;
+        long mutationEpochBefore = fixture.ExecutionState.MutationEpochState.CurrentEpoch;
+        Assert.That(fixture.ExecutionState.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+                fixture.Graph,
+                out IDailyV1P12CrimeJusticeMutationProtocol protocol,
+                out DailyV1P12CrimeJusticeMutationCoordinator coordinator), Is.True);
+        string travelPlanSection = DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind,
+            fixture.Actor.RuntimeId);
+        Assert.That(protocol.TryValidateUnchangedSections(new[] { travelPlanSection }), Is.True,
+            "The exact TravelPlan row starts at its admitted baseline.");
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryDispatch(
+                fixture.Graph, fixture.Actor, new FixedActionRandom(0f), 12L,
+                fixture.Boundary, out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.Kind, Is.EqualTo(DailyV1SelectedActionDispatchKind.FleeCity));
+        Assert.That(result.ActionRollSucceeded, Is.True);
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.FleeCity, Is.Not.Null);
+        Assert.That(result.FleeCity.Succeeded, Is.True);
+        Assert.That(result.FleeCity.DestinationCityRuntimeId,
+            Is.EqualTo(fixture.Destination.RuntimeId));
+        Assert.That(fixture.Actor.TravelPlan.Revision,
+            Is.EqualTo(travelPlanRevisionBefore + 1L));
+        Assert.That(fixture.Actor.TravelPlan.Matches(
+                fixture.Destination.LocationRuntimeId,
+                fixture.Destination.RuntimeId,
+                NpcTravelReason.Flee,
+                80f,
+                result.FleeCity.TravelCost,
+                "decision/flee-city"), Is.True);
+        Assert.That(fixture.ExecutionState.MutationEpochState.CurrentEpoch,
+            Is.EqualTo(mutationEpochBefore + 1L));
+        Assert.That(protocol.TryValidateUnchangedSections(new[] { travelPlanSection }), Is.True,
+            "The successful Core mutation refreshes the exact TravelPlan census baseline.");
+        Assert.That(coordinator.CanBeginDailyMutation(), Is.True,
+            "The immediate operation releases its P12 scope after publication.");
+    }
+
+    [Test]
+    public void CoreOnlyStealDispatchCommitsExactMoneyAndCrimeOwnersThroughCoreP12()
+    {
+        CoreOnlyStealDispatchFixture fixture = CreateCoreOnlyStealDispatchFixture();
+        float victimBalanceBefore = fixture.Victim.MoneyAccount.Balance;
+        float perpetratorBalanceBefore = fixture.Perpetrator.MoneyAccount.Balance;
+        long victimRevisionBefore = fixture.Victim.MoneyAccount.Revision;
+        long perpetratorRevisionBefore = fixture.Perpetrator.MoneyAccount.Revision;
+        long epochBefore = fixture.ExecutionState.MutationEpochState.CurrentEpoch;
+        CrimeSocialAppraisalWorldState social = fixture.Graph.P12EOwners.CrimeSocialAppraisal;
+        int outcomesBefore = social.TheftOutcomes.Count;
+        long outcomesRevisionBefore = social.TheftOutcomes.P12CensusRevision;
+        Assert.That(fixture.Perpetrator.Travel.IsTraveling, Is.False);
+        Assert.That(fixture.Victim.Travel.IsTraveling, Is.False);
+        Assert.That(fixture.Perpetrator.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Alive));
+        Assert.That(fixture.Victim.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Alive));
+        Assert.That(fixture.Victim.HiddenState.RemainingDays, Is.Zero);
+        Assert.That(DailyV1NpcDefinitionRules.IsAdmittedAction(
+            fixture.Graph.Definitions, fixture.Perpetrator.ActionSlot.CurrentAction), Is.True);
+        Assert.That(DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+            fixture.Graph.Definitions, fixture.Perpetrator.ActionSlot.CurrentAction,
+            fixture.Perpetrator.Status.Statuses), Is.True);
+        Assert.That(social.PersonStore.TryGetByMaterializedNpcRuntimeId(
+            fixture.Perpetrator.RuntimeId, out PersonRuntime perpetratorPerson), Is.True);
+        Assert.That(social.PersonStore.TryGetByMaterializedNpcRuntimeId(
+            fixture.Victim.RuntimeId, out PersonRuntime victimPerson), Is.True);
+        TheftOutcomeId expectedOutcomeId = TheftOutcomeId.Create(
+            perpetratorPerson.PersonId, victimPerson.PersonId,
+            social.SimulationTime.AbsoluteDay, fixture.Perpetrator.ActionSlot.CurrentPayload.StableOccurrenceKey);
+        TheftOutcome expectedOutcome = new TheftOutcome(
+            expectedOutcomeId, perpetratorPerson.PersonId, victimPerson.PersonId,
+            17, social.SimulationTime.AbsoluteDay,
+            fixture.Perpetrator.ActionSlot.CurrentPayload.StableOccurrenceKey,
+            fixture.Perpetrator.ActionSlot.CurrentPayload.OriginDecisionId);
+        Assert.That(social.Integration.CanAcceptTheftOutcome(expectedOutcome), Is.True);
+        Assert.That(DailyV1MoneyTransferOperation.Validate(
+            fixture.Victim.MoneyAccount, fixture.Perpetrator.MoneyAccount, 17,
+            fixture.Victim.RuntimeId, fixture.Perpetrator.RuntimeId), Is.Null);
+
+        Assert.That(fixture.ExecutionState.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+                fixture.Graph,
+                out IDailyV1P12CrimeJusticeMutationProtocol protocol,
+                out DailyV1P12CrimeJusticeMutationCoordinator coordinator), Is.True);
+        Assert.That(fixture.Boundary.TryGetStealActionBoundary(
+                fixture.Perpetrator, fixture.Perpetrator.ActionSlot.CurrentAction,
+                out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary stealBoundary), Is.True);
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryDispatch(
+                fixture.Graph, fixture.Perpetrator, new FixedActionRandom(0f), 41L,
+                fixture.Boundary, out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.Kind, Is.EqualTo(DailyV1SelectedActionDispatchKind.Steal));
+        Assert.That(result.ActionRollSucceeded, Is.True);
+        Assert.That(result.Succeeded, Is.True);
+        Assert.That(result.Steal, Is.Not.Null);
+        Assert.That(result.Steal.TargetRuntimeId, Is.EqualTo(fixture.Victim.RuntimeId));
+        Assert.That(result.Steal.Amount, Is.EqualTo(17));
+        Assert.That(fixture.Victim.MoneyAccount.Balance, Is.EqualTo(victimBalanceBefore - 17f));
+        Assert.That(fixture.Perpetrator.MoneyAccount.Balance, Is.EqualTo(perpetratorBalanceBefore + 17f));
+        Assert.That(fixture.Victim.MoneyAccount.Revision, Is.EqualTo(victimRevisionBefore + 1L));
+        Assert.That(fixture.Perpetrator.MoneyAccount.Revision, Is.EqualTo(perpetratorRevisionBefore + 1L));
+        Assert.That(social.TheftOutcomes.Count, Is.EqualTo(outcomesBefore + 1));
+        Assert.That(social.TheftOutcomes.P12CensusRevision, Is.EqualTo(outcomesRevisionBefore + 1L));
+        Assert.That(fixture.ExecutionState.MutationEpochState.CurrentEpoch, Is.GreaterThan(epochBefore));
+        Assert.That(protocol.TryValidateUnchangedSections(new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix
+                + fixture.Perpetrator.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix
+                + fixture.Victim.RuntimeId,
+            P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId
+        }), Is.True,
+            "Core refreshes exact account and theft-outcome census baselines after committed owner writes.");
+        Assert.That(coordinator.CanBeginDailyMutation(), Is.True,
+            "Both nested Core P12 operation scopes close after the selected action.");
+        Assert.That(fixture.ExecutionState.IsSelectedRuntimeCensusProtocolFaulted, Is.False);
+    }
+
+    [Test]
+    public void CoreOnlyFleeCityDomainRejectionLeavesTravelPlanAndP12EpochUnchanged()
+    {
+        CoreOnlyFleeDispatchFixture fixture = CreateCoreOnlyFleeDispatchFixture(actorArrested: true);
+        long travelPlanRevisionBefore = fixture.Actor.TravelPlan.Revision;
+        long mutationEpochBefore = fixture.ExecutionState.MutationEpochState.CurrentEpoch;
+        Assert.That(fixture.ExecutionState.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+                fixture.Graph,
+                out IDailyV1P12CrimeJusticeMutationProtocol protocol,
+                out DailyV1P12CrimeJusticeMutationCoordinator coordinator), Is.True);
+
+        Assert.That(DailyV1SelectedActionDispatchStage.TryDispatch(
+                fixture.Graph, fixture.Actor, new FixedActionRandom(1f), 12L,
+                fixture.Boundary, out DailyV1SelectedActionDispatchResult result), Is.True);
+
+        Assert.That(result.Kind, Is.EqualTo(DailyV1SelectedActionDispatchKind.FleeCity));
+        Assert.That(result.ActionRollSucceeded, Is.True,
+            "FleeCity cannot fail by its action roll; this case rejects its ineligible actor state.");
+        Assert.That(result.Succeeded, Is.False);
+        Assert.That(result.FleeCity.Succeeded, Is.False);
+        Assert.That(fixture.Actor.TravelPlan.Revision, Is.EqualTo(travelPlanRevisionBefore));
+        Assert.That(fixture.ExecutionState.MutationEpochState.CurrentEpoch,
+            Is.EqualTo(mutationEpochBefore));
+        Assert.That(coordinator.CanBeginDailyMutation(), Is.True,
+            "A domain-rejected FleeCity action releases its Core P12 mutation scope.");
+        Assert.That(protocol.TryValidateUnchangedSections(new[]
+            {
+                DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(
+                    fixture.Actor.RuntimeId),
+                DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind,
+                    fixture.Actor.RuntimeId)
+            }), Is.True,
+            "The domain rejection leaves both admitted actor and TravelPlan census rows unchanged.");
+    }    [Test]
     public void CoreFleeBoundaryRejectsReplacedHostBindingBeforeOpeningP12Scope()
     {
         CoreFleeBoundaryFixture fixture = CreateCoreFleeBoundaryFixture();
@@ -705,7 +864,25 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
 
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
         DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
-        DailyV1CityRuntimeOwners destination = graph.Cities[0];
+        DailyV1CityRuntimeOwners destination = graph.Cities.FirstOrDefault(candidate =>
+            candidate != null
+            && !string.Equals(candidate.RuntimeId, actor.Travel?.CurrentCityRuntimeId,
+                StringComparison.Ordinal)
+            && !string.Equals(candidate.LocationRuntimeId,
+                actor.Travel?.CurrentLocationRuntimeId, StringComparison.Ordinal)
+            && graph.TryPlanSelectedSoloTravel(actor,
+                actor.Travel.CurrentLocationRuntimeId,
+                candidate.LocationRuntimeId,
+                candidate.RuntimeId,
+                out SpatialRouteRuntime route,
+                out float cost)
+            && route != null
+            && actor.MoneyAccount?.CanDebit(cost) == true
+            && actor.TravelPlan?.CanCommit(
+                candidate.LocationRuntimeId, candidate.RuntimeId,
+                NpcTravelReason.Flee, 80f, cost, "decision/flee-city") == true);
+        Assert.That(destination, Is.Not.Null,
+            "The fixture must select a different reachable city with a valid FleeCity plan.");
         DailyV1ActionDefinition action = ActionOfType(definitions,
             DailyV1NpcDefinitionRules.FleeCityActionTypeValue);
         Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
@@ -737,7 +914,274 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
                 protocol, graph,
                 out DailyV1P12CrimeJusticeMutationCoordinator coordinator), Is.True);
         return new CoreFleeBoundaryFixture(
-            graph, actor, destination, protocol, hostPort, projection, boundary, coordinator);
+            composition.ExecutionBoundaryState, graph, actor, destination,
+            protocol, hostPort, projection, boundary, coordinator);
+    }
+
+    private static CoreOnlyFleeDispatchFixture CreateCoreOnlyFleeDispatchFixture(bool actorArrested = false)
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition,
+                out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1CityRuntimeOwners destination = graph.Cities.FirstOrDefault(candidate =>
+            candidate != null
+            && !string.Equals(candidate.RuntimeId, actor.Travel?.CurrentCityRuntimeId,
+                StringComparison.Ordinal)
+            && !string.Equals(candidate.LocationRuntimeId,
+                actor.Travel?.CurrentLocationRuntimeId, StringComparison.Ordinal)
+            && graph.TryPlanSelectedSoloTravel(actor,
+                actor.Travel.CurrentLocationRuntimeId,
+                candidate.LocationRuntimeId,
+                candidate.RuntimeId,
+                out SpatialRouteRuntime route,
+                out float cost)
+            && route != null
+            && actor.MoneyAccount?.CanDebit(cost) == true
+            && actor.TravelPlan?.CanCommit(
+                candidate.LocationRuntimeId, candidate.RuntimeId,
+                NpcTravelReason.Flee, 80f, cost, "decision/flee-city") == true);
+        Assert.That(destination, Is.Not.Null,
+            "The fixture must select a different reachable city with a valid FleeCity plan.");
+        DailyV1ActionDefinition action = ActionOfType(definitions,
+            DailyV1NpcDefinitionRules.FleeCityActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, action, null, destination.RuntimeId, null,
+            0, 0f, 1f, NpcTravelReason.None, 0f,
+            "decision/flee-city", null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, action, payload, null), Is.True);
+        if (actorArrested)
+        {
+            Assert.That(definitions.Statuses.TryGetValue(
+                definitions.Configuration.arrestedStatus,
+                out DailyV1StatusDefinition arrestedStatus), Is.True);
+            Assert.That(actor.Status.TryAdd(arrestedStatus), Is.True,
+                "The fixture admits the arrested status before sealing its P12 baseline.");
+        }
+        SealCoreOnlySelectedP12Census(composition);
+        Assert.That(DailyV1CoreOnlyCrimeActionBoundary.TryCreate(
+                composition.ExecutionBoundaryState, graph, actor,
+                out IDailyV1SelectedActionDispatchBoundary boundary), Is.True);
+        return new CoreOnlyFleeDispatchFixture(
+            composition.ExecutionBoundaryState, graph, actor, destination, boundary);
+    }
+
+    private static CoreOnlyStealDispatchFixture CreateCoreOnlyStealDispatchFixture()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions,
+                SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition,
+                out string diagnostic), Is.True, diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        string arrestedStatusId = definitions.Configuration?.arrestedStatus;
+        DailyV1StatusDefinition arrestedStatus = null;
+        if (!string.IsNullOrWhiteSpace(arrestedStatusId))
+            definitions.Statuses.TryGetValue(arrestedStatusId, out arrestedStatus);
+        DailyV1NpcRuntimeOwners perpetrator = graph.Npcs.FirstOrDefault(candidate =>
+            candidate != null && candidate.Travel != null && !candidate.Travel.IsTraveling
+            && candidate.Lifecycle?.LifeState == NpcLifeState.Alive
+            && candidate.HiddenState?.RemainingDays <= 0
+            && (arrestedStatus == null || candidate.Status?.Contains(arrestedStatus) != true));
+        Assert.That(perpetrator, Is.Not.Null,
+            "The authored selected profile must have an alive, present, non-arrested Steal actor.");
+        DailyV1NpcRuntimeOwners victim = graph.Npcs.FirstOrDefault(candidate =>
+            candidate != null && !ReferenceEquals(candidate, perpetrator)
+            && string.Equals(candidate.Travel?.CurrentCityRuntimeId,
+                perpetrator.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal)
+            && !candidate.Travel.IsTraveling
+            && candidate.Lifecycle?.LifeState == NpcLifeState.Alive
+            && candidate.HiddenState?.RemainingDays <= 0
+            && (arrestedStatus == null || candidate.Status?.Contains(arrestedStatus) != true)
+            && candidate.MoneyAccount?.Balance >= 17f);
+        Assert.That(victim, Is.Not.Null,
+            "The authored selected profile must have a co-located victim with enough money for the fixture transfer.");
+
+        DailyV1ActionDefinition action = ActionOfType(definitions,
+            DailyV1NpcDefinitionRules.StealActionTypeValue);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, action, victim.RuntimeId, null, null, 17, 0f, 1f,
+            NpcTravelReason.None, 0f, "decision/core-steal", "theft/core-dispatch",
+            null, null, out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(perpetrator, action, payload, null), Is.True);
+
+        PersonId perpetratorPersonId = new PersonId("core-steal-perpetrator");
+        PersonId victimPersonId = new PersonId("core-steal-victim");
+        Assert.That(graph.PersonStore.TryRegister(
+            new PersonRuntime(perpetratorPersonId), out _), Is.True);
+        Assert.That(graph.PersonStore.TryRegister(
+            new PersonRuntime(victimPersonId), out _), Is.True);
+        Assert.That(graph.PersonStore.TryBindMaterializedNpc(
+            perpetratorPersonId, perpetrator.RuntimeId, out _), Is.True);
+        Assert.That(graph.PersonStore.TryBindMaterializedNpc(
+            victimPersonId, victim.RuntimeId, out _), Is.True);
+
+        SealCoreOnlySelectedP12Census(composition);
+        Assert.That(DailyV1CoreOnlyCrimeActionBoundary.TryCreate(
+                composition.ExecutionBoundaryState, graph, perpetrator,
+                out IDailyV1SelectedActionDispatchBoundary boundary), Is.True);
+        return new CoreOnlyStealDispatchFixture(
+            composition.ExecutionBoundaryState, graph, perpetrator, victim, boundary);
+    }
+
+    private static void SealCoreOnlySelectedP12Census(
+        DailyV1GenesisComposition composition)
+    {
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+                composition, 0L, out DailyV1ActiveRuntimeSession session,
+                out string diagnostic), Is.True, diagnostic);
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        OwnerSectionCensusSnapshot[] initialVector =
+            DailyV1ApplicationSessionGateTests.CreateCoreBoundCompleteOwnerSectionVector(session);
+        Dictionary<string, IOwnerSectionCensusProvider> liveProviders =
+            DailyV1NpcOwnerCensusProviders.CreateRuntimeAuthorityProviders(graph)
+                .Concat(DailyV1NpcOwnerCensusProviders.CreateMoneyAccountProviders(graph.Npcs))
+                .Concat(DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph))
+                .ToDictionary(provider => provider.GetCurrentCensus().SectionId,
+                    StringComparer.Ordinal);
+        liveProviders[ScheduledDirectiveStore.SectionId] =
+            new ScheduledDirectiveCensusProvider(graph.ScheduledDirectives);
+        liveProviders[DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId] =
+            new TestWitnessOwnerSectionCensusProvider(
+                () => graph.PersonStore.GetMembershipCensusWitness());
+        liveProviders[DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId] =
+            new TestWitnessOwnerSectionCensusProvider(
+                () => graph.PersonStore.GetMaterializationBindingCensusWitness());
+        foreach (PersonRuntime person in graph.PersonStore.Persons)
+        {
+            OwnerSectionCensusWitness witness = person.GetLifeResidenceCensusWitness();
+            Assert.That(witness, Is.Not.Null);
+            liveProviders[witness.SectionId] = new TestOwnerSectionCensusProvider(
+                witness.SectionId, witness.SchemaVersion, person,
+                () => 1,
+                () => PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person));
+        }
+        OwnerSectionCensusSnapshot justiceBaseline = initialVector.Single(snapshot =>
+            string.Equals(snapshot.SectionId,
+                DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+                StringComparison.Ordinal));
+        liveProviders[DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId] =
+            new TestOwnerSectionCensusProvider(
+                DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
+                justiceBaseline.SchemaVersion, justiceBaseline.OwnerInstanceIdentity,
+                () => graph.JusticeRecordsOwner.WantedRecords.Count
+                    + graph.JusticeRecordsOwner.Sentences.Count,
+                () => graph.JusticeRecordsOwner.Revision);
+
+        CrimeSocialAppraisalWorldState crimeSocial = graph.P12EOwners?.CrimeSocialAppraisal;
+        if (crimeSocial != null)
+        {
+            liveProviders[P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId] =
+                new TestOwnerSectionCensusProvider(
+                    P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId,
+                    P12CrimeSocialAppraisalOwnerContract.SchemaVersion,
+                    crimeSocial.TheftOutcomes,
+                    () => crimeSocial.TheftOutcomes.Count,
+                    () => crimeSocial.TheftOutcomes.P12CensusRevision);
+            liveProviders[P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId] =
+                new TestOwnerSectionCensusProvider(
+                    P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId,
+                    P12CrimeSocialAppraisalOwnerContract.SchemaVersion,
+                    crimeSocial.CrimeKnowledge,
+                    () => crimeSocial.CrimeKnowledge.Count,
+                    () => crimeSocial.CrimeKnowledge.P12CensusRevision);
+            liveProviders[P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId] =
+                new TestOwnerSectionCensusProvider(
+                    P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId,
+                    P12CrimeSocialAppraisalOwnerContract.SchemaVersion,
+                    crimeSocial.SocialReactions,
+                    () => crimeSocial.SocialReactions.Count,
+                    () => crimeSocial.SocialReactions.P12CensusRevision);
+        }
+
+        List<DailyV1OwnerSectionContractIdentity> contracts =
+            new List<DailyV1OwnerSectionContractIdentity>(initialVector.Length);
+        List<DailyV1OwnerSectionCensusProviderRegistration> registrations =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(initialVector.Length);
+        foreach (OwnerSectionCensusSnapshot snapshot in initialVector)
+        {
+            IOwnerSectionCensusProvider provider;
+            if (string.Equals(snapshot.SectionId,
+                    RuntimeIdAllocatorCensusProvider.EventsSectionId, StringComparison.Ordinal))
+                provider = RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(
+                    composition.RuntimeIdAllocator);
+            else if (string.Equals(snapshot.SectionId,
+                    RuntimeIdAllocatorCensusProvider.DecisionsSectionId, StringComparison.Ordinal))
+                provider = RuntimeIdAllocatorCensusProvider.CreateDecisionCounterProvider(
+                    composition.RuntimeIdAllocator);
+            else if (string.Equals(snapshot.SectionId,
+                    SimulationRecordSequenceCensusProvider.SectionId, StringComparison.Ordinal))
+                provider = new SimulationRecordSequenceCensusProvider(composition.RecordSequence);
+            else if (!liveProviders.TryGetValue(snapshot.SectionId, out provider))
+                provider = new BaselineOwnerSectionCensusProvider(snapshot);
+
+            contracts.Add(new DailyV1OwnerSectionContractIdentity(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role));
+            registrations.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role, provider,
+                snapshot.OwnerInstanceIdentity, snapshot.Cardinality, snapshot.Revision,
+                hasBaseline: true));
+        }
+
+        Dictionary<string, DailyV1OwnerSectionContractIdentity> contractMap =
+            contracts.ToDictionary(contract => contract.SectionId, StringComparer.Ordinal);
+        Assert.That(registrations.Select(registration => registration.SectionId)
+                .Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(contracts.Count));
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in registrations)
+        {
+            Assert.That(contractMap.TryGetValue(registration.SectionId,
+                out DailyV1OwnerSectionContractIdentity contract), Is.True, registration.SectionId);
+            Assert.That(contract.SchemaVersion, Is.EqualTo(registration.SchemaVersion), registration.SectionId);
+            Assert.That(contract.Role, Is.EqualTo(registration.Role), registration.SectionId);
+            OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
+            Assert.That(witness.SectionId, Is.EqualTo(registration.SectionId), registration.SectionId);
+            Assert.That(witness.SchemaVersion, Is.EqualTo(registration.SchemaVersion), registration.SectionId);
+        }
+
+        bool censusReplaced = state.TryReplaceSelectedOwnerSectionCensusRegistryBeforeSeal(
+            contracts, registrations);
+        Assert.That(censusReplaced, Is.True);
+
+        Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.True);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in registrations)
+        {
+            OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
+            Assert.That(witness.SectionId, Is.EqualTo(registration.SectionId), registration.SectionId);
+            Assert.That(witness.SchemaVersion, Is.EqualTo(registration.SchemaVersion), registration.SectionId);
+            Assert.That(witness.OwnerInstanceIdentity,
+                Is.SameAs(registration.BaselineOwnerInstanceIdentity), registration.SectionId);
+            Assert.That(witness.Cardinality, Is.EqualTo(registration.BaselineCardinality), registration.SectionId);
+            Assert.That(witness.Revision, Is.EqualTo(registration.BaselineRevision), registration.SectionId);
+        }
+        OwnerSectionCensusSnapshot[] stagedSnapshots = registrations.Select(registration =>
+            new OwnerSectionCensusSnapshot(
+                registration.SectionId, registration.SchemaVersion, registration.Role,
+                registration.BaselineOwnerInstanceIdentity,
+                registration.BaselineCardinality, registration.BaselineRevision)).ToArray();
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+            stagedSnapshots), Is.True,
+            "The Core P12 provider vector must preserve all 89 owner families and exact per-Person rows.");
+        Assert.That(state.TrySealSelectedOwnerSectionCensusRegistry(registrations), Is.True);
+        foreach (string operationContractId in
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                hasRuntimeAdmission: true,
+                hasTravelPartySystem: graph.TravelParties != null,
+                hasTravelSystem: true))
+            Assert.That(state.TryRegisterRuntimeProtocolOperationContract(
+                operationContractId), Is.True, operationContractId);
+        Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
+        Assert.That(state.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
     }
 
     private static CoreGuardBoundaryFixture CreateCoreGuardBoundaryFixture()
@@ -831,8 +1275,8 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
         RecordingCrimeMutationHostPort hostPort =
             new RecordingCrimeMutationHostPort(hostBinding);
         PersonStore persons = new PersonStore();
-        PersonId perpetratorPersonId = new PersonId("person/core-steal-perpetrator");
-        PersonId victimPersonId = new PersonId("person/core-steal-victim");
+        PersonId perpetratorPersonId = new PersonId("core-steal-perpetrator");
+        PersonId victimPersonId = new PersonId("core-steal-victim");
         Assert.That(persons.TryRegister(new PersonRuntime(perpetratorPersonId), out _), Is.True);
         Assert.That(persons.TryRegister(new PersonRuntime(victimPersonId), out _), Is.True);
         Assert.That(persons.TryBindMaterializedNpc(perpetratorPersonId,
@@ -863,6 +1307,7 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
     private sealed class CoreFleeBoundaryFixture
     {
         internal DailyV1SelectedRuntimeOwnerGraph Graph { get; }
+        internal DailyV1ExecutionBoundaryState ExecutionState { get; }
         internal DailyV1NpcRuntimeOwners Actor { get; }
         internal DailyV1CityRuntimeOwners Destination { get; }
         internal RecordingP12Protocol Protocol { get; }
@@ -872,6 +1317,7 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
         internal DailyV1P12CrimeJusticeMutationCoordinator Coordinator { get; }
 
         internal CoreFleeBoundaryFixture(
+            DailyV1ExecutionBoundaryState executionState,
             DailyV1SelectedRuntimeOwnerGraph graph,
             DailyV1NpcRuntimeOwners actor,
             DailyV1CityRuntimeOwners destination,
@@ -881,6 +1327,7 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary boundary,
             DailyV1P12CrimeJusticeMutationCoordinator coordinator)
         {
+            ExecutionState = executionState;
             Graph = graph;
             Actor = actor;
             Destination = destination;
@@ -890,6 +1337,105 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
             Boundary = boundary;
             Coordinator = coordinator;
         }
+    }
+
+    private sealed class CoreOnlyFleeDispatchFixture
+    {
+        internal DailyV1ExecutionBoundaryState ExecutionState { get; }
+        internal DailyV1SelectedRuntimeOwnerGraph Graph { get; }
+        internal DailyV1NpcRuntimeOwners Actor { get; }
+        internal DailyV1CityRuntimeOwners Destination { get; }
+        internal IDailyV1SelectedActionDispatchBoundary Boundary { get; }
+
+        internal CoreOnlyFleeDispatchFixture(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination,
+            IDailyV1SelectedActionDispatchBoundary boundary)
+        {
+            ExecutionState = executionState;
+            Graph = graph;
+            Actor = actor;
+            Destination = destination;
+            Boundary = boundary;
+        }
+    }
+
+    private sealed class CoreOnlyStealDispatchFixture
+    {
+        internal DailyV1ExecutionBoundaryState ExecutionState { get; }
+        internal DailyV1SelectedRuntimeOwnerGraph Graph { get; }
+        internal DailyV1NpcRuntimeOwners Perpetrator { get; }
+        internal DailyV1NpcRuntimeOwners Victim { get; }
+        internal IDailyV1SelectedActionDispatchBoundary Boundary { get; }
+
+        internal CoreOnlyStealDispatchFixture(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners perpetrator,
+            DailyV1NpcRuntimeOwners victim,
+            IDailyV1SelectedActionDispatchBoundary boundary)
+        {
+            ExecutionState = executionState;
+            Graph = graph;
+            Perpetrator = perpetrator;
+            Victim = victim;
+            Boundary = boundary;
+        }
+    }
+
+    private sealed class TestOwnerSectionCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly string sectionId;
+        private readonly int schemaVersion;
+        private readonly object owner;
+        private readonly Func<int> cardinality;
+        private readonly Func<long> revision;
+
+        internal TestOwnerSectionCensusProvider(
+            string sectionId,
+            int schemaVersion,
+            object owner,
+            Func<int> cardinality,
+            Func<long> revision)
+        {
+            this.sectionId = sectionId;
+            this.schemaVersion = schemaVersion;
+            this.owner = owner;
+            this.cardinality = cardinality;
+            this.revision = revision;
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus() =>
+            new OwnerSectionCensusWitness(
+                sectionId, schemaVersion, owner, cardinality(), revision());
+    }
+
+    private sealed class TestWitnessOwnerSectionCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly Func<OwnerSectionCensusWitness> getWitness;
+
+        internal TestWitnessOwnerSectionCensusProvider(
+            Func<OwnerSectionCensusWitness> getWitness) =>
+            this.getWitness = getWitness;
+
+        public OwnerSectionCensusWitness GetCurrentCensus() => getWitness();
+    }
+
+    private sealed class BaselineOwnerSectionCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly OwnerSectionCensusWitness witness;
+
+        internal BaselineOwnerSectionCensusProvider(OwnerSectionCensusSnapshot snapshot)
+        {
+            if (snapshot == null) throw new ArgumentNullException(nameof(snapshot));
+            witness = new OwnerSectionCensusWitness(
+                snapshot.SectionId, snapshot.SchemaVersion,
+                snapshot.OwnerInstanceIdentity, snapshot.Cardinality, snapshot.Revision);
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus() => witness;
     }
 
     private sealed class CoreGuardBoundaryFixture
@@ -1386,6 +1932,8 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
 
     private sealed class RecordingP12Protocol : IDailyV1P12CrimeJusticeMutationProtocol
     {
+        internal List<string[]> ValidationCalls { get; } = new List<string[]>();
+        internal List<string[]> RefreshedSections { get; } = new List<string[]>();
         internal IReadOnlyList<string> ValidatedSections { get; private set; }
         internal bool Faulted { get; private set; }
 
@@ -1393,10 +1941,15 @@ public sealed class DailyV1SelectedCrimeActionExecutionTests
         public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds)
         {
             ValidatedSections = sectionIds?.ToArray();
+            if (ValidatedSections != null)
+                ValidationCalls.Add(ValidatedSections.ToArray());
             return sectionIds != null;
         }
-        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) =>
-            sectionIds != null;
+        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds)
+        {
+            if (sectionIds != null) RefreshedSections.Add(sectionIds.ToArray());
+            return sectionIds != null;
+        }
 
         public bool TryRefreshCommittedMutationBaselinesForReservation(
             object reservationToken,

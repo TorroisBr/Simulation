@@ -652,9 +652,9 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
     /// Creates the bounded actor-turn context that needs no Unity host ports.
     /// This path is intentionally narrower than the admitted Unity profile:
     /// it requires a sealed full-owner census and the active DailyAdvance scope,
-    /// excludes Merchant and actor-choice inputs, and permits only the existing
-    /// targetless autonomous actions plus the admitted scheduled EscapePrison
-    /// ForceOutcome. Unsupported profiles are rejected before actor selection can
+    /// excludes Merchant and actor-choice inputs, and permits the existing
+    /// targetless autonomous actions, the exact Core Guard Arrest and FleeCity transitions,
+    /// and the admitted scheduled EscapePrison ForceOutcome. Unsupported profiles are rejected before actor selection can
     /// consume deterministic RNG or mutate owners.
     /// </summary>
     internal static bool TryCreateCoreOnly(
@@ -762,7 +762,9 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                     action.DefinitionId, out DailyV1ActionDefinition admittedAction)
                 || !ReferenceEquals(admittedAction, action)
                 || (actionType != DailyV1NpcDefinitionRules.NormalActionTypeValue
-                    && actionType != DailyV1NpcDefinitionRules.HideActionTypeValue)
+                    && actionType != DailyV1NpcDefinitionRules.HideActionTypeValue
+                    && actionType != DailyV1NpcDefinitionRules.ArrestActionTypeValue
+                    && actionType != DailyV1NpcDefinitionRules.FleeCityActionTypeValue)
                 || !DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
                     graph.Definitions, action)
                 || !DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
@@ -786,7 +788,9 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             }
             if (DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
                     graph, actor, installed)
-                || IsProjectionIndependentCoreHideAction(graph, actor, installed))
+                || IsProjectionIndependentCoreHideAction(graph, actor, installed)
+                || IsProjectionIndependentCoreGuardArrestAction(graph, actor, installed)
+                || IsProjectionIndependentCoreFleeCityAction(graph, actor, installed))
                 continue;
             return false;
         }
@@ -802,6 +806,38 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
         DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
         return DailyV1CoreOnlyCrimeActionBoundary.IsExactTargetlessHideSlot(
             graph, actor, action, payload)
+            && DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
+                graph.Definitions, action,
+                out _, out _,
+                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove,
+                out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd)
+            && targetStatusToRemove.Count == 0
+            && targetStatusToAdd.Count == 0;
+    }
+
+    private static bool IsProjectionIndependentCoreGuardArrestAction(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action)
+    {
+        DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
+        return DailyV1CoreOnlyCrimeActionBoundary.IsExactGuardArrestActionSlot(
+                graph, actor, action, payload)
+            && !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+            && graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
+                out DailyV1NpcRuntimeOwners target)
+            && target != null
+            && !ReferenceEquals(target, actor);
+    }
+
+    private static bool IsProjectionIndependentCoreFleeCityAction(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action)
+    {
+        DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
+        return DailyV1CoreOnlyCrimeActionBoundary.IsExactFleeCityActionSlot(
+                graph, actor, action, payload)
             && DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
                 graph.Definitions, action,
                 out _, out _,

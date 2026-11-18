@@ -37,6 +37,17 @@ internal sealed class DailyV1P12CrimeJusticeOwnerBinding
             () => owner.CrimeJusticeRevision);
     }
 
+    internal static DailyV1P12CrimeJusticeOwnerBinding ForNpcTravelPlanOwner(
+        DailyV1NpcRuntimeOwners owner)
+    {
+        if (owner?.TravelPlan == null) throw new ArgumentNullException(nameof(owner));
+        return new DailyV1P12CrimeJusticeOwnerBinding(
+            owner.TravelPlan,
+            DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, owner.RuntimeId),
+            () => owner.TravelPlan.Revision);
+    }
+
     internal static DailyV1P12CrimeJusticeOwnerBinding ForJusticeRecordsOwner(
         object censusOwnerIdentity,
         DailyV1JusticeRecordsOwner owner)
@@ -78,7 +89,8 @@ internal interface IDailyV1P12CrimeJusticeMutationProtocol
 /// </summary>
 internal sealed class DailyV1CoreSelectedOwnerSectionMutationProtocol
     : IDailyV1P12CrimeJusticeMutationProtocol,
-      IDailyV1P12CrimeJusticeReservedBaselineProtocol
+      IDailyV1P12CrimeJusticeReservedBaselineProtocol,
+      IDailyV1P12CrimeJusticeMutationDiagnosticProtocol
 {
     private readonly DailyV1ExecutionBoundaryState executionState;
     private readonly DailyV1SelectedRuntimeOwnerGraph graph;
@@ -106,9 +118,21 @@ internal sealed class DailyV1CoreSelectedOwnerSectionMutationProtocol
     }
 
     public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
-        IsBoundTo(executionState, graph)
-        && executionState.TryValidateCoreSelectedOwnerSectionCensusRows(graph, sectionIds);
+        TryValidateUnchangedSections(sectionIds, out _);
 
+    public bool TryValidateUnchangedSections(
+        IReadOnlyList<string> sectionIds,
+        out string failure)
+    {
+        failure = null;
+        if (!IsBoundTo(executionState, graph))
+        {
+            failure = "CoreProtocolUnbound";
+            return false;
+        }
+        return executionState.TryValidateCoreSelectedOwnerSectionCensusRows(
+            graph, sectionIds, null, out failure);
+    }
     public bool TryValidateUnchangedSectionsDuringDailyReservation(
         object reservationToken,
         IReadOnlyList<string> sectionIds,
@@ -192,6 +216,467 @@ internal sealed class DailyV1CoreSelectedOwnerSectionMutationProtocol
         return executionState.MutationEpochState.TryAdvanceCommittedMutation();
     }
 }
+
+/// <summary>
+/// Core-owned P12 boundary for the exact CrimeSocialAppraisal owners already
+/// admitted by the selected runtime census. It preserves the bounded
+/// TheftAcceptance write budget and its single nested knowledge operation.
+/// </summary>
+internal sealed class DailyV1CoreCrimeSocialAppraisalMutationBoundary
+    : IP12CrimeSocialAppraisalOwnerMutationBoundary,
+      IP12CrimeSocialAppraisalOperationBoundary
+{
+    private enum TheftStage : byte { None = 0, BeforeKnowledge = 1, Knowledge = 2, AfterKnowledge = 3 }
+
+    private sealed class Owner
+    {
+        internal object Value;
+        internal string Section;
+        internal Func<long> Revision;
+    }
+
+    private sealed class Context
+    {
+        internal P12CrimeSocialAppraisalOperation Operation;
+        internal Thread Thread;
+        internal int ThreadId;
+        internal TheftStage Stage;
+        internal bool NestedKnowledgeUsed;
+        internal DailyV1MutationEpochReservation Reservation;
+        internal readonly Dictionary<object, int> Remaining =
+            new Dictionary<object, int>(ReferenceIdentityComparer.Instance);
+        internal readonly Dictionary<object, long> Revisions =
+            new Dictionary<object, long>(ReferenceIdentityComparer.Instance);
+        internal readonly HashSet<string> Changed = new HashSet<string>(StringComparer.Ordinal);
+        internal bool IsCurrentThread => ReferenceEquals(Thread, System.Threading.Thread.CurrentThread)
+            && ThreadId == System.Threading.Thread.CurrentThread.ManagedThreadId;
+    }
+
+    private sealed class ReferenceIdentityComparer : IEqualityComparer<object>
+    {
+        internal static readonly ReferenceIdentityComparer Instance = new ReferenceIdentityComparer();
+        public new bool Equals(object left, object right) => ReferenceEquals(left, right);
+        public int GetHashCode(object value) => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(value);
+    }
+
+    private readonly DailyV1ExecutionBoundaryState state;
+    private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+    private readonly CrimeSocialAppraisalWorldState world;
+    private readonly DailyV1CoreSelectedOwnerSectionMutationProtocol protocol;
+    private readonly Owner[] owners;
+    private Context active;
+
+    private DailyV1CoreCrimeSocialAppraisalMutationBoundary(
+        DailyV1ExecutionBoundaryState state,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        CrimeSocialAppraisalWorldState world,
+        DailyV1CoreSelectedOwnerSectionMutationProtocol protocol)
+    {
+        this.state = state;
+        this.graph = graph;
+        this.world = world;
+        this.protocol = protocol;
+        owners = new[]
+        {
+            new Owner { Value = world.TheftOutcomes, Section = P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId,
+                Revision = () => world.TheftOutcomes.P12CensusRevision },
+            new Owner { Value = world.CrimeKnowledge, Section = P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId,
+                Revision = () => world.CrimeKnowledge.P12CensusRevision },
+            new Owner { Value = world.SocialReactions, Section = P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId,
+                Revision = () => world.SocialReactions.P12CensusRevision }
+        };
+    }
+
+    internal static bool TryCreateAndBind(
+        DailyV1ExecutionBoundaryState state,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out DailyV1CoreCrimeSocialAppraisalMutationBoundary boundary)
+    {
+        boundary = null;
+        CrimeSocialAppraisalWorldState world = graph?.P12EOwners?.CrimeSocialAppraisal;
+        if (state == null || graph == null || world == null
+            || !state.HasAdmittedSelectedDailyExecution
+            || state.AdmissionContext?.IsOwnedByCurrentThread() != true
+            || !ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph)
+            || !ReferenceEquals(world.PersonStore, graph.PersonStore)
+            || !ReferenceEquals(world.InstitutionStore, graph.P12EOwners.Institutions)
+            || !ReferenceEquals(world.SimulationTime, state.SimulationTime)
+            || !state.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+                graph, out IDailyV1P12CrimeJusticeMutationProtocol p12Protocol, out _)
+            || !(p12Protocol is DailyV1CoreSelectedOwnerSectionMutationProtocol coreProtocol))
+            return false;
+
+        DailyV1CoreCrimeSocialAppraisalMutationBoundary candidate =
+            new DailyV1CoreCrimeSocialAppraisalMutationBoundary(state, graph, world, coreProtocol);
+        foreach (Owner owner in candidate.owners)
+            if (!state.TryGetSelectedOwnerSectionCensusBaselineOwnerIdentity(
+                    owner.Section, graph, out object censusOwner)
+                || !ReferenceEquals(owner.Value, censusOwner))
+                return false;
+
+        // Do not replace a different host's callbacks on these same owners.
+        if (!world.TheftOutcomes.TryBindP12MutationBoundary(candidate)
+            || !world.CrimeKnowledge.TryBindP12MutationBoundary(candidate)
+            || !world.SocialReactions.TryBindP12MutationBoundary(candidate)
+            || !world.Integration.TryBindP12OperationBoundary(candidate))
+            return false;
+        boundary = candidate;
+        return true;
+    }
+
+    internal bool IsBoundTo(DailyV1ExecutionBoundaryState candidateState,
+        DailyV1SelectedRuntimeOwnerGraph candidateGraph) =>
+        ReferenceEquals(state, candidateState) && ReferenceEquals(graph, candidateGraph)
+        && ReferenceEquals(graph.P12EOwners?.CrimeSocialAppraisal, world)
+        && state.HasAdmittedSelectedDailyExecution
+        && ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph)
+        && protocol.IsBoundTo(state, graph);
+
+    public bool TryBeginOperation(P12CrimeSocialAppraisalOperation operation)
+    {
+        if (!IsCurrent() || !Enum.IsDefined(typeof(P12CrimeSocialAppraisalOperation), operation))
+            return false;
+        if (active != null)
+        {
+            if (operation == P12CrimeSocialAppraisalOperation.KnowledgeAndAppraisal
+                && active.Operation == P12CrimeSocialAppraisalOperation.TheftAcceptance
+                && active.Stage == TheftStage.BeforeKnowledge && !active.NestedKnowledgeUsed
+                && active.IsCurrentThread)
+            {
+                active.NestedKnowledgeUsed = true;
+                active.Stage = TheftStage.Knowledge;
+                return true;
+            }
+            Fault();
+            return false;
+        }
+
+        int[] budgets = operation == P12CrimeSocialAppraisalOperation.TheftAcceptance
+            ? new[] { 2, 2, 4 } : new[] { 0, 2, 4 };
+        if (!TryOpen(operation, budgets, out Context context)) return false;
+        if (operation == P12CrimeSocialAppraisalOperation.TheftAcceptance)
+            context.Stage = TheftStage.BeforeKnowledge;
+        active = context;
+        return true;
+    }
+
+    public bool EndOperation(P12CrimeSocialAppraisalOperation operation)
+    {
+        Context current = active;
+        if (current == null || !current.IsCurrentThread) { Fault(); return false; }
+        if (current.Operation == P12CrimeSocialAppraisalOperation.TheftAcceptance
+            && operation == P12CrimeSocialAppraisalOperation.KnowledgeAndAppraisal
+            && current.Stage == TheftStage.Knowledge)
+        {
+            current.Stage = TheftStage.AfterKnowledge;
+            return true;
+        }
+        if (current.Operation != operation) { Fault(); return false; }
+        return Close(current);
+    }
+
+    public bool CanCommit(object owner)
+    {
+        Owner entry = Find(owner);
+        Context current = active;
+        if (entry == null || current == null || !current.IsCurrentThread
+            || !Allowed(current, entry)
+            || !current.Remaining.TryGetValue(owner, out int remaining) || remaining <= 0)
+        { Fault(); return false; }
+        long revision;
+        try { revision = entry.Revision(); }
+        catch { Fault(); return false; }
+        if (revision == long.MaxValue || revision != current.Revisions[owner])
+        { Fault(); return false; }
+        current.Remaining[owner] = remaining - 1;
+        return true;
+    }
+
+    public void Committed(object owner)
+    {
+        Owner entry = Find(owner);
+        Context current = active;
+        if (entry == null || current == null || !current.IsCurrentThread
+            || !current.Revisions.TryGetValue(owner, out long prior)
+            || prior == long.MaxValue || entry.Revision() != prior + 1L)
+        { Fault(); return; }
+        current.Revisions[owner] = prior + 1L;
+        current.Changed.Add(entry.Section);
+    }
+
+    public void Fault()
+    {
+        try { protocol?.FaultClosed(); } catch { }
+        state?.MarkSelectedRuntimeCensusProtocolFaulted();
+        state?.InvalidateCurrentCaptureToken();
+    }
+
+    private bool TryOpen(P12CrimeSocialAppraisalOperation operation, int[] budgets, out Context context)
+    {
+        context = null;
+        if (!IsCurrent() || active != null || budgets == null || budgets.Length != owners.Length)
+        { Fault(); return false; }
+        List<string> sections = new List<string>(owners.Length);
+        for (int i = 0; i < owners.Length; i++)
+        {
+            if (budgets[i] < 0) return false;
+            if (budgets[i] == 0) continue;
+            long revision;
+            try { revision = owners[i].Revision(); } catch { return false; }
+            if (revision < 0L || revision > long.MaxValue - budgets[i]) return false;
+            sections.Add(owners[i].Section);
+        }
+        if (sections.Count == 0 || !protocol.TryValidateUnchangedSections(sections)
+            || !state.MutationEpochState.TryReserve(out DailyV1MutationEpochReservation reservation))
+            return false;
+
+        context = new Context
+        {
+            Operation = operation,
+            Thread = System.Threading.Thread.CurrentThread,
+            ThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId,
+            Reservation = reservation
+        };
+        for (int i = 0; i < owners.Length; i++)
+        {
+            if (budgets[i] == 0) continue;
+            context.Remaining.Add(owners[i].Value, budgets[i]);
+            context.Revisions.Add(owners[i].Value, owners[i].Revision());
+        }
+        return true;
+    }
+
+    private bool Allowed(Context context, Owner entry)
+    {
+        if (context.Operation == P12CrimeSocialAppraisalOperation.KnowledgeAndAppraisal)
+            return !ReferenceEquals(entry.Value, world.TheftOutcomes);
+        if (context.Operation != P12CrimeSocialAppraisalOperation.TheftAcceptance) return false;
+        if (context.Stage == TheftStage.BeforeKnowledge || context.Stage == TheftStage.AfterKnowledge)
+            return ReferenceEquals(entry.Value, world.TheftOutcomes);
+        return context.Stage == TheftStage.Knowledge
+            && !ReferenceEquals(entry.Value, world.TheftOutcomes);
+    }
+
+    private bool Close(Context context)
+    {
+        if (!ReferenceEquals(active, context) || !context.IsCurrentThread
+            || context.Reservation == null || !state.MutationEpochState.Owns(context.Reservation))
+        { Fault(); return false; }
+        active = null;
+        bool completed;
+        if (context.Changed.Count == 0)
+            completed = state.MutationEpochState.TryRelease(context.Reservation);
+        else
+        {
+            List<string> changed = new List<string>(context.Changed);
+            changed.Sort(StringComparer.Ordinal);
+            completed = protocol.TryRefreshCommittedMutationBaselinesForReservation(
+                    context.Reservation.Token, changed)
+                && state.MutationEpochState.TryComplete(context.Reservation, true);
+        }
+        if (!completed) Fault();
+        return completed;
+    }
+
+    private Owner Find(object owner)
+    {
+        foreach (Owner candidate in owners)
+            if (ReferenceEquals(candidate.Value, owner)) return candidate;
+        return null;
+    }
+
+    private bool IsCurrent() => state != null && graph != null && world != null
+        && state.HasAdmittedSelectedDailyExecution
+        && state.AdmissionContext?.IsOwnedByCurrentThread() == true
+        && ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph)
+        && ReferenceEquals(graph.P12EOwners?.CrimeSocialAppraisal, world)
+        && protocol.IsBoundTo(state, graph);
+}
+
+/// <summary>
+/// Executes the existing shared transfer through the selected runtime's exact
+/// two MoneyAccount census rows. Every actual debit/credit refreshes its own
+/// baseline and advances the shared epoch, matching the established owner
+/// callback contract.
+/// </summary>
+internal sealed class DailyV1CoreNpcMoneyTransferMutationBoundary
+{
+    private sealed class AccountBinding
+    {
+        internal DailyV1NpcRuntimeOwners Npc;
+        internal MoneyAccountRuntime Account;
+        internal string SectionId;
+        internal long ExpectedRevision;
+        internal int RemainingWrites;
+        internal Func<bool> Admission;
+        internal Action Committed;
+    }
+
+    private readonly DailyV1ExecutionBoundaryState state;
+    private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+    private readonly DailyV1CoreSelectedOwnerSectionMutationProtocol protocol;
+    private readonly AccountBinding source;
+    private readonly AccountBinding destination;
+    private bool active;
+
+    private DailyV1CoreNpcMoneyTransferMutationBoundary(
+        DailyV1ExecutionBoundaryState state,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1CoreSelectedOwnerSectionMutationProtocol protocol,
+        DailyV1NpcRuntimeOwners source,
+        DailyV1NpcRuntimeOwners destination)
+    {
+        this.state = state;
+        this.graph = graph;
+        this.protocol = protocol;
+        this.source = CreateBinding(source, 2);
+        this.destination = CreateBinding(destination, 1);
+        this.source.Admission = () => CanCommit(this.source);
+        this.source.Committed = () => NotifyCommitted(this.source);
+        this.destination.Admission = () => CanCommit(this.destination);
+        this.destination.Committed = () => NotifyCommitted(this.destination);
+    }
+
+    internal static EconomyTransactionResult Execute(
+        DailyV1ExecutionBoundaryState state,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners source,
+        DailyV1NpcRuntimeOwners destination,
+        Func<EconomyTransactionResult> operation)
+    {
+        if (operation == null || !IsExactNpc(graph, source) || !IsExactNpc(graph, destination)
+            || ReferenceEquals(source, destination) || source.MoneyAccount == null
+            || destination.MoneyAccount == null
+            || ReferenceEquals(source.MoneyAccount, destination.MoneyAccount))
+            return Failure(source, destination, EconomyTransactionFailureReason.InvalidInput);
+
+        if (state == null || !state.HasAdmittedSelectedDailyExecution
+            || state.AdmissionContext?.IsOwnedByCurrentThread() != true
+            || !ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph)
+            || !state.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+                graph, out IDailyV1P12CrimeJusticeMutationProtocol p12Protocol, out _)
+            || !(p12Protocol is DailyV1CoreSelectedOwnerSectionMutationProtocol protocol))
+            return Failure(source, destination, EconomyTransactionFailureReason.TransactionCommitFailed);
+
+        string sourceSection = DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix
+            + source.RuntimeId;
+        string destinationSection = DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix
+            + destination.RuntimeId;
+        if (!state.TryGetSelectedOwnerSectionCensusBaselineOwnerIdentity(
+                sourceSection, graph, out object sourceIdentity)
+            || !ReferenceEquals(sourceIdentity, source.MoneyAccount)
+            || !state.TryGetSelectedOwnerSectionCensusBaselineOwnerIdentity(
+                destinationSection, graph, out object destinationIdentity)
+            || !ReferenceEquals(destinationIdentity, destination.MoneyAccount)
+            || MoneyAccountOwnerBridge.HasP12MutationBoundary(source.MoneyAccount)
+            || MoneyAccountOwnerBridge.HasP12MutationBoundary(destination.MoneyAccount)
+            || state.MutationEpochState.CurrentEpoch > long.MaxValue - 2L
+            || !protocol.TryValidateUnchangedSections(new[] { sourceSection, destinationSection })
+            || !state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.NpcMoneyTransfer))
+            return Failure(source, destination, EconomyTransactionFailureReason.TransactionCommitFailed);
+
+        DailyV1CoreNpcMoneyTransferMutationBoundary boundary =
+            new DailyV1CoreNpcMoneyTransferMutationBoundary(state, graph, protocol, source, destination);
+        bool sourceBound = false;
+        bool destinationBound = false;
+        try
+        {
+            MoneyAccountOwnerBridge.BindP12MutationBoundary(
+                source.MoneyAccount, boundary.source.Admission, boundary.source.Committed);
+            sourceBound = true;
+            MoneyAccountOwnerBridge.BindP12MutationBoundary(
+                destination.MoneyAccount, boundary.destination.Admission, boundary.destination.Committed);
+            destinationBound = true;
+            boundary.active = true;
+            return operation();
+        }
+        catch
+        {
+            boundary.Fault();
+            throw;
+        }
+        finally
+        {
+            boundary.active = false;
+            bool unbound = true;
+            if (destinationBound)
+                unbound &= MoneyAccountOwnerBridge.UnbindP12MutationBoundary(
+                    destination.MoneyAccount, boundary.destination.Admission,
+                    boundary.destination.Committed);
+            if (sourceBound)
+                unbound &= MoneyAccountOwnerBridge.UnbindP12MutationBoundary(
+                    source.MoneyAccount, boundary.source.Admission,
+                    boundary.source.Committed);
+            bool ended = state.TryEndRuntimeProtocolOperation();
+            if (!unbound || !ended) boundary.Fault();
+        }
+    }
+
+    private AccountBinding CreateBinding(DailyV1NpcRuntimeOwners npc, int writes) => new AccountBinding
+    {
+        Npc = npc,
+        Account = npc.MoneyAccount,
+        SectionId = DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + npc.RuntimeId,
+        ExpectedRevision = npc.MoneyAccount.Revision,
+        RemainingWrites = writes
+    };
+
+    private bool CanCommit(AccountBinding binding)
+    {
+        if (!active || !IsCurrent() || binding == null || binding.RemainingWrites <= 0
+            || !IsExactNpc(graph, binding.Npc)
+            || !ReferenceEquals(binding.Npc.MoneyAccount, binding.Account)
+            || binding.Account.Revision != binding.ExpectedRevision
+            || binding.Account.Revision == long.MaxValue
+            || !protocol.TryValidateUnchangedSections(new[] { binding.SectionId }))
+        {
+            Fault();
+            return false;
+        }
+        binding.RemainingWrites--;
+        return true;
+    }
+
+    private void NotifyCommitted(AccountBinding binding)
+    {
+        if (!active || !IsCurrent() || binding == null
+            || binding.Account.Revision != binding.ExpectedRevision + 1L
+            || !protocol.NotifyCommittedMutation(binding.SectionId))
+        {
+            Fault();
+            return;
+        }
+        binding.ExpectedRevision++;
+    }
+
+    private bool IsCurrent() => state != null && graph != null
+        && state.HasAdmittedSelectedDailyExecution
+        && state.AdmissionContext?.IsOwnedByCurrentThread() == true
+        && ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph)
+        && protocol.IsBoundTo(state, graph);
+
+    private void Fault()
+    {
+        try { protocol?.FaultClosed(); } catch { }
+        state?.MarkSelectedRuntimeCensusProtocolFaulted();
+        state?.InvalidateCurrentCaptureToken();
+    }
+
+    private static bool IsExactNpc(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners owner) => graph != null && owner != null
+        && graph.ContainsExactNpcOwner(owner)
+        && ReferenceEquals(owner.Definitions, graph.Definitions);
+
+    private static EconomyTransactionResult Failure(
+        DailyV1NpcRuntimeOwners source,
+        DailyV1NpcRuntimeOwners destination,
+        EconomyTransactionFailureReason reason) =>
+        EconomyTransactionResult.CreateFailure(EconomyTransactionType.MoneyTransfer,
+            MoneyEffect.Transfer, reason, source?.RuntimeId, destination?.RuntimeId);
+}
+
 /// <summary>Optional failure detail for the selected host's P12 baseline adapter.</summary>
 internal interface IDailyV1P12CrimeJusticeMutationDiagnosticProtocol
 {
@@ -736,6 +1221,56 @@ internal sealed class DailyV1P12CrimeJusticeMutationCoordinator
                 out List<DailyV1P12CrimeJusticeOwnerBinding> owners,
                 out List<string> sections))
             return false;
+        return TryBeginImmediateMutation(owners, sections, out scope);
+    }
+
+    /// <summary>
+    /// Builds the exact selected FleeCity operation. The pending travel-plan
+    /// owner joins the actor, Justice and receipt sections because its revision
+    /// is the factual leaf committed by this action.
+    /// </summary>
+    internal bool TryBeginSelectedFleeCityMutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        object justiceCensusOwnerIdentity,
+        bool includeCrimeReceiptSection,
+        out IDisposable scope)
+    {
+        scope = null;
+        if (!isAdmissionEnabled()) return true;
+        if (graph == null || graph.Definitions == null || actor == null
+            || justiceCensusOwnerIdentity == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(actor.Definitions, graph.Definitions)
+            || actor.TravelPlan == null
+            || graph.JusticeRecordsOwner == null)
+        {
+            faultAdmission();
+            return false;
+        }
+
+        DailyV1P12CrimeJusticeOwnerBinding actorBinding =
+            DailyV1P12CrimeJusticeOwnerBinding.ForNpcStatusOwner(actor);
+        DailyV1P12CrimeJusticeOwnerBinding travelPlanBinding =
+            DailyV1P12CrimeJusticeOwnerBinding.ForNpcTravelPlanOwner(actor);
+        DailyV1P12CrimeJusticeOwnerBinding justiceBinding =
+            DailyV1P12CrimeJusticeOwnerBinding.ForJusticeRecordsOwner(
+                justiceCensusOwnerIdentity, graph.JusticeRecordsOwner);
+        List<DailyV1P12CrimeJusticeOwnerBinding> owners = new List<DailyV1P12CrimeJusticeOwnerBinding>(3)
+        {
+            actorBinding,
+            travelPlanBinding,
+            justiceBinding
+        };
+        List<string> sections = new List<string>(includeCrimeReceiptSection ? 5 : 4)
+        {
+            actorBinding.SectionId,
+            travelPlanBinding.SectionId,
+            justiceBinding.SectionId,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId
+        };
+        if (includeCrimeReceiptSection)
+            sections.Add(DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId);
         return TryBeginImmediateMutation(owners, sections, out scope);
     }
 

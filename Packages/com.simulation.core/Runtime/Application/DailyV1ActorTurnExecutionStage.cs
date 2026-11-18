@@ -327,6 +327,7 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
     private readonly IDailyV1SelectedActorTurnHostPorts hostPorts;
     private readonly IDailyV1SelectedP12NpcActionOwnerMutationProtocol actionSlotP12MutationProtocol;
     private IDailyV1SelectedMerchantTradeStateBoundary merchantBoundary;
+    internal string LastActionStatusBoundaryRejection { get; private set; }
 
     private DailyV1CoreSelectedActorTurnExecutionBoundary(
         DailyV1ExecutionBoundaryState executionState,
@@ -547,11 +548,19 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         DailyV1CoreSelectedOwnerSectionMutationProtocol protocol =
             new DailyV1CoreSelectedOwnerSectionMutationProtocol(executionState, graph);
         if (!protocol.TryRefreshCommittedMutationBaselines(
-                new[] { ScheduledDirectiveCensusProvider.SectionId })
-            || !executionState.MutationEpochState.TryAdvanceCommittedMutation())
+                new[] { ScheduledDirectiveCensusProvider.SectionId }))
+        {
+            string rejection = executionState.LastSelectedOwnerSectionCensusRefreshRejection
+                ?? "Core census refresh precondition rejected the complete owner vector.";
+            protocol.FaultClosed();
+            throw new InvalidOperationException(
+                "P12F could not publish the terminal directive row: " + rejection);
+        }
+        if (!executionState.MutationEpochState.TryAdvanceCommittedMutation())
         {
             protocol.FaultClosed();
-            return false;
+            throw new InvalidOperationException(
+                "P12F refreshed the terminal directive row but could not advance the shared mutation epoch.");
         }
         return true;
     }
@@ -691,12 +700,39 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
 
         DailyV1ActionDefinition action = actor.ActionSlot?.CurrentAction;
         DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
+        if (dispatch.Kind == DailyV1SelectedActionDispatchKind.GuardArrest)
+            return dispatch.GuardArrest != null
+                && dispatch.Succeeded == (dispatch.ActionRollSucceeded && dispatch.GuardArrest.Succeeded)
+                && DailyV1CoreOnlyCrimeActionBoundary.IsExactGuardArrestActionSlot(
+                    graph, actor, action, payload);
+
+        if (dispatch.Kind == DailyV1SelectedActionDispatchKind.FleeCity)
+            return dispatch.FleeCity != null
+                && dispatch.ActionRollSucceeded
+                && dispatch.Succeeded == dispatch.FleeCity.Succeeded
+                && string.Equals(dispatch.FleeCity.DestinationCityRuntimeId,
+                    payload?.TargetCityRuntimeId, StringComparison.Ordinal)
+                && DailyV1CoreOnlyCrimeActionBoundary.IsExactFleeCityActionSlot(
+                    graph, actor, action, payload);
+
         if (dispatch.Kind == DailyV1SelectedActionDispatchKind.Crime)
             return dispatch.Crime != null
                 && dispatch.ActionRollSucceeded == dispatch.Crime.ActionRollSucceeded
                 && dispatch.Succeeded == dispatch.Crime.Succeeded
                 && DailyV1CoreOnlyCrimeActionBoundary.IsExactTargetlessHideSlot(
                     graph, actor, action, payload);
+
+        if (dispatch.Kind == DailyV1SelectedActionDispatchKind.Steal)
+            return dispatch.Steal != null
+                && dispatch.Succeeded == dispatch.Steal.Succeeded
+                && string.Equals(dispatch.Steal.TargetRuntimeId,
+                    payload?.TargetNpcRuntimeId, StringComparison.Ordinal)
+                && string.Equals(dispatch.Steal.CityRuntimeId,
+                    actor.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal)
+                && DailyV1NpcDefinitionRules.IsAdmittedAction(graph.Definitions, action)
+                && action.Values.actionType?.Value == DailyV1NpcDefinitionRules.StealActionTypeValue
+                && payload?.TargetItem == null
+                && payload?.TargetCityRuntimeId == null;
 
         if (dispatch.Kind != DailyV1SelectedActionDispatchKind.Normal) return false;
         // Normal slot effects are committed separately through the exact Core
@@ -719,25 +755,49 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         bool reuseExistingOperation,
         out DailyV1SelectedActionExecutionStage.ISelectedActionStatusOperationBoundary boundary)
     {
+        LastActionStatusBoundaryRejection = null;
         boundary = null;
         if (!TryGetExactActor(actor)
             || (target != null && !graph.ContainsExactNpcOwner(target)))
+        {
+            LastActionStatusBoundaryRejection = "ExactActorOrTarget";
             return false;
+        }
         if (hostPorts != null && hostPorts.TryGetActionStatusBoundary(
                 actor, target, reuseExistingOperation, out boundary)
             && boundary != null)
             return true;
         boundary = null;
-        return !reuseExistingOperation
-            && !RequiresActionProjection
-            ? DailyV1SelectedActionExecutionStage.CoreSelectedActionStatusOperationBoundary.TryCreate(
-                executionState, graph, null, actor, target, null, out boundary)
-                && boundary != null
-            : reuseExistingOperation && !RequiresActionProjection
-                && DailyV1SelectedActionExecutionStage.CoreSelectedActionStatusOperationBoundary
-                    .TryCreateForForcedEscapeScopeReuse(
-                        executionState, graph, actor, target, out boundary)
-                && boundary != null;
+        if (RequiresActionProjection)
+        {
+            LastActionStatusBoundaryRejection = "RequiredHostProjectionUnavailable";
+            return false;
+        }
+        if (!reuseExistingOperation)
+        {
+            bool created = DailyV1SelectedActionExecutionStage
+                .CoreSelectedActionStatusOperationBoundary.TryCreate(
+                    executionState, graph, null, actor, target, null,
+                    out boundary, out string rejection);
+            if (!created || boundary == null)
+            {
+                LastActionStatusBoundaryRejection = rejection
+                    ?? "CoreActionStatusBoundaryUnavailable";
+                return false;
+            }
+            return true;
+        }
+
+        bool reused = DailyV1SelectedActionExecutionStage
+            .CoreSelectedActionStatusOperationBoundary.TryCreateForForcedEscapeScopeReuse(
+                executionState, graph, actor, target, out boundary);
+        if (!reused || boundary == null)
+        {
+            LastActionStatusBoundaryRejection =
+                "ForcedEscapeScopeReuseUnavailable";
+            return false;
+        }
+        return true;
     }
 
     public bool TryPrepareForcedOutcomeActionProjection(
@@ -1002,14 +1062,16 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
 }
 
 /// <summary>
-/// Hostless Core boundary for the selected Hide action and the existing
-/// scheduled ForceOutcome/EscapePrison operation. Domain execution, owner
+/// Hostless Core boundary for the selected Hide, FleeCity and Guard Arrest
+/// actions and the existing scheduled ForceOutcome/EscapePrison operation. Domain execution, owner
 /// writes and P12 reservation remain in Core; Unity callbacks are omitted
 /// presentation effects, while every unsupported action path fails closed.
 /// </summary>
 internal sealed class DailyV1CoreOnlyCrimeActionBoundary :
     IDailyV1SelectedActionDispatchBoundary,
     DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionProjectionBoundary,
+    DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionProjectionBoundary,
+    DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionProjectionBoundary,
     IDailyV1SelectedCrimeJusticeDailyMutationHostPort
 {
     private readonly DailyV1ExecutionBoundaryState executionState;
@@ -1018,6 +1080,13 @@ internal sealed class DailyV1CoreOnlyCrimeActionBoundary :
     private readonly DailyV1ActionDefinition action;
     private readonly DailyV1NpcActionPayloadOwner payload;
     private readonly bool forcedEscape;
+    private DailyV1JusticeSentenceOwner preparedGuardArrestSentence;
+    private DailyV1CityRuntimeOwners preparedFleeDestination;
+    private float preparedFleeTravelCost;
+    private string preparedFleeOriginDecisionId;
+    private long preparedFleeTravelPlanRevision;
+    private bool preparedFleeTravelPlanChanges;
+    private DailyV1P12CrimeJusticeMutationCoordinator preparedFleeCoordinator;
 
     private DailyV1CoreOnlyCrimeActionBoundary(
         DailyV1ExecutionBoundaryState executionState,
@@ -1045,7 +1114,10 @@ internal sealed class DailyV1CoreOnlyCrimeActionBoundary :
         DailyV1ActionDefinition action = actor?.ActionSlot?.CurrentAction;
         DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
         if (executionState == null || graph == null || actor == null
-            || !IsExactTargetlessHideSlot(graph, actor, action, payload)
+            || (!IsExactTargetlessHideSlot(graph, actor, action, payload)
+                && !IsExactFleeCityActionSlot(graph, actor, action, payload)
+                && !IsExactGuardArrestActionSlot(graph, actor, action, payload)
+                && !IsExactStealActionSlot(graph, actor, action, payload))
             || !IsCurrentAdmittedCoreSession(executionState, graph, actor))
             return false;
 
@@ -1108,6 +1180,86 @@ internal sealed class DailyV1CoreOnlyCrimeActionBoundary :
         && payload.CommercialDecisionEvidence == null
         && payload.CommercialScoutingEvidence == null;
 
+    internal static bool IsExactGuardArrestActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload) =>
+        graph != null && actor != null && action != null && payload != null
+        && graph.ContainsExactNpcOwner(actor)
+        && ReferenceEquals(actor.Definitions, graph.Definitions)
+        && graph.Definitions.Actions.TryGetValue(action.DefinitionId,
+            out DailyV1ActionDefinition admittedAction)
+        && ReferenceEquals(action, admittedAction)
+        && DailyV1NpcDefinitionRules.IsAdmittedAction(graph.Definitions, action)
+        && DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+            graph.Definitions, action)
+        && action.Values.actionType?.Value == DailyV1NpcDefinitionRules.ArrestActionTypeValue
+        && ReferenceEquals(actor.ActionSlot?.CurrentAction, action)
+        && ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)
+        && ReferenceEquals(payload.Action, action)
+        && !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+        && payload.TargetCityRuntimeId == null
+        && payload.TargetItem == null
+        && payload.Amount == 0
+        && payload.ExpectedUnitPrice == 0f
+        && payload.TravelReason == NpcTravelReason.None
+        && payload.ExpectedNetValue == 0f
+        && payload.CommercialDecisionEvidence == null
+        && payload.CommercialScoutingEvidence == null;
+
+    internal static bool IsExactFleeCityActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload) =>
+        graph != null && actor != null && action != null && payload != null
+        && graph.ContainsExactNpcOwner(actor)
+        && ReferenceEquals(actor.Definitions, graph.Definitions)
+        && graph.Definitions.Actions.TryGetValue(action.DefinitionId,
+            out DailyV1ActionDefinition admittedAction)
+        && ReferenceEquals(action, admittedAction)
+        && DailyV1NpcDefinitionRules.IsAdmittedAction(graph.Definitions, action)
+        && DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+            graph.Definitions, action)
+        && action.Values.actionType?.Value == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
+        && ReferenceEquals(actor.ActionSlot?.CurrentAction, action)
+        && ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)
+        && ReferenceEquals(payload.Action, action)
+        && !string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+        && payload.TargetNpcRuntimeId == null
+        && payload.TargetItem == null
+        && payload.Amount == 0;
+
+    internal static bool IsExactStealActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload) =>
+        graph != null && actor != null && action != null && payload != null
+        && graph.ContainsExactNpcOwner(actor)
+        && ReferenceEquals(actor.Definitions, graph.Definitions)
+        && graph.Definitions.Actions.TryGetValue(action.DefinitionId,
+            out DailyV1ActionDefinition admittedAction)
+        && ReferenceEquals(action, admittedAction)
+        && DailyV1NpcDefinitionRules.IsAdmittedAction(graph.Definitions, action)
+        && DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+            graph.Definitions, action)
+        && action.Values.actionType?.Value == DailyV1NpcDefinitionRules.StealActionTypeValue
+        && ReferenceEquals(actor.ActionSlot?.CurrentAction, action)
+        && ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)
+        && ReferenceEquals(payload.Action, action)
+        && !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+        && payload.TargetCityRuntimeId == null
+        && payload.TargetItem == null
+        && payload.Amount > 0
+        && payload.ExpectedUnitPrice == 0f
+        && payload.TravelReason == NpcTravelReason.None
+        && payload.ExpectedNetValue == 0f
+        && payload.CommercialDecisionEvidence == null
+        && payload.CommercialScoutingEvidence == null
+        && !string.IsNullOrWhiteSpace(payload.StableOccurrenceKey);
+
     private static bool IsExactTargetlessForcedEscapeSlot(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
@@ -1154,7 +1306,13 @@ internal sealed class DailyV1CoreOnlyCrimeActionBoundary :
         IsCurrentAdmittedCoreSession(executionState, graph, actor)
         && (forcedEscape
             ? IsExactTargetlessForcedEscapeSlot(graph, actor, action, payload)
-            : IsExactTargetlessHideSlot(graph, actor, action, payload));
+            : action?.Values.actionType?.Value == DailyV1NpcDefinitionRules.ArrestActionTypeValue
+                ? IsExactGuardArrestActionSlot(graph, actor, action, payload)
+                : action?.Values.actionType?.Value == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
+                    ? IsExactFleeCityActionSlot(graph, actor, action, payload)
+                    : action?.Values.actionType?.Value == DailyV1NpcDefinitionRules.StealActionTypeValue
+                        ? IsExactStealActionSlot(graph, actor, action, payload)
+                        : IsExactTargetlessHideSlot(graph, actor, action, payload));
 
     private bool IsExactActor(DailyV1NpcRuntimeOwners candidate) =>
         ReferenceEquals(candidate, actor) && IsCurrent();
@@ -1188,19 +1346,71 @@ internal sealed class DailyV1CoreOnlyCrimeActionBoundary :
         DailyV1NpcRuntimeOwners candidate,
         DailyV1ActionDefinition expectedAction,
         out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary boundary)
-    { boundary = null; return false; }
+    {
+        boundary = null;
+        if (forcedEscape || !IsExactActor(candidate)
+            || !ReferenceEquals(expectedAction, action)
+            || !IsExactFleeCityActionSlot(graph, actor, action, payload))
+            return false;
+
+        return DailyV1SelectedCrimeActionExecutionStage
+            .DailyV1CoreSelectedFleeCityActionBoundary.TryCreate(
+                executionState, graph, actor, action, this, this, out boundary)
+            && boundary != null;
+    }
 
     public bool TryGetGuardArrestActionBoundary(
         DailyV1NpcRuntimeOwners candidate,
         DailyV1ActionDefinition expectedAction,
         out DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary boundary)
-    { boundary = null; return false; }
+    {
+        boundary = null;
+        if (forcedEscape || !IsExactActor(candidate)
+            || !ReferenceEquals(expectedAction, action)
+            || !IsExactGuardArrestActionSlot(graph, actor, action, payload)
+            || !graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
+                out DailyV1NpcRuntimeOwners target)
+            || target == null || ReferenceEquals(target, actor))
+            return false;
+
+        return DailyV1SelectedCrimeActionExecutionStage.DailyV1CoreSelectedGuardArrestActionBoundary.TryCreate(
+                executionState, graph, actor, action, target, this, this, out boundary)
+            && boundary != null;
+    }
 
     public bool TryGetStealActionBoundary(
         DailyV1NpcRuntimeOwners candidate,
         DailyV1ActionDefinition expectedAction,
         out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary boundary)
-    { boundary = null; return false; }
+    {
+        boundary = null;
+        if (forcedEscape || !IsExactActor(candidate)
+            || !ReferenceEquals(expectedAction, action)
+            || !DailyV1CoreOnlyCrimeActionBoundary.IsExactStealActionSlot(
+                graph, actor, action, payload)
+            || string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+            || !graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
+                out DailyV1NpcRuntimeOwners victim)
+            || victim == null || ReferenceEquals(victim, actor))
+            return false;
+
+        DailyV1CityRuntimeOwners city = null;
+        foreach (DailyV1CityRuntimeOwners candidateCity in graph.Cities)
+            if (candidateCity != null
+                && string.Equals(candidateCity.RuntimeId,
+                    actor.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal))
+            {
+                city = candidateCity;
+                break;
+            }
+        if (city == null) return false;
+
+        return DailyV1SelectedCrimeActionExecutionStage
+            .DailyV1CoreSelectedStealActionBoundary.TryCreate(
+                executionState, graph, actor, victim, city, action,
+                null, this, out boundary)
+            && boundary != null;
+    }
 
     public bool TryGetCrimeActionBoundary(
         DailyV1NpcRuntimeOwners candidate,
@@ -1226,6 +1436,101 @@ internal sealed class DailyV1CoreOnlyCrimeActionBoundary :
             && DailyV1SelectedCrimeActionExecutionStage.DailyV1CoreSelectedCrimeActionBoundary.TryCreate(
                 executionState, graph, actor, action, this, this, out boundary)
             && boundary != null;
+    }
+
+    public bool CanPrepareTravelPlanProjection(
+        DailyV1NpcRuntimeOwners candidateActor,
+        DailyV1CityRuntimeOwners destination,
+        float travelCost,
+        string originDecisionId)
+    {
+        preparedFleeDestination = null;
+        preparedFleeCoordinator = null;
+        preparedFleeTravelPlanChanges = false;
+        if (!IsExactActor(candidateActor)
+            || !IsExactFleeCityActionSlot(graph, actor, action, payload)
+            || destination == null || !graph.ContainsExactCityOwner(destination)
+            || !ReferenceEquals(destination.Definitions, graph.Definitions)
+            || !string.Equals(destination.RuntimeId, payload.TargetCityRuntimeId,
+                StringComparison.Ordinal)
+            || actor.TravelPlan == null)
+            return false;
+
+        string normalizedDecisionId = string.IsNullOrWhiteSpace(originDecisionId)
+            ? null
+            : originDecisionId;
+        if (!actor.TravelPlan.CanCommit(
+                destination.LocationRuntimeId, destination.RuntimeId,
+                NpcTravelReason.Flee, 80f, travelCost, normalizedDecisionId)
+            || !executionState.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+                graph,
+                out IDailyV1P12CrimeJusticeMutationProtocol protocol,
+                out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+            || protocol == null || coordinator == null)
+            return false;
+
+        preparedFleeDestination = destination;
+        preparedFleeTravelCost = travelCost;
+        preparedFleeOriginDecisionId = normalizedDecisionId;
+        preparedFleeTravelPlanRevision = actor.TravelPlan.Revision;
+        preparedFleeTravelPlanChanges = !actor.TravelPlan.Matches(
+            destination.LocationRuntimeId, destination.RuntimeId,
+            NpcTravelReason.Flee, 80f, travelCost, normalizedDecisionId);
+        preparedFleeCoordinator = coordinator;
+        return true;
+    }
+
+    public bool CanAdmitTravelPlanMutation()
+    {
+        if (preparedFleeDestination == null || !preparedFleeTravelPlanChanges
+            || !IsCurrent() || actor.TravelPlan == null
+            || actor.TravelPlan.Revision != preparedFleeTravelPlanRevision
+            || !executionState.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+                graph,
+                out IDailyV1P12CrimeJusticeMutationProtocol protocol,
+                out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+            || protocol == null || !ReferenceEquals(coordinator, preparedFleeCoordinator))
+            return false;
+
+        string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId);
+        return coordinator.CanCommit(actor.TravelPlan, sectionId);
+    }
+
+    public void PublishCommittedTravelPlan(
+        DailyV1NpcRuntimeOwners candidateActor,
+        DailyV1CityRuntimeOwners destination,
+        float travelCost,
+        string originDecisionId)
+    {
+        string normalizedDecisionId = string.IsNullOrWhiteSpace(originDecisionId)
+            ? null
+            : originDecisionId;
+        if (!IsExactActor(candidateActor) || actor.TravelPlan == null
+            || !ReferenceEquals(destination, preparedFleeDestination)
+            || !preparedFleeTravelPlanChanges
+            || !travelCost.Equals(preparedFleeTravelCost)
+            || !string.Equals(normalizedDecisionId, preparedFleeOriginDecisionId,
+                StringComparison.Ordinal)
+            || actor.TravelPlan.Revision != preparedFleeTravelPlanRevision + 1L
+            || !actor.TravelPlan.Matches(destination.LocationRuntimeId,
+                destination.RuntimeId, NpcTravelReason.Flee, 80f,
+                travelCost, normalizedDecisionId)
+            || !executionState.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+                graph,
+                out IDailyV1P12CrimeJusticeMutationProtocol protocol,
+                out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+            || protocol == null || !ReferenceEquals(coordinator, preparedFleeCoordinator))
+            throw new InvalidOperationException(
+                "The Core-only FleeCity TravelPlan commit left its exact admitted owner or mutation scope.");
+
+        string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId);
+        coordinator.NotifyCommitted(actor.TravelPlan, sectionId);
+        preparedFleeDestination = null;
+        preparedFleeOriginDecisionId = null;
+        preparedFleeTravelPlanChanges = false;
+        preparedFleeCoordinator = null;
     }
 
     public bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners candidate) => false;
@@ -1255,7 +1560,11 @@ internal sealed class DailyV1CoreOnlyCrimeActionBoundary :
         DailyV1NpcRuntimeOwners candidate,
         IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
     {
-        if (!IsExactActor(candidate) || statusToAdd == null || candidate.Status == null)
+        bool exactWriter = action?.Values.actionType?.Value
+                == DailyV1NpcDefinitionRules.ArrestActionTypeValue
+            ? IsGuardArrestTarget(candidate)
+            : IsExactActor(candidate);
+        if (!exactWriter || !IsCurrent() || statusToAdd == null || candidate.Status == null)
             return false;
         foreach (DailyV1StatusDefinition status in statusToAdd)
             if (status == null
@@ -1264,6 +1573,100 @@ internal sealed class DailyV1CoreOnlyCrimeActionBoundary :
                 || !ReferenceEquals(status, admittedStatus))
                 return false;
         return true;
+    }
+
+    public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners candidate)
+    {
+        if (action?.Values.actionType?.Value != DailyV1NpcDefinitionRules.ArrestActionTypeValue
+            || !IsGuardArrestTarget(candidate) || !IsCurrent())
+            throw new InvalidOperationException(
+                "The Core-only Guard Arrest status write left its exact admitted target owner.");
+        executionState.EnsureSelectedP12CrimeJusticeOwnerMutationAllowed(candidate);
+    }
+
+    public void NotifyStatusMutationCommitted(
+        DailyV1NpcRuntimeOwners candidate,
+        DailyV1StatusDefinition status,
+        bool added)
+    {
+        if (action?.Values.actionType?.Value != DailyV1NpcDefinitionRules.ArrestActionTypeValue
+            || !IsGuardArrestTarget(candidate) || !IsCurrent())
+            throw new InvalidOperationException(
+                "The Core-only Guard Arrest status commit left its exact admitted target owner.");
+        executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(candidate);
+    }
+
+    public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners candidate)
+    {
+        if (action?.Values.actionType?.Value != DailyV1NpcDefinitionRules.ArrestActionTypeValue
+            || !IsGuardArrestTarget(candidate) || !IsCurrent())
+            throw new InvalidOperationException(
+                "The Core-only Guard Arrest hidden-state commit left its exact admitted target owner.");
+        executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(candidate);
+    }
+
+    public bool TryPrepareSentenceProjection(
+        DailyV1NpcRuntimeOwners target,
+        DailyV1CityRuntimeOwners city,
+        DailyV1JusticeWantedRecordOwner warrant,
+        DailyV1JusticeSentenceOwner sentence)
+    {
+        if (action?.Values.actionType?.Value != DailyV1NpcDefinitionRules.ArrestActionTypeValue
+            || !IsGuardArrestTarget(target)
+            || !graph.ContainsExactCityOwner(city)
+            || !ReferenceEquals(city.Definitions, graph.Definitions)
+            || warrant == null || !graph.JusticeRecordsOwner.ContainsWantedRecord(warrant)
+            || !string.Equals(warrant.TargetRuntimeId, target.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(warrant.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+            || sentence == null || !ReferenceEquals(sentence.Warrant, warrant)
+            || !string.Equals(sentence.TargetRuntimeId, target.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(sentence.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+            || preparedGuardArrestSentence != null || !IsCurrent())
+            return false;
+
+        preparedGuardArrestSentence = sentence;
+        return true;
+    }
+
+    public void DiscardPreparedSentenceProjection(DailyV1JusticeSentenceOwner sentence)
+    {
+        if (!ReferenceEquals(preparedGuardArrestSentence, sentence) || !IsCurrent())
+            throw new InvalidOperationException(
+                "The Core-only Guard Arrest discarded a sentence outside its exact prepared owner relation.");
+        preparedGuardArrestSentence = null;
+    }
+
+    public bool CommitPreparedSentenceProjection(DailyV1JusticeSentenceOwner sentence)
+    {
+        if (!ReferenceEquals(preparedGuardArrestSentence, sentence) || !IsCurrent()
+            || !graph.JusticeRecordsOwner.ContainsSentence(sentence))
+            return false;
+        preparedGuardArrestSentence = null;
+        return true;
+    }
+
+    public void PublishArrest(
+        DailyV1NpcRuntimeOwners guard,
+        DailyV1NpcRuntimeOwners target,
+        DailyV1CityRuntimeOwners city,
+        string originDecisionId)
+    {
+        if (action?.Values.actionType?.Value != DailyV1NpcDefinitionRules.ArrestActionTypeValue
+            || !ReferenceEquals(guard, actor) || !IsGuardArrestTarget(target)
+            || !graph.ContainsExactCityOwner(city)
+            || !ReferenceEquals(city.Definitions, graph.Definitions)
+            || !string.Equals(originDecisionId, payload.OriginDecisionId, StringComparison.Ordinal)
+            || !IsCurrent())
+            throw new InvalidOperationException(
+                "The Core-only Guard Arrest publication left its exact admitted owners.");
+
+        // DomainEventRecorder.Record historically reports failure without
+        // rolling back the committed arrest. Keep that post-commit behavior;
+        // the session recorder itself retains event identity and sequence.
+        if (!executionState.TryRecordSelectedNpcArrestEvent(
+                guard, target, city, originDecisionId, out _))
+            throw new InvalidOperationException(
+                "The Core-only Guard Arrest could not record through its exact selected event authority.");
     }
 
     public void RefreshStatusProjection(DailyV1NpcRuntimeOwners candidate) => EnsureExactActor(candidate);
@@ -1300,9 +1703,20 @@ internal sealed class DailyV1CoreOnlyCrimeActionBoundary :
             || (hadActiveSentence && eventCity == null))
             throw new InvalidOperationException(
                 "Escape publication left the exact Core-only Crime action boundary.");
-        // Publication is a Unity presentation effect; the Core Justice/NPC
-        // owners already contain the authoritative transition.
+        if (!executionState.TryRecordSelectedNpcEscapeEvent(
+                candidate, eventCity, originDecisionId, out _))
+            throw new InvalidOperationException(
+                "The Core-only Escape could not record through its exact selected event authority.");
     }
+
+    private bool IsGuardArrestTarget(DailyV1NpcRuntimeOwners candidate) =>
+        action?.Values.actionType?.Value == DailyV1NpcDefinitionRules.ArrestActionTypeValue
+        && candidate != null
+        && graph.TryGetNpcOwner(payload?.TargetNpcRuntimeId,
+            out DailyV1NpcRuntimeOwners exactTarget)
+        && ReferenceEquals(candidate, exactTarget)
+        && graph.ContainsExactNpcOwner(candidate)
+        && ReferenceEquals(candidate.Definitions, graph.Definitions);
 
     private bool IsExactActiveSentence(DailyV1JusticeSentenceOwner sentence) =>
         sentence != null && sentence.IsActive

@@ -75,7 +75,8 @@ internal sealed class DailyV1DomainEventAuthority
                 executionBoundaryState.SelectedDecisionStore))
             return false;
 
-        return executionBoundaryState.TryBindSelectedTravelEventRecorders(
-            Recorder, Recorder);
+        return executionBoundaryState.TryBindSelectedDomainEventRecorder(Recorder)
+            && executionBoundaryState.TryBindSelectedTravelEventRecorders(
+                Recorder, Recorder);
     }
 }
