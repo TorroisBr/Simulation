@@ -1,8 +1,8 @@
 # Core-composed selected demography boundary
 
-Date: 2026-11-18  
-Candidate implementation commit: `c17fe044b6053d6a84278843b6d842b80b8366b8`  
-Parent: `6af0932c3490e9ded814ac6e64004dbafd284a82`  
+Date: 2026-11-18
+Candidate implementation commit: `c17fe044b6053d6a84278843b6d842b80b8366b8`
+Parent: `6af0932c3490e9ded814ac6e64004dbafd284a82`
 Tree: `1c60ae76289ab132787c5ae83a9920507ad984d8`
 
 ## Scope
