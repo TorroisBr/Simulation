@@ -673,6 +673,103 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
+    public void DotNetGenesisStartPublishesTheExactCoreSessionWithoutUnityProjection()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "detached-core-start-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, dotNetIdentity: DotNetIdentity());
+        int runtimeFactoryCalls = 0;
+
+        bool BindCoreRuntimeBoundary(
+            DailyV1ApplicationStartPreparation preparation,
+            DailyV1ActiveRuntimeSession candidateCoreSession,
+            out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+            out string diagnostic)
+        {
+            runtimeFactoryCalls++;
+            Assert.That(preparation.Application, Is.SameAs(application));
+            Assert.That(candidateCoreSession, Is.SameAs(preparation.CoreSession));
+            Assert.That(preparation.Kind,
+                Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+            DailyV1ApplicationSessionGateTests.BindCoreSelectedCensusRegistryAndMarkReadyForTests(
+                candidateCoreSession);
+            candidateHostPorts = new MinimalSelectedRuntimeAdvanceHostPorts(
+                candidateCoreSession.ExecutionBoundaryState);
+            diagnostic = null;
+            return true;
+        }
+
+        Assert.That(application.TryStartDotNetGenesisOnExistingApplication(
+            definitions, host, BindCoreRuntimeBoundary,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult persistenceResult,
+            out string diagnostic), Is.True, diagnostic);
+
+        Assert.That(runtimeFactoryCalls, Is.EqualTo(1));
+        Assert.That(preparation.Kind,
+            Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+        Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(application.ActiveSession, Is.SameAs(preparation.CoreSession));
+        Assert.That(application.ActiveSession.Definitions, Is.SameAs(definitions));
+        Assert.That(application.ActiveSession.RuntimeAdvanceBoundary, Is.Not.Null);
+        Assert.That(application.TryGetPublishedHostProjection(
+            preparation.CoreSession, out _), Is.False,
+            "A detached .NET start publishes the Core session without creating a Unity projection.");
+    }
+
+    [Test]
+    public void DotNetGenesisStartDoesNotFallThroughWhenAContinuationIsLoaded()
+    {
+        Assert.That(TryCreateStructurallyAdmittedDotNetV2Fixture(
+            out DailyV1EffectiveDefinitions definitions,
+            out P12ACompatibilityDescriptorV2 descriptor,
+            out P12ADailyV1SectionManifest manifest,
+            out byte[] bytes,
+            out string fixtureDiagnostic), Is.True, fixtureDiagnostic);
+
+        var operations = new InMemorySlotOperations();
+        const string root = "dotnet-genesis-loaded-slot";
+        Assert.That(P12AContinuationStore.TrySaveDotNetV2(
+            bytes, manifest, descriptor, root, operations,
+            out P12AResult saveResult), Is.True, saveResult?.Code.ToString());
+        Assert.That(saveResult.Code, Is.EqualTo(P12AResultCode.Saved));
+
+        DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            root, operations, stageCompleted: null, logOutput: null,
+            dotNetIdentity: DotNetIdentity());
+        int runtimeFactoryCalls = 0;
+        bool ShouldNotBindRuntimePorts(
+            DailyV1ApplicationStartPreparation preparation,
+            DailyV1ActiveRuntimeSession candidateCoreSession,
+            out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+            out string diagnostic)
+        {
+            runtimeFactoryCalls++;
+            candidateHostPorts = null;
+            diagnostic = "A loaded continuation must be rejected before the genesis runtime factory.";
+            return false;
+        }
+
+        Assert.That(application.TryStartDotNetGenesisOnExistingApplication(
+            definitions, host, ShouldNotBindRuntimePorts,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult persistenceResult,
+            out string diagnostic), Is.False);
+
+        Assert.That(preparation, Is.Not.Null);
+        Assert.That(preparation.Kind,
+            Is.EqualTo(DailyV1ApplicationStartPreparationKind.RestoreRequired));
+        Assert.That(preparation.StartAdmission.Kind,
+            Is.EqualTo(DailyV1ApplicationStartAdmissionKind.RestoreRequired));
+        Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.Loaded));
+        Assert.That(runtimeFactoryCalls, Is.Zero);
+        Assert.That(application.ActiveSession, Is.Null);
+        Assert.That(diagnostic, Does.Contain("rejects a loaded continuation"));
+    }
+    [Test]
     public void CoreGenesisStartRejectsProjectionWithoutExactCoreSessionBinding()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -1417,6 +1514,87 @@ public sealed class DailyV1ApplicationHostTests
         return P12AContinuationCodec.TryEncode(image, manifest, out bytes, out P12AResult result)
             ? true
             : Fail(result?.Code.ToString(), out diagnostic);
+    }
+
+    private static bool TryCreateStructurallyAdmittedDotNetV2Fixture(
+        out DailyV1EffectiveDefinitions definitions,
+        out P12ACompatibilityDescriptorV2 descriptor,
+        out P12ADailyV1SectionManifest manifest,
+        out byte[] bytes,
+        out string diagnostic)
+    {
+        definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        descriptor = null;
+        manifest = null;
+        bytes = null;
+        diagnostic = null;
+        if (!DailyV1CompatibilityDescriptorFactory.TryCreateDotNetV2(
+                definitions, DotNetIdentity(), out descriptor, out diagnostic)
+            || !DailyV1GenesisComposer.TryComposeSelectedOwners(
+                definitions, SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+                out DailyV1GenesisComposition composition, out diagnostic)
+            || composition?.P9ManifestSnapshot == null
+            || !(composition.RandomSource is DeterministicRandomSource random))
+            return Fail(string.IsNullOrWhiteSpace(diagnostic)
+                ? "The structurally admitted image fixture could not bind its genesis roots."
+                : diagnostic, out diagnostic);
+
+        var snapshots = new List<OwnerSectionCensusSnapshot>();
+        var ownersByAlias = new Dictionary<string, object>(StringComparer.Ordinal);
+        foreach (string id in P12ADailyV1Census.FixedRequiredSectionIds)
+            AddSnapshot(id, OwnerSectionRole.Required, cardinality: 1);
+        foreach (string id in P12ADailyV1Census.FixedEmptySectionIds)
+            AddSnapshot(id, OwnerSectionRole.ExplicitlyEmpty, cardinality: 0);
+        foreach (string prefix in P12ADailyV1Census.NpcSectionPrefixes)
+            AddSnapshot(prefix + "npc-fixture", OwnerSectionRole.Required, cardinality: 1);
+        foreach (string prefix in P12ADailyV1Census.CitySectionPrefixes)
+        {
+            string id = prefix == "p12b.city.important-npcs/"
+                ? prefix + "city-fixture"
+                : prefix + "12:city-fixture";
+            AddSnapshot(id, OwnerSectionRole.Required, cardinality: 1);
+        }
+
+        if (!P12ADailyV1Census.TryCreate(snapshots, out P12ADailyV1Census census,
+                out P12AResult snapshotCensusResult)
+            || census == null)
+            return Fail(snapshotCensusResult?.Code.ToString()
+                ?? "The structural owner snapshots did not satisfy the complete Daily-v1 census.", out diagnostic);
+
+        var sections = new List<P12AOwnerSection>(census.Sections.Count);
+        foreach (P12ACensusSectionValue value in census.Sections)
+        {
+            P12AOwnerRow[] rows = value.Cardinality == 0
+                ? Array.Empty<P12AOwnerRow>()
+                : new[] { new P12AOwnerRow("fixture-row", 0L, new byte[] { 0x2A }) };
+            sections.Add(new P12AOwnerSection(value.Id, value.SchemaVersion, 0,
+                value.Role, value.AliasGroup, value.Revision, rows));
+        }
+
+        var header = P12AContinuationHeader.ForDotNetV2(
+            composition.WorldId.Value, 0L, 1L, -1L,
+            composition.P9ManifestSnapshot.SelectedP9ContractIdentity,
+            composition.P9ManifestSnapshot.Fingerprint,
+            "P8-A", descriptor.P8Fingerprint, 0L, descriptor);
+        var image = new P12AContinuationImage(header,
+            new P12ACausalRootPayload(composition.P9ManifestSnapshot,
+                random.CaptureSnapshot()), sections);
+        if (!P12AContinuationCodec.TryEncode(image, census.Manifest,
+                out bytes, out P12AResult encodeResult))
+            return Fail(encodeResult?.Code.ToString()
+                ?? "The structural image could not be encoded.", out diagnostic);
+
+        manifest = census.Manifest;
+        return true;
+        void AddSnapshot(string id, OwnerSectionRole role, int cardinality)
+        {
+            string alias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(id);
+            if (alias != null && !ownersByAlias.TryGetValue(alias, out _))
+                ownersByAlias.Add(alias, new object());
+            object ownerIdentity = alias == null ? new object() : ownersByAlias[alias];
+            snapshots.Add(new OwnerSectionCensusSnapshot(
+                id, 1, role, ownerIdentity, cardinality, 0L));
+        }
     }
 
     private static bool Fail(string message, out string diagnostic)

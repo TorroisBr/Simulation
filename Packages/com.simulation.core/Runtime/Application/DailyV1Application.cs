@@ -397,6 +397,15 @@ internal delegate bool DailyV1ApplicationInitialStartHostProjectionFactory(
     out IDailyV1ApplicationHostProjection candidateHostProjection,
     out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
     out string diagnostic);
+/// <summary>
+/// Supplies the Core-owned runtime boundary for the fixed detached host. It
+/// deliberately has no Unity projection output.
+/// </summary>
+internal delegate bool DailyV1ApplicationInitialRuntimePortsFactory(
+    DailyV1ApplicationStartPreparation preparation,
+    DailyV1ActiveRuntimeSession candidateCoreSession,
+    out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+    out string diagnostic);
 
 internal sealed class DailyV1Application
 {
@@ -661,6 +670,146 @@ internal sealed class DailyV1Application
         }
     }
 
+    /// <summary>
+    /// Starts the fixed .NET host through Core's NoSave genesis admission and
+    /// active-session gate. A loaded continuation remains fail-closed until
+    /// this path owns the full Core restore staging sequence. The detached host
+    /// supplies only the exact runtime boundary ports; this path never creates
+    /// or publishes a Unity projection.
+    /// </summary>
+    internal bool TryStartDotNetGenesisOnExistingApplication(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ApplicationHost host,
+        DailyV1ApplicationInitialRuntimePortsFactory runtimePortsFactory,
+        out DailyV1ApplicationStartPreparation preparation,
+        out P12AResult persistenceResult,
+        out string diagnostic)
+    {
+        preparation = null;
+        persistenceResult = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        diagnostic = null;
+        if (host?.DotNetIdentity == null || host.UnityV1Identity != null)
+        {
+            diagnostic = "The detached start path requires the fixed .NET v2 host identity.";
+            return false;
+        }
+
+        if (runtimePortsFactory == null)
+        {
+            diagnostic = "The detached start path requires its Core runtime-boundary factory.";
+            return false;
+        }
+
+        try
+        {
+            if (!TryPrepareStartOnExistingApplication(
+                    definitions, host, out preparation, out persistenceResult, out diagnostic))
+                return false;
+
+            if (preparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                || preparation.StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.GenesisRequired
+                || preparation.PersistenceResult.Code != P12AResultCode.NoSave
+                || preparation.CoreSession == null)
+            {
+                diagnostic = "The detached genesis path rejects a loaded continuation until Core-owned initial restore staging is integrated.";
+                return false;
+            }
+
+            IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts;
+            bool portsReady;
+            try
+            {
+                portsReady = runtimePortsFactory(
+                    preparation, preparation.CoreSession,
+                    out candidateHostPorts, out diagnostic);
+            }
+            catch (Exception exception) when (exception is ArgumentException
+                || exception is InvalidOperationException || exception is OverflowException
+                || exception is NullReferenceException)
+            {
+                diagnostic = "The detached runtime boundary could not bind the exact prepared Core session: "
+                    + exception.Message;
+                return false;
+            }
+
+            if (!portsReady || candidateHostPorts == null)
+            {
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "The detached host did not provide runtime ports for the exact Core session.";
+                return false;
+            }
+
+            return TryCommitInitialGenesisWithoutHostProjection(
+                preparation, candidateHostPorts, out diagnostic);
+        }
+        finally
+        {
+            if (preparation?.Kind == DailyV1ApplicationStartPreparationKind.RestoreRequired)
+                ClearPreparedInitialRestoredSession(preparation.RestoreImage);
+        }
+    }
+
+    /// <summary>
+    /// Publishes the exact admitted .NET genesis session without a Unity
+    /// projection. The runtime boundary remains bound to the candidate's exact
+    /// execution state and is installed before the sole session exchange.
+    /// </summary>
+    internal bool TryCommitInitialGenesisWithoutHostProjection(
+        DailyV1ApplicationStartPreparation preparation,
+        IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        DailyV1ApplicationHost host = BoundHost;
+        DailyV1ActiveRuntimeSession candidate = preparation?.CoreSession;
+        if (host?.DotNetIdentity == null || host.UnityV1Identity != null)
+        {
+            diagnostic = "Projection-free initial publication is reserved for the fixed .NET host.";
+            return false;
+        }
+
+        if (preparation == null
+            || !ReferenceEquals(preparation.Application, this)
+            || preparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+            || preparation.StartAdmission == null
+            || !ReferenceEquals(preparation.StartAdmission.Application, this)
+            || preparation.StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.GenesisRequired
+            || !ReferenceEquals(preparation.PersistenceResult,
+                preparation.StartAdmission.PersistenceResult)
+            || preparation.PersistenceResult.Code != P12AResultCode.NoSave
+            || candidate == null || candidateHostPorts == null
+            || !ReferenceEquals(candidate.ExecutionBoundaryState,
+                candidateHostPorts.ExecutionState))
+        {
+            diagnostic = "Projection-free publication requires this application's exact prepared session and runtime boundary.";
+            return false;
+        }
+
+        if (!ReferenceEquals(preparedInitialSession, candidate)
+            || !ReferenceEquals(preparedInitialGenesis, preparation.GenesisComposition)
+            || !ReferenceEquals(candidate.GenesisComposition, preparation.GenesisComposition)
+            || !ReferenceEquals(candidate.Definitions, preparation.GenesisComposition?.Definitions)
+            || !ReferenceEquals(candidate.AdmissionContext, bootstrapAdmissionContext)
+            || candidate.AdmissionContext?.IsOwnedByCurrentThread() != true)
+        {
+            diagnostic = "Projection-free genesis publication requires this application's exact private NoSave candidate.";
+            return false;
+        }
+
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (activeSessionGate.Current != null
+                || activeSessionGate.ActiveOperationCount != 0
+                || activeHostProjections.Count != 0
+                || !TryBindRuntimeAdvanceBoundary(candidate, candidateHostPorts)
+                || !TryPublishInitial(candidate))
+            {
+                diagnostic = "Core rejected projection-free genesis runtime binding or session publication.";
+                return false;
+            }
+        }
+        return true;
+    }
     private static SimulationLogger CreateInitialLogger(
         DailyV1EffectiveDefinitions definitions,
         DailyV1ApplicationHost host)
