@@ -2325,9 +2325,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             definitions.ExplorableSites.Values);
     }
 
-    private static DailyV1EffectiveDefinitions CopyWithNaturalMortalityEnabled(
+    internal static DailyV1EffectiveDefinitions CopyWithNaturalMortalityEnabled(
         DailyV1EffectiveDefinitions definitions,
-        bool enabled)
+        bool enabled,
+        double annualProbability = 0d)
     {
         EffectiveSimulationConfiguration current = definitions.EffectiveConfiguration;
         EffectiveSimulationConfiguration configuration = new EffectiveSimulationConfiguration(
@@ -2336,7 +2337,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             current.Travel,
             current.Crime,
             current.GuardCrime,
-            new EffectiveNaturalMortalityConfiguration(enabled, 0d),
+            new EffectiveNaturalMortalityConfiguration(enabled, annualProbability),
             current.AggregateDemography,
             current.MerchantTrade,
             current.CommercialKnowledge);
@@ -2478,7 +2479,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         return CopyWithEconomyEnabled(definitions, true);
     }
 
-    private sealed class FakeBoundary : IDailyV1SelectedDailyExecutionBoundary,
+    internal sealed class FakeBoundary : IDailyV1SelectedDailyExecutionBoundary,
         IDailyV1SelectedDailyExecutionHostPorts
     {
         private readonly RuntimeIdAllocator runtimeIdAllocator;
@@ -2511,6 +2512,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal DailyV1SelectedDemographyResult PublishedDemographyResult { get; private set; }
         internal bool ThrowOnDemography { get; set; }
         internal bool OmitDemographyBoundary { get; set; }
+        internal IPersonNaturalMortalitySampleProvider MortalitySampleProvider { get; set; }
         internal bool ThrowOnBeginDay { get; set; }
         internal bool SubstituteActorPersonStore { get; set; }
         internal bool UseSelectedDayStartContext { get; set; }
@@ -2553,7 +2555,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             Calls.Add("demography");
             if (ThrowOnDemography) throw new InvalidOperationException("demography failed");
-            context = new FakeDemographyContext(graph);
+            context = new FakeDemographyContext(
+                graph, OmitDemographyBoundary, MortalitySampleProvider);
             return true;
         }
         public bool TryCreateSelectedDemographyHostPorts(
@@ -2566,7 +2569,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 hostPorts = null;
                 throw new InvalidOperationException("demography failed");
             }
-            hostPorts = new FakeDemographyContext(graph, OmitDemographyBoundary);
+            hostPorts = new FakeDemographyContext(
+                graph, OmitDemographyBoundary, MortalitySampleProvider);
             return true;
         }
         public void PublishSelectedDemographyResult(DailyV1SelectedDemographyResult result)
@@ -2692,7 +2696,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             internal FakeDemographyContext(
                 DailyV1SelectedRuntimeOwnerGraph graph,
-                bool omitBoundary = false)
+                bool omitBoundary = false,
+                IPersonNaturalMortalitySampleProvider mortalitySamples = null)
             {
                 DailyV1CalendarDefinition definition = graph.Definitions.Calendar;
                 Calendar = definition.monthLengths != null && definition.monthLengths.Count > 0
@@ -2701,10 +2706,11 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                     : new SimulationCalendar(new CalendarDefinition(
                         definition.monthsPerYear, definition.weeksPerMonth, definition.daysPerWeek));
                 Boundary = omitBoundary ? null : new FakeDemographyBoundary(graph);
+                MortalitySamples = mortalitySamples;
             }
 
             public SimulationCalendar Calendar { get; }
-            public IPersonNaturalMortalitySampleProvider MortalitySamples => null;
+            public IPersonNaturalMortalitySampleProvider MortalitySamples { get; }
             public IAggregateDemographyProvider AggregateProvider => null;
             public IDailyV1SelectedDemographyBoundary Boundary { get; }
         }
@@ -3018,6 +3024,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             IDailyV1SelectedActorChoiceExecutionContext,
             IDailyV1CoreActorChoiceExecutionBoundary,
             IDailyV1SelectedMerchantTradeStateBoundary,
+            IDailyV1SelectedMerchantTradeStateP12HostPorts,
             IDailyV1SelectedActorTurnHostPorts,
             IDailyV1SelectedCrimeJusticeDailyBoundary
         {

@@ -150,6 +150,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         private Action<DailyV1CaptureScopeAllowance> onOwnerSectionCensusCapture;
         private readonly Dictionary<string, SnapshotOwnerSectionCensusProvider> coreCensusProviders =
             new Dictionary<string, SnapshotOwnerSectionCensusProvider>(StringComparer.Ordinal);
+        private DailyV1SelectedRuntimeOwnerGraph selectedDailyExecutionOwnerGraph;
+        private IDailyV1SelectedDailyExecutionHostPorts selectedDailyExecutionHostPorts;
 
         internal ApplicationAdvanceBoundary(
             DailyV1ExecutionBoundaryState state,
@@ -171,6 +173,20 @@ public sealed class DailyV1ApplicationSessionGateTests
         internal bool ReturnSelectedExecutionHostPorts { get; set; }
         internal int SelectedExecutionHostPortCreationCount { get; private set; }
         internal int LegacyAdvanceInvocationCount { get; private set; }
+
+        internal bool TryBindSelectedDailyExecutionHostPorts(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            IDailyV1SelectedDailyExecutionHostPorts hostPorts)
+        {
+            if (graph == null || hostPorts == null
+                || !ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph)
+                || selectedDailyExecutionHostPorts != null)
+                return false;
+
+            selectedDailyExecutionOwnerGraph = graph;
+            selectedDailyExecutionHostPorts = hostPorts;
+            return true;
+        }
         internal bool Faulted { get; private set; }
         internal string RequestedRuntimeProtocolOperationId { get; private set; }
         internal bool? RequestedSessionReplacement { get; private set; }
@@ -303,6 +319,15 @@ public sealed class DailyV1ApplicationSessionGateTests
             onOperationEntry?.Invoke();
             SelectedBoundaryRequested = true;
             SelectedExecutionHostPortCreationCount++;
+            if (selectedDailyExecutionHostPorts != null)
+            {
+                hostPorts = ReferenceEquals(graph, selectedDailyExecutionOwnerGraph)
+                    && ReferenceEquals(graph, state.SelectedRuntimeOwnerGraph)
+                    ? selectedDailyExecutionHostPorts
+                    : null;
+                return hostPorts != null;
+            }
+
             hostPorts = ReturnSelectedExecutionHostPorts
                 ? new SelectedDailyExecutionHostPorts()
                 : null;
@@ -474,7 +499,10 @@ public sealed class DailyV1ApplicationSessionGateTests
         return new TestSession(state);
     }
 
-    private static void EnsureRuntimeProtocolInventory(DailyV1ExecutionBoundaryState state)
+    private static void EnsureRuntimeProtocolInventory(
+        DailyV1ExecutionBoundaryState state,
+        bool hasTravelPartySystem = false,
+        bool hasTravelSystem = false)
     {
         if (state.HasRuntimeProtocolOperationInventory) return;
         Assert.That(state.HasRegisteredRuntimeProtocolOperationContracts, Is.False,
@@ -482,8 +510,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         IReadOnlyList<string> operationContractIds =
             DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
                 hasRuntimeAdmission: true,
-                hasTravelPartySystem: false,
-                hasTravelSystem: false);
+                hasTravelPartySystem: hasTravelPartySystem,
+                hasTravelSystem: hasTravelSystem);
         foreach (string operationContractId in operationContractIds)
             Assert.That(state.TryRegisterRuntimeProtocolOperationContract(operationContractId), Is.True);
         Assert.That(state.TrySealRuntimeProtocolOperationInventory(), Is.True);
@@ -2880,6 +2908,137 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
     }
 
+    [Test]
+    public void ApplicationAdvanceExecutesCoreComposedResidentDeathWithoutUnityProjection()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1SelectedDailyExecutionStageTests.CopyWithNaturalMortalityEnabled(
+                DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
+                enabled: true,
+                annualProbability: 1d);
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession session,
+            out string diagnostic), Is.True, diagnostic);
+
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        Assert.That(state.TryMarkFactualReadWorldPublished(), Is.True);
+        EnsureRuntimeProtocolInventory(
+            state, hasTravelPartySystem: true, hasTravelSystem: true);
+        Assert.That(graph.TravelParties, Is.Not.Null);
+        Assert.That(state.HasRuntimeProtocolOperationContract(
+            DailyV1RuntimeProtocolOperationContracts.TravelPartyAdvance), Is.True);
+        Assert.That(state.HasRuntimeProtocolOperationContract(
+            DailyV1RuntimeProtocolOperationContracts.SoloTravelStart), Is.True);
+
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[3];
+        DailyV1CityRuntimeOwners city = graph.Cities[0];
+        Assert.That(city.Population.CurrentPopulation, Is.GreaterThan(0));
+        Assert.That(graph.PersonStore.TryGetByMaterializedNpcRuntimeId(
+            npc.RuntimeId, out _), Is.False,
+            "The fixture attaches one exact Core Person row to an otherwise unmaterialized selected NPC.");
+        PersonRuntime person = new PersonRuntime(
+            new PersonId("application-core-resident-death"), state.SimulationTime.AbsoluteDay);
+        Assert.That(graph.PersonStore.TryRegister(person, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(state.TryCreateSelectedRuntimeActorRosterWithPersonBinding(
+            npc.RuntimeId, person.PersonId,
+            out IReadOnlyList<DailyV1ActorTurnRosterProjection> expectedRoster,
+            out IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster), Is.True);
+        Assert.That(state.TryCommitSelectedRuntimeActorRoster(
+            expectedRoster, replacementRoster), Is.True,
+            "The actor-turn projection carries the exact PersonId materialized into the selected NPC owner.");
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            person, city.RuntimeId), Is.True);
+        Assert.That(graph.PersonStore.TryBindMaterializedNpc(
+            person.PersonId, npc.RuntimeId, out PersonStoreFailure bindFailure),
+            Is.True, bindFailure.ToString());
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryPrepare(
+            graph, graph.PersonStore, person, state.SimulationTime.AbsoluteDay,
+            out DailyV1SelectedPersonDeathPlan plan, out diagnostic), Is.True, diagnostic);
+        Assert.That(plan.MaterializedNpc, Is.SameAs(npc));
+        Assert.That(plan.ResidenceCity, Is.SameAs(city));
+
+        DailyV1CoreSelectedPersonDeathBoundaryTests.BindCompleteCoreCensus(
+            state, session, plan);
+        OwnerSectionCensusSnapshot[] ownerSections =
+            CreateCoreBoundCompleteOwnerSectionVector(session);
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(ownerSections), Is.True);
+        ApplicationAdvanceBoundary runtimeHost = new ApplicationAdvanceBoundary(
+            state, onOperationEntry: null, ownerSections,
+            state.MutationEpochState.CurrentEpoch);
+        DailyV1SelectedDailyExecutionStageTests.FakeBoundary dailyHost =
+            new DailyV1SelectedDailyExecutionStageTests.FakeBoundary(
+                state.SelectedRuntimeIdAllocator,
+                state.SelectedRandomSource,
+                state.SelectedRecordSequence,
+                state.SelectedDecisionStore,
+                state.SelectedActorChoiceStore)
+            {
+                UseSelectedActionExecution = true,
+                UseSelectedDayStartContext = true,
+                ActorChoiceSelectedActionExecutionOverride = false,
+                OmitDemographyBoundary = true,
+                MortalitySampleProvider = new CertainMortalitySamples()
+            };
+        Assert.That(runtimeHost.TryBindSelectedDailyExecutionHostPorts(
+            graph, dailyHost), Is.True);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(
+            session, runtimeHost), Is.True);
+        Assert.That(application.TryPublishInitial(session), Is.True,
+            "The application publishes only after the exact Core census and host adapter are bound.");
+
+        long startDay = session.SimulationTime.AbsoluteDay;
+        long startEpoch = state.MutationEpochState.CurrentEpoch;
+        long personRevision = PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person);
+        long npcLifeRevision = npc.Lifecycle.LifeStateRevision;
+        long populationRevision = city.Population.Revision;
+        int populationBefore = city.Population.CurrentPopulation;
+
+        Assert.That(application.TryAdvanceDay(
+            out SimulationRuntimeAdvanceFailure failure), Is.True, failure.ToString());
+
+        Assert.That(session.SimulationTime.AbsoluteDay, Is.EqualTo(startDay + 1L));
+        Assert.That(state.CompletedCoreSequence, Is.EqualTo(1L));
+        Assert.That(state.CurrentCaptureToken, Is.Not.Null);
+        Assert.That(state.CurrentCaptureToken.AbsoluteDay, Is.EqualTo(startDay + 1L));
+        Assert.That(person.DeathAbsoluteDay, Is.Not.Null,
+            "The app-gated Core demography stage applies the deterministic resident death.");
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person),
+            Is.EqualTo(personRevision + 2L));
+        Assert.That(npc.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Dead));
+        Assert.That(npc.Lifecycle.LifeStateRevision, Is.EqualTo(npcLifeRevision + 1L));
+        Assert.That(city.Population.CurrentPopulation, Is.EqualTo(populationBefore - 1));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevision + 1L));
+        Assert.That(dailyHost.Calls, Does.Contain("demography-host-ports"));
+        Assert.That(dailyHost.Calls, Does.Not.Contain("demography"),
+            "Core composes its execution boundary from host sample ports and no Unity projection.");
+        Assert.That(dailyHost.PublishedDemographyResult, Is.Not.Null);
+        Assert.That(dailyHost.PublishedDemographyResult.NamedDeathsApplied, Is.EqualTo(1));
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(startEpoch + 1L));
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.False);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(state.ActiveOperationCount, Is.Zero);
+        Assert.That(state.AdvanceLeaseHeld, Is.False);
+        Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.False);
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+            out long capturedEpoch,
+            out DailyCaptureEligibilityFailure captureFailure), Is.True, captureFailure.ToString());
+        Assert.That(capturedEpoch, Is.EqualTo(startEpoch + 1L));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True,
+            "The completed application day retains the exact complete Core-bound P12 census.");
+    }
+
+    private sealed class CertainMortalitySamples : IPersonNaturalMortalitySampleProvider
+    {
+        public double GetSample(PersonId personId, long currentAbsoluteDay) => 0d;
+    }
     [Test]
     public void CoreSelectsAndRechecksExactP12CaptureScopeWithoutUsingHostCensusPort()
     {
