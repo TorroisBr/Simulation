@@ -636,6 +636,33 @@ internal sealed class DailyV1NpcActionSlotOwner
         if (Revision < long.MaxValue) Revision++;
     }
 
+    internal bool CanRollbackSelectedDeathMutation(
+        DailyV1ActionDefinition expectedAction,
+        DailyV1NpcActionPayloadOwner expectedPayload,
+        long revisionBefore)
+    {
+        if (revisionBefore < 0L || revisionBefore > long.MaxValue - (expectedAction == null ? 0L : 1L))
+            return false;
+        bool unchanged = Revision == revisionBefore
+            && ReferenceEquals(CurrentAction, expectedAction)
+            && ReferenceEquals(CurrentPayload, expectedPayload);
+        bool cleared = expectedAction != null
+            && Revision == revisionBefore + 1L
+            && CurrentAction == null
+            && CurrentPayload == null;
+        return unchanged || cleared;
+    }
+
+    internal void RollbackSelectedDeathMutation(
+        DailyV1ActionDefinition expectedAction,
+        DailyV1NpcActionPayloadOwner expectedPayload,
+        long revisionBefore)
+    {
+        CurrentAction = expectedAction;
+        CurrentPayload = expectedPayload;
+        Revision = revisionBefore;
+    }
+
     /// <summary>
     /// Captures the selected action payload from its authoritative Core slot
     /// for persistence. Unity adapters may validate their object projection,
@@ -848,6 +875,32 @@ internal sealed class DailyV1NpcLifecycleOwner
     internal void NotifyLifeStateMutationCommitted()
     {
         if (LifeStateRevision < long.MaxValue) LifeStateRevision++;
+    }
+
+    internal bool CanRollbackSelectedDeathMutation(
+        NpcLifeState lifeStateBefore,
+        NpcInjurySeverity injurySeverityBefore,
+        long revisionBefore)
+    {
+        if (revisionBefore < 0L || revisionBefore == long.MaxValue)
+            return false;
+        bool unchanged = LifeStateRevision == revisionBefore
+            && LifeState == lifeStateBefore
+            && InjurySeverity == injurySeverityBefore;
+        bool applied = LifeStateRevision == revisionBefore + 1L
+            && LifeState == NpcLifeState.Dead
+            && InjurySeverity == injurySeverityBefore;
+        return unchanged || applied;
+    }
+
+    internal void RollbackSelectedDeathMutation(
+        NpcLifeState lifeStateBefore,
+        NpcInjurySeverity injurySeverityBefore,
+        long revisionBefore)
+    {
+        LifeState = lifeStateBefore;
+        InjurySeverity = injurySeverityBefore;
+        LifeStateRevision = revisionBefore;
     }
 }
 

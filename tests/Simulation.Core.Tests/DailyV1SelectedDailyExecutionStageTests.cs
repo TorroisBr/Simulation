@@ -2629,6 +2629,19 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 representedFloors = floors;
             }
 
+            public bool TryBeginPersonDeathProjectionMutation(
+                DailyV1SelectedPersonDeathPlan plan,
+                string operationId,
+                bool currentActionChanged,
+                IReadOnlyList<string> sectionIds) => false;
+
+            public bool TryCompletePersonDeathProjectionMutation(
+                DailyV1SelectedPersonDeathPlan plan,
+                string operationId,
+                bool currentActionChanged,
+                IReadOnlyList<string> sectionIds,
+                bool operationSucceeded) => false;
+
             public bool TryValidatePersonDeathProjection(
                 DailyV1SelectedPersonDeathPlan plan,
                 out bool currentActionChanged,

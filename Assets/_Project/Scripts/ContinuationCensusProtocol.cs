@@ -102,6 +102,41 @@ public sealed class ContinuationCensusProtocol
         }
     }
 
+    internal sealed class CompatibilityMirrorBaselineSnapshot
+    {
+        internal readonly ContinuationCensusProtocol Owner;
+        internal readonly object Registry;
+
+        internal CompatibilityMirrorBaselineSnapshot(
+            ContinuationCensusProtocol owner,
+            object registry)
+        {
+            Owner = owner;
+            Registry = registry;
+        }
+
+    }
+
+    internal sealed class CompatibilityMirrorBaselineUpdate
+    {
+        internal readonly ContinuationCensusProtocol Owner;
+        internal readonly DailyV1MutationEpochReservation Reservation;
+        internal readonly object PriorRegistry;
+        internal readonly object StagedRegistry;
+
+        internal CompatibilityMirrorBaselineUpdate(
+            ContinuationCensusProtocol owner,
+            DailyV1MutationEpochReservation reservation,
+            object priorRegistry,
+            object stagedRegistry)
+        {
+            Owner = owner;
+            Reservation = reservation;
+            PriorRegistry = priorRegistry;
+            StagedRegistry = stagedRegistry;
+        }
+    }
+
     private sealed class SpatialKnowledgeSectionCandidate
     {
         public readonly string SectionId;
@@ -1594,6 +1629,165 @@ public sealed class ContinuationCensusProtocol
             out failure,
             advanceEpoch: false,
             refreshCoreOwnerSectionRegistry: false);
+    }
+
+    /// <summary>
+    /// Captures the current immutable registry reference so a surrounding
+    /// Core-owned operation can restore the compatibility baseline if its
+    /// reserved Core census/epoch commit is rejected after mirror validation.
+    /// The registry is replaced, never edited in place, on bound operations.
+    /// </summary>
+    internal CompatibilityMirrorBaselineSnapshot CaptureCompatibilityMirrorBaselineSnapshot()
+    {
+        if (!TryRequireOwnerThread(out _)) return null;
+        return new CompatibilityMirrorBaselineSnapshot(this, registeredSections);
+    }
+
+    internal bool TryRestoreCompatibilityMirrorBaselineSnapshot(
+        CompatibilityMirrorBaselineSnapshot snapshot)
+    {
+        if (snapshot == null
+            || !ReferenceEquals(snapshot.Owner, this)
+            || !TryRequireOwnerThread(out _))
+            return false;
+
+        if (!(snapshot.Registry is Dictionary<string, RegisteredSection> priorRegistry))
+            return false;
+
+        registeredSections = priorRegistry;
+        return true;
+    }
+
+    /// <summary>
+    /// Builds a complete replacement compatibility registry without publishing
+    /// it or faulting the Core protocol when a provider read rejects. This is
+    /// used by a Core-reserved transaction that must still be able to roll back
+    /// its owners before the one authoritative epoch is committed.
+    /// </summary>
+    internal bool TryPrepareCompatibilityMirrorBaselineUpdate(
+        IEnumerable<string> sectionIds,
+        DailyV1MutationEpochReservation reservation,
+        out CompatibilityMirrorBaselineUpdate update,
+        out string rejection)
+    {
+        update = null;
+        rejection = null;
+        if (!TryRequireOwnerThread(out ContinuationCensusFailure ownerFailure))
+        {
+            rejection = "OwnerThread:" + ownerFailure;
+            return false;
+        }
+        if (reservation == null
+            || !ReferenceEquals(activeMutationEpochReservation, reservation)
+            || !mutationEpochState.Owns(reservation))
+        {
+            rejection = "CoreMutationEpochReservationMismatch";
+            return false;
+        }
+        if (sectionIds == null)
+        {
+            rejection = "ChangedSectionIdsMissing";
+            return false;
+        }
+
+        HashSet<string> changedIds = new HashSet<string>(StringComparer.Ordinal);
+        List<PendingSectionBaseline> observed = new List<PendingSectionBaseline>();
+        try
+        {
+            foreach (string sectionId in sectionIds)
+            {
+                if (string.IsNullOrWhiteSpace(sectionId)
+                    || !changedIds.Add(sectionId)
+                    || !registeredSections.TryGetValue(sectionId, out RegisteredSection section)
+                    || section == null || section.Provider == null || section.Contract == null
+                    )
+                {
+                    rejection = "ChangedSectionInvalidOrUnregistered";
+                    return false;
+                }
+                if (!TryReadAndValidate(
+                        section, allowRevisionAdvance: true,
+                        out OwnerSectionCensusWitness witness,
+                        out ContinuationCensusFailure readFailure))
+                {
+                    rejection = "ChangedSectionWitness:" + readFailure;
+                    return false;
+                }
+                if (section.HasBaseline && witness.Revision == section.LastRevision)
+                {
+                    rejection = "ChangedOwnerRevisionNotAdvanced";
+                    return false;
+                }
+                observed.Add(new PendingSectionBaseline(section, witness));
+            }
+        }
+        catch (Exception exception)
+        {
+            rejection = "ChangedSectionEnumeration:" + exception.GetType().Name;
+            return false;
+        }
+        if (changedIds.Count == 0)
+        {
+            rejection = "ChangedSectionIdsEmpty";
+            return false;
+        }
+
+        Dictionary<string, RegisteredSection> staged;
+        try
+        {
+            staged = new Dictionary<string, RegisteredSection>(
+                registeredSections.Count, StringComparer.Ordinal);
+            foreach (KeyValuePair<string, RegisteredSection> pair in registeredSections)
+            {
+                if (pair.Value == null || pair.Value.Contract == null || pair.Value.Provider == null)
+                {
+                    rejection = "RegisteredSectionInvalid";
+                    return false;
+                }
+                staged.Add(pair.Key, CloneRegisteredSection(pair.Value));
+            }
+            foreach (PendingSectionBaseline pending in observed)
+            {
+                if (!staged.TryGetValue(
+                        pending.Section.Contract.SectionId, out RegisteredSection target))
+                {
+                    rejection = "StagedChangedSectionMissing";
+                    return false;
+                }
+                SetBaseline(target, pending.Witness);
+            }
+        }
+        catch (Exception exception)
+        {
+            rejection = "BaselineClone:" + exception.GetType().Name;
+            return false;
+        }
+
+        update = new CompatibilityMirrorBaselineUpdate(
+            this, reservation, registeredSections, staged);
+        return true;
+    }
+
+    /// <summary>
+    /// Publishes a prepared mirror registry by replacing one reference only.
+    /// Under the bound owner thread, no provider read or epoch mutation occurs.
+    /// </summary>
+    internal bool TryPublishCompatibilityMirrorBaselineUpdate(
+        CompatibilityMirrorBaselineUpdate update,
+        DailyV1MutationEpochReservation reservation)
+    {
+        if (update == null
+            || !ReferenceEquals(update.Owner, this)
+            || !ReferenceEquals(update.Reservation, reservation)
+            || !ReferenceEquals(activeMutationEpochReservation, reservation)
+            || !mutationEpochState.Owns(reservation)
+            || !ReferenceEquals(registeredSections, update.PriorRegistry)
+            || !TryRequireOwnerThread(out _)
+            || !(update.StagedRegistry is Dictionary<string, RegisteredSection> staged))
+            return false;
+
+        registeredSections = staged;
+        return true;
     }
 
     /// <summary>

@@ -1249,6 +1249,8 @@ public sealed class P12PopulationLifecycleInvalidationTests
             configuration: configuration,
             personStore: people,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1());
+        Assert.That(runtime.ExecutionBoundaryState.HasAdmittedSelectedDailyExecution, Is.False,
+            "This selected-profile compatibility fixture has no admitted Core execution session and must retain the Unity P12 fallback.");
         DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
 
         Assert.That(runtime.Configuration.NaturalMortality.Enabled, Is.False);

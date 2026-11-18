@@ -455,7 +455,9 @@ public sealed class DailyV1SelectedDemographyStageTests
         long populationRevisionAfterCompetingWrite = city.Population.Revision;
 
         Assert.That(DailyV1SelectedPersonDeathOperation.TryCommit(
-            graph, people, plan, out _), Is.False);
+            graph, people, plan, out bool rollbackSucceeded, out _), Is.False);
+        Assert.That(rollbackSucceeded, Is.True,
+            "A stale preflight is rejected before writing and does not need rollback.");
         Assert.That(person.DeathAbsoluteDay, Is.Null);
         Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
         Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person), Is.EqualTo(personRevision));
@@ -579,6 +581,19 @@ public sealed class DailyV1SelectedDemographyStageTests
             floorSupplements = values;
         }
 
+        public bool TryBeginPersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds) => true;
+
+        public bool TryCompletePersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds,
+            bool operationSucceeded) => true;
+
         public bool TryValidatePersonDeathProjection(
             DailyV1SelectedPersonDeathPlan plan,
             out bool currentActionChanged,
@@ -623,7 +638,7 @@ public sealed class DailyV1SelectedDemographyStageTests
 
         private sealed class SuccessfulPersonDeathScope : IDailyV1SelectedPersonDeathP12Scope
         {
-            public void Complete(bool operationSucceeded) { }
+            public bool Complete(bool operationSucceeded) => true;
             public void Dispose() { }
         }
 

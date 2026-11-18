@@ -68,6 +68,27 @@ public static class PersonRuntimeOwnerBridge
         return person.RecordDeathAfterValidation(absoluteDay);
     }
 
+    internal static bool CanRollbackSelectedDeathMutation(
+        PersonRuntime person,
+        long absoluteDay,
+        string residenceBefore,
+        long revisionBefore,
+        int expectedRevisionIncrements)
+    {
+        if (person == null) return false;
+        return person.CanRollbackSelectedDeathMutation(
+            absoluteDay, residenceBefore, revisionBefore, expectedRevisionIncrements);
+    }
+
+    internal static void RollbackSelectedDeathMutation(
+        PersonRuntime person,
+        string residenceBefore,
+        long revisionBefore)
+    {
+        if (person == null) throw new ArgumentNullException(nameof(person));
+        person.RollbackSelectedDeathMutation(residenceBefore, revisionBefore);
+    }
+
     public static bool TryBindMaterializedNpc(PersonRuntime person, string npcRuntimeId)
     {
         if (person == null) throw new ArgumentNullException(nameof(person));

@@ -172,6 +172,32 @@ public sealed class PersonRuntime
         return true;
     }
 
+    internal bool CanRollbackSelectedDeathMutation(
+        long absoluteDay,
+        string residenceBefore,
+        long revisionBefore,
+        int expectedRevisionIncrements)
+    {
+        if (absoluteDay < 0L || revisionBefore < 0L || expectedRevisionIncrements < 1
+            || revisionBefore > long.MaxValue - expectedRevisionIncrements)
+            return false;
+
+        return (!deathAbsoluteDay.HasValue || deathAbsoluteDay.Value == absoluteDay)
+            && (string.Equals(residenceSettlementRuntimeId, residenceBefore, StringComparison.Ordinal)
+                || residenceSettlementRuntimeId == null)
+            && lifeResidenceRevision >= revisionBefore
+            && lifeResidenceRevision <= revisionBefore + expectedRevisionIncrements;
+    }
+
+    internal void RollbackSelectedDeathMutation(
+        string residenceBefore,
+        long revisionBefore)
+    {
+        deathAbsoluteDay = null;
+        residenceSettlementRuntimeId = residenceBefore;
+        lifeResidenceRevision = revisionBefore;
+    }
+
     internal bool TryBindMaterializedNpc(string npcRuntimeId)
     {
         if (string.IsNullOrWhiteSpace(npcRuntimeId) == true || IsMaterialized == true)

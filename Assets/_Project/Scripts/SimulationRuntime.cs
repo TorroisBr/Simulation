@@ -7985,6 +7985,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
     {
         scope = null;
         if (runtimeAdmissionContext == null
+            || activeCoreSelectedPersonDeathProjectionContext != null
             || !IsRuntimeAdmissionOwnerThreadCurrent()
             || npcRosterCensusProtocol == null
             || !npcRosterCensusProtocol.TryEnterOperation(
@@ -8047,6 +8048,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
             activeContext.NestingDepth++;
             return new NpcMembershipCensusScope(this, activeContext);
+        }
+
+        if (activeCoreSelectedPersonDeathProjectionContext != null)
+        {
+            FaultNpcMembershipCensusBoundary();
+            return new NpcMembershipCensusScope(this, null);
         }
 
         NpcMembershipCensusContext context = new NpcMembershipCensusContext(

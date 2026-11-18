@@ -281,6 +281,23 @@ public static class DailyDemographicSystem
             personDeathBoundary = world.CreateSelectedPersonDeathBoundary();
         }
 
+        public bool TryBeginPersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds) =>
+            personDeathBoundary.TryBeginPersonDeathProjectionMutation(
+                plan, operationId, currentActionChanged, sectionIds);
+
+        public bool TryCompletePersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds,
+            bool operationSucceeded) =>
+            personDeathBoundary.TryCompletePersonDeathProjectionMutation(
+                plan, operationId, currentActionChanged, sectionIds, operationSucceeded);
+
         public bool TryValidatePersonDeathProjection(
             DailyV1SelectedPersonDeathPlan plan,
             out bool currentActionChanged,

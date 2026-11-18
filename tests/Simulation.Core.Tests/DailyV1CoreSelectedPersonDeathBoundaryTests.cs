@@ -10,6 +10,8 @@ public sealed class DailyV1CoreSelectedPersonDeathBoundaryTests
     {
         private readonly Func<long> revision;
         private readonly Func<int> cardinality;
+        internal bool RejectNextRead;
+        internal int ReadCount;
 
         internal CensusProvider(OwnerSectionCensusSnapshot snapshot)
             : this(snapshot, () => snapshot.Revision, () => snapshot.Cardinality) { }
@@ -30,10 +32,18 @@ public sealed class DailyV1CoreSelectedPersonDeathBoundaryTests
         internal int SchemaVersion { get; }
         internal object OwnerInstanceIdentity { get; }
 
-        public OwnerSectionCensusWitness GetCurrentCensus() =>
-            new OwnerSectionCensusWitness(
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            ReadCount++;
+            if (RejectNextRead)
+            {
+                RejectNextRead = false;
+                throw new InvalidOperationException("Injected census provider failure.");
+            }
+            return new OwnerSectionCensusWitness(
                 SectionId, SchemaVersion, OwnerInstanceIdentity,
                 cardinality(), revision());
+        }
     }
 
     private sealed class PersonDeathProjection : IDailyV1SelectedPersonDeathProjectionBoundary
@@ -42,9 +52,73 @@ public sealed class DailyV1CoreSelectedPersonDeathBoundaryTests
         internal int PublishedDeaths;
         internal int Faults;
         internal int WorldRevisionAdvances;
+        internal int BeginProjectionMutationCalls;
+        internal int CompleteProjectionMutationCalls;
+        internal bool LastProjectionMutationSucceeded;
+        internal int WorldRevision;
+        internal bool AllowProjectionMutationBegin = true;
+        internal bool ThrowOnProjectionMutationBegin;
+        internal bool ThrowOnProjectionPublication;
+        internal bool RejectNextSuccessfulCompletion;
+        internal Action OnSuccessfulCompatibilityBaselineStage;
+        internal long CompatibilityBaselineRevision;
+        private long compatibilityBaselineRevisionAtBegin;
+        private int publishedDeathsAtBegin;
+        private int worldRevisionAtBegin;
 
         internal PersonDeathProjection(DailyV1SelectedRuntimeOwnerGraph graph) =>
             this.graph = graph;
+
+        public bool TryBeginPersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds)
+        {
+            BeginProjectionMutationCalls++;
+            if (ThrowOnProjectionMutationBegin)
+                throw new InvalidOperationException("Injected projection begin failure.");
+            bool admitted = AllowProjectionMutationBegin
+                && plan != null && sectionIds != null && sectionIds.Count > 0;
+            if (admitted)
+            {
+                publishedDeathsAtBegin = PublishedDeaths;
+                worldRevisionAtBegin = WorldRevision;
+                compatibilityBaselineRevisionAtBegin = CompatibilityBaselineRevision;
+            }
+            return admitted;
+        }
+
+        public bool TryCompletePersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds,
+            bool operationSucceeded)
+        {
+            CompleteProjectionMutationCalls++;
+            LastProjectionMutationSucceeded = operationSucceeded;
+            if (operationSucceeded && RejectNextSuccessfulCompletion)
+            {
+                RejectNextSuccessfulCompletion = false;
+                return false;
+            }
+            if (operationSucceeded && OnSuccessfulCompatibilityBaselineStage != null)
+            {
+                CompatibilityBaselineRevision = PersonRuntimeOwnerBridge.GetLifeResidenceRevision(
+                    plan.Person);
+                Action afterStage = OnSuccessfulCompatibilityBaselineStage;
+                OnSuccessfulCompatibilityBaselineStage = null;
+                afterStage();
+            }
+            if (!operationSucceeded)
+            {
+                PublishedDeaths = publishedDeathsAtBegin;
+                WorldRevision = worldRevisionAtBegin;
+                CompatibilityBaselineRevision = compatibilityBaselineRevisionAtBegin;
+            }
+            return plan != null && sectionIds != null && sectionIds.Count > 0;
+        }
 
         public bool TryValidatePersonDeathProjection(
             DailyV1SelectedPersonDeathPlan plan,
@@ -76,12 +150,18 @@ public sealed class DailyV1CoreSelectedPersonDeathBoundaryTests
                     || plan.MaterializedNpc.ActionSlot.CurrentAction != null
                     || plan.MaterializedNpc.ActionSlot.CurrentPayload != null))
                 return false;
+            if (ThrowOnProjectionPublication)
+                throw new InvalidOperationException("Injected projection publication failure after Core owner writes.");
             PublishedDeaths++;
             return true;
         }
 
         public void FaultPersonDeathRuntime() => Faults++;
-        public void AdvancePersonDeathWorldRevision() => WorldRevisionAdvances++;
+        public void AdvancePersonDeathWorldRevision()
+        {
+            WorldRevisionAdvances++;
+            WorldRevision++;
+        }
     }
 
     [Test]
@@ -111,7 +191,7 @@ public sealed class DailyV1CoreSelectedPersonDeathBoundaryTests
         Assert.That(plan.MaterializedNpc, Is.Null,
             "This regression covers the Core-owned Person row without a Unity NPC projection.");
 
-        BindCompleteCoreCensus(state, session, plan);
+        BindCompleteCoreCensus(state, session, plan, out _);
         PersonDeathProjection projection = new PersonDeathProjection(graph);
         DailyV1CoreSelectedPersonDeathBoundary boundary =
             new DailyV1CoreSelectedPersonDeathBoundary(state, graph, projection);
@@ -128,6 +208,27 @@ public sealed class DailyV1CoreSelectedPersonDeathBoundaryTests
         Assert.That(coreProtocol.IsBoundTo(state, graph), Is.True);
         Assert.That(coreProtocol.TryValidateUnchangedSections(expectedSections), Is.True,
             "The exact Person-death rows must match the sealed Core census before operation admission.");
+
+        projection.AllowProjectionMutationBegin = false;
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryExecute(
+            graph, graph.PersonStore, plan, boundary, out diagnostic), Is.False,
+            "A rejected host writer permit must abort before the first owner write.");
+        Assert.That(person.DeathAbsoluteDay, Is.Null);
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(priorEpoch));
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.False);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+
+        projection.AllowProjectionMutationBegin = true;
+        projection.ThrowOnProjectionMutationBegin = true;
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryExecute(
+            graph, graph.PersonStore, plan, boundary, out diagnostic), Is.False,
+            "An exception while establishing the host permit must fail closed before owner writes.");
+        Assert.That(person.DeathAbsoluteDay, Is.Null);
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(priorEpoch));
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.False);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+
+        projection.ThrowOnProjectionMutationBegin = false;
         Assert.That(boundary.TryBeginPersonDeathOperation(
             plan, actionChanged, DailyV1RuntimeProtocolOperationContracts.PersonDeath,
             expectedSections, () => true,
@@ -142,6 +243,10 @@ public sealed class DailyV1CoreSelectedPersonDeathBoundaryTests
         Assert.That(person.DeathAbsoluteDay, Is.EqualTo(plan.AbsoluteDay));
         Assert.That(projection.PublishedDeaths, Is.Zero,
             "An unmaterialized Core Person has no Unity NPC projection to publish.");
+        Assert.That(projection.BeginProjectionMutationCalls, Is.EqualTo(4));
+        Assert.That(projection.CompleteProjectionMutationCalls, Is.EqualTo(3),
+            "Success stages the host baseline before Core epoch publication, then revokes the permit after commit.");
+        Assert.That(projection.LastProjectionMutationSucceeded, Is.True);
         Assert.That(projection.WorldRevisionAdvances, Is.EqualTo(1));
         Assert.That(projection.Faults, Is.Zero);
         Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(priorEpoch + 1L));
@@ -157,11 +262,240 @@ public sealed class DailyV1CoreSelectedPersonDeathBoundaryTests
         Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
     }
 
+    [Test]
+    public void SelectedResidentPersonDeathUsesExactNpcActionAndCitySections()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, admission,
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            composition.ExecutionBoundaryState, definitions, 0L,
+            out DailyV1ActiveRuntimeSession session, out diagnostic), Is.True, diagnostic);
+
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        Assert.That(graph.Npcs, Is.Not.Empty);
+        DailyV1NpcRuntimeOwners npc = graph.Npcs[0];
+        DailyV1CityRuntimeOwners city = graph.Cities.FirstOrDefault(candidate =>
+            candidate?.Population?.CurrentPopulation > 0);
+        Assert.That(city, Is.Not.Null);
+        Assert.That(city.Population.CurrentPopulation, Is.GreaterThan(0));
+
+        PersonRuntime person = new PersonRuntime(
+            new PersonId("core-owned-resident-death-boundary"), state.SimulationTime.AbsoluteDay);
+        Assert.That(graph.PersonStore.TryRegister(person, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        Assert.That(graph.PersonStore.TryBindMaterializedNpc(
+            person.PersonId, npc.RuntimeId, out PersonStoreFailure bindFailure),
+            Is.True, bindFailure.ToString());
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            person, city.RuntimeId), Is.True);
+
+        DailyV1ActionDefinition action = definitions.Actions["DESCANSAR"];
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            definitions, action, null, null, null, 0,
+            0f, 1f, NpcTravelReason.None, 0f, "person-death/resident-action",
+            null, null, null, out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(npc, action, payload, null), Is.True);
+
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryPrepare(
+            graph, graph.PersonStore, person, state.SimulationTime.AbsoluteDay,
+            out DailyV1SelectedPersonDeathPlan plan, out diagnostic), Is.True, diagnostic);
+        Assert.That(plan.IsResident, Is.True);
+        Assert.That(plan.MaterializedNpc, Is.SameAs(npc));
+        Assert.That(plan.ExpectedAction, Is.SameAs(action));
+        Assert.That(plan.ResidenceCity, Is.SameAs(city));
+
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryCreateP12SectionIds(
+            plan, out IReadOnlyList<string> expectedSections), Is.True);
+        Assert.That(expectedSections, Is.EqualTo(new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(person.PersonId),
+            DailyV1SelectedOwnerSectionCensusContract.NpcLifeStatePrefix + npc.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix + npc.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix
+                + P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(city.RuntimeId)
+        }));
+
+        BindCompleteCoreCensus(state, session, plan, out CensusProvider personProvider);
+        PersonDeathProjection projection = new PersonDeathProjection(graph);
+        DailyV1CoreSelectedPersonDeathBoundary boundary =
+            new DailyV1CoreSelectedPersonDeathBoundary(state, graph, projection);
+
+        long priorEpoch = state.MutationEpochState.CurrentEpoch;
+        long personRevision = PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person);
+        long npcLifeRevision = npc.Lifecycle.LifeStateRevision;
+        long actionRevision = npc.ActionSlot.Revision;
+        long populationRevision = city.Population.Revision;
+        int populationBefore = city.Population.CurrentPopulation;
+
+        List<string> mismatchedSections = expectedSections.ToList();
+        mismatchedSections[1] += "/wrong-owner";
+        Assert.That(boundary.TryBeginPersonDeathOperation(
+            plan, currentActionChanged: true,
+            DailyV1RuntimeProtocolOperationContracts.PopulationResidentDeath,
+            mismatchedSections, () => true,
+            out IDailyV1SelectedPersonDeathP12Scope rejectedScope), Is.False);
+        Assert.That(rejectedScope, Is.Null);
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(priorEpoch));
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.False);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(person.DeathAbsoluteDay, Is.Null);
+        Assert.That(npc.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Alive));
+        Assert.That(npc.ActionSlot.CurrentAction, Is.SameAs(action));
+        Assert.That(city.Population.CurrentPopulation, Is.EqualTo(populationBefore));
+
+        projection.ThrowOnProjectionPublication = true;
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryExecute(
+            graph, graph.PersonStore, plan,
+            DailyV1RuntimeProtocolOperationContracts.PopulationResidentDeath,
+            boundary, out diagnostic), Is.False,
+            "A projection exception after Core has written every owner must roll back the full transaction.");
+
+        Assert.That(person.DeathAbsoluteDay, Is.Null);
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person), Is.EqualTo(personRevision));
+        Assert.That(npc.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Alive));
+        Assert.That(npc.Lifecycle.LifeStateRevision, Is.EqualTo(npcLifeRevision));
+        Assert.That(npc.ActionSlot.CurrentAction, Is.SameAs(action));
+        Assert.That(npc.ActionSlot.CurrentPayload, Is.SameAs(payload));
+        Assert.That(npc.ActionSlot.Revision, Is.EqualTo(actionRevision));
+        Assert.That(city.Population.CurrentPopulation, Is.EqualTo(populationBefore));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevision));
+        Assert.That(projection.WorldRevisionAdvances, Is.Zero);
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(priorEpoch));
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.False);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(projection.Faults, Is.Zero);
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> rolledBackCensus,
+            out long rolledBackEpoch,
+            out DailyCaptureEligibilityFailure rollbackFailure), Is.True, rollbackFailure.ToString());
+        Assert.That(rolledBackEpoch, Is.EqualTo(priorEpoch));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(rolledBackCensus), Is.True);
+
+        projection.ThrowOnProjectionPublication = false;
+        projection.RejectNextSuccessfulCompletion = true;
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryExecute(
+            graph, graph.PersonStore, plan,
+            DailyV1RuntimeProtocolOperationContracts.PopulationResidentDeath,
+            boundary, out diagnostic), Is.False,
+            "A host compatibility-baseline rejection before Core epoch publication must roll back every owner.");
+
+        Assert.That(person.DeathAbsoluteDay, Is.Null);
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person), Is.EqualTo(personRevision));
+        Assert.That(npc.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Alive));
+        Assert.That(npc.Lifecycle.LifeStateRevision, Is.EqualTo(npcLifeRevision));
+        Assert.That(npc.ActionSlot.CurrentAction, Is.SameAs(action));
+        Assert.That(npc.ActionSlot.CurrentPayload, Is.SameAs(payload));
+        Assert.That(npc.ActionSlot.Revision, Is.EqualTo(actionRevision));
+        Assert.That(city.Population.CurrentPopulation, Is.EqualTo(populationBefore));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevision));
+        Assert.That(projection.WorldRevision, Is.Zero,
+            "A rejected Core epoch commit must restore the compatibility world revision.");
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(priorEpoch));
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.False);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> rejectedCommitCensus,
+            out long rejectedCommitEpoch,
+            out DailyCaptureEligibilityFailure rejectedCommitFailure), Is.True,
+            rejectedCommitFailure.ToString());
+        Assert.That(rejectedCommitEpoch, Is.EqualTo(priorEpoch));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(rejectedCommitCensus), Is.True);
+
+        projection.CompatibilityBaselineRevision = personRevision;
+        projection.OnSuccessfulCompatibilityBaselineStage = () => personProvider.RejectNextRead = true;
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryExecute(
+            graph, graph.PersonStore, plan,
+            DailyV1RuntimeProtocolOperationContracts.PopulationResidentDeath,
+            boundary, out diagnostic), Is.False,
+            "A Core census commit rejection after host baseline staging must restore both owner state and host baselines.");
+        Assert.That(diagnostic, Does.Contain("CoreCensusOrEpochCommitRejected:ProviderReadFailed"));
+        Assert.That(personProvider.RejectNextRead, Is.False,
+            "The injected Core provider rejection must occur during final Core census publication.");
+        Assert.That(projection.CompatibilityBaselineRevision, Is.EqualTo(personRevision),
+            "The host compatibility baseline staged before Core publication must be restored on rejection.");
+        Assert.That(person.DeathAbsoluteDay, Is.Null);
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person), Is.EqualTo(personRevision));
+        Assert.That(npc.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Alive));
+        Assert.That(npc.Lifecycle.LifeStateRevision, Is.EqualTo(npcLifeRevision));
+        Assert.That(npc.ActionSlot.CurrentAction, Is.SameAs(action));
+        Assert.That(npc.ActionSlot.CurrentPayload, Is.SameAs(payload));
+        Assert.That(npc.ActionSlot.Revision, Is.EqualTo(actionRevision));
+        Assert.That(city.Population.CurrentPopulation, Is.EqualTo(populationBefore));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevision));
+        Assert.That(projection.WorldRevision, Is.Zero,
+            "The host world revision must be restored if Core publication rejects after host baseline staging.");
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(priorEpoch));
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.False);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> afterCoreRejection,
+            out long afterCoreRejectionEpoch,
+            out DailyCaptureEligibilityFailure afterCoreRejectionFailure), Is.True,
+            afterCoreRejectionFailure.ToString());
+        Assert.That(afterCoreRejectionEpoch, Is.EqualTo(priorEpoch));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(afterCoreRejection), Is.True);
+
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryExecute(
+            graph, graph.PersonStore, plan,
+            DailyV1RuntimeProtocolOperationContracts.PopulationResidentDeath,
+            boundary, out diagnostic), Is.True, diagnostic);
+
+        Assert.That(person.DeathAbsoluteDay, Is.EqualTo(plan.AbsoluteDay));
+        Assert.That(person.ResidenceSettlementRuntimeId, Is.Null);
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person),
+            Is.EqualTo(personRevision + 2L));
+        Assert.That(person.MaterializedNpcRuntimeId, Is.EqualTo(npc.RuntimeId));
+        Assert.That(npc.Lifecycle.LifeState, Is.EqualTo(NpcLifeState.Dead));
+        Assert.That(npc.Lifecycle.LifeStateRevision, Is.EqualTo(npcLifeRevision + 1L));
+        Assert.That(npc.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(npc.ActionSlot.CurrentPayload, Is.Null);
+        Assert.That(npc.ActionSlot.Revision, Is.EqualTo(actionRevision + 1L));
+        Assert.That(city.Population.CurrentPopulation, Is.EqualTo(populationBefore - 1));
+        Assert.That(city.Population.Revision, Is.EqualTo(populationRevision + 1L));
+        Assert.That(projection.PublishedDeaths, Is.EqualTo(1));
+        Assert.That(projection.Faults, Is.Zero,
+            "Core census refresh rejection: " + state.LastSelectedOwnerSectionCensusRefreshRejection);
+        Assert.That(projection.WorldRevisionAdvances, Is.EqualTo(3),
+            "The two post-projection commit rejections each advance then restore the projection revision; only the successful attempt remains effective.");
+        Assert.That(projection.WorldRevision, Is.EqualTo(1));
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(priorEpoch + 1L));
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.False);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+            out long capturedEpoch,
+            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+        Assert.That(capturedEpoch, Is.EqualTo(priorEpoch + 1L));
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+    }
+
     private static void BindCompleteCoreCensus(
         DailyV1ExecutionBoundaryState state,
         DailyV1ActiveRuntimeSession session,
-        DailyV1SelectedPersonDeathPlan plan)
+        DailyV1SelectedPersonDeathPlan plan) =>
+        BindCompleteCoreCensus(state, session, plan, out _);
+
+    private static void BindCompleteCoreCensus(
+        DailyV1ExecutionBoundaryState state,
+        DailyV1ActiveRuntimeSession session,
+        DailyV1SelectedPersonDeathPlan plan,
+        out CensusProvider personProvider)
     {
+        personProvider = null;
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
         foreach (string operationId in DailyV1RuntimeProtocolOperationContracts
                      .GetExpectedOperationContractIds(
@@ -216,6 +550,10 @@ public sealed class DailyV1CoreSelectedPersonDeathBoundaryTests
         foreach (OwnerSectionCensusSnapshot snapshot in snapshots)
         {
             CensusProvider provider = CreateProvider(snapshot, plan, dynamicSections);
+            if (string.Equals(snapshot.SectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(
+                        plan.Person.PersonId), StringComparison.Ordinal))
+                personProvider = provider;
             contracts.Add(new DailyV1OwnerSectionContractIdentity(
                 snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role));
             registrations.Add(new DailyV1OwnerSectionCensusProviderRegistration(

@@ -1780,6 +1780,14 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         int cardinality)
     {
         if (string.IsNullOrWhiteSpace(sectionId) || cardinality < 0) return false;
+        if (sectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix,
+                StringComparison.Ordinal))
+        {
+            string actionRuntimeId = sectionId.Substring(
+                DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix.Length);
+            return !string.IsNullOrWhiteSpace(actionRuntimeId) && cardinality <= 1;
+        }
         if (!sectionId.StartsWith(
                 DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimePrefix,
                 StringComparison.Ordinal))
@@ -1795,7 +1803,14 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         // These admitted stores use census cardinality to count records. Their
         // exact operation scopes reserve the epoch and publish the new revision
         // before the complete baseline is replaced.
-        return string.Equals(sectionId,
+        bool isNpcCurrentAction = sectionId != null
+            && sectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix,
+                StringComparison.Ordinal)
+            && sectionId.Length
+                > DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix.Length;
+        return isNpcCurrentAction
+            || string.Equals(sectionId,
                 DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
                 StringComparison.Ordinal)
             || string.Equals(sectionId,

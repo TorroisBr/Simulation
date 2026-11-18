@@ -7,6 +7,30 @@ using UnityEngine;
 [Serializable]
 public class NpcRuntime : ICapabilityConditionSource
 {
+    internal sealed class CoreSelectedPersonDeathProjectionSnapshot
+    {
+        internal readonly NpcRuntime Owner;
+        internal readonly DailyV1NpcRuntimeOwners RuntimeOwners;
+        internal readonly NpcLifeState LifeState;
+        internal readonly NpcInjurySeverity InjurySeverity;
+        internal readonly NpcActionData CurrentAction;
+        internal readonly NpcActionRuntime CurrentActionRuntime;
+        internal readonly DailyV1ActionDefinition CoreAction;
+        internal readonly DailyV1NpcActionPayloadOwner CoreActionPayload;
+
+        internal CoreSelectedPersonDeathProjectionSnapshot(NpcRuntime owner)
+        {
+            Owner = owner;
+            RuntimeOwners = owner.selectedRuntimeOwners;
+            LifeState = owner.lifeState;
+            InjurySeverity = owner.injurySeverity;
+            CurrentAction = owner.currentAction;
+            CurrentActionRuntime = owner.currentActionRuntime;
+            CoreAction = owner.selectedRuntimeOwners?.ActionSlot?.CurrentAction;
+            CoreActionPayload = owner.selectedRuntimeOwners?.ActionSlot?.CurrentPayload;
+        }
+    }
+
     [NonSerialized] private MutationGuardBinding runtimeMutationGuardBinding = new MutationGuardBinding();
     [NonSerialized] private long travelStateRevision;
     [NonSerialized] private long currentActionRevision;
@@ -2429,6 +2453,63 @@ public class NpcRuntime : ICapabilityConditionSource
             currentActionChanged: currentActionChanged,
             currentActionRevisionAlreadyCommitted: currentActionChanged,
             lifeStateRevisionAlreadyCommitted: true);
+        return true;
+    }
+
+    internal CoreSelectedPersonDeathProjectionSnapshot CaptureCoreSelectedPersonDeathProjectionSnapshot(
+        DailyV1NpcRuntimeOwners expectedOwners)
+    {
+        if (expectedOwners == null
+            || !ReferenceEquals(selectedRuntimeOwners, expectedOwners)
+            || !HasConsistentCurrentActionSlot
+            || !IsP12LifecycleBound
+            || (currentActionRuntime != null
+                && !currentActionRuntime.CanBindToP12Owner(this)))
+            return null;
+        return new CoreSelectedPersonDeathProjectionSnapshot(this);
+    }
+
+    internal bool TryRestoreCoreSelectedPersonDeathProjection(
+        CoreSelectedPersonDeathProjectionSnapshot snapshot)
+    {
+        if (snapshot == null
+            || !ReferenceEquals(snapshot.Owner, this)
+            || !ReferenceEquals(selectedRuntimeOwners, snapshot.RuntimeOwners)
+            || !ReferenceEquals(selectedRuntimeOwners.ActionSlot?.CurrentAction, snapshot.CoreAction)
+            || !ReferenceEquals(selectedRuntimeOwners.ActionSlot?.CurrentPayload, snapshot.CoreActionPayload))
+            return false;
+
+        bool alreadyRestored = lifeState == snapshot.LifeState
+            && injurySeverity == snapshot.InjurySeverity
+            && ReferenceEquals(currentAction, snapshot.CurrentAction)
+            && ReferenceEquals(currentActionRuntime, snapshot.CurrentActionRuntime);
+        if (alreadyRestored) return true;
+
+        if (lifeState != NpcLifeState.Dead
+            || injurySeverity != snapshot.InjurySeverity
+            || currentAction != null
+            || currentActionRuntime != null)
+            return false;
+
+        NpcActionRuntime priorActionRuntime = snapshot.CurrentActionRuntime;
+        if (priorActionRuntime != null)
+        {
+            if (!priorActionRuntime.TryBindSelectedOwner(
+                    snapshot.CoreActionPayload,
+                    selectedDefinitionGraph,
+                    selectedDefinitionBindings))
+                return false;
+            if (!priorActionRuntime.TryBindP12Owner(this))
+            {
+                priorActionRuntime.UnbindSelectedOwner();
+                return false;
+            }
+        }
+
+        lifeState = snapshot.LifeState;
+        injurySeverity = snapshot.InjurySeverity;
+        currentAction = snapshot.CurrentAction;
+        currentActionRuntime = priorActionRuntime;
         return true;
     }
 

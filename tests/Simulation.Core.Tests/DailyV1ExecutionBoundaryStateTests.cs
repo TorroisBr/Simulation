@@ -633,6 +633,112 @@ public sealed class DailyV1ExecutionBoundaryStateTests
     }
 
     [Test]
+    public void CoreActionSlotMutationAllowsOneToZeroAndZeroToOneCardinalityTransitions()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture();
+        DailyV1ExecutionBoundaryState state = fixture.State;
+        string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix + "npc-1";
+        MutableCensusProvider provider = fixture.Providers[sectionId];
+
+        foreach (int nextCardinality in new[] { 0, 1 })
+        {
+            OwnerSectionCensusWitness prior = provider.Witness;
+            provider.Witness = new OwnerSectionCensusWitness(
+                prior.SectionId, prior.SchemaVersion, prior.OwnerInstanceIdentity,
+                nextCardinality, prior.Revision + 1L);
+
+            Assert.That(state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
+            Assert.That(state.TryRefreshAndAdvanceSelectedNpcActionSlotMutation(
+                new[] { sectionId }, synchronizeCompatibilityBaselines: null), Is.True,
+                "An admitted current-action slot is present zero or one times; each committed transition refreshes its exact owner row.");
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(nextCardinality + 1L));
+            Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+
+            Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+                state, DailyV1CaptureScopeAllowance.None,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> captured,
+                out long mutationEpoch,
+                out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+            Assert.That(mutationEpoch, Is.EqualTo(nextCardinality + 1L));
+            Assert.That(captured.Single(row => row.SectionId == sectionId).Cardinality,
+                Is.EqualTo(nextCardinality));
+            Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(captured), Is.True);
+        }
+    }
+
+    [Test]
+    public void CoreActionSlotMutationRejectsCardinalityAboveOneWithoutPublishing()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture();
+        DailyV1ExecutionBoundaryState state = fixture.State;
+        string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix + "npc-1";
+        MutableCensusProvider provider = fixture.Providers[sectionId];
+        OwnerSectionCensusWitness prior = provider.Witness;
+        provider.Witness = new OwnerSectionCensusWitness(
+            prior.SectionId, prior.SchemaVersion, prior.OwnerInstanceIdentity,
+            cardinality: 2, revision: prior.Revision + 1L);
+
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
+        Assert.That(state.TryRefreshAndAdvanceSelectedNpcActionSlotMutation(
+            new[] { sectionId }, synchronizeCompatibilityBaselines: null), Is.False);
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero);
+        provider.Witness = prior;
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+        Assert.That(state.TryGetSelectedOwnerSectionCensusRegistry(
+            DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registered,
+            out _, out _, out _), Is.True);
+        Assert.That(registered.Single(row => row.SectionId == sectionId).BaselineCardinality,
+            Is.EqualTo(prior.Cardinality),
+            "An invalid action cardinality cannot replace the previously committed census baseline.");
+    }
+
+    [Test]
+    public void CoreCensusKeepsOtherDynamicFamilyCardinalityTransitionsRejected()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture();
+        DailyV1ExecutionBoundaryState state = fixture.State;
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        Assert.That(state.TryBindSelectedRuntimeOwnerGraph(graph), Is.True);
+
+        string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "npc-1";
+        MutableCensusProvider provider = fixture.Providers[sectionId];
+        OwnerSectionCensusWitness prior = provider.Witness;
+        provider.Witness = new OwnerSectionCensusWitness(
+            prior.SectionId, prior.SchemaVersion, prior.OwnerInstanceIdentity,
+            prior.Cardinality + 1, prior.Revision + 1L);
+
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
+        Assert.That(state.MutationEpochState.TryReserve(
+            out DailyV1MutationEpochReservation reservation), Is.True);
+        Assert.That(state.TryRefreshCoreSelectedOwnerSectionCensusRows(
+            graph, new[] { sectionId }, reservation), Is.False,
+            "The bounded zero/one exception applies only to an NPC current-action section.");
+        Assert.That(state.MutationEpochState.HasActiveReservation, Is.True,
+            "A rejected unrelated cardinality change leaves the caller's reservation available.");
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero);
+        provider.Witness = prior;
+        Assert.That(state.MutationEpochState.TryRelease(reservation), Is.True);
+        Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+        Assert.That(state.TryGetSelectedOwnerSectionCensusRegistry(
+            DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registered,
+            out _, out _, out _), Is.True);
+        Assert.That(registered.Single(row => row.SectionId == sectionId).BaselineCardinality,
+            Is.EqualTo(prior.Cardinality));
+    }
+
+    [Test]
     public void CoreActionSlotMutationRejectsUnchangedRevisionAndDoesNotAdvanceEpoch()
     {
         CensusRegistryFixture fixture = CreateCensusRegistryFixture();

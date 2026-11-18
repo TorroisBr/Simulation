@@ -87,6 +87,27 @@ public sealed class SettlementPopulationRuntime
         }
     }
 
+    internal bool CanRollbackSelectedDeathTransition(SettlementPopulationTransition transition)
+    {
+        if (transition == null
+            || !string.Equals(SettlementRuntimeId, transition.SettlementRuntimeId, StringComparison.Ordinal)
+            || transition.ExpectedRevision < 0L
+            || transition.ExpectedRevision == long.MaxValue)
+            return false;
+
+        bool unchanged = revision == transition.ExpectedRevision
+            && currentPopulation == transition.PopulationBefore;
+        bool applied = revision == transition.ExpectedRevision + 1L
+            && currentPopulation == transition.PopulationAfter;
+        return unchanged || applied;
+    }
+
+    internal void RollbackSelectedDeathTransition(SettlementPopulationTransition transition)
+    {
+        currentPopulation = transition.PopulationBefore;
+        revision = transition.ExpectedRevision;
+    }
+
     internal void GetOperationReceiptCensus(out int cardinality, out long receiptRevision)
     {
         lock (operationReceiptGate)

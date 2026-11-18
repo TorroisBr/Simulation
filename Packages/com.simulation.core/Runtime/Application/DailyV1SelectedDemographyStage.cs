@@ -4,7 +4,7 @@ using System.Threading;
 
 internal interface IDailyV1SelectedPersonDeathP12Scope : IDisposable
 {
-    void Complete(bool operationSucceeded);
+    bool Complete(bool operationSucceeded);
 }
 
 internal interface IDailyV1SelectedPersonDeathBoundary
@@ -26,6 +26,17 @@ internal interface IDailyV1SelectedPersonDeathBoundary
 /// </summary>
 internal interface IDailyV1SelectedPersonDeathProjectionBoundary
 {
+    bool TryBeginPersonDeathProjectionMutation(
+        DailyV1SelectedPersonDeathPlan plan,
+        string operationId,
+        bool currentActionChanged,
+        IReadOnlyList<string> sectionIds);
+    bool TryCompletePersonDeathProjectionMutation(
+        DailyV1SelectedPersonDeathPlan plan,
+        string operationId,
+        bool currentActionChanged,
+        IReadOnlyList<string> sectionIds,
+        bool operationSucceeded);
     bool TryValidatePersonDeathProjection(
         DailyV1SelectedPersonDeathPlan plan,
         out bool currentActionChanged,
@@ -48,6 +59,9 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
     private sealed class OperationContext
     {
         internal readonly IReadOnlyList<string> SectionIds;
+        internal readonly DailyV1SelectedPersonDeathPlan Plan;
+        internal readonly string OperationId;
+        internal readonly bool CurrentActionChanged;
         internal readonly DailyV1MutationEpochReservation MutationEpochReservation;
         internal readonly Thread OwnerThread;
         internal readonly int OwnerManagedThreadId;
@@ -56,9 +70,15 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
 
         internal OperationContext(
             IReadOnlyList<string> sectionIds,
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
             DailyV1MutationEpochReservation mutationEpochReservation)
         {
             SectionIds = sectionIds;
+            Plan = plan;
+            OperationId = operationId;
+            CurrentActionChanged = currentActionChanged;
             MutationEpochReservation = mutationEpochReservation;
             OwnerThread = Thread.CurrentThread;
             OwnerManagedThreadId = OwnerThread.ManagedThreadId;
@@ -83,23 +103,39 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
             this.context = context;
         }
 
-        public void Complete(bool operationSucceeded)
+        public bool Complete(bool operationSucceeded)
         {
             DailyV1CoreSelectedPersonDeathBoundary current = owner;
             if (disposed || context.Completed)
             {
                 current.FaultPersonDeathRuntime();
-                return;
+                return false;
             }
+
+            if (operationSucceeded)
+            {
+                // Complete synchronously so the caller can roll back every
+                // authoritative owner before aborting a rejected commit.
+                if (!current.TryCommitOperation(context))
+                    return false;
+                context.Completed = true;
+                context.Succeeded = true;
+                return true;
+            }
+
+            bool aborted = current.TryAbortOperation(context);
             context.Completed = true;
-            context.Succeeded = operationSucceeded;
+            context.Succeeded = false;
+            if (!aborted) current.FaultPersonDeathRuntime();
+            return aborted;
         }
 
         public void Dispose()
         {
             if (disposed) return;
+            if (!context.Completed)
+                Complete(operationSucceeded: false);
             disposed = true;
-            owner.ExitOperation(context, context.Completed && context.Succeeded);
         }
     }
 
@@ -108,6 +144,7 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
     private readonly IDailyV1SelectedPersonDeathProjectionBoundary projection;
     private readonly DailyV1CoreSelectedOwnerSectionMutationProtocol mutationProtocol;
     private OperationContext activeOperation;
+    internal string LastPersonDeathCommitFailure { get; private set; }
 
     internal DailyV1CoreSelectedPersonDeathBoundary(
         DailyV1ExecutionBoundaryState executionState,
@@ -217,16 +254,40 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
             || !mutationProtocol.TryReserveMutationEpoch(out reservation)
             || !(reservation is DailyV1MutationEpochReservation coreReservation))
         {
-            mutationProtocol.FaultClosed();
-            projection.FaultPersonDeathRuntime();
-            mutationProtocol.ReleaseMutationEpoch(reservation);
+            FaultPersonDeathRuntime();
+            ReleaseMutationEpochSafely(reservation);
             if (!executionState.TryEndRuntimeProtocolOperation())
                 mutationProtocol.FaultClosed();
             return false;
         }
 
-        activeOperation = new OperationContext(sectionIds, coreReservation);
-        scope = new OperationScope(this, activeOperation);
+        OperationContext context = new OperationContext(
+            sectionIds, plan, operationId, currentActionChanged, coreReservation);
+        activeOperation = context;
+        bool projectionAdmitted;
+        try
+        {
+            projectionAdmitted = projection.TryBeginPersonDeathProjectionMutation(
+                plan, operationId, currentActionChanged, sectionIds);
+        }
+        catch
+        {
+            projectionAdmitted = false;
+        }
+        if (!projectionAdmitted)
+        {
+            activeOperation = null;
+            ReleaseMutationEpochSafely(coreReservation);
+            try
+            {
+                if (!executionState.TryEndRuntimeProtocolOperation())
+                    mutationProtocol.FaultClosed();
+            }
+            catch { mutationProtocol.FaultClosed(); }
+            return false;
+        }
+
+        scope = new OperationScope(this, context);
         return true;
     }
 
@@ -235,49 +296,162 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
         bool currentActionChanged) =>
         projection.TryPublishPersonDeathProjection(plan, currentActionChanged);
 
+    public bool TryBeginPersonDeathProjectionMutation(
+        DailyV1SelectedPersonDeathPlan plan,
+        string operationId,
+        bool currentActionChanged,
+        IReadOnlyList<string> sectionIds) =>
+        projection.TryBeginPersonDeathProjectionMutation(
+            plan, operationId, currentActionChanged, sectionIds);
+
+    public bool TryCompletePersonDeathProjectionMutation(
+        DailyV1SelectedPersonDeathPlan plan,
+        string operationId,
+        bool currentActionChanged,
+        IReadOnlyList<string> sectionIds,
+        bool operationSucceeded) =>
+        projection.TryCompletePersonDeathProjectionMutation(
+            plan, operationId, currentActionChanged, sectionIds, operationSucceeded);
+
     public void FaultPersonDeathRuntime()
     {
-        mutationProtocol.FaultClosed();
-        projection.FaultPersonDeathRuntime();
+        try { mutationProtocol.FaultClosed(); }
+        catch { }
+        try { projection.FaultPersonDeathRuntime(); }
+        catch { }
     }
 
     public void AdvancePersonDeathWorldRevision() =>
         projection.AdvancePersonDeathWorldRevision();
 
-    private void ExitOperation(OperationContext context, bool operationSucceeded)
+    private bool TryCommitOperation(OperationContext context)
+    {
+        LastPersonDeathCommitFailure = null;
+        if (context == null
+            || !context.IsOwnedByCurrentThread()
+            || !ReferenceEquals(activeOperation, context))
+        {
+            FaultPersonDeathRuntime();
+            return false;
+        }
+
+        try
+        {
+            // Stage Unity's compatibility baseline before Core publishes the
+            // reserved epoch. A rejected read leaves the reservation and
+            // owner state available for exact rollback by the caller.
+            if (!projection.TryCompletePersonDeathProjectionMutation(
+                    context.Plan,
+                    context.OperationId,
+                    context.CurrentActionChanged,
+                    context.SectionIds,
+                    operationSucceeded: true))
+            {
+                LastPersonDeathCommitFailure = "CompatibilityBaselinePreparationRejected";
+                return false;
+            }
+
+            // Core atomically validates and refreshes its census, then
+            // publishes exactly one reserved mutation epoch.
+            if (!mutationProtocol.TryNotifyReservedCommittedMutations(
+                    context.MutationEpochReservation,
+                    ToSectionSet(context.SectionIds)))
+            {
+                LastPersonDeathCommitFailure = "CoreCensusOrEpochCommitRejected:"
+                    + executionState.LastSelectedOwnerSectionCensusRefreshRejection;
+                return false;
+            }
+        }
+        catch (Exception exception)
+        {
+            LastPersonDeathCommitFailure = "CommitException:" + exception.GetType().Name;
+            return false;
+        }
+
+        // This second host completion only revokes the exact temporary writer
+        // context; its reads and baseline staging already succeeded above.
+        try
+        {
+            if (!projection.TryCompletePersonDeathProjectionMutation(
+                    context.Plan,
+                    context.OperationId,
+                    context.CurrentActionChanged,
+                    context.SectionIds,
+                    operationSucceeded: true))
+                FaultPersonDeathRuntime();
+        }
+        catch { FaultPersonDeathRuntime(); }
+
+        try
+        {
+            if (!executionState.TryEndRuntimeProtocolOperation())
+                FaultPersonDeathRuntime();
+        }
+        catch { FaultPersonDeathRuntime(); }
+        activeOperation = null;
+        return true;
+    }
+
+    private bool TryAbortOperation(OperationContext context)
     {
         if (context == null
             || !context.IsOwnedByCurrentThread()
             || !ReferenceEquals(activeOperation, context))
         {
             FaultPersonDeathRuntime();
-            return;
+            return false;
         }
 
-        if (operationSucceeded)
+        // Revoke the host writer permit and restore its exact compatibility
+        // snapshot before releasing the Core reservation.
+        bool projectionRestored;
+        try
         {
-            if (!mutationProtocol.TryNotifyReservedCommittedMutations(
-                    context.MutationEpochReservation,
-                    ToSectionSet(context.SectionIds)))
+            projectionRestored = projection.TryCompletePersonDeathProjectionMutation(
+                context.Plan,
+                context.OperationId,
+                context.CurrentActionChanged,
+                context.SectionIds,
+                operationSucceeded: false);
+        }
+        catch { projectionRestored = false; }
+        if (!projectionRestored) FaultPersonDeathRuntime();
+
+        bool ownersUnchanged;
+        try
+        {
+            ownersUnchanged = executionState.TryValidateCoreSelectedOwnerSectionCensusRows(
+                ownerGraph,
+                context.SectionIds,
+                context.MutationEpochReservation,
+                out _);
+        }
+        catch { ownersUnchanged = false; }
+        if (!ownersUnchanged) FaultPersonDeathRuntime();
+
+        ReleaseMutationEpochSafely(context.MutationEpochReservation);
+
+        try
+        {
+            if (!executionState.TryEndRuntimeProtocolOperation())
             {
                 FaultPersonDeathRuntime();
-                mutationProtocol.ReleaseMutationEpoch(context.MutationEpochReservation);
+                ownersUnchanged = false;
             }
         }
-        else
+        catch
         {
-            if (!executionState.TryValidateCoreSelectedOwnerSectionCensusRows(
-                    ownerGraph,
-                    context.SectionIds,
-                    context.MutationEpochReservation,
-                    out _))
-                FaultPersonDeathRuntime();
-            mutationProtocol.ReleaseMutationEpoch(context.MutationEpochReservation);
-        }
-
-        if (!executionState.TryEndRuntimeProtocolOperation())
             FaultPersonDeathRuntime();
+            ownersUnchanged = false;
+        }
         activeOperation = null;
+        return ownersUnchanged && projectionRestored;
+    }
+
+    private void ReleaseMutationEpochSafely(object reservation)
+    {
+        try { mutationProtocol.ReleaseMutationEpoch(reservation); }
+        catch { FaultPersonDeathRuntime(); }
     }
 
     private static IReadOnlyCollection<string> ToSectionSet(
@@ -606,6 +780,11 @@ internal sealed class DailyV1SelectedPersonDeathPlan
     internal DailyV1CityRuntimeOwners ResidenceCity { get; }
     internal long ExpectedPopulationRevision { get; }
     internal int ExpectedPopulation { get; }
+    internal long ExpectedPersonLifeResidenceRevision { get; }
+    internal NpcLifeState ExpectedNpcLifeState { get; }
+    internal NpcInjurySeverity ExpectedNpcInjurySeverity { get; }
+    internal long ExpectedNpcLifeStateRevision { get; }
+    internal long ExpectedNpcActionRevision { get; }
     internal SettlementPopulationTransition PopulationTransition { get; }
     internal DailyV1ActionDefinition ExpectedAction { get; }
     internal DailyV1NpcActionPayloadOwner ExpectedPayload { get; }
@@ -618,6 +797,11 @@ internal sealed class DailyV1SelectedPersonDeathPlan
         DailyV1CityRuntimeOwners residenceCity,
         long expectedPopulationRevision,
         int expectedPopulation,
+        long expectedPersonLifeResidenceRevision,
+        NpcLifeState expectedNpcLifeState,
+        NpcInjurySeverity expectedNpcInjurySeverity,
+        long expectedNpcLifeStateRevision,
+        long expectedNpcActionRevision,
         SettlementPopulationTransition populationTransition,
         DailyV1ActionDefinition expectedAction,
         DailyV1NpcActionPayloadOwner expectedPayload)
@@ -628,6 +812,11 @@ internal sealed class DailyV1SelectedPersonDeathPlan
         ResidenceCity = residenceCity;
         ExpectedPopulationRevision = expectedPopulationRevision;
         ExpectedPopulation = expectedPopulation;
+        ExpectedPersonLifeResidenceRevision = expectedPersonLifeResidenceRevision;
+        ExpectedNpcLifeState = expectedNpcLifeState;
+        ExpectedNpcInjurySeverity = expectedNpcInjurySeverity;
+        ExpectedNpcLifeStateRevision = expectedNpcLifeStateRevision;
+        ExpectedNpcActionRevision = expectedNpcActionRevision;
         PopulationTransition = populationTransition;
         ExpectedAction = expectedAction;
         ExpectedPayload = expectedPayload;
@@ -724,10 +913,21 @@ internal static class DailyV1SelectedPersonDeathOperation
             return false;
         }
 
+        long expectedPersonLifeResidenceRevision =
+            PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person);
+        NpcLifeState expectedNpcLifeState = materializedNpc?.Lifecycle?.LifeState
+            ?? NpcLifeState.Alive;
+        NpcInjurySeverity expectedNpcInjurySeverity =
+            materializedNpc?.Lifecycle?.InjurySeverity ?? NpcInjurySeverity.None;
+        long expectedNpcLifeStateRevision = materializedNpc?.Lifecycle?.LifeStateRevision ?? 0L;
+        long expectedNpcActionRevision = materializedNpc?.ActionSlot?.Revision ?? 0L;
+
         plan = new DailyV1SelectedPersonDeathPlan(
             person, absoluteDay, materializedNpc, residenceCity,
-            expectedPopulationRevision, expectedPopulation, populationTransition,
-            expectedAction, expectedPayload);
+            expectedPopulationRevision, expectedPopulation,
+            expectedPersonLifeResidenceRevision, expectedNpcLifeState,
+            expectedNpcInjurySeverity, expectedNpcLifeStateRevision,
+            expectedNpcActionRevision, populationTransition, expectedAction, expectedPayload);
         failure = null;
         return true;
     }
@@ -736,8 +936,10 @@ internal static class DailyV1SelectedPersonDeathOperation
         DailyV1SelectedRuntimeOwnerGraph graph,
         PersonStore personStore,
         DailyV1SelectedPersonDeathPlan plan,
+        out bool rollbackSucceeded,
         out string failure)
     {
+        rollbackSucceeded = true;
         failure = "Selected Person death expected state changed before Core commit.";
         if (graph == null || personStore == null || plan == null
             || !ReferenceEquals(graph.PersonStore, personStore)
@@ -746,7 +948,9 @@ internal static class DailyV1SelectedPersonDeathOperation
             || !ReferenceEquals(registeredPerson, plan.Person)
             || plan.Person.DeathAbsoluteDay.HasValue
             || (plan.Person.BirthAbsoluteDay.HasValue
-                && plan.Person.BirthAbsoluteDay.Value > plan.AbsoluteDay))
+                && plan.Person.BirthAbsoluteDay.Value > plan.AbsoluteDay)
+            || PersonRuntimeOwnerBridge.GetLifeResidenceRevision(plan.Person)
+                != plan.ExpectedPersonLifeResidenceRevision)
             return false;
 
         string expectedResidenceId = plan.ResidenceCity?.RuntimeId;
@@ -763,6 +967,10 @@ internal static class DailyV1SelectedPersonDeathOperation
                     || !personStore.TryGetByMaterializedNpcRuntimeId(
                         materializedNpc.RuntimeId, out PersonRuntime boundPerson)
                     || !ReferenceEquals(boundPerson, plan.Person)
+                    || materializedNpc.Lifecycle.LifeState != plan.ExpectedNpcLifeState
+                    || materializedNpc.Lifecycle.InjurySeverity != plan.ExpectedNpcInjurySeverity
+                    || materializedNpc.Lifecycle.LifeStateRevision != plan.ExpectedNpcLifeStateRevision
+                    || materializedNpc.ActionSlot.Revision != plan.ExpectedNpcActionRevision
                     || !materializedNpc.CanCommitPersonDeathAfterValidation(
                         NpcInjurySeverity.None, plan.ExpectedAction, plan.ExpectedPayload))))
             return false;
@@ -794,41 +1002,124 @@ internal static class DailyV1SelectedPersonDeathOperation
         }
 
         // All owner identities, revisions, bindings, and the population
-        // transition are checked before the first authoritative write.
+        // transition are checked before the first authoritative write. Any
+        // later failure restores those exact owner instances and revisions
+        // before the enclosing P12 scope releases its epoch reservation.
+        try
+        {
+            if (plan.IsResident
+                && !SettlementPopulationSystem.TryApply(
+                    plan.ResidenceCity.Population, plan.PopulationTransition, out _))
+                return AbortAndRollback(graph, personStore, plan,
+                    "The prepared selected resident population transition was rejected.",
+                    out rollbackSucceeded, out failure);
+
+            if (!PersonRuntimeOwnerBridge.RecordDeathAfterValidation(
+                    plan.Person, plan.AbsoluteDay))
+                return AbortAndRollback(graph, personStore, plan,
+                    "The selected Person death write was rejected after preflight.",
+                    out rollbackSucceeded, out failure);
+
+            if (plan.IsResident
+                && !PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(plan.Person, null))
+                return AbortAndRollback(graph, personStore, plan,
+                    "The selected Person residence clear was rejected after preflight.",
+                    out rollbackSucceeded, out failure);
+
+            if (materializedNpc != null
+                && !materializedNpc.TryCommitPersonDeathAfterValidation(
+                    NpcInjurySeverity.None,
+                    plan.ExpectedAction,
+                    plan.ExpectedPayload,
+                    out _))
+                return AbortAndRollback(graph, personStore, plan,
+                    "The selected materialized NPC death write was rejected after preflight.",
+                    out rollbackSucceeded, out failure);
+
+            failure = null;
+            return true;
+        }
+        catch (Exception exception)
+        {
+            return AbortAndRollback(graph, personStore, plan,
+                "The selected Person-death transaction threw before commit: " + exception.GetType().Name,
+                out rollbackSucceeded, out failure);
+        }
+    }
+
+    private static bool AbortAndRollback(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        DailyV1SelectedPersonDeathPlan plan,
+        string failure,
+        out bool rollbackSucceeded,
+        out string resultFailure)
+    {
+        rollbackSucceeded = TryRollback(graph, personStore, plan);
+        if (rollbackSucceeded)
+        {
+            resultFailure = failure + " All attempted owner writes were rolled back.";
+            return false;
+        }
+
+        resultFailure = failure + " Rollback could not restore the exact prepared owner state.";
+        return false;
+    }
+
+    private static bool TryRollback(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        PersonStore personStore,
+        DailyV1SelectedPersonDeathPlan plan)
+    {
+        if (graph == null || personStore == null || plan == null
+            || !ReferenceEquals(graph.PersonStore, personStore)
+            || !personStore.TryGet(plan.Person.PersonId, out PersonRuntime registeredPerson)
+            || !ReferenceEquals(registeredPerson, plan.Person))
+            return false;
+
+        string residenceBefore = plan.ResidenceCity?.RuntimeId;
+        int personRevisionIncrements = plan.IsResident ? 2 : 1;
+        if (!PersonRuntimeOwnerBridge.CanRollbackSelectedDeathMutation(
+                plan.Person, plan.AbsoluteDay, residenceBefore,
+                plan.ExpectedPersonLifeResidenceRevision, personRevisionIncrements))
+            return false;
+
+        SettlementPopulationRuntime population = plan.ResidenceCity?.Population;
         if (plan.IsResident
-            && !SettlementPopulationSystem.TryApply(
-                plan.ResidenceCity.Population, plan.PopulationTransition, out _))
-        {
-            failure = "The prepared selected resident population transition was rejected.";
+            && (!graph.ContainsExactCityOwner(plan.ResidenceCity)
+                || population == null
+                || !population.CanRollbackSelectedDeathTransition(plan.PopulationTransition)))
             return false;
-        }
 
-        if (!PersonRuntimeOwnerBridge.RecordDeathAfterValidation(
-                plan.Person, plan.AbsoluteDay))
-        {
-            failure = "The selected Person death write was rejected after preflight.";
+        DailyV1NpcRuntimeOwners npc = plan.MaterializedNpc;
+        if (npc != null
+            && (!graph.ContainsExactNpcOwner(npc)
+                || !npc.Lifecycle.CanRollbackSelectedDeathMutation(
+                    plan.ExpectedNpcLifeState,
+                    plan.ExpectedNpcInjurySeverity,
+                    plan.ExpectedNpcLifeStateRevision)
+                || !npc.ActionSlot.CanRollbackSelectedDeathMutation(
+                    plan.ExpectedAction,
+                    plan.ExpectedPayload,
+                    plan.ExpectedNpcActionRevision)))
             return false;
-        }
 
-        if (plan.IsResident
-            && !PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(plan.Person, null))
+        // Check every owner before restoring any of them. These private Core
+        // assignments restore exact revisions and do not notify P12 or publish
+        // an epoch, so the enclosing operation remains failure-atomic.
+        if (npc != null)
         {
-            failure = "The selected Person residence clear was rejected after preflight.";
-            return false;
+            npc.ActionSlot.RollbackSelectedDeathMutation(
+                plan.ExpectedAction, plan.ExpectedPayload, plan.ExpectedNpcActionRevision);
+            npc.Lifecycle.RollbackSelectedDeathMutation(
+                plan.ExpectedNpcLifeState,
+                plan.ExpectedNpcInjurySeverity,
+                plan.ExpectedNpcLifeStateRevision);
         }
-
-        if (materializedNpc != null
-            && !materializedNpc.TryCommitPersonDeathAfterValidation(
-                NpcInjurySeverity.None,
-                plan.ExpectedAction,
-                plan.ExpectedPayload,
-                out _))
-        {
-            failure = "The selected materialized NPC death write was rejected after preflight.";
-            return false;
-        }
-
-        failure = null;
+        PersonRuntimeOwnerBridge.RollbackSelectedDeathMutation(
+            plan.Person, residenceBefore, plan.ExpectedPersonLifeResidenceRevision);
+        if (plan.IsResident)
+            population.RollbackSelectedDeathTransition(plan.PopulationTransition);
         return true;
     }
 
@@ -917,24 +1208,58 @@ internal static class DailyV1SelectedPersonDeathOperation
 
         using (scope)
         {
-            if (!TryCommit(graph, personStore, plan, out failure))
+            if (!TryCommit(graph, personStore, plan, out bool rollbackSucceeded, out failure))
             {
+                if (!rollbackSucceeded) boundary.FaultPersonDeathRuntime();
                 scope?.Complete(false);
                 return false;
             }
 
-            if (plan.MaterializedNpc != null
-                && !boundary.TryPublishPersonDeathProjection(plan, currentActionChanged))
+            bool projectionPublished = plan.MaterializedNpc == null;
+            if (plan.MaterializedNpc != null)
             {
-                boundary.FaultPersonDeathRuntime();
-                failure = "RuntimeFaulted";
+                try
+                {
+                    projectionPublished = boundary.TryPublishPersonDeathProjection(
+                        plan, currentActionChanged);
+                }
+                catch
+                {
+                    projectionPublished = false;
+                }
+            }
+
+            if (!projectionPublished)
+            {
+                bool rolledBack = TryRollback(graph, personStore, plan);
+                if (!rolledBack) boundary.FaultPersonDeathRuntime();
+                failure = rolledBack
+                    ? "The Unity compatibility projection rejected the death; all Core owner writes were rolled back."
+                    : "The Unity compatibility projection rejected the death and exact Core owner rollback failed.";
                 scope?.Complete(false);
                 return false;
             }
 
             boundary.AdvancePersonDeathWorldRevision();
+            if (scope == null || !scope.Complete(true))
+            {
+                bool rolledBack = TryRollback(graph, personStore, plan);
+                if (!rolledBack) boundary.FaultPersonDeathRuntime();
+                bool aborted = scope?.Complete(false) ?? false;
+                string commitFailure = boundary is DailyV1CoreSelectedPersonDeathBoundary coreBoundary
+                    ? coreBoundary.LastPersonDeathCommitFailure
+                    : null;
+                failure = rolledBack && aborted
+                    ? "The selected Person-death census commit was rejected"
+                        + (string.IsNullOrWhiteSpace(commitFailure) ? string.Empty : " (" + commitFailure + ")")
+                        + " and all attempted owner and projection writes were rolled back."
+                    : "The selected Person-death census commit was rejected"
+                        + (string.IsNullOrWhiteSpace(commitFailure) ? string.Empty : " (" + commitFailure + ")")
+                        + " and exact rollback could not be confirmed.";
+                return false;
+            }
+
             failure = null;
-            scope?.Complete(true);
             return true;
         }
     }

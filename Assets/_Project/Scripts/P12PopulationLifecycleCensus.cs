@@ -11,6 +11,72 @@ public sealed partial class SimulationRuntime
     private readonly HashSet<PersonRuntime> p12LifecycleBoundPeople = new HashSet<PersonRuntime>();
     private readonly HashSet<NpcRuntime> p12LifecycleBoundNpcs = new HashSet<NpcRuntime>();
     private volatile P12PopulationOperationContext activeP12PopulationOperationContext;
+    private volatile CoreSelectedPersonDeathProjectionContext activeCoreSelectedPersonDeathProjectionContext;
+    private string lastCoreSelectedPersonDeathFailure;
+    private string lastCoreSelectedPersonDeathProjectionFailure;
+    internal string LastCoreSelectedPersonDeathFailure => lastCoreSelectedPersonDeathFailure;
+    internal string LastCoreSelectedPersonDeathProjectionFailure =>
+        lastCoreSelectedPersonDeathProjectionFailure;
+
+    private sealed class CoreSelectedPersonDeathProjectionContext
+    {
+        public readonly DailyV1SelectedPersonDeathPlan Plan;
+        public readonly string OperationId;
+        public readonly bool CurrentActionChanged;
+        public readonly DailyV1MutationEpochReservation EpochReservation;
+        public readonly PersonRuntime Person;
+        public readonly NpcRuntime MaterializedNpc;
+        public readonly CityRuntime ResidenceCity;
+        public readonly SettlementPopulationRuntime Population;
+        public readonly HashSet<string> ExpectedSectionIds;
+        public readonly HashSet<string> ChangedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        public readonly NpcRuntime.CoreSelectedPersonDeathProjectionSnapshot NpcProjectionSnapshot;
+        public readonly ContinuationCensusProtocol.CompatibilityMirrorBaselineSnapshot MirrorBaselineSnapshot;
+        public readonly long PoliticalWorldRevisionBefore;
+        public readonly long PoliticalTruthFingerprintBefore;
+        public readonly bool HasPoliticalTruthFingerprintBefore;
+        public readonly Thread OwnerThread;
+        public readonly int OwnerManagedThreadId;
+        public bool CompatibilityBaselinesPrepared;
+        public bool PermissionRevoked;
+
+        public CoreSelectedPersonDeathProjectionContext(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            DailyV1MutationEpochReservation epochReservation,
+            PersonRuntime person,
+            NpcRuntime materializedNpc,
+            CityRuntime residenceCity,
+            SettlementPopulationRuntime population,
+            IEnumerable<string> sectionIds,
+            NpcRuntime.CoreSelectedPersonDeathProjectionSnapshot npcProjectionSnapshot,
+            ContinuationCensusProtocol.CompatibilityMirrorBaselineSnapshot mirrorBaselineSnapshot,
+            long politicalWorldRevisionBefore,
+            long politicalTruthFingerprintBefore,
+            bool hasPoliticalTruthFingerprintBefore)
+        {
+            Plan = plan;
+            OperationId = operationId;
+            CurrentActionChanged = currentActionChanged;
+            EpochReservation = epochReservation;
+            Person = person;
+            MaterializedNpc = materializedNpc;
+            ResidenceCity = residenceCity;
+            Population = population;
+            ExpectedSectionIds = new HashSet<string>(sectionIds, StringComparer.Ordinal);
+            NpcProjectionSnapshot = npcProjectionSnapshot;
+            MirrorBaselineSnapshot = mirrorBaselineSnapshot;
+            PoliticalWorldRevisionBefore = politicalWorldRevisionBefore;
+            PoliticalTruthFingerprintBefore = politicalTruthFingerprintBefore;
+            HasPoliticalTruthFingerprintBefore = hasPoliticalTruthFingerprintBefore;
+            OwnerThread = Thread.CurrentThread;
+            OwnerManagedThreadId = OwnerThread.ManagedThreadId;
+        }
+
+        public bool IsOwnedByCurrentThread() => ReferenceEquals(OwnerThread, Thread.CurrentThread)
+            && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
 
     private sealed class P12PopulationOperationContext
     {
@@ -57,15 +123,16 @@ public sealed partial class SimulationRuntime
             this.context = context ?? throw new ArgumentNullException(nameof(context));
         }
 
-        public void Complete(bool operationSucceeded)
+        public bool Complete(bool operationSucceeded)
         {
             if (disposed || completed)
             {
                 owner?.FaultRuntimeAdmission();
-                return;
+                return false;
             }
             completed = true;
             succeeded = operationSucceeded;
+            return true;
         }
 
         public void Dispose()
@@ -269,6 +336,7 @@ public sealed partial class SimulationRuntime
         }
         if (activeP12PopulationOperationContext != null
             || activeNpcMembershipCensusContext != null
+            || activeCoreSelectedPersonDeathProjectionContext != null
             || localRevisionCapacity == null
             || !localRevisionCapacity())
             return false;
@@ -340,13 +408,17 @@ public sealed partial class SimulationRuntime
         string operationContractId,
         out string failure)
     {
-        return DailyV1SelectedPersonDeathOperation.TryExecute(
+        bool applied = DailyV1SelectedPersonDeathOperation.TryExecute(
             SelectedRuntimeOwnerGraph,
             personStore,
             plan,
             operationContractId,
             CreateSelectedPersonDeathBoundary(plan),
             out failure);
+        lastCoreSelectedPersonDeathFailure = applied ? null : failure;
+        if (!applied && !string.IsNullOrWhiteSpace(lastCoreSelectedPersonDeathProjectionFailure))
+            lastCoreSelectedPersonDeathFailure += " (" + lastCoreSelectedPersonDeathProjectionFailure + ")";
+        return applied;
     }
 
     internal IDailyV1SelectedPersonDeathBoundary CreateSelectedPersonDeathBoundary() =>
@@ -460,6 +532,258 @@ public sealed partial class SimulationRuntime
         return true;
     }
 
+    private bool TryBeginCoreSelectedPersonDeathProjectionMutation(
+        DailyV1SelectedPersonDeathPlan plan,
+        string operationId,
+        bool currentActionChanged,
+        IReadOnlyList<string> sectionIds)
+    {
+        if (runtimeAdmissionContext == null)
+            return activeCoreSelectedPersonDeathProjectionContext == null;
+
+        DailyV1MutationEpochReservation epochReservation =
+            dailyExecutionBoundary?.MutationEpochState.ActiveReservation;
+
+        if (!IsP12PopulationProfileSupported()
+            || !IsRuntimeAdmissionOwnerThreadCurrent()
+            || (!string.Equals(operationId,
+                    DailyV1RuntimeProtocolOperationContracts.PersonDeath, StringComparison.Ordinal)
+                && !string.Equals(operationId,
+                    DailyV1RuntimeProtocolOperationContracts.PopulationResidentDeath, StringComparison.Ordinal))
+            || plan?.Person?.PersonId == null
+            || epochReservation == null
+            || currentActionChanged != (plan.ExpectedAction != null)
+            || sectionIds == null
+            || activeCoreSelectedPersonDeathProjectionContext != null
+            || activeP12PopulationOperationContext != null
+            || activeNpcMembershipCensusContext != null
+            || dailyExecutionBoundary?.HasAdmittedSelectedDailyExecution != true
+            || dailyExecutionBoundary.ActiveRuntimeOperationCount <= 0
+            || !DailyV1SelectedPersonDeathOperation.TryCreateP12SectionIds(
+                plan, out IReadOnlyList<string> expectedSectionIds)
+            || !HasExactCorePersonDeathSectionIds(expectedSectionIds, sectionIds)
+            || !personStore.TryGet(plan.Person.PersonId, out PersonRuntime registeredPerson)
+            || !ReferenceEquals(registeredPerson, plan.Person)
+            || !p12LifecycleBoundPeople.Contains(plan.Person)
+            || !PersonRuntimeOwnerBridge.IsP12LifecycleBound(plan.Person))
+            return false;
+
+        NpcRuntime materializedNpc = null;
+        if (plan.MaterializedNpc != null)
+        {
+            if (!npcRegistryById.TryGetValue(plan.MaterializedNpc.RuntimeId, out materializedNpc)
+                || materializedNpc == null
+                || !ReferenceEquals(materializedNpc.SelectedRuntimeOwners, plan.MaterializedNpc)
+                || !ReferenceEquals(materializedNpc.BoundPersonRuntime, plan.Person)
+                || !p12LifecycleBoundNpcs.Contains(materializedNpc)
+                || !materializedNpc.IsP12LifecycleBound
+                || !ContainsCorePersonDeathSectionId(sectionIds,
+                    NpcLifecycleCensusProvider.SectionIdFor(materializedNpc.RuntimeId, false))
+                || currentActionChanged != ContainsCorePersonDeathSectionId(
+                    sectionIds,
+                    NpcCurrentActionCensusProvider.SectionIdFor(materializedNpc.RuntimeId)))
+                return false;
+        }
+
+        CityRuntime residenceCity = null;
+        SettlementPopulationRuntime population = null;
+        if (plan.IsResident)
+        {
+            if (plan.ResidenceCity?.RuntimeId == null
+                || !TryResolveCityByRuntimeId(plan.ResidenceCity.RuntimeId, out residenceCity)
+                || residenceCity == null
+                || !ReferenceEquals(residenceCity.SelectedRuntimeOwners, plan.ResidenceCity)
+                || !ReferenceEquals(residenceCity.Population, plan.ResidenceCity.Population)
+                || (population = residenceCity.Population) == null
+                || !populationAggregateSectionIdsByOwner.TryGetValue(
+                    population, out string aggregateSectionId)
+                || !ContainsCorePersonDeathSectionId(sectionIds, aggregateSectionId))
+                return false;
+        }
+
+        if (npcRosterCensusProtocol == null
+            || !npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _))
+            return false;
+
+        NpcRuntime.CoreSelectedPersonDeathProjectionSnapshot npcProjectionSnapshot = null;
+        if (materializedNpc != null
+            && (npcProjectionSnapshot = materializedNpc.CaptureCoreSelectedPersonDeathProjectionSnapshot(
+                    plan.MaterializedNpc)) == null)
+            return false;
+        ContinuationCensusProtocol.CompatibilityMirrorBaselineSnapshot mirrorBaselineSnapshot =
+            npcRosterCensusProtocol.CaptureCompatibilityMirrorBaselineSnapshot();
+        if (mirrorBaselineSnapshot == null) return false;
+
+        activeCoreSelectedPersonDeathProjectionContext =
+            new CoreSelectedPersonDeathProjectionContext(
+                plan, operationId, currentActionChanged, epochReservation, plan.Person,
+                materializedNpc, residenceCity, population, sectionIds,
+                npcProjectionSnapshot, mirrorBaselineSnapshot,
+                politicalWorldRevision, lastPoliticalTruthFingerprint,
+                hasPoliticalTruthFingerprint);
+        lastCoreSelectedPersonDeathProjectionFailure = null;
+        return true;
+    }
+
+    private bool TryCompleteCoreSelectedPersonDeathProjectionMutation(
+        DailyV1SelectedPersonDeathPlan plan,
+        string operationId,
+        bool currentActionChanged,
+        IReadOnlyList<string> sectionIds,
+        bool operationSucceeded)
+    {
+        if (runtimeAdmissionContext == null)
+            return activeCoreSelectedPersonDeathProjectionContext == null;
+
+        CoreSelectedPersonDeathProjectionContext context =
+            activeCoreSelectedPersonDeathProjectionContext;
+        if (operationSucceeded)
+        {
+            if (context == null
+                || !context.IsOwnedByCurrentThread()
+                || !ReferenceEquals(context.Plan, plan)
+                || !string.Equals(context.OperationId, operationId, StringComparison.Ordinal)
+                || context.CurrentActionChanged != currentActionChanged
+                || !HasExactCorePersonDeathSectionIds(sectionIds, context.ExpectedSectionIds))
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+
+            if (context.CompatibilityBaselinesPrepared)
+            {
+                // The baseline was already prepared and installed before Core
+                // completed the reserved epoch. This branch only revokes the
+                // exact operation-scoped writer context.
+                if (!ReferenceEquals(activeCoreSelectedPersonDeathProjectionContext, context))
+                {
+                    lastCoreSelectedPersonDeathProjectionFailure = "PreparedProjectionContextChanged";
+                    FaultRuntimeAdmission();
+                    return false;
+                }
+                activeCoreSelectedPersonDeathProjectionContext = null;
+                return true;
+            }
+
+            if (!context.ChangedSectionIds.SetEquals(context.ExpectedSectionIds)
+                || npcRosterCensusProtocol == null)
+            {
+                // This is still a prepared, reversible Core transaction. The
+                // caller restores the exact owner state and the original
+                // mirror snapshot before the reservation is released.
+                lastCoreSelectedPersonDeathProjectionFailure = "ChangedSectionsOrMirrorProtocolMismatch";
+                return false;
+            }
+
+            if (!npcRosterCensusProtocol.TryPrepareCompatibilityMirrorBaselineUpdate(
+                    sectionIds,
+                    context.EpochReservation,
+                    out ContinuationCensusProtocol.CompatibilityMirrorBaselineUpdate update,
+                    out string rejection))
+            {
+                lastCoreSelectedPersonDeathProjectionFailure =
+                    "MirrorBaselineStagingRejected:" + rejection;
+                return false;
+            }
+            if (!npcRosterCensusProtocol.TryPublishCompatibilityMirrorBaselineUpdate(
+                    update, context.EpochReservation))
+            {
+                lastCoreSelectedPersonDeathProjectionFailure = "MirrorBaselinePublicationRejected";
+                return false;
+            }
+
+            context.CompatibilityBaselinesPrepared = true;
+            context.PermissionRevoked = true;
+            return true;
+        }
+
+        CoreSelectedPersonDeathProjectionContext failedContext =
+            activeCoreSelectedPersonDeathProjectionContext;
+        try
+        {
+            if (context == null
+                || !ReferenceEquals(context, failedContext)
+                || !context.IsOwnedByCurrentThread()
+                || !ReferenceEquals(context.Plan, plan)
+                || !string.Equals(context.OperationId, operationId, StringComparison.Ordinal)
+                || context.CurrentActionChanged != currentActionChanged
+                || !HasExactCorePersonDeathSectionIds(sectionIds, context.ExpectedSectionIds))
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+
+            bool projectionRestored = context.MaterializedNpc == null
+                || context.MaterializedNpc.TryRestoreCoreSelectedPersonDeathProjection(
+                    context.NpcProjectionSnapshot);
+            politicalWorldRevision = context.PoliticalWorldRevisionBefore;
+            lastPoliticalTruthFingerprint = context.PoliticalTruthFingerprintBefore;
+            hasPoliticalTruthFingerprint = context.HasPoliticalTruthFingerprintBefore;
+            bool baselinesRestored = npcRosterCensusProtocol != null
+                && npcRosterCensusProtocol.TryRestoreCompatibilityMirrorBaselineSnapshot(
+                    context.MirrorBaselineSnapshot);
+            bool unchanged = baselinesRestored
+                && npcRosterCensusProtocol.TryValidateUnchangedSections(sectionIds, out _);
+            if (!projectionRestored || !unchanged)
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+
+            return true;
+        }
+        catch
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        finally
+        {
+            if (ReferenceEquals(activeCoreSelectedPersonDeathProjectionContext, failedContext))
+                activeCoreSelectedPersonDeathProjectionContext = null;
+        }
+    }
+
+    private static bool HasExactCorePersonDeathSectionIds(
+        IReadOnlyList<string> expected,
+        IReadOnlyList<string> actual)
+    {
+        if (expected == null || actual == null || expected.Count == 0
+            || expected.Count != actual.Count)
+            return false;
+        for (int index = 0; index < expected.Count; index++)
+            if (string.IsNullOrWhiteSpace(expected[index])
+                || !string.Equals(expected[index], actual[index], StringComparison.Ordinal))
+                return false;
+        return true;
+    }
+
+    private static bool ContainsCorePersonDeathSectionId(
+        IReadOnlyList<string> sectionIds,
+        string expectedSectionId)
+    {
+        if (sectionIds == null || string.IsNullOrWhiteSpace(expectedSectionId))
+            return false;
+        for (int index = 0; index < sectionIds.Count; index++)
+            if (string.Equals(sectionIds[index], expectedSectionId, StringComparison.Ordinal))
+                return true;
+        return false;
+    }
+
+    private static bool HasExactCorePersonDeathSectionIds(
+        IReadOnlyList<string> actual,
+        HashSet<string> expected)
+    {
+        if (actual == null || expected == null || actual.Count == 0
+            || actual.Count != expected.Count)
+            return false;
+        HashSet<string> actualSet = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in actual)
+            if (string.IsNullOrWhiteSpace(sectionId) || !actualSet.Add(sectionId))
+                return false;
+        return actualSet.SetEquals(expected);
+    }
+
     private bool TryPublishCoreSelectedPersonDeathProjection(
         DailyV1SelectedPersonDeathPlan plan,
         bool actionChanged)
@@ -494,6 +818,23 @@ public sealed partial class SimulationRuntime
         {
             this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
         }
+
+        public bool TryBeginPersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds) =>
+            owner.TryBeginCoreSelectedPersonDeathProjectionMutation(
+                plan, operationId, currentActionChanged, sectionIds);
+
+        public bool TryCompletePersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds,
+            bool operationSucceeded) =>
+            owner.TryCompleteCoreSelectedPersonDeathProjectionMutation(
+                plan, operationId, currentActionChanged, sectionIds, operationSucceeded);
 
         public bool TryValidatePersonDeathProjection(
             DailyV1SelectedPersonDeathPlan plan,
@@ -559,6 +900,23 @@ public sealed partial class SimulationRuntime
         {
             this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
         }
+
+        public bool TryBeginPersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds) =>
+            owner.TryBeginCoreSelectedPersonDeathProjectionMutation(
+                plan, operationId, currentActionChanged, sectionIds);
+
+        public bool TryCompletePersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds,
+            bool operationSucceeded) =>
+            owner.TryCompleteCoreSelectedPersonDeathProjectionMutation(
+                plan, operationId, currentActionChanged, sectionIds, operationSucceeded);
 
         public bool TryValidatePersonDeathProjection(
             DailyV1SelectedPersonDeathPlan plan,
@@ -633,6 +991,14 @@ public sealed partial class SimulationRuntime
         if (runtimeAdmissionContext == null) return true;
         if (person == null || !IsRuntimeAdmissionOwnerThreadCurrent()) return false;
         string sectionId = PersonLifeResidenceCensusProvider.SectionIdFor(person.PersonId);
+        CoreSelectedPersonDeathProjectionContext coreDeathContext =
+            activeCoreSelectedPersonDeathProjectionContext;
+        if (coreDeathContext != null)
+            return !coreDeathContext.PermissionRevoked
+                && coreDeathContext.IsOwnedByCurrentThread()
+                && ReferenceEquals(coreDeathContext.Person, person)
+                && coreDeathContext.ExpectedSectionIds.Contains(sectionId);
+
         P12PopulationOperationContext populationContext = activeP12PopulationOperationContext;
         if (populationContext != null && populationContext.IsOwnedByCurrentThread())
             return populationContext.ExpectedSectionIds.Contains(sectionId);
@@ -673,11 +1039,29 @@ public sealed partial class SimulationRuntime
 
         P12PopulationOperationContext populationContext = activeP12PopulationOperationContext;
         NpcMembershipCensusContext membershipContext = activeNpcMembershipCensusContext;
-        HashSet<string> allowedSectionIds = populationContext != null && populationContext.IsOwnedByCurrentThread()
-            ? populationContext.ExpectedSectionIds
-            : membershipContext != null && membershipContext.IsOwnedByCurrentThread()
-                ? membershipContext.AllowedLifecycleSectionIds
-                : null;
+        CoreSelectedPersonDeathProjectionContext coreDeathContext =
+            activeCoreSelectedPersonDeathProjectionContext;
+        HashSet<string> allowedSectionIds;
+        if (coreDeathContext != null)
+        {
+            if (coreDeathContext.PermissionRevoked
+                || !coreDeathContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(coreDeathContext.MaterializedNpc, npc)
+                || !lifeStateChanged
+                || residenceChanged
+                || currentActionChanged != coreDeathContext.CurrentActionChanged
+                || nextActionRuntime != null)
+                return false;
+            allowedSectionIds = coreDeathContext.ExpectedSectionIds;
+        }
+        else
+        {
+            allowedSectionIds = populationContext != null && populationContext.IsOwnedByCurrentThread()
+                ? populationContext.ExpectedSectionIds
+                : membershipContext != null && membershipContext.IsOwnedByCurrentThread()
+                    ? membershipContext.AllowedLifecycleSectionIds
+                    : null;
+        }
         if (lifeStateChanged || residenceChanged)
         {
             if (allowedSectionIds == null
@@ -724,7 +1108,8 @@ public sealed partial class SimulationRuntime
             FaultRuntimeAdmission();
         if (currentActionChanged)
         {
-            if (activeP12PopulationOperationContext != null
+            if (activeCoreSelectedPersonDeathProjectionContext != null
+                || activeP12PopulationOperationContext != null
                 || activeNpcMembershipCensusContext != null)
             {
                 if (!TryRecordP12LifecycleMutation(
@@ -746,6 +1131,20 @@ public sealed partial class SimulationRuntime
     {
         if (runtimeAdmissionContext == null) return true;
         if (owner == null || !IsRuntimeAdmissionOwnerThreadCurrent()) return false;
+        CoreSelectedPersonDeathProjectionContext coreDeathContext =
+            activeCoreSelectedPersonDeathProjectionContext;
+        if (coreDeathContext != null)
+        {
+            return !coreDeathContext.PermissionRevoked
+                && coreDeathContext.IsOwnedByCurrentThread()
+                && coreDeathContext.Plan.IsResident == aggregateChanged
+                && !receiptChanged
+                && ReferenceEquals(coreDeathContext.Population, owner)
+                && populationAggregateSectionIdsByOwner.TryGetValue(
+                    owner, out string coreAggregateId)
+                && coreDeathContext.ExpectedSectionIds.Contains(coreAggregateId);
+        }
+
         P12PopulationOperationContext context = activeP12PopulationOperationContext;
         if (context == null || !context.IsOwnedByCurrentThread()) return false;
         return (!aggregateChanged
@@ -762,6 +1161,30 @@ public sealed partial class SimulationRuntime
         bool receiptChanged)
     {
         if (runtimeAdmissionContext == null) return;
+        CoreSelectedPersonDeathProjectionContext coreDeathContext =
+            activeCoreSelectedPersonDeathProjectionContext;
+        if (coreDeathContext != null)
+        {
+            string coreAggregateId = null;
+            bool aggregateSectionAuthorized = !aggregateChanged
+                || (populationAggregateSectionIdsByOwner.TryGetValue(
+                        owner, out coreAggregateId)
+                    && coreDeathContext.ExpectedSectionIds.Contains(coreAggregateId));
+            if (coreDeathContext.PermissionRevoked
+                || !coreDeathContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(coreDeathContext.Population, owner)
+                || coreDeathContext.Plan.IsResident != aggregateChanged
+                || receiptChanged
+                || !aggregateSectionAuthorized)
+            {
+                FaultRuntimeAdmission();
+                return;
+            }
+            if (aggregateChanged)
+                coreDeathContext.ChangedSectionIds.Add(coreAggregateId);
+            return;
+        }
+
         P12PopulationOperationContext context = activeP12PopulationOperationContext;
         if (context == null || !context.IsOwnedByCurrentThread())
         {
@@ -786,6 +1209,18 @@ public sealed partial class SimulationRuntime
 
     private bool TryRecordP12LifecycleMutation(string sectionId)
     {
+        CoreSelectedPersonDeathProjectionContext coreDeathContext =
+            activeCoreSelectedPersonDeathProjectionContext;
+        if (coreDeathContext != null)
+        {
+            if (coreDeathContext.PermissionRevoked
+                || !coreDeathContext.IsOwnedByCurrentThread()
+                || !coreDeathContext.ExpectedSectionIds.Contains(sectionId))
+                return false;
+            coreDeathContext.ChangedSectionIds.Add(sectionId);
+            return true;
+        }
+
         P12PopulationOperationContext populationContext = activeP12PopulationOperationContext;
         if (populationContext != null && populationContext.IsOwnedByCurrentThread())
         {
