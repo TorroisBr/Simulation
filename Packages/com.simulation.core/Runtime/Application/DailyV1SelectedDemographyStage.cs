@@ -20,9 +20,10 @@ internal interface IDailyV1SelectedPersonDeathBoundary
 }
 
 /// <summary>
-/// Unity-facing projection callbacks for the selected Person-death transaction.
-/// P12 admission, owner baselines and mutation-epoch publication are owned by
-/// Core; the host only validates and updates its exact compatibility projection.
+/// Optional host projection callbacks for the selected Person-death transaction.
+/// P12 admission, Core owner writes and mutation-epoch publication are always
+/// owned by Core. A Unity host supplies this adapter to keep its compatibility
+/// projection synchronized; a detached host passes no projection.
 /// </summary>
 internal interface IDailyV1SelectedPersonDeathProjectionBoundary
 {
@@ -155,8 +156,7 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
             ?? throw new ArgumentNullException(nameof(executionState));
         this.ownerGraph = ownerGraph
             ?? throw new ArgumentNullException(nameof(ownerGraph));
-        this.projection = projection
-            ?? throw new ArgumentNullException(nameof(projection));
+        this.projection = projection;
         mutationProtocol = new DailyV1CoreSelectedOwnerSectionMutationProtocol(
             executionState, ownerGraph);
     }
@@ -204,10 +204,16 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
             return false;
         }
 
-        if (!projection.TryValidatePersonDeathProjection(
-                plan, out bool projectionActionChanged, out failure)
-            || projectionActionChanged != currentActionChanged
-            || currentActionChanged != (plan.ExpectedAction != null))
+        if (currentActionChanged != (plan.ExpectedAction != null))
+        {
+            failure = "PersonDeathProjectionMismatch";
+            return false;
+        }
+
+        if (projection != null
+            && (!projection.TryValidatePersonDeathProjection(
+                    plan, out bool projectionActionChanged, out failure)
+                || projectionActionChanged != currentActionChanged))
         {
             failure = "PersonDeathProjectionMismatch";
             return false;
@@ -264,11 +270,12 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
         OperationContext context = new OperationContext(
             sectionIds, plan, operationId, currentActionChanged, coreReservation);
         activeOperation = context;
-        bool projectionAdmitted;
+        bool projectionAdmitted = projection == null;
         try
         {
-            projectionAdmitted = projection.TryBeginPersonDeathProjectionMutation(
-                plan, operationId, currentActionChanged, sectionIds);
+            if (projection != null)
+                projectionAdmitted = projection.TryBeginPersonDeathProjectionMutation(
+                    plan, operationId, currentActionChanged, sectionIds);
         }
         catch
         {
@@ -294,14 +301,16 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
     public bool TryPublishPersonDeathProjection(
         DailyV1SelectedPersonDeathPlan plan,
         bool currentActionChanged) =>
-        projection.TryPublishPersonDeathProjection(plan, currentActionChanged);
+        projection == null
+        || projection.TryPublishPersonDeathProjection(plan, currentActionChanged);
 
     public bool TryBeginPersonDeathProjectionMutation(
         DailyV1SelectedPersonDeathPlan plan,
         string operationId,
         bool currentActionChanged,
         IReadOnlyList<string> sectionIds) =>
-        projection.TryBeginPersonDeathProjectionMutation(
+        projection == null
+        || projection.TryBeginPersonDeathProjectionMutation(
             plan, operationId, currentActionChanged, sectionIds);
 
     public bool TryCompletePersonDeathProjectionMutation(
@@ -310,19 +319,20 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
         bool currentActionChanged,
         IReadOnlyList<string> sectionIds,
         bool operationSucceeded) =>
-        projection.TryCompletePersonDeathProjectionMutation(
+        projection == null
+        || projection.TryCompletePersonDeathProjectionMutation(
             plan, operationId, currentActionChanged, sectionIds, operationSucceeded);
 
     public void FaultPersonDeathRuntime()
     {
         try { mutationProtocol.FaultClosed(); }
         catch { }
-        try { projection.FaultPersonDeathRuntime(); }
+        try { projection?.FaultPersonDeathRuntime(); }
         catch { }
     }
 
     public void AdvancePersonDeathWorldRevision() =>
-        projection.AdvancePersonDeathWorldRevision();
+        projection?.AdvancePersonDeathWorldRevision();
 
     private bool TryCommitOperation(OperationContext context)
     {
@@ -337,15 +347,17 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
 
         try
         {
-            // Stage Unity's compatibility baseline before Core publishes the
-            // reserved epoch. A rejected read leaves the reservation and
-            // owner state available for exact rollback by the caller.
-            if (!projection.TryCompletePersonDeathProjectionMutation(
-                    context.Plan,
-                    context.OperationId,
-                    context.CurrentActionChanged,
-                    context.SectionIds,
-                    operationSucceeded: true))
+            // When Unity is present, stage its compatibility baseline before
+            // Core publishes the reserved epoch. A detached Core host has no
+            // projection baseline to stage; its exact owner vector is still
+            // validated and published by the same Core mutation protocol.
+            if (projection != null
+                && !projection.TryCompletePersonDeathProjectionMutation(
+                        context.Plan,
+                        context.OperationId,
+                        context.CurrentActionChanged,
+                        context.SectionIds,
+                        operationSucceeded: true))
             {
                 LastPersonDeathCommitFailure = "CompatibilityBaselinePreparationRejected";
                 return false;
@@ -372,12 +384,13 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
         // context; its reads and baseline staging already succeeded above.
         try
         {
-            if (!projection.TryCompletePersonDeathProjectionMutation(
-                    context.Plan,
-                    context.OperationId,
-                    context.CurrentActionChanged,
-                    context.SectionIds,
-                    operationSucceeded: true))
+            if (projection != null
+                && !projection.TryCompletePersonDeathProjectionMutation(
+                        context.Plan,
+                        context.OperationId,
+                        context.CurrentActionChanged,
+                        context.SectionIds,
+                        operationSucceeded: true))
                 FaultPersonDeathRuntime();
         }
         catch { FaultPersonDeathRuntime(); }
@@ -404,15 +417,16 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
 
         // Revoke the host writer permit and restore its exact compatibility
         // snapshot before releasing the Core reservation.
-        bool projectionRestored;
+        bool projectionRestored = projection == null;
         try
         {
-            projectionRestored = projection.TryCompletePersonDeathProjectionMutation(
-                context.Plan,
-                context.OperationId,
-                context.CurrentActionChanged,
-                context.SectionIds,
-                operationSucceeded: false);
+            if (projection != null)
+                projectionRestored = projection.TryCompletePersonDeathProjectionMutation(
+                    context.Plan,
+                    context.OperationId,
+                    context.CurrentActionChanged,
+                    context.SectionIds,
+                    operationSucceeded: false);
         }
         catch { projectionRestored = false; }
         if (!projectionRestored) FaultPersonDeathRuntime();
