@@ -671,13 +671,12 @@ internal sealed class DailyV1Application
     }
 
     /// <summary>
-    /// Starts the fixed .NET host through Core's NoSave genesis admission and
-    /// active-session gate. A loaded continuation remains fail-closed until
-    /// this path owns the full Core restore staging sequence. The detached host
-    /// supplies only the exact runtime boundary ports; this path never creates
-    /// or publishes a Unity projection.
+    /// Starts the fixed .NET host through Core's initial-slot admission. A
+    /// NoSave slot prepares genesis; a loaded slot runs the complete ordered
+    /// Core P12 restore transaction. Both paths bind only the exact Core
+    /// runtime session and publish without creating a Unity projection.
     /// </summary>
-    internal bool TryStartDotNetGenesisOnExistingApplication(
+    internal bool TryStartDotNetOnExistingApplication(
         DailyV1EffectiveDefinitions definitions,
         DailyV1ApplicationHost host,
         DailyV1ApplicationInitialRuntimePortsFactory runtimePortsFactory,
@@ -700,53 +699,169 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        DailyV1RestoredImageCoreOwnerStages restoreStages = null;
+        bool committed = false;
         try
         {
             if (!TryPrepareStartOnExistingApplication(
                     definitions, host, out preparation, out persistenceResult, out diagnostic))
                 return false;
 
-            if (preparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
-                || preparation.StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.GenesisRequired
-                || preparation.PersistenceResult.Code != P12AResultCode.NoSave
-                || preparation.CoreSession == null)
+            if (preparation.Kind == DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                && preparation.StartAdmission.Kind == DailyV1ApplicationStartAdmissionKind.GenesisRequired
+                && preparation.PersistenceResult.Code == P12AResultCode.NoSave
+                && preparation.CoreSession != null)
             {
-                diagnostic = "The detached genesis path rejects a loaded continuation until Core-owned initial restore staging is integrated.";
+                if (!TryCreateDotNetRuntimeBoundary(
+                        runtimePortsFactory, preparation, preparation.CoreSession,
+                        out IDailyV1SelectedRuntimeAdvanceHostPorts genesisHostPorts,
+                        out diagnostic))
+                    return false;
+
+                committed = TryCommitInitialGenesisWithoutHostProjection(
+                    preparation, genesisHostPorts, out diagnostic);
+                return committed;
+            }
+
+            if (preparation.Kind != DailyV1ApplicationStartPreparationKind.RestoreRequired
+                || preparation.StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.RestoreRequired
+                || preparation.PersistenceResult.Code != P12AResultCode.Loaded
+                || preparation.RestoreImage == null)
+            {
+                diagnostic = "The detached host received no exact admitted NoSave or loaded-image start path.";
                 return false;
             }
 
-            IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts;
-            bool portsReady;
-            try
-            {
-                portsReady = runtimePortsFactory(
-                    preparation, preparation.CoreSession,
-                    out candidateHostPorts, out diagnostic);
-            }
-            catch (Exception exception) when (exception is ArgumentException
-                || exception is InvalidOperationException || exception is OverflowException
-                || exception is NullReferenceException)
-            {
-                diagnostic = "The detached runtime boundary could not bind the exact prepared Core session: "
-                    + exception.Message;
-                return false;
-            }
-
-            if (!portsReady || candidateHostPorts == null)
+            if (!DailyV1CompatibilityDescriptorFactory.TryCreateDotNetV2(
+                    definitions, host.DotNetIdentity,
+                    out P12ACompatibilityDescriptorV2 dotNetIdentity,
+                    out diagnostic)
+                || dotNetIdentity == null)
             {
                 if (string.IsNullOrWhiteSpace(diagnostic))
-                    diagnostic = "The detached host did not provide runtime ports for the exact Core session.";
+                    diagnostic = "The detached restore could not recreate this host's exact P12-v2 identity.";
                 return false;
             }
 
-            return TryCommitInitialGenesisWithoutHostProjection(
-                preparation, candidateHostPorts, out diagnostic);
+            DailyV1ApplicationStartPreparation restorePreparation = preparation;
+            P12AContinuationImage image = restorePreparation.RestoreImage;
+            bool staged = TryRunRestoredImageCoreOwnerTransaction(
+                image,
+                unityV1Identity: null,
+                dotNetV2Identity: dotNetIdentity,
+                selectedDefinitions: definitions,
+                bootstrapAdmissionContext: bootstrapAdmissionContext,
+                expectedSession: null,
+                replacementOperation: null,
+                initialStartAdmission: restorePreparation.StartAdmission,
+                createDiagnosticLogger: () => restorePreparation.Logger,
+                lastEconomySnapshotDay: image.Header.LastEconomySnapshotDay,
+                imageDecoded: null,
+                stageCompleted: host.StageCompleted,
+                projectCoreRoots: null,
+                prepareHostProjection: null,
+                projectCompletedCoreOwnerStage: null,
+                p12EOwnerStageObserver: null,
+                p12FOwnerStageObserver: null,
+                out bool admissionPassed,
+                out bool rootsPrepared,
+                out P12ADailyV1Census imageCensus,
+                out _,
+                out restoreStages,
+                out DailyV1RestoredImageCoreOwnerStageBoundary failedBoundary,
+                out P12AResult restoreResult,
+                out string restoreDiagnostic);
+            if (!staged || !admissionPassed || !rootsPrepared
+                || restoreStages == null || !restoreStages.IsComplete
+                || restoreStages.CoreSession == null || imageCensus == null)
+            {
+                diagnostic = string.IsNullOrWhiteSpace(restoreDiagnostic)
+                    ? "Core could not complete the detached P12-C/D/E/F restore transaction at "
+                        + failedBoundary + " (" + (restoreResult?.SectionCode
+                            ?? restoreResult?.Code.ToString() ?? "Unknown") + ")."
+                    : restoreDiagnostic;
+                return false;
+            }
+
+            DailyV1ActiveRuntimeSession restoredSession = restoreStages.CoreSession;
+            if (!TryCreateDotNetRuntimeBoundary(
+                    runtimePortsFactory, preparation, restoredSession,
+                    out IDailyV1SelectedRuntimeAdvanceHostPorts restoredHostPorts,
+                    out diagnostic))
+                return false;
+
+            if (!TryCaptureAndValidateRestoredImageOwnerVector(
+                    restoredSession, restoredHostPorts, imageCensus,
+                    expectedSession: null, replacementOperation: null,
+                    stageObserver: null,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> targetOwnerSections,
+                    out long targetMutationEpoch,
+                    out P12GDailyV1OwnerVectorFailure ownerVectorFailure,
+                    out diagnostic))
+            {
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "The detached restored Core session did not satisfy the exact P12 owner vector: "
+                        + ownerVectorFailure + ".";
+                return false;
+            }
+
+            if (!TryBindInitialRestoredImageCommitProof(
+                    restorePreparation.StartAdmission, restoreStages, restoredSession,
+                    targetOwnerSections, targetMutationEpoch, stageObserver: null,
+                    out diagnostic))
+                return false;
+
+            committed = TryCommitInitialRestoredCoreCandidate(
+                restorePreparation.StartAdmission, image, restoredSession,
+                restoredHostPorts, out diagnostic);
+            return committed;
         }
         finally
         {
             if (preparation?.Kind == DailyV1ApplicationStartPreparationKind.RestoreRequired)
+            {
+                if (!committed)
+                    restoreStages?.Fail();
                 ClearPreparedInitialRestoredSession(preparation.RestoreImage);
+            }
         }
+    }
+
+    private static bool TryCreateDotNetRuntimeBoundary(
+        DailyV1ApplicationInitialRuntimePortsFactory runtimePortsFactory,
+        DailyV1ApplicationStartPreparation preparation,
+        DailyV1ActiveRuntimeSession candidateSession,
+        out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+        out string diagnostic)
+    {
+        candidateHostPorts = null;
+        diagnostic = null;
+        bool portsReady;
+        try
+        {
+            portsReady = runtimePortsFactory(
+                preparation, candidateSession, out candidateHostPorts, out diagnostic);
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException
+            || exception is NullReferenceException)
+        {
+            diagnostic = "The detached runtime boundary could not bind the exact prepared Core session: "
+                + exception.Message;
+            return false;
+        }
+
+        if (!portsReady || candidateHostPorts == null
+            || !ReferenceEquals(candidateSession?.ExecutionBoundaryState,
+                candidateHostPorts.ExecutionState))
+        {
+            candidateHostPorts = null;
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The detached host did not provide runtime ports for the exact Core session.";
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>

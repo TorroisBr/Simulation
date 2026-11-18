@@ -701,7 +701,7 @@ public sealed class DailyV1ApplicationHostTests
             return true;
         }
 
-        Assert.That(application.TryStartDotNetGenesisOnExistingApplication(
+        Assert.That(application.TryStartDotNetOnExistingApplication(
             definitions, host, BindCoreRuntimeBoundary,
             out DailyV1ApplicationStartPreparation preparation,
             out P12AResult persistenceResult,
@@ -720,7 +720,7 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
-    public void DotNetGenesisStartDoesNotFallThroughWhenAContinuationIsLoaded()
+    public void DotNetStartRoutesLoadedContinuationThroughCoreRestoreAndNeverFallsBackToGenesis()
     {
         Assert.That(TryCreateStructurallyAdmittedDotNetV2Fixture(
             out DailyV1EffectiveDefinitions definitions,
@@ -749,11 +749,11 @@ public sealed class DailyV1ApplicationHostTests
         {
             runtimeFactoryCalls++;
             candidateHostPorts = null;
-            diagnostic = "A loaded continuation must be rejected before the genesis runtime factory.";
+            diagnostic = "A detached restore must not bind runtime ports before Core has staged the loaded continuation.";
             return false;
         }
 
-        Assert.That(application.TryStartDotNetGenesisOnExistingApplication(
+        Assert.That(application.TryStartDotNetOnExistingApplication(
             definitions, host, ShouldNotBindRuntimePorts,
             out DailyV1ApplicationStartPreparation preparation,
             out P12AResult persistenceResult,
@@ -767,7 +767,9 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.Loaded));
         Assert.That(runtimeFactoryCalls, Is.Zero);
         Assert.That(application.ActiveSession, Is.Null);
-        Assert.That(diagnostic, Does.Contain("rejects a loaded continuation"));
+        Assert.That(diagnostic, Does.Contain("Core could not begin the exact private restored-image admission and root stage"),
+            "The structurally admitted fixture has deliberately non-decodable owner payloads, so the Core restore pipeline must reject it before runtime binding.");
+        Assert.That(diagnostic, Does.Not.Contain("genesis"));
     }
     [Test]
     public void CoreGenesisStartRejectsProjectionWithoutExactCoreSessionBinding()
