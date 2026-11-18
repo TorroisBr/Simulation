@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 internal interface IDailyV1SelectedPersonDeathP12Scope : IDisposable
 {
@@ -7,11 +8,8 @@ internal interface IDailyV1SelectedPersonDeathP12Scope : IDisposable
 }
 
 internal interface IDailyV1SelectedPersonDeathBoundary
+    : IDailyV1SelectedPersonDeathProjectionBoundary
 {
-    bool TryValidatePersonDeathProjection(
-        DailyV1SelectedPersonDeathPlan plan,
-        out bool currentActionChanged,
-        out string failure);
     bool TryBeginPersonDeathOperation(
         DailyV1SelectedPersonDeathPlan plan,
         bool currentActionChanged,
@@ -19,11 +17,296 @@ internal interface IDailyV1SelectedPersonDeathBoundary
         IReadOnlyList<string> sectionIds,
         Func<bool> localRevisionCapacity,
         out IDailyV1SelectedPersonDeathP12Scope scope);
+}
+
+/// <summary>
+/// Unity-facing projection callbacks for the selected Person-death transaction.
+/// P12 admission, owner baselines and mutation-epoch publication are owned by
+/// Core; the host only validates and updates its exact compatibility projection.
+/// </summary>
+internal interface IDailyV1SelectedPersonDeathProjectionBoundary
+{
+    bool TryValidatePersonDeathProjection(
+        DailyV1SelectedPersonDeathPlan plan,
+        out bool currentActionChanged,
+        out string failure);
     bool TryPublishPersonDeathProjection(
         DailyV1SelectedPersonDeathPlan plan,
         bool currentActionChanged);
     void FaultPersonDeathRuntime();
     void AdvancePersonDeathWorldRevision();
+}
+
+/// <summary>
+/// Owns selected Person-death P12 admission and mutation-epoch publication for
+/// the exact Core execution state. The host projection cannot enter or close
+/// the operation and cannot publish its census epoch.
+/// </summary>
+internal sealed class DailyV1CoreSelectedPersonDeathBoundary
+    : IDailyV1SelectedPersonDeathBoundary
+{
+    private sealed class OperationContext
+    {
+        internal readonly IReadOnlyList<string> SectionIds;
+        internal readonly DailyV1MutationEpochReservation MutationEpochReservation;
+        internal readonly Thread OwnerThread;
+        internal readonly int OwnerManagedThreadId;
+        internal bool Completed;
+        internal bool Succeeded;
+
+        internal OperationContext(
+            IReadOnlyList<string> sectionIds,
+            DailyV1MutationEpochReservation mutationEpochReservation)
+        {
+            SectionIds = sectionIds;
+            MutationEpochReservation = mutationEpochReservation;
+            OwnerThread = Thread.CurrentThread;
+            OwnerManagedThreadId = OwnerThread.ManagedThreadId;
+        }
+
+        internal bool IsOwnedByCurrentThread() =>
+            ReferenceEquals(OwnerThread, Thread.CurrentThread)
+            && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
+    }
+
+    private sealed class OperationScope : IDailyV1SelectedPersonDeathP12Scope
+    {
+        private readonly DailyV1CoreSelectedPersonDeathBoundary owner;
+        private readonly OperationContext context;
+        private bool disposed;
+
+        internal OperationScope(
+            DailyV1CoreSelectedPersonDeathBoundary owner,
+            OperationContext context)
+        {
+            this.owner = owner;
+            this.context = context;
+        }
+
+        public void Complete(bool operationSucceeded)
+        {
+            DailyV1CoreSelectedPersonDeathBoundary current = owner;
+            if (disposed || context.Completed)
+            {
+                current.FaultPersonDeathRuntime();
+                return;
+            }
+            context.Completed = true;
+            context.Succeeded = operationSucceeded;
+        }
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+            owner.ExitOperation(context, context.Completed && context.Succeeded);
+        }
+    }
+
+    private readonly DailyV1ExecutionBoundaryState executionState;
+    private readonly DailyV1SelectedRuntimeOwnerGraph ownerGraph;
+    private readonly IDailyV1SelectedPersonDeathProjectionBoundary projection;
+    private readonly DailyV1CoreSelectedOwnerSectionMutationProtocol mutationProtocol;
+    private OperationContext activeOperation;
+
+    internal DailyV1CoreSelectedPersonDeathBoundary(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+        IDailyV1SelectedPersonDeathProjectionBoundary projection)
+    {
+        this.executionState = executionState
+            ?? throw new ArgumentNullException(nameof(executionState));
+        this.ownerGraph = ownerGraph
+            ?? throw new ArgumentNullException(nameof(ownerGraph));
+        this.projection = projection
+            ?? throw new ArgumentNullException(nameof(projection));
+        mutationProtocol = new DailyV1CoreSelectedOwnerSectionMutationProtocol(
+            executionState, ownerGraph);
+    }
+
+    public bool TryValidatePersonDeathProjection(
+        DailyV1SelectedPersonDeathPlan plan,
+        out bool currentActionChanged,
+        out string failure)
+    {
+        currentActionChanged = false;
+        failure = "CorePersonDeathOwnerOrSessionMismatch";
+        if (plan == null
+            || !mutationProtocol.IsBoundTo(executionState, ownerGraph)
+            || executionState.AdmissionContext?.IsOwnedByCurrentThread() != true
+            || executionState.SimulationTime?.AbsoluteDay != plan.AbsoluteDay
+            || plan.Person?.PersonId == null
+            || ownerGraph.PersonStore == null
+            || !ownerGraph.PersonStore.TryGet(plan.Person.PersonId, out PersonRuntime registeredPerson)
+            || !ReferenceEquals(registeredPerson, plan.Person))
+            return false;
+
+        if (plan.MaterializedNpc != null)
+        {
+            DailyV1NpcRuntimeOwners npc = plan.MaterializedNpc;
+            if (!ownerGraph.ContainsExactNpcOwner(npc)
+                || npc.Lifecycle?.LifeState != NpcLifeState.Alive
+                || npc.ActionSlot == null
+                || !ownerGraph.PersonStore.TryGetByMaterializedNpcRuntimeId(
+                    npc.RuntimeId, out PersonRuntime materializedPerson)
+                || !ReferenceEquals(materializedPerson, plan.Person)
+                || !ReferenceEquals(npc.ActionSlot.CurrentAction, plan.ExpectedAction)
+                || !ReferenceEquals(npc.ActionSlot.CurrentPayload, plan.ExpectedPayload))
+            {
+                failure = "CorePersonDeathNpcOwnerMismatch";
+                return false;
+            }
+            currentActionChanged = npc.ActionSlot.CurrentAction != null;
+        }
+
+        if (plan.IsResident
+            && (!ownerGraph.ContainsExactCityOwner(plan.ResidenceCity)
+                || plan.ResidenceCity.Population == null))
+        {
+            failure = "CorePersonDeathResidenceOwnerMismatch";
+            return false;
+        }
+
+        if (!projection.TryValidatePersonDeathProjection(
+                plan, out bool projectionActionChanged, out failure)
+            || projectionActionChanged != currentActionChanged
+            || currentActionChanged != (plan.ExpectedAction != null))
+        {
+            failure = "PersonDeathProjectionMismatch";
+            return false;
+        }
+        failure = null;
+        return true;
+    }
+
+    public bool TryBeginPersonDeathOperation(
+        DailyV1SelectedPersonDeathPlan plan,
+        bool currentActionChanged,
+        string operationId,
+        IReadOnlyList<string> sectionIds,
+        Func<bool> localRevisionCapacity,
+        out IDailyV1SelectedPersonDeathP12Scope scope)
+    {
+        scope = null;
+        if (activeOperation != null
+            || !IsSupportedOperation(operationId)
+            || plan == null
+            || currentActionChanged != (plan.ExpectedAction != null)
+            || sectionIds == null || sectionIds.Count == 0
+            || localRevisionCapacity == null
+            || !mutationProtocol.IsBoundTo(executionState, ownerGraph)
+            || executionState.AdmissionContext?.IsOwnedByCurrentThread() != true
+            || !DailyV1SelectedPersonDeathOperation.TryCreateP12SectionIds(
+                plan, out IReadOnlyList<string> expectedSectionIds)
+            || !HasExactSectionIds(expectedSectionIds, sectionIds))
+            return false;
+
+        bool hasCapacity;
+        try { hasCapacity = localRevisionCapacity(); }
+        catch { hasCapacity = false; }
+        if (!hasCapacity) return false;
+
+        if (!executionState.TryBeginRuntimeProtocolOperation(operationId))
+        {
+            FaultPersonDeathRuntime();
+            return false;
+        }
+
+        object reservation = null;
+        if (!mutationProtocol.TryValidateUnchangedSections(sectionIds)
+            || !mutationProtocol.TryReserveMutationEpoch(out reservation)
+            || !(reservation is DailyV1MutationEpochReservation coreReservation))
+        {
+            mutationProtocol.FaultClosed();
+            projection.FaultPersonDeathRuntime();
+            mutationProtocol.ReleaseMutationEpoch(reservation);
+            if (!executionState.TryEndRuntimeProtocolOperation())
+                mutationProtocol.FaultClosed();
+            return false;
+        }
+
+        activeOperation = new OperationContext(sectionIds, coreReservation);
+        scope = new OperationScope(this, activeOperation);
+        return true;
+    }
+
+    public bool TryPublishPersonDeathProjection(
+        DailyV1SelectedPersonDeathPlan plan,
+        bool currentActionChanged) =>
+        projection.TryPublishPersonDeathProjection(plan, currentActionChanged);
+
+    public void FaultPersonDeathRuntime()
+    {
+        mutationProtocol.FaultClosed();
+        projection.FaultPersonDeathRuntime();
+    }
+
+    public void AdvancePersonDeathWorldRevision() =>
+        projection.AdvancePersonDeathWorldRevision();
+
+    private void ExitOperation(OperationContext context, bool operationSucceeded)
+    {
+        if (context == null
+            || !context.IsOwnedByCurrentThread()
+            || !ReferenceEquals(activeOperation, context))
+        {
+            FaultPersonDeathRuntime();
+            return;
+        }
+
+        if (operationSucceeded)
+        {
+            if (!mutationProtocol.TryNotifyReservedCommittedMutations(
+                    context.MutationEpochReservation,
+                    ToSectionSet(context.SectionIds)))
+            {
+                FaultPersonDeathRuntime();
+                mutationProtocol.ReleaseMutationEpoch(context.MutationEpochReservation);
+            }
+        }
+        else
+        {
+            if (!executionState.TryValidateCoreSelectedOwnerSectionCensusRows(
+                    ownerGraph,
+                    context.SectionIds,
+                    context.MutationEpochReservation,
+                    out _))
+                FaultPersonDeathRuntime();
+            mutationProtocol.ReleaseMutationEpoch(context.MutationEpochReservation);
+        }
+
+        if (!executionState.TryEndRuntimeProtocolOperation())
+            FaultPersonDeathRuntime();
+        activeOperation = null;
+    }
+
+    private static IReadOnlyCollection<string> ToSectionSet(
+        IReadOnlyList<string> sectionIds)
+    {
+        HashSet<string> result = new HashSet<string>(StringComparer.Ordinal);
+        if (sectionIds != null)
+            foreach (string sectionId in sectionIds)
+                if (!string.IsNullOrWhiteSpace(sectionId)) result.Add(sectionId);
+        return result;
+    }
+
+    private static bool HasExactSectionIds(
+        IReadOnlyList<string> expected,
+        IReadOnlyList<string> actual)
+    {
+        if (expected == null || actual == null || expected.Count != actual.Count)
+            return false;
+        for (int index = 0; index < expected.Count; index++)
+            if (!string.Equals(expected[index], actual[index], StringComparison.Ordinal))
+                return false;
+        return true;
+    }
+
+    private static bool IsSupportedOperation(string operationId) =>
+        string.Equals(operationId, DailyV1RuntimeProtocolOperationContracts.PersonDeath,
+            StringComparison.Ordinal)
+        || string.Equals(operationId, DailyV1RuntimeProtocolOperationContracts.PopulationResidentDeath,
+            StringComparison.Ordinal);
 }
 
 internal interface IDailyV1SelectedDemographyBoundary : IDailyV1SelectedPersonDeathBoundary
@@ -656,7 +939,7 @@ internal static class DailyV1SelectedPersonDeathOperation
         }
     }
 
-    private static bool TryCreateP12SectionIds(
+    internal static bool TryCreateP12SectionIds(
         DailyV1SelectedPersonDeathPlan plan,
         out IReadOnlyList<string> sectionIds)
     {

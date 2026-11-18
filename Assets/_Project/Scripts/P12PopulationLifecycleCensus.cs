@@ -345,12 +345,69 @@ public sealed partial class SimulationRuntime
             personStore,
             plan,
             operationContractId,
-            new SelectedPersonDeathP12Boundary(this),
+            CreateSelectedPersonDeathBoundary(plan),
             out failure);
     }
 
     internal IDailyV1SelectedPersonDeathBoundary CreateSelectedPersonDeathBoundary() =>
         new SelectedPersonDeathP12Boundary(this);
+
+    private IDailyV1SelectedPersonDeathBoundary CreateSelectedPersonDeathBoundary(
+        DailyV1SelectedPersonDeathPlan plan)
+    {
+        if (!IsCoreOwnedSelectedPersonDeathPlan(plan))
+            return CreateSelectedPersonDeathBoundary();
+
+        return new DailyV1CoreSelectedPersonDeathBoundary(
+            dailyExecutionBoundary,
+            SelectedRuntimeOwnerGraph,
+            new SelectedPersonDeathProjectionBoundary(this));
+    }
+
+    private bool IsCoreOwnedSelectedPersonDeathPlan(
+        DailyV1SelectedPersonDeathPlan plan)
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = SelectedRuntimeOwnerGraph;
+        if (plan?.Person?.PersonId == null
+            || dailyExecutionBoundary?.HasAdmittedSelectedDailyExecution != true
+            || !IsP12PopulationProfileSupported()
+            || !ReferenceEquals(graph, dailyExecutionBoundary.SelectedRuntimeOwnerGraph)
+            || !ReferenceEquals(graph?.PersonStore, personStore)
+            || !personStore.TryGet(plan.Person.PersonId, out PersonRuntime registeredPerson)
+            || !ReferenceEquals(registeredPerson, plan.Person))
+            return false;
+
+        if (plan.MaterializedNpc != null)
+        {
+            if (!graph.ContainsExactNpcOwner(plan.MaterializedNpc)
+                || !npcRegistryById.TryGetValue(
+                    plan.MaterializedNpc.RuntimeId, out NpcRuntime selectedNpc)
+                || selectedNpc == null
+                || !ReferenceEquals(selectedNpc.SelectedRuntimeOwners, plan.MaterializedNpc)
+                || !ReferenceEquals(selectedNpc.BoundPersonRuntime, plan.Person))
+                return false;
+        }
+        else
+        {
+            // A Unity NPC outside the Core owner graph can still project this
+            // Person. Keep that compatibility authority on the existing Unity
+            // census boundary instead of committing only the Core Person row.
+            foreach (NpcRuntime npc in npcRuntimeSnapshot)
+                if (npc != null && ReferenceEquals(npc.BoundPersonRuntime, plan.Person))
+                    return false;
+        }
+
+        if (plan.IsResident
+            && (!graph.ContainsExactCityOwner(plan.ResidenceCity)
+                || !TryResolveCityByRuntimeId(
+                    plan.ResidenceCity.RuntimeId, out CityRuntime selectedCity)
+                || selectedCity == null
+                || !ReferenceEquals(selectedCity.SelectedRuntimeOwners, plan.ResidenceCity)
+                || !ReferenceEquals(selectedCity.Population, plan.ResidenceCity.Population)))
+            return false;
+
+        return true;
+    }
 
     private bool TryValidateCoreSelectedPersonDeathProjection(
         DailyV1SelectedPersonDeathPlan plan,
@@ -381,7 +438,12 @@ public sealed partial class SimulationRuntime
                 return false;
             actionChanged = materializedNpc.CurrentActionRuntime != null;
             if (!materializedNpc.CanPublishCoreSelectedPersonDeath(
-                    plan.MaterializedNpc, actionChanged))
+                    plan.MaterializedNpc, actionChanged)
+                || !materializedNpc.CanAdvanceP12LifecycleRevisions(
+                    1, 0, actionChanged ? 1 : 0)
+                || !materializedNpc.CanCommitSelectedPersonDeathAfterValidation(
+                    NpcInjurySeverity.None, out bool projectionActionChanged)
+                || projectionActionChanged != actionChanged)
                 return false;
         }
 
@@ -396,6 +458,60 @@ public sealed partial class SimulationRuntime
 
         failure = null;
         return true;
+    }
+
+    private bool TryPublishCoreSelectedPersonDeathProjection(
+        DailyV1SelectedPersonDeathPlan plan,
+        bool actionChanged)
+    {
+        if (plan?.MaterializedNpc == null)
+            return plan != null;
+        if (!npcRegistryById.TryGetValue(
+                plan.MaterializedNpc.RuntimeId, out NpcRuntime materializedNpc)
+            || materializedNpc == null
+            || !ReferenceEquals(materializedNpc.SelectedRuntimeOwners, plan.MaterializedNpc)
+            || !ReferenceEquals(materializedNpc.BoundPersonRuntime, plan.Person)
+            || !materializedNpc.PublishCoreSelectedPersonDeath(
+                plan.MaterializedNpc, actionChanged))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        return true;
+    }
+
+    private void FaultCoreSelectedPersonDeathRuntime() => FaultRuntimeAdmission();
+
+    private void AdvanceCoreSelectedPersonDeathWorldRevision() =>
+        AdvancePoliticalWorldRevision();
+
+    private sealed class SelectedPersonDeathProjectionBoundary :
+        IDailyV1SelectedPersonDeathProjectionBoundary
+    {
+        private readonly SimulationRuntime owner;
+
+        internal SelectedPersonDeathProjectionBoundary(SimulationRuntime owner)
+        {
+            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        }
+
+        public bool TryValidatePersonDeathProjection(
+            DailyV1SelectedPersonDeathPlan plan,
+            out bool currentActionChanged,
+            out string failure) =>
+            owner.TryValidateCoreSelectedPersonDeathProjection(
+                plan, out currentActionChanged, out failure);
+
+        public bool TryPublishPersonDeathProjection(
+            DailyV1SelectedPersonDeathPlan plan,
+            bool currentActionChanged) =>
+            owner.TryPublishCoreSelectedPersonDeathProjection(plan, currentActionChanged);
+
+        public void FaultPersonDeathRuntime() =>
+            owner.FaultCoreSelectedPersonDeathRuntime();
+
+        public void AdvancePersonDeathWorldRevision() =>
+            owner.AdvanceCoreSelectedPersonDeathWorldRevision();
     }
 
     private bool TryBeginCoreSelectedPersonDeathOperation(
@@ -433,31 +549,6 @@ public sealed partial class SimulationRuntime
         scope = populationScope;
         return true;
     }
-
-    private bool TryPublishCoreSelectedPersonDeathProjection(
-        DailyV1SelectedPersonDeathPlan plan,
-        bool actionChanged)
-    {
-        if (plan?.MaterializedNpc == null)
-            return plan != null;
-        if (!npcRegistryById.TryGetValue(
-                plan.MaterializedNpc.RuntimeId, out NpcRuntime materializedNpc)
-            || materializedNpc == null
-            || !ReferenceEquals(materializedNpc.SelectedRuntimeOwners, plan.MaterializedNpc)
-            || !ReferenceEquals(materializedNpc.BoundPersonRuntime, plan.Person)
-            || !materializedNpc.PublishCoreSelectedPersonDeath(
-                plan.MaterializedNpc, actionChanged))
-        {
-            FaultRuntimeAdmission();
-            return false;
-        }
-        return true;
-    }
-
-    private void FaultCoreSelectedPersonDeathRuntime() => FaultRuntimeAdmission();
-
-    private void AdvanceCoreSelectedPersonDeathWorldRevision() =>
-        AdvancePoliticalWorldRevision();
 
     private sealed class SelectedPersonDeathP12Boundary :
         IDailyV1SelectedPersonDeathBoundary
