@@ -163,6 +163,13 @@ internal sealed class DailyV1CoreSelectedPersonDeathBoundary
             executionState, ownerGraph);
     }
 
+    internal bool IsBoundTo(
+        DailyV1ExecutionBoundaryState candidateExecutionState,
+        DailyV1SelectedRuntimeOwnerGraph candidateOwnerGraph) =>
+        ReferenceEquals(executionState, candidateExecutionState)
+        && ReferenceEquals(ownerGraph, candidateOwnerGraph)
+        && mutationProtocol.IsBoundTo(candidateExecutionState, candidateOwnerGraph);
+
     public bool TryValidatePersonDeathProjection(
         DailyV1SelectedPersonDeathPlan plan,
         out bool currentActionChanged,

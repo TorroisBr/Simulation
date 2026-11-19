@@ -620,6 +620,225 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(application.ActiveSession, Is.Null,
             "Preparing the existing application must not publish its unbound session.");
     }
+
+    [Test]
+    public void DetachedCoreStartFailsClosedUntilTheProductionOwnerCensusIsSealed()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "detached-core-unsealed-census-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, dotNetIdentity: DotNetIdentity());
+
+        Assert.That(application.TryStartDotNetOnExistingApplication(
+                definitions, host,
+                out DailyV1ApplicationStartPreparation preparation,
+                out P12AResult persistenceResult,
+                out string diagnostic), Is.False);
+        Assert.That(preparation, Is.Not.Null);
+        Assert.That(preparation.Kind,
+            Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+        Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(application.ActiveSession, Is.Null,
+            "The production .NET start path must not publish a session without the complete sealed census.");
+        Assert.That(diagnostic, Does.Contain("sealed selected owner census"));
+
+        Assert.That(application.TryStartDotNetOnExistingApplication(
+                definitions, host,
+                out DailyV1ApplicationStartPreparation retryPreparation,
+                out P12AResult retryPersistenceResult,
+                out string retryDiagnostic), Is.False);
+        Assert.That(retryPreparation, Is.Null);
+        Assert.That(retryPersistenceResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+        Assert.That(retryDiagnostic, Does.Contain("terminal after its initial genesis failed"),
+            "The failed private Genesis candidate may have consumed allocator identities and cannot be silently recomposed or retried on the same application.");
+        Assert.That(application.ActiveSession, Is.Null,
+            "A failed detached Genesis start remains unpublished after the terminal failure is recorded.");
+
+        IDailyV1SelectedRuntimeAdvanceHostPorts rejectedCandidatePorts =
+            new MinimalSelectedRuntimeAdvanceHostPorts(
+                preparation.CoreSession.ExecutionBoundaryState);
+        Assert.That(application.TryCommitInitialGenesisWithoutHostProjection(
+                preparation, rejectedCandidatePorts, out string noProjectionCommitDiagnostic), Is.False);
+        Assert.That(noProjectionCommitDiagnostic, Does.Contain("terminal after its initial genesis failed"));
+        Assert.That(application.TryCommitInitialStartWithHostProjection(
+                preparation,
+                preparation.CoreSession,
+                new TestHostProjection(preparation.CoreSession),
+                rejectedCandidatePorts,
+                out string projectionCommitDiagnostic), Is.False);
+        Assert.That(projectionCommitDiagnostic, Does.Contain("terminal after its initial genesis failed"));
+        Assert.That(preparation.CoreSession.RuntimeAdvanceBoundary, Is.Null,
+            "Neither commit entry point may bind a failed private candidate after terminalization.");
+        Assert.That(application.ActiveSession, Is.Null,
+            "A previously returned preparation cannot bypass failed-start terminalization.");
+    }
+
+    [Test]
+    public void DetachedCoreRuntimePortsBindTheExactPreparedSessionAndCoreOwnedStages()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "detached-core-runtime-ports-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, dotNetIdentity: DotNetIdentity());
+
+        Assert.That(application.TryPrepareStartOnExistingApplication(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out _, out string preparationDiagnostic), Is.True, preparationDiagnostic);
+        Assert.That(preparation.Kind,
+            Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+
+        Assert.That(DailyV1CoreSelectedRuntimeAdvanceHostPorts.TryCreateForApplicationStart(
+                preparation, preparation.CoreSession,
+                out IDailyV1SelectedRuntimeAdvanceHostPorts prematurePorts,
+                out string prematureDiagnostic), Is.False);
+        Assert.That(prematurePorts, Is.Null);
+        Assert.That(prematureDiagnostic, Does.Contain("sealed selected owner census"));
+
+        // This test binder supplies the same complete sealed owner census used
+        // by the existing application-host tests. Production composition does
+        // not accept a second census vector from the detached host.
+        DailyV1ApplicationSessionGateTests.BindCoreSelectedCensusRegistryAndMarkReadyForTests(
+            preparation.CoreSession);
+
+        Assert.That(DailyV1CoreSelectedRuntimeAdvanceHostPorts.TryCreateForApplicationStart(
+                preparation, preparation.CoreSession,
+                out IDailyV1SelectedRuntimeAdvanceHostPorts prepublicationPorts,
+                out string portsDiagnostic), Is.False);
+        Assert.That(prepublicationPorts, Is.Null);
+        Assert.That(portsDiagnostic, Does.Contain("outside the detached Core-only actor-turn envelope"),
+            "The hostless application must reject a profile that its current actor boundary cannot advance before publication.");
+
+        Assert.That(DailyV1CoreSelectedRuntimeAdvanceHostPorts.TryCreate(
+                preparation.CoreSession, preparation.Logger,
+                out IDailyV1SelectedRuntimeAdvanceHostPorts runtimePorts,
+                out portsDiagnostic), Is.True, portsDiagnostic);
+        Assert.That(runtimePorts.ExecutionState,
+            Is.SameAs(preparation.CoreSession.ExecutionBoundaryState));
+        Assert.That(runtimePorts.SelectedRuntimeOwnerCensusSourceIdentity,
+            Is.SameAs(preparation.CoreSession.ExecutionBoundaryState));
+
+        DailyV1JusticeRecordsOwner justice = preparation.CoreSession.OwnerGraph.JusticeRecordsOwner;
+        Assert.That(runtimePorts.TryGetExactJusticeRecordsCensusProjectionIdentity(
+                justice, out object justiceIdentity, out long p18ReceiptRevision), Is.True);
+        Assert.That(justiceIdentity, Is.SameAs(justice));
+        Assert.That(p18ReceiptRevision, Is.Zero,
+            "Detached P18 receipt census retains the accepted exact-zero sentinel.");
+
+        Assert.That(runtimePorts.TryCreateSelectedDailyExecutionHostPorts(
+                preparation.CoreSession.OwnerGraph,
+                out IDailyV1SelectedDailyExecutionHostPorts dailyPorts), Is.True);
+        Assert.That(dailyPorts.HasExactCrimeJusticeProjectionOwnerBindings(
+            preparation.CoreSession.OwnerGraph), Is.True);
+        Assert.That(dailyPorts.TryCreateSelectedDemographyHostPorts(
+                preparation.CoreSession.OwnerGraph,
+                out IDailyV1SelectedDemographyHostPorts demographyPorts), Is.True);
+        Assert.That(demographyPorts, Is.TypeOf<DailyV1CoreSelectedDemographyHostPorts>());
+        Assert.That(demographyPorts.Boundary,
+            Is.TypeOf<DailyV1CoreSelectedPersonDeathBoundary>());
+        Assert.That(((DailyV1CoreSelectedPersonDeathBoundary)demographyPorts.Boundary)
+            .IsBoundTo(preparation.CoreSession.ExecutionBoundaryState,
+                preparation.CoreSession.OwnerGraph), Is.True);
+
+        Assert.That(dailyPorts.TryCreateSelectedTravelDayHostPorts(
+                preparation.CoreSession.OwnerGraph,
+                out IDailyV1SelectedTravelDayHostPorts travelPorts), Is.True);
+        Assert.That(travelPorts, Is.TypeOf<DailyV1CoreSelectedTravelDayHostPorts>());
+        Assert.That(dailyPorts.TryCreateSelectedActorTurnHostPorts(
+                preparation.CoreSession.OwnerGraph,
+                out IDailyV1SelectedActorTurnHostPorts actorPorts), Is.False);
+        Assert.That(actorPorts, Is.Null,
+            "The Core host does not manufacture Unity actor projections or widen the bounded Core-only action path.");
+        Assert.Throws<InvalidOperationException>(() => dailyPorts.BeginSimulationDay(),
+            "The detached host must not invoke Unity's mixed-roster whole-stage fallback.");
+
+        Assert.That(runtimePorts.TryCaptureOwnerSectionCensus(
+                DailyV1CaptureScopeAllowance.None,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> hostCensus,
+                out long hostEpoch,
+                out DailyCaptureEligibilityFailure censusFailure), Is.False);
+        Assert.That(hostCensus, Is.Null);
+        Assert.That(hostEpoch, Is.Zero);
+        Assert.That(censusFailure,
+            Is.EqualTo(DailyCaptureEligibilityFailure.UnsupportedProfile));
+    }
+    [Test]
+    public void FailedGenesisPreparationDoesNotSilentlyRetryAfterTheNoSaveAttempt()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        int stageCallbacks = 0;
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "detached-core-genesis-preparation-failure-root", new MissingSlotOperations(),
+            stageCompleted: _ =>
+            {
+                stageCallbacks++;
+                throw new InvalidOperationException("Injected genesis preparation failure.");
+            },
+            logOutput: null, dotNetIdentity: DotNetIdentity());
+
+        Assert.That(application.TryPrepareStartOnExistingApplication(
+                definitions, host,
+                out DailyV1ApplicationStartPreparation preparation,
+                out P12AResult persistenceResult,
+                out string diagnostic), Is.False);
+        Assert.That(preparation, Is.Null);
+        Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(diagnostic, Does.Contain("Injected genesis preparation failure"));
+        Assert.That(stageCallbacks, Is.GreaterThan(0));
+        Assert.That(application.ActiveSession, Is.Null);
+
+        Assert.That(application.TryPrepareStartOnExistingApplication(
+                definitions, host,
+                out DailyV1ApplicationStartPreparation retryPreparation,
+                out P12AResult retryPersistenceResult,
+                out string retryDiagnostic), Is.False);
+        Assert.That(retryPreparation, Is.Null);
+        Assert.That(retryPersistenceResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+        Assert.That(retryDiagnostic, Does.Contain("terminal after its initial genesis failed"),
+            "A consumed NoSave preparation attempt must not silently allocate a second set of identities.");
+        Assert.That(stageCallbacks, Is.EqualTo(1));
+        Assert.That(application.ActiveSession, Is.Null);
+    }
+
+    [Test]
+    public void UnexpectedGenesisPreparationExceptionPreservesExceptionAndTerminalizesAttempt()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        int stageCallbacks = 0;
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "detached-core-genesis-unexpected-failure-root", new MissingSlotOperations(),
+            stageCompleted: _ =>
+            {
+                stageCallbacks++;
+                throw new IOException("Injected unexpected genesis preparation failure.");
+            },
+            logOutput: null, dotNetIdentity: DotNetIdentity());
+
+        Assert.Throws<IOException>(() => application.TryPrepareStartOnExistingApplication(
+            definitions, host,
+            out _, out _, out _));
+        Assert.That(stageCallbacks, Is.EqualTo(1));
+        Assert.That(application.ActiveSession, Is.Null);
+
+        Assert.That(application.TryPrepareStartOnExistingApplication(
+                definitions, host,
+                out DailyV1ApplicationStartPreparation retryPreparation,
+                out P12AResult retryPersistenceResult,
+                out string retryDiagnostic), Is.False);
+        Assert.That(retryPreparation, Is.Null);
+        Assert.That(retryPersistenceResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+        Assert.That(retryDiagnostic, Does.Contain("terminal after its initial genesis failed"));
+        Assert.That(stageCallbacks, Is.EqualTo(1),
+            "An unexpected stage exception must not permit Genesis to consume allocator identities again.");
+        Assert.That(application.ActiveSession, Is.Null);
+    }
+
     [Test]
     public void CoreStartOnExistingApplicationCommitsExactSessionAfterHostProjection()
     {
@@ -670,6 +889,64 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(application.TryGetPublishedHostProjection(
             preparation.CoreSession, out IDailyV1ApplicationHostProjection publishedProjection), Is.True);
         Assert.That(publishedProjection, Is.SameAs(projection));
+    }
+
+    [Test]
+    public void FailedHostProjectionMakesPreparedGenesisApplicationTerminal()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "start-existing-application-failure-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, unityV1Identity: UnityIdentity());
+        int projectionAttempts = 0;
+
+        bool RejectPreparedGenesis(
+            DailyV1ApplicationStartPreparation preparation,
+            out IDailyV1ApplicationHostProjection candidateProjection,
+            out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+            out string diagnostic)
+        {
+            projectionAttempts++;
+            Assert.That(preparation.Kind,
+                Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+            candidateProjection = null;
+            candidateHostPorts = null;
+            diagnostic = "The host projection is unavailable.";
+            return false;
+        }
+
+        Assert.That(application.TryStartOnExistingApplication(
+                definitions, host, RejectPreparedGenesis,
+                out DailyV1ApplicationStartPreparation firstPreparation,
+                out P12AResult firstPersistenceResult,
+                out string firstDiagnostic), Is.False);
+        Assert.That(firstPreparation, Is.Not.Null);
+        Assert.That(firstPersistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(firstDiagnostic, Is.EqualTo("The host projection is unavailable."));
+        Assert.That(application.ActiveSession, Is.Null);
+
+        Assert.That(application.TryCommitInitialStartWithHostProjection(
+                firstPreparation, firstPreparation.CoreSession,
+                new TestHostProjection(firstPreparation.CoreSession),
+                new MinimalSelectedRuntimeAdvanceHostPorts(
+                    firstPreparation.CoreSession.ExecutionBoundaryState),
+                out string commitDiagnostic), Is.False);
+        Assert.That(commitDiagnostic, Does.Contain("terminal after its initial genesis failed"),
+            "Returning a preparation to an internal caller does not let a terminal application publish it later.");
+        Assert.That(application.ActiveSession, Is.Null);
+
+        Assert.That(application.TryStartOnExistingApplication(
+                definitions, host, RejectPreparedGenesis,
+                out DailyV1ApplicationStartPreparation retryPreparation,
+                out P12AResult retryPersistenceResult,
+                out string retryDiagnostic), Is.False);
+        Assert.That(retryPreparation, Is.Null);
+        Assert.That(retryPersistenceResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
+        Assert.That(retryDiagnostic, Does.Contain("terminal after its initial genesis failed"));
+        Assert.That(projectionAttempts, Is.EqualTo(1),
+            "A failed private Genesis candidate is not recomposed or handed to another projection factory on the same application.");
+        Assert.That(application.ActiveSession, Is.Null);
     }
 
     [Test]

@@ -421,6 +421,7 @@ internal sealed class DailyV1Application
     private P12AResult initialContinuationLoadResult;
     private P12AContinuationImage initialContinuationImage;
     private bool initialGenesisPreparationAttempted;
+    private bool initialGenesisStartFailed;
     private DailyV1GenesisComposition preparedInitialGenesis;
     private DailyV1ActiveRuntimeSession preparedInitialSession;
     private P12AContinuationImage preparedInitialRestoredImage;
@@ -512,6 +513,15 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (initialGenesisStartFailed)
+            {
+                diagnostic = "This Core application is terminal after its initial genesis failed before publication; create a new application to repeat initial slot admission.";
+                return false;
+            }
+        }
+
         if (!TryBindApplicationHost(host, out diagnostic)) return false;
 
         if (!TryAdmitInitialStart(
@@ -561,6 +571,10 @@ internal sealed class DailyV1Application
             {
                 if (string.IsNullOrWhiteSpace(diagnostic))
                     diagnostic = "Core genesis did not retain the admitted definitions and bootstrap identity.";
+                if (preparation?.Kind == DailyV1ApplicationStartPreparationKind.GenesisPrepared)
+                    MarkPreparedGenesisStartFailed(preparation);
+                else
+                    MarkInitialGenesisPreparationFailedIfAttempted(persistenceResult);
                 preparation = null;
                 return false;
             }
@@ -570,9 +584,18 @@ internal sealed class DailyV1Application
             || exception is InvalidOperationException
             || exception is OverflowException)
         {
+            MarkInitialGenesisPreparationFailedIfAttempted(persistenceResult);
             preparation = null;
             diagnostic = "Core could not prepare the admitted initial Daily-v1 genesis: " + exception.Message;
             return false;
+        }
+        catch
+        {
+            // Preserve unexpected host/stage exceptions, but do not leave a
+            // consumed NoSave attempt looking reusable after Genesis may have
+            // already allocated runtime identities.
+            MarkInitialGenesisPreparationFailedIfAttempted(persistenceResult);
+            throw;
         }
     }
 
@@ -667,6 +690,12 @@ internal sealed class DailyV1Application
             {
                 ClearPreparedInitialRestoredSession(preparation.RestoreImage);
             }
+            else if (!committed
+                && preparation?.Kind == DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                && ReferenceEquals(preparation.Application, this))
+            {
+                MarkPreparedGenesisStartFailed(preparation);
+            }
         }
     }
 
@@ -675,6 +704,23 @@ internal sealed class DailyV1Application
     /// NoSave slot prepares genesis; a loaded slot runs the complete ordered
     /// Core P12 restore transaction. Both paths bind only the exact Core
     /// runtime session and publish without creating a Unity projection.
+    /// </summary>
+    internal bool TryStartDotNetOnExistingApplication(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ApplicationHost host,
+        out DailyV1ApplicationStartPreparation preparation,
+        out P12AResult persistenceResult,
+        out string diagnostic) =>
+        TryStartDotNetOnExistingApplication(
+            definitions, host,
+            DailyV1CoreSelectedRuntimeAdvanceHostPorts.TryCreateForApplicationStart,
+            out preparation, out persistenceResult, out diagnostic);
+
+    /// <summary>
+    /// Starts the fixed .NET host through Core's initial-slot admission. A
+    /// NoSave slot prepares genesis; a loaded slot runs the complete ordered
+    /// Core P12 restore transaction. Both paths bind only the exact Core
+    /// runtime session and publish without a Unity projection.
     /// </summary>
     internal bool TryStartDotNetOnExistingApplication(
         DailyV1EffectiveDefinitions definitions,
@@ -824,6 +870,52 @@ internal sealed class DailyV1Application
                     restoreStages?.Fail();
                 ClearPreparedInitialRestoredSession(preparation.RestoreImage);
             }
+            else if (!committed
+                && preparation?.Kind == DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                && ReferenceEquals(preparation.Application, this))
+            {
+                MarkPreparedGenesisStartFailed(preparation);
+            }
+        }
+    }
+
+    private void MarkPreparedGenesisStartFailed(
+        DailyV1ApplicationStartPreparation preparation)
+    {
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (activeSessionGate.Current != null
+                || preparation == null
+                || !ReferenceEquals(preparation.Application, this)
+                || preparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                || preparation.StartAdmission?.Kind
+                    != DailyV1ApplicationStartAdmissionKind.GenesisRequired
+                || !ReferenceEquals(preparedInitialSession, preparation.CoreSession)
+                || !ReferenceEquals(preparedInitialGenesis, preparation.GenesisComposition))
+                return;
+
+            // Genesis may already have consumed allocator identities while
+            // composing the candidate. Keep that exact candidate private and
+            // make this application terminal instead of silently recomposing
+            // it or allowing a second initial NoSave attempt. A new application
+            // must repeat slot admission before it can attempt another start.
+            initialGenesisStartFailed = true;
+        }
+    }
+
+    private void MarkInitialGenesisPreparationFailedIfAttempted(P12AResult persistenceResult)
+    {
+        if (persistenceResult?.Code != P12AResultCode.NoSave) return;
+        lock (activeSessionGate.SyncRoot)
+        {
+            if (!initialGenesisPreparationAttempted || activeSessionGate.Current != null)
+                return;
+
+            // The one-shot NoSave attempt was already consumed even if a
+            // preparation object could not be returned. The application
+            // remains unusable rather than silently allocating a second set of
+            // identities on a repeated call.
+            initialGenesisStartFailed = true;
         }
     }
 
@@ -913,6 +1005,12 @@ internal sealed class DailyV1Application
 
         lock (activeSessionGate.SyncRoot)
         {
+            if (initialGenesisStartFailed)
+            {
+                diagnostic = "This Core application is terminal after its initial genesis failed before publication.";
+                return false;
+            }
+
             if (activeSessionGate.Current != null
                 || activeSessionGate.ActiveOperationCount != 0
                 || activeHostProjections.Count != 0
@@ -2756,6 +2854,9 @@ internal sealed class DailyV1Application
             return false;
         lock (activeSessionGate.SyncRoot)
         {
+            if (initialGenesisStartFailed)
+                return false;
+
             if (preparedInitialSession != null)
             {
                 if (!ReferenceEquals(preparedInitialSession, candidate)
@@ -2801,6 +2902,11 @@ internal sealed class DailyV1Application
         {
             DailyV1ActiveRuntimeSession candidate = preparation?.CoreSession;
             P12AResult admittedResult = preparation?.StartAdmission?.PersistenceResult;
+            if (initialGenesisStartFailed)
+            {
+                diagnostic = "This Core application is terminal after its initial genesis failed before publication.";
+                return false;
+            }
             if (preparation == null
                 || !ReferenceEquals(preparation.Application, this)
                 || preparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
@@ -2914,6 +3020,9 @@ internal sealed class DailyV1Application
 
         lock (activeSessionGate.SyncRoot)
         {
+            if (initialGenesisStartFailed)
+                return false;
+
             if (activeSessionGate.Current != null
                 || activeHostProjections.ContainsKey(candidate)
                 || !TryBindRuntimeAdvanceBoundary(candidate, hostPorts))

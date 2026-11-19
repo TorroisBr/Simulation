@@ -239,6 +239,18 @@ internal sealed class DailyV1CoreSelectedDailyExecutionBoundary
             || sourceHostPorts == null)
             return false;
 
+        // A detached Core host may provide the already Core-owned death
+        // boundary for this exact execution state. Do not wrap that boundary
+        // as if it were a Unity projection: doing so would create a second
+        // callback path around the same authoritative owner operation.
+        if (sourceHostPorts is DailyV1CoreSelectedDemographyHostPorts coreHostPorts
+            && coreHostPorts.Boundary is DailyV1CoreSelectedPersonDeathBoundary coreBoundary
+            && coreBoundary.IsBoundTo(executionState, ownerGraph))
+        {
+            selectedHostPorts = coreHostPorts;
+            return true;
+        }
+
         IDailyV1SelectedDemographyBoundary projection = sourceHostPorts.Boundary;
         selectedHostPorts = new DailyV1CoreSelectedDemographyHostPorts(
             sourceHostPorts.MortalitySamples,
@@ -692,7 +704,8 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
         context = null;
         if (executionState == null || graph == null
             || !executionState.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(graph)
-            || !CanExecuteCoreOnlyActorTurn(executionState, graph)
+            || !CanExecuteCoreOnlyActorTurn(
+                executionState, graph, requireActiveDailyAdvanceScope: true)
             || graph.PersonStore == null
             || executionState.SelectedActorChoiceStore == null
             || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore))
@@ -726,9 +739,34 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
         return true;
     }
 
+    /// <summary>
+    /// Pre-publication admission for the bounded detached Core-only actor
+    /// envelope. It binds the exact Crime/Justice mutation identity from the
+    /// sealed Core census, then performs the same owner/action checks as the
+    /// daily-stage fallback without requiring the advance scope that only
+    /// exists after the application has published the session.
+    /// </summary>
+    internal static bool TryValidateCoreOnlyStart(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (executionState == null || graph == null
+            || !executionState.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(graph)
+            || !CanExecuteCoreOnlyActorTurn(
+                executionState, graph, requireActiveDailyAdvanceScope: false))
+        {
+            diagnostic = "The prepared selected profile is outside the detached Core-only actor-turn envelope.";
+            return false;
+        }
+        return true;
+    }
+
     private static bool CanExecuteCoreOnlyActorTurn(
         DailyV1ExecutionBoundaryState executionState,
-        DailyV1SelectedRuntimeOwnerGraph graph)
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        bool requireActiveDailyAdvanceScope)
     {
         if (executionState == null || graph == null
             || !executionState.HasAdmittedSelectedDailyExecution
@@ -739,7 +777,8 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
             || !executionState.HasSealedSelectedOwnerSectionCensusRegistry
             || executionState.IsSelectedRuntimeCensusProtocolFaulted
-            || !executionState.IsSelectedDailyAdvanceCoreTurnActive
+            || (requireActiveDailyAdvanceScope
+                && !executionState.IsSelectedDailyAdvanceCoreTurnActive)
             || !executionState.TryValidateCurrentSelectedOwnerSectionCensusBaselines()
             || executionState.SelectedRuntimeActorRoster == null
             || executionState.SelectedActorChoiceStore == null
