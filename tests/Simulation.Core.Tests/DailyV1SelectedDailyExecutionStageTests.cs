@@ -519,14 +519,16 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "An attempted write outside the admitted mutation scope faults the selected census closed.");
     }
 
-    [TestCase(false, false, false, false, false, false, false)]
-    [TestCase(true, false, false, false, false, false, false)]
-    [TestCase(false, true, false, false, false, false, false)]
-    [TestCase(false, false, true, false, false, false, false)]
-    [TestCase(false, false, false, true, false, false, false)]
-    [TestCase(false, false, false, false, true, false, false)]
-    [TestCase(false, false, false, false, false, true, false)]
-    [TestCase(false, false, false, false, false, false, true)]
+    [TestCase(false, false, false, false, false, false, false, false, false)]
+    [TestCase(true, false, false, false, false, false, false, false, false)]
+    [TestCase(false, true, false, false, false, false, false, false, false)]
+    [TestCase(false, false, true, false, false, false, false, false, false)]
+    [TestCase(false, false, false, true, false, false, false, false, false)]
+    [TestCase(false, false, false, false, true, false, false, false, false)]
+    [TestCase(false, false, false, false, false, true, false, false, false)]
+    [TestCase(false, false, false, false, false, false, true, false, false)]
+    [TestCase(false, false, false, false, false, false, true, true, false)]
+    [TestCase(false, false, false, false, false, false, true, false, true)]
     public void CoreOnlyActorTurnExecutesAdmittedActionWithCompleteP12Census(
         bool prebindMismatchedCrimeReceiptIdentity,
         bool executeCoreOnlyHideAction,
@@ -534,7 +536,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         bool executeCoreOnlyForcedEscape,
         bool executeCoreOnlyGuardArrest,
         bool executeCoreOnlyFleeCity,
-        bool enableCoreOnlyMerchantTrade)
+        bool enableCoreOnlyMerchantTrade,
+        bool executeCoreOnlyMerchantScopedKnowledgeMutation,
+        bool rejectCoreOnlyCrossThreadKnowledgeMutation)
     {
         DailyV1EffectiveDefinitions configuredDefinitions = CopyWithMerchantTradeEnabled(
             DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
@@ -788,12 +792,127 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             graph, out _), Is.False,
             "The Core-only session begins without a Unity-selected Crime/Justice receipt binding.");
 
+        if (rejectCoreOnlyCrossThreadKnowledgeMutation)
+        {
+            Assert.That(state.TryCreateRestoredContinuationToken(
+                state.AdmissionContext, state.ConfigurationIdentity, state.CalendarIdentity,
+                state.CompositionProfile, state.WorldId, state.SimulationTime.AbsoluteDay,
+                1L, state.MutationEpochState.CurrentEpoch, initialVector,
+                out DailyCaptureEligibilityToken priorCaptureToken), Is.True,
+                "The regression starts with an actual exact-census continuation token.");
+            Assert.That(state.CurrentCaptureToken, Is.SameAs(priorCaptureToken));
+        }
+
         long mutationEpochBeforeTurn = state.MutationEpochState.CurrentEpoch;
         bool coreOnlyFleeCityActionSucceeded = false;
         Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
         Assert.That(state.TryBeginAdvance(invalidateCaptureToken: false,
             out DailyV1AdvanceLease lease), Is.True);
         Assert.That(state.TryBeginSelectedRuntimeDailyAdvanceOperation(), Is.True);
+        if (executeCoreOnlyMerchantScopedKnowledgeMutation)
+        {
+            Assert.That(enableCoreOnlyMerchantTrade, Is.True,
+                "The nested Merchant commit regression uses the admitted Merchant profile.");
+            Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreateCoreOnly(
+                state, graph,
+                out IDailyV1SelectedActorTurnExecutionContext merchantContext), Is.True,
+                "The exact Core-only execution context binds the selected Merchant operation.");
+            DailyV1CoreSelectedActorTurnExecutionBoundary merchantBoundary =
+                merchantContext.Boundary as DailyV1CoreSelectedActorTurnExecutionBoundary;
+            Assert.That(merchantBoundary, Is.Not.Null);
+            DailyV1NpcRuntimeOwners merchantActor = graph.Npcs.First(owner =>
+                DailyV1NpcDefinitionRules.HasJobType(owner.Definition, definitions,
+                    DailyV1NpcDefinitionRules.MerchantJobTypeValue));
+            DailyV1CityRuntimeOwners observationCity = null;
+            DailyV1ItemDefinition observationItem = null;
+            foreach (DailyV1CityRuntimeOwners candidateCity in graph.Cities)
+            {
+                foreach (DailyV1ItemDefinition candidateItem in definitions.Items.Values)
+                {
+                    if (merchantActor.CommercialKnowledge.TryGetObservation(
+                        candidateCity.LocationRuntimeId, candidateItem.DefinitionId, out _))
+                        continue;
+                    observationCity = candidateCity;
+                    observationItem = candidateItem;
+                    break;
+                }
+                if (observationCity != null) break;
+            }
+            bool addsMarketObservation = observationCity != null;
+            string mutationLocationRuntimeId = observationCity?.LocationRuntimeId;
+            DailyV1ItemDefinition mutationItem = observationItem;
+            if (!addsMarketObservation)
+            {
+                DailyV1CommercialMarketObservation replaceableObservation =
+                    merchantActor.CommercialKnowledge.Observations.FirstOrDefault(existing =>
+                        existing.Source != DailyV1CommercialKnowledgeSource.DirectObservation
+                        || existing.ObservedDay < state.SimulationTime.AbsoluteDay);
+                Assert.That(replaceableObservation, Is.Not.Null,
+                    "The selected Core owner exposes a valid initial or stale fact that can be directly re-observed.");
+                mutationLocationRuntimeId = replaceableObservation.LocationRuntimeId;
+                mutationItem = replaceableObservation.ItemDefinition;
+            }
+            Assert.That(mutationItem, Is.Not.Null);
+
+            string marketSectionId =
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix
+                + merchantActor.RuntimeId;
+            string liquiditySectionId =
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix
+                + merchantActor.RuntimeId;
+            string receiptsSectionId =
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix
+                + merchantActor.RuntimeId;
+            string[] merchantSectionIds =
+            {
+                marketSectionId, liquiditySectionId, receiptsSectionId
+            };
+            OwnerSectionCensusWitness marketBefore =
+                liveRuntimeProviders[marketSectionId].GetCurrentCensus();
+            OwnerSectionCensusWitness liquidityBefore =
+                liveRuntimeProviders[liquiditySectionId].GetCurrentCensus();
+            OwnerSectionCensusWitness receiptsBefore =
+                liveRuntimeProviders[receiptsSectionId].GetCurrentCensus();
+            long merchantRevisionBefore = merchantActor.CommercialKnowledge.Revision;
+            long merchantEpochBefore = state.MutationEpochState.CurrentEpoch;
+            DailyV1CommercialMarketObservation nestedObservation =
+                new DailyV1CommercialMarketObservation(
+                    mutationLocationRuntimeId, mutationItem, 3f, 2,
+                    state.SimulationTime.AbsoluteDay, state.SimulationTime.AbsoluteDay,
+                    DailyV1CommercialKnowledgeSource.DirectObservation);
+
+            Assert.That(merchantBoundary.ExecuteWithinSelectedMerchantDailyOperation(
+                merchantActor,
+                () => merchantActor.CommercialKnowledge.RecordObservation(nestedObservation)), Is.True,
+                "A real Core CommercialKnowledge owner commit executes inside the P12 Merchant operation.");
+            Assert.That(merchantActor.CommercialKnowledge.Revision,
+                Is.EqualTo(merchantRevisionBefore + 1L));
+            Assert.That(state.MutationEpochState.CurrentEpoch,
+                Is.EqualTo(merchantEpochBefore + 1L),
+                "The nested Merchant transaction publishes exactly one shared epoch at operation close.");
+            Assert.That(state.TryValidateCoreSelectedOwnerSectionCensusRows(
+                graph, merchantSectionIds, null), Is.True,
+                "The Merchant commit refreshes all exact CommercialKnowledge census siblings.");
+
+            OwnerSectionCensusWitness marketAfter =
+                liveRuntimeProviders[marketSectionId].GetCurrentCensus();
+            OwnerSectionCensusWitness liquidityAfter =
+                liveRuntimeProviders[liquiditySectionId].GetCurrentCensus();
+            OwnerSectionCensusWitness receiptsAfter =
+                liveRuntimeProviders[receiptsSectionId].GetCurrentCensus();
+            Assert.That(marketAfter.OwnerInstanceIdentity,
+                Is.SameAs(merchantActor.CommercialKnowledge));
+            Assert.That(liquidityAfter.OwnerInstanceIdentity,
+                Is.SameAs(merchantActor.CommercialKnowledge));
+            Assert.That(receiptsAfter.OwnerInstanceIdentity,
+                Is.SameAs(merchantActor.CommercialKnowledge));
+            Assert.That(marketAfter.Cardinality, Is.EqualTo(marketBefore.Cardinality + (addsMarketObservation ? 1 : 0)));
+            Assert.That(liquidityAfter.Cardinality, Is.EqualTo(liquidityBefore.Cardinality));
+            Assert.That(receiptsAfter.Cardinality, Is.EqualTo(receiptsBefore.Cardinality));
+            Assert.That(marketAfter.Revision, Is.EqualTo(merchantRevisionBefore + 1L));
+            Assert.That(liquidityAfter.Revision, Is.EqualTo(marketAfter.Revision));
+            Assert.That(receiptsAfter.Revision, Is.EqualTo(marketAfter.Revision));
+        }
         if (executeCoreOnlyFleeCity)
         {
             Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreateCoreOnly(
@@ -819,13 +938,107 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         };
         try
         {
-            DailyV1SelectedDailyExecutionStage.Advance(state, graph, dailyBoundary);
+            if (rejectCoreOnlyCrossThreadKnowledgeMutation)
+            {
+                Assert.That(enableCoreOnlyMerchantTrade, Is.True,
+                    "The cross-thread refusal regression uses the admitted Merchant owner boundary.");
+                Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreateCoreOnly(
+                    state, graph,
+                    out IDailyV1SelectedActorTurnExecutionContext merchantContext), Is.True,
+                    "Core binds the exact CommercialKnowledge owner before the attempted write.");
+                DailyV1NpcRuntimeOwners merchantActor = graph.Npcs.First(owner =>
+                    DailyV1NpcDefinitionRules.HasJobType(owner.Definition, definitions,
+                        DailyV1NpcDefinitionRules.MerchantJobTypeValue));
+                DailyV1CityRuntimeOwners observationCity = null;
+                DailyV1ItemDefinition observationItem = null;
+                foreach (DailyV1CityRuntimeOwners candidateCity in graph.Cities)
+                {
+                    foreach (DailyV1ItemDefinition candidateItem in definitions.Items.Values)
+                    {
+                        if (merchantActor.CommercialKnowledge.TryGetObservation(
+                            candidateCity.LocationRuntimeId, candidateItem.DefinitionId, out _))
+                            continue;
+                        observationCity = candidateCity;
+                        observationItem = candidateItem;
+                        break;
+                    }
+                    if (observationCity != null) break;
+                }
+                bool addsMarketObservation = observationCity != null;
+                string mutationLocationRuntimeId = observationCity?.LocationRuntimeId;
+                DailyV1ItemDefinition mutationItem = observationItem;
+                if (!addsMarketObservation)
+                {
+                    DailyV1CommercialMarketObservation replaceableObservation =
+                        merchantActor.CommercialKnowledge.Observations.FirstOrDefault(existing =>
+                            existing.Source != DailyV1CommercialKnowledgeSource.DirectObservation
+                            || existing.ObservedDay < state.SimulationTime.AbsoluteDay);
+                    Assert.That(replaceableObservation, Is.Not.Null,
+                        "The attempted operation can upgrade a valid initial or stale owner fact.");
+                    mutationLocationRuntimeId = replaceableObservation.LocationRuntimeId;
+                    mutationItem = replaceableObservation.ItemDefinition;
+                }
+                Assert.That(mutationItem, Is.Not.Null);
+                DailyV1CommercialMarketObservation rejectedObservation =
+                    new DailyV1CommercialMarketObservation(
+                        mutationLocationRuntimeId, mutationItem, 4f, 1,
+                        state.SimulationTime.AbsoluteDay, state.SimulationTime.AbsoluteDay,
+                        DailyV1CommercialKnowledgeSource.DirectObservation);
+                Assert.That(merchantActor.CommercialKnowledge.CanImproveWith(rejectedObservation), Is.True,
+                    "The candidate is a valid changed fact before thread admission is evaluated.");
+                IReadOnlyList<DailyV1CommercialMarketObservation> ownerFactsBefore =
+                    merchantActor.CommercialKnowledge.Observations.ToArray();
+                long ownerRevisionBefore = merchantActor.CommercialKnowledge.Revision;
+                long mutationEpochBeforeRejectedWrite = state.MutationEpochState.CurrentEpoch;
+                DailyCaptureEligibilityToken captureTokenBeforeRejectedWrite = state.CurrentCaptureToken;
+                Assert.That(captureTokenBeforeRejectedWrite, Is.Not.Null);
+                Assert.That(captureTokenBeforeRejectedWrite.BoundaryProvenance,
+                    Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
+
+                bool committedOnWrongThread = System.Threading.Tasks.Task.Run(
+                    () => merchantActor.CommercialKnowledge.RecordObservation(rejectedObservation))
+                    .GetAwaiter().GetResult();
+
+                Assert.That(committedOnWrongThread, Is.False,
+                    "The valid write is refused specifically while the admitted operation is owned by another thread.");
+                Assert.That(merchantActor.CommercialKnowledge.Revision,
+                    Is.EqualTo(ownerRevisionBefore));
+                Assert.That(merchantActor.CommercialKnowledge.Observations.Count,
+                    Is.EqualTo(ownerFactsBefore.Count));
+                for (int index = 0; index < ownerFactsBefore.Count; index++)
+                    Assert.That(merchantActor.CommercialKnowledge.Observations[index],
+                        Is.SameAs(ownerFactsBefore[index]),
+                        "Refusal occurs before any authoritative owner fact changes.");
+                Assert.That(merchantActor.CommercialKnowledge.TryGetObservation(
+                    mutationLocationRuntimeId, mutationItem.DefinitionId, out _),
+                    Is.EqualTo(!addsMarketObservation));
+                Assert.That(state.MutationEpochState.CurrentEpoch,
+                    Is.EqualTo(mutationEpochBeforeRejectedWrite));
+                Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.True);
+                Assert.That(state.CurrentCaptureToken, Is.Null,
+                    "The old continuation token is revoked at the rejected owner boundary.");
+            }
+            else
+            {
+                DailyV1SelectedDailyExecutionStage.Advance(state, graph, dailyBoundary);
+            }
         }
         finally
         {
             Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
             lease.Dispose();
             Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+
+        if (rejectCoreOnlyCrossThreadKnowledgeMutation)
+        {
+            Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+                state, DailyV1CaptureScopeAllowance.None,
+                out _, out _, out DailyCaptureEligibilityFailure rejectedCaptureFailure), Is.False);
+            Assert.That(rejectedCaptureFailure,
+                Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress),
+                "The faulted census registry refuses capture rather than accepting stale owner state.");
+            return;
         }
 
         Assert.That(dailyBoundary.Calls, Does.Contain("actor-host-ports"),

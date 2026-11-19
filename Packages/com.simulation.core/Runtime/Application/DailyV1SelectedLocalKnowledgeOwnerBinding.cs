@@ -290,10 +290,20 @@ internal sealed class DailyV1SelectedLocalKnowledgeOwnerBinding
         out Action committed)
     {
         admission = () =>
-            ReferenceEquals(coreState, state)
-            && ReferenceEquals(Graph, exactGraph)
-            && state.TryCanCommitCoreSelectedLocalKnowledgeMutation(
-                exactGraph, sections);
+        {
+            if (ReferenceEquals(coreState, state)
+                && ReferenceEquals(Graph, exactGraph)
+                && state.TryCanCommitCoreSelectedLocalKnowledgeMutation(
+                    exactGraph, sections))
+                return true;
+
+            // Owner APIs reach this callback only after accepting a valid,
+            // changed candidate write. A refusal here must preserve the owner
+            // facts and close P12 capture rather than leave a stale token usable.
+            state.MarkSelectedRuntimeCensusProtocolFaulted();
+            state.InvalidateCurrentCaptureToken();
+            return false;
+        };
         committed = () =>
         {
             if (ReferenceEquals(coreState, state)
