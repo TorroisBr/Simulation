@@ -304,6 +304,131 @@ internal interface IDailyV1SelectedCrimeJusticeDailyMutationHostPort
 }
 
 /// <summary>
+/// P12 operation adapter for the Core-only Merchant daily pass. The admitted
+/// Core census registry supplies the exact seven-row owner cut and baselines;
+/// this adapter only opens the already-inventoried operation scope and keeps
+/// the registry synchronized when Core commits plan, spatial, or knowledge
+/// rows.
+/// </summary>
+internal sealed class DailyV1CoreSelectedP12MerchantDailyTradeProtocol
+    : IDailyV1SelectedP12MerchantDailyTradeProtocol
+{
+    private sealed class OperationScope : IDisposable
+    {
+        private readonly DailyV1ExecutionBoundaryState state;
+        private readonly DailyV1CoreSelectedP12MerchantDailyTradeProtocol owner;
+        private bool disposed;
+
+        internal OperationScope(
+            DailyV1ExecutionBoundaryState state,
+            DailyV1CoreSelectedP12MerchantDailyTradeProtocol owner)
+        {
+            this.state = state;
+            this.owner = owner;
+        }
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+            if (!state.TryEndRuntimeProtocolOperation()) owner.FaultClosed();
+        }
+    }
+
+    private readonly DailyV1ExecutionBoundaryState state;
+    private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+    internal string LastFailure { get; private set; }
+
+    internal DailyV1CoreSelectedP12MerchantDailyTradeProtocol(
+        DailyV1ExecutionBoundaryState state,
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        this.state = state ?? throw new ArgumentNullException(nameof(state));
+        this.graph = graph ?? throw new ArgumentNullException(nameof(graph));
+    }
+
+    public bool TryValidateOwnerSections(
+        DailyV1SelectedRuntimeOwnerGraph candidateGraph,
+        DailyV1NpcRuntimeOwners actor,
+        IReadOnlyList<string> sectionIds)
+    {
+        LastFailure = null;
+        if (!IsBound())
+        {
+            LastFailure = "ProtocolNotBound:faulted=" + state.IsSelectedRuntimeCensusProtocolFaulted;
+            return false;
+        }
+        if (!ReferenceEquals(candidateGraph, graph))
+        {
+            LastFailure = "GraphMismatch";
+            return false;
+        }
+        if (!state.TryCreateSelectedP12MerchantDailyTradeSectionIds(
+                graph, actor, out IReadOnlyList<string> expected)
+            || sectionIds == null || sectionIds.Count != expected.Count)
+        {
+            LastFailure = "OwnerSectionCut";
+            return false;
+        }
+
+        HashSet<string> expectedIds = new HashSet<string>(expected, StringComparer.Ordinal);
+        HashSet<string> suppliedIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in sectionIds)
+            if (string.IsNullOrWhiteSpace(sectionId)
+                || !expectedIds.Contains(sectionId)
+                || !suppliedIds.Add(sectionId))
+            {
+                LastFailure = "OwnerSectionSet";
+                return false;
+            }
+
+        bool valid = suppliedIds.Count == expectedIds.Count
+            && state.TryValidateCoreSelectedOwnerSectionCensusRows(graph, expected, null);
+        if (!valid) LastFailure = "OwnerSectionBaseline";
+        return valid;
+    }
+
+    public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds)
+    {
+        LastFailure = null;
+        bool valid = IsBound() && sectionIds != null && sectionIds.Count > 0
+            && state.TryValidateCoreSelectedOwnerSectionCensusRows(graph, sectionIds, null);
+        if (!valid) LastFailure = "UnchangedOwnerSectionBaseline";
+        return valid;
+    }
+
+    public bool TryEnterOperation(out IDisposable operationScope)
+    {
+        operationScope = null;
+        if (!IsBound()
+            || !state.TryBeginRuntimeProtocolOperation(
+                DailyV1RuntimeProtocolOperationContracts.MerchantDailyNpcTrade))
+            return false;
+
+        operationScope = new OperationScope(state, this);
+        return true;
+    }
+
+    public bool TryRefreshCommittedMutationBaselines(
+        IReadOnlyCollection<string> sectionIds) =>
+        IsBound() && sectionIds != null && sectionIds.Count > 0
+        && state.TryRefreshCoreSelectedOwnerSectionCensusRows(graph, sectionIds, null);
+
+    public void FaultClosed()
+    {
+        state.MarkSelectedRuntimeCensusProtocolFaulted();
+        state.InvalidateCurrentCaptureToken();
+    }
+
+    private bool IsBound() => state.HasAdmittedSelectedDailyExecution
+        && state.AdmissionContext?.IsOwnedByCurrentThread() == true
+        && state.HasRuntimeProtocolOperationInventory
+        && state.HasSealedSelectedOwnerSectionCensusRegistry
+        && !state.IsSelectedRuntimeCensusProtocolFaulted
+        && ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph);
+}
+
+/// <summary>
 /// Core-created admitted actor-turn boundary. The exact owner graph, roots,
 /// PersonStore, ActorChoiceStore, and roster come from the bound execution
 /// state; Unity can provide only effect ports and cannot replace actor policy.
@@ -325,9 +450,11 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
     private readonly DailyV1ActorTurnCoreRoots coreRoots;
     private readonly IReadOnlyCollection<DailyV1NpcRuntimeOwners> exactRosterOwners;
     private readonly IDailyV1SelectedActorTurnHostPorts hostPorts;
+    private readonly DailyV1CoreSelectedP12MerchantDailyTradeProtocol coreMerchantDailyTradeProtocol;
     private readonly IDailyV1SelectedP12NpcActionOwnerMutationProtocol actionSlotP12MutationProtocol;
     private IDailyV1SelectedMerchantTradeStateBoundary merchantBoundary;
     internal string LastActionStatusBoundaryRejection { get; private set; }
+    internal bool UsesCoreOnlyActorTurnPath => hostPorts == null;
 
     private DailyV1CoreSelectedActorTurnExecutionBoundary(
         DailyV1ExecutionBoundaryState executionState,
@@ -346,6 +473,9 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         this.coreRoots = coreRoots;
         this.exactRosterOwners = exactRosterOwners;
         this.hostPorts = hostPorts;
+        coreMerchantDailyTradeProtocol = hostPorts == null
+            ? new DailyV1CoreSelectedP12MerchantDailyTradeProtocol(executionState, graph)
+            : null;
         this.actionSlotP12MutationProtocol = actionSlotP12MutationProtocol;
     }
 
@@ -884,31 +1014,57 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
             graph, actor, sectionId, revision, actionSlotP12MutationProtocol);
 
     public bool CanAdmitSelectedMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) =>
-        TryGetExactActor(actor) && RequireHostPorts().CanAdmitSelectedMerchantPlanMutation(actor);
+        TryGetExactActor(actor)
+        && (hostPorts != null
+            ? hostPorts.CanAdmitSelectedMerchantPlanMutation(actor)
+            : CanAdmitCoreMerchantSection(actor,
+                DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind,
+                    actor.RuntimeId)));
 
     public bool NotifySelectedMerchantPlanMutationCommitted(
         DailyV1NpcRuntimeOwners actor,
         long revision) =>
         TryGetExactActor(actor)
-        && RequireHostPorts().NotifySelectedMerchantPlanMutationCommitted(actor, revision);
+        && actor.MerchantTradePlan?.Revision == revision
+        && (hostPorts != null
+            ? hostPorts.NotifySelectedMerchantPlanMutationCommitted(actor, revision)
+            : RecordCoreMerchantSection(actor,
+                DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind,
+                    actor.RuntimeId)));
 
     public bool CanProjectSelectedMerchantTravelPlanMutation(
         DailyV1NpcRuntimeOwners actor,
         string targetLocationRuntimeId,
         string targetCityRuntimeId) =>
         TryGetExactActor(actor)
-        && RequireHostPorts().CanProjectSelectedMerchantTravelPlanMutation(
-            actor, targetLocationRuntimeId, targetCityRuntimeId);
+        && (hostPorts != null
+            ? hostPorts.CanProjectSelectedMerchantTravelPlanMutation(
+                actor, targetLocationRuntimeId, targetCityRuntimeId)
+            : CanProjectCoreMerchantTravelPlan(
+                targetLocationRuntimeId, targetCityRuntimeId));
 
     public bool CanAdmitSelectedMerchantTravelPlanMutation(DailyV1NpcRuntimeOwners actor) =>
         TryGetExactActor(actor)
-        && RequireHostPorts().CanAdmitSelectedMerchantTravelPlanMutation(actor);
+        && (hostPorts != null
+            ? hostPorts.CanAdmitSelectedMerchantTravelPlanMutation(actor)
+            : CanAdmitCoreMerchantSection(actor,
+                DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind,
+                    actor.RuntimeId)));
 
     public bool NotifySelectedMerchantTravelPlanMutationCommitted(
         DailyV1NpcRuntimeOwners actor,
         long revision) =>
         TryGetExactActor(actor)
-        && RequireHostPorts().NotifySelectedMerchantTravelPlanMutationCommitted(actor, revision);
+        && actor.TravelPlan?.Revision == revision
+        && (hostPorts != null
+            ? hostPorts.NotifySelectedMerchantTravelPlanMutationCommitted(actor, revision)
+            : RecordCoreMerchantSection(actor,
+                DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind,
+                    actor.RuntimeId)));
 
     public NpcDecisionRecord RecordTradeRedirect(
         DailyV1NpcRuntimeOwners actor,
@@ -918,14 +1074,61 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
             ? RequireHostPorts().RecordTradeRedirect(actor, targetLocationRuntimeId, evidence)
             : throw new InvalidOperationException("A Merchant decision referenced an actor outside the Core roster.");
 
-    public void LogTradeDecisionFailure(string message) => RequireHostPorts().LogTradeDecisionFailure(message);
-    public void LogTrade(string message) => RequireHostPorts().LogTrade(message);
+    public void LogTradeDecisionFailure(string message) => hostPorts?.LogTradeDecisionFailure(message);
+    public void LogTrade(string message) => hostPorts?.LogTrade(message);
 
     public bool ExecuteWithinSelectedMerchantDailyOperation(
         DailyV1NpcRuntimeOwners actor,
-        Func<bool> operation) =>
-        TryGetExactActor(actor)
-        && RequireHostPorts().ExecuteWithinSelectedMerchantDailyOperation(actor, operation);
+        Func<bool> operation)
+    {
+        if (!TryGetExactActor(actor) || operation == null) return false;
+        return hostPorts != null
+            ? hostPorts.ExecuteWithinSelectedMerchantDailyOperation(actor, operation)
+            : executionState.ExecuteSelectedP12MerchantDailyTrade(
+                graph, actor, coreMerchantDailyTradeProtocol, operation);
+    }
+
+    private bool CanAdmitCoreMerchantSection(
+        DailyV1NpcRuntimeOwners actor,
+        string sectionId)
+    {
+        if (!TryGetExactActor(actor) || string.IsNullOrWhiteSpace(sectionId)) return false;
+        return executionState.TryCanCommitSelectedP12MerchantDailyTradeMutation(
+                new[] { sectionId }, out bool handled)
+            && handled;
+    }
+
+    private bool RecordCoreMerchantSection(
+        DailyV1NpcRuntimeOwners actor,
+        string sectionId)
+    {
+        if (!TryGetExactActor(actor) || string.IsNullOrWhiteSpace(sectionId)) return false;
+        return executionState.TryRecordSelectedP12MerchantDailyTradeMutation(
+                new[] { sectionId }, out bool handled)
+            && handled;
+    }
+
+    private bool CanProjectCoreMerchantTravelPlan(
+        string targetLocationRuntimeId,
+        string targetCityRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(targetLocationRuntimeId)
+            || string.IsNullOrWhiteSpace(targetCityRuntimeId))
+            return targetLocationRuntimeId == null && targetCityRuntimeId == null;
+
+        DailyV1CityRuntimeOwners target = null;
+        foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+        {
+            if (!string.Equals(candidate.RuntimeId, targetCityRuntimeId,
+                    StringComparison.Ordinal)
+                || !string.Equals(candidate.LocationRuntimeId, targetLocationRuntimeId,
+                    StringComparison.Ordinal))
+                continue;
+            if (target != null || !graph.ContainsExactCityOwner(candidate)) return false;
+            target = candidate;
+        }
+        return target != null;
+    }
 
     public DailyV1JusticeRecordsOwner JusticeRecordsOwner => graph.JusticeRecordsOwner;
 

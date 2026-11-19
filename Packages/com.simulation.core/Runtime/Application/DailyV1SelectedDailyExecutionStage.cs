@@ -691,7 +691,8 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
     /// Creates the bounded actor-turn context that needs no Unity host ports.
     /// This path is intentionally narrower than the admitted Unity profile:
     /// it requires a sealed full-owner census and the active DailyAdvance scope,
-    /// excludes Merchant and actor-choice inputs, and permits the existing
+    /// executes the selected Merchant plan pass through Core's sealed P12 rows,
+    /// excludes actor-choice inputs, and permits the existing
     /// targetless autonomous actions, the exact Core Guard Arrest and FleeCity transitions,
     /// and the admitted scheduled EscapePrison ForceOutcome. Unsupported profiles are rejected before actor selection can
     /// consume deterministic RNG or mutate owners.
@@ -709,6 +710,8 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             || graph.PersonStore == null
             || executionState.SelectedActorChoiceStore == null
             || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore))
+            return false;
+        if (!executionState.TryBindSelectedCoreLocalKnowledgeMutationBoundaries(graph))
             return false;
 
         DailyV1ActorTurnCoreRoots coreRoots = executionState.SelectedRuntimeActorTurnCoreRoots;
@@ -729,13 +732,19 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 out IReadOnlyList<DailyV1ActorTurnRosterEntry> roster))
             return false;
 
+        if (!TryCreateCoreMerchantBoundary(
+                graph, coreRoots, actorBoundary,
+                out IDailyV1SelectedMerchantTradeStateBoundary merchantTradeBoundary))
+            return false;
+        actorBoundary.BindMerchantBoundary(merchantTradeBoundary);
+
         context = new CoreSelectedActorTurnExecutionContext(
             executionState.SelectedRuntimeActorRoster,
             graph.PersonStore,
             executionState.SelectedActorChoiceStore,
             coreRoots,
             actorBoundary,
-            merchantTradeBoundary: null);
+            merchantTradeBoundary);
         return true;
     }
 
@@ -758,6 +767,11 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 executionState, graph, requireActiveDailyAdvanceScope: false))
         {
             diagnostic = "The prepared selected profile is outside the detached Core-only actor-turn envelope.";
+            return false;
+        }
+        if (!executionState.TryBindSelectedCoreLocalKnowledgeMutationBoundaries(graph))
+        {
+            diagnostic = "The selected Core local-knowledge owner boundaries could not bind to the exact sealed census.";
             return false;
         }
         return true;
@@ -787,7 +801,6 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             || graph.ScheduledDirectives == null
             || executionState.SelectedActorChoiceStore.PendingInputs.Count != 0
             || graph.Definitions?.EffectiveConfiguration == null
-            || graph.Definitions.EffectiveConfiguration.MerchantTrade?.Enabled != false
             || !DailyV1SelectedNpcActionDecisionStage.TryResolveConfiguredActions(
                 graph.Definitions, out IReadOnlyList<DailyV1ActionDefinition> actions)
             || actions == null || actions.Count == 0

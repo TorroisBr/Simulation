@@ -243,6 +243,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private string lastSelectedOwnerSectionCensusRefreshRejection;
     internal string LastSelectedOwnerSectionCensusRefreshRejection =>
         lastSelectedOwnerSectionCensusRefreshRejection;
+    private string lastSelectedMerchantDailyTradeRejection;
+    internal string LastSelectedMerchantDailyTradeRejection =>
+        lastSelectedMerchantDailyTradeRejection;
     private string lastCoreSelectedP12CrimeJusticeBoundaryRejection;
     internal string LastCoreSelectedP12CrimeJusticeBoundaryRejection =>
         lastCoreSelectedP12CrimeJusticeBoundaryRejection;
@@ -272,6 +275,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private DailyCaptureEligibilityToken currentCaptureToken;
     private bool selectedRuntimeOwnerGraphBound;
     private DailyV1SelectedRuntimeOwnerGraph selectedRuntimeOwnerGraph;
+    private DailyV1SelectedLocalKnowledgeOwnerBinding selectedCoreLocalKnowledgeOwnerBinding;
     private object selectedRuntimeOwnerCensusSourceIdentity;
     private Func<DailyV1CaptureScopeAllowance, DailyV1OwnerSectionCensusCaptureResult> selectedRuntimeOwnerCensusSource;
     private IReadOnlyList<DailyV1ActorTurnRosterProjection> selectedRuntimeActorRoster;
@@ -298,6 +302,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private SelectedP12SoloTravelStartContext selectedP12SoloTravelStartContext;
     private SelectedP12MerchantDailyTradeContext selectedP12MerchantDailyTradeContext;
     private HashSet<string> selectedCoreTravelCityCardinalityTransitionSections;
+    private HashSet<string> selectedCoreLocalKnowledgeCardinalityTransitionSections;
     private DailyV1Application applicationAdvanceAuthority;
     private DailyV1ActiveRuntimeSession applicationAdvanceSession;
 
@@ -1527,6 +1532,182 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     }
 
     /// <summary>
+    /// Admits one exact selected SpatialKnowledge or CommercialKnowledge
+    /// owner commit during the active DailyAdvance. These local writes are
+    /// individual owner commits outside the per-actor Merchant transaction;
+    /// Core refreshes the exact owner rows and advances the shared epoch once
+    /// for each committed owner mutation.
+    /// </summary>
+    internal bool TryCanCommitCoreSelectedLocalKnowledgeMutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyCollection<string> sectionIds)
+    {
+        if (graph == null || sectionIds == null
+            || !TryGetExactCoreLocalKnowledgeOwnerSections(
+                graph, sectionIds, out _, out string[] orderedSections))
+            return false;
+
+        lock (operationSyncRoot)
+        {
+            if (!HasAdmittedSelectedDailyExecution
+                || AdmissionContext?.IsOwnedByCurrentThread() != true
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph))
+                return false;
+
+            if (selectedP12MerchantDailyTradeContext != null)
+                return TryCanCommitSelectedP12MerchantDailyTradeMutation(
+                        orderedSections, out bool merchantHandled)
+                    && merchantHandled;
+
+            return IsSelectedDailyAdvanceCoreTurnActiveUnsafe()
+                && selectedP12TravelPartyAdvanceContext == null
+                && selectedP12TravelPartyStartContext == null
+                && selectedP12SoloTravelStartContext == null
+                && TryValidateCoreSelectedOwnerSectionCensusRows(graph, orderedSections, null);
+        }
+    }
+
+    /// <summary>
+    /// Publishes one Core-owned local-knowledge mutation after verifying the
+    /// exact selected owner group advanced by one shared revision without
+    /// changing identity. Dynamic Knowledge cardinalities are accepted only
+    /// for this exact owner group at its commit boundary; every sibling census
+    /// row must observe the same revision before the full baseline is refreshed.
+    /// </summary>
+    internal bool TryNotifyCoreSelectedLocalKnowledgeMutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyCollection<string> sectionIds)
+    {
+        if (graph == null || sectionIds == null
+            || !TryGetExactCoreLocalKnowledgeOwnerSections(
+                graph, sectionIds, out _, out string[] orderedSections))
+            return false;
+
+        lock (operationSyncRoot)
+        {
+            if (!HasAdmittedSelectedDailyExecution
+                || AdmissionContext?.IsOwnedByCurrentThread() != true
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph))
+                return false;
+
+            if (selectedP12MerchantDailyTradeContext != null)
+                return TryRecordSelectedP12MerchantDailyTradeMutation(
+                        orderedSections, out bool merchantHandled)
+                    && merchantHandled;
+
+            if (!IsSelectedDailyAdvanceCoreTurnActiveUnsafe()
+                || selectedP12TravelPartyAdvanceContext != null
+                || selectedP12TravelPartyStartContext != null
+                || selectedP12SoloTravelStartContext != null
+                || !CanAdvanceSelectedMutationEpoch)
+                return false;
+
+            long committedRevision = -1L;
+            foreach (string sectionId in orderedSections)
+            {
+                if (!selectedOwnerSectionCensusProviders.TryGetValue(
+                        sectionId, out DailyV1OwnerSectionCensusProviderRegistration registration)
+                    || registration == null || !registration.HasBaseline
+                    || registration.Role != OwnerSectionRole.Required
+                    || registration.BaselineRevision == long.MaxValue)
+                    return false;
+
+                OwnerSectionCensusWitness witness;
+                try { witness = registration.Provider.GetCurrentCensus(); }
+                catch { return false; }
+                if (witness == null
+                    || !string.Equals(witness.SectionId, registration.SectionId,
+                        StringComparison.Ordinal)
+                    || witness.SchemaVersion != registration.SchemaVersion
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity,
+                        registration.BaselineOwnerInstanceIdentity)
+                    || witness.Revision != registration.BaselineRevision + 1L
+                    || (committedRevision >= 0L && witness.Revision != committedRevision))
+                    return false;
+                committedRevision = witness.Revision;
+            }
+
+            DailyV1CoreSelectedOwnerSectionMutationProtocol protocol =
+                new DailyV1CoreSelectedOwnerSectionMutationProtocol(this, graph);
+            selectedCoreLocalKnowledgeCardinalityTransitionSections =
+                new HashSet<string>(orderedSections, StringComparer.Ordinal);
+            try
+            {
+                return TryRefreshAndAdvanceSelectedMutationEpoch(
+                    orderedSections, protocol.TryRefreshCommittedMutationBaselines);
+            }
+            finally
+            {
+                selectedCoreLocalKnowledgeCardinalityTransitionSections = null;
+            }
+        }
+    }
+
+    private static bool TryGetExactCoreLocalKnowledgeOwnerSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IEnumerable<string> suppliedSectionIds,
+        out DailyV1NpcRuntimeOwners owner,
+        out string[] orderedSections)
+    {
+        owner = null;
+        orderedSections = null;
+        if (graph?.Npcs == null || suppliedSectionIds == null) return false;
+
+        HashSet<string> supplied = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            foreach (string sectionId in suppliedSectionIds)
+                if (string.IsNullOrWhiteSpace(sectionId) || !supplied.Add(sectionId))
+                    return false;
+        }
+        catch { return false; }
+        if (supplied.Count == 0) return false;
+
+        DailyV1NpcRuntimeOwners matchedOwner = null;
+        string[] matchedSections = null;
+        foreach (DailyV1NpcRuntimeOwners candidate in graph.Npcs)
+        {
+            if (candidate == null || !graph.ContainsExactNpcOwner(candidate)
+                || !ReferenceEquals(candidate.Definitions, graph.Definitions)
+                || string.IsNullOrWhiteSpace(candidate.RuntimeId))
+                return false;
+
+            string[] spatial =
+            {
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix
+                    + candidate.RuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix
+                    + candidate.RuntimeId
+            };
+            Array.Sort(spatial, StringComparer.Ordinal);
+            string[] commercial =
+            {
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix
+                    + candidate.RuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix
+                    + candidate.RuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix
+                    + candidate.RuntimeId
+            };
+            Array.Sort(commercial, StringComparer.Ordinal);
+
+            bool spatialMatch = candidate.SpatialKnowledge != null
+                && HaveExactSelectedP12SectionSet(spatial, new List<string>(supplied));
+            bool commercialMatch = candidate.CommercialKnowledge != null
+                && HaveExactSelectedP12SectionSet(commercial, new List<string>(supplied));
+            if (!spatialMatch && !commercialMatch) continue;
+            if (matchedOwner != null) return false;
+            matchedOwner = candidate;
+            matchedSections = spatialMatch ? spatial : commercial;
+        }
+
+        if (matchedOwner == null) return false;
+        owner = matchedOwner;
+        orderedSections = matchedSections;
+        return true;
+    }
+
+    /// <summary>
     /// Commits one selected solo travel-day owner transition through the
     /// sealed Core census. The changed cut is restricted to the exact travel
     /// and City-presence rows that a prepared Core transition can mutate.
@@ -1857,8 +2038,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     /// Refreshes changed rows from their live Core census providers and
     /// atomically replaces the full sealed baseline vector. Unchanged rows
     /// must remain exact; changed required rows must retain owner identity and
-    /// advance revision. Cardinality changes are limited to section families
-    /// whose contract counts dynamic records (currently Justice records). A
+    /// advance revision. Cardinality changes are limited to dynamic owner
+    /// families with an exact active operation or owner-commit context. A
     /// reservation, when supplied, must be the exact Core epoch reservation
     /// owned by this session.
     /// </summary>
@@ -1993,6 +2174,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     if (prior.Role != OwnerSectionRole.Required
                         || (witness.Cardinality != prior.BaselineCardinality
                             && !AllowsCoreSelectedOwnerSectionCardinalityTransition(sectionId)
+                            && !AllowsCurrentCoreMerchantKnowledgeCardinalityTransition(sectionId)
+                            && !AllowsCurrentCoreLocalKnowledgeCardinalityTransition(sectionId)
                             && !AllowsCurrentCoreTravelCityCardinalityTransition(sectionId))
                         || witness.Revision <= prior.BaselineRevision)
                     {
@@ -2095,6 +2278,37 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         return selectedCoreTravelCityCardinalityTransitionSections != null
             && selectedCoreTravelCityCardinalityTransitionSections.Contains(sectionId);
     }
+
+    private bool AllowsCurrentCoreMerchantKnowledgeCardinalityTransition(string sectionId)
+    {
+        SelectedP12MerchantDailyTradeContext merchantContext =
+            selectedP12MerchantDailyTradeContext;
+        if (merchantContext == null
+            || !IsCurrentSelectedMerchantDailyTradeContext(merchantContext)
+            || !merchantContext.ChangedSectionIds.Contains(sectionId)
+            || !merchantContext.AllowedSectionIds.Contains(sectionId))
+            return false;
+
+        string runtimeId = merchantContext.Actor?.RuntimeId;
+        if (string.IsNullOrWhiteSpace(runtimeId)) return false;
+        string[] allowedKnowledgePrefixes =
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix
+        };
+        foreach (string prefix in allowedKnowledgePrefixes)
+            if (string.Equals(sectionId, prefix + runtimeId, StringComparison.Ordinal))
+                return true;
+        return false;
+    }
+
+    private bool AllowsCurrentCoreLocalKnowledgeCardinalityTransition(string sectionId) =>
+        selectedCoreLocalKnowledgeCardinalityTransitionSections != null
+        && selectedCoreLocalKnowledgeCardinalityTransitionSections.Contains(sectionId);
+
     internal static bool IsSelectedDynamicOwnerSectionId(string sectionId)
     {
         if (string.IsNullOrWhiteSpace(sectionId)) return false;
@@ -3141,6 +3355,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         IDailyV1SelectedP12MerchantDailyTradeProtocol protocol,
         Func<bool> operation)
     {
+        lastSelectedMerchantDailyTradeRejection = null;
         if (operation == null) return false;
         if (!HasAdmittedSelectedDailyExecution) return operation();
         if (graph == null || actor == null || protocol == null)
@@ -3151,6 +3366,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         if (!TryCreateSelectedP12MerchantDailyTradeSectionIds(
                 graph, actor, out IReadOnlyList<string> sectionIds))
         {
+            lastSelectedMerchantDailyTradeRejection = "OwnerSectionCut";
             FaultSelectedMerchantDailyTrade(protocol);
             return false;
         }
@@ -3169,18 +3385,30 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || selectedP12SoloTravelStartContext != null
                 || !AreRequiredSelectedP12Sections(sectionIds))
             {
+                lastSelectedMerchantDailyTradeRejection = "OperationAdmission";
                 FaultSelectedMerchantDailyTrade(protocol);
                 return false;
             }
 
             try
             {
-                if (!protocol.TryValidateOwnerSections(graph, actor, sectionIds)
-                    || !protocol.TryValidateUnchangedSections(sectionIds)
-                    || !CanAdvanceSelectedMutationEpoch
-                    || !protocol.TryEnterOperation(out protocolScope)
-                    || protocolScope == null)
+                bool ownerSectionsValid = protocol.TryValidateOwnerSections(graph, actor, sectionIds);
+                bool unchangedSectionsValid = ownerSectionsValid
+                    && protocol.TryValidateUnchangedSections(sectionIds);
+                bool epochAvailable = unchangedSectionsValid && CanAdvanceSelectedMutationEpoch;
+                bool operationEntered = epochAvailable
+                    && protocol.TryEnterOperation(out protocolScope)
+                    && protocolScope != null;
+                if (!ownerSectionsValid || !unchangedSectionsValid
+                    || !epochAvailable || !operationEntered)
                 {
+                    lastSelectedMerchantDailyTradeRejection = !ownerSectionsValid
+                        ? "OwnerSectionPreflight:" +
+                            (protocol is DailyV1CoreSelectedP12MerchantDailyTradeProtocol coreProtocol
+                                ? coreProtocol.LastFailure : "HostProtocol")
+                        : !unchangedSectionsValid ? "BaselinePreflight"
+                        : !epochAvailable ? "EpochCapacity"
+                        : "ProtocolScopeEntry";
                     FaultSelectedMerchantDailyTrade(protocol);
                     IDisposable rejectedScope = protocolScope;
                     protocolScope = null;
@@ -3196,6 +3424,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             }
             catch
             {
+                lastSelectedMerchantDailyTradeRejection = "ProtocolScopeException";
                 FaultSelectedMerchantDailyTrade(protocol);
                 IDisposable failedScope = protocolScope;
                 protocolScope = null;
@@ -3228,6 +3457,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || !TryGetRequestedMerchantDailyTradeSections(context, sectionIds,
                     out HashSet<string> requested))
             {
+                lastSelectedMerchantDailyTradeRejection = "MutationAdmissionCut";
                 FaultSelectedMerchantDailyTrade(context.Protocol);
                 return false;
             }
@@ -3241,6 +3471,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             }
             catch { }
             FaultSelectedMerchantDailyTrade(context.Protocol);
+            lastSelectedMerchantDailyTradeRejection = "MutationAdmissionBaseline";
             return false;
         }
     }
@@ -3258,6 +3489,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || !TryGetRequestedMerchantDailyTradeSections(context, sectionIds,
                     out HashSet<string> changed))
             {
+                lastSelectedMerchantDailyTradeRejection = "MutationCommitCut";
                 FaultSelectedMerchantDailyTrade(context.Protocol);
                 return false;
             }
@@ -3307,14 +3539,25 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             try
             {
                 if (!IsCurrentSelectedMerchantDailyTradeContext(context))
+                {
+                    lastSelectedMerchantDailyTradeRejection = "ContextChangedAtClose";
                     FaultSelectedMerchantDailyTrade(context?.Protocol);
+                }
                 else if (context.ChangedSectionIds.Count != 0
                     && !TryRefreshAndAdvanceSelectedMutationEpoch(
                         ToOrderedSectionArray(context.ChangedSectionIds),
                         context.Protocol.TryRefreshCommittedMutationBaselines))
+                {
+                    lastSelectedMerchantDailyTradeRejection = "Refresh:" +
+                        (lastSelectedOwnerSectionCensusRefreshRejection ?? "Unknown");
                     FaultSelectedMerchantDailyTrade(context.Protocol);
+                }
             }
-            catch { FaultSelectedMerchantDailyTrade(context?.Protocol); }
+            catch
+            {
+                lastSelectedMerchantDailyTradeRejection = "ExceptionAtClose";
+                FaultSelectedMerchantDailyTrade(context?.Protocol);
+            }
             finally
             {
                 if (ReferenceEquals(selectedP12MerchantDailyTradeContext, context))
@@ -3322,7 +3565,11 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 IDisposable protocolScope = context?.ProtocolScope;
                 if (context != null) context.ProtocolScope = null;
                 try { protocolScope?.Dispose(); }
-                catch { FaultSelectedMerchantDailyTrade(context?.Protocol); }
+                catch
+                {
+                    lastSelectedMerchantDailyTradeRejection = "ProtocolScopeClose";
+                    FaultSelectedMerchantDailyTrade(context?.Protocol);
+                }
             }
         }
     }
@@ -6518,6 +6765,54 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         return true;
     }
 
+    /// <summary>
+    /// Installs Core's long-lived P12 guard callbacks on the exact selected
+    /// local-knowledge owners before the detached actor-turn path can execute.
+    /// Existing Unity host bindings remain the compatibility path when Unity
+    /// supplies actor-turn ports.
+    /// </summary>
+    internal bool TryBindSelectedCoreLocalKnowledgeMutationBoundaries(
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        lock (operationSyncRoot)
+        {
+            if (!HasAdmittedSelectedDailyExecution
+                || AdmissionContext?.IsOwnedByCurrentThread() != true
+                || !selectedRuntimeOwnerGraphBound
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
+                || !selectedOwnerSectionCensusRegistrySealed
+                || !selectedRuntimeCensusProtocolReady
+                || selectedRuntimeCensusProtocolFaulted
+                || mutationEpochState.HasActiveReservation)
+                return false;
+
+            if (selectedCoreLocalKnowledgeOwnerBinding != null)
+            {
+                if (ReferenceEquals(selectedCoreLocalKnowledgeOwnerBinding.Graph, graph))
+                    return true;
+                if (!selectedCoreLocalKnowledgeOwnerBinding.TryRebindCoreSelected(graph))
+                {
+                    MarkSelectedRuntimeCensusProtocolFaulted();
+                    InvalidateCurrentCaptureToken();
+                    return false;
+                }
+                return true;
+            }
+
+            bool created = DailyV1SelectedLocalKnowledgeOwnerBinding.TryCreateCoreSelected(
+                this, graph,
+                out DailyV1SelectedLocalKnowledgeOwnerBinding binding);
+            if (binding != null) selectedCoreLocalKnowledgeOwnerBinding = binding;
+            if (!created || binding == null)
+            {
+                MarkSelectedRuntimeCensusProtocolFaulted();
+                InvalidateCurrentCaptureToken();
+                return false;
+            }
+            return true;
+        }
+    }
+
     internal bool TryReplaceSelectedRuntimeOwnerGraph(
         DailyV1SelectedRuntimeOwnerGraph expected,
         DailyV1SelectedRuntimeOwnerGraph replacement)
@@ -6547,6 +6842,10 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 return false;
             }
         }
+
+        if (selectedCoreLocalKnowledgeOwnerBinding != null
+            && !selectedCoreLocalKnowledgeOwnerBinding.TryRebindCoreSelected(replacement))
+            return false;
 
         selectedRuntimeOwnerGraph = replacement;
         if (replacementActorTurnRoots != null)
@@ -6798,6 +7097,10 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 return false;
             }
         }
+
+        if (selectedCoreLocalKnowledgeOwnerBinding != null
+            && !selectedCoreLocalKnowledgeOwnerBinding.TryRebindCoreSelected(replacementGraph))
+            return false;
 
         selectedRuntimeOwnerGraph = replacementGraph;
         selectedRuntimeActorRoster = validatedRoster;

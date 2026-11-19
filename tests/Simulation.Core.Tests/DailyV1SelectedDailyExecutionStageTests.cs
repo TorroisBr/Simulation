@@ -519,23 +519,26 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "An attempted write outside the admitted mutation scope faults the selected census closed.");
     }
 
-    [TestCase(false, false, false, false, false, false)]
-    [TestCase(true, false, false, false, false, false)]
-    [TestCase(false, true, false, false, false, false)]
-    [TestCase(false, false, true, false, false, false)]
-    [TestCase(false, false, false, true, false, false)]
-    [TestCase(false, false, false, false, true, false)]
-    [TestCase(false, false, false, false, false, true)]
+    [TestCase(false, false, false, false, false, false, false)]
+    [TestCase(true, false, false, false, false, false, false)]
+    [TestCase(false, true, false, false, false, false, false)]
+    [TestCase(false, false, true, false, false, false, false)]
+    [TestCase(false, false, false, true, false, false, false)]
+    [TestCase(false, false, false, false, true, false, false)]
+    [TestCase(false, false, false, false, false, true, false)]
+    [TestCase(false, false, false, false, false, false, true)]
     public void CoreOnlyActorTurnExecutesAdmittedActionWithCompleteP12Census(
         bool prebindMismatchedCrimeReceiptIdentity,
         bool executeCoreOnlyHideAction,
         bool expireCoreOnlyHiddenState,
         bool executeCoreOnlyForcedEscape,
         bool executeCoreOnlyGuardArrest,
-        bool executeCoreOnlyFleeCity)
+        bool executeCoreOnlyFleeCity,
+        bool enableCoreOnlyMerchantTrade)
     {
         DailyV1EffectiveDefinitions configuredDefinitions = CopyWithMerchantTradeEnabled(
-            DailyV1CapturedSelectedContentFixture.CreateDefinitions(), false);
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
+            enableCoreOnlyMerchantTrade);
         if (executeCoreOnlyFleeCity)
             configuredDefinitions = CopyWithCrimeAutonomousEnabled(configuredDefinitions, true);
         DailyV1EffectiveDefinitions definitions = CopyWithConfiguredActions(
@@ -698,6 +701,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Dictionary<string, IOwnerSectionCensusProvider> liveRuntimeProviders =
             DailyV1NpcOwnerCensusProviders.CreateRuntimeAuthorityProviders(graph)
                 .Concat(DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph))
+                .Concat(DailyV1NpcOwnerCensusProviders.CreateCommercialKnowledgeProviders(graph.Npcs))
+                .Concat(DailyV1NpcOwnerCensusProviders.CreateSpatialKnowledgeProviders(graph.Npcs))
                 .ToDictionary(provider => provider.GetCurrentCensus().SectionId,
                     StringComparer.Ordinal);
         liveRuntimeProviders[ScheduledDirectiveStore.SectionId] =
@@ -848,6 +853,54 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
         Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(after), Is.True);
         Assert.That(after.Count, Is.EqualTo(initialVector.Length));
+        if (enableCoreOnlyMerchantTrade)
+        {
+            string[] commercialPrefixes =
+            {
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix,
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix,
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix
+            };
+            OwnerSectionCensusSnapshot[] commercialRows = after.Where(row =>
+                commercialPrefixes.Any(prefix => row.SectionId.StartsWith(
+                    prefix, StringComparison.Ordinal))).ToArray();
+            Assert.That(commercialRows, Is.Not.Empty,
+                "The full selected census retains every CommercialKnowledge owner family.");
+            Assert.That(commercialRows.Any(row =>
+                row.Revision > before[row.SectionId].Revision), Is.True,
+                "The Core-only host executes real local market observation writes.");
+            foreach (OwnerSectionCensusSnapshot row in commercialRows)
+            {
+                OwnerSectionCensusSnapshot baseline = before[row.SectionId];
+                Assert.That(row.OwnerInstanceIdentity, Is.SameAs(baseline.OwnerInstanceIdentity),
+                    "Host-neutral execution keeps the exact P12 owner identity.");
+                string prefix = commercialPrefixes.Single(candidate =>
+                    row.SectionId.StartsWith(candidate, StringComparison.Ordinal));
+                string runtimeId = row.SectionId.Substring(prefix.Length);
+                DailyV1NpcRuntimeOwners exactOwner = graph.Npcs.Single(candidate =>
+                    string.Equals(candidate.RuntimeId, runtimeId, StringComparison.Ordinal));
+                Assert.That(row.OwnerInstanceIdentity, Is.SameAs(exactOwner.CommercialKnowledge),
+                    "The live Core census is bound to the exact CommercialKnowledge owner in the executing graph.");
+                Assert.That(exactOwner.CommercialKnowledge.TryReadCensus(
+                    out int markets, out int liquidity, out int receipts, out long ownerRevision), Is.True);
+                int expectedCardinality = prefix ==
+                    DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix
+                    ? markets
+                    : prefix == DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix
+                        ? liquidity : receipts;
+                Assert.That(row.Cardinality, Is.EqualTo(expectedCardinality),
+                    "The full P12 vector reflects the live dynamic cardinality of its exact Core owner.");
+                Assert.That(row.Revision, Is.EqualTo(ownerRevision),
+                    "All CommercialKnowledge census siblings retain the shared owner revision.");
+                if (prefix == DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix)
+                    Assert.That(row.Cardinality, Is.EqualTo(baseline.Cardinality),
+                        "Observation-only daily execution does not create share receipts.");
+            }
+            Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.False);
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(epoch));
+            Assert.That(epoch, Is.GreaterThan(mutationEpochBeforeTurn),
+                "Committed Core local-knowledge writes publish through the shared mutation epoch.");
+        }
         Assert.That(after.Single(row => row.SectionId ==
                 DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId)
                 .OwnerInstanceIdentity, Is.SameAs(crimeReceiptIdentity));
