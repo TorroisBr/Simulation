@@ -7,6 +7,48 @@ using NUnit.Framework;
 public sealed class DailyV1ActorTurnExecutionStageTests
 {
     [Test]
+    public void P8DTravelAuthoritiesAreCreatedAndRetainedByTheExactSelectedGraph()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out _);
+        PersonStore people = new PersonStore();
+        Assert.That(graph.TryBindPersonStore(people), Is.True);
+
+        SpatialAuthorityStore spatial = new SpatialAuthorityStore();
+        PersonSpatialPositionStore positions = new PersonSpatialPositionStore(
+            people, spatial, new SpatialPassageTraversalOptionResolver(spatial.PassageAuthority));
+        Assert.That(graph.TryBindPersonSpatialPositionStore(positions), Is.True);
+
+        SimulationTime time = new SimulationTime(12L);
+        Assert.That(graph.TryCreateP8DTravelOwners(time), Is.True);
+        Assert.That(graph.SpatialRouteKnowledgeStore, Is.Not.Null);
+        Assert.That(graph.PersonRoutePlanStore, Is.Not.Null);
+        Assert.That(graph.SpatialRoutePlanningSystem, Is.Not.Null);
+        Assert.That(graph.P8ETravelTransactionCoordinator, Is.Not.Null);
+        Assert.That(graph.TryCreateP8DTravelOwners(time), Is.True,
+            "Repeated composition retains the exact Core owner instances.");
+        Assert.That(graph.TryCreateP8DTravelOwners(new SimulationTime(12L)), Is.False,
+            "The same numeric day on a different clock is not the same runtime authority.");
+
+        OwnerSectionCensusWitness observations = new SpatialRouteObservationCensusProvider(
+            graph.SpatialRouteKnowledgeStore).GetCurrentCensus();
+        OwnerSectionCensusWitness plans = new PersonRoutePlanHistoryCensusProvider(
+            graph.PersonRoutePlanStore).GetCurrentCensus();
+        Assert.That(observations.SectionId, Is.EqualTo("p8d.spatial-route-observations"));
+        Assert.That(observations.OwnerInstanceIdentity, Is.SameAs(graph.SpatialRouteKnowledgeStore));
+        Assert.That(observations.Cardinality, Is.Zero);
+        Assert.That(observations.Revision, Is.Zero);
+        Assert.That(plans.SectionId, Is.EqualTo("p8d.person-route-plan-history"));
+        Assert.That(plans.OwnerInstanceIdentity, Is.SameAs(graph.PersonRoutePlanStore));
+        Assert.That(plans.Cardinality, Is.Zero);
+        Assert.That(plans.Revision, Is.Zero);
+
+        SpatialRouteKnowledgeStore aliasKnowledge = new SpatialRouteKnowledgeStore(people);
+        PersonRoutePlanStore aliasPlans = new PersonRoutePlanStore(people, aliasKnowledge);
+        Assert.That(graph.TryBindP8DTravelOwners(aliasKnowledge, aliasPlans, time), Is.False,
+            "P12 cannot substitute a census-facing alias for the graph's live owner instances.");
+    }
+
+    [Test]
     public void AdmittedSelectedLoopRejectsHostOwnedActionFallbackBeforeActorCallbacks()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(

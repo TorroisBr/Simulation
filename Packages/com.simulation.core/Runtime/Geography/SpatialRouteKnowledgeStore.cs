@@ -19,6 +19,9 @@ public sealed class SpatialRouteKnowledgeStore : IAuthoritativeMutationGuardBind
         this.personStore = personStore ?? throw new ArgumentNullException(nameof(personStore));
     }
 
+    internal bool IsBoundTo(PersonStore expectedPersonStore) =>
+        expectedPersonStore != null && ReferenceEquals(personStore, expectedPersonStore);
+
     public long Revision => revision;
     internal bool TryPrepareObservation(PersonId actor, SpatialObservation observation, long currentWorldDay,
         long expectedRevision, out PreparedSpatialKnowledgeChange prepared, out SpatialKnowledgeFailure failure)

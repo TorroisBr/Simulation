@@ -94,14 +94,54 @@ public static class P10RuinLocalTopologyGenesis
         out LegacySpatialAnchorBindingStore legacyAnchorBindings,
         out string diagnostic)
     {
+        legacyAnchorBindings = siteStore == null || spatialAuthority == null
+            ? null
+            : new LegacySpatialAnchorBindingStore(
+                spatialAuthority,
+                owner => owner != null
+                    && owner.Kind == SpatialAnchorOwnerKind.ExplorableSite
+                    && siteStore.TryGetByRuntimeId(owner.Value, out _));
+        return TryCompose(
+            candidate,
+            idAllocator,
+            identityRegistry,
+            spatialNetwork,
+            siteStore,
+            spatialAuthority,
+            localTopologyStore,
+            legacyAnchorBindings,
+            out siteRuntime,
+            out topology,
+            out diagnostic);
+    }
+
+    /// <summary>
+    /// Composes the bounded P10 Ruin into the exact P8 anchor owner already
+    /// selected by the host/Core graph, keeping all anchor facts under one
+    /// authoritative owner.
+    /// </summary>
+    public static bool TryCompose(
+        P10RuinLocalTopologyCandidate candidate,
+        RuntimeIdAllocator idAllocator,
+        RuntimeIdentityRegistry identityRegistry,
+        SpatialNetworkRuntime spatialNetwork,
+        ExplorableSiteStore siteStore,
+        SpatialAuthorityStore spatialAuthority,
+        LocalTopologyStore localTopologyStore,
+        LegacySpatialAnchorBindingStore legacyAnchorBindings,
+        out ExplorableSiteRuntime siteRuntime,
+        out LocalTopologyRuntime topology,
+        out string diagnostic)
+    {
         siteRuntime = null;
         topology = null;
-        legacyAnchorBindings = null;
         diagnostic = null;
         if (candidate == null || idAllocator == null || identityRegistry == null || spatialNetwork == null
-            || siteStore == null || spatialAuthority == null || localTopologyStore == null)
+            || siteStore == null || spatialAuthority == null || localTopologyStore == null
+            || legacyAnchorBindings == null
+            || !ReferenceEquals(legacyAnchorBindings.SpatialLocationLookup, spatialAuthority))
         {
-            diagnostic = "P10 composition requires the complete P9/P8 genesis authorities and runtime identity services.";
+            diagnostic = "P10 composition requires the complete P9/P8 genesis authorities, exact anchor owner, and runtime identity services.";
             return false;
         }
         if (!spatialAuthority.TryGet(candidate.Location.Id, out LocationRecord selectedLocation)
@@ -139,11 +179,6 @@ public static class P10RuinLocalTopologyGenesis
             return false;
         }
 
-        legacyAnchorBindings = new LegacySpatialAnchorBindingStore(
-            spatialAuthority,
-            owner => owner != null
-                && owner.Kind == SpatialAnchorOwnerKind.ExplorableSite
-                && siteStore.TryGetByRuntimeId(owner.Value, out _));
         if (!legacyAnchorBindings.TryBindSite(pendingSite.RuntimeId, candidate.Location.Id, out SpatialAnchorBindingFailure anchorFailure))
         {
             diagnostic = "P10 Ruin P8 anchor binding failed: " + anchorFailure;

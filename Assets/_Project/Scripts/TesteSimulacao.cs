@@ -747,7 +747,10 @@ public class TesteSimulacao : MonoBehaviour
                 calendarDefinition: calendarDefinition,
                 spatialAuthorityStore: genesisSpatialAuthority,
                 localTopologyStore: genesisLocalTopologyStore,
-                legacySpatialAnchorBindingStore: genesisLegacySpatialAnchorBindingStore,
+                legacySpatialAnchorBindingStore: genesis.OwnerGraph.LegacySpatialAnchors,
+                personSpatialPositionStore: genesis.OwnerGraph.PersonSpatialPositionStore,
+                spatialRouteKnowledgeStore: genesis.OwnerGraph.SpatialRouteKnowledgeStore,
+                personRoutePlanStore: genesis.OwnerGraph.PersonRoutePlanStore,
                 runtimeAdmissionContext: runtimeAdmissionContext,
                 recordSequence: recordSequence,
                 worldId: unpublishedWorldId,
@@ -1378,6 +1381,9 @@ public class TesteSimulacao : MonoBehaviour
                             spatialAuthorityStore: genesisSpatialAuthority,
                             localTopologyStore: genesisLocalTopologyStore,
                             legacySpatialAnchorBindingStore: genesisLegacySpatialAnchorBindingStore,
+                            personSpatialPositionStore: selectedInitialRuntimeOwnerGraph?.PersonSpatialPositionStore,
+                            spatialRouteKnowledgeStore: selectedInitialRuntimeOwnerGraph?.SpatialRouteKnowledgeStore,
+                            personRoutePlanStore: selectedInitialRuntimeOwnerGraph?.PersonRoutePlanStore,
                             runtimeAdmissionContext: runtimeAdmissionContext,
                             recordSequence: recordSequence,
                             worldId: unpublishedWorldId,
@@ -2078,6 +2084,8 @@ public class TesteSimulacao : MonoBehaviour
     {
         p10RuinCandidate = P10RuinLocalTopologyGenesis.CreateCandidate(simulationConfig, genesisSpatialAuthority, selectedDefinitions);
         genesisLocalTopologyStore = new LocalTopologyStore(runtimeIdentityRegistry);
+        if (genesisLegacySpatialAnchorBindingStore == null)
+            genesisLegacySpatialAnchorBindingStore = new LegacySpatialAnchorBindingStore(genesisSpatialAuthority);
         if (!P10RuinLocalTopologyGenesis.TryCompose(
                 p10RuinCandidate,
                 runtimeIdAllocator,
@@ -2086,9 +2094,9 @@ public class TesteSimulacao : MonoBehaviour
                 explorableSiteStore,
                 genesisSpatialAuthority,
                 genesisLocalTopologyStore,
+                genesisLegacySpatialAnchorBindingStore,
                 out p10RuinRuntime,
                 out _,
-                out genesisLegacySpatialAnchorBindingStore,
                 out string diagnostic))
             throw new System.InvalidOperationException("P10 Ruin topology genesis stage failed before publication: " + diagnostic);
         AddExplorableSiteRuntimeByDefinition(p10RuinRuntime.DefinitionId, p10RuinRuntime);

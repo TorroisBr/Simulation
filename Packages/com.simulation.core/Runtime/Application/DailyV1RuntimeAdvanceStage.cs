@@ -690,7 +690,9 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         DailyV1SelectedOwnerSectionCensusContract.SpatialPassageStateSectionId,
         DailyV1SelectedOwnerSectionCensusContract.SpatialCrossingSectionId,
         LegacySpatialAnchorBindingCensusProvider.SectionId,
-        PersonSpatialPositionCensusProvider.SectionId
+        PersonSpatialPositionCensusProvider.SectionId,
+        SpatialRouteObservationCensusProvider.SectionId,
+        PersonRoutePlanHistoryCensusProvider.SectionId
     };
 
     internal static IReadOnlyList<string> CoreOwnedIdentitySpatialSectionIds { get; } =
@@ -759,6 +761,8 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         DailyV1SelectedOwnerSectionCensusContract.SpatialCrossingSectionId,
         LegacySpatialAnchorBindingCensusProvider.SectionId,
         PersonSpatialPositionCensusProvider.SectionId,
+        SpatialRouteObservationCensusProvider.SectionId,
+        PersonRoutePlanHistoryCensusProvider.SectionId,
         DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId,
         DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId,
         ActorChoiceP11CensusProvider.SectionId,
@@ -1811,18 +1815,28 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         PersonSpatialPositionStore positions = graph?.PersonSpatialPositionStore;
         LegacySpatialAnchorBindingStore anchors = graph?.LegacySpatialAnchors;
         SpatialAuthorityStore spatial = positions?.SpatialAuthorityStore;
+        SpatialRouteKnowledgeStore routeKnowledge = graph?.SpatialRouteKnowledgeStore;
+        PersonRoutePlanStore routePlans = graph?.PersonRoutePlanStore;
         if (persons == null)
         {
             diagnostic = "The Core identity and spatial census requires its exact PersonStore.";
             return false;
         }
 
+        if ((routeKnowledge == null) != (routePlans == null)
+            || !graph.TryValidateP8DTravelOwnerBindings())
+        {
+            diagnostic = "The Core P8-D census requires the exact paired route owners joined to the selected PersonStore, position store, and clock.";
+            return false;
+        }
         List<OwnerSectionCensusSnapshot> built =
             new List<OwnerSectionCensusSnapshot>(CoreOwnedIdentitySpatialSectionIdValues.Length);
         int expectedCoreRowCount = (identities == null ? 0 : 8)
             + (spatialNetwork == null ? 0 : 2)
             + (positions == null ? 0 : 6)
-            + (anchors == null || positions == null ? 0 : 1);
+            + (anchors == null || positions == null ? 0 : 1)
+            + (routeKnowledge == null ? 0 : 1)
+            + (routePlans == null ? 0 : 1);
         try
         {
             DailyV1RuntimeIdentityKind[] identityKinds =
@@ -1926,6 +1940,15 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 }
                 built.Add(ToOwnerSectionSnapshot(
                     new LegacySpatialAnchorBindingCensusProvider(anchors).GetCurrentCensus(),
+                    OwnerSectionRole.ExplicitlyEmpty));
+            }
+            if (routeKnowledge != null && routePlans != null)
+            {
+                built.Add(ToOwnerSectionSnapshot(
+                    new SpatialRouteObservationCensusProvider(routeKnowledge).GetCurrentCensus(),
+                    OwnerSectionRole.ExplicitlyEmpty));
+                built.Add(ToOwnerSectionSnapshot(
+                    new PersonRoutePlanHistoryCensusProvider(routePlans).GetCurrentCensus(),
                     OwnerSectionRole.ExplicitlyEmpty));
             }
         }

@@ -3532,6 +3532,7 @@ internal sealed class DailyV1Application
             || !ReferenceEquals(state.SelectedRuntimeIdAllocator, graph.RuntimeIdAllocator)
             || !eventAuthority.IsFor(state.SelectedRuntimeIdAllocator, state.SimulationTime,
                 state.SelectedRecordSequence, state.SelectedDecisionStore)
+            || !graph.TryValidateP8DTravelOwnerBindings()
             || graph.RuntimeIdentityIndex == null || graph.TravelParties == null
             || graph.ScheduledDirectives == null || graph.Expeditions == null
             || state.SelectedDecisionStore == null || state.SelectedActorChoiceStore == null)
@@ -3558,6 +3559,23 @@ internal sealed class DailyV1Application
             diagnostic = "The restored Core target is missing its exact owner graph, P11 authority, or owner vector.";
             return false;
         }
+
+        // P8-D travel census is exact-empty in Daily-v1 and must identify the exact Core owners.
+        if ((graph.SpatialRouteKnowledgeStore != null
+                && !TryValidateRestoredCoreCurrentRevisionWitness(
+                    targetOwnerSections,
+                    new SpatialRouteObservationCensusProvider(graph.SpatialRouteKnowledgeStore).GetCurrentCensus(),
+                    0,
+                    OwnerSectionRole.ExplicitlyEmpty,
+                    out diagnostic))
+            || (graph.PersonRoutePlanStore != null
+                && !TryValidateRestoredCoreCurrentRevisionWitness(
+                    targetOwnerSections,
+                    new PersonRoutePlanHistoryCensusProvider(graph.PersonRoutePlanStore).GetCurrentCensus(),
+                    0,
+                    OwnerSectionRole.ExplicitlyEmpty,
+                    out diagnostic)))
+            return false;
 
         // P8 position and anchor rows remain host-owned unless their exact
         // instances have been installed in the selected Core graph. Validate

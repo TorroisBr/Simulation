@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using NUnit.Framework;
@@ -1252,6 +1253,7 @@ public sealed class DailyV1ApplicationHostTests
             ToRequiredSnapshot(expeditionWitness),
             ToRequiredSnapshot(p11Witness)
         };
+        AppendMissingCoreP8OwnerRows(session, targetSections);
 
         Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
             session, targetSections, out string diagnostic), Is.True, diagnostic);
@@ -1284,7 +1286,9 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(diagnostic, Does.Contain("Required P11 ActorChoice owner"));
 
         List<OwnerSectionCensusSnapshot> missingP11Sections =
-            new List<OwnerSectionCensusSnapshot> { ToRequiredSnapshot(expeditionWitness) };
+            new List<OwnerSectionCensusSnapshot>(targetSections);
+        missingP11Sections.RemoveAll(section =>
+            section.SectionId == ActorChoiceP11CensusProvider.SectionId);
         Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
             session, missingP11Sections, out diagnostic), Is.False);
         Assert.That(diagnostic, Does.Contain("Required P11 ActorChoice owner"));
@@ -1326,6 +1330,34 @@ public sealed class DailyV1ApplicationHostTests
             witness.Revision);
     }
 
+    private static void AppendMissingCoreP8OwnerRows(
+        DailyV1ActiveRuntimeSession session,
+        List<OwnerSectionCensusSnapshot> sections)
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = session?.OwnerGraph;
+        if (graph == null || sections == null) return;
+
+        void AddIfMissing(OwnerSectionCensusWitness witness)
+        {
+            if (!sections.Any(section => string.Equals(
+                    section.SectionId, witness.SectionId, StringComparison.Ordinal)))
+                sections.Add(ToExplicitlyEmptySnapshot(witness));
+        }
+
+        if (graph.PersonSpatialPositionStore != null)
+            AddIfMissing(new PersonSpatialPositionCensusProvider(
+                graph.PersonSpatialPositionStore).GetCurrentCensus());
+        if (graph.LegacySpatialAnchors != null)
+            AddIfMissing(new LegacySpatialAnchorBindingCensusProvider(
+                graph.LegacySpatialAnchors).GetCurrentCensus());
+        if (graph.SpatialRouteKnowledgeStore != null)
+            AddIfMissing(new SpatialRouteObservationCensusProvider(
+                graph.SpatialRouteKnowledgeStore).GetCurrentCensus());
+        if (graph.PersonRoutePlanStore != null)
+            AddIfMissing(new PersonRoutePlanHistoryCensusProvider(
+                graph.PersonRoutePlanStore).GetCurrentCensus());
+    }
+
     [Test]
     public void CoreRestoredTargetInvariantGateRequiresExactZeroRowsForBoundP8Owners()
     {
@@ -1340,12 +1372,15 @@ public sealed class DailyV1ApplicationHostTests
 
         DailyV1ActiveRuntimeSession session = preparation.CoreSession;
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
-        SpatialAuthorityStore spatial = new SpatialAuthorityStore();
-        PersonSpatialPositionStore positions = new PersonSpatialPositionStore(
-            graph.PersonStore,
-            spatial,
-            new SpatialPassageTraversalOptionResolver(spatial.PassageAuthority));
-        LegacySpatialAnchorBindingStore anchors = new LegacySpatialAnchorBindingStore(spatial);
+        SpatialAuthorityStore spatial = graph.PersonSpatialPositionStore?.SpatialAuthorityStore
+            ?? new SpatialAuthorityStore();
+        PersonSpatialPositionStore positions = graph.PersonSpatialPositionStore
+            ?? new PersonSpatialPositionStore(
+                graph.PersonStore,
+                spatial,
+                new SpatialPassageTraversalOptionResolver(spatial.PassageAuthority));
+        LegacySpatialAnchorBindingStore anchors = graph.LegacySpatialAnchors
+            ?? new LegacySpatialAnchorBindingStore(spatial);
         Assert.That(graph.TryBindPersonSpatialPositionStore(positions), Is.True);
         Assert.That(graph.TryBindLegacySpatialAnchorBindingStore(anchors), Is.True);
 
@@ -1361,6 +1396,7 @@ public sealed class DailyV1ApplicationHostTests
             ToExplicitlyEmptySnapshot(position),
             ToExplicitlyEmptySnapshot(anchor)
         };
+        AppendMissingCoreP8OwnerRows(session, exactEmptyTarget);
 
         Assert.That(position.Cardinality, Is.Zero);
         Assert.That(anchor.Cardinality, Is.Zero);
@@ -1368,12 +1404,8 @@ public sealed class DailyV1ApplicationHostTests
             session, exactEmptyTarget, out string diagnostic), Is.True, diagnostic);
 
         List<OwnerSectionCensusSnapshot> missingPosition =
-            new List<OwnerSectionCensusSnapshot>
-            {
-                ToRequiredSnapshot(expedition),
-                ToRequiredSnapshot(p11),
-                ToExplicitlyEmptySnapshot(anchor)
-            };
+            new List<OwnerSectionCensusSnapshot>(exactEmptyTarget);
+        missingPosition.RemoveAll(section => section.SectionId == position.SectionId);
         Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
             session, missingPosition, out diagnostic), Is.False);
         Assert.That(diagnostic, Does.Contain(PersonSpatialPositionCensusProvider.SectionId));
@@ -1397,12 +1429,8 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(diagnostic, Does.Contain(PersonSpatialPositionCensusProvider.SectionId));
 
         List<OwnerSectionCensusSnapshot> missingAnchor =
-            new List<OwnerSectionCensusSnapshot>
-            {
-                ToRequiredSnapshot(expedition),
-                ToRequiredSnapshot(p11),
-                ToExplicitlyEmptySnapshot(position)
-            };
+            new List<OwnerSectionCensusSnapshot>(exactEmptyTarget);
+        missingAnchor.RemoveAll(section => section.SectionId == anchor.SectionId);
         Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
             session, missingAnchor, out diagnostic), Is.False);
         Assert.That(diagnostic, Does.Contain(LegacySpatialAnchorBindingCensusProvider.SectionId));
@@ -1424,6 +1452,87 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
             session, wrongAnchorRole, out diagnostic), Is.False);
         Assert.That(diagnostic, Does.Contain(LegacySpatialAnchorBindingCensusProvider.SectionId));
+    }
+
+    [Test]
+    public void CoreRestoredTargetInvariantGateRequiresExactCurrentP8DTravelRows()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession session, out string startDiagnostic),
+            Is.True, startDiagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        Assert.That(graph.TryValidateP8DTravelOwnerBindings(), Is.True);
+        Assert.That(graph.SpatialRouteKnowledgeStore, Is.Not.Null);
+        Assert.That(graph.PersonRoutePlanStore, Is.Not.Null);
+
+        OwnerSectionCensusWitness expedition =
+            new ExpeditionCensusProvider(graph.Expeditions).GetCurrentCensus();
+        OwnerSectionCensusWitness actorChoices =
+            new ActorChoiceP11CensusProvider(session.ExecutionBoundaryState.SelectedActorChoiceStore)
+                .GetCurrentCensus();
+        List<OwnerSectionCensusSnapshot> target = new List<OwnerSectionCensusSnapshot>
+        {
+            ToRequiredSnapshot(expedition),
+            ToRequiredSnapshot(actorChoices)
+        };
+        AppendMissingCoreP8OwnerRows(session, target);
+
+        OwnerSectionCensusWitness[] routeOwners =
+        {
+            new SpatialRouteObservationCensusProvider(graph.SpatialRouteKnowledgeStore).GetCurrentCensus(),
+            new PersonRoutePlanHistoryCensusProvider(graph.PersonRoutePlanStore).GetCurrentCensus()
+        };
+        foreach (OwnerSectionCensusWitness witness in routeOwners)
+        {
+            Assert.That(witness.Cardinality, Is.Zero, witness.SectionId);
+            OwnerSectionCensusSnapshot exact = target.Find(
+                section => section.SectionId == witness.SectionId);
+            Assert.That(exact, Is.Not.Null, witness.SectionId);
+            Assert.That(exact.OwnerInstanceIdentity, Is.SameAs(witness.OwnerInstanceIdentity), witness.SectionId);
+            Assert.That(exact.Revision, Is.EqualTo(witness.Revision), witness.SectionId);
+        }
+        Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+            session, target, out string diagnostic), Is.True, diagnostic);
+
+        foreach (OwnerSectionCensusWitness witness in routeOwners)
+        {
+            List<OwnerSectionCensusSnapshot> missing = new List<OwnerSectionCensusSnapshot>(target);
+            missing.RemoveAll(section => section.SectionId == witness.SectionId);
+            Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+                session, missing, out diagnostic), Is.False, witness.SectionId);
+            Assert.That(diagnostic, Does.Contain(witness.SectionId));
+
+            int rowIndex = target.FindIndex(section => section.SectionId == witness.SectionId);
+            List<OwnerSectionCensusSnapshot> substituted = new List<OwnerSectionCensusSnapshot>(target);
+            substituted[rowIndex] = new OwnerSectionCensusSnapshot(
+                witness.SectionId, witness.SchemaVersion, OwnerSectionRole.ExplicitlyEmpty,
+                new object(), witness.Cardinality, witness.Revision);
+            Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+                session, substituted, out diagnostic), Is.False, witness.SectionId);
+            Assert.That(diagnostic, Does.Contain(witness.SectionId));
+
+            List<OwnerSectionCensusSnapshot> nonzero = new List<OwnerSectionCensusSnapshot>(target);
+            nonzero[rowIndex] = new OwnerSectionCensusSnapshot(
+                witness.SectionId, witness.SchemaVersion, OwnerSectionRole.ExplicitlyEmpty,
+                witness.OwnerInstanceIdentity, witness.Cardinality + 1, witness.Revision);
+            Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+                session, nonzero, out diagnostic), Is.False, witness.SectionId);
+            Assert.That(diagnostic, Does.Contain(witness.SectionId));
+
+            List<OwnerSectionCensusSnapshot> staleRevision = new List<OwnerSectionCensusSnapshot>(target);
+            staleRevision[rowIndex] = new OwnerSectionCensusSnapshot(
+                witness.SectionId, witness.SchemaVersion, OwnerSectionRole.ExplicitlyEmpty,
+                witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision + 1L);
+            Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
+                session, staleRevision, out diagnostic), Is.False, witness.SectionId);
+            Assert.That(diagnostic, Does.Contain(witness.SectionId));
+        }
     }
 
     [Test]
@@ -1472,14 +1581,14 @@ public sealed class DailyV1ApplicationHostTests
             session.OwnerGraph.Expeditions).GetCurrentCensus();
         OwnerSectionCensusWitness p11 = new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus();
         Assert.That(p11.Cardinality, Is.EqualTo(1));
+        List<OwnerSectionCensusSnapshot> targetSections = new List<OwnerSectionCensusSnapshot>
+        {
+            ToRequiredSnapshot(expedition),
+            ToRequiredSnapshot(p11)
+        };
+        AppendMissingCoreP8OwnerRows(session, targetSections);
         Assert.That(DailyV1Application.TryValidateRestoredCoreTargetInvariants(
-            session,
-            new List<OwnerSectionCensusSnapshot>
-            {
-                ToRequiredSnapshot(expedition),
-                ToRequiredSnapshot(p11)
-            },
-            out string diagnostic), Is.True, diagnostic);
+            session, targetSections, out string diagnostic), Is.True, diagnostic);
     }
 
     [Test]

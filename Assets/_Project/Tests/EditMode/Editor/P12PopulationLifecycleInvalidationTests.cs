@@ -1546,6 +1546,25 @@ public sealed class P12PopulationLifecycleInvalidationTests
         long npcRevision = new NpcLifecycleCensusProvider(npc, residence: false).GetCurrentCensus().Revision;
         long actionRevision = actionProvider.GetCurrentCensus().Revision;
         long populationRevision = city.Population.Revision;
+
+        Assert.That(PersonRuntimeOwnerBridge.CanCommitP12LifeResidenceMutation(person), Is.False,
+            "The Person writer is closed before Core admits the exact death operation.");
+        Assert.That(npc.CanCommitP12LifecycleMutation(
+            lifeStateChanged: true, residenceChanged: false,
+            currentActionChanged: true), Is.False,
+            "The NPC lifecycle writer is closed before Core admits the exact death operation.");
+        Assert.That(PopulationOwnerBridge.CanCommitP12AggregateMutation(city.Population), Is.False,
+            "The City aggregate writer is closed before Core admits the exact death operation.");
+
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryPrepare(
+            runtime.SelectedRuntimeOwnerGraph, people, person, runtime.CurrentDay,
+            out DailyV1SelectedPersonDeathPlan preparedPlan, out string prepareDiagnostic),
+            Is.True, prepareDiagnostic);
+        Assert.That(preparedPlan.MaterializedNpc, Is.SameAs(npc.SelectedRuntimeOwners));
+        Assert.That(preparedPlan.ResidenceCity, Is.SameAs(city.SelectedRuntimeOwners));
+        Assert.That(person.DeathAbsoluteDay, Is.Null,
+            "Plan preparation validates current facts and capacity without opening or mutating a P12 writer.");
+
         bool applied = runtime.TryApplyResidentDeath(npc, city,
             out NpcPopulationLifecycleTransition transition, out NpcPopulationLifecycleFailure failure);
 
@@ -1575,6 +1594,14 @@ public sealed class P12PopulationLifecycleInvalidationTests
         Assert.That(npc.IsDead, Is.True);
         Assert.That(npc.CurrentActionRuntime, Is.Null);
         Assert.That(npc.BoundPersonRuntime, Is.SameAs(person));
+        Assert.That(PersonRuntimeOwnerBridge.CanCommitP12LifeResidenceMutation(person), Is.False,
+            "The Person writer permission is revoked when the Core operation completes.");
+        Assert.That(npc.CanCommitP12LifecycleMutation(
+            lifeStateChanged: true, residenceChanged: false,
+            currentActionChanged: false), Is.False,
+            "The NPC writer permission is revoked when the Core operation completes.");
+        Assert.That(PopulationOwnerBridge.CanCommitP12AggregateMutation(city.Population), Is.False,
+            "The City writer permission is revoked when the Core operation completes.");
     }
 
     [Test]

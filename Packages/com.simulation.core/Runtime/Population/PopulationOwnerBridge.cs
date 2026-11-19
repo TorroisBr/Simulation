@@ -52,6 +52,9 @@ public static class PopulationOwnerBridge
         return owner.CanAdvanceP12AggregateRevision;
     }
 
+    internal static bool CanCommitP12AggregateMutation(SettlementPopulationRuntime owner) =>
+        owner != null && owner.CanCommitP12AggregateMutation();
+
     public static void BindP12PopulationMutationBoundary(
         SettlementPopulationRuntime owner,
         System.Func<SettlementPopulationRuntime, bool, bool, bool> admission,

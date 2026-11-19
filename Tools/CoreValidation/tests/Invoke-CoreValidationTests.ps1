@@ -145,6 +145,16 @@ try {
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..\..')).Path
 $coreInputs = @(Get-CoreInputSnapshot -ProjectRoot $repositoryRoot | ForEach-Object { [string]$_.path })
 foreach ($requiredInput in @(
+    'Packages/com.simulation.core/Runtime/Geography/P12P8DCensusProviders.cs',
+    'Packages/com.simulation.core/Runtime/Geography/P12P8DCensusProviders.cs.meta',
+    'Packages/com.simulation.core/Runtime/Geography/P8ETravelTransactionCoordinator.cs',
+    'Packages/com.simulation.core/Runtime/Geography/P8ETravelTransactionCoordinator.cs.meta',
+    'Packages/com.simulation.core/Runtime/Geography/PersonRoutePlanStore.cs',
+    'Packages/com.simulation.core/Runtime/Geography/PersonRoutePlanStore.cs.meta',
+    'Packages/com.simulation.core/Runtime/Geography/SpatialRouteKnowledge.cs',
+    'Packages/com.simulation.core/Runtime/Geography/SpatialRouteKnowledge.cs.meta',
+    'Packages/com.simulation.core/Runtime/Geography/SpatialRoutePlanningSystem.cs',
+    'Packages/com.simulation.core/Runtime/Geography/SpatialRoutePlanningSystem.cs.meta',
     'Packages/com.simulation.core/Runtime/Persistence/P18DCommercialSharingCodec.cs',
     'Packages/com.simulation.core/Runtime/Numerics/UnityMathfCompatibility.cs',
     'Assets/_Project/Tests/EditMode/Editor/Core/CORE_F_CompatibilityParityTests.cs',

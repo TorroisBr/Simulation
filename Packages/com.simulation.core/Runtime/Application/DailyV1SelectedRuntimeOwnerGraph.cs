@@ -24,7 +24,16 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal PersonStore PersonStore { get; private set; }
     internal GenealogyStore GenealogyStore { get; private set; }
     internal PersonSpatialPositionStore PersonSpatialPositionStore { get; private set; }
+    internal SpatialRouteKnowledgeStore SpatialRouteKnowledgeStore { get; private set; }
+    internal PersonRoutePlanStore PersonRoutePlanStore { get; private set; }
+    internal SpatialRoutePlanningSystem SpatialRoutePlanningSystem { get; private set; }
+    internal P8ETravelTransactionCoordinator P8ETravelTransactionCoordinator { get; private set; }
+    private SimulationTime p8dSimulationTime;
     internal LegacySpatialAnchorBindingStore LegacySpatialAnchors { get; private set; }
+    internal bool HasCompleteMutationGuardRoots => PersonStore != null
+        && JusticeRecordsOwner != null
+        && TravelParties != null
+        && ScheduledDirectives != null;
     internal ScheduledDirectiveStore ScheduledDirectives { get; private set; }
     internal PoliticalKnowledgeStore PoliticalKnowledgeStore { get; private set; }
     internal PoliticalDecisionStore PoliticalDecisionStore { get; private set; }
@@ -206,6 +215,80 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     }
 
     /// <summary>
+    /// Binds the exact P8-D owners joined to this graph's Person authority.
+    /// Route plans must consume the same Spatial Knowledge owner; keeping the
+    /// join here lets P12 observe the live owners without constructing a
+    /// second census-facing copy.
+    /// </summary>
+    internal bool TryBindP8DTravelOwners(
+        SpatialRouteKnowledgeStore knowledge,
+        PersonRoutePlanStore plans,
+        SimulationTime simulationTime)
+    {
+        if (PersonStore == null || PersonSpatialPositionStore == null
+            || simulationTime == null || knowledge == null || plans == null
+            || !ReferenceEquals(PersonSpatialPositionStore.PersonStore, PersonStore)
+            || !knowledge.IsBoundTo(PersonStore)
+            || !plans.IsBoundTo(PersonStore, knowledge)) return false;
+        if (SpatialRouteKnowledgeStore != null || PersonRoutePlanStore != null)
+            return ReferenceEquals(SpatialRouteKnowledgeStore, knowledge)
+                && ReferenceEquals(PersonRoutePlanStore, plans)
+                && ReferenceEquals(p8dSimulationTime, simulationTime)
+                && SpatialRoutePlanningSystem != null
+                && P8ETravelTransactionCoordinator != null;
+
+        SpatialRoutePlanningSystem planning = new SpatialRoutePlanningSystem(
+            PersonStore, PersonSpatialPositionStore.SpatialAuthorityStore, knowledge);
+        P8ETravelTransactionCoordinator travel = new P8ETravelTransactionCoordinator(
+            PersonSpatialPositionStore, plans, knowledge,
+            PersonSpatialPositionStore.SpatialAuthorityStore.PassageAuthority,
+            () => simulationTime.AbsoluteDay);
+        SpatialRouteKnowledgeStore = knowledge;
+        PersonRoutePlanStore = plans;
+        SpatialRoutePlanningSystem = planning;
+        P8ETravelTransactionCoordinator = travel;
+        p8dSimulationTime = simulationTime;
+        return true;
+    }
+
+    /// <summary>
+    /// Constructs the selected P8-D owners on this Core graph's exact Person,
+    /// position, and clock authorities. Repeated composition is permitted only
+    /// for that same owner set and SimulationTime instance.
+    /// </summary>
+    internal bool TryCreateP8DTravelOwners(SimulationTime simulationTime)
+    {
+        if (simulationTime == null || PersonStore == null || PersonSpatialPositionStore == null
+            || !ReferenceEquals(PersonSpatialPositionStore.PersonStore, PersonStore)) return false;
+        if (SpatialRouteKnowledgeStore != null || PersonRoutePlanStore != null)
+            return SpatialRouteKnowledgeStore != null && PersonRoutePlanStore != null
+                && TryBindP8DTravelOwners(SpatialRouteKnowledgeStore, PersonRoutePlanStore, simulationTime);
+
+        SpatialRouteKnowledgeStore knowledge = new SpatialRouteKnowledgeStore(PersonStore);
+        PersonRoutePlanStore plans = new PersonRoutePlanStore(
+            PersonStore,
+            knowledge,
+            () => simulationTime.AbsoluteDay,
+            actor => PersonSpatialPositionStore.TryGetPosition(
+                    actor, out PersonSpatialPosition position)
+                && position.IsInTransit);
+        return TryBindP8DTravelOwners(knowledge, plans, simulationTime);
+    }
+
+    internal bool TryValidateP8DTravelOwnerBindings()
+    {
+        bool anyP8DState = SpatialRouteKnowledgeStore != null || PersonRoutePlanStore != null
+            || SpatialRoutePlanningSystem != null || P8ETravelTransactionCoordinator != null
+            || p8dSimulationTime != null;
+        if (!anyP8DState) return true;
+        return PersonStore != null && PersonSpatialPositionStore != null
+            && SpatialRouteKnowledgeStore != null && PersonRoutePlanStore != null
+            && SpatialRoutePlanningSystem != null && P8ETravelTransactionCoordinator != null
+            && p8dSimulationTime != null
+            && TryBindP8DTravelOwners(SpatialRouteKnowledgeStore, PersonRoutePlanStore, p8dSimulationTime);
+    }
+
+    /// <summary>
     /// Binds the exact P8 anchor authority used by the runtime spatial owner.
     /// Selected action eligibility reads this Core-owned relation instead of
     /// asking a Unity runtime projection to infer current-city location.
@@ -315,36 +398,43 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     /// </summary>
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
     {
-        if (guard == null
-            || PersonStore == null
-            || JusticeRecordsOwner == null
-            || TravelParties == null
-            || ScheduledDirectives == null)
-            return false;
+        return GetMutationGuardBindingFailure(guard) == null;
+    }
+
+    internal string GetMutationGuardBindingFailure(AuthoritativeMutationGuard guard)
+    {
+        if (guard == null) return "MutationGuard";
+        if (PersonStore == null) return nameof(PersonStore);
+        if (JusticeRecordsOwner == null) return nameof(JusticeRecordsOwner);
+        if (TravelParties == null) return nameof(TravelParties);
+        if (ScheduledDirectives == null) return nameof(ScheduledDirectives);
 
         List<IAuthoritativeMutationGuardBindable> authorities =
             CreateMutationGuardAuthorities();
-        if (authorities == null) return false;
+        if (authorities == null) return "MutationGuardAuthorityList";
         foreach (IAuthoritativeMutationGuardBindable authority in authorities)
             if (authority == null || !authority.CanBindMutationGuard(guard))
-                return false;
+                return authority?.GetType().Name ?? "NullMutationGuardAuthority";
 
         if (GenealogyStore != null
             && !GenealogyOwnerBridge.CanBindMutationStatus(GenealogyStore, guard))
-            return false;
+            return nameof(GenealogyStore);
 
-        foreach (DailyV1CityRuntimeOwners city in cities)
+        for (int index = 0; index < cities.Count; index++)
+        {
+            DailyV1CityRuntimeOwners city = cities[index];
             if (city == null || city.Population == null
                 || !PopulationOwnerBridge.CanBindMutationStatus(city.Population, guard))
-                return false;
+                return "CityPopulation[" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]";
+        }
 
         if (P12EOwners != null
             && (!InstitutionOfficeOwnerBridge.CanBindMutationStatus(P12EOwners.Institutions, guard)
                 || !InstitutionOfficeOwnerBridge.CanBindMutationStatus(P12EOwners.Offices, guard)
                 || !PoliticalClaimOwnerBridge.CanBindMutationStatus(P12EOwners.PoliticalClaims, guard)))
-            return false;
+            return "P12EOwners.Institutions/Offices/PoliticalClaims";
 
-        return true;
+        return null;
     }
 
     /// <summary>
@@ -392,6 +482,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         if (!AddMutationGuardAuthorityIfPresent(authorities, PoliticalKnowledgeStore)
             || !AddMutationGuardAuthorityIfPresent(authorities, PoliticalDecisionStore)
             || !AddMutationGuardAuthorityIfPresent(authorities, PersonSpatialPositionStore)
+            || !AddMutationGuardAuthorityIfPresent(authorities, SpatialRouteKnowledgeStore)
+            || !AddMutationGuardAuthorityIfPresent(authorities, PersonRoutePlanStore)
             || !AddMutationGuardAuthorityIfPresent(
                 authorities, PersonSpatialPositionStore?.SpatialAuthorityStore)
             || !AddMutationGuardAuthorityIfPresent(authorities, LegacySpatialAnchors)
@@ -1284,6 +1376,14 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         }
         if (PersonSpatialPositionStore != null
             && !graph.TryBindPersonSpatialPositionStore(PersonSpatialPositionStore))
+        {
+            graph = null;
+            return false;
+        }
+        if (SpatialRouteKnowledgeStore != null
+            && (PersonRoutePlanStore == null
+                || !graph.TryBindP8DTravelOwners(
+                    SpatialRouteKnowledgeStore, PersonRoutePlanStore, p8dSimulationTime)))
         {
             graph = null;
             return false;

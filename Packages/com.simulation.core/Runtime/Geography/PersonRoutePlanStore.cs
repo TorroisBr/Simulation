@@ -104,6 +104,11 @@ public sealed class PersonRoutePlanStore : IAuthoritativeMutationGuardBindable
         this.actorInTransitProvider = actorInTransitProvider;
     }
 
+    internal bool IsBoundTo(PersonStore expectedPersonStore, SpatialRouteKnowledgeStore expectedKnowledgeStore) =>
+        expectedPersonStore != null && expectedKnowledgeStore != null
+        && ReferenceEquals(personStore, expectedPersonStore)
+        && ReferenceEquals(knowledgeStore, expectedKnowledgeStore);
+
     /// <summary>Mutation version; lifecycle transitions advance it independently of accepted plan count.</summary>
     public long Revision => revision;
     internal bool TryPrepareStatusChange(PersonId actor, long expectedStoreRevision, long expectedPlanRevision,

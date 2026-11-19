@@ -215,6 +215,43 @@ public sealed class P10RuinLocalTopologyGenesisTests
         return topology;
     }
 
+    [Test]
+    public void ComposeAddsRuinAnchorToTheSuppliedP8OwnerInstance()
+    {
+        SimulationConfigData config = CreateP10Config(ExplorableSiteKind.Ruin);
+        var spatialAuthority = new SpatialAuthorityStore();
+        Assert.That(spatialAuthority.TryComposeGeography(
+            new SpatialGeographyDefinition(
+                new SpatialWorldScaleContext("scale/v1", "profile/test", "1", 1m, "km"),
+                new[]
+                {
+                    new HexRecord(new HexId(config.authoredHexId), new HexCoordinate(config.authoredHexQ, config.authoredHexR),
+                        new TerrainReference(new TerrainDefinitionId(config.authoredTerrainDefinitionId), config.authoredTerrainRevisionToken))
+                },
+                new[] { new LocationRecord(new LocationId(config.authoredLocationId), new HexId(config.authoredHexId)) }),
+            out SpatialAuthorityFailure geographyFailure), Is.True, geographyFailure.ToString());
+
+        P10RuinLocalTopologyCandidate candidate = P10RuinLocalTopologyGenesis.CreateCandidate(config, spatialAuthority);
+        var identity = new RuntimeIdentityRegistry();
+        var allocator = new RuntimeIdAllocator();
+        var spatialNetwork = new SpatialNetworkRuntime(identity);
+        var siteStore = new ExplorableSiteStore();
+        var topologyStore = new LocalTopologyStore(identity);
+        var selectedAnchors = new LegacySpatialAnchorBindingStore(spatialAuthority);
+
+        Assert.That(P10RuinLocalTopologyGenesis.TryCompose(
+            candidate, allocator, identity, spatialNetwork, siteStore, spatialAuthority,
+            topologyStore, selectedAnchors, out ExplorableSiteRuntime site,
+            out LocalTopologyRuntime topology, out string diagnostic), Is.True, diagnostic);
+        Assert.That(site, Is.Not.Null);
+        Assert.That(topology, Is.Not.Null);
+        Assert.That(selectedAnchors.TryGet(
+            new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.ExplorableSite, site.RuntimeId),
+            out LocationId boundLocation), Is.True);
+        Assert.That(boundLocation, Is.EqualTo(candidate.Location.Id));
+        Assert.That(selectedAnchors.Count, Is.EqualTo(1));
+    }
+
     private static (ExplorableSiteRuntime Site, LocalTopologyRuntime Topology) ComposeCandidate(
         SimulationConfigData config,
         bool preallocateRuntimeIds)

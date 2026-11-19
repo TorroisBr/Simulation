@@ -1007,11 +1007,14 @@ internal static class DailyV1SelectedPersonDeathOperation
                         NpcInjurySeverity.None, plan.ExpectedAction, plan.ExpectedPayload))))
             return false;
 
+        // P12 writer admission is established only after Core opens the exact
+        // death operation and the Unity projection binds its scoped permit.
+        // Preparation checks revision capacity here; checking the writer guard
+        // before that operation exists would reject a valid selected death.
         if (!PersonRuntimeOwnerBridge.CanAdvanceP12LifeResidenceRevision(
-                plan.Person, plan.IsResident ? 2 : 1)
-            || !PersonRuntimeOwnerBridge.CanCommitP12LifeResidenceMutation(plan.Person))
+                plan.Person, plan.IsResident ? 2 : 1))
         {
-            failure = "The selected Person lifecycle revision or writer is unavailable.";
+            failure = "The selected Person lifecycle revision is unavailable.";
             return false;
         }
 

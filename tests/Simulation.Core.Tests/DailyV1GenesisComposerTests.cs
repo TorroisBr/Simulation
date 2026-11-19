@@ -44,6 +44,31 @@ public sealed class DailyV1GenesisComposerTests
             Is.SameAs(composition.OwnerGraph.P12EOwners.Wars));
         Assert.That(composition.OwnerGraph.P12EOwners.CrimeSocialAppraisal.SimulationTime,
             Is.SameAs(composition.SimulationTime));
+        Assert.That(composition.OwnerGraph.PersonSpatialPositionStore, Is.Not.Null,
+            "Core Genesis owns the selected P8-C Person-position authority before Unity projection.");
+        Assert.That(composition.OwnerGraph.PersonSpatialPositionStore.PersonStore,
+            Is.SameAs(composition.PersonStore));
+        Assert.That(composition.OwnerGraph.PersonSpatialPositionStore.SpatialAuthorityStore,
+            Is.SameAs(composition.SpatialAuthority));
+        Assert.That(composition.OwnerGraph.PersonSpatialPositionStore.Count, Is.Zero);
+        Assert.That(composition.OwnerGraph.SpatialRouteKnowledgeStore, Is.Not.Null,
+            "The P8-D Spatial Knowledge owner is composed in Core.");
+        Assert.That(composition.OwnerGraph.PersonRoutePlanStore, Is.Not.Null,
+            "The P8-D route-plan owner is composed in Core.");
+        Assert.That(composition.OwnerGraph.SpatialRoutePlanningSystem, Is.Not.Null);
+        Assert.That(composition.OwnerGraph.P8ETravelTransactionCoordinator, Is.Not.Null);
+        OwnerSectionCensusWitness routeObservations = new SpatialRouteObservationCensusProvider(
+            composition.OwnerGraph.SpatialRouteKnowledgeStore).GetCurrentCensus();
+        OwnerSectionCensusWitness routePlans = new PersonRoutePlanHistoryCensusProvider(
+            composition.OwnerGraph.PersonRoutePlanStore).GetCurrentCensus();
+        Assert.That(routeObservations.Cardinality, Is.Zero);
+        Assert.That(routeObservations.Revision, Is.Zero);
+        Assert.That(routeObservations.OwnerInstanceIdentity,
+            Is.SameAs(composition.OwnerGraph.SpatialRouteKnowledgeStore));
+        Assert.That(routePlans.Cardinality, Is.Zero);
+        Assert.That(routePlans.Revision, Is.Zero);
+        Assert.That(routePlans.OwnerInstanceIdentity,
+            Is.SameAs(composition.OwnerGraph.PersonRoutePlanStore));
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12EOwnerSections(
             composition.OwnerGraph, Array.Empty<OwnerSectionCensusSnapshot>(),
             out IReadOnlyList<OwnerSectionCensusSnapshot> genesisP12ERows,

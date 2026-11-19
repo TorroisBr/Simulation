@@ -47,6 +47,9 @@ public sealed class SettlementPopulationRuntime
         catch { return false; }
     }
 
+    internal bool CanCommitP12AggregateMutation() =>
+        CanCommitP12PopulationMutation(aggregateChanged: true, receiptChanged: false);
+
     private void NotifyP12PopulationMutationCommitted(bool aggregateChanged, bool receiptChanged)
     {
         if (p12PopulationMutationCommitted == null) return;

@@ -265,6 +265,45 @@ public sealed class DailyV1CoreSelectedPersonDeathBoundaryTests
     }
 
     [Test]
+    public void SelectedPersonDeathPlanCanBePreparedWhileItsP12WriterIsClosed()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions, admission,
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            composition.ExecutionBoundaryState, definitions, 0L,
+            out DailyV1ActiveRuntimeSession session, out diagnostic), Is.True, diagnostic);
+
+        DailyV1ExecutionBoundaryState state = session.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        PersonRuntime person = new PersonRuntime(
+            new PersonId("person-death-plan-with-closed-writer"), state.SimulationTime.AbsoluteDay);
+        Assert.That(graph.PersonStore.TryRegister(person, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+        bool writerPermitOpen = false;
+        PersonRuntimeOwnerBridge.BindP12LifecycleMutationBoundary(
+            person, _ => writerPermitOpen, _ => { });
+
+        Assert.That(PersonRuntimeOwnerBridge.CanCommitP12LifeResidenceMutation(person), Is.False,
+            "The compatibility writer is closed until the Core operation issues its exact P12 scope.");
+        Assert.That(DailyV1SelectedPersonDeathOperation.TryPrepare(
+            graph, graph.PersonStore, person, state.SimulationTime.AbsoluteDay,
+            out DailyV1SelectedPersonDeathPlan plan, out diagnostic), Is.True, diagnostic,
+            "Preparation validates expected state and revision capacity; it must not require a writer permit before operation admission.");
+        Assert.That(plan.Person, Is.SameAs(person));
+        Assert.That(person.DeathAbsoluteDay, Is.Null);
+        Assert.That(state.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero);
+        Assert.That(PersonRuntimeOwnerBridge.CanCommitP12LifeResidenceMutation(person), Is.False,
+            "Preparing the plan cannot open or retain the P12 writer permission.");
+    }
+
+    [Test]
     public void SelectedResidentDeathCanCommitThroughCoreWithoutUnityProjection()
     {
         DailyV1EffectiveDefinitions definitions =

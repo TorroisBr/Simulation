@@ -97,6 +97,17 @@ internal sealed class DailyV1GenesisComposition
         OwnerGraph = ownerGraph ?? throw new ArgumentNullException(nameof(ownerGraph));
         if (!ReferenceEquals(OwnerGraph.Definitions, Definitions))
             throw new ArgumentException("The unpublished owner graph must retain the exact selected definition graph.");
+        if (!ReferenceEquals(OwnerGraph.PersonStore, PersonStore)
+            || OwnerGraph.PersonSpatialPositionStore == null
+            || !ReferenceEquals(OwnerGraph.PersonSpatialPositionStore.PersonStore, PersonStore)
+            || !ReferenceEquals(OwnerGraph.PersonSpatialPositionStore.SpatialAuthorityStore, SpatialAuthority)
+            || !ReferenceEquals(OwnerGraph.LegacySpatialAnchors, LegacySpatialAnchorBindings)
+            || OwnerGraph.SpatialRouteKnowledgeStore == null
+            || OwnerGraph.PersonRoutePlanStore == null
+            || OwnerGraph.SpatialRoutePlanningSystem == null
+            || OwnerGraph.P8ETravelTransactionCoordinator == null)
+            throw new ArgumentException(
+                "The unpublished Core graph must retain the exact P8-C and P8-D authorities needed by the selected Daily-v1 runtime.");
     }
 }
 
@@ -207,8 +218,10 @@ internal static class DailyV1GenesisComposer
         LegacySpatialAnchorBindingStore anchorBindings = new LegacySpatialAnchorBindingStore(
             spatialAuthority,
             owner => owner != null
-                && owner.Kind == SpatialAnchorOwnerKind.City
-                && ContainsCity(builder, owner.Value));
+                && ((owner.Kind == SpatialAnchorOwnerKind.City
+                        && ContainsCity(builder, owner.Value))
+                    || (owner.Kind == SpatialAnchorOwnerKind.ExplorableSite
+                        && explorableSites.TryGetByRuntimeId(owner.Value, out _))));
 
         bool invokingStageCallback = false;
         void CompleteStage(string stageId)
@@ -279,8 +292,15 @@ internal static class DailyV1GenesisComposer
                         || !graph.TryBindPersonStore(personStore)
                         || !graph.TryBindPoliticalDecisionStore(new PoliticalDecisionStore())
                         || !graph.TryBindGenealogyStore(genealogyStore)
+                        || !graph.TryBindPersonSpatialPositionStore(
+                            new PersonSpatialPositionStore(
+                                personStore,
+                                spatialAuthority,
+                                new SpatialPassageTraversalOptionResolver(spatialAuthority.PassageAuthority)))
+                        || !graph.TryBindLegacySpatialAnchorBindingStore(anchorBindings)
+                        || !graph.TryCreateP8DTravelOwners(time)
                         || !ReferenceEquals(actorChoiceStore.PersonStore, personStore))
-                        return Fail("The selected Core runtime could not bind its initial owner roots.", out diagnostic);
+                        return Fail("The selected Core runtime could not bind its initial owner roots and P8-D travel authorities.", out diagnostic);
                     if (!DailyV1P12ECoreOwnerRestoreStager.TryCreateEmptyForGenesis(
                             personStore, spatialAuthority, graph.PoliticalDecisionStore,
                             graph.JusticeRecordsOwner, time,

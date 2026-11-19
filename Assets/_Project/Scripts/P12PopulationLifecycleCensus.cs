@@ -635,6 +635,45 @@ public sealed partial class SimulationRuntime
                 hasPoliticalTruthFingerprint);
         if (populationOperationContext != null)
             populationOperationContext.CoreSelectedPersonDeathProjectionBound = true;
+
+        // Bind the temporary permit first, then ask each exact owner guard to
+        // admit its planned write. The checks are read-only and happen before
+        // Core commits any owner, so a rejected writer cannot leave a partial
+        // resident-death transaction.
+        bool personWriterAdmitted;
+        bool npcWriterAdmitted;
+        bool populationWriterAdmitted;
+        try
+        {
+            personWriterAdmitted = PersonRuntimeOwnerBridge.CanCommitP12LifeResidenceMutation(
+                plan.Person);
+            npcWriterAdmitted = materializedNpc == null
+                || (materializedNpc.CanCommitP12LifecycleMutation(
+                        lifeStateChanged: true,
+                        residenceChanged: false,
+                        currentActionChanged: currentActionChanged)
+                    && materializedNpc.CanCommitSelectedPersonDeathAfterValidation(
+                        NpcInjurySeverity.None, out bool projectionActionChanged)
+                    && projectionActionChanged == currentActionChanged);
+            populationWriterAdmitted = population == null
+                || PopulationOwnerBridge.CanCommitP12AggregateMutation(population);
+        }
+        catch
+        {
+            personWriterAdmitted = false;
+            npcWriterAdmitted = false;
+            populationWriterAdmitted = false;
+        }
+
+        if (!personWriterAdmitted || !npcWriterAdmitted || !populationWriterAdmitted)
+        {
+            activeCoreSelectedPersonDeathProjectionContext = null;
+            if (populationOperationContext != null)
+                populationOperationContext.CoreSelectedPersonDeathProjectionBound = false;
+            lastCoreSelectedPersonDeathProjectionFailure = "ExactOwnerWriterPermitRejected";
+            return false;
+        }
+
         lastCoreSelectedPersonDeathProjectionFailure = null;
         return true;
     }

@@ -2959,25 +2959,103 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             : structureStore.Clone(resolvedSpatialAuthorityStore);
         ISpatialTraversalOptionResolver resolvedTraversalOptionResolver =
             new SpatialPassageTraversalOptionResolver(resolvedSpatialAuthorityStore.PassageAuthority);
-        LegacySpatialAnchorBindingStore resolvedLegacySpatialAnchorBindingStore =
-            CloneLegacySpatialAnchorBindingStore(
+        DailyV1SelectedRuntimeOwnerGraph preboundSpatialOwnerGraph =
+            selectedExecutionBoundaryState?.SelectedRuntimeOwnerGraph;
+        LegacySpatialAnchorBindingStore resolvedLegacySpatialAnchorBindingStore;
+        if (preboundSpatialOwnerGraph?.LegacySpatialAnchors != null)
+        {
+            LegacySpatialAnchorBindingStore preboundAnchors = preboundSpatialOwnerGraph.LegacySpatialAnchors;
+            if ((legacySpatialAnchorBindingStore != null
+                    && !ReferenceEquals(legacySpatialAnchorBindingStore, preboundAnchors))
+                || !ReferenceEquals(preboundAnchors.SpatialLocationLookup, resolvedSpatialAuthorityStore)
+                || !preboundAnchors.ValidateInvariants().IsValid)
+                throw new ArgumentException(
+                    "The prebound Core LegacySpatialAnchorBindingStore must remain the exact valid owner of this runtime.",
+                    nameof(legacySpatialAnchorBindingStore));
+            resolvedLegacySpatialAnchorBindingStore = preboundAnchors;
+        }
+        else
+        {
+            resolvedLegacySpatialAnchorBindingStore = CloneLegacySpatialAnchorBindingStore(
                 legacySpatialAnchorBindingStore,
                 resolvedSpatialAuthorityStore,
                 resolvedCities,
                 explorableSiteStore);
-        PersonSpatialPositionStore resolvedPersonSpatialPositionStore =
-            ClonePersonSpatialPositionStore(
+        }
+
+        PersonSpatialPositionStore resolvedPersonSpatialPositionStore;
+        if (preboundSpatialOwnerGraph?.PersonSpatialPositionStore != null)
+        {
+            PersonSpatialPositionStore preboundPositions =
+                preboundSpatialOwnerGraph.PersonSpatialPositionStore;
+            if ((personSpatialPositionStore != null
+                    && !ReferenceEquals(personSpatialPositionStore, preboundPositions))
+                || !ReferenceEquals(preboundPositions.PersonStore, resolvedPersonStore)
+                || !ReferenceEquals(preboundPositions.SpatialAuthorityStore, resolvedSpatialAuthorityStore)
+                || !preboundPositions.ValidateInvariants().IsValid)
+                throw new ArgumentException(
+                    "The prebound Core PersonSpatialPositionStore must remain the exact valid owner of this runtime.",
+                    nameof(personSpatialPositionStore));
+            resolvedPersonSpatialPositionStore = preboundPositions;
+        }
+        else
+        {
+            resolvedPersonSpatialPositionStore = ClonePersonSpatialPositionStore(
                 personSpatialPositionStore,
                 resolvedPersonStore,
                 resolvedSpatialAuthorityStore,
                 resolvedTraversalOptionResolver);
-        SpatialRouteKnowledgeStore resolvedSpatialRouteKnowledgeStore =
-            CloneSpatialRouteKnowledgeStore(
+        }
+        SpatialRouteKnowledgeStore resolvedSpatialRouteKnowledgeStore;
+        SpatialRouteKnowledgeStore preboundKnowledge =
+            preboundSpatialOwnerGraph?.SpatialRouteKnowledgeStore;
+        if (preboundKnowledge != null)
+        {
+            if ((spatialRouteKnowledgeStore != null
+                    && !ReferenceEquals(spatialRouteKnowledgeStore, preboundKnowledge))
+                || !preboundKnowledge.IsBoundTo(resolvedPersonStore)
+                || !preboundKnowledge.ValidateInvariants().IsValid)
+                throw new ArgumentException(
+                    "The prebound Core SpatialRouteKnowledgeStore must remain the exact valid owner of this runtime.",
+                    nameof(spatialRouteKnowledgeStore));
+            foreach (PersonId actor in preboundKnowledge.Actors)
+                foreach (SpatialObservation observation in preboundKnowledge.GetObservations(actor))
+                    if (observation != null
+                        && (observation.ObservedDay > this.simulationTime.AbsoluteDay
+                            || observation.ReceivedDay > this.simulationTime.AbsoluteDay))
+                        throw new ArgumentException(
+                            "The prebound Core SpatialRouteKnowledgeStore contains an observation later than the runtime clock.",
+                            nameof(spatialRouteKnowledgeStore));
+            resolvedSpatialRouteKnowledgeStore = preboundKnowledge;
+        }
+        else
+        {
+            resolvedSpatialRouteKnowledgeStore = CloneSpatialRouteKnowledgeStore(
                 spatialRouteKnowledgeStore,
                 resolvedPersonStore,
                 this.simulationTime.AbsoluteDay);
-        PersonRoutePlanStore resolvedPersonRoutePlanStore =
-            ClonePersonRoutePlanStore(
+        }
+
+        PersonRoutePlanStore resolvedPersonRoutePlanStore;
+        PersonRoutePlanStore preboundPlans = preboundSpatialOwnerGraph?.PersonRoutePlanStore;
+        if (preboundPlans != null)
+        {
+            if ((personRoutePlanStore != null && !ReferenceEquals(personRoutePlanStore, preboundPlans))
+                || !preboundPlans.IsBoundTo(resolvedPersonStore, resolvedSpatialRouteKnowledgeStore)
+                || !preboundPlans.ValidateInvariants().IsValid)
+                throw new ArgumentException(
+                    "The prebound Core PersonRoutePlanStore must remain the exact valid owner of this runtime.",
+                    nameof(personRoutePlanStore));
+            foreach (PersonRoutePlan plan in preboundPlans.History)
+                if (plan != null && plan.AcceptedDay > this.simulationTime.AbsoluteDay)
+                    throw new ArgumentException(
+                        "The prebound Core PersonRoutePlanStore contains a plan accepted later than the runtime clock.",
+                        nameof(personRoutePlanStore));
+            resolvedPersonRoutePlanStore = preboundPlans;
+        }
+        else
+        {
+            resolvedPersonRoutePlanStore = ClonePersonRoutePlanStore(
                 personRoutePlanStore,
                 resolvedPersonStore,
                 resolvedSpatialRouteKnowledgeStore,
@@ -2985,6 +3063,7 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                     && currentPosition.IsInTransit,
                 () => this.simulationTime.AbsoluteDay,
                 this.simulationTime.AbsoluteDay);
+        }
         SpatialRoutePlanningSystem resolvedSpatialRoutePlanningSystem =
             new SpatialRoutePlanningSystem(
                 resolvedPersonStore,
@@ -3345,6 +3424,57 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             && !selectedOwnerGraph.TryBindLegacySpatialAnchorBindingStore(this.legacySpatialAnchorBindingStore))
             throw new InvalidOperationException(
                 "The selected owner graph could not bind the exact P8 City-anchor authority installed by this runtime.");
+        if (selectedOwnerGraph != null)
+        {
+            bool selectedDailyV1 = runtimeAdmissionContext?.Profile
+                == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
+            if (selectedOwnerGraph.SpatialRouteKnowledgeStore == null
+                && selectedOwnerGraph.PersonRoutePlanStore == null)
+            {
+                if (selectedDailyV1)
+                {
+                    SpatialKnowledgeInvariantReport knowledgeReport =
+                        resolvedSpatialRouteKnowledgeStore.ValidateInvariants();
+                    PersonRoutePlanInvariantReport planReport =
+                        resolvedPersonRoutePlanStore.ValidateInvariants();
+                    if (!knowledgeReport.IsValid || !planReport.IsValid
+                        || resolvedSpatialRouteKnowledgeStore.ObservationCount != 0
+                        || resolvedSpatialRouteKnowledgeStore.Revision != 0L
+                        || resolvedPersonRoutePlanStore.PlanCount != 0
+                        || resolvedPersonRoutePlanStore.History.Count != 0
+                        || resolvedPersonRoutePlanStore.Revision != 0L)
+                        throw new ArgumentException(
+                            "The initial Daily-v1 P8-D source owners must satisfy their admitted exact-empty census contract.",
+                            nameof(spatialRouteKnowledgeStore));
+                    if (!selectedOwnerGraph.TryCreateP8DTravelOwners(this.simulationTime))
+                        throw new InvalidOperationException(
+                            "The Core selected owner graph could not create its P8-D authorities over the exact Person, position, and clock owners.");
+                }
+                else if (!selectedOwnerGraph.TryBindP8DTravelOwners(
+                    resolvedSpatialRouteKnowledgeStore,
+                    resolvedPersonRoutePlanStore,
+                    this.simulationTime))
+                {
+                    throw new InvalidOperationException(
+                        "The selected runtime owner graph could not bind its exact P8-D route authorities.");
+                }
+            }
+            else if (!selectedOwnerGraph.TryBindP8DTravelOwners(
+                selectedOwnerGraph.SpatialRouteKnowledgeStore,
+                selectedOwnerGraph.PersonRoutePlanStore,
+                this.simulationTime))
+            {
+                throw new InvalidOperationException(
+                    "The prebound Core P8-D owners do not match the runtime's exact Person, position, and clock authorities.");
+            }
+
+            resolvedSpatialRouteKnowledgeStore = selectedOwnerGraph.SpatialRouteKnowledgeStore;
+            resolvedPersonRoutePlanStore = selectedOwnerGraph.PersonRoutePlanStore;
+            this.spatialRouteKnowledgeStore = resolvedSpatialRouteKnowledgeStore;
+            this.personRoutePlanStore = resolvedPersonRoutePlanStore;
+            this.spatialRoutePlanningSystem = selectedOwnerGraph.SpatialRoutePlanningSystem;
+            p8eTravelTransactionCoordinator = selectedOwnerGraph.P8ETravelTransactionCoordinator;
+        }
         if (selectedOwnerGraph != null
             && !dailyExecutionBoundary.TryBindOrValidateSelectedRuntimeActorRoster(
                 this.npcRuntimes.Select(npc => npc == null
@@ -12007,10 +12137,14 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return false;
         if (!graph.TryBindPoliticalDecisionStore(politicalDecisionStore))
             return false;
-        if (!graph.TryBindMutationGuard(dailyExecutionBoundary.MutationGuard))
-            return false;
         if (!graph.TryBindPersonSpatialPositionStore(personSpatialPositionStore)
             || !graph.TryBindLegacySpatialAnchorBindingStore(legacySpatialAnchorBindingStore))
+            return false;
+        if (!graph.TryBindP8DTravelOwners(
+                spatialRouteKnowledgeStore, personRoutePlanStore, simulationTime)
+            || (runtimeAdmissionContext?.IsRestoredContinuation != true
+                && graph.HasCompleteMutationGuardRoots
+                && !graph.TryBindMutationGuard(dailyExecutionBoundary.MutationGuard)))
             return false;
         if (!graph.TryBindExplorableSiteStore(explorableSiteStore)
             || !ReferenceEquals(graph.ExplorableSites, explorableSiteStore))

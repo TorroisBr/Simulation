@@ -528,8 +528,10 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(sourceSections, Is.Not.Null);
         OwnerSectionCensusSnapshot[] ordered = sourceSections
             .OrderBy(section => section.SectionId, StringComparer.Ordinal).ToArray();
+        string censusRows = string.Join("; ", ordered.Select(section =>
+            section.SectionId + "=" + section.Role + "/" + section.Cardinality));
         Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(ordered), Is.True,
-            "The test fixture binds the complete selected Daily-v1 census shape before readiness.");
+            "The test fixture binds the complete selected Daily-v1 census shape before readiness. " + censusRows);
         List<DailyV1OwnerSectionContractIdentity> contracts =
             new List<DailyV1OwnerSectionContractIdentity>(ordered.Length);
         List<DailyV1OwnerSectionCensusProviderRegistration> providers =
@@ -743,6 +745,13 @@ public sealed class DailyV1ApplicationSessionGateTests
         if (graph.PersonSpatialPositionStore != null)
             ReplaceOwnerSectionWithCurrentCensus(sections,
                 new PersonSpatialPositionCensusProvider(graph.PersonSpatialPositionStore).GetCurrentCensus());
+        if (graph.SpatialRouteKnowledgeStore != null)
+            ReplaceOwnerSectionWithCurrentCensus(sections,
+                new SpatialRouteObservationCensusProvider(graph.SpatialRouteKnowledgeStore).GetCurrentCensus());
+        if (graph.PersonRoutePlanStore != null)
+            ReplaceOwnerSectionWithCurrentCensus(sections,
+                new PersonRoutePlanHistoryCensusProvider(graph.PersonRoutePlanStore).GetCurrentCensus());
+
     }
 
     private static OwnerSectionCensusSnapshot[] CreateCoreBoundP12FSectionVector(
@@ -1210,10 +1219,14 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(application.TryBeginContinuationSaveOperation(
             session, out DailyV1P12GContinuationSaveOperation operation, out _), Is.True);
 
-        const string hostOwnedSectionId = "p8d.spatial-route-observations";
-        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds
-                .Contains(hostOwnedSectionId, StringComparer.Ordinal),
-            Is.False, "The changed-revision probe must mutate the host-owned exact-empty row, not a Core-bound identity.");
+        OwnerSectionCensusSnapshot hostOwnedExactEmptyRow = sections.FirstOrDefault(section =>
+            section.Role == OwnerSectionRole.ExplicitlyEmpty
+            && section.Cardinality == 0
+            && !DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds
+                .Contains(section.SectionId, StringComparer.Ordinal));
+        Assert.That(hostOwnedExactEmptyRow, Is.Not.Null,
+            "The changed-revision probe requires a host-owned exact-empty row, not a Core-bound identity.");
+        string hostOwnedSectionId = hostOwnedExactEmptyRow.SectionId;
         int hostOwnedSectionIndex = Array.FindIndex(sections,
             section => section.SectionId == hostOwnedSectionId);
         Assert.That(hostOwnedSectionIndex, Is.GreaterThanOrEqualTo(0));
@@ -1678,24 +1691,44 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
-    public void SaveAdmissionRejectsCoreCityLocalMaterialFlowState()
+    public void P14LocalFlowCityAnchorDoesNotFitDailyV1ExactEmptyCensus()
     {
         DailyV1EffectiveDefinitions definitions = CreateP14LocalFlowDefinitions();
-        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
-            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
-            out ApplicationAdvanceBoundary boundary, definitions);
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        DailyV1ApplicationHostTests.AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);
+
         DailyV1CityRuntimeOwners city = session.OwnerGraph.Cities[0];
         Assert.That(city.HasLocalDailyMaterialFlow, Is.True);
+        LegacySpatialAnchorBindingStore anchors = session.OwnerGraph.LegacySpatialAnchors;
+        Assert.That(anchors, Is.Not.Null);
+        Assert.That(anchors.TryGet(
+            new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.City, city.RuntimeId),
+            out LocationId boundLocation), Is.True,
+            "P14 genesis binds the configured material-flow City to its admitted LocationId.");
+        Assert.That(boundLocation.Value, Is.EqualTo(city.Definition.Values.materialFlowLocationId));
 
-        OwnerSectionCensusSnapshot[] sections = CreateCoreBoundCityAndP12FSectionVector(session);
-        InstallCompletedBoundaryToken(session, boundary, sections);
-
-        Assert.That(application.TryBeginContinuationSaveOperation(
-            session, out DailyV1P12GContinuationSaveOperation operation,
-            out DailyCaptureEligibilityFailure failure), Is.False);
-        Assert.That(operation, Is.Null);
-        Assert.That(failure, Is.EqualTo(DailyCaptureEligibilityFailure.OwnerCoverageIncomplete));
-        Assert.That(application.ActiveOperationCount, Is.Zero);
+        OwnerSectionCensusWitness anchorCensus =
+            new LegacySpatialAnchorBindingCensusProvider(anchors).GetCurrentCensus();
+        Assert.That(anchorCensus.Cardinality, Is.EqualTo(1),
+            "The census must report the actual P14 City anchor, not fabricate an empty row.");
+        OwnerSectionCensusSnapshot[] dailyV1Sections =
+            DailyV1ExecutionBoundaryStateTests.CreateCompleteSnapshot();
+        int anchorIndex = Array.FindIndex(dailyV1Sections,
+            section => section.SectionId == LegacySpatialAnchorBindingCensusProvider.SectionId);
+        Assert.That(anchorIndex, Is.GreaterThanOrEqualTo(0));
+        OwnerSectionCensusSnapshot exactEmptyContract = dailyV1Sections[anchorIndex];
+        Assert.That(exactEmptyContract.Role, Is.EqualTo(OwnerSectionRole.ExplicitlyEmpty));
+        dailyV1Sections[anchorIndex] = new OwnerSectionCensusSnapshot(
+            exactEmptyContract.SectionId, exactEmptyContract.SchemaVersion,
+            exactEmptyContract.Role, anchorCensus.OwnerInstanceIdentity,
+            anchorCensus.Cardinality, anchorCensus.Revision);
+        Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+                dailyV1Sections), Is.False,
+            "Daily-v1 must reject P14's real City anchor because its accepted P8-C census row is exact-empty.");
     }
 
     private static void RecordNoOpDailyEconomyReceipt(DailyV1CityRuntimeOwners city)
@@ -3460,16 +3493,13 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(rebuilt.Revision, Is.EqualTo(original.Revision), original.SectionId);
         }
 
-        string hostOwnedIdentitySpatialId = DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedIdentitySpatialSectionIds
-            .First(sectionId => !activeIdentitySpatialIdSet.Contains(sectionId));
-        Assert.That(hostRemainder.Any(section => section.SectionId == hostOwnedIdentitySpatialId), Is.True,
-            hostOwnedIdentitySpatialId);
-        OwnerSectionCensusSnapshot[] missingHostIdentitySpatialRow = hostRemainder
-            .Where(section => section.SectionId != hostOwnedIdentitySpatialId).ToArray();
+        string omittedCoreIdentitySpatialId = activeIdentitySpatialIds.First();
+        OwnerSectionCensusSnapshot[] partialIdentitySpatialVector = completeHostVector
+            .Where(section => section.SectionId != omittedCoreIdentitySpatialId).ToArray();
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedIdentitySpatialSections(
-                graph, missingHostIdentitySpatialRow,
+                graph, partialIdentitySpatialVector,
                 out _, out _), Is.False,
-            "Core must fail closed when a fixed identity or spatial row remains host-owned but is omitted.");
+            "Core must fail closed when the host partially omits the exact Core identity/spatial source set.");
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedPersonStoreSections(
                 graph, hostRemainder.Concat(hostRemainder.Take(1)).ToArray(), out _, out _), Is.False,
             "Core must fail closed when the host remainder duplicates a section.");
