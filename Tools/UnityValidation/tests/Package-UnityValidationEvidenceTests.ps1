@@ -21,6 +21,15 @@ function Assert-Throws([scriptblock]$Action, [string]$Message) {
     try { & $Action | Out-Null } catch { $threw = $true }
     if (-not $threw) { throw "ASSERTION FAILED: $Message" }
 }
+$evidenceModule = Get-Module UnityValidationEvidence
+$utcDate = [DateTime]::SpecifyKind([DateTime]::new(2026, 11, 19, 3, 19, 45), [DateTimeKind]::Utc)
+$utcText = & $evidenceModule { param($value) ConvertTo-EvidenceUtcText $value } $utcDate
+Assert-True ($utcText -ceq '2026-11-19T03:19:45.0000000Z') 'UTC DateTime preserves its instant instead of being shifted by the local offset'
+$offsetDate = [DateTimeOffset]::new(2026, 11, 19, 6, 19, 45, [TimeSpan]::FromHours(3))
+$offsetText = & $evidenceModule { param($value) ConvertTo-EvidenceUtcText $value } $offsetDate
+Assert-True ($offsetText -ceq '2026-11-19T03:19:45.0000000Z') 'DateTimeOffset is normalized from its explicit offset'
+$unspecifiedDate = [DateTime]::SpecifyKind([DateTime]::new(2026, 11, 19, 3, 19, 45), [DateTimeKind]::Unspecified)
+Assert-Throws { & $evidenceModule { param($value) ConvertTo-EvidenceUtcText $value } $unspecifiedDate } 'timezone-ambiguous DateTime is rejected'
 
 function Invoke-PackagerCli([string[]]$CliArguments) {
     $pwshPath = (Get-Command pwsh -ErrorAction Stop).Source

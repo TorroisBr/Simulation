@@ -1,12 +1,71 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
 
 public sealed class CoreFDailyV1OwnerClosureTests
 {
+    private sealed class ThrowAfterPersonDeathProjectionPublicationBoundary
+        : IDailyV1SelectedPersonDeathBoundary
+    {
+        private readonly IDailyV1SelectedPersonDeathBoundary inner;
+
+        internal ThrowAfterPersonDeathProjectionPublicationBoundary(
+            IDailyV1SelectedPersonDeathBoundary inner)
+        {
+            this.inner = inner ?? throw new System.ArgumentNullException(nameof(inner));
+        }
+
+        public bool TryBeginPersonDeathOperation(
+            DailyV1SelectedPersonDeathPlan plan,
+            bool currentActionChanged,
+            string operationId,
+            IReadOnlyList<string> sectionIds,
+            System.Func<bool> localRevisionCapacity,
+            out IDailyV1SelectedPersonDeathP12Scope scope) =>
+            inner.TryBeginPersonDeathOperation(
+                plan, currentActionChanged, operationId, sectionIds,
+                localRevisionCapacity, out scope);
+
+        public bool TryBeginPersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds) =>
+            inner.TryBeginPersonDeathProjectionMutation(
+                plan, operationId, currentActionChanged, sectionIds);
+
+        public bool TryCompletePersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds,
+            bool operationSucceeded) =>
+            inner.TryCompletePersonDeathProjectionMutation(
+                plan, operationId, currentActionChanged, sectionIds, operationSucceeded);
+
+        public bool TryValidatePersonDeathProjection(
+            DailyV1SelectedPersonDeathPlan plan,
+            out bool currentActionChanged,
+            out string failure) =>
+            inner.TryValidatePersonDeathProjection(plan, out currentActionChanged, out failure);
+
+        public bool TryPublishPersonDeathProjection(
+            DailyV1SelectedPersonDeathPlan plan,
+            bool currentActionChanged)
+        {
+            if (!inner.TryPublishPersonDeathProjection(plan, currentActionChanged)) return false;
+            throw new System.InvalidOperationException(
+                "Injected exception after the compatibility projection was published.");
+        }
+
+        public void FaultPersonDeathRuntime() => inner.FaultPersonDeathRuntime();
+        public void AdvancePersonDeathWorldRevision() => inner.AdvancePersonDeathWorldRevision();
+    }
+
     private GameObject simulationObject;
 
     [TearDown]
@@ -200,7 +259,41 @@ public sealed class CoreFDailyV1OwnerClosureTests
         }
     }
 
-    private void RunAdmittedSelectedPersonDeathUsesCoreP12BoundaryThroughUnityRuntimeDispatch()
+    [Test]
+    public void AdmittedSelectedPersonDeathRejectsCrossThreadWriterPermission()
+    {
+        UnityEngine.Random.State previousRandomState = UnityEngine.Random.state;
+        UnityEngine.Random.InitState(314159);
+        try
+        {
+            RunAdmittedSelectedPersonDeathUsesCoreP12BoundaryThroughUnityRuntimeDispatch(
+                probeCrossThreadWriters: true);
+        }
+        finally
+        {
+            UnityEngine.Random.state = previousRandomState;
+        }
+    }
+
+    [Test]
+    public void AdmittedSelectedPersonDeathRollsBackOwnersAndProjectionWhenPublishThrows()
+    {
+        UnityEngine.Random.State previousRandomState = UnityEngine.Random.state;
+        UnityEngine.Random.InitState(314160);
+        try
+        {
+            RunAdmittedSelectedPersonDeathUsesCoreP12BoundaryThroughUnityRuntimeDispatch(
+                throwAfterProjectionPublication: true);
+        }
+        finally
+        {
+            UnityEngine.Random.state = previousRandomState;
+        }
+    }
+
+    private void RunAdmittedSelectedPersonDeathUsesCoreP12BoundaryThroughUnityRuntimeDispatch(
+        bool probeCrossThreadWriters = false,
+        bool throwAfterProjectionPublication = false)
     {
         SimulationConfigData configuration = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
@@ -313,6 +406,26 @@ public sealed class CoreFDailyV1OwnerClosureTests
 
         Assert.That(DailyV1SelectedPersonDeathOperation.TryCreateP12SectionIds(
             deathPlan, out IReadOnlyList<string> deathSections), Is.True);
+        CityRuntime unrelatedCity = runtime.Cities.First(candidate =>
+            candidate?.Population != null && !ReferenceEquals(candidate, city));
+        Assert.That(boundary.TryBeginPersonDeathOperation(
+            deathPlan, actionChanged, "runtime.person.death.unapproved",
+            deathSections, () => true,
+            out IDailyV1SelectedPersonDeathP12Scope wrongOperationScope), Is.False,
+            "A different operation identity must not acquire the death writer permit.");
+        Assert.That(wrongOperationScope, Is.Null);
+        IReadOnlyList<string> expandedDeathSections = deathSections.Concat(new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(
+                unrelatedCity.RuntimeId)
+        }).ToArray();
+        Assert.That(boundary.TryBeginPersonDeathOperation(
+            deathPlan, actionChanged,
+            DailyV1RuntimeProtocolOperationContracts.PersonDeath,
+            expandedDeathSections, () => true,
+            out IDailyV1SelectedPersonDeathP12Scope expandedScope), Is.False,
+            "The permit must reject sections outside the exact selected death operation cut.");
+        Assert.That(expandedScope, Is.Null);
         Assert.That(boundary.TryBeginPersonDeathOperation(
             deathPlan, actionChanged,
             DailyV1RuntimeProtocolOperationContracts.PersonDeath,
@@ -347,6 +460,11 @@ public sealed class CoreFDailyV1OwnerClosureTests
             MethodInfo npcWriterAdmission = typeof(SimulationRuntime).GetMethod(
                 "CanCommitP12NpcLifecycleMutation", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(npcWriterAdmission, Is.Not.Null);
+            Assert.That((bool)npcWriterAdmission.Invoke(runtime, new object[]
+            {
+                npc, true, false, actionChanged, null
+            }), Is.True,
+                "The exact materialized NPC owner must be admitted for its selected death sections.");
             NpcRuntime unrelatedNpc = runtime.NpcRuntimes.First(candidate =>
                 candidate != null && !ReferenceEquals(candidate, npc)
                 && candidate.SelectedRuntimeOwners != null
@@ -359,9 +477,11 @@ public sealed class CoreFDailyV1OwnerClosureTests
             MethodInfo populationWriterAdmission = typeof(SimulationRuntime).GetMethod(
                 "CanCommitP12PopulationMutation", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(populationWriterAdmission, Is.Not.Null);
-            CityRuntime unrelatedCity = runtime.Cities.First(candidate =>
-                candidate != null && !ReferenceEquals(candidate, city)
-                && candidate.Population != null);
+            Assert.That((bool)populationWriterAdmission.Invoke(runtime, new object[]
+            {
+                city.Population, true, false
+            }), Is.True,
+                "The exact City aggregate owner must be admitted for resident death.");
             Assert.That((bool)populationWriterAdmission.Invoke(runtime, new object[]
             {
                 unrelatedCity.Population, true, false
@@ -371,14 +491,71 @@ public sealed class CoreFDailyV1OwnerClosureTests
                 city.Population, true, true
             }), Is.False, "A receipt section is outside this selected death operation.");
 
-            Assert.That(preflightScope.Complete(false), Is.True,
-                "The bounded death-operation preflight scope should abort cleanly after all unauthorized writer probes are rejected.");
+            if (probeCrossThreadWriters)
+            {
+                bool crossThreadPersonAllowed = true;
+                bool crossThreadNpcAllowed = true;
+                bool crossThreadPopulationAllowed = true;
+                Thread crossThreadProbe = new Thread(() =>
+                {
+                    crossThreadPersonAllowed =
+                        PersonRuntimeOwnerBridge.CanCommitP12LifeResidenceMutation(person);
+                    crossThreadNpcAllowed = (bool)npcWriterAdmission.Invoke(runtime, new object[]
+                    {
+                        npc, true, false, actionChanged, null
+                    });
+                    crossThreadPopulationAllowed = (bool)populationWriterAdmission.Invoke(runtime,
+                        new object[] { city.Population, true, false });
+                }) { IsBackground = true };
+                crossThreadProbe.Start();
+                Assert.That(crossThreadProbe.Join(5000), Is.True,
+                    "The cross-thread writer probe must finish without mutating the simulation.");
+                Assert.That(crossThreadPersonAllowed, Is.False,
+                    "The exact Person permit is bound to the active operation thread.");
+                Assert.That(crossThreadNpcAllowed, Is.False,
+                    "The exact NPC permit is bound to the active operation thread.");
+                Assert.That(crossThreadPopulationAllowed, Is.False,
+                    "The exact City permit is bound to the active operation thread.");
+            }
+
+            Assert.That(preflightScope.Complete(false), Is.EqualTo(!probeCrossThreadWriters),
+                "The bounded death-operation preflight scope should abort cleanly after all unauthorized writer probes are rejected. " +
+                "Projection=" + runtime.LastCoreSelectedPersonDeathProjectionFailure +
+                "; Boundary=" + ((DailyV1CoreSelectedPersonDeathBoundary)boundary).LastPersonDeathCommitFailure +
+                "; Census=" + executionState.LastSelectedOwnerSectionCensusRefreshRejection +
+                "; ProtocolFaulted=" + executionState.IsSelectedRuntimeCensusProtocolFaulted);
         }
         Assert.That(executionState.MutationEpochState.CurrentEpoch, Is.EqualTo(epochBeforeDeath),
             "A rejected/no-op preflight releases its reservation without publishing a mutation.");
         Assert.That(executionState.ActiveRuntimeOperationCount, Is.Zero);
+        if (probeCrossThreadWriters)
+        {
+            Assert.That(executionState.IsSelectedRuntimeCensusProtocolFaulted, Is.True,
+                "The existing owner-thread contract fault-closes the P12 protocol after cross-thread use.");
+            Assert.That(person.DeathAbsoluteDay.HasValue, Is.False);
+            Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
+            Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person), Is.EqualTo(personRevisionBeforeDeath));
+            Assert.That(npc.SelectedRuntimeOwners.Lifecycle.LifeStateRevision, Is.EqualTo(npcLifeRevisionBeforeDeath));
+            Assert.That(city.Population.Revision, Is.EqualTo(populationRevisionBeforeDeath));
+            Assert.That(city.CurrentPopulation, Is.EqualTo(populationBeforeDeath));
+            Assert.That(npc.SelectedRuntimeOwners.Lifecycle.LifeState, Is.Not.EqualTo(NpcLifeState.Dead));
+            return;
+        }
+        Assert.That(executionState.IsSelectedRuntimeCensusProtocolFaulted, Is.False);
         Assert.That(PersonRuntimeOwnerBridge.CanCommitP12LifeResidenceMutation(person), Is.False,
             "The compatibility writer permit must be revoked when the Core scope closes.");
+        MethodInfo closedNpcWriterAdmission = typeof(SimulationRuntime).GetMethod(
+            "CanCommitP12NpcLifecycleMutation", BindingFlags.Instance | BindingFlags.NonPublic);
+        MethodInfo closedPopulationWriterAdmission = typeof(SimulationRuntime).GetMethod(
+            "CanCommitP12PopulationMutation", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That((bool)closedNpcWriterAdmission.Invoke(runtime, new object[]
+        {
+            npc, true, false, actionChanged, null
+        }), Is.False, "The NPC writer permit is revoked when the Core scope closes.");
+        Assert.That((bool)closedPopulationWriterAdmission.Invoke(runtime, new object[]
+        {
+            city.Population, true, false
+        }), Is.False, "The City writer permit is revoked when the Core scope closes.");
 
         Assert.That(PersonDeathLifecycleSystem.TryValidateDeath(
             runtime, transition, requireMaterializedNpc: false,
@@ -420,6 +597,98 @@ public sealed class CoreFDailyV1OwnerClosureTests
             "The same exact Core P12 operation should remain admissible after a clean abort.");
         Assert.That(retryPreflightScope.Complete(false), Is.True);
         retryPreflightScope.Dispose();
+
+        if (throwAfterProjectionPublication)
+        {
+            long personRevisionBeforeInjectedFailure =
+                PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person);
+            string residenceBeforeInjectedFailure = person.ResidenceSettlementRuntimeId;
+            int populationBeforeInjectedFailure = city.CurrentPopulation;
+            long populationRevisionBeforeInjectedFailure = city.Population.Revision;
+            NpcLifeState npcLifeBeforeInjectedFailure = npc.SelectedRuntimeOwners.Lifecycle.LifeState;
+            long npcLifeRevisionBeforeInjectedFailure =
+                npc.SelectedRuntimeOwners.Lifecycle.LifeStateRevision;
+            DailyV1ActionDefinition actionBeforeInjectedFailure =
+                npc.SelectedRuntimeOwners.ActionSlot.CurrentAction;
+            DailyV1NpcActionPayloadOwner payloadBeforeInjectedFailure =
+                npc.SelectedRuntimeOwners.ActionSlot.CurrentPayload;
+            long actionRevisionBeforeInjectedFailure = npc.SelectedRuntimeOwners.ActionSlot.Revision;
+            bool projectedDeadBeforeInjectedFailure = npc.IsDead;
+            long epochBeforeInjectedFailure = executionState.MutationEpochState.CurrentEpoch;
+            Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+                executionState, DailyV1CaptureScopeAllowance.None,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> censusBeforeInjectedFailure,
+                out long capturedEpochBeforeInjectedFailure,
+                out DailyCaptureEligibilityFailure captureBeforeInjectedFailure), Is.True,
+                captureBeforeInjectedFailure.ToString());
+            Assert.That(capturedEpochBeforeInjectedFailure, Is.EqualTo(epochBeforeInjectedFailure));
+
+            bool appliedAfterInjectedException = DailyV1SelectedPersonDeathOperation.TryExecute(
+                graph,
+                runtime.PersonStore,
+                deathPlan,
+                DailyV1RuntimeProtocolOperationContracts.PersonDeath,
+                new ThrowAfterPersonDeathProjectionPublicationBoundary(boundary),
+                out string injectedFailure);
+
+            Assert.That(appliedAfterInjectedException, Is.False);
+            Assert.That(injectedFailure, Does.Contain("compatibility projection rejected"));
+            Assert.That(person.DeathAbsoluteDay, Is.Null);
+            Assert.That(person.ResidenceSettlementRuntimeId, Is.EqualTo(residenceBeforeInjectedFailure));
+            Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person),
+                Is.EqualTo(personRevisionBeforeInjectedFailure));
+            Assert.That(city.CurrentPopulation, Is.EqualTo(populationBeforeInjectedFailure));
+            Assert.That(city.Population.Revision, Is.EqualTo(populationRevisionBeforeInjectedFailure));
+            Assert.That(npc.SelectedRuntimeOwners.Lifecycle.LifeState,
+                Is.EqualTo(npcLifeBeforeInjectedFailure));
+            Assert.That(npc.SelectedRuntimeOwners.Lifecycle.LifeStateRevision,
+                Is.EqualTo(npcLifeRevisionBeforeInjectedFailure));
+            Assert.That(npc.SelectedRuntimeOwners.ActionSlot.CurrentAction,
+                Is.SameAs(actionBeforeInjectedFailure));
+            Assert.That(npc.SelectedRuntimeOwners.ActionSlot.CurrentPayload,
+                Is.SameAs(payloadBeforeInjectedFailure));
+            Assert.That(npc.SelectedRuntimeOwners.ActionSlot.Revision,
+                Is.EqualTo(actionRevisionBeforeInjectedFailure));
+            Assert.That(npc.IsDead, Is.EqualTo(projectedDeadBeforeInjectedFailure));
+            Assert.That(executionState.MutationEpochState.CurrentEpoch,
+                Is.EqualTo(epochBeforeInjectedFailure));
+            Assert.That(executionState.MutationEpochState.HasActiveReservation, Is.False);
+            Assert.That(executionState.ActiveRuntimeOperationCount, Is.Zero);
+            Assert.That(executionState.IsSelectedRuntimeCensusProtocolFaulted, Is.False);
+            MethodInfo rollbackNpcWriterAdmission = typeof(SimulationRuntime).GetMethod(
+                "CanCommitP12NpcLifecycleMutation", BindingFlags.Instance | BindingFlags.NonPublic);
+            MethodInfo rollbackPopulationWriterAdmission = typeof(SimulationRuntime).GetMethod(
+                "CanCommitP12PopulationMutation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(rollbackNpcWriterAdmission, Is.Not.Null);
+            Assert.That(rollbackPopulationWriterAdmission, Is.Not.Null);
+            Assert.That(PersonRuntimeOwnerBridge.CanCommitP12LifeResidenceMutation(person), Is.False,
+                "The Person compatibility permit is revoked after rollback.");
+            Assert.That((bool)rollbackNpcWriterAdmission.Invoke(runtime, new object[]
+            {
+                npc, true, false, actionChanged, null
+            }), Is.False, "The NPC compatibility permit is revoked after rollback.");
+            Assert.That((bool)rollbackPopulationWriterAdmission.Invoke(runtime, new object[]
+            {
+                city.Population, true, false
+            }), Is.False, "The City compatibility permit is revoked after rollback.");
+            Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+                executionState, DailyV1CaptureScopeAllowance.None,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> censusAfterInjectedFailure,
+                out long capturedEpochAfterInjectedFailure,
+                out DailyCaptureEligibilityFailure captureAfterInjectedFailure), Is.True,
+                captureAfterInjectedFailure.ToString());
+            Assert.That(capturedEpochAfterInjectedFailure, Is.EqualTo(epochBeforeInjectedFailure));
+            Assert.That(censusAfterInjectedFailure, Has.Count.EqualTo(censusBeforeInjectedFailure.Count));
+            foreach (OwnerSectionCensusSnapshot before in censusBeforeInjectedFailure)
+            {
+                OwnerSectionCensusSnapshot after = censusAfterInjectedFailure.Single(
+                    candidate => candidate.SectionId == before.SectionId);
+                Assert.That(after.SchemaVersion, Is.EqualTo(before.SchemaVersion), before.SectionId);
+                Assert.That(after.OwnerInstanceIdentity, Is.SameAs(before.OwnerInstanceIdentity), before.SectionId);
+                Assert.That(after.Cardinality, Is.EqualTo(before.Cardinality), before.SectionId);
+                Assert.That(after.Revision, Is.EqualTo(before.Revision), before.SectionId);
+            }
+        }
 
         Assert.That(runtime.TryApplyPersonDeath(
             transition, out PersonDeathLifecycleFailure failure), Is.True,

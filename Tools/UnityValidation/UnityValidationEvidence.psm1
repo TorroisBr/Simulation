@@ -561,8 +561,20 @@ function Assert-OriginalGateOutcome {
 
 function ConvertTo-EvidenceUtcText {
     param([Parameter(Mandatory)][object]$Value)
-    $date = [DateTime]::Parse([string]$Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind)
-    return $date.ToUniversalTime().ToString('o', [Globalization.CultureInfo]::InvariantCulture)
+    if ($Value -is [DateTimeOffset]) {
+        $date = $Value.UtcDateTime
+    } elseif ($Value -is [DateTime]) {
+        switch ($Value.Kind) {
+            ([DateTimeKind]::Utc) { $date = $Value }
+            ([DateTimeKind]::Local) { $date = $Value.ToUniversalTime() }
+            default { throw 'Evidence timestamps must include a time zone.' }
+        }
+    } else {
+        $date = [DateTime]::Parse([string]$Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind)
+        if ($date.Kind -eq [DateTimeKind]::Unspecified) { throw 'Evidence timestamps must include a time zone.' }
+        $date = $date.ToUniversalTime()
+    }
+    return $date.ToString('o', [Globalization.CultureInfo]::InvariantCulture)
 }
 
 function Get-RunManifestPublicRecord {

@@ -1767,6 +1767,27 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         Func<TravelPartyRuntime, bool> publishArrivalEvent,
         out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> arrivals)
     {
+        return TryAdvanceTravelParties(
+            partyStore, preCommitAdmission, publishCommitted, publishArrivalEvent,
+            null, null, null, out arrivals);
+    }
+
+    /// <summary>
+    /// Advances parties while exposing exact preflight and post-commit receipts
+    /// for the two additional owners mutated by an arrival: member spatial
+    /// discovery and the PartyStore completion row. Existing callers without
+    /// a P12 host retain the established overload above.
+    /// </summary>
+    internal bool TryAdvanceTravelParties(
+        TravelPartyStore partyStore,
+        Func<DailyV1NpcRuntimeOwners, DailyV1SelectedTravelTransitionPlan, bool, bool> preCommitAdmission,
+        Action<DailyV1NpcRuntimeOwners, DailyV1SelectedTravelTransitionPlan, bool> publishCommitted,
+        Func<TravelPartyRuntime, bool> publishArrivalEvent,
+        Func<TravelPartyRuntime, bool> preCommitPartyCompletion,
+        Action<TravelPartyRuntime> publishPartyCompletion,
+        Action<DailyV1NpcRuntimeOwners, string> publishSpatialDiscovery,
+        out IReadOnlyList<DailyV1SelectedTravelPartyArrivalResult> arrivals)
+    {
         arrivals = null;
         if (partyStore == null || preCommitAdmission == null || publishCommitted == null)
             return false;
@@ -1834,7 +1855,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                     if (destinationCity == null) continue;
                 }
 
-                if (willArrive && !partyStore.CanCommitMutations(1)) continue;
+                if (willArrive && (!partyStore.CanCommitMutations(1)
+                    || (preCommitPartyCompletion != null
+                        && !preCommitPartyCompletion(party)))) continue;
 
                 List<DailyV1SelectedTravelTransitionPlan> advancePlans =
                     new List<DailyV1SelectedTravelTransitionPlan>(members.Count);
@@ -1894,7 +1917,10 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 if (!willArrive) continue;
 
                 foreach (DailyV1NpcRuntimeOwners member in members)
-                    member.SpatialKnowledge.DiscoverLocation(party.DestinationLocationRuntimeId);
+                {
+                    if (member.SpatialKnowledge.DiscoverLocation(party.DestinationLocationRuntimeId))
+                        publishSpatialDiscovery?.Invoke(member, party.DestinationLocationRuntimeId);
+                }
 
                 bool eventRecorded = publishArrivalEvent == null || publishArrivalEvent(party);
                 foreach (DailyV1NpcRuntimeOwners member in members)
@@ -1911,6 +1937,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 if (!partyStore.Complete(party.TravelPartyId))
                     throw new InvalidOperationException(
                         "A preflighted TravelParty arrival could not complete its Core owner.");
+                publishPartyCompletion?.Invoke(party);
 
                 completed.Add(new DailyV1SelectedTravelPartyArrivalResult(
                     party, members.AsReadOnly(), eventRecorded));
@@ -2020,6 +2047,20 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         Action<DailyV1SelectedSoloTravelDayResult> publishResult,
         out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> results)
     {
+        return TryAdvanceSoloTravelDay(
+            exactNpcOwners, managedTravelPartyNpcRuntimeIds, preCommitAdmission,
+            publishCommitted, publishResult, null, out results);
+    }
+
+    internal bool TryAdvanceSoloTravelDay(
+        IEnumerable<DailyV1NpcRuntimeOwners> exactNpcOwners,
+        IReadOnlyCollection<string> managedTravelPartyNpcRuntimeIds,
+        Func<DailyV1NpcRuntimeOwners, DailyV1SelectedTravelTransitionPlan, bool, bool> preCommitAdmission,
+        Action<DailyV1NpcRuntimeOwners, DailyV1SelectedTravelTransitionPlan, bool> publishCommitted,
+        Action<DailyV1SelectedSoloTravelDayResult> publishResult,
+        Action<DailyV1NpcRuntimeOwners, string> publishSpatialDiscovery,
+        out IReadOnlyList<DailyV1SelectedSoloTravelDayResult> results)
+    {
         results = null;
         if (!MatchesExactOwnerInstances(npcs, exactNpcOwners)
             || managedTravelPartyNpcRuntimeIds == null
@@ -2093,7 +2134,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 // installed the authoritative location on this exact NPC owner;
                 // the SpatialKnowledge owner retains its existing P12 mutation
                 // boundary and revision behavior.
-                npc.SpatialKnowledge.DiscoverLocation(npc.Travel.CurrentLocationRuntimeId);
+                string arrivedLocationRuntimeId = npc.Travel.CurrentLocationRuntimeId;
+                if (npc.SpatialKnowledge.DiscoverLocation(arrivedLocationRuntimeId))
+                    publishSpatialDiscovery?.Invoke(npc, arrivedLocationRuntimeId);
             }
             publishResult(advanceResult);
         }
