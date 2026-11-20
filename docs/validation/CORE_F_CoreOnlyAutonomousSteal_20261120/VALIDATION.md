@@ -8,9 +8,10 @@ The selected Core-only actor-turn boundary admits the existing Steal action when
 
 ## Source identity
 
-- Candidate commit: `4b50d4b443a1f26a0e8ddc5860bd06f9aa788fa9`
+- Reviewed candidate commit: `4b50d4b443a1f26a0e8ddc5860bd06f9aa788fa9`
 - Candidate tree: `a87157eb8607a6707d7ab075e760fc4a31c28663`
-- Parent / validation base: `81b187dce3eb1d9c5714b7b4497a25fa2f7b202d`
+- Implementation source commit: `3c6e3355230c808d16691dba088534dab302606b`
+- Review baseline / validation starting tip: `81b187dce3eb1d9c5714b7b4497a25fa2f7b202d`
 - Current Core canonical: `a07402faa4739d0bb276d3bc4aa24e6ed7bd6cea`
 - CoreValidation working-input digest: `4500ecc0c079d9877b4fb40da6701f5f411383e768d667a88af69e0466d64814`
 - Production source SHA-256: `3433f89a5f30e15ed19756048bf5d96769029a5c4df8617ada0b0103700d6d2c`

@@ -12,7 +12,9 @@ The review was performed independently against the exact candidate tip. No code 
 - Candidate branch: `codex/core/CORE-F-restore-stage-transaction`
 - Candidate commit: `4b50d4b443a1f26a0e8ddc5860bd06f9aa788fa9`
 - Candidate tree: `a87157eb8607a6707d7ab075e760fc4a31c28663`
-- Candidate parent/base: `81b187dce3eb1d9c5714b7b4497a25fa2f7b202d`
+- Implementation source commit: `3c6e3355230c808d16691dba088534dab302606b` (direct parent `81b187dce3eb1d9c5714b7b4497a25fa2f7b202d`)
+- Review baseline: `81b187dce3eb1d9c5714b7b4497a25fa2f7b202d`
+- Reviewed candidate tip: `4b50d4b443a1f26a0e8ddc5860bd06f9aa788fa9` (docs-only successor of implementation commit)
 - Core canonical at review: `a07402faa4739d0bb276d3bc4aa24e6ed7bd6cea`
 
 ## Review findings
