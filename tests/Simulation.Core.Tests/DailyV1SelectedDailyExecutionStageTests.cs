@@ -42,6 +42,56 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         }
     }
 
+    private sealed class CoreTheftOutcomesCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly TheftOutcomeStore owner;
+        private readonly string sectionId;
+        private readonly int schemaVersion;
+        private readonly object ownerIdentity;
+
+        internal CoreTheftOutcomesCensusProvider(
+            TheftOutcomeStore owner,
+            OwnerSectionCensusSnapshot baseline)
+        {
+            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            if (baseline == null) throw new ArgumentNullException(nameof(baseline));
+            if (!string.Equals(baseline.SectionId,
+                    P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId,
+                    StringComparison.Ordinal))
+                throw new ArgumentException("The theft-outcome census baseline has the wrong section.", nameof(baseline));
+            sectionId = baseline.SectionId;
+            schemaVersion = baseline.SchemaVersion;
+            ownerIdentity = baseline.OwnerInstanceIdentity;
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus() => new OwnerSectionCensusWitness(
+            sectionId, schemaVersion, ownerIdentity, owner.Count, owner.P12CensusRevision);
+    }
+
+    private sealed class CoreP12OwnerCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly OwnerSectionCensusSnapshot baseline;
+        private readonly object ownerIdentity;
+        private readonly System.Func<int> cardinality;
+        private readonly System.Func<long> revision;
+
+        internal CoreP12OwnerCensusProvider(
+            OwnerSectionCensusSnapshot baseline,
+            object ownerIdentity,
+            System.Func<int> cardinality,
+            System.Func<long> revision)
+        {
+            this.baseline = baseline ?? throw new System.ArgumentNullException(nameof(baseline));
+            if (ownerIdentity == null || !ReferenceEquals(ownerIdentity, baseline.OwnerInstanceIdentity))
+                throw new System.ArgumentException("The live P12 provider must preserve its exact baseline owner identity.", nameof(ownerIdentity));
+            this.ownerIdentity = ownerIdentity;
+            this.cardinality = cardinality ?? throw new System.ArgumentNullException(nameof(cardinality));
+            this.revision = revision ?? throw new System.ArgumentNullException(nameof(revision));
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus() => new OwnerSectionCensusWitness(
+            baseline.SectionId, baseline.SchemaVersion, ownerIdentity, cardinality(), revision());
+    }
     private sealed class CoreJusticeRecordsCensusProvider : IOwnerSectionCensusProvider
     {
         private readonly DailyV1JusticeRecordsOwner owner;
@@ -519,16 +569,17 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "An attempted write outside the admitted mutation scope faults the selected census closed.");
     }
 
-    [TestCase(false, false, false, false, false, false, false, false, false)]
-    [TestCase(true, false, false, false, false, false, false, false, false)]
-    [TestCase(false, true, false, false, false, false, false, false, false)]
-    [TestCase(false, false, true, false, false, false, false, false, false)]
-    [TestCase(false, false, false, true, false, false, false, false, false)]
-    [TestCase(false, false, false, false, true, false, false, false, false)]
-    [TestCase(false, false, false, false, false, true, false, false, false)]
-    [TestCase(false, false, false, false, false, false, true, false, false)]
-    [TestCase(false, false, false, false, false, false, true, true, false)]
-    [TestCase(false, false, false, false, false, false, true, false, true)]
+    [TestCase(false, false, false, false, false, false, false, false, false, false)]
+    [TestCase(true, false, false, false, false, false, false, false, false, false)]
+    [TestCase(false, true, false, false, false, false, false, false, false, false)]
+    [TestCase(false, false, true, false, false, false, false, false, false, false)]
+    [TestCase(false, false, false, true, false, false, false, false, false, false)]
+    [TestCase(false, false, false, false, true, false, false, false, false, false)]
+    [TestCase(false, false, false, false, false, true, false, false, false, false)]
+    [TestCase(false, false, false, false, false, false, true, false, false, false)]
+    [TestCase(false, false, false, false, false, false, true, true, false, false)]
+    [TestCase(false, false, false, false, false, false, true, false, true, false)]
+    [TestCase(false, false, false, false, false, false, false, false, false, true)]
     public void CoreOnlyActorTurnExecutesAdmittedActionWithCompleteP12Census(
         bool prebindMismatchedCrimeReceiptIdentity,
         bool executeCoreOnlyHideAction,
@@ -538,18 +589,25 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         bool executeCoreOnlyFleeCity,
         bool enableCoreOnlyMerchantTrade,
         bool executeCoreOnlyMerchantScopedKnowledgeMutation,
-        bool rejectCoreOnlyCrossThreadKnowledgeMutation)
+        bool rejectCoreOnlyCrossThreadKnowledgeMutation,
+        bool executeCoreOnlySteal)
     {
         DailyV1EffectiveDefinitions configuredDefinitions = CopyWithMerchantTradeEnabled(
             DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
             enableCoreOnlyMerchantTrade);
-        if (executeCoreOnlyFleeCity)
+        if (executeCoreOnlyFleeCity || executeCoreOnlySteal)
             configuredDefinitions = CopyWithCrimeAutonomousEnabled(configuredDefinitions, true);
         DailyV1EffectiveDefinitions definitions = CopyWithConfiguredActions(
             configuredDefinitions,
             executeCoreOnlyFleeCity ? new[] { "FUGIR_DA_CIDADE" }
                 : executeCoreOnlyHideAction ? new[] { "ESCONDER_SE" }
                 : executeCoreOnlyGuardArrest ? new[] { "PRENDER" }
+                : executeCoreOnlySteal ? new[]
+                {
+                    configuredDefinitions.Actions.Values.Single(action =>
+                        action.Values.actionType?.Value == DailyV1NpcDefinitionRules.StealActionTypeValue)
+                        .DefinitionId
+                }
                 : new[] { "DESCANSAR" });
         if (executeCoreOnlyHideAction)
             definitions = CopyWithGuaranteedSuccessfulAction(
@@ -560,10 +618,20 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         if (executeCoreOnlyFleeCity)
             definitions = CopyWithGuaranteedSuccessfulAction(
                 definitions, DailyV1NpcDefinitionRules.FleeCityActionTypeValue);
+        if (executeCoreOnlySteal)
+            definitions = CopyWithGuaranteedSuccessfulAction(
+                definitions, DailyV1NpcDefinitionRules.StealActionTypeValue);
         DailyV1GenesisComposition composition = CreateSelectedGenesis(definitions);
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
         DailyV1StatusDefinition hiddenStatus = definitions.Statuses[
             definitions.Configuration.hiddenStatus];
+        DailyV1ActionDefinition stealAction = executeCoreOnlySteal
+            ? definitions.Actions.Values.Single(action => action.Values.actionType?.Value
+                == DailyV1NpcDefinitionRules.StealActionTypeValue)
+            : null;
+        definitions.Statuses.TryGetValue(
+            definitions.Configuration?.arrestedStatus ?? string.Empty,
+            out DailyV1StatusDefinition stealArrestedStatus);
         DailyV1NpcRuntimeOwners guardArrestActor = executeCoreOnlyGuardArrest
             ? graph.Npcs.First(owner => DailyV1NpcDefinitionRules.HasJobType(
                 owner.Definition, definitions, DailyV1NpcDefinitionRules.GuardJobTypeValue))
@@ -579,6 +647,45 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             : graph.Npcs[0];
         DailyV1NpcRuntimeOwners hider = executeCoreOnlyHideAction ? graph.Npcs[1] : null;
         DailyV1NpcRuntimeOwners fleeCityActor = executeCoreOnlyFleeCity ? graph.Npcs[1] : null;
+        DailyV1NpcRuntimeOwners stealActor = executeCoreOnlySteal
+            ? graph.Npcs.FirstOrDefault(owner => owner != null
+                && owner.Travel != null && !owner.Travel.IsTraveling
+                && owner.Lifecycle?.LifeState == NpcLifeState.Alive
+                && owner.HiddenState?.RemainingDays <= 0
+                && owner.MoneyAccount != null
+                && DailyV1NpcDefinitionRules.HasConfiguredDefaultAction(
+                    owner.Definition, definitions, stealAction)
+                && graph.Cities.Any(city => city != null
+                    && string.Equals(city.RuntimeId, owner.Travel.CurrentCityRuntimeId,
+                        StringComparison.Ordinal)
+                    && city.NpcPresence.Contains(owner.RuntimeId))
+                && (stealArrestedStatus == null
+                    || owner.Status?.Contains(stealArrestedStatus) != true))
+            : null;
+        DailyV1NpcRuntimeOwners stealVictim = executeCoreOnlySteal
+            ? graph.Npcs.FirstOrDefault(owner => owner != null
+                && !ReferenceEquals(owner, stealActor)
+                && string.Equals(owner.Travel?.CurrentCityRuntimeId,
+                    stealActor?.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal)
+                && !owner.Travel.IsTraveling
+                && owner.Lifecycle?.LifeState == NpcLifeState.Alive
+                && owner.HiddenState?.RemainingDays <= 0
+                && owner.MoneyAccount?.Balance >= 17f
+                && graph.Cities.Any(city => city != null
+                    && string.Equals(city.RuntimeId, owner.Travel.CurrentCityRuntimeId,
+                        StringComparison.Ordinal)
+                    && city.NpcPresence.Contains(owner.RuntimeId))
+                && (stealArrestedStatus == null
+                    || owner.Status?.Contains(stealArrestedStatus) != true))
+            : null;
+        PersonId stealActorPersonId = null;
+        PersonId stealVictimPersonId = null;
+        CrimeSocialAppraisalWorldState stealSocial = null;
+        int stealOutcomesBefore = 0;
+        long stealOutcomeRevisionBefore = 0L;
+        float stealActorBalanceBefore = 0f;
+        float stealVictimBalanceBefore = 0f;
+        Dictionary<string, float> stealBalancesBefore = null;
         DailyV1CityRuntimeOwners fleeCityDestination = null;
         DailyV1ActionDefinition fleeCityAction = null;
         float fleeCityExpectedTravelCost = 0f;
@@ -687,6 +794,56 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 "The exact admitted Core FleeCity action slot is prepared before the P12 census baseline.");
             fleeCityTravelPlanRevisionBefore = fleeCityActor.TravelPlan.Revision;
         }
+        if (executeCoreOnlySteal)
+        {
+            Assert.That(stealActor, Is.Not.Null,
+                "The authored selected profile provides an alive, present actor whose admitted NPC definition enables autonomous Steal.");
+            Assert.That(stealVictim, Is.Not.Null,
+                "The authored selected profile provides a co-located living victim with sufficient funds.");
+            Assert.That(DailyV1NpcDefinitionRules.HasConfiguredDefaultAction(
+                stealActor.Definition, definitions, stealAction), Is.True,
+                "The daily turn must select Steal through the actor's admitted default-action policy.");
+            Assert.That(DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+                definitions, stealAction), Is.True);
+            Assert.That(DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
+                definitions, stealAction,
+                out _, out _,
+                out IReadOnlyList<DailyV1StatusDefinition> stealTargetStatusToRemove,
+                out IReadOnlyList<DailyV1StatusDefinition> stealTargetStatusToAdd), Is.True);
+            Assert.That(stealTargetStatusToRemove, Is.Empty);
+            Assert.That(stealTargetStatusToAdd, Is.Empty);
+            stealActorPersonId = new PersonId("core-only-daily-steal-actor");
+            stealVictimPersonId = new PersonId("core-only-daily-steal-victim");
+            DailyV1ExecutionBoundaryState genesisState = composition.ExecutionBoundaryState;
+            foreach (DailyV1NpcRuntimeOwners owner in graph.Npcs)
+            {
+                PersonId personId = ReferenceEquals(owner, stealActor)
+                    ? stealActorPersonId
+                    : ReferenceEquals(owner, stealVictim)
+                        ? stealVictimPersonId
+                        : new PersonId("core-only-daily-steal-person-" + owner.RuntimeId.Replace("/", "-"));
+                Assert.That(graph.PersonStore.TryRegister(
+                    new PersonRuntime(personId), out _), Is.True);
+                Assert.That(genesisState.TryCreateSelectedRuntimeActorRosterWithPersonBinding(
+                    owner.RuntimeId, personId,
+                    out IReadOnlyList<DailyV1ActorTurnRosterProjection> expectedRoster,
+                    out IReadOnlyList<DailyV1ActorTurnRosterProjection> replacementRoster), Is.True,
+                    "A materialized Person identity is prepared on the exact selected actor roster without changing ordinal order.");
+                Assert.That(genesisState.TryCommitSelectedRuntimeActorRoster(
+                    expectedRoster, replacementRoster), Is.True);
+                Assert.That(graph.PersonStore.TryBindMaterializedNpc(
+                    personId, owner.RuntimeId, out _), Is.True);
+            }
+            Assert.That(graph.P12EOwners?.CrimeSocialAppraisal, Is.Not.Null);
+            stealSocial = graph.P12EOwners.CrimeSocialAppraisal;
+            stealOutcomesBefore = stealSocial.TheftOutcomes.Count;
+            stealOutcomeRevisionBefore = stealSocial.TheftOutcomes.P12CensusRevision;
+            stealActorBalanceBefore = stealActor.MoneyAccount.Balance;
+            stealVictimBalanceBefore = stealVictim.MoneyAccount.Balance;
+            stealBalancesBefore = graph.Npcs.ToDictionary(
+                owner => owner.RuntimeId, owner => owner.MoneyAccount.Balance,
+                StringComparer.Ordinal);
+        }
         Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero);
         if (expireCoreOnlyHiddenState)
             Assert.That(staleHiddenActor.HiddenState.TrySetRemainingDays(1), Is.True,
@@ -700,6 +857,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
         OwnerSectionCensusSnapshot[] initialVector =
             DailyV1ApplicationSessionGateTests.CreateCoreBoundCompleteOwnerSectionVector(session);
+        if (executeCoreOnlySteal)
+        {
+            Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+                initialVector), Is.True,
+                "All required owner-family rows remain complete after exact Person-to-NPC binding.");
+        }
         Dictionary<string, OwnerSectionCensusSnapshot> before = initialVector.ToDictionary(
             row => row.SectionId, StringComparer.Ordinal);
         Dictionary<string, IOwnerSectionCensusProvider> liveRuntimeProviders =
@@ -707,10 +870,33 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 .Concat(DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph))
                 .Concat(DailyV1NpcOwnerCensusProviders.CreateCommercialKnowledgeProviders(graph.Npcs))
                 .Concat(DailyV1NpcOwnerCensusProviders.CreateSpatialKnowledgeProviders(graph.Npcs))
+                .Concat(DailyV1NpcOwnerCensusProviders.CreateMoneyAccountProviders(graph.Npcs))
                 .ToDictionary(provider => provider.GetCurrentCensus().SectionId,
                     StringComparer.Ordinal);
         liveRuntimeProviders[ScheduledDirectiveStore.SectionId] =
             new ScheduledDirectiveCensusProvider(graph.ScheduledDirectives);
+        if (executeCoreOnlySteal)
+        {
+            OwnerSectionCensusSnapshot theftOutcomeBaseline = initialVector.Single(row =>
+                row.SectionId == P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId);
+            liveRuntimeProviders[P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId] =
+                new CoreTheftOutcomesCensusProvider(stealSocial.TheftOutcomes, theftOutcomeBaseline);
+            CrimeSocialAppraisalWorldState crimeSocialWorld = stealSocial;
+            OwnerSectionCensusSnapshot crimeKnowledgeBaseline = initialVector.Single(row =>
+                row.SectionId == P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId);
+            liveRuntimeProviders[P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId] =
+                new CoreP12OwnerCensusProvider(crimeKnowledgeBaseline,
+                    crimeSocialWorld.CrimeKnowledge,
+                    () => crimeSocialWorld.CrimeKnowledge.Count,
+                    () => crimeSocialWorld.CrimeKnowledge.P12CensusRevision);
+            OwnerSectionCensusSnapshot socialReactionsBaseline = initialVector.Single(row =>
+                row.SectionId == P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId);
+            liveRuntimeProviders[P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId] =
+                new CoreP12OwnerCensusProvider(socialReactionsBaseline,
+                    crimeSocialWorld.SocialReactions,
+                    () => crimeSocialWorld.SocialReactions.Count,
+                    () => crimeSocialWorld.SocialReactions.P12CensusRevision);
+        }
         OwnerSectionCensusSnapshot justiceRecordsBaseline = initialVector.Single(row =>
             row.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
         liveRuntimeProviders[DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId] =
@@ -803,12 +989,33 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             Assert.That(state.CurrentCaptureToken, Is.SameAs(priorCaptureToken));
         }
 
+        if (executeCoreOnlySteal)
+        {
+            Assert.That(state.TryValidateCurrentSelectedOwnerSectionCensusBaselines(), Is.True,
+                "The complete Core P12 census remains current after installing the exact Steal action and Person links.");
+            Assert.That(state.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(graph), Is.True,
+                "The exact Crime/Justice P12 host binding is established from the sealed census.");
+            Assert.That(state.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding stealCrimeJusticeBinding), Is.True);
+            Assert.That(stealCrimeJusticeBinding.AdmissionEnabled, Is.True);
+            Assert.That(stealCrimeJusticeBinding.HasExactCoreOwnerRelationships(graph), Is.True);
+            Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryValidateCoreOnlyStart(
+                state, graph, out string coreOnlyStartDiagnostic), Is.True, coreOnlyStartDiagnostic);
+        }
         long mutationEpochBeforeTurn = state.MutationEpochState.CurrentEpoch;
         bool coreOnlyFleeCityActionSucceeded = false;
         Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
         Assert.That(state.TryBeginAdvance(invalidateCaptureToken: false,
             out DailyV1AdvanceLease lease), Is.True);
         Assert.That(state.TryBeginSelectedRuntimeDailyAdvanceOperation(), Is.True);
+        if (executeCoreOnlySteal)
+        {
+            Assert.That(state.IsSelectedDailyAdvanceCoreTurnActive, Is.True);
+            Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreateCoreOnly(
+                state, graph, out IDailyV1SelectedActorTurnExecutionContext admittedStealContext), Is.True,
+                "The active DailyAdvance must admit the exact Steal actor context.");
+            Assert.That(admittedStealContext, Is.Not.Null);
+        }
         if (executeCoreOnlyMerchantScopedKnowledgeMutation)
         {
             Assert.That(enableCoreOnlyMerchantTrade, Is.True,
@@ -1137,12 +1344,28 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         if (executeCoreOnlyFleeCity)
             Assert.That(decisionAfter.Revision, Is.EqualTo(decisionBefore.Revision),
                 "The preinstalled FleeCity action does not allocate an autonomous decision.");
+        else if (executeCoreOnlySteal)
+        {
+            Assert.That(decisionAfter.Revision, Is.GreaterThan(decisionBefore.Revision),
+                "Core autonomous selection records its chosen Steal action in the exact decision owner.");
+            NpcDecisionRecord[] stealDecisions = composition.DecisionStore.Decisions
+                .Where(decision => string.Equals(decision.ActorRuntimeId,
+                    stealActor.RuntimeId, StringComparison.Ordinal)).ToArray();
+            Assert.That(stealDecisions, Has.Length.EqualTo(1));
+            Assert.That(stealDecisions[0].ActionDefinitionId, Is.EqualTo(stealAction.DefinitionId));
+            Assert.That(stealDecisions[0].Origin, Is.EqualTo(NpcDecisionOrigin.Autonomous));
+            Assert.That(stealDecisions[0].AbsoluteDay,
+                Is.EqualTo(composition.SimulationTime.AbsoluteDay));
+        }
         else
             Assert.That(decisionAfter.Revision, Is.GreaterThan(decisionBefore.Revision),
                 $"Decision revision must advance for this autonomous-action scenario; before={decisionBefore.Revision}, after={decisionAfter.Revision}, forcedEscape={executeCoreOnlyForcedEscape}.");
         if (executeCoreOnlyFleeCity)
             Assert.That(sequenceAfter.Revision, Is.EqualTo(sequenceBefore.Revision),
                 "The preinstalled FleeCity transition emits no decision or record-sequence entry.");
+        else if (executeCoreOnlySteal)
+            Assert.That(sequenceAfter.Revision, Is.GreaterThan(sequenceBefore.Revision),
+                "Core autonomous Steal selection allocates and commits its decision sequence.");
         else
             Assert.That(sequenceAfter.Revision, Is.GreaterThan(sequenceBefore.Revision),
                 $"Record sequence must advance for this autonomous-action scenario; before={sequenceBefore.Revision}, after={sequenceAfter.Revision}, forcedEscape={executeCoreOnlyForcedEscape}.");
@@ -1185,7 +1408,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         if (executeCoreOnlyFleeCity)
             Assert.That(coreOnlyFleeCityActionSucceeded, Is.True,
                 "FleeCity completed through the Core actor-turn boundary; the subsequent autonomous pass may clear an ineligible plan slot.");
-        else
+        else if (!executeCoreOnlySteal)
             Assert.That(graph.Npcs.Any(owner => owner.ActionSlot.CurrentAction != null), Is.True,
                 "At least one exact admitted actor installed and executed a configured Core action.");
         if (executeCoreOnlyHideAction)
@@ -1334,6 +1557,111 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             Assert.That(targetStatusAfter.Revision,
                 Is.GreaterThan(targetStatusBefore.Revision),
                 "The selected P12 target-status owner records the admitted arrest writes.");
+        }
+        if (executeCoreOnlySteal)
+        {
+            TheftOutcome[] thefts = stealSocial.TheftOutcomes.Outcomes
+                .Skip(stealOutcomesBefore).ToArray();
+            Assert.That(thefts, Has.Length.EqualTo(1),
+                "The full Core daily actor turn autonomously commits exactly one Steal occurrence.");
+            TheftOutcome theft = thefts[0];
+            Assert.That(theft.PerpetratorPersonId, Is.EqualTo(stealActorPersonId));
+            Assert.That(theft.VictimPersonId, Is.Not.EqualTo(stealActorPersonId));
+            Assert.That(graph.PersonStore.TryGet(theft.VictimPersonId,
+                out PersonRuntime exactVictimPerson), Is.True);
+            Assert.That(exactVictimPerson.IsMaterialized, Is.True);
+            Assert.That(graph.TryGetNpcOwner(exactVictimPerson.MaterializedNpcRuntimeId,
+                out stealVictim), Is.True);
+            Assert.That(stealVictim, Is.Not.Null);
+            stealVictimPersonId = exactVictimPerson.PersonId;
+            Assert.That(stealVictim.Travel.CurrentCityRuntimeId,
+                Is.EqualTo(stealActor.Travel.CurrentCityRuntimeId));
+            stealVictimBalanceBefore = stealBalancesBefore[stealVictim.RuntimeId];
+            int expectedTheftAmount = UnityMathfCompatibility.Min(
+                UnityMathfCompatibility.Max(0, stealAction.Values.crimeSettings.amount),
+                UnityMathfCompatibility.FloorToInt(stealVictimBalanceBefore));
+            Assert.That(theft.LossAmount, Is.EqualTo(expectedTheftAmount));
+            Assert.That(theft.OccurredAbsoluteDay,
+                Is.EqualTo(composition.SimulationTime.AbsoluteDay));
+            Assert.That(theft.OccurrenceKey, Is.EqualTo(
+                "autonomous|day|"
+                + composition.SimulationTime.AbsoluteDay.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)
+                + "|perp|" + stealActorPersonId.Value
+                + "|victim|" + theft.VictimPersonId.Value
+                + "|amount|" + theft.LossAmount.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture)
+                + "|action|" + stealAction.DefinitionId));
+
+            int actorNetTransfer = 0;
+            int victimNetTransfer = 0;
+            foreach (TheftOutcome outcome in thefts)
+            {
+                if (outcome.PerpetratorPersonId.Equals(stealActorPersonId))
+                    actorNetTransfer += outcome.LossAmount;
+                if (outcome.VictimPersonId.Equals(stealActorPersonId))
+                    actorNetTransfer -= outcome.LossAmount;
+                if (outcome.PerpetratorPersonId.Equals(stealVictimPersonId))
+                    victimNetTransfer += outcome.LossAmount;
+                if (outcome.VictimPersonId.Equals(stealVictimPersonId))
+                    victimNetTransfer -= outcome.LossAmount;
+            }
+            Assert.That(stealActor.MoneyAccount.Balance,
+                Is.EqualTo(stealActorBalanceBefore + actorNetTransfer));
+            Assert.That(stealVictim.MoneyAccount.Balance,
+                Is.EqualTo(stealVictimBalanceBefore + victimNetTransfer));
+
+            foreach (DailyV1NpcRuntimeOwners owner in new[] { stealActor, stealVictim })
+            {
+                string moneySectionId =
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + owner.RuntimeId;
+                OwnerSectionCensusSnapshot moneyBefore = before[moneySectionId];
+                OwnerSectionCensusSnapshot moneyAfter = after.Single(row =>
+                    row.SectionId == moneySectionId);
+                Assert.That(moneyAfter.OwnerInstanceIdentity, Is.SameAs(moneyBefore.OwnerInstanceIdentity));
+                Assert.That(moneyAfter.OwnerInstanceIdentity, Is.SameAs(owner.MoneyAccount));
+                Assert.That(moneyAfter.Cardinality, Is.EqualTo(1));
+                Assert.That(moneyAfter.Revision,
+                    Is.GreaterThan(moneyBefore.Revision),
+                    "The Core theft operation refreshes the exact changed account census row.");
+                Assert.That(moneyAfter.Revision, Is.EqualTo(owner.MoneyAccount.Revision));
+            }
+
+            OwnerSectionCensusSnapshot outcomesBefore = before[
+                P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId];
+            OwnerSectionCensusSnapshot outcomesAfter = after.Single(row =>
+                row.SectionId == P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId);
+            Assert.That(outcomesAfter.OwnerInstanceIdentity, Is.SameAs(outcomesBefore.OwnerInstanceIdentity));
+            Assert.That(outcomesAfter.OwnerInstanceIdentity, Is.SameAs(stealSocial.TheftOutcomes));
+            Assert.That(outcomesAfter.Cardinality, Is.EqualTo(stealSocial.TheftOutcomes.Count));
+            Assert.That(outcomesAfter.Revision,
+                Is.EqualTo(stealSocial.TheftOutcomes.P12CensusRevision));
+            Assert.That(stealSocial.TheftOutcomes.Count,
+                Is.GreaterThan(stealOutcomesBefore));
+            Assert.That(stealSocial.TheftOutcomes.P12CensusRevision,
+                Is.GreaterThan(stealOutcomeRevisionBefore));
+            foreach ((string sectionId, object ownerIdentity, int cardinality, long revision) in new[]
+            {
+                (P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId,
+                    (object)stealSocial.CrimeKnowledge,
+                    stealSocial.CrimeKnowledge.Count,
+                    stealSocial.CrimeKnowledge.P12CensusRevision),
+                (P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId,
+                    (object)stealSocial.SocialReactions,
+                    stealSocial.SocialReactions.Count,
+                    stealSocial.SocialReactions.P12CensusRevision)
+            })
+            {
+                OwnerSectionCensusSnapshot baseline = before[sectionId];
+                OwnerSectionCensusSnapshot current = after.Single(row => row.SectionId == sectionId);
+                Assert.That(current.OwnerInstanceIdentity, Is.SameAs(baseline.OwnerInstanceIdentity));
+                Assert.That(current.OwnerInstanceIdentity, Is.SameAs(ownerIdentity));
+                Assert.That(current.Cardinality, Is.EqualTo(cardinality));
+                Assert.That(current.Revision, Is.EqualTo(revision));
+            }
+            Assert.That(epoch, Is.GreaterThan(mutationEpochBeforeTurn),
+                "The Core Steal transfer, social acceptance, and warrant writes advance the sealed epoch.");
+            Assert.That(epoch, Is.EqualTo(state.MutationEpochState.CurrentEpoch));
         }
         Assert.That(epoch, Is.GreaterThan(0L),
             "The complete daily execution publishes its shared mutation epoch.");

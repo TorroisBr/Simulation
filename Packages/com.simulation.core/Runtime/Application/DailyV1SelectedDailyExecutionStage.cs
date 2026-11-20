@@ -693,7 +693,7 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
     /// it requires a sealed full-owner census and the active DailyAdvance scope,
     /// executes the selected Merchant plan pass through Core's sealed P12 rows,
     /// excludes actor-choice inputs, and permits the existing
-    /// targetless autonomous actions, the exact Core Guard Arrest and FleeCity transitions,
+    /// targetless autonomous actions, the exact Core Guard Arrest, FleeCity, and Steal transitions,
     /// and the admitted scheduled EscapePrison ForceOutcome. Unsupported profiles are rejected before actor selection can
     /// consume deterministic RNG or mutate owners.
     /// </summary>
@@ -706,7 +706,7 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
         if (executionState == null || graph == null
             || !executionState.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(graph)
             || !CanExecuteCoreOnlyActorTurn(
-                executionState, graph, requireActiveDailyAdvanceScope: true)
+                executionState, graph, requireActiveDailyAdvanceScope: true, out _)
             || graph.PersonStore == null
             || executionState.SelectedActorChoiceStore == null
             || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore))
@@ -761,12 +761,22 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
         out string diagnostic)
     {
         diagnostic = null;
-        if (executionState == null || graph == null
-            || !executionState.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(graph)
-            || !CanExecuteCoreOnlyActorTurn(
-                executionState, graph, requireActiveDailyAdvanceScope: false))
+        if (executionState == null || graph == null)
         {
             diagnostic = "The prepared selected profile is outside the detached Core-only actor-turn envelope.";
+            return false;
+        }
+        if (!executionState.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(graph))
+        {
+            diagnostic = "The prepared selected profile is outside the detached Core-only actor-turn envelope: "
+                + "the exact Crime/Justice receipt binding could not be established from the sealed census.";
+            return false;
+        }
+        if (!CanExecuteCoreOnlyActorTurn(
+                executionState, graph, requireActiveDailyAdvanceScope: false, out string actorTurnDiagnostic))
+        {
+            diagnostic = "The prepared selected profile is outside the detached Core-only actor-turn envelope: "
+                + actorTurnDiagnostic;
             return false;
         }
         if (!executionState.TryBindSelectedCoreLocalKnowledgeMutationBoundaries(graph))
@@ -780,39 +790,67 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
     private static bool CanExecuteCoreOnlyActorTurn(
         DailyV1ExecutionBoundaryState executionState,
         DailyV1SelectedRuntimeOwnerGraph graph,
-        bool requireActiveDailyAdvanceScope)
+        bool requireActiveDailyAdvanceScope,
+        out string diagnostic)
     {
+        diagnostic = null;
         if (executionState == null || graph == null
             || !executionState.HasAdmittedSelectedDailyExecution
             || !executionState.SelectedRuntimeExecutionRootsBound
             || !executionState.HasRuntimeProtocolOperationInventory
             || executionState.AdmissionContext?.Profile
                 != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
-            || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
-            || !executionState.HasSealedSelectedOwnerSectionCensusRegistry
+            || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph))
+        {
+            diagnostic = "the selected Core runtime, execution roots, protocol inventory, or owner graph is not admitted";
+            return false;
+        }
+        if (!executionState.HasSealedSelectedOwnerSectionCensusRegistry
             || executionState.IsSelectedRuntimeCensusProtocolFaulted
             || (requireActiveDailyAdvanceScope
                 && !executionState.IsSelectedDailyAdvanceCoreTurnActive)
-            || !executionState.TryValidateCurrentSelectedOwnerSectionCensusBaselines()
-            || executionState.SelectedRuntimeActorRoster == null
+            || !executionState.TryValidateCurrentSelectedOwnerSectionCensusBaselines())
+        {
+            diagnostic = "the complete selected-owner census is not sealed, current, and inside the required daily scope";
+            return false;
+        }
+        if (executionState.SelectedRuntimeActorRoster == null
             || executionState.SelectedActorChoiceStore == null
             || graph.PersonStore == null
             || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore)
             || graph.ScheduledDirectives == null
-            || executionState.SelectedActorChoiceStore.PendingInputs.Count != 0
-            || graph.Definitions?.EffectiveConfiguration == null
+            || executionState.SelectedActorChoiceStore.PendingInputs.Count != 0)
+        {
+            diagnostic = "the actor roster, Person store, directive store, or pending-choice boundary is unsupported";
+            return false;
+        }
+        if (graph.Definitions?.EffectiveConfiguration == null
             || !DailyV1SelectedNpcActionDecisionStage.TryResolveConfiguredActions(
                 graph.Definitions, out IReadOnlyList<DailyV1ActionDefinition> actions)
-            || actions == null || actions.Count == 0
-            || !DailyV1ActorTurnExecutionStage.TryBuildRoster(
+            || actions == null || actions.Count == 0)
+        {
+            diagnostic = "the admitted effective definitions contain no resolvable configured actions";
+            return false;
+        }
+        if (!DailyV1ActorTurnExecutionStage.TryBuildRoster(
                 graph, executionState.SelectedRuntimeActorRoster,
                 out IReadOnlyList<DailyV1ActorTurnRosterEntry> roster))
+        {
+            diagnostic = "the exact ordered runtime roster cannot be resolved to Core NPC owners";
             return false;
+        }
 
         if (!TryGetCoreOnlyForcedEscapeActorIds(
-                graph, out HashSet<string> forcedEscapeActorIds)
-            || !CanExecuteCoreOnlyCrimeJustice(executionState, graph, forcedEscapeActorIds))
+                graph, out HashSet<string> forcedEscapeActorIds))
+        {
+            diagnostic = "the scheduled directive set contains an unsupported or unresolved force-outcome";
             return false;
+        }
+        if (!CanExecuteCoreOnlyCrimeJustice(executionState, graph, forcedEscapeActorIds))
+        {
+            diagnostic = "the exact Core Crime/Justice owner binding or its selected facts are unsupported";
+            return false;
+        }
 
         foreach (DailyV1ActorTurnRosterProjection projection
             in executionState.SelectedRuntimeActorRoster)
@@ -824,14 +862,21 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 || !graph.TryGetNpcOwner(projection.RuntimeId,
                     out DailyV1NpcRuntimeOwners exactOwner)
                 || exactOwner == null)
+            {
+                diagnostic = "a populated runtime roster position does not bind to its exact Core NPC owner";
                 return false;
+            }
         }
 
         List<DailyV1NpcRuntimeOwners> rosterOwners = new List<DailyV1NpcRuntimeOwners>();
         foreach (DailyV1ActorTurnRosterEntry entry in roster)
             if (entry?.ActorOwner != null)
                 rosterOwners.Add(entry.ActorOwner);
-        if (!graph.MatchesExactOwnerInstances(graph.Cities, rosterOwners)) return false;
+        if (!graph.MatchesExactOwnerInstances(graph.Cities, rosterOwners))
+        {
+            diagnostic = "the Core owner graph does not match the exact city and roster owner instances";
+            return false;
+        }
 
         foreach (DailyV1ActionDefinition action in actions)
         {
@@ -843,7 +888,8 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 || (actionType != DailyV1NpcDefinitionRules.NormalActionTypeValue
                     && actionType != DailyV1NpcDefinitionRules.HideActionTypeValue
                     && actionType != DailyV1NpcDefinitionRules.ArrestActionTypeValue
-                    && actionType != DailyV1NpcDefinitionRules.FleeCityActionTypeValue)
+                    && actionType != DailyV1NpcDefinitionRules.FleeCityActionTypeValue
+                    && actionType != DailyV1NpcDefinitionRules.StealActionTypeValue)
                 || !DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
                     graph.Definitions, action)
                 || !DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
@@ -853,27 +899,41 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                     out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd)
                 || targetStatusToRemove.Count != 0
                 || targetStatusToAdd.Count != 0)
+            {
+                diagnostic = "a configured action is not an admitted autonomous projection-independent action";
                 return false;
+            }
         }
 
         foreach (DailyV1NpcRuntimeOwners actor in graph.Npcs)
         {
-            if (actor?.ActionSlot == null) return false;
+            if (actor?.ActionSlot == null)
+            {
+                diagnostic = "a Core NPC owner has no authoritative action slot";
+                return false;
+            }
             DailyV1ActionDefinition installed = actor.ActionSlot.CurrentAction;
             if (installed == null)
             {
-                if (actor.ActionSlot.CurrentPayload != null) return false;
+                if (actor.ActionSlot.CurrentPayload != null)
+                {
+                    diagnostic = "an empty action slot retains a stale payload";
+                    return false;
+                }
                 continue;
             }
             if (DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
                     graph, actor, installed)
                 || IsProjectionIndependentCoreHideAction(graph, actor, installed)
                 || IsProjectionIndependentCoreGuardArrestAction(graph, actor, installed)
-                || IsProjectionIndependentCoreFleeCityAction(graph, actor, installed))
+                || IsProjectionIndependentCoreFleeCityAction(graph, actor, installed)
+                || IsProjectionIndependentCoreStealAction(graph, actor, installed))
                 continue;
+            diagnostic = "an installed actor action is not supported by the host-neutral execution boundary";
             return false;
         }
 
+        diagnostic = null;
         return true;
     }
 
@@ -901,6 +961,21 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
     {
         DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
         return DailyV1CoreOnlyCrimeActionBoundary.IsExactGuardArrestActionSlot(
+                graph, actor, action, payload)
+            && !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+            && graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
+                out DailyV1NpcRuntimeOwners target)
+            && target != null
+            && !ReferenceEquals(target, actor);
+    }
+
+    private static bool IsProjectionIndependentCoreStealAction(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action)
+    {
+        DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
+        return DailyV1CoreOnlyCrimeActionBoundary.IsExactStealActionSlot(
                 graph, actor, action, payload)
             && !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
             && graph.TryGetNpcOwner(payload.TargetNpcRuntimeId,
