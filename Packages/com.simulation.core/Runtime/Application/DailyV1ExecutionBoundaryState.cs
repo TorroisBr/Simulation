@@ -1753,7 +1753,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         if (!IsCurrentSelectedSoloTravelStartContext(context)
             || !ReferenceEquals(graph, context.Graph)
             || !ReferenceEquals(localKnowledgeOwner, context.Actor)
-            || !ReferenceEquals(context.Actor.SpatialKnowledge, localKnowledgeOwner)
+            || context.Actor.SpatialKnowledge == null
             || sectionIds == null || sectionIds.Count != 2)
             return false;
 

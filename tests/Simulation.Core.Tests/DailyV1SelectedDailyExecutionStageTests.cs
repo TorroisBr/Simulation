@@ -969,9 +969,44 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             Assert.That(DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
                 definitions, soloTravelAction), Is.True,
                 "The exact authored Travel action is admitted for host-neutral autonomous selection.");
-            soloTravelOrigin = graph.Cities.Single(city =>
+            DailyV1CityRuntimeOwners initialSoloTravelOrigin = graph.Cities.Single(city =>
                 string.Equals(city.RuntimeId,
                     soloTravelActor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+            DailyV1CityRuntimeOwners undiscoveredRouteOrigin = null;
+            foreach (DailyV1CityRuntimeOwners candidateOrigin in graph.Cities)
+            {
+                if (candidateOrigin == null || ReferenceEquals(candidateOrigin, initialSoloTravelOrigin)
+                    || !graph.SpatialNetwork.TryGetLocation(candidateOrigin.LocationRuntimeId,
+                        out SpatialLocationRuntime candidateOriginLocation))
+                    continue;
+                bool hasUndiscoveredDirectRoute = graph.SpatialNetwork
+                    .GetOutgoingRoutes(candidateOriginLocation)
+                    .Any(route => route != null
+                        && !soloTravelActor.SpatialKnowledge.KnowsRoute(route.RuntimeId)
+                        && graph.Cities.Any(destination => destination != null
+                            && !ReferenceEquals(destination, candidateOrigin)
+                            && string.Equals(destination.LocationRuntimeId,
+                                route.Destination?.RuntimeId, StringComparison.Ordinal)));
+                if (!hasUndiscoveredDirectRoute) continue;
+                undiscoveredRouteOrigin = candidateOrigin;
+                break;
+            }
+            Assert.That(undiscoveredRouteOrigin, Is.Not.Null,
+                "The authored Core graph has an ordinary route from another canonical City that this actor has not discovered.");
+            Assert.That(initialSoloTravelOrigin.NpcPresence.Contains(soloTravelActor.RuntimeId), Is.True);
+            Assert.That(undiscoveredRouteOrigin.NpcPresence.Contains(soloTravelActor.RuntimeId), Is.False);
+            Assert.That(soloTravelActor.Travel.CanAdvanceRevision(1), Is.True);
+            Assert.That(soloTravelActor.Travel.TryInstallState(
+                undiscoveredRouteOrigin.LocationRuntimeId,
+                undiscoveredRouteOrigin.RuntimeId,
+                null, null, 0, 0, null, false, null, null,
+                soloTravelActor.Travel.Revision + 1L), Is.True,
+                "The pre-admission fixture moves the exact Travel owner to a different canonical City.");
+            Assert.That(initialSoloTravelOrigin.NpcPresence.TryRemove(soloTravelActor.RuntimeId), Is.True);
+            Assert.That(undiscoveredRouteOrigin.NpcPresence.TryAdd(soloTravelActor.RuntimeId), Is.True);
+            soloTravelOrigin = undiscoveredRouteOrigin;
+            Assert.That(graph.IsActorAtCurrentCityLocation(soloTravelActor), Is.True,
+                "Travel state and the exact Core City-presence owner agree before the P12 baseline is captured.");
             soloTravelDestination = graph.Cities.FirstOrDefault(candidate =>
                 candidate != null
                 && !ReferenceEquals(candidate, soloTravelOrigin)
@@ -979,7 +1014,11 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                     soloTravelActor.Travel.CurrentLocationRuntimeId,
                     candidate.LocationRuntimeId, candidate.RuntimeId,
                     out SpatialRouteRuntime route, out float cost)
-                && route != null && soloTravelActor.MoneyAccount.CanDebit(cost));
+                && route != null
+                && soloTravelActor.SpatialKnowledge != null
+                && !soloTravelActor.SpatialKnowledge.KnownRouteRuntimeIds
+                    .Contains(route.RuntimeId, StringComparer.Ordinal)
+                && soloTravelActor.MoneyAccount.CanDebit(cost));
             Assert.That(soloTravelDestination, Is.Not.Null,
                 "The selected Core owner graph has a direct, affordable ordinary Travel destination.");
             Assert.That(graph.TryPlanSelectedSoloTravel(soloTravelActor,
@@ -992,6 +1031,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             soloTravelEventDay = composition.SimulationTime.AbsoluteDay;
             soloTravelRouteKnownBefore = soloTravelActor.SpatialKnowledge.KnownRouteRuntimeIds
                 .Contains(soloTravelRouteRuntimeId, StringComparer.Ordinal);
+            Assert.That(soloTravelRouteKnownBefore, Is.False,
+                "The selected Core fixture requires a genuinely new route-knowledge write.");
             Assert.That(soloTravelActor.TravelPlan.TryCommit(
                 soloTravelDestination.LocationRuntimeId, soloTravelDestination.RuntimeId,
                 NpcTravelReason.None, 50f, soloTravelCost,
@@ -1624,9 +1665,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 Is.EqualTo(soloTravelActor.SpatialKnowledge.KnownRouteRuntimeIds.Count));
             Assert.That(soloTravelActor.SpatialKnowledge.KnowsRoute(soloTravelRouteRuntimeId), Is.True,
                 "Core's ordinary Travel stage commits discovery of its exact route.");
-            if (!soloTravelRouteKnownBefore)
-                Assert.That(routesAfter.Cardinality, Is.GreaterThan(before[routesSectionId].Cardinality),
-                    "The admitted SoloTravel operation records the newly discovered route row.");
+            Assert.That(routesAfter.Cardinality,
+                Is.EqualTo(before[routesSectionId].Cardinality + 1),
+                "The admitted SoloTravel operation records exactly one newly discovered route row.");
+            Assert.That(routesAfter.Revision,
+                Is.EqualTo(before[routesSectionId].Revision + 1L),
+                "The exact SpatialKnowledge owner revision advances for that new route fact.");
 
             NpcTravelStartedEvent[] actorTravelStartedEvents = composition.EventAuthority.EventStore.Events
                 .OfType<NpcTravelStartedEvent>()
