@@ -2016,6 +2016,277 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         return true;
     }
 
+    /// <summary>
+    /// Creates live Core providers for the identity/spatial rows already
+    /// composed from the exact selected owner graph. Unity may compare its
+    /// authoring/runtime projection against these providers during the
+    /// compatibility census pass, but the sealed Core registry retains these
+    /// Core providers as the source used by later captures.
+    /// </summary>
+    internal static bool TryCreateCoreOwnedIdentitySpatialCensusProviderRegistrations(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+        out string diagnostic)
+    {
+        registrations = null;
+        diagnostic = null;
+        if (!TryCreateCoreOwnedIdentitySpatialCensusSections(
+                graph, out IReadOnlyList<OwnerSectionCensusSnapshot> expected,
+                out diagnostic)
+            || expected == null)
+            return false;
+
+        if (!TryCreateIdentitySpatialCensusReaders(graph,
+                out Dictionary<string, Func<OwnerSectionCensusWitness>> readers,
+                out diagnostic))
+            return false;
+
+        Dictionary<string, OwnerSectionCensusSnapshot> expectedById =
+            new Dictionary<string, OwnerSectionCensusSnapshot>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot section in expected)
+        {
+            if (section == null || !expectedById.TryAdd(section.SectionId, section))
+            {
+                diagnostic = "The Core identity/spatial census contains a duplicate expected section.";
+                return false;
+            }
+        }
+
+        if (expectedById.Count != readers.Count)
+        {
+            diagnostic = "The Core identity/spatial live provider set does not match its exact owner rows.";
+            return false;
+        }
+
+        List<DailyV1OwnerSectionCensusProviderRegistration> built =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(expected.Count);
+        foreach (OwnerSectionCensusSnapshot section in expected)
+        {
+            if (!readers.TryGetValue(section.SectionId,
+                    out Func<OwnerSectionCensusWitness> read)
+                || read == null)
+            {
+                diagnostic = "The Core identity/spatial source has no live reader for "
+                    + section.SectionId + ".";
+                return false;
+            }
+
+            DailyV1CoreIdentitySpatialOwnerSectionCensusProvider provider =
+                new DailyV1CoreIdentitySpatialOwnerSectionCensusProvider(
+                    section.SectionId, section.SchemaVersion, read);
+            OwnerSectionCensusWitness current;
+            try
+            {
+                current = provider.GetCurrentCensus();
+            }
+            catch (Exception exception) when (exception is ArgumentException
+                || exception is InvalidOperationException || exception is OverflowException)
+            {
+                diagnostic = "The Core identity/spatial provider could not read "
+                    + section.SectionId + ".";
+                return false;
+            }
+
+            if (!HasExactIdentitySpatialWitness(current, section))
+            {
+                diagnostic = "The live Core identity/spatial provider differs from its exact owner row at "
+                    + section.SectionId + ".";
+                return false;
+            }
+
+            built.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                section.SectionId, section.SchemaVersion, section.Role, provider));
+        }
+
+        registrations = built.AsReadOnly();
+        return true;
+    }
+
+    private static bool TryCreateIdentitySpatialCensusReaders(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out Dictionary<string, Func<OwnerSectionCensusWitness>> readers,
+        out string diagnostic)
+    {
+        readers = null;
+        diagnostic = null;
+        if (graph == null)
+        {
+            diagnostic = "The Core identity/spatial census requires its exact owner graph.";
+            return false;
+        }
+
+        Dictionary<string, Func<OwnerSectionCensusWitness>> built =
+            new Dictionary<string, Func<OwnerSectionCensusWitness>>(StringComparer.Ordinal);
+        string invalidReaderSection = null;
+        DailyV1RuntimeIdentityIndex identities = graph.RuntimeIdentityIndex;
+        if (identities != null)
+        {
+            DailyV1RuntimeIdentityKind[] kinds =
+            {
+                DailyV1RuntimeIdentityKind.Npc,
+                DailyV1RuntimeIdentityKind.City,
+                DailyV1RuntimeIdentityKind.Location,
+                DailyV1RuntimeIdentityKind.Route,
+                DailyV1RuntimeIdentityKind.ExplorableSite,
+                DailyV1RuntimeIdentityKind.LocalPlace,
+                DailyV1RuntimeIdentityKind.LocalConnection,
+                DailyV1RuntimeIdentityKind.NotableItem
+            };
+            foreach (DailyV1RuntimeIdentityKind kind in kinds)
+            {
+                DailyV1RuntimeIdentityKind capturedKind = kind;
+                OwnerSectionCensusWitness identityWitness =
+                    identities.GetOwnerSectionCensusWitness(capturedKind);
+                Add(identityWitness.SectionId,
+                    () => identities.GetOwnerSectionCensusWitness(capturedKind));
+            }
+        }
+
+        SpatialNetworkOwner network = graph.SpatialNetwork;
+        if (network != null)
+        {
+            Add(P12ASpatialNetworkOwnerCodec.LocationsSectionId,
+                () => new OwnerSectionCensusWitness(
+                    P12ASpatialNetworkOwnerCodec.LocationsSectionId,
+                    P12ASpatialNetworkOwnerCodec.SchemaVersion,
+                    network, network.LocationCount, network.Revision));
+            Add(P12ASpatialNetworkOwnerCodec.RoutesSectionId,
+                () => new OwnerSectionCensusWitness(
+                    P12ASpatialNetworkOwnerCodec.RoutesSectionId,
+                    P12ASpatialNetworkOwnerCodec.SchemaVersion,
+                    network, network.RouteCount, network.Revision));
+        }
+
+        PersonSpatialPositionStore positions = graph.PersonSpatialPositionStore;
+        SpatialAuthorityStore spatial = positions?.SpatialAuthorityStore;
+        if (positions != null && spatial != null && spatial.PassageAuthority != null)
+        {
+            Add(P12P8AImageSectionContract.HexSectionId,
+                () => new OwnerSectionCensusWitness(
+                    P12P8AImageSectionContract.HexSectionId,
+                    P12P8AImageSectionContract.SchemaVersion,
+                    spatial, spatial.HexCount, spatial.Revision));
+            Add(P12P8AImageSectionContract.LocationSectionId,
+                () => new OwnerSectionCensusWitness(
+                    P12P8AImageSectionContract.LocationSectionId,
+                    P12P8AImageSectionContract.SchemaVersion,
+                    spatial, spatial.LocationCount, spatial.Revision));
+            Add(P12P8AImageSectionContract.ScaleContextSectionId,
+                () => new OwnerSectionCensusWitness(
+                    P12P8AImageSectionContract.ScaleContextSectionId,
+                    P12P8AImageSectionContract.SchemaVersion,
+                    spatial, spatial.HasGeography ? 1 : 0, spatial.Revision));
+
+            SpatialPassageAuthority passage = spatial.PassageAuthority;
+            Add(DailyV1SelectedOwnerSectionCensusContract.SpatialPassageStateSectionId,
+                () =>
+                {
+                    int cardinality;
+                    checked { cardinality = passage.Options.Count + passage.Barriers.Count; }
+                    return new OwnerSectionCensusWitness(
+                        DailyV1SelectedOwnerSectionCensusContract.SpatialPassageStateSectionId,
+                        DailyV1SelectedOwnerSectionCensusContract.SpatialPassageStateSchemaVersion,
+                        passage, cardinality, spatial.Revision);
+                });
+            Add(DailyV1SelectedOwnerSectionCensusContract.SpatialCrossingSectionId,
+                () => new OwnerSectionCensusWitness(
+                    DailyV1SelectedOwnerSectionCensusContract.SpatialCrossingSectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.SpatialCrossingSchemaVersion,
+                    spatial, spatial.CrossingCount, spatial.Revision));
+            PersonSpatialPositionCensusProvider positionProvider =
+                new PersonSpatialPositionCensusProvider(positions);
+            Add(PersonSpatialPositionCensusProvider.SectionId,
+                positionProvider.GetCurrentCensus);
+        }
+
+        LegacySpatialAnchorBindingStore anchors = graph.LegacySpatialAnchors;
+        if (anchors != null)
+        {
+            LegacySpatialAnchorBindingCensusProvider provider =
+                new LegacySpatialAnchorBindingCensusProvider(anchors);
+            Add(LegacySpatialAnchorBindingCensusProvider.SectionId,
+                provider.GetCurrentCensus);
+        }
+
+        SpatialRouteKnowledgeStore routeKnowledge = graph.SpatialRouteKnowledgeStore;
+        if (routeKnowledge != null)
+        {
+            SpatialRouteObservationCensusProvider provider =
+                new SpatialRouteObservationCensusProvider(routeKnowledge);
+            Add(SpatialRouteObservationCensusProvider.SectionId,
+                provider.GetCurrentCensus);
+        }
+
+        PersonRoutePlanStore routePlans = graph.PersonRoutePlanStore;
+        if (routePlans != null)
+        {
+            PersonRoutePlanHistoryCensusProvider provider =
+                new PersonRoutePlanHistoryCensusProvider(routePlans);
+            Add(PersonRoutePlanHistoryCensusProvider.SectionId,
+                provider.GetCurrentCensus);
+        }
+
+        if (invalidReaderSection != null)
+        {
+            diagnostic = "The Core identity/spatial census has an invalid or duplicate live section reader at "
+                + invalidReaderSection + ".";
+            return false;
+        }
+
+        readers = built;
+        return true;
+
+        void Add(string sectionId, Func<OwnerSectionCensusWitness> read)
+        {
+            if (string.IsNullOrWhiteSpace(sectionId) || read == null
+                || !built.TryAdd(sectionId, read))
+                invalidReaderSection ??= string.IsNullOrWhiteSpace(sectionId) ? "<empty>" : sectionId;
+        }
+    }
+
+    private static bool HasExactIdentitySpatialWitness(
+        OwnerSectionCensusWitness actual,
+        OwnerSectionCensusSnapshot expected) =>
+        actual != null && expected != null
+        && string.Equals(actual.SectionId, expected.SectionId, StringComparison.Ordinal)
+        && actual.SchemaVersion == expected.SchemaVersion
+        && ReferenceEquals(actual.OwnerInstanceIdentity, expected.OwnerInstanceIdentity)
+        && actual.Cardinality == expected.Cardinality
+        && actual.Revision == expected.Revision;
+
+    internal static bool IsCoreOwnedIdentitySpatialSection(string sectionId) =>
+        !string.IsNullOrEmpty(sectionId)
+        && Array.IndexOf(CoreOwnedIdentitySpatialSectionIdValues, sectionId) >= 0;
+
+    private sealed class DailyV1CoreIdentitySpatialOwnerSectionCensusProvider
+        : IOwnerSectionCensusProvider
+    {
+        private readonly string sectionId;
+        private readonly int schemaVersion;
+        private readonly Func<OwnerSectionCensusWitness> read;
+
+        internal DailyV1CoreIdentitySpatialOwnerSectionCensusProvider(
+            string sectionId,
+            int schemaVersion,
+            Func<OwnerSectionCensusWitness> read)
+        {
+            this.sectionId = sectionId ?? throw new ArgumentNullException(nameof(sectionId));
+            this.schemaVersion = schemaVersion;
+            this.read = read ?? throw new ArgumentNullException(nameof(read));
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            OwnerSectionCensusWitness witness = read();
+            if (witness == null
+                || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
+                || witness.SchemaVersion != schemaVersion)
+                throw new InvalidOperationException(
+                    "The Core identity/spatial census reader changed its fixed section contract.");
+            return witness;
+        }
+    }
+
     private static OwnerSectionCensusSnapshot ToOwnerSectionSnapshot(
         OwnerSectionCensusWitness witness,
         OwnerSectionRole role)

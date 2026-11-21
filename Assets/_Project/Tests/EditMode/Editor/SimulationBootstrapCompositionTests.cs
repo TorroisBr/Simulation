@@ -931,6 +931,21 @@ public sealed class SimulationBootstrapCompositionTests
             .GetField("registeredSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
         AssertSelectedDailyV1SectionInventory(runtime, expectedCensusSections, registeredSections);
+        foreach (string sectionId in identitySpatialSectionIds)
+        {
+            if (string.Equals(sectionId, ExplorableSiteCensusProvider.SectionId,
+                    System.StringComparison.Ordinal))
+                continue;
+
+            object registered = registeredSections[sectionId];
+            IOwnerSectionCensusProvider provider = (IOwnerSectionCensusProvider)registered
+                .GetType().GetField("Provider", BindingFlags.Instance | BindingFlags.Public)
+                .GetValue(registered);
+            Assert.That(provider.GetType().Name,
+                Is.EqualTo("DailyV1CoreIdentitySpatialOwnerSectionCensusProvider"),
+                "The sealed selected-profile census must retain the Core live owner provider for "
+                    + sectionId + ".");
+        }
         AssertSelectedDailyV1RegisteredOwnerIdentityMap(
             runtime, simulation.Bootstrap, expectedCensusSections, registeredSections);
         AssertSelectedDailyV1NonVectorOwnerDisposition(

@@ -215,6 +215,7 @@ public sealed class ContinuationCensusProtocol
     private Dictionary<string, RegisteredSection> registeredSections =
         new Dictionary<string, RegisteredSection>(StringComparer.Ordinal);
     private bool coreOwnedCityCensusProvidersBound;
+    private bool coreOwnedIdentitySpatialCensusProvidersBound;
     private readonly HashSet<string> expectedOperations = new HashSet<string>(StringComparer.Ordinal);
     private HashSet<string> spatialKnowledgeSectionIds = new HashSet<string>(StringComparer.Ordinal);
     private Dictionary<string, NpcRuntime> spatialKnowledgeNpcOwnersBySection =
@@ -1478,6 +1479,15 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
+        if (requiresSelectedCoreOwnerCensus
+            && !TryBindCoreOwnedIdentitySpatialCensusProviders(out failure))
+        {
+            RecordFirstFaultDetail("CoreOwnedIdentitySpatialProviderBindingRejected");
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
         List<PendingSectionBaseline> observedSections = new List<PendingSectionBaseline>(expectedSections.Count);
         foreach (KeyValuePair<string, OwnerSectionContract> pair in expectedSections)
         {
@@ -1660,6 +1670,167 @@ public sealed class ContinuationCensusProtocol
         failure = ContinuationCensusFailure.None;
         return true;
     }
+
+    /// <summary>
+    /// Replaces the selected-profile runtime identity and spatial rows with
+    /// live providers from the exact Core graph. Unity's registered providers
+    /// are checked as compatibility projections, then excluded from the
+    /// sealed registry used by Core capture.
+    /// </summary>
+    private bool TryBindCoreOwnedIdentitySpatialCensusProviders(
+        out ContinuationCensusFailure failure)
+    {
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        if (!requiresSelectedCoreOwnerCensus || sharedExecutionState == null)
+        {
+            RecordFirstFaultDetail("CoreIdentitySpatialBindingUnavailable");
+            return false;
+        }
+
+        DailyV1SelectedRuntimeOwnerGraph graph = sharedExecutionState.SelectedRuntimeOwnerGraph;
+        if (graph == null)
+        {
+            if (coreOwnedIdentitySpatialCensusProvidersBound)
+            {
+                RecordFirstFaultDetail("CoreIdentitySpatialOwnerGraphMissingAfterBinding");
+                return false;
+            }
+
+            failure = ContinuationCensusFailure.None;
+            return true;
+        }
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource
+                .TryCreateCoreOwnedIdentitySpatialCensusProviderRegistrations(
+                    graph,
+                    out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> coreProviders,
+                    out string coreDiagnostic)
+            || coreProviders == null || coreProviders.Count == 0)
+        {
+            RecordFirstFaultDetail("CoreIdentitySpatialProviderConstructionRejected:"
+                + (coreDiagnostic ?? "NoProviders"));
+            return false;
+        }
+
+        HashSet<string> coreIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in coreProviders)
+        {
+            if (registration == null || !coreIds.Add(registration.SectionId))
+            {
+                RecordFirstFaultDetail("CoreIdentitySpatialProviderDuplicateSection");
+                return false;
+            }
+        }
+
+        HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in expectedSections.Keys)
+            if (DailyV1SelectedRuntimeOwnerCensusSource
+                    .IsCoreOwnedIdentitySpatialSection(sectionId))
+                expectedIds.Add(sectionId);
+
+        HashSet<string> registeredIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in registeredSections.Keys)
+            if (DailyV1SelectedRuntimeOwnerCensusSource
+                    .IsCoreOwnedIdentitySpatialSection(sectionId))
+                registeredIds.Add(sectionId);
+
+        if (expectedIds.Count == 0 || !expectedIds.SetEquals(coreIds)
+            || !registeredIds.SetEquals(coreIds))
+        {
+            RecordFirstFaultDetail("CoreIdentitySpatialSectionSetMismatch:expected="
+                + expectedIds.Count + ":registered=" + registeredIds.Count
+                + ":core=" + coreIds.Count);
+            return false;
+        }
+
+        Dictionary<string, RegisteredSection> staged =
+            new Dictionary<string, RegisteredSection>(registeredSections, StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in coreProviders)
+        {
+            if (!expectedSections.TryGetValue(registration.SectionId,
+                    out OwnerSectionContract contract)
+                || contract.SchemaVersion != registration.SchemaVersion
+                || contract.Role != registration.Role
+                || !registeredSections.TryGetValue(registration.SectionId,
+                    out RegisteredSection prior)
+                || prior?.Contract == null || prior.Provider == null)
+            {
+                RecordFirstFaultDetail("CoreIdentitySpatialSectionContractMismatch:"
+                    + registration.SectionId);
+                return false;
+            }
+
+            OwnerSectionCensusWitness projection;
+            OwnerSectionCensusWitness core;
+            try
+            {
+                projection = prior.Provider.GetCurrentCensus();
+                core = registration.Provider.GetCurrentCensus();
+            }
+            catch (Exception exception)
+            {
+                RecordFirstFaultDetail("CoreIdentitySpatialProviderReadFailed:"
+                    + registration.SectionId + ":" + exception.GetType().Name);
+                return false;
+            }
+
+            if (!HasExactSelectedCoreIdentitySpatialWitness(projection, core))
+            {
+                string mismatch = projection == null ? "ProjectionMissing"
+                    : core == null ? "CoreMissing"
+                    : !string.Equals(projection.SectionId, core.SectionId,
+                        StringComparison.Ordinal) ? "SectionId"
+                    : projection.SchemaVersion != core.SchemaVersion ? "Schema"
+                    : !ReferenceEquals(projection.OwnerInstanceIdentity,
+                        core.OwnerInstanceIdentity) ? "OwnerIdentity"
+                    : projection.Cardinality != core.Cardinality ? "Cardinality"
+                    : "Revision";
+                RecordFirstFaultDetail("CoreIdentitySpatialProjectionMismatch:"
+                    + registration.SectionId + ":" + mismatch);
+                return false;
+            }
+
+            if (!HasSelectedCoreIdentitySpatialWitness(core, registration))
+            {
+                RecordFirstFaultDetail("CoreIdentitySpatialWitnessInvalid:"
+                    + registration.SectionId);
+                return false;
+            }
+
+            if (!coreOwnedIdentitySpatialCensusProvidersBound)
+            {
+                RegisteredSection replacement = new RegisteredSection(
+                    contract, registration.Provider);
+                SetBaseline(replacement, core);
+                staged[registration.SectionId] = replacement;
+            }
+        }
+
+        if (!coreOwnedIdentitySpatialCensusProvidersBound)
+            registeredSections = staged;
+        coreOwnedIdentitySpatialCensusProvidersBound = true;
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    private static bool HasExactSelectedCoreIdentitySpatialWitness(
+        OwnerSectionCensusWitness projection,
+        OwnerSectionCensusWitness core) =>
+        projection != null && core != null
+        && string.Equals(projection.SectionId, core.SectionId, StringComparison.Ordinal)
+        && projection.SchemaVersion == core.SchemaVersion
+        && ReferenceEquals(projection.OwnerInstanceIdentity, core.OwnerInstanceIdentity)
+        && projection.Cardinality == core.Cardinality
+        && projection.Revision == core.Revision;
+
+    private static bool HasSelectedCoreIdentitySpatialWitness(
+        OwnerSectionCensusWitness witness,
+        DailyV1OwnerSectionCensusProviderRegistration registration) =>
+        witness != null && registration != null
+        && string.Equals(witness.SectionId, registration.SectionId, StringComparison.Ordinal)
+        && witness.SchemaVersion == registration.SchemaVersion
+        && witness.OwnerInstanceIdentity != null
+        && witness.Cardinality >= 0 && witness.Revision >= 0L;
 
     private static bool HasExactSelectedCoreCityWitness(
         OwnerSectionCensusWitness projection,

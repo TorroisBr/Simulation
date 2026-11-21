@@ -1133,6 +1133,59 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void CoreIdentitySpatialCensusCompositionUsesExactLiveGraphOwners()
+    {
+        _ = CreateApplicationWithAdvanceBoundary(
+            onOperationEntry: null, out DailyV1ActiveRuntimeSession session,
+            out ApplicationAdvanceBoundary _);
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryCreateCoreOwnedIdentitySpatialCensusSections(
+                    session.OwnerGraph,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> expected,
+                    out string expectedDiagnostic),
+            Is.True, expectedDiagnostic);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryCreateCoreOwnedIdentitySpatialCensusProviderRegistrations(
+                    session.OwnerGraph,
+                    out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+                    out string diagnostic),
+            Is.True, diagnostic);
+
+        Dictionary<string, OwnerSectionCensusSnapshot> expectedById = expected
+            .ToDictionary(section => section.SectionId, StringComparer.Ordinal);
+        Assert.That(registrations, Has.Count.EqualTo(expectedById.Count));
+        HashSet<string> actualIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in registrations)
+        {
+            Assert.That(registration, Is.Not.Null);
+            Assert.That(actualIds.Add(registration.SectionId), Is.True,
+                "The Core runtime/spatial census must contain one live provider per exact section.");
+            Assert.That(expectedById.TryGetValue(registration.SectionId,
+                out OwnerSectionCensusSnapshot expectedSection), Is.True,
+                registration.SectionId);
+
+            OwnerSectionCensusWitness actual = registration.Provider.GetCurrentCensus();
+            Assert.That(actual.SectionId, Is.EqualTo(expectedSection.SectionId));
+            Assert.That(actual.SchemaVersion, Is.EqualTo(expectedSection.SchemaVersion));
+            Assert.That(registration.Role, Is.EqualTo(expectedSection.Role));
+            Assert.That(actual.OwnerInstanceIdentity,
+                Is.SameAs(expectedSection.OwnerInstanceIdentity));
+            Assert.That(actual.Cardinality, Is.EqualTo(expectedSection.Cardinality));
+            Assert.That(actual.Revision, Is.EqualTo(expectedSection.Revision));
+            Assert.That(registration.Provider.GetType().Name,
+                Is.EqualTo("DailyV1CoreIdentitySpatialOwnerSectionCensusProvider"));
+        }
+
+        Assert.That(actualIds.SetEquals(expectedById.Keys), Is.True);
+        OwnerSectionCensusSnapshot bindings = expectedById[
+            "p8c.city-site-location-bindings"];
+        Assert.That(bindings.Role, Is.EqualTo(OwnerSectionRole.ExplicitlyEmpty));
+        Assert.That(bindings.Cardinality, Is.Zero,
+            "The Core spatial provider must preserve the accepted P8-C exact-zero contract.");
+    }
+
+    [Test]
     public void ContinuationSaveOperationRetainsExactCompletedSourceWitnessAndClosesScope()
     {
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(
