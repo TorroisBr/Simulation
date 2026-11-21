@@ -932,14 +932,93 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 || IsProjectionIndependentCoreHideAction(graph, actor, installed)
                 || IsProjectionIndependentCoreGuardArrestAction(graph, actor, installed)
                 || IsProjectionIndependentCoreFleeCityAction(graph, actor, installed)
-                || IsProjectionIndependentCoreStealAction(graph, actor, installed))
+                || IsProjectionIndependentCoreStealAction(graph, actor, installed)
+                || IsProjectionIndependentCoreLocalSellGoodsActionSlot(
+                    executionState, graph, actor, installed))
                 continue;
-            diagnostic = "an installed actor action is not supported by the host-neutral execution boundary";
+            diagnostic = "an installed actor action is not supported by the host-neutral execution boundary: "
+                + actor.RuntimeId + " / " + installed.DefinitionId;
             return false;
         }
 
         diagnostic = null;
         return true;
+    }
+
+    private static bool IsProjectionIndependentCoreLocalSellGoodsActionSlot(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action)
+    {
+        if (executionState == null || actor == null || action == null
+            || !DailyV1CoreSelectedActorTurnExecutionBoundary.IsExactCoreLocalSellGoodsActionSlot(
+                graph, actor, action))
+            return false;
+
+        DailyV1NpcActionPayloadOwner payload = actor.ActionSlot.CurrentPayload;
+        if (string.IsNullOrWhiteSpace(payload?.OriginDecisionId)
+            || executionState.SelectedActorChoiceStore == null
+            || executionState.SelectedDecisionStore == null)
+            return false;
+
+        foreach (NpcDecisionRecord decision in executionState.SelectedDecisionStore.Decisions)
+        {
+            if (decision == null
+                || !string.Equals(decision.DecisionId, payload.OriginDecisionId, StringComparison.Ordinal)
+                || !string.Equals(decision.ActorRuntimeId, actor.RuntimeId, StringComparison.Ordinal)
+                || !string.Equals(decision.ActionDefinitionId, action.DefinitionId, StringComparison.Ordinal))
+                continue;
+
+            // Autonomous merchant SellGoods is an admitted Daily-v1 action. Its
+            // durable decision record is sufficient to validate the installed
+            // slot; it does not imply or synthesize a P11 actor choice.
+            if (decision.Origin == NpcDecisionOrigin.Autonomous)
+                return true;
+            if (decision.Origin != NpcDecisionOrigin.ActorChoice)
+                continue;
+
+            PersonId rosterPersonId = null;
+            foreach (DailyV1ActorTurnRosterProjection projection
+                in executionState.SelectedRuntimeActorRoster ?? Array.Empty<DailyV1ActorTurnRosterProjection>())
+            {
+                if (projection == null
+                    || !string.Equals(projection.RuntimeId, actor.RuntimeId, StringComparison.Ordinal))
+                    continue;
+                if (rosterPersonId != null || projection.PersonId == null)
+                {
+                    rosterPersonId = null;
+                    break;
+                }
+                rosterPersonId = projection.PersonId;
+            }
+            if (rosterPersonId == null) continue;
+
+            foreach (ActorChoiceInput input in executionState.SelectedActorChoiceStore.Inputs)
+            {
+                if (input == null || input.Status != ActorChoiceInputStatus.AttemptReturned
+                || input.PersonId == null || !input.PersonId.Equals(rosterPersonId)
+                || !string.Equals(input.ActionDefinitionId, action.DefinitionId, StringComparison.Ordinal)
+                || input.Origin != WorldCommandOrigin.LocalPlayer
+                || input.Authority != WorldCommandAuthorityMode.Request
+                || input.TemporalCapture != null
+                || input.Dispositions == null || input.Dispositions.Count != 2)
+                    continue;
+
+                ActorChoiceDisposition dispatch = input.Dispositions[0];
+                ActorChoiceDisposition returned = input.Dispositions[1];
+                if (dispatch == null || returned == null
+                    || dispatch.Kind != ActorChoiceDispositionKind.DispatchStarted
+                    || returned.Kind != ActorChoiceDispositionKind.AttemptReturned
+                    || !string.Equals(dispatch.DecisionRecordId,
+                        payload.OriginDecisionId, StringComparison.Ordinal))
+                    continue;
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsProjectionIndependentCoreHideAction(

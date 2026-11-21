@@ -1026,12 +1026,27 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
             hostPorts.CancelPreparedRequestedActionProjection(actor, payload);
     }
 
-    private bool IsExactCoreLocalSellGoodsPayload(
+    internal static bool IsExactCoreLocalSellGoodsActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
-        DailyV1NpcActionPayloadOwner payload)
+        DailyV1ActionDefinition action) =>
+        action != null
+        && ReferenceEquals(actor?.ActionSlot?.CurrentAction, action)
+        && IsExactCoreLocalSellGoodsPayload(
+            graph, actor, actor?.ActionSlot?.CurrentPayload, requireInstalledSlot: true);
+
+    internal static bool IsExactCoreLocalSellGoodsPayload(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload,
+        bool requireInstalledSlot)
     {
-        if (hostPorts != null || RequiresActionProjection
-            || !TryGetExactActor(actor) || payload?.Action == null
+        if (graph == null || actor == null || payload?.Action == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(actor.Definitions, graph.Definitions)
+            || (requireInstalledSlot
+                && (!ReferenceEquals(actor.ActionSlot?.CurrentAction, payload.Action)
+                    || !ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)))
             || actor.MerchantTradePlan?.IsActive == true
             || payload.TargetItem == null || payload.Amount <= 0
             || !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
@@ -1041,6 +1056,10 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
                 actor.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal)
             || payload.Action.Values.actionType?.Value
                 != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            || !graph.Definitions.Actions.TryGetValue(
+                payload.Action.DefinitionId,
+                out DailyV1ActionDefinition exactAction)
+            || !ReferenceEquals(exactAction, payload.Action)
             || !DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
                 graph.Definitions, payload.Action)
             || !graph.Definitions.Items.TryGetValue(
@@ -1058,6 +1077,14 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
 
         return false;
     }
+
+    private bool IsExactCoreLocalSellGoodsPayload(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload) =>
+        hostPorts == null && !RequiresActionProjection
+        && TryGetExactActor(actor)
+        && IsExactCoreLocalSellGoodsPayload(
+            graph, actor, payload, requireInstalledSlot: false);
 
     /// <summary>
     /// Projection-free dispatch for the bounded Local SellGoods actor choice.
@@ -1377,9 +1404,20 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
                     inventorySectionId, actor.Inventory, out inventoryCardinalityTransition))
                 FaultClosedAndThrow(
                     "The exact actor Inventory row could not enter its committed MarketSale transition.");
+            object marketCardinalityTransition = null;
+            if (unnotifiedSections.Contains(marketSectionId)
+                && !executionState.TryBeginCoreSelectedMarketSaleMarketCardinalityTransition(
+                    marketSectionId, market, out marketCardinalityTransition))
+            {
+                executionState.TryEndCoreSelectedMarketSaleInventoryCardinalityTransition(
+                    inventoryCardinalityTransition);
+                FaultClosedAndThrow(
+                    "The exact City Market row could not enter its committed MarketSale transition.");
+            }
 
             bool ownerRowsRefreshed = true;
-            bool transitionClosed = true;
+            bool inventoryTransitionClosed = true;
+            bool marketTransitionClosed = true;
             if (unnotifiedSections.Count > 0)
             {
                 try
@@ -1389,12 +1427,14 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
                 }
                 finally
                 {
-                    transitionClosed = executionState.TryEndCoreSelectedMarketSaleInventoryCardinalityTransition(
+                    inventoryTransitionClosed = executionState.TryEndCoreSelectedMarketSaleInventoryCardinalityTransition(
                         inventoryCardinalityTransition);
+                    marketTransitionClosed = executionState.TryEndCoreSelectedMarketSaleMarketCardinalityTransition(
+                        marketCardinalityTransition);
                 }
             }
-            if (!transitionClosed)
-                FaultClosedAndThrow("The exact actor Inventory cardinality transition did not close.");
+            if (!inventoryTransitionClosed || !marketTransitionClosed)
+                FaultClosedAndThrow("The exact MarketSale cardinality transitions did not close.");
 
             if (unnotifiedSections.Count > 0
                 && (!ownerRowsRefreshed
