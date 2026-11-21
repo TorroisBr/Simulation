@@ -237,7 +237,9 @@ internal static class DailyV1SelectedActorActionExecutionStage
                      graph, actor, selected, projectionBoundary, NpcDecisionOrigin.Autonomous,
                      absoluteDay, boundary, coreRoots))
             throw new InvalidOperationException(
-                "The exact selected Daily-v1 action could not be installed through its admitted Core owner boundary.");
+                "The exact selected Daily-v1 action could not be installed through its admitted Core owner boundary. P12: "
+                + ((boundary as DailyV1CoreSelectedActorTurnExecutionBoundary)
+                    ?.LastActionSlotP12Failure ?? "no rejection detail"));
 
         DailyV1ActionDefinition action = actor.ActionSlot.CurrentAction;
         if (action == null) return true;
@@ -423,7 +425,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
             || p12Boundary.CanCommitSelectedActionSlotP12Mutation(graph, actor);
     }
 
-    private static void NotifySelectedActionSlotP12MutationCommitted(
+    internal static void NotifySelectedActionSlotP12MutationCommitted(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         IDailyV1SelectedActorActionExecutionBoundary boundary)
@@ -437,8 +439,16 @@ internal static class DailyV1SelectedActorActionExecutionStage
         long revision = actor.ActionSlot?.Revision ?? -1L;
         if (!p12Boundary.NotifySelectedActionSlotP12MutationCommitted(
                 graph, actor, sectionId, revision))
+        {
+            string diagnostic = boundary is DailyV1CoreSelectedActorTurnExecutionBoundary coreBoundary
+                ? coreBoundary.LastActionSlotP12Failure
+                : null;
             throw new InvalidOperationException(
-                "A committed selected Core action-slot mutation could not publish its exact P12 owner-section invalidation.");
+                "A committed selected Core action-slot mutation could not publish its exact P12 owner-section invalidation."
+                + (string.IsNullOrWhiteSpace(diagnostic)
+                    ? " Boundary=" + (boundary?.GetType().FullName ?? "null")
+                    : " " + diagnostic));
+        }
     }
 
     internal static void ProcessScheduledRequestAction(

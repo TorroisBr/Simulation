@@ -3494,7 +3494,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 this.randomSource,
                 simulationRecordSequence,
                 this.decisionRecorder?.DecisionStore,
-                this.actorChoiceStore))
+                this.actorChoiceStore,
+                runtimeAdmissionContext.Profile
+                    == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                    ? new Func<IReadOnlyCollection<string>, bool>(
+                        TryRefreshSelectedActorChoiceCompatibilityMirror)
+                    : null))
             throw new InvalidOperationException(
                 "The selected runtime execution roots could not be bound to the exact Core owner graph.");
         if (runtimeAdmissionContext?.Profile
@@ -4168,6 +4173,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                 expectedInitialCardinality: requireEmptyBootstrapState ? 0 : (int?)null);
     }
 
+    private bool TryRefreshSelectedActorChoiceCompatibilityMirror(
+        IReadOnlyCollection<string> sectionIds) =>
+        npcRosterCensusProtocol != null
+        && npcRosterCensusProtocol.TryRefreshCompatibilityMirrorBaselines(
+            sectionIds, out _);
+
     private void InitializeNpcRosterCensusProtocol()
     {
         npcRosterCensusProtocolInitializationFailure = null;
@@ -4332,7 +4343,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
                         NotifyP12ScheduledDirectiveMutation);
                 }
 
-                if (actorChoiceP11CensusProvider != null)
+                if (actorChoiceP11CensusProvider != null
+                    && !dailyExecutionBoundary.HasSelectedCoreActorChoiceP12MutationBoundary)
                 {
                     actorChoiceStore.BindP12MutationBoundary(
                         CanCommitP12ActorChoiceMutation,
@@ -13828,7 +13840,9 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
 
             try
             {
-                if (!exactRuntime.TryInstallPrecommittedCurrentActionRuntime(preparedActionRuntime))
+                if (!exactRuntime.TryInstallPrecommittedCurrentActionRuntime(
+                        preparedActionRuntime,
+                        notifyP12MutationBoundary: !OwnsSelectedActionSlotP12Mutation))
                     return false;
                 return true;
             }
@@ -14983,6 +14997,20 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         WorldCommandAuthorityMode authority,
         out ActorChoiceStoreFailureCode failure)
     {
+        if (dailyExecutionBoundary.TryGetApplicationAdvanceAuthority(
+                out DailyV1Application application,
+                out DailyV1ActiveRuntimeSession session))
+        {
+            return application.TryCaptureActorChoiceInput(
+                session,
+                worldCommandId,
+                personId,
+                actionDefinitionId,
+                origin,
+                authority,
+                out failure);
+        }
+
         if (runtimeAdmissionContext == null)
         {
             return actorChoiceStore.TryCapture(

@@ -284,6 +284,12 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private IAuthoritativeRandomSource selectedRandomSource;
     private SimulationRecordSequence selectedRecordSequence;
     private bool selectedCoreDecisionMutationBoundariesBound;
+    private bool selectedCoreActorChoiceMutationBoundaryBound;
+    private bool selectedCoreActorChoiceCardinalityTransitionActive;
+    private Func<IReadOnlyCollection<string>, bool> selectedActorChoiceCompatibilityBaselineSynchronizer;
+    private object selectedCoreMarketSaleInventoryCardinalityTransitionToken;
+    private string selectedCoreMarketSaleInventoryCardinalityTransitionSectionId;
+    private object selectedCoreMarketSaleInventoryCardinalityTransitionOwnerIdentity;
     private NpcDecisionStore selectedDecisionStore;
     private ActorChoiceStore selectedActorChoiceStore;
     private DomainEventRecorder selectedTravelPartyEventRecorder;
@@ -2171,16 +2177,28 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
                 if (changed.Contains(sectionId))
                 {
-                    if (prior.Role != OwnerSectionRole.Required
-                        || (witness.Cardinality != prior.BaselineCardinality
-                            && !AllowsCoreSelectedOwnerSectionCardinalityTransition(sectionId)
-                            && !AllowsCurrentCoreMerchantKnowledgeCardinalityTransition(sectionId)
-                            && !AllowsCurrentCoreLocalKnowledgeCardinalityTransition(sectionId)
-                            && !AllowsCurrentCoreTravelCityCardinalityTransition(sectionId))
-                        || witness.Revision <= prior.BaselineRevision)
+                    if (prior.Role != OwnerSectionRole.Required)
                     {
                         lastSelectedOwnerSectionCensusRefreshRejection =
-                            "ChangedWitnessMismatch:" + sectionId;
+                            "ChangedSectionNotRequired:" + sectionId;
+                        return false;
+                    }
+                    if (witness.Cardinality != prior.BaselineCardinality
+                        && !AllowsCoreSelectedOwnerSectionCardinalityTransition(sectionId)
+                        && !AllowsCurrentCoreMerchantKnowledgeCardinalityTransition(sectionId)
+                        && !AllowsCurrentCoreLocalKnowledgeCardinalityTransition(sectionId)
+                        && !AllowsCurrentCoreTravelCityCardinalityTransition(sectionId))
+                    {
+                        lastSelectedOwnerSectionCensusRefreshRejection =
+                            "ChangedCardinalityNotAdmitted:" + sectionId;
+                        return false;
+                    }
+                    if (witness.Revision <= prior.BaselineRevision)
+                    {
+                        lastSelectedOwnerSectionCensusRefreshRejection =
+                            "ChangedRevisionDidNotAdvance:" + sectionId
+                            + ":" + prior.BaselineRevision.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                            + ">=" + witness.Revision.ToString(System.Globalization.CultureInfo.InvariantCulture);
                         return false;
                     }
                     staged.Add(new DailyV1OwnerSectionCensusProviderRegistration(
@@ -2237,11 +2255,10 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         return !string.IsNullOrWhiteSpace(runtimeId) && cardinality == 1;
     }
 
-    private static bool AllowsCoreSelectedOwnerSectionCardinalityTransition(string sectionId)
+    private bool AllowsCoreSelectedOwnerSectionCardinalityTransition(string sectionId)
     {
-        // These admitted stores use census cardinality to count records. Their
-        // exact operation scopes reserve the epoch and publish the new revision
-        // before the complete baseline is replaced.
+        // These admitted stores count records in the census. Their exact owner
+        // commit or operation boundary controls whether cardinality may change.
         bool isNpcCurrentAction = sectionId != null
             && sectionId.StartsWith(
                 DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix,
@@ -2250,6 +2267,11 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 > DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix.Length;
         return isNpcCurrentAction
             || string.Equals(sectionId, TravelPartyCensusProvider.SectionId, StringComparison.Ordinal)
+            || (selectedCoreActorChoiceCardinalityTransitionActive
+                && string.Equals(sectionId,
+                    ActorChoiceP11CensusProvider.SectionId,
+                    StringComparison.Ordinal))
+            || AllowsCurrentCoreMarketSaleInventoryCardinalityTransition(sectionId)
             || string.Equals(sectionId,
                 DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
                 StringComparison.Ordinal)
@@ -2262,6 +2284,127 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             || string.Equals(sectionId,
                 P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId,
                 StringComparison.Ordinal);
+    }
+
+    private bool AllowsCurrentCoreMarketSaleInventoryCardinalityTransition(string sectionId)
+    {
+        if (selectedCoreMarketSaleInventoryCardinalityTransitionToken == null
+            || !string.Equals(
+                selectedCoreMarketSaleInventoryCardinalityTransitionSectionId,
+                sectionId,
+                StringComparison.Ordinal)
+            || AdmissionContext?.IsOwnedByCurrentThread() != true
+            || activeOperationScopes.Count != 3
+            || activeOperationScopes[0] != DailyV1OperationScopeKind.DailyAdvance
+            || activeOperationScopes[1] != DailyV1OperationScopeKind.RuntimeProtocol
+            || activeOperationScopes[2] != DailyV1OperationScopeKind.RuntimeProtocol
+            || activeRuntimeProtocolOperationContracts.Count != 2
+            || !string.Equals(activeRuntimeProtocolOperationContracts[0],
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance, StringComparison.Ordinal)
+            || !string.Equals(activeRuntimeProtocolOperationContracts[1],
+                DailyV1RuntimeProtocolOperationContracts.MarketSale, StringComparison.Ordinal)
+            || !selectedOwnerSectionCensusProviders.TryGetValue(
+                sectionId ?? string.Empty,
+                out DailyV1OwnerSectionCensusProviderRegistration registration))
+            return false;
+
+        return registration != null
+            && ReferenceEquals(
+                registration.BaselineOwnerInstanceIdentity,
+                selectedCoreMarketSaleInventoryCardinalityTransitionOwnerIdentity);
+    }
+
+    /// <summary>
+    /// Opens a one-section cardinality transition only for a committed local
+    /// MarketSale on the exact actor Inventory owner inside this session's
+    /// serialized DailyAdvance. A null token means the sale kept its row count.
+    /// </summary>
+    internal bool TryBeginCoreSelectedMarketSaleInventoryCardinalityTransition(
+        string inventorySectionId,
+        object expectedInventoryOwner,
+        out object transitionToken)
+    {
+        transitionToken = null;
+        if (string.IsNullOrWhiteSpace(inventorySectionId) || expectedInventoryOwner == null)
+            return false;
+
+        lock (operationSyncRoot)
+        {
+            bool exactMarketSaleScope = activeOperationScopes.Count == 3
+                && activeOperationScopes[0] == DailyV1OperationScopeKind.DailyAdvance
+                && activeOperationScopes[1] == DailyV1OperationScopeKind.RuntimeProtocol
+                && activeOperationScopes[2] == DailyV1OperationScopeKind.RuntimeProtocol
+                && activeRuntimeProtocolOperationContracts.Count == 2
+                && string.Equals(
+                    activeRuntimeProtocolOperationContracts[0],
+                    DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+                    StringComparison.Ordinal)
+                && string.Equals(
+                    activeRuntimeProtocolOperationContracts[1],
+                    DailyV1RuntimeProtocolOperationContracts.MarketSale,
+                    StringComparison.Ordinal);
+            if (AdmissionContext?.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || selectedRuntimeCensusProtocolFaulted
+                || !selectedRuntimeCensusProtocolReady
+                || !selectedOwnerSectionCensusRegistrySealed
+                || selectedP12CrimeJusticeMutationOperationScopeToken != null
+                || mutationEpochState.HasActiveReservation
+                || !exactMarketSaleScope
+                || selectedCoreMarketSaleInventoryCardinalityTransitionToken != null
+                || !inventorySectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix,
+                    StringComparison.Ordinal)
+                || !selectedOwnerSectionCensusProviders.TryGetValue(
+                    inventorySectionId,
+                    out DailyV1OwnerSectionCensusProviderRegistration registration)
+                || registration == null
+                || registration.Role != OwnerSectionRole.Required
+                || !registration.HasBaseline
+                || !ReferenceEquals(registration.BaselineOwnerInstanceIdentity, expectedInventoryOwner))
+                return false;
+
+            OwnerSectionCensusWitness witness;
+            try { witness = registration.Provider?.GetCurrentCensus(); }
+            catch { return false; }
+            if (witness == null
+                || !string.Equals(witness.SectionId, inventorySectionId, StringComparison.Ordinal)
+                || witness.SchemaVersion != registration.SchemaVersion
+                || !ReferenceEquals(witness.OwnerInstanceIdentity, expectedInventoryOwner)
+                || witness.Cardinality < 0
+                || witness.Revision < registration.BaselineRevision)
+                return false;
+
+            if (witness.Cardinality == registration.BaselineCardinality)
+                return true;
+            if (witness.Revision <= registration.BaselineRevision)
+                return false;
+
+            object token = new object();
+            selectedCoreMarketSaleInventoryCardinalityTransitionToken = token;
+            selectedCoreMarketSaleInventoryCardinalityTransitionSectionId = inventorySectionId;
+            selectedCoreMarketSaleInventoryCardinalityTransitionOwnerIdentity = expectedInventoryOwner;
+            transitionToken = token;
+            return true;
+        }
+    }
+
+    internal bool TryEndCoreSelectedMarketSaleInventoryCardinalityTransition(object transitionToken)
+    {
+        if (transitionToken == null) return true;
+        lock (operationSyncRoot)
+        {
+            if (!ReferenceEquals(
+                    selectedCoreMarketSaleInventoryCardinalityTransitionToken,
+                    transitionToken)
+                || AdmissionContext?.IsOwnedByCurrentThread() != true)
+                return false;
+
+            selectedCoreMarketSaleInventoryCardinalityTransitionToken = null;
+            selectedCoreMarketSaleInventoryCardinalityTransitionSectionId = null;
+            selectedCoreMarketSaleInventoryCardinalityTransitionOwnerIdentity = null;
+            return true;
+        }
     }
 
     private bool AllowsCurrentCoreTravelCityCardinalityTransition(string sectionId)
@@ -2417,7 +2560,12 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 if (wasChanged != valueChanged
                     || (wasChanged && current.BaselineRevision <= prior.BaselineRevision))
                 {
-                    lastSelectedOwnerSectionCensusRefreshRejection = "ChangedSetOrRevisionMismatch";
+                    lastSelectedOwnerSectionCensusRefreshRejection =
+                        "ChangedSetOrRevisionMismatch:" + pair.Key
+                        + ";declared=" + wasChanged
+                        + ";observed=" + valueChanged
+                        + ";prior=" + prior.BaselineCardinality + "/" + prior.BaselineRevision
+                        + ";current=" + current.BaselineCardinality + "/" + current.BaselineRevision;
                     return false;
                 }
             }
@@ -2504,6 +2652,89 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             registryRevision = selectedOwnerSectionCensusRegistryRevision;
             mutationEpoch = mutationEpochState.CurrentEpoch;
             failure = DailyCaptureEligibilityFailure.None;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Returns the sealed census registry to the selected daily-economy
+    /// transaction while the serialized DailyAdvance and its matching runtime
+    /// protocol operation are active. This is an operation-local witness read,
+    /// not a persistence capture and cannot mint a capture token.
+    /// </summary>
+    internal bool TryGetSelectedOwnerSectionCensusRegistryForDailyAdvance(
+        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> providers,
+        out long registryRevision,
+        out long mutationEpoch,
+        out DailyCaptureEligibilityFailure failure,
+        out string diagnostic)
+    {
+        providers = null;
+        registryRevision = 0L;
+        mutationEpoch = 0L;
+        failure = DailyCaptureEligibilityFailure.RuntimeFaulted;
+        diagnostic = null;
+        lock (operationSyncRoot)
+        {
+            if (AdmissionContext == null
+                || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !AdmissionContext.IsOwnedByCurrentThread())
+            {
+                failure = DailyCaptureEligibilityFailure.WrongOwnerThread;
+                diagnostic = "AdmissionOwnerThread";
+                return false;
+            }
+
+            bool exactDailyAdvanceScope = activeOperationScopes.Count == 2
+                && activeOperationScopes[0] == DailyV1OperationScopeKind.DailyAdvance
+                && activeOperationScopes[1] == DailyV1OperationScopeKind.RuntimeProtocol
+                && activeRuntimeProtocolOperationContracts.Count == 1
+                && string.Equals(
+                    activeRuntimeProtocolOperationContracts[0],
+                    DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+                    StringComparison.Ordinal);
+            if (!selectedRuntimeCensusProtocolReady
+                || selectedRuntimeCensusProtocolFaulted
+                || !selectedOwnerSectionCensusRegistrySealed)
+            {
+                failure = selectedRuntimeCensusProtocolFaulted
+                    ? DailyCaptureEligibilityFailure.RuntimeFaulted
+                    : DailyCaptureEligibilityFailure.OwnerCoverageIncomplete;
+                diagnostic = "Ready=" + selectedRuntimeCensusProtocolReady
+                    + ";Faulted=" + selectedRuntimeCensusProtocolFaulted
+                    + ";Sealed=" + selectedOwnerSectionCensusRegistrySealed;
+                return false;
+            }
+            if (selectedP12CrimeJusticeMutationOperationScopeToken != null)
+            {
+                failure = DailyCaptureEligibilityFailure.OperationInProgress;
+                diagnostic = "CrimeJusticeOperationActive";
+                return false;
+            }
+            if (mutationEpochState.HasActiveReservation)
+            {
+                failure = DailyCaptureEligibilityFailure.OperationInProgress;
+                diagnostic = "MutationEpochReservationActive";
+                return false;
+            }
+            if (!exactDailyAdvanceScope)
+            {
+                failure = DailyCaptureEligibilityFailure.OperationInProgress;
+                diagnostic = "OperationScopes=" + string.Join(",", activeOperationScopes)
+                    + ";RuntimeProtocols=" + string.Join(",", activeRuntimeProtocolOperationContracts);
+                return false;
+            }
+
+            List<DailyV1OwnerSectionCensusProviderRegistration> ordered =
+                new List<DailyV1OwnerSectionCensusProviderRegistration>(
+                    selectedOwnerSectionCensusProviders.Values);
+            ordered.Sort((left, right) =>
+                StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+            providers = ordered.AsReadOnly();
+            registryRevision = selectedOwnerSectionCensusRegistryRevision;
+            mutationEpoch = mutationEpochState.CurrentEpoch;
+            failure = DailyCaptureEligibilityFailure.None;
+            diagnostic = null;
             return true;
         }
     }
@@ -4523,31 +4754,54 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         long committedRevision,
         IDailyV1SelectedP12NpcActionOwnerMutationProtocol protocol)
     {
+        lastSelectedOwnerSectionCensusRefreshRejection = null;
         if (AdmissionContext == null) return true;
-        if (TryGetSelectedNpcActionSlotMutationSection(
+        if (!TryGetSelectedNpcActionSlotMutationSection(
                 graph, owner, out string expectedSectionId)
-            && string.Equals(sectionId, expectedSectionId, StringComparison.Ordinal)
-            && owner.ActionSlot?.Revision == committedRevision)
+            || !string.Equals(sectionId, expectedSectionId, StringComparison.Ordinal))
         {
-            string[] sectionIds = { expectedSectionId };
-            bool coreRegistrySealed = HasSealedSelectedOwnerSectionCensusRegistry;
-            try
-            {
-                if ((protocol != null
-                        && !protocol.TryValidateOwnerSection(graph, owner, expectedSectionId))
-                    || (protocol == null && !coreRegistrySealed))
-                    return FaultAndRejectSelectedNpcActionSlotCensus(protocol);
+            lastSelectedOwnerSectionCensusRefreshRejection = "ActionSlotSectionIdentityMismatch";
+            return FaultAndRejectSelectedNpcActionSlotCensus(protocol);
+        }
+        if (owner.ActionSlot?.Revision != committedRevision)
+        {
+            lastSelectedOwnerSectionCensusRefreshRejection =
+                "ActionSlotCommittedRevisionMismatch:reported="
+                + committedRevision.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ";observed="
+                + (owner.ActionSlot?.Revision ?? -1L).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return FaultAndRejectSelectedNpcActionSlotCensus(protocol);
+        }
 
-                Func<IReadOnlyCollection<string>, bool> synchronizeCompatibilityBaselines =
-                    protocol == null ? null : protocol.TryRefreshCompatibilityBaselines;
-                bool refreshed = coreRegistrySealed
-                    ? TryRefreshAndAdvanceSelectedNpcActionSlotMutation(
-                        sectionIds, synchronizeCompatibilityBaselines)
-                    : TryRefreshAndAdvanceSelectedMutationEpoch(
-                        sectionIds, synchronizeCompatibilityBaselines);
-                if (refreshed) return true;
+        string[] sectionIds = { expectedSectionId };
+        bool coreRegistrySealed = HasSealedSelectedOwnerSectionCensusRegistry;
+        try
+        {
+            if (protocol != null
+                && !protocol.TryValidateOwnerSection(graph, owner, expectedSectionId))
+            {
+                lastSelectedOwnerSectionCensusRefreshRejection = "ActionSlotHostOwnerValidationFailed";
+                return FaultAndRejectSelectedNpcActionSlotCensus(protocol);
             }
-            catch { }
+            if (protocol == null && !coreRegistrySealed)
+            {
+                lastSelectedOwnerSectionCensusRefreshRejection = "ActionSlotCoreRegistryMissing";
+                return FaultAndRejectSelectedNpcActionSlotCensus(protocol);
+            }
+
+            Func<IReadOnlyCollection<string>, bool> synchronizeCompatibilityBaselines =
+                protocol == null ? null : protocol.TryRefreshCompatibilityBaselines;
+            bool refreshed = coreRegistrySealed
+                ? TryRefreshAndAdvanceSelectedNpcActionSlotMutation(
+                    sectionIds, synchronizeCompatibilityBaselines)
+                : TryRefreshAndAdvanceSelectedMutationEpoch(
+                    sectionIds, synchronizeCompatibilityBaselines);
+            if (refreshed) return true;
+        }
+        catch (Exception exception)
+        {
+            lastSelectedOwnerSectionCensusRefreshRejection =
+                "ActionSlotCommitNotificationException:" + exception.GetType().Name;
         }
 
         return FaultAndRejectSelectedNpcActionSlotCensus(protocol);
@@ -4604,21 +4858,49 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         IReadOnlyCollection<string> changedSectionIds,
         Func<IReadOnlyCollection<string>, bool> synchronizeCompatibilityBaselines)
     {
-        if (changedSectionIds == null || changedSectionIds.Count != 1
-            || !CanAdvanceSelectedMutationEpoch)
+        if (changedSectionIds == null || changedSectionIds.Count != 1)
+        {
+            lastSelectedOwnerSectionCensusRefreshRejection = "ActionSlotChangedSectionSetInvalid";
             return false;
+        }
+        if (!CanAdvanceSelectedMutationEpoch)
+        {
+            lastSelectedOwnerSectionCensusRefreshRejection =
+                mutationEpochState.HasActiveReservation
+                    ? "ActionSlotMutationEpochReservationStillActive"
+                    : "ActionSlotMutationEpochCapacityExhausted";
+            return false;
+        }
 
         return TryRefreshAndAdvanceSelectedMutationEpoch(
             changedSectionIds,
-            changed => TryRefreshCoreSelectedNpcActionSlotCensusBaseline(changed)
-                && (synchronizeCompatibilityBaselines == null
-                    || synchronizeCompatibilityBaselines(changed)));
+            changed =>
+            {
+                if (!TryRefreshCoreSelectedNpcActionSlotCensusBaseline(changed))
+                {
+                    if (string.IsNullOrWhiteSpace(lastSelectedOwnerSectionCensusRefreshRejection))
+                        lastSelectedOwnerSectionCensusRefreshRejection =
+                            "CoreActionSlotCensusBaselineRefreshRejected";
+                    return false;
+                }
+                if (synchronizeCompatibilityBaselines == null
+                    || synchronizeCompatibilityBaselines(changed))
+                    return true;
+
+                lastSelectedOwnerSectionCensusRefreshRejection =
+                    "CompatibilityMirrorRefreshFailed:" + string.Join(",", changed);
+                return false;
+            });
     }
 
     private bool TryRefreshCoreSelectedNpcActionSlotCensusBaseline(
         IReadOnlyCollection<string> changedSectionIds)
     {
-        if (changedSectionIds == null || changedSectionIds.Count != 1) return false;
+        if (changedSectionIds == null || changedSectionIds.Count != 1)
+        {
+            lastSelectedOwnerSectionCensusRefreshRejection = "ActionSlotCoreChangedSectionSetInvalid";
+            return false;
+        }
         string sectionId = null;
         try
         {
@@ -4630,12 +4912,23 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                         DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix,
                         StringComparison.Ordinal)
                     || candidate.Length == DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix.Length)
+                {
+                    lastSelectedOwnerSectionCensusRefreshRejection = "ActionSlotCoreSectionIdInvalid";
                     return false;
+                }
                 sectionId = candidate;
             }
         }
-        catch { return false; }
-        if (string.IsNullOrWhiteSpace(sectionId)) return false;
+        catch
+        {
+            lastSelectedOwnerSectionCensusRefreshRejection = "ActionSlotCoreSectionEnumerationFailed";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(sectionId))
+        {
+            lastSelectedOwnerSectionCensusRefreshRejection = "ActionSlotCoreSectionMissing";
+            return false;
+        }
 
         List<DailyV1OwnerSectionCensusProviderRegistration> staged;
         lock (operationSyncRoot)
@@ -4650,11 +4943,24 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || changed == null
                 || changed.Role != OwnerSectionRole.Required
                 || !changed.HasBaseline)
+            {
+                lastSelectedOwnerSectionCensusRefreshRejection =
+                    "ActionSlotCoreRegistryPrecondition:sealed="
+                    + selectedOwnerSectionCensusRegistrySealed
+                    + ";ready=" + selectedRuntimeCensusProtocolReady
+                    + ";faulted=" + selectedRuntimeCensusProtocolFaulted
+                    + ";owner=" + (selectedOwnerSectionCensusProviders.ContainsKey(sectionId));
                 return false;
+            }
 
             OwnerSectionCensusWitness witness;
             try { witness = changed.Provider.GetCurrentCensus(); }
-            catch { return false; }
+            catch (Exception exception)
+            {
+                lastSelectedOwnerSectionCensusRefreshRejection =
+                    "ActionSlotCoreProviderReadFailed:" + exception.GetType().Name;
+                return false;
+            }
             if (witness == null
                 || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
                 || witness.SchemaVersion != changed.SchemaVersion
@@ -4662,7 +4968,15 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     changed.BaselineOwnerInstanceIdentity)
                 || witness.Cardinality < 0 || witness.Cardinality > 1
                 || witness.Revision <= changed.BaselineRevision)
+            {
+                lastSelectedOwnerSectionCensusRefreshRejection =
+                    "ActionSlotCoreWitnessMismatch:section="
+                    + (witness?.SectionId ?? "null")
+                    + ";cardinality=" + (witness?.Cardinality ?? -1)
+                    + ";revision=" + (witness?.Revision ?? -1L)
+                    + ";baseline=" + changed.BaselineCardinality + "/" + changed.BaselineRevision;
                 return false;
+            }
 
             List<string> orderedIds = new List<string>(selectedOwnerSectionCensusProviders.Keys);
             orderedIds.Sort(StringComparer.Ordinal);
@@ -6693,6 +7007,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     internal IReadOnlyList<DailyV1ActorTurnRosterProjection> SelectedRuntimeActorRoster =>
         selectedRuntimeActorRoster;
     internal bool SelectedRuntimeExecutionRootsBound => selectedRuntimeExecutionRootsBound;
+    internal bool HasSelectedCoreActorChoiceP12MutationBoundary =>
+        selectedCoreActorChoiceMutationBoundaryBound;
     internal bool HasSelectedP12TravelPartyAdvanceInProgress
     {
         get
@@ -7155,7 +7471,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         IAuthoritativeRandomSource randomSource,
         SimulationRecordSequence recordSequence,
         NpcDecisionStore decisionStore,
-        ActorChoiceStore actorChoiceStore)
+        ActorChoiceStore actorChoiceStore,
+        Func<IReadOnlyCollection<string>, bool> synchronizeActorChoiceCompatibilityBaseline = null)
     {
         if (!runtimeIdentityBound || !runtimeConfigurationBound
             || !selectedRuntimeOwnerGraphBound || selectedRuntimeOwnerGraph == null
@@ -7165,20 +7482,55 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             || !ReferenceEquals(actorChoiceStore.PersonStore, selectedRuntimeOwnerGraph.PersonStore))
             return false;
 
+        bool bindCoreActorChoiceBoundary = AdmissionContext?.Profile
+            == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
+        if (synchronizeActorChoiceCompatibilityBaseline != null
+            && !bindCoreActorChoiceBoundary)
+            return false;
+        Func<bool> actorChoiceAdmission = bindCoreActorChoiceBoundary
+            ? () => CanCommitSelectedCoreActorChoiceMutation(actorChoiceStore)
+            : null;
+        Action actorChoiceCommitted = bindCoreActorChoiceBoundary
+            ? () => NotifySelectedCoreActorChoiceMutationCommitted(actorChoiceStore)
+            : null;
+
         if (selectedRuntimeExecutionRootsBound)
-            return ReferenceEquals(selectedRuntimeIdAllocator, runtimeIdAllocator)
+        {
+            bool exactRoots = ReferenceEquals(selectedRuntimeIdAllocator, runtimeIdAllocator)
                 && ReferenceEquals(selectedRuntimeOwnerGraph.RuntimeIdAllocator, runtimeIdAllocator)
                 && ReferenceEquals(selectedRuntimeOwnerGraph.RecordSequence, recordSequence)
                 && ReferenceEquals(selectedRandomSource, randomSource)
                 && ReferenceEquals(selectedRecordSequence, recordSequence)
                 && ReferenceEquals(selectedDecisionStore, decisionStore)
-                && ReferenceEquals(selectedActorChoiceStore, actorChoiceStore);
+                && ReferenceEquals(selectedActorChoiceStore, actorChoiceStore)
+                && (!bindCoreActorChoiceBoundary
+                    || selectedCoreActorChoiceMutationBoundaryBound);
+            if (!exactRoots) return false;
+
+            if (synchronizeActorChoiceCompatibilityBaseline != null)
+            {
+                if (selectedActorChoiceCompatibilityBaselineSynchronizer != null
+                    && selectedActorChoiceCompatibilityBaselineSynchronizer
+                        != synchronizeActorChoiceCompatibilityBaseline)
+                    return false;
+                selectedActorChoiceCompatibilityBaselineSynchronizer =
+                    synchronizeActorChoiceCompatibilityBaseline;
+            }
+            return true;
+        }
+
+        if (bindCoreActorChoiceBoundary
+            && !actorChoiceStore.CanBindP12MutationBoundary(
+                actorChoiceAdmission, actorChoiceCommitted))
+            return false;
 
         selectedRuntimeIdAllocator = runtimeIdAllocator;
         selectedRandomSource = randomSource;
         selectedRecordSequence = recordSequence;
         selectedDecisionStore = decisionStore;
         selectedActorChoiceStore = actorChoiceStore;
+        selectedActorChoiceCompatibilityBaselineSynchronizer =
+            synchronizeActorChoiceCompatibilityBaseline;
         try
         {
             selectedRuntimeActorTurnCoreRoots = new DailyV1ActorTurnCoreRoots(
@@ -7188,6 +7540,13 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 throw new ArgumentException(
                     "The selected owner graph is already bound to a different execution identity root.",
                     nameof(recordSequence));
+
+            if (bindCoreActorChoiceBoundary)
+            {
+                actorChoiceStore.BindP12MutationBoundary(
+                    actorChoiceAdmission, actorChoiceCommitted);
+                selectedCoreActorChoiceMutationBoundaryBound = true;
+            }
         }
         catch (ArgumentException)
         {
@@ -7196,11 +7555,130 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             selectedRecordSequence = null;
             selectedDecisionStore = null;
             selectedActorChoiceStore = null;
+            selectedActorChoiceCompatibilityBaselineSynchronizer = null;
             selectedRuntimeActorTurnCoreRoots = null;
             return false;
         }
         selectedRuntimeExecutionRootsBound = true;
         return true;
+    }
+
+    private bool CanCommitSelectedCoreActorChoiceMutation(ActorChoiceStore expectedOwner)
+    {
+        lock (operationSyncRoot)
+        {
+            DailyV1SelectedRuntimeOwnerGraph graph = selectedRuntimeOwnerGraph;
+            DailyV1CoreSelectedOwnerSectionMutationProtocol protocol =
+                graph == null ? null : new DailyV1CoreSelectedOwnerSectionMutationProtocol(this, graph);
+            bool applicationCaptureScope = activeOperationScopes.Count == 1
+                && activeOperationScopes[0] == DailyV1OperationScopeKind.Application;
+            bool admittedCoreActorTurn = IsSelectedDailyAdvanceCoreTurnActiveUnsafe();
+            bool admitted = selectedCoreActorChoiceMutationBoundaryBound
+                && selectedRuntimeExecutionRootsBound
+                && HasAdmittedSelectedDailyExecution
+                && selectedRuntimeCensusProtocolReady
+                && !selectedRuntimeCensusProtocolFaulted
+                && selectedOwnerSectionCensusRegistrySealed
+                && AdmissionContext?.Profile
+                    == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                && AdmissionContext.IsOwnedByCurrentThread()
+                && mutationGuard.CanMutate
+                && (applicationCaptureScope || admittedCoreActorTurn)
+                && !mutationEpochState.HasActiveReservation
+                && mutationEpochState.CanAdvance
+                && ReferenceEquals(selectedActorChoiceStore, expectedOwner)
+                && ReferenceEquals(selectedRuntimeOwnerGraph?.PersonStore, expectedOwner?.PersonStore)
+                && protocol != null
+                && IsExactCoreSelectedP11OwnerProvider(expectedOwner)
+                && protocol.TryValidateUnchangedSections(
+                    new[] { ActorChoiceP11CensusProvider.SectionId })
+                && protocol.TryValidateMutationEpochCapacity();
+            if (admitted) return true;
+
+            protocol?.FaultClosed();
+            return false;
+        }
+    }
+
+    private void NotifySelectedCoreActorChoiceMutationCommitted(ActorChoiceStore expectedOwner)
+    {
+        lock (operationSyncRoot)
+        {
+            DailyV1SelectedRuntimeOwnerGraph graph = selectedRuntimeOwnerGraph;
+            DailyV1CoreSelectedOwnerSectionMutationProtocol protocol =
+                graph == null ? null : new DailyV1CoreSelectedOwnerSectionMutationProtocol(this, graph);
+            bool ownerIsExact = selectedCoreActorChoiceMutationBoundaryBound
+                && selectedRuntimeExecutionRootsBound
+                && HasAdmittedSelectedDailyExecution
+                && AdmissionContext?.IsOwnedByCurrentThread() == true
+                && ReferenceEquals(selectedActorChoiceStore, expectedOwner)
+                && ReferenceEquals(selectedRuntimeOwnerGraph?.PersonStore, expectedOwner?.PersonStore)
+                && IsExactCoreSelectedP11OwnerProvider(expectedOwner)
+                && protocol != null;
+            if (ownerIsExact)
+            {
+                selectedCoreActorChoiceCardinalityTransitionActive = true;
+                try
+                {
+                    if (protocol.NotifyCommittedMutation(ActorChoiceP11CensusProvider.SectionId))
+                    {
+                        Func<IReadOnlyCollection<string>, bool> synchronizeCompatibilityMirror =
+                            selectedActorChoiceCompatibilityBaselineSynchronizer;
+                        if (synchronizeCompatibilityMirror == null
+                            || synchronizeCompatibilityMirror(
+                                new[] { ActorChoiceP11CensusProvider.SectionId }))
+                            return;
+
+                        lastSelectedOwnerSectionCensusRefreshRejection =
+                            "CompatibilityMirrorRefreshFailed:"
+                            + ActorChoiceP11CensusProvider.SectionId;
+                    }
+                }
+                finally
+                {
+                    selectedCoreActorChoiceCardinalityTransitionActive = false;
+                }
+            }
+
+            protocol?.FaultClosed();
+            throw new InvalidOperationException(
+                "The committed Core ActorChoice mutation could not refresh its exact P12 owner row and shared mutation epoch"
+                + (string.IsNullOrWhiteSpace(lastSelectedOwnerSectionCensusRefreshRejection)
+                    ? "."
+                    : ": " + lastSelectedOwnerSectionCensusRefreshRejection + "."));
+        }
+    }
+
+    private bool IsExactCoreSelectedP11OwnerProvider(ActorChoiceStore expectedOwner)
+    {
+        if (expectedOwner == null
+            || !selectedOwnerSectionCensusProviders.TryGetValue(
+                ActorChoiceP11CensusProvider.SectionId,
+                out DailyV1OwnerSectionCensusProviderRegistration registration)
+            || registration == null
+            || registration.Role != OwnerSectionRole.Required
+            || registration.SchemaVersion != ActorChoiceP11CensusProvider.SchemaVersion)
+            return false;
+
+        try
+        {
+            OwnerSectionCensusWitness registered = registration.Provider?.GetCurrentCensus();
+            OwnerSectionCensusWitness owner =
+                new ActorChoiceP11CensusProvider(expectedOwner).GetCurrentCensus();
+            return registered != null && owner != null
+                && string.Equals(registered.SectionId, ActorChoiceP11CensusProvider.SectionId,
+                    StringComparison.Ordinal)
+                && registered.SchemaVersion == ActorChoiceP11CensusProvider.SchemaVersion
+                && ReferenceEquals(registered.OwnerInstanceIdentity, owner.OwnerInstanceIdentity)
+                && ReferenceEquals(registered.OwnerInstanceIdentity,
+                    registration.BaselineOwnerInstanceIdentity)
+                && registered.Cardinality == owner.Cardinality
+                && registered.Revision == owner.Revision;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>

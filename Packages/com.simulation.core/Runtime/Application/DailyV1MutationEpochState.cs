@@ -14,6 +14,8 @@ internal sealed class DailyV1MutationEpochState
     internal bool HasActiveReservation => activeReservation != null;
     internal DailyV1MutationEpochReservation ActiveReservation => activeReservation;
     internal bool CanAdvance => epoch < long.MaxValue;
+    internal bool CanAdvanceBy(int mutationCount) =>
+        mutationCount >= 0 && mutationCount <= long.MaxValue - epoch;
 
     internal bool TryReserve(out DailyV1MutationEpochReservation reservation)
     {
@@ -30,9 +32,17 @@ internal sealed class DailyV1MutationEpochState
         && reservation.IsOwnedBy(this);
 
     internal bool TryAdvanceCommittedMutation()
+        => TryAdvanceCommittedMutations(1);
+
+    /// <summary>
+    /// Atomically publishes the epoch advances for a committed multi-owner
+    /// transaction after its complete changed-section set has been refreshed.
+    /// </summary>
+    internal bool TryAdvanceCommittedMutations(int mutationCount)
     {
-        if (activeReservation != null || epoch == long.MaxValue) return false;
-        epoch++;
+        if (mutationCount <= 0 || activeReservation != null
+            || !CanAdvanceBy(mutationCount)) return false;
+        epoch += mutationCount;
         return true;
     }
 

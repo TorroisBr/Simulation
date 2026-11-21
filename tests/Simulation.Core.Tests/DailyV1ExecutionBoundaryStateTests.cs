@@ -745,7 +745,8 @@ public sealed class DailyV1ExecutionBoundaryStateTests
         DailyV1ExecutionBoundaryState state = fixture.State;
         string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix + "npc-1";
         MutableCensusProvider provider = fixture.Providers[sectionId];
-        long priorRevision = provider.Witness.Revision;
+        OwnerSectionCensusWitness priorWitness = provider.Witness;
+        long priorRevision = priorWitness.Revision;
         Assert.That(state.TryBeginRuntimeProtocolOperation(
             DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
 
@@ -753,8 +754,12 @@ public sealed class DailyV1ExecutionBoundaryStateTests
             new[] { sectionId }, _ => true), Is.False,
             "A current-action owner must advance its local revision for a committed write.");
         Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero);
-        Assert.That(state.LastSelectedOwnerSectionCensusRefreshRejection, Is.Null,
-            "Rejection occurs before Core registry publication.");
+        Assert.That(state.LastSelectedOwnerSectionCensusRefreshRejection,
+            Is.EqualTo("ActionSlotCoreWitnessMismatch:section=" + sectionId
+                + ";cardinality=" + priorWitness.Cardinality
+                + ";revision=" + priorRevision
+                + ";baseline=" + priorWitness.Cardinality + "/" + priorRevision),
+            "The unchanged local revision is rejected before Core registry publication.");
         Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
         Assert.That(provider.Witness.Revision, Is.EqualTo(priorRevision));
     }

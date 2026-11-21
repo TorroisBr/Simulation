@@ -119,8 +119,9 @@ public sealed class DailyV1GenesisComposerTests
             out _, out string rejectedDiagnostic), Is.False);
         Assert.That(rejectedDiagnostic, Does.Contain("exact admitted definitions"));
 
+        ActorChoiceStore restoredActorChoices = StageActorChoicesForRestoreTest(source);
         Assert.That(TryComposeRestoredBoundary(
-            source, restoredTime, restoredAdmission, source.ActorChoiceStore,
+            source, restoredTime, restoredAdmission, restoredActorChoices,
             out DailyV1ExecutionBoundaryState restoredBoundary,
             out string diagnostic), Is.True, diagnostic);
 
@@ -134,7 +135,7 @@ public sealed class DailyV1GenesisComposerTests
             Is.EqualTo(source.OwnerGraph.Npcs.Select(owner => owner.RuntimeId)));
         Assert.That(restoredBoundary.HasAdmittedSelectedDailyExecution, Is.True);
         Assert.That(restoredBoundary.HasExactSelectedRuntimeExecutionRoots(
-            restoredBoundary.SelectedRuntimeOwnerGraph, source.PersonStore, source.ActorChoiceStore, source.RandomSource,
+            restoredBoundary.SelectedRuntimeOwnerGraph, source.PersonStore, restoredActorChoices, source.RandomSource,
             source.RuntimeIdAllocator, source.RecordSequence, source.DecisionStore), Is.True);
 
         Assert.That(application.TryCreateRestoredActiveRuntimeSession(
@@ -158,8 +159,9 @@ public sealed class DailyV1GenesisComposerTests
         SimulationRuntimeAdmissionContext restoredAdmission =
             source.AdmissionContext.CreateRestoredContinuationContext();
         SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
+        ActorChoiceStore restoredActorChoices = StageActorChoicesForRestoreTest(source);
         Assert.That(TryComposeRestoredBoundary(
-            source, restoredTime, restoredAdmission, source.ActorChoiceStore,
+            source, restoredTime, restoredAdmission, restoredActorChoices,
             out DailyV1ExecutionBoundaryState restoredBoundary,
             out string diagnostic), Is.True, diagnostic);
 
@@ -184,7 +186,7 @@ public sealed class DailyV1GenesisComposerTests
             "The selected City population authority is bound before Unity projection binding.");
         Assert.That(SimulationTimeOwnerBridge.CanBindMutationStatus(
             restoredTime, foreignGuard), Is.False);
-        Assert.That(((IAuthoritativeMutationGuardBindable)source.ActorChoiceStore)
+        Assert.That(((IAuthoritativeMutationGuardBindable)restoredActorChoices)
             .CanBindMutationGuard(foreignGuard), Is.False);
     }
 
@@ -201,8 +203,9 @@ public sealed class DailyV1GenesisComposerTests
         SimulationRuntimeAdmissionContext restoredAdmission =
             source.AdmissionContext.CreateRestoredContinuationContext();
         SimulationTime restoredTime = new SimulationTime(source.SimulationTime.AbsoluteDay);
+        ActorChoiceStore restoredActorChoices = StageActorChoicesForRestoreTest(source);
         Assert.That(TryComposeRestoredBoundary(
-            source, restoredTime, restoredAdmission, source.ActorChoiceStore,
+            source, restoredTime, restoredAdmission, restoredActorChoices,
             out DailyV1ExecutionBoundaryState restoredBoundary,
             out string diagnostic), Is.True, diagnostic);
 
@@ -219,7 +222,7 @@ public sealed class DailyV1GenesisComposerTests
             "Core preflights the entire graph before binding any member.");
         Assert.That(SimulationTimeOwnerBridge.CanBindMutationStatus(
             restoredTime, foreignGuard), Is.True);
-        Assert.That(((IAuthoritativeMutationGuardBindable)source.ActorChoiceStore)
+        Assert.That(((IAuthoritativeMutationGuardBindable)restoredActorChoices)
             .CanBindMutationGuard(foreignGuard), Is.True);
     }
 
@@ -243,6 +246,7 @@ public sealed class DailyV1GenesisComposerTests
             : new CalendarDefinition(definitions.Calendar.monthsPerYear,
                 definitions.Calendar.weeksPerMonth, definitions.Calendar.daysPerWeek);
         ScheduledDirectiveStore directives = new ScheduledDirectiveStore(restoredTime);
+        ActorChoiceStore restoredActorChoices = StageActorChoicesForRestoreTest(source);
 
         Assert.That(DailyV1RestoredExecutionBoundaryComposer.TryCreate(
             definitions,
@@ -265,7 +269,7 @@ public sealed class DailyV1GenesisComposerTests
             source.RandomSource,
             source.RecordSequence,
             source.DecisionStore,
-            source.ActorChoiceStore,
+            restoredActorChoices,
             out DailyV1ExecutionBoundaryState restoredBoundary,
             out SimulationCalendar restoredCalendar,
             out string diagnostic,
@@ -284,7 +288,7 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(restoredBoundary.HasExactSelectedRuntimeExecutionRoots(
             restoredBoundary.SelectedRuntimeOwnerGraph,
             source.PersonStore,
-            source.ActorChoiceStore,
+            restoredActorChoices,
             source.RandomSource,
             source.RuntimeIdAllocator,
             source.RecordSequence,
@@ -449,6 +453,7 @@ public sealed class DailyV1GenesisComposerTests
             : new CalendarDefinition(definitions.Calendar.monthsPerYear,
                 definitions.Calendar.weeksPerMonth, definitions.Calendar.daysPerWeek);
         ScheduledDirectiveStore directives = new ScheduledDirectiveStore(restoredTime);
+        ActorChoiceStore restoredActorChoices = StageActorChoicesForRestoreTest(source);
 
         Assert.That(application.TryCreateRestoredActiveRuntimeSession(
             definitions,
@@ -474,7 +479,7 @@ public sealed class DailyV1GenesisComposerTests
             source.RandomSource,
             source.RecordSequence,
             source.DecisionStore,
-            source.ActorChoiceStore,
+            restoredActorChoices,
             lastEconomySnapshotDay: 0L,
             replacementOperation: null,
             out DailyV1ActiveRuntimeSession candidate,
@@ -490,6 +495,8 @@ public sealed class DailyV1GenesisComposerTests
         Assert.That(candidate.OwnerGraph.Definitions, Is.SameAs(definitions));
         Assert.That(candidate.OwnerGraph.ScheduledDirectives, Is.SameAs(directives));
         Assert.That(candidate.OwnerGraph.Expeditions, Is.SameAs(source.Expeditions));
+        Assert.That(candidate.ExecutionBoundaryState.SelectedActorChoiceStore,
+            Is.SameAs(restoredActorChoices));
         Assert.That(restoredCalendar.SemanticVersion, Is.EqualTo(source.Calendar.SemanticVersion));
         Assert.That(candidate.RuntimeAdvanceBoundary, Is.Null);
         Assert.That(application.ActiveSession, Is.Null,
@@ -517,7 +524,7 @@ public sealed class DailyV1GenesisComposerTests
             source.RandomSource,
             source.RecordSequence,
             null,
-            source.ActorChoiceStore,
+            StageActorChoicesForRestoreTest(source),
             0L,
             null,
             out DailyV1ActiveRuntimeSession missingDecisionStoreCandidate,
@@ -549,7 +556,7 @@ public sealed class DailyV1GenesisComposerTests
             source.RandomSource,
             source.RecordSequence,
             source.DecisionStore,
-            source.ActorChoiceStore,
+            StageActorChoicesForRestoreTest(source),
             lastEconomySnapshotDay: 0L,
             replacementOperation: null,
             out DailyV1ActiveRuntimeSession rejectedCandidate,
@@ -720,6 +727,25 @@ public sealed class DailyV1GenesisComposerTests
             Is.EqualTo(expected.SpatialNetwork.Routes.Select(route => route.RuntimeId)));
         Assert.That(composition.OwnerGraph.Npcs.Select(owner => owner.RuntimeId),
             Is.EqualTo(expected.Npcs.Select(owner => owner.RuntimeId)));
+    }
+
+    private static ActorChoiceStore StageActorChoicesForRestoreTest(
+        DailyV1GenesisComposition source)
+    {
+        Assert.That(source?.ActorChoiceStore, Is.Not.Null);
+        Assert.That(source.PersonStore, Is.Not.Null);
+        P12FActorChoiceSnapshot snapshot = new P12FActorChoiceSnapshot(
+            P12FActorChoiceSnapshot.CurrentSchemaVersion,
+            source.ActorChoiceStore.Inputs,
+            source.ActorChoiceStore.NextInputSequence,
+            source.ActorChoiceStore.CensusRevision);
+        Assert.That(P12FActorChoiceSnapshot.TryStage(
+            snapshot, source.PersonStore,
+            out ActorChoiceStore staged, out P12FActorChoiceSnapshotFailure failure),
+            Is.True, failure.ToString());
+        Assert.That(staged, Is.Not.SameAs(source.ActorChoiceStore));
+        Assert.That(staged.PersonStore, Is.SameAs(source.PersonStore));
+        return staged;
     }
 
     private static bool TryComposeRestoredBoundary(

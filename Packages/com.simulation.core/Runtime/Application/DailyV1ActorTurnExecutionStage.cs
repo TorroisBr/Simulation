@@ -453,8 +453,15 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
     private readonly DailyV1CoreSelectedP12MerchantDailyTradeProtocol coreMerchantDailyTradeProtocol;
     private readonly IDailyV1SelectedP12NpcActionOwnerMutationProtocol actionSlotP12MutationProtocol;
     private IDailyV1SelectedMerchantTradeStateBoundary merchantBoundary;
+    private string lastActionSlotP12Failure;
     internal string LastActionStatusBoundaryRejection { get; private set; }
     internal bool UsesCoreOnlyActorTurnPath => hostPorts == null;
+    internal string LastActionSlotP12Failure =>
+        lastActionSlotP12Failure
+        ?? executionState.LastCoreDecisionMutationAdmissionRejection
+        ?? executionState.LastSelectedOwnerSectionCensusRefreshRejection;
+    internal string LastMerchantP12Failure =>
+        executionState.LastSelectedMerchantDailyTradeRejection;
 
     private DailyV1CoreSelectedActorTurnExecutionBoundary(
         DailyV1ExecutionBoundaryState executionState,
@@ -812,6 +819,12 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         if (hostPorts != null)
             return hostPorts.TryGetDispatchBoundary(actor, out dispatchBoundary)
                 && dispatchBoundary != null;
+        if (!RequiresActionProjection
+            && IsExactCoreLocalSellGoodsPayload(actor, actor.ActionSlot?.CurrentPayload))
+        {
+            dispatchBoundary = new DailyV1CoreOnlyLocalSellDispatchBoundary(this, actor);
+            return true;
+        }
         return !RequiresActionProjection
             && DailyV1CoreOnlyCrimeActionBoundary.TryCreate(
                 executionState, graph, actor, out dispatchBoundary);
@@ -830,6 +843,14 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
 
         DailyV1ActionDefinition action = actor.ActionSlot?.CurrentAction;
         DailyV1NpcActionPayloadOwner payload = actor.ActionSlot?.CurrentPayload;
+        if (dispatch.Kind == DailyV1SelectedActionDispatchKind.OpenMarket)
+            return dispatch.OpenMarket != null
+                && dispatch.ActionRollSucceeded == dispatch.OpenMarket.ActionRollSucceeded
+                && dispatch.Succeeded == (dispatch.ActionRollSucceeded
+                    && dispatch.OpenMarket.Succeeded)
+                && dispatch.OpenMarket.Sale != null
+                && IsExactCoreLocalSellGoodsPayload(actor, payload);
+
         if (dispatch.Kind == DailyV1SelectedActionDispatchKind.GuardArrest)
             return dispatch.GuardArrest != null
                 && dispatch.Succeeded == (dispatch.ActionRollSucceeded && dispatch.GuardArrest.Succeeded)
@@ -955,30 +976,490 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
 
     public bool TryPrepareRequestedActionProjection(
         DailyV1NpcRuntimeOwners actor,
-        DailyV1NpcActionPayloadOwner payload) =>
-        TryGetExactActor(actor) && RequireHostPorts().TryPrepareRequestedActionProjection(actor, payload);
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        if (hostPorts != null)
+            return TryGetExactActor(actor)
+                && hostPorts.TryPrepareRequestedActionProjection(actor, payload);
+        return IsExactCoreLocalSellGoodsPayload(actor, payload);
+    }
 
     public bool TryRefreshRequestedActionProjection(
         DailyV1NpcRuntimeOwners actor,
-        DailyV1NpcActionPayloadOwner payload) =>
-        TryGetExactActor(actor) && RequireHostPorts().TryRefreshRequestedActionProjection(actor, payload);
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        if (hostPorts != null)
+            return TryGetExactActor(actor)
+                && hostPorts.TryRefreshRequestedActionProjection(actor, payload);
+        return IsExactCoreLocalSellGoodsPayload(actor, payload);
+    }
 
     public bool CanCommitRequestedActionSlot(
         DailyV1NpcRuntimeOwners actor,
-        DailyV1NpcActionPayloadOwner payload) =>
-        TryGetExactActor(actor) && RequireHostPorts().CanCommitRequestedActionSlot(actor, payload);
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        if (hostPorts != null)
+            return TryGetExactActor(actor)
+                && hostPorts.CanCommitRequestedActionSlot(actor, payload);
+        return IsExactCoreLocalSellGoodsPayload(actor, payload)
+            && CanCommitSelectedActionSlotP12Mutation(graph, actor);
+    }
 
     public bool TryPublishRequestedActionProjection(
         DailyV1NpcRuntimeOwners actor,
-        DailyV1NpcActionPayloadOwner payload) =>
-        TryGetExactActor(actor) && RequireHostPorts().TryPublishRequestedActionProjection(actor, payload);
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        if (hostPorts != null)
+            return TryGetExactActor(actor)
+                && hostPorts.TryPublishRequestedActionProjection(actor, payload);
+        return IsExactCoreLocalSellGoodsPayload(actor, payload)
+            && ReferenceEquals(actor.ActionSlot?.CurrentAction, payload.Action)
+            && ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload);
+    }
 
     public void CancelPreparedRequestedActionProjection(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionPayloadOwner payload)
     {
         RequireExactActor(actor);
-        RequireHostPorts().CancelPreparedRequestedActionProjection(actor, payload);
+        if (hostPorts != null)
+            hostPorts.CancelPreparedRequestedActionProjection(actor, payload);
+    }
+
+    private bool IsExactCoreLocalSellGoodsPayload(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        if (hostPorts != null || RequiresActionProjection
+            || !TryGetExactActor(actor) || payload?.Action == null
+            || actor.MerchantTradePlan?.IsActive == true
+            || payload.TargetItem == null || payload.Amount <= 0
+            || !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+            || payload.TravelReason != NpcTravelReason.None
+            || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+            || !string.Equals(payload.TargetCityRuntimeId,
+                actor.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal)
+            || payload.Action.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            || !DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
+                graph.Definitions, payload.Action)
+            || !graph.Definitions.Items.TryGetValue(
+                payload.TargetItem.DefinitionId,
+                out DailyV1ItemDefinition exactItem)
+            || !ReferenceEquals(exactItem, payload.TargetItem))
+            return false;
+
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            if (city != null
+                && graph.ContainsExactCityOwner(city)
+                && string.Equals(city.RuntimeId, payload.TargetCityRuntimeId,
+                    StringComparison.Ordinal))
+                return graph.IsActorAtCurrentCityLocation(actor);
+
+        return false;
+    }
+
+    /// <summary>
+    /// Projection-free dispatch for the bounded Local SellGoods actor choice.
+    /// All sale planning and writes remain in the exact Core owner graph; this
+    /// boundary contributes only the selected-profile P12 operation scope.
+    /// </summary>
+    private sealed class DailyV1CoreOnlyLocalSellDispatchBoundary
+        : IDailyV1SelectedActionDispatchBoundary
+    {
+        private readonly DailyV1CoreSelectedActorTurnExecutionBoundary owner;
+        private readonly DailyV1NpcRuntimeOwners actor;
+        private readonly DailyV1ActionDefinition action;
+        private readonly DailyV1NpcActionPayloadOwner payload;
+
+        internal DailyV1CoreOnlyLocalSellDispatchBoundary(
+            DailyV1CoreSelectedActorTurnExecutionBoundary owner,
+            DailyV1NpcRuntimeOwners actor)
+        {
+            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+            this.actor = actor ?? throw new ArgumentNullException(nameof(actor));
+            action = actor.ActionSlot?.CurrentAction;
+            payload = actor.ActionSlot?.CurrentPayload;
+        }
+
+        private bool IsCurrent(DailyV1NpcRuntimeOwners candidate) =>
+            ReferenceEquals(candidate, actor)
+            && owner.TryGetExactActor(actor)
+            && ReferenceEquals(actor.ActionSlot?.CurrentAction, action)
+            && ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)
+            && owner.IsExactCoreLocalSellGoodsPayload(actor, payload);
+
+        public bool TryGetMarketBoundaries(
+            DailyV1NpcRuntimeOwners candidate,
+            out IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
+            out IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary)
+        {
+            saleBoundary = null;
+            purchaseBoundary = null;
+            if (!IsCurrent(candidate)
+                || !TryFindExactCurrentCity(owner.graph, actor, out DailyV1CityRuntimeOwners city)
+                || !DailyV1CoreOnlyLocalSellSaleBoundary.TryCreate(
+                    owner.executionState, owner.graph, actor, city,
+                    out DailyV1CoreOnlyLocalSellSaleBoundary boundary))
+                return false;
+            saleBoundary = boundary;
+            return true;
+        }
+
+        public bool TryGetSoloTravelBoundary(
+            DailyV1NpcRuntimeOwners candidate,
+            DailyV1ActionDefinition expectedAction,
+            out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary)
+        { boundary = null; return false; }
+
+        public bool TryGetNpcTradeBoundary(
+            DailyV1NpcRuntimeOwners seller,
+            DailyV1NpcRuntimeOwners buyer,
+            out IDailyV1SelectedNpcTradeBoundary boundary)
+        { boundary = null; return false; }
+
+        public bool TryGetFleeCityActionBoundary(
+            DailyV1NpcRuntimeOwners candidate,
+            DailyV1ActionDefinition expectedAction,
+            out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary boundary)
+        { boundary = null; return false; }
+
+        public bool TryGetGuardArrestActionBoundary(
+            DailyV1NpcRuntimeOwners candidate,
+            DailyV1ActionDefinition expectedAction,
+            out DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary boundary)
+        { boundary = null; return false; }
+
+        public bool TryGetStealActionBoundary(
+            DailyV1NpcRuntimeOwners candidate,
+            DailyV1ActionDefinition expectedAction,
+            out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary boundary)
+        { boundary = null; return false; }
+
+        public bool TryGetCrimeActionBoundary(
+            DailyV1NpcRuntimeOwners candidate,
+            DailyV1ActionDefinition expectedAction,
+            out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
+        { boundary = null; return false; }
+
+        public bool TryGetForcedEscapeBoundary(
+            DailyV1NpcRuntimeOwners candidate,
+            DailyV1ActionDefinition expectedAction,
+            out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary)
+        { boundary = null; return false; }
+
+        public bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners candidate) => false;
+
+        public void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners candidate) =>
+            throw new InvalidOperationException(
+                "The Core-only Local SellGoods boundary does not admit Merchant-plan writes.");
+
+        public bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners candidate) => false;
+
+        public void PublishTradeTravelPlanMutation(DailyV1NpcRuntimeOwners candidate) =>
+            throw new InvalidOperationException(
+                "The Core-only Local SellGoods boundary does not admit trade-travel plan writes.");
+
+        public void CompleteCrossCityBuy(
+            DailyV1NpcRuntimeOwners candidate,
+            DailyV1SelectedCrossCityBuyResult result) =>
+            throw new InvalidOperationException(
+                "The Core-only Local SellGoods boundary does not admit cross-city purchases.");
+    }
+
+    private static bool TryFindExactCurrentCity(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        out DailyV1CityRuntimeOwners city)
+    {
+        city = null;
+        string cityRuntimeId = actor?.Travel?.CurrentCityRuntimeId;
+        if (graph == null || actor == null || string.IsNullOrWhiteSpace(cityRuntimeId))
+            return false;
+        foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+            if (candidate != null
+                && graph.ContainsExactCityOwner(candidate)
+                && ReferenceEquals(candidate.Definitions, graph.Definitions)
+                && ReferenceEquals(candidate.Market?.Definitions, graph.Definitions)
+                && string.Equals(candidate.RuntimeId, cityRuntimeId, StringComparison.Ordinal))
+            {
+                city = candidate;
+                return true;
+            }
+        return false;
+    }
+
+    /// <summary>
+    /// Core-owned equivalent of the former Unity sale adapter. It fences the
+    /// exact actor/city owner sections, enters the admitted MarketSale
+    /// operation, and publishes every committed owner mutation to the shared
+    /// census and epoch before ending that scope.
+    /// </summary>
+    private sealed class DailyV1CoreOnlyLocalSellSaleBoundary
+        : IDailyV1SelectedOpenMarketSaleBoundary
+    {
+        private readonly DailyV1ExecutionBoundaryState executionState;
+        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+        private readonly DailyV1NpcRuntimeOwners actor;
+        private readonly DailyV1CityRuntimeOwners city;
+        private readonly DailyV1MarketOwner market;
+        private readonly DailyV1CoreSelectedOwnerSectionMutationProtocol protocol;
+        private readonly string accountSectionId;
+        private readonly string inventorySectionId;
+        private readonly string marketSectionId;
+        private readonly string[] sectionIds;
+        private long accountRevisionBefore;
+        private long inventoryRevisionBefore;
+        private long marketRevisionBefore;
+        private long mutationEpochBefore;
+        private bool accountOwnerPublishes;
+        private bool inventoryOwnerPublishes;
+        private bool marketOwnerPublishes;
+        private bool operationBegun;
+        private bool disposed;
+        private string beginRejection;
+
+        private DailyV1CoreOnlyLocalSellSaleBoundary(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners city)
+        {
+            this.executionState = executionState;
+            this.graph = graph;
+            this.actor = actor;
+            this.city = city;
+            market = city.Market;
+            protocol = new DailyV1CoreSelectedOwnerSectionMutationProtocol(
+                executionState, graph);
+            accountSectionId = DailyV1SelectedOwnerSectionCensusContract
+                .NpcMoneyAccountPrefix + actor.RuntimeId;
+            inventorySectionId = DailyV1SelectedOwnerSectionCensusContract
+                .NpcInventoryPrefix + actor.RuntimeId;
+            string cityKey = P12DCityOwnerImageSectionCodec
+                .EncodeCityKeyForSection(city.RuntimeId);
+            marketSectionId = DailyV1SelectedOwnerSectionCensusContract
+                .CityMarketStockRowsSectionPrefix + cityKey;
+            sectionIds = new[] { accountSectionId, inventorySectionId, marketSectionId };
+        }
+
+        internal static bool TryCreate(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners city,
+            out DailyV1CoreOnlyLocalSellSaleBoundary boundary)
+        {
+            boundary = null;
+            if (executionState == null || graph == null || actor == null || city == null
+                || !executionState.HasAdmittedSelectedDailyExecution
+                || !executionState.HasSealedSelectedOwnerSectionCensusRegistry
+                || !executionState.HasRuntimeProtocolOperationInventory
+                || executionState.AdmissionContext?.Profile
+                    != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !executionState.AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                || !graph.ContainsExactNpcOwner(actor)
+                || !graph.ContainsExactCityOwner(city)
+                || !ReferenceEquals(actor.Definitions, graph.Definitions)
+                || !ReferenceEquals(city.Definitions, graph.Definitions)
+                || actor.MoneyAccount == null || actor.Inventory == null
+                || city.Market == null
+                || !ReferenceEquals(city.Market.Definitions, graph.Definitions)
+                || !string.Equals(actor.Travel?.CurrentCityRuntimeId,
+                    city.RuntimeId, StringComparison.Ordinal))
+                return false;
+
+            DailyV1CoreOnlyLocalSellSaleBoundary candidate =
+                new DailyV1CoreOnlyLocalSellSaleBoundary(
+                    executionState, graph, actor, city);
+            if (!candidate.protocol.TryValidateUnchangedSections(candidate.sectionIds))
+                return false;
+            boundary = candidate;
+            return true;
+        }
+
+        public bool TryBegin()
+        {
+            if (disposed || operationBegun || !IsCurrent())
+            {
+                beginRejection = "ExactSessionOrOwnerMismatch";
+                protocol.FaultClosed();
+                return false;
+            }
+            if (executionState.MutationEpochState.HasActiveReservation
+                || !executionState.MutationEpochState.CanAdvanceBy(3))
+            {
+                beginRejection = "MutationEpochUnavailable";
+                protocol.FaultClosed();
+                return false;
+            }
+            if (!protocol.TryValidateUnchangedSections(sectionIds, out string censusFailure))
+            {
+                beginRejection = "OwnerSectionBaseline:" + (censusFailure ?? "Unknown");
+                protocol.FaultClosed();
+                return false;
+            }
+            if (!executionState.TryBeginRuntimeProtocolOperation(
+                    DailyV1RuntimeProtocolOperationContracts.MarketSale,
+                    requireNoActiveRuntimeProtocolOperations: false))
+            {
+                beginRejection = "MarketSaleOperationNotAdmitted";
+                protocol.FaultClosed();
+                return false;
+            }
+
+            accountRevisionBefore = actor.MoneyAccount.Revision;
+            inventoryRevisionBefore = actor.Inventory.Revision;
+            marketRevisionBefore = market.Revision;
+            mutationEpochBefore = executionState.MutationEpochState.CurrentEpoch;
+            accountOwnerPublishes = MoneyAccountOwnerBridge.HasP12MutationBoundary(
+                actor.MoneyAccount);
+            inventoryOwnerPublishes = actor.Inventory.HasMutationBoundary;
+            marketOwnerPublishes = market.HasMutationBoundary;
+            operationBegun = true;
+            return true;
+        }
+
+        public void Complete(DailyV1SelectedOpenMarketSaleCommitResult result)
+        {
+            if (!operationBegun || disposed)
+            {
+                if (!disposed
+                    && result?.Failure == DailyV1SelectedOpenMarketSaleFailure.AdmissionRejected
+                    && !string.IsNullOrWhiteSpace(beginRejection))
+                    throw new InvalidOperationException(
+                        "Core P12 MarketSale admission was rejected: " + beginRejection + ".");
+                return;
+            }
+            if (result == null)
+            {
+                FaultClosedAndThrow("The sale returned no commit result.");
+                return;
+            }
+            if (!IsCurrent())
+                FaultClosedAndThrow("The exact selected session or owner graph changed during the sale.");
+            if (accountOwnerPublishes != MoneyAccountOwnerBridge.HasP12MutationBoundary(
+                    actor.MoneyAccount)
+                || inventoryOwnerPublishes != actor.Inventory.HasMutationBoundary
+                || marketOwnerPublishes != market.HasMutationBoundary)
+                FaultClosedAndThrow("An owner mutation callback changed during the admitted sale.");
+            if (!HasExpectedRevision(actor.MoneyAccount.Revision,
+                    accountRevisionBefore, result.AccountMutationCount))
+                FaultClosedAndThrow("The account revision delta does not match the sale commit result.");
+            if (!HasExpectedRevision(actor.Inventory.Revision,
+                    inventoryRevisionBefore, result.InventoryMutationCount))
+                FaultClosedAndThrow("The Inventory revision delta does not match the sale commit result.");
+            if (!HasExpectedRevision(market.Revision, marketRevisionBefore,
+                    result.Succeeded ? 1 : 0))
+                FaultClosedAndThrow("The Market revision delta does not match the sale commit result.");
+
+            List<string> unnotifiedSections = new List<string>(3);
+            int unnotifiedMutationCount = 0;
+            if (result.AccountMutationCount > 0 && !accountOwnerPublishes)
+            {
+                unnotifiedSections.Add(accountSectionId);
+                unnotifiedMutationCount += result.AccountMutationCount;
+            }
+            if (result.InventoryMutationCount > 0 && !inventoryOwnerPublishes)
+            {
+                unnotifiedSections.Add(inventorySectionId);
+                unnotifiedMutationCount += result.InventoryMutationCount;
+            }
+            if (result.Succeeded && !marketOwnerPublishes)
+            {
+                unnotifiedSections.Add(marketSectionId);
+                unnotifiedMutationCount++;
+            }
+            object inventoryCardinalityTransition = null;
+            if (unnotifiedSections.Contains(inventorySectionId)
+                && !executionState.TryBeginCoreSelectedMarketSaleInventoryCardinalityTransition(
+                    inventorySectionId, actor.Inventory, out inventoryCardinalityTransition))
+                FaultClosedAndThrow(
+                    "The exact actor Inventory row could not enter its committed MarketSale transition.");
+
+            bool ownerRowsRefreshed = true;
+            bool transitionClosed = true;
+            if (unnotifiedSections.Count > 0)
+            {
+                try
+                {
+                    ownerRowsRefreshed = executionState.TryRefreshCoreSelectedOwnerSectionCensusRows(
+                        graph, unnotifiedSections, reservation: null);
+                }
+                finally
+                {
+                    transitionClosed = executionState.TryEndCoreSelectedMarketSaleInventoryCardinalityTransition(
+                        inventoryCardinalityTransition);
+                }
+            }
+            if (!transitionClosed)
+                FaultClosedAndThrow("The exact actor Inventory cardinality transition did not close.");
+
+            if (unnotifiedSections.Count > 0
+                && (!ownerRowsRefreshed
+                    || !executionState.MutationEpochState.TryAdvanceCommittedMutations(
+                        unnotifiedMutationCount)))
+            {
+                string changedSections = string.Join(",", unnotifiedSections);
+                FaultClosedAndThrow(
+                    "Committed P12 owner rows [" + changedSections
+                    + "] could not publish their " + unnotifiedMutationCount
+                    + " owner mutation epochs (refresh="
+                    + (executionState.LastSelectedOwnerSectionCensusRefreshRejection
+                        ?? "none") + ").");
+            }
+
+            long committedSaleMutationCount = (long)result.AccountMutationCount
+                + result.InventoryMutationCount
+                + (result.Succeeded ? 1L : 0L);
+            if (committedSaleMutationCount < 0L
+                || committedSaleMutationCount > 3L
+                || mutationEpochBefore > long.MaxValue - committedSaleMutationCount
+                || executionState.MutationEpochState.CurrentEpoch
+                    != mutationEpochBefore + committedSaleMutationCount)
+                FaultClosedAndThrow(
+                    "The committed MarketSale owner writes did not publish their exact shared mutation epoch.");
+
+            if (result.PartialCommit)
+                FaultClosedAndThrow("The sale reported a partial owner commit.");
+            if (!protocol.TryValidateUnchangedSections(sectionIds, out string finalCensusFailure))
+                FaultClosedAndThrow("The sale left a P12 owner baseline mismatch: "
+                    + (finalCensusFailure ?? "Unknown") + ".");
+        }
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+            if (operationBegun && !executionState.TryEndRuntimeProtocolOperation())
+                protocol.FaultClosed();
+            operationBegun = false;
+        }
+
+        private bool IsCurrent() =>
+            executionState.HasAdmittedSelectedDailyExecution
+            && executionState.AdmissionContext?.IsOwnedByCurrentThread() == true
+            && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+            && graph.ContainsExactNpcOwner(actor)
+            && graph.ContainsExactCityOwner(city)
+            && ReferenceEquals(city.Market, market)
+            && ReferenceEquals(actor.Definitions, graph.Definitions)
+            && ReferenceEquals(city.Definitions, graph.Definitions)
+            && string.Equals(actor.Travel?.CurrentCityRuntimeId,
+                city.RuntimeId, StringComparison.Ordinal);
+
+        private static bool HasExpectedRevision(long current, long before, int increments) =>
+            increments >= 0 && before >= 0L
+            && before <= long.MaxValue - increments
+            && current == before + increments;
+
+        private void FaultClosedAndThrow(string message)
+        {
+            protocol.FaultClosed();
+            throw new InvalidOperationException("Core P12 MarketSale faulted closed: " + message);
+        }
+
     }
 
     public void LogRequestedActionDecisionFailure(string message)
@@ -1007,11 +1488,27 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         DailyV1SelectedRuntimeOwnerGraph expectedGraph,
         DailyV1NpcRuntimeOwners actor,
         string sectionId,
-        long revision) =>
-        ReferenceEquals(expectedGraph, graph)
-        && TryGetExactActor(actor)
-        && executionState.TryRecordSelectedNpcActionSlotMutation(
-            graph, actor, sectionId, revision, actionSlotP12MutationProtocol);
+        long revision)
+    {
+        lastActionSlotP12Failure = null;
+        if (!ReferenceEquals(expectedGraph, graph))
+        {
+            lastActionSlotP12Failure = "ActionSlotGraphMismatch";
+            return false;
+        }
+        if (!TryGetExactActor(actor))
+        {
+            lastActionSlotP12Failure = "ActionSlotActorOutsideBoundRoster";
+            return false;
+        }
+        if (executionState.TryRecordSelectedNpcActionSlotMutation(
+                graph, actor, sectionId, revision, actionSlotP12MutationProtocol))
+            return true;
+
+        lastActionSlotP12Failure = executionState.LastSelectedOwnerSectionCensusRefreshRejection
+            ?? "ActionSlotCoreP12NotificationRejectedWithoutDiagnostic";
+        return false;
+    }
 
     public bool CanAdmitSelectedMerchantPlanMutation(DailyV1NpcRuntimeOwners actor) =>
         TryGetExactActor(actor)
@@ -2444,7 +2941,10 @@ internal static class DailyV1ActorTurnExecutionStage
                     () => DailyV1SelectedMerchantTradeStateOperation.TryAdvance(
                         graph, actor, absoluteDay, selectedMerchantBoundary, coreRoots)))
                 throw new InvalidOperationException(
-                    "The selected Core Merchant daily operation could not complete through its admitted owner graph.");
+                    "The selected Core Merchant daily operation could not complete through its admitted owner graph for actor '"
+                    + actor.RuntimeId + "': "
+                    + ((boundary as DailyV1CoreSelectedActorTurnExecutionBoundary)
+                        ?.LastMerchantP12Failure ?? "no rejection detail"));
             return;
         }
 

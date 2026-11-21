@@ -103,6 +103,25 @@ public sealed class DailyV1ApplicationSessionGateTests
         }
     }
 
+    private sealed class LiveActorChoiceP11CensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly ActorChoiceP11CensusProvider provider;
+        private readonly Action onRead;
+
+        internal LiveActorChoiceP11CensusProvider(ActorChoiceStore store, Action onRead)
+        {
+            provider = new ActorChoiceP11CensusProvider(
+                store ?? throw new ArgumentNullException(nameof(store)));
+            this.onRead = onRead;
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            onRead?.Invoke();
+            return provider.GetCurrentCensus();
+        }
+    }
+
     private sealed class SelectedDailyExecutionHostPorts : IDailyV1SelectedDailyExecutionHostPorts
     {
         public void BeginLoggerDay(long absoluteDay) { }
@@ -538,10 +557,16 @@ public sealed class DailyV1ApplicationSessionGateTests
             new List<DailyV1OwnerSectionCensusProviderRegistration>(ordered.Length);
         foreach (OwnerSectionCensusSnapshot section in ordered)
         {
-            SnapshotOwnerSectionCensusProvider provider =
+            SnapshotOwnerSectionCensusProvider compatibilityProvider =
                 new SnapshotOwnerSectionCensusProvider(section, onProviderRead);
-            boundProviders?.Add(section.SectionId, provider);
-            boundary?.RegisterCoreCensusProvider(section.SectionId, provider);
+            boundProviders?.Add(section.SectionId, compatibilityProvider);
+            boundary?.RegisterCoreCensusProvider(section.SectionId, compatibilityProvider);
+            IOwnerSectionCensusProvider provider = string.Equals(
+                    section.SectionId, ActorChoiceP11CensusProvider.SectionId,
+                    StringComparison.Ordinal)
+                ? new LiveActorChoiceP11CensusProvider(
+                    state.SelectedActorChoiceStore, onProviderRead)
+                : compatibilityProvider;
             contracts.Add(new DailyV1OwnerSectionContractIdentity(
                 section.SectionId, section.SchemaVersion, section.Role));
             providers.Add(new DailyV1OwnerSectionCensusProviderRegistration(
@@ -1915,7 +1940,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             CreateBoundaryWithAdmission(composition, restoredAdmission);
         OwnerSectionCensusSnapshot[] ownerSections =
             CreateCoreBoundCompleteOwnerSectionVector(
-                composition.OwnerGraph, composition.ActorChoiceStore);
+                composition.OwnerGraph, restoredState.SelectedActorChoiceStore);
         Assert.That(restoredState.TryCreateRestoredContinuationToken(
             restoredAdmission,
             restoredState.ConfigurationIdentity,
@@ -2025,7 +2050,7 @@ public sealed class DailyV1ApplicationSessionGateTests
                 CreateBoundaryWithAdmission(candidateComposition, candidateAdmission);
             OwnerSectionCensusSnapshot[] candidateOwners =
             CreateCoreBoundCompleteOwnerSectionVector(
-                candidateComposition.OwnerGraph, candidateComposition.ActorChoiceStore);
+                candidateComposition.OwnerGraph, candidateState.SelectedActorChoiceStore);
             Assert.That(candidateOwners.First(section => section.SectionId
                 == PoliticalDecisionStoreCensusProvider.SectionId).OwnerInstanceIdentity,
                 Is.SameAs(candidateComposition.OwnerGraph.PoliticalDecisionStore),
@@ -2152,7 +2177,7 @@ public sealed class DailyV1ApplicationSessionGateTests
                 CreateBoundaryWithAdmission(candidateComposition, candidateAdmission);
             OwnerSectionCensusSnapshot[] candidateOwners =
             CreateCoreBoundCompleteOwnerSectionVector(
-                candidateComposition.OwnerGraph, candidateComposition.ActorChoiceStore);
+                candidateComposition.OwnerGraph, candidateState.SelectedActorChoiceStore);
             Assert.That(candidateOwners.First(section => section.SectionId
                 == PoliticalDecisionStoreCensusProvider.SectionId).OwnerInstanceIdentity,
                 Is.SameAs(candidateComposition.OwnerGraph.PoliticalDecisionStore),
@@ -3809,10 +3834,26 @@ public sealed class DailyV1ApplicationSessionGateTests
     [Test]
     public void CoreP12FCensusRecomposesExactSelectedNpcInventoryAndMoneyAccountHostOmission()
     {
-        CreateApplicationWithAdvanceBoundary(
+        DailyV1Application application = CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session,
             out _);
         DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        PersonId selectedPerson = new PersonId("person-census-live-owner");
+        Assert.That(application.TryBeginOperation(
+            session, DailyV1OperationScopeKind.Application,
+            out DailyV1ActiveRuntimeSession registrationSession), Is.True);
+        Assert.That(registrationSession, Is.SameAs(session));
+        try
+        {
+            Assert.That(graph.PersonStore.TryRegister(
+                new PersonRuntime(selectedPerson), out PersonStoreFailure personFailure),
+                Is.True, personFailure.ToString());
+        }
+        finally
+        {
+            application.EndOperation(DailyV1OperationScopeKind.Application);
+        }
+        Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
         ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
         OwnerSectionCensusSnapshot[] completeVector =
             CreateCoreBoundCompleteOwnerSectionVector(session);
@@ -3938,14 +3979,13 @@ public sealed class DailyV1ApplicationSessionGateTests
 
         OwnerSectionCensusSnapshot beforeActorChoice = composed.Single(section =>
             section.SectionId == ActorChoiceP11CensusProvider.SectionId);
-        Assert.That(actorChoices.TryCapture(
+        Assert.That(application.TryCaptureActorChoiceInput(
+                session,
                 "census-live-owner-input",
-                new PersonId("person-census-live-owner"),
+                selectedPerson,
                 "action.sell-goods",
                 WorldCommandOrigin.LocalPlayer,
                 WorldCommandAuthorityMode.Request,
-                0L,
-                out _,
                 out ActorChoiceStoreFailureCode captureFailure), Is.True, captureFailure.ToString());
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryComposeCoreOwnedP12FSections(
                 graph, actorChoices, hostRemainder,
@@ -5130,8 +5170,24 @@ public sealed class DailyV1ApplicationSessionGateTests
             composition.RandomSource,
             composition.RecordSequence,
             composition.DecisionStore,
-            composition.ActorChoiceStore), Is.True);
+            StageActorChoicesForBoundaryTest(composition)), Is.True);
         return boundary;
+    }
+
+    private static ActorChoiceStore StageActorChoicesForBoundaryTest(
+        DailyV1GenesisComposition composition)
+    {
+        P12FActorChoiceSnapshot snapshot = new P12FActorChoiceSnapshot(
+            P12FActorChoiceSnapshot.CurrentSchemaVersion,
+            composition.ActorChoiceStore.Inputs,
+            composition.ActorChoiceStore.NextInputSequence,
+            composition.ActorChoiceStore.CensusRevision);
+        Assert.That(P12FActorChoiceSnapshot.TryStage(
+            snapshot, composition.PersonStore,
+            out ActorChoiceStore staged, out P12FActorChoiceSnapshotFailure failure),
+            Is.True, failure.ToString());
+        Assert.That(staged, Is.Not.SameAs(composition.ActorChoiceStore));
+        return staged;
     }
 
     [Test]

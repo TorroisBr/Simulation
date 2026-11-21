@@ -735,20 +735,11 @@ public sealed class DailyV1ActorTurnExecutionStageTests
     }
 
     [Test]
-    public void SelectedActorChoiceDispatchUsesCoreActionExecutionPorts()
+    public void SelectedActorChoiceRootRejectsAnExistingForeignP12Boundary()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners actor);
-        DailyV1CityRuntimeOwners city = graph.Cities.Single(owner =>
-            owner.RuntimeId == actor.Travel.CurrentCityRuntimeId);
-        DailyV1ItemDefinition iron = graph.Definitions.Items["FERRO"];
-        Assert.That(actor.Inventory.TryAddItem(iron, 5, 10f), Is.True);
-        float referencePrice = actor.Inventory.GetAverageUnitCost(iron);
-        Assert.That(actor.CommercialKnowledge.RecordObservation(new DailyV1CommercialMarketObservation(
-            city.LocationRuntimeId, iron, referencePrice + 3f, 12, 20L, 20L,
-            DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
-
         PersonStore people = new PersonStore();
-        PersonId personId = RegisterMaterializedPerson(people, actor, "person-core-choice-sale");
+        PersonId personId = RegisterMaterializedPerson(people, actor, "person-foreign-p12-choice");
         Assert.That(graph.TryBindPersonStore(people), Is.True);
         ActorChoiceStore choices = new ActorChoiceStore(people);
         int choiceAdmissionCount = 0;
@@ -756,73 +747,48 @@ public sealed class DailyV1ActorTurnExecutionStageTests
         choices.BindP12MutationBoundary(
             () => { choiceAdmissionCount++; return true; },
             () => choiceCommitCount++);
-        Assert.That(choices.TryCapture("command-core-choice-sale", personId,
+        Assert.That(choices.TryCapture("command-foreign-p12-choice", personId,
             "VENDER_MERCADORIA", WorldCommandOrigin.LocalPlayer,
             WorldCommandAuthorityMode.Request, 19L,
             out ActorChoiceInput input, out ActorChoiceStoreFailureCode captureFailure),
             Is.True, captureFailure.ToString());
 
+        DailyV1CalendarDefinition calendarDefinition = graph.Definitions.Calendar;
+        CalendarDefinition calendar = calendarDefinition.monthLengths != null
+            && calendarDefinition.monthLengths.Count > 0
+            ? new CalendarDefinition(new List<int>(calendarDefinition.monthLengths), calendarDefinition.daysPerWeek)
+            : new CalendarDefinition(calendarDefinition.monthsPerYear,
+                calendarDefinition.weeksPerMonth, calendarDefinition.daysPerWeek);
+        DailyV1ExecutionBoundaryState executionState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(20L),
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(Guid.NewGuid()));
+        Assert.That(executionState.TryBindRuntimeConfiguration(
+            graph.Definitions.EffectiveConfiguration, new SimulationCalendar(calendar)), Is.True);
+        Assert.That(executionState.TryBindSelectedRuntimeOwnerGraph(graph), Is.True);
+        Assert.That(executionState.TryBindInitialSelectedRuntimeActorRosterFromOwnerGraph(), Is.True);
+
         RuntimeIdAllocator coreIdAllocator = new RuntimeIdAllocator();
         IAuthoritativeRandomSource coreRandom = new FixedRandom(0.75f);
         SimulationRecordSequence coreRecordSequence = new SimulationRecordSequence();
         NpcDecisionStore coreDecisionStore = new NpcDecisionStore();
-        DailyV1ExecutionBoundaryState executionState = CreateActorTurnExecutionState(
-            graph, choices, coreIdAllocator, coreRandom, coreRecordSequence, coreDecisionStore);
-        DailyV1ActorTurnCoreRoots coreRoots = new DailyV1ActorTurnCoreRoots(executionState, graph);
+        Assert.That(executionState.TryBindSelectedRuntimeExecutionRoots(
+            coreIdAllocator, coreRandom, coreRecordSequence, coreDecisionStore, choices), Is.False,
+            "A host-prebound P12 mutation callback cannot be rebound as the Core session's P11 authority.");
 
-        int inventoryBefore = actor.Inventory.GetAmount(iron);
-        int marketBefore = city.Market.GetAmount(iron);
-        float balanceBefore = actor.MoneyAccount.Balance;
-        long accountRevisionBefore = actor.MoneyAccount.Revision;
-        long inventoryRevisionBefore = actor.Inventory.Revision;
-        long marketRevisionBefore = city.Market.Revision;
-
-        CoreSelectedActionBoundary boundary = new CoreSelectedActionBoundary();
-        boundary.BindGraph(graph);
-        boundary.WithdrawSelectedExecutionAfterPreflight = true;
-        Assert.That(DailyV1ActorTurnExecutionStage.TryRunOrdered(
-            graph,
-            new[] { new DailyV1ActorTurnRosterEntry(0, personId, actor) },
-            people, choices, null, 20L, merchantTradeEnabled: false,
-            requireCoreOwnedSelectedOperations: true, coreRoots: coreRoots, boundary: boundary), Is.True);
-
-        Assert.That(boundary.Events, Does.Contain("complete-dispatch"),
-            "The committed actor-choice slot was dispatched through the Core selected action stage.");
-        Assert.That(boundary.Events, Does.Not.Contain("legacy-choice-callback"));
-        Assert.That(boundary.Events, Does.Not.Contain("legacy-action-callback"));
-        Assert.That(choices.TryGet(input.InputId, out ActorChoiceInput attempted), Is.True);
-        Assert.That(attempted.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
-        Assert.That(attempted.Dispositions[0].DecisionRecordId,
-            Is.EqualTo(coreDecisionStore.Decisions.Single().DecisionId));
-        Assert.That(boundary.Decisions.Decisions, Is.Empty,
-            "The admitted Core roots own decision recording even when the host boundary exposes different decision owners.");
-        Assert.That(boundary.DecisionOwnerLookupCount, Is.Zero,
-            "The admitted Core path never asks the Unity boundary for allocator, sequence or decision-store roots.");
-        Assert.That(boundary.SelectedExecutionChecks, Is.EqualTo(1),
-            "A committed Core choice still dispatches after Unity withdraws its selection flag following preflight.");
-        Assert.That(coreIdAllocator.CaptureSnapshot().Counters.Single(counter =>
-            counter.FamilyId == "decision").NextSequence, Is.EqualTo(2L),
-            "The Core decision allocator consumes one identity from its initial next-sequence value.");
-        Assert.That(coreRecordSequence.CaptureSnapshot().NextSequence, Is.EqualTo(2L),
-            "The Core record sequence owns both the actor-choice and its action result records.");
-        Assert.That(attempted.Dispositions[1].AttemptOutcome,
-            Is.EqualTo(ActorChoiceAttemptOutcome.Succeeded));
-        DailyV1NpcActionPayloadOwner salePayload = actor.ActionSlot.CurrentPayload;
-        Assert.That(salePayload, Is.Not.Null);
-        Assert.That(boundary.SaleAdmissionCount, Is.EqualTo(1));
-        Assert.That(boundary.ActionSlotAdmissionCount, Is.EqualTo(1));
-        Assert.That(boundary.SaleReceiptCount, Is.EqualTo(1));
-        Assert.That(boundary.SaleDisposeCount, Is.EqualTo(1));
-        Assert.That(boundary.LastSaleCommit?.Succeeded, Is.True);
-        Assert.That(actor.Inventory.GetAmount(iron), Is.EqualTo(inventoryBefore - salePayload.Amount));
-        Assert.That(city.Market.GetAmount(iron), Is.EqualTo(marketBefore + salePayload.Amount));
-        Assert.That(actor.MoneyAccount.Balance, Is.GreaterThan(balanceBefore));
-        Assert.That(actor.MoneyAccount.Revision, Is.EqualTo(accountRevisionBefore + 1L));
-        Assert.That(actor.Inventory.Revision, Is.EqualTo(inventoryRevisionBefore + 1L));
-        Assert.That(city.Market.Revision, Is.EqualTo(marketRevisionBefore + 1L));
-        Assert.That(choiceAdmissionCount, Is.EqualTo(3),
-            "Capture, dispatch-start and returned-attempt transitions each use their existing P12 boundary.");
-        Assert.That(choiceCommitCount, Is.EqualTo(3));
+        Assert.That(executionState.SelectedActorChoiceStore, Is.Null,
+            "Rejected root binding does not partially publish the foreign owner into Core state.");
+        Assert.That(executionState.HasExactSelectedRuntimeExecutionRoots(
+            graph, people, choices, coreRandom, coreIdAllocator, coreRecordSequence, coreDecisionStore), Is.False);
+        Assert.That(choices.TryGet(input.InputId, out ActorChoiceInput pending), Is.True);
+        Assert.That(pending.Status, Is.EqualTo(ActorChoiceInputStatus.Pending),
+            "Rejection leaves the accepted input unchanged and undispatched.");
+        Assert.That(choiceAdmissionCount, Is.EqualTo(1));
+        Assert.That(choiceCommitCount, Is.EqualTo(1));
+        Assert.That(actor.ActionSlot.CurrentAction, Is.Null);
+        Assert.That(coreDecisionStore.Decisions, Is.Empty);
+        Assert.That(coreRecordSequence.CaptureSnapshot().NextSequence, Is.EqualTo(1L));
     }
 
     [Test]

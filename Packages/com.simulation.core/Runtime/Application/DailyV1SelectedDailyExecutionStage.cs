@@ -818,10 +818,9 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             || executionState.SelectedActorChoiceStore == null
             || graph.PersonStore == null
             || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore)
-            || graph.ScheduledDirectives == null
-            || executionState.SelectedActorChoiceStore.PendingInputs.Count != 0)
+            || graph.ScheduledDirectives == null)
         {
-            diagnostic = "the actor roster, Person store, directive store, or pending-choice boundary is unsupported";
+            diagnostic = "the actor roster, Person store, or directive store is unsupported";
             return false;
         }
         if (graph.Definitions?.EffectiveConfiguration == null
@@ -881,17 +880,23 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
         foreach (DailyV1ActionDefinition action in actions)
         {
             int actionType = action?.Values.actionType?.Value ?? int.MinValue;
+            bool admittedAutonomousAction = actionType == DailyV1NpcDefinitionRules.NormalActionTypeValue
+                || actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
+                || actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue
+                || actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
+                || actionType == DailyV1NpcDefinitionRules.StealActionTypeValue;
+            bool admittedCoreActorChoiceAction = actionType
+                == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
+                    graph.Definitions, action);
             if (action == null
                 || !graph.Definitions.Actions.TryGetValue(
                     action.DefinitionId, out DailyV1ActionDefinition admittedAction)
                 || !ReferenceEquals(admittedAction, action)
-                || (actionType != DailyV1NpcDefinitionRules.NormalActionTypeValue
-                    && actionType != DailyV1NpcDefinitionRules.HideActionTypeValue
-                    && actionType != DailyV1NpcDefinitionRules.ArrestActionTypeValue
-                    && actionType != DailyV1NpcDefinitionRules.FleeCityActionTypeValue
-                    && actionType != DailyV1NpcDefinitionRules.StealActionTypeValue)
-                || !DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
-                    graph.Definitions, action)
+                || (!admittedAutonomousAction && !admittedCoreActorChoiceAction)
+                || (admittedAutonomousAction
+                    && !DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+                        graph.Definitions, action))
                 || !DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
                     graph.Definitions, action,
                     out _, out _,
@@ -900,7 +905,7 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 || targetStatusToRemove.Count != 0
                 || targetStatusToAdd.Count != 0)
             {
-                diagnostic = "a configured action is not an admitted autonomous projection-independent action";
+                diagnostic = "a configured action is outside the autonomous or bounded Core actor-choice execution set";
                 return false;
             }
         }
@@ -1739,13 +1744,28 @@ internal static class DailyV1SelectedDailyExecutionStage
         {
             if (!preparedDay.selectedEconomyPreflighted)
                 boundary.EnsureSelectedEconomyCanRun(graph);
-            if (!graph.TrySimulateDailyEconomyDay(
+            bool hasAdmittedFullP12Census = executionState != null
+                && executionState.HasSealedSelectedOwnerSectionCensusRegistry;
+            string economyP12Diagnostic = !hasAdmittedFullP12Census
+                ? "Legacy non-admitted economy path"
+                : null;
+            bool economyCompleted = !hasAdmittedFullP12Census
+                ? graph.TrySimulateDailyEconomyDay(
                     graph.Cities,
                     absoluteDay,
                     GetCalendarSemanticVersion(graph.Definitions.Calendar),
-                    boundary.LogSelectedDailyEconomy))
+                    boundary.LogSelectedDailyEconomy)
+                : TrySimulateAdmittedDailyEconomyDay(
+                    executionState,
+                    graph,
+                    absoluteDay,
+                    GetCalendarSemanticVersion(graph.Definitions.Calendar),
+                    boundary.LogSelectedDailyEconomy,
+                    out economyP12Diagnostic);
+            if (!economyCompleted)
                 throw new InvalidOperationException(
-                    "The selected Core economy stage could not complete against its exact runtime owner graph.");
+                    "The selected Core economy stage could not complete against its exact runtime owner graph. "
+                    + economyP12Diagnostic);
         }
 
         if (!preparedDay.selectedLocalKnowledgePreflighted)
@@ -1806,6 +1826,371 @@ internal static class DailyV1SelectedDailyExecutionStage
             throw new InvalidOperationException(
                 "The selected Core post-travel market observation could not apply to its exact owner graph.");
         travelContext.ObserveCompletedTravelResults();
+    }
+
+    private static bool TrySimulateAdmittedDailyEconomyDay(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        long absoluteDay,
+        string calendarVersion,
+        Action<DailyV1CityRuntimeOwners, SimulationLogCategory, string> logOutput,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        if (executionState == null || graph == null
+            || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+            || !TryGetDailyEconomyP12MutationUpperBound(graph, out int mutationUpperBound)
+            || !executionState.MutationEpochState.CanAdvanceBy(mutationUpperBound))
+        {
+            diagnostic = "P12DailyEconomyPreflightCapacityOrGraph";
+            return false;
+        }
+
+        DailyV1CoreSelectedOwnerSectionMutationProtocol protocol =
+            new DailyV1CoreSelectedOwnerSectionMutationProtocol(executionState, graph);
+        if (!TryReadAdmittedDailyEconomyP12Witnesses(
+                executionState,
+                requireCurrentBaselines: true,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> before,
+                out _,
+                out long epochBefore,
+                out string baselineReadDiagnostic))
+        {
+            diagnostic = "P12DailyEconomyBaselineRead:" + baselineReadDiagnostic;
+            protocol.FaultClosed();
+            return false;
+        }
+        if (before == null || before.Count == 0
+            || epochBefore != executionState.MutationEpochState.CurrentEpoch)
+        {
+            diagnostic = "P12DailyEconomyBaselineVectorOrEpoch";
+            protocol.FaultClosed();
+            return false;
+        }
+
+        bool completed = graph.TrySimulateDailyEconomyDay(
+            graph.Cities, absoluteDay, calendarVersion, logOutput);
+        if (!TryReadAdmittedDailyEconomyP12Witnesses(
+                executionState,
+                requireCurrentBaselines: false,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> after,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> afterRegistrations,
+                out long postReadEpoch,
+                out string postReadDiagnostic))
+        {
+            diagnostic = "P12DailyEconomyPostWitnessRead:" + postReadDiagnostic
+                + ":" + executionState.LastSelectedOwnerSectionCensusRefreshRejection;
+            protocol.FaultClosed();
+            return false;
+        }
+        long epochAfter = executionState.MutationEpochState.CurrentEpoch;
+        if (postReadEpoch != epochAfter || postReadEpoch < epochBefore)
+        {
+            diagnostic = "P12DailyEconomyPostWitnessEpochDrift:before=" + epochBefore
+                + ";witness=" + postReadEpoch + ";current=" + epochAfter;
+            protocol.FaultClosed();
+            return false;
+        }
+
+        if (!TryGetChangedDailyEconomyP12Sections(
+                before, after,
+                out IReadOnlyList<string> changedSectionIds,
+                out int committedMutationCount))
+        {
+            diagnostic = "P12DailyEconomyChangedOwnerCutInvalid";
+            protocol.FaultClosed();
+            return false;
+        }
+
+        if (!completed)
+        {
+            if (changedSectionIds.Count != 0
+                || epochAfter != epochBefore)
+            {
+                diagnostic = "P12DailyEconomyRejectedAfterMutation";
+                protocol.FaultClosed();
+            }
+            return false;
+        }
+
+        if (changedSectionIds.Count == 0)
+        {
+            bool unchangedEpoch = epochAfter == epochBefore;
+            if (!unchangedEpoch) diagnostic = "P12DailyEconomyEpochChangedWithoutOwnerRows";
+            return unchangedEpoch;
+        }
+
+        // Unity compatibility owners may already publish each successful
+        // Market commit through their bound P12 callback. That callback shares
+        // this Core epoch and atomically refreshes the sealed Core census.
+        // Accept that path only when the complete post-operation baseline now
+        // exactly matches every live witness; never publish a second epoch.
+        long publishedEpochDelta = epochAfter - epochBefore;
+        if (publishedEpochDelta > 0L)
+        {
+            if (!HasExactHostPublishedDailyEconomyMutationEpochDelta(
+                    publishedEpochDelta, committedMutationCount, mutationUpperBound)
+                || !HasExactAdmittedDailyEconomyBaselines(afterRegistrations, after))
+            {
+                diagnostic = "P12DailyEconomyHostPublishedBaselineOrEpochMismatch:epochDelta="
+                    + publishedEpochDelta.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + ";ownerMutations="
+                    + committedMutationCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                protocol.FaultClosed();
+                return false;
+            }
+            return true;
+        }
+
+        if (committedMutationCount <= 0
+            || committedMutationCount > mutationUpperBound
+            || !protocol.TryRefreshCommittedMutationBaselines(changedSectionIds)
+            || !executionState.MutationEpochState.TryAdvanceCommittedMutations(
+                committedMutationCount)
+            || executionState.MutationEpochState.CurrentEpoch
+                != epochBefore + committedMutationCount)
+        {
+            diagnostic = "P12DailyEconomyPublish:" + executionState.LastSelectedOwnerSectionCensusRefreshRejection;
+            protocol.FaultClosed();
+            return false;
+        }
+
+        diagnostic = "P12DailyEconomyCommittedRows=" + changedSectionIds.Count
+            + ";ownerMutations=" + committedMutationCount;
+        return true;
+    }
+
+    internal static bool HasExactHostPublishedDailyEconomyMutationEpochDelta(
+        long publishedEpochDelta,
+        int committedMutationCount,
+        int mutationUpperBound) =>
+        publishedEpochDelta > 0L
+        && committedMutationCount > 0
+        && committedMutationCount <= mutationUpperBound
+        && publishedEpochDelta == committedMutationCount;
+
+    private static bool TryReadAdmittedDailyEconomyP12Witnesses(
+        DailyV1ExecutionBoundaryState executionState,
+        bool requireCurrentBaselines,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
+        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+        out long mutationEpoch,
+        out string diagnostic)
+    {
+        snapshots = null;
+        registrations = null;
+        mutationEpoch = 0L;
+        diagnostic = null;
+        if (executionState == null)
+        {
+            diagnostic = "ExecutionStateMissing";
+            return false;
+        }
+        if (!executionState.TryGetSelectedOwnerSectionCensusRegistryForDailyAdvance(
+                out registrations,
+                out _, out mutationEpoch, out DailyCaptureEligibilityFailure registryFailure,
+                out string registryDiagnostic))
+        {
+            diagnostic = registryFailure + ":" + registryDiagnostic;
+            return false;
+        }
+        if (registrations == null || registrations.Count == 0)
+        {
+            diagnostic = "OwnerCoverageIncomplete";
+            return false;
+        }
+
+        List<OwnerSectionCensusSnapshot> captured =
+            new List<OwnerSectionCensusSnapshot>(registrations.Count);
+        HashSet<string> sectionIds = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            foreach (DailyV1OwnerSectionCensusProviderRegistration registration in registrations)
+            {
+                if (registration == null || registration.Provider == null
+                    || !registration.HasBaseline
+                    || string.IsNullOrWhiteSpace(registration.SectionId)
+                    || registration.SchemaVersion <= 0
+                    || registration.BaselineOwnerInstanceIdentity == null
+                    || !sectionIds.Add(registration.SectionId))
+                    return false;
+
+                OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
+                if (witness == null
+                    || !string.Equals(witness.SectionId, registration.SectionId,
+                        StringComparison.Ordinal)
+                    || witness.SchemaVersion != registration.SchemaVersion
+                    || witness.OwnerInstanceIdentity == null
+                    || !ReferenceEquals(witness.OwnerInstanceIdentity,
+                        registration.BaselineOwnerInstanceIdentity)
+                    || witness.Cardinality < 0 || witness.Revision < 0L)
+                {
+                    diagnostic = "OwnerWitnessInvalid:" + registration.SectionId;
+                    return false;
+                }
+                if (requireCurrentBaselines
+                    && (witness.Cardinality != registration.BaselineCardinality
+                        || witness.Revision != registration.BaselineRevision))
+                {
+                    diagnostic = "BaselineDrift:" + registration.SectionId;
+                    return false;
+                }
+
+                captured.Add(new OwnerSectionCensusSnapshot(
+                    witness.SectionId,
+                    witness.SchemaVersion,
+                    registration.Role,
+                    witness.OwnerInstanceIdentity,
+                    witness.Cardinality,
+                    witness.Revision));
+            }
+        }
+        catch
+        {
+            diagnostic = "ProviderReadException";
+            return false;
+        }
+
+        captured.Sort((left, right) =>
+            StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+        snapshots = captured.AsReadOnly();
+        return true;
+    }
+
+    private static bool HasExactAdmittedDailyEconomyBaselines(
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+        IReadOnlyList<OwnerSectionCensusSnapshot> witnesses)
+    {
+        if (registrations == null || witnesses == null || registrations.Count == 0
+            || registrations.Count != witnesses.Count)
+            return false;
+
+        Dictionary<string, OwnerSectionCensusSnapshot> witnessesById;
+        try
+        {
+            witnessesById = witnesses.ToDictionary(row => row.SectionId, StringComparer.Ordinal);
+        }
+        catch
+        {
+            return false;
+        }
+
+        HashSet<string> registrationIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in registrations)
+        {
+            if (registration == null || registration.Provider == null || !registration.HasBaseline
+                || string.IsNullOrWhiteSpace(registration.SectionId)
+                || !registrationIds.Add(registration.SectionId)
+                || !witnessesById.TryGetValue(registration.SectionId,
+                    out OwnerSectionCensusSnapshot witness)
+                || witness == null
+                || witness.SchemaVersion != registration.SchemaVersion
+                || witness.Role != registration.Role
+                || !ReferenceEquals(witness.OwnerInstanceIdentity,
+                    registration.BaselineOwnerInstanceIdentity)
+                || witness.Cardinality != registration.BaselineCardinality
+                || witness.Revision != registration.BaselineRevision)
+                return false;
+        }
+        return registrationIds.Count == witnessesById.Count;
+    }
+
+    private static bool TryGetChangedDailyEconomyP12Sections(
+        IReadOnlyList<OwnerSectionCensusSnapshot> before,
+        IReadOnlyList<OwnerSectionCensusSnapshot> after,
+        out IReadOnlyList<string> changedSectionIds,
+        out int committedMutationCount)
+    {
+        changedSectionIds = null;
+        committedMutationCount = 0;
+        if (before == null || after == null || before.Count == 0
+            || before.Count != after.Count)
+            return false;
+
+        Dictionary<string, OwnerSectionCensusSnapshot> priorById;
+        try
+        {
+            priorById = before.ToDictionary(row => row.SectionId, StringComparer.Ordinal);
+        }
+        catch { return false; }
+
+        List<string> changed = new List<string>();
+        List<KeyValuePair<object, long>> ownerRevisionDeltas =
+            new List<KeyValuePair<object, long>>();
+        foreach (OwnerSectionCensusSnapshot current in after)
+        {
+            if (current == null || string.IsNullOrWhiteSpace(current.SectionId)
+                || !priorById.TryGetValue(current.SectionId,
+                    out OwnerSectionCensusSnapshot prior)
+                || prior == null || prior.Role != current.Role
+                || prior.SchemaVersion != current.SchemaVersion
+                || !ReferenceEquals(prior.OwnerInstanceIdentity,
+                    current.OwnerInstanceIdentity))
+                return false;
+
+            bool cardinalityChanged = current.Cardinality != prior.Cardinality;
+            bool revisionChanged = current.Revision != prior.Revision;
+            if (!cardinalityChanged && !revisionChanged) continue;
+            if (!revisionChanged || current.Revision <= prior.Revision) return false;
+
+            long revisionDelta = current.Revision - prior.Revision;
+            int ownerIndex = -1;
+            for (int index = 0; index < ownerRevisionDeltas.Count; index++)
+                if (ReferenceEquals(ownerRevisionDeltas[index].Key,
+                        current.OwnerInstanceIdentity))
+                {
+                    ownerIndex = index;
+                    break;
+                }
+
+            if (ownerIndex < 0)
+                ownerRevisionDeltas.Add(new KeyValuePair<object, long>(
+                    current.OwnerInstanceIdentity, revisionDelta));
+            else if (ownerRevisionDeltas[ownerIndex].Value != revisionDelta)
+                return false;
+
+            changed.Add(current.SectionId);
+        }
+
+        long total = 0L;
+        foreach (KeyValuePair<object, long> ownerDelta in ownerRevisionDeltas)
+        {
+            if (ownerDelta.Value <= 0L || total > int.MaxValue - ownerDelta.Value)
+                return false;
+            total += ownerDelta.Value;
+        }
+
+        changed.Sort(StringComparer.Ordinal);
+        changedSectionIds = changed.AsReadOnly();
+        committedMutationCount = (int)total;
+        return true;
+    }
+
+    private static bool TryGetDailyEconomyP12MutationUpperBound(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out int mutationUpperBound)
+    {
+        mutationUpperBound = 0;
+        if (graph?.Cities == null || graph.Definitions?.Items == null) return false;
+
+        long upperBound = 0L;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            if (city == null || city.Definition?.Values == null
+                || city.Market == null || !graph.ContainsExactCityOwner(city))
+                return false;
+
+            var values = city.Definition.Values;
+            int productionCount = values.productionConfigs?.Count ?? 0;
+            int marketCount = values.marketItems?.Count ?? 0;
+            int localFlowCount = city.HasLocalDailyMaterialFlow ? 1 : 0;
+            upperBound += productionCount + (long)marketCount * 2L
+                + localFlowCount + 4L;
+            if (upperBound > int.MaxValue) return false;
+        }
+
+        mutationUpperBound = (int)upperBound;
+        return mutationUpperBound > 0;
     }
 
     private static bool HasUnselectedRuntimeMemberFromCoreRoster(

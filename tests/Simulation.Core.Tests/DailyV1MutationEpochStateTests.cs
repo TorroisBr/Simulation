@@ -20,6 +20,27 @@ public sealed class DailyV1MutationEpochStateTests
     }
 
     [Test]
+    public void MultiOwnerCommitPublishesItsCompleteEpochCountAtomically()
+    {
+        DailyV1MutationEpochState state = new DailyV1MutationEpochState();
+
+        Assert.That(state.CanAdvanceBy(3), Is.True);
+        Assert.That(state.TryAdvanceCommittedMutations(3), Is.True);
+        Assert.That(state.CurrentEpoch, Is.EqualTo(3L),
+            "The census owner set is refreshed before all committed owner-write epochs become visible.");
+        Assert.That(state.TryAdvanceCommittedMutations(0), Is.False);
+        Assert.That(state.TryAdvanceCommittedMutations(-1), Is.False);
+        Assert.That(state.CurrentEpoch, Is.EqualTo(3L));
+
+        Assert.That(state.TryReserve(out DailyV1MutationEpochReservation reservation), Is.True);
+        Assert.That(state.CanAdvanceBy(1), Is.True);
+        Assert.That(state.TryAdvanceCommittedMutations(1), Is.False,
+            "Direct multi-owner publication cannot interleave with a reserved transaction.");
+        Assert.That(state.CurrentEpoch, Is.EqualTo(3L));
+        Assert.That(state.TryRelease(reservation), Is.True);
+    }
+
+    [Test]
     public void ReservedCommittedMutationCompletesOnceAndInvalidatesStaleHandles()
     {
         DailyV1MutationEpochState state = new DailyV1MutationEpochState();

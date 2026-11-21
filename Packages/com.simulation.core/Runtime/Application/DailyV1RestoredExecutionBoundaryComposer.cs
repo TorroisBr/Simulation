@@ -180,14 +180,30 @@ internal static class DailyV1RestoredExecutionBoundaryComposer
             admissionContext,
             SimulationRuntimeCompositionProfile.Standard,
             worldId);
-        if (!candidate.TryBindRuntimeConfiguration(effectiveConfiguration, calendar)
-            || !candidate.TryBindSelectedRuntimeOwnerGraph(ownerGraph)
-            || !candidate.TryBindInitialSelectedRuntimeActorRosterFromOwnerGraph()
-            || !candidate.TryBindSelectedRuntimeExecutionRoots(
-                runtimeIdAllocator, randomSource, recordSequence, decisionStore, actorChoiceStore)
-            || !candidate.HasAdmittedSelectedDailyExecution)
+        if (!candidate.TryBindRuntimeConfiguration(effectiveConfiguration, calendar))
         {
-            diagnostic = "Core rejected the restored selected owner graph or one of its exact execution roots.";
+            diagnostic = "Core rejected the restored configuration or calendar identity.";
+            return false;
+        }
+        if (!candidate.TryBindSelectedRuntimeOwnerGraph(ownerGraph))
+        {
+            diagnostic = "Core rejected the restored selected owner graph identity.";
+            return false;
+        }
+        if (!candidate.TryBindInitialSelectedRuntimeActorRosterFromOwnerGraph())
+        {
+            diagnostic = "Core rejected the restored owner graph actor roster.";
+            return false;
+        }
+        if (!candidate.TryBindSelectedRuntimeExecutionRoots(
+                runtimeIdAllocator, randomSource, recordSequence, decisionStore, actorChoiceStore))
+        {
+            diagnostic = "Core rejected the restored runtime execution roots.";
+            return false;
+        }
+        if (!candidate.HasAdmittedSelectedDailyExecution)
+        {
+            diagnostic = "Core rejected the restored selected daily execution admission.";
             return false;
         }
 

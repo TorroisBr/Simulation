@@ -2175,6 +2175,64 @@ internal sealed class DailyV1Application
             activeSessionGate.EndOperation(DailyV1OperationScopeKind.Application);
         }
     }
+
+    /// <summary>
+    /// Captures a trusted one-shot actor choice against the exact published
+    /// Core session. Domain eligibility is revalidated by the Core actor turn;
+    /// the host supplies only the stable command values.
+    /// </summary>
+    internal bool TryCaptureActorChoiceInput(
+        DailyV1ActiveRuntimeSession expectedSession,
+        string worldCommandId,
+        PersonId personId,
+        string actionDefinitionId,
+        WorldCommandOrigin origin,
+        WorldCommandAuthorityMode authority,
+        out ActorChoiceStoreFailureCode failure)
+    {
+        failure = ActorChoiceStoreFailureCode.RuntimeFaulted;
+        if (expectedSession == null
+            || !ReferenceEquals(activeSessionGate.Current, expectedSession)
+            || !expectedSession.ExecutionBoundaryState.IsHealthyDailyOwnerThreadBoundary())
+            return false;
+
+        if (!activeSessionGate.TryBeginOperation(
+                expectedSession,
+                DailyV1OperationScopeKind.Application,
+                out DailyV1ActiveRuntimeSession session))
+            return false;
+
+        try
+        {
+            DailyV1ExecutionBoundaryState executionState = session.ExecutionBoundaryState;
+            ActorChoiceStore actorChoices = executionState.SelectedActorChoiceStore;
+            if (!ReferenceEquals(session, expectedSession)
+                || !ReferenceEquals(executionState, expectedSession.ExecutionBoundaryState)
+                || !executionState.AdmissionContext.IsOwnedByCurrentThread()
+                || executionState.AdvanceLeaseHeld
+                || !executionState.MutationGuard.CanMutate
+                || !executionState.HasAdmittedSelectedDailyExecution
+                || executionState.AdmissionContext.Profile
+                    != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || actorChoices == null
+                || !ReferenceEquals(actorChoices.PersonStore, session.OwnerGraph.PersonStore))
+                return false;
+
+            return actorChoices.TryCapture(
+                worldCommandId,
+                personId,
+                actionDefinitionId,
+                origin,
+                authority,
+                session.SimulationTime.AbsoluteDay,
+                out _,
+                out failure);
+        }
+        finally
+        {
+            activeSessionGate.EndOperation(DailyV1OperationScopeKind.Application);
+        }
+    }
     /// <summary>
     /// Starts the single Core-owned P12-G save operation and captures the
     /// exact current completed-boundary witness before detached staging. The

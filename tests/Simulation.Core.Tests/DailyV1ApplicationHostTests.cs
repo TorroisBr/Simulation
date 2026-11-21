@@ -1592,6 +1592,130 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
+    public void PublishedCoreApplicationCapturesActorChoiceAgainstExactSessionAndP11Owner()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession session, out string startDiagnostic),
+            Is.True, startDiagnostic);
+
+        MinimalSelectedRuntimeAdvanceHostPorts hostPorts =
+            new MinimalSelectedRuntimeAdvanceHostPorts(session.ExecutionBoundaryState);
+        DailyV1ApplicationSessionGateTests.BindCoreSelectedCensusRegistryAndMarkReadyForTests(session);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, hostPorts), Is.True);
+        Assert.That(application.TryPublishInitial(session), Is.True);
+
+        PersonId personId = new PersonId("core-application-p11-person");
+        ActorChoiceStore actorChoices = session.ExecutionBoundaryState.SelectedActorChoiceStore;
+        int compatibilityMirrorRefreshCount = 0;
+        OwnerSectionCensusWitness before = null;
+        long epochBefore = 0L;
+        Assert.That(application.TryBeginOperation(
+            session, DailyV1OperationScopeKind.Application,
+            out DailyV1ActiveRuntimeSession registrationSession), Is.True);
+        Assert.That(registrationSession, Is.SameAs(session));
+        try
+        {
+            Assert.That(session.OwnerGraph.PersonStore.TryRegister(
+                new PersonRuntime(personId), out PersonStoreFailure personFailure),
+                Is.True, personFailure.ToString());
+            before = new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus();
+            epochBefore = session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch;
+            Assert.That(session.ExecutionBoundaryState.TryBindSelectedRuntimeExecutionRoots(
+                    session.ExecutionBoundaryState.SelectedRuntimeIdAllocator,
+                    session.ExecutionBoundaryState.SelectedRandomSource,
+                    session.ExecutionBoundaryState.SelectedRecordSequence,
+                    session.ExecutionBoundaryState.SelectedDecisionStore,
+                    actorChoices,
+                    changedSections =>
+                    {
+                        Assert.That(changedSections,
+                            Is.EqualTo(new[] { ActorChoiceP11CensusProvider.SectionId }));
+                        OwnerSectionCensusWitness committed =
+                            new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus();
+                        Assert.That(committed.Cardinality, Is.EqualTo(before.Cardinality + 1));
+                        Assert.That(committed.Revision, Is.EqualTo(before.Revision + 1L));
+                        Assert.That(session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch,
+                            Is.EqualTo(epochBefore + 1L),
+                            "The compatibility mirror observes the already-published Core epoch.");
+                        compatibilityMirrorRefreshCount++;
+                        return true;
+                    }), Is.True,
+                "The mirror callback binds only through the already bound runtime roots.");
+        }
+        finally
+        {
+            application.EndOperation(DailyV1OperationScopeKind.Application);
+        }
+
+        Assert.That(before.Cardinality, Is.Zero);
+        Assert.That(application.TryCaptureActorChoiceInput(
+            session,
+            "core-application-p11-command",
+            personId,
+            "VENDER_MERCADORIA",
+            WorldCommandOrigin.LocalPlayer,
+            WorldCommandAuthorityMode.Request,
+            out ActorChoiceStoreFailureCode captureFailure), Is.True, captureFailure.ToString());
+
+        OwnerSectionCensusWitness after =
+            new ActorChoiceP11CensusProvider(actorChoices).GetCurrentCensus();
+        Assert.That(after.OwnerInstanceIdentity, Is.SameAs(actorChoices.CensusOwnerIdentity));
+        Assert.That(after.OwnerInstanceIdentity, Is.SameAs(before.OwnerInstanceIdentity));
+        Assert.That(after.Cardinality, Is.EqualTo(before.Cardinality + 1));
+        Assert.That(after.Revision, Is.EqualTo(before.Revision + 1L));
+        Assert.That(compatibilityMirrorRefreshCount, Is.EqualTo(1),
+            "A successful Core ActorChoice commit synchronizes the exact compatibility row once.");
+        Assert.That(session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch,
+            Is.EqualTo(epochBefore + 1L),
+            "The application operation commits the ActorChoice owner write in exactly one shared epoch.");
+        Assert.That(session.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+
+        ActorChoiceInput captured = actorChoices.Inputs.Single();
+        Assert.That(captured.PersonId, Is.EqualTo(personId));
+        Assert.That(captured.ActionDefinitionId, Is.EqualTo("VENDER_MERCADORIA"));
+        Assert.That(captured.Origin, Is.EqualTo(WorldCommandOrigin.LocalPlayer));
+        Assert.That(captured.Authority, Is.EqualTo(WorldCommandAuthorityMode.Request));
+        Assert.That(captured.Status, Is.EqualTo(ActorChoiceInputStatus.Pending));
+
+        long committedEpoch = session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch;
+        Assert.That(application.TryCaptureActorChoiceInput(
+            session,
+            "core-application-p11-command",
+            personId,
+            "VENDER_MERCADORIA",
+            WorldCommandOrigin.LocalPlayer,
+            WorldCommandAuthorityMode.Request,
+            out ActorChoiceStoreFailureCode duplicateFailure), Is.False);
+        Assert.That(duplicateFailure,
+            Is.EqualTo(ActorChoiceStoreFailureCode.DuplicateWorldCommandId));
+        Assert.That(session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch,
+            Is.EqualTo(committedEpoch),
+            "A rejected duplicate command does not mutate the owner or publish another epoch.");
+
+        bool crossThreadCapture = System.Threading.Tasks.Task.Run(() =>
+            application.TryCaptureActorChoiceInput(
+                session,
+                "core-application-p11-cross-thread",
+                personId,
+                "VENDER_MERCADORIA",
+                WorldCommandOrigin.LocalPlayer,
+                WorldCommandAuthorityMode.Request,
+                out _)).GetAwaiter().GetResult();
+        Assert.That(crossThreadCapture, Is.False,
+            "The Core application preserves the selected session's owner-thread boundary.");
+        Assert.That(actorChoices.Count, Is.EqualTo(1));
+        Assert.That(session.ExecutionBoundaryState.MutationEpochState.CurrentEpoch,
+            Is.EqualTo(committedEpoch));
+    }
+
+    [Test]
     public void RestoredCoreOwnerGraphRejectsGenealogyEndpointsOutsidePersonStore()
     {
         PersonStore people = new PersonStore();

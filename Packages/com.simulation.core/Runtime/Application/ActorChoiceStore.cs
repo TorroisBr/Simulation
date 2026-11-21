@@ -1072,6 +1072,11 @@ public sealed class ActorChoiceStore : IAuthoritativeMutationGuardBindable
         p12MutationCommitted = committed;
     }
 
+    internal bool CanBindP12MutationBoundary(Func<bool> admission, Action committed) =>
+        admission != null && committed != null
+        && p12MutationAdmission == null
+        && p12MutationCommitted == null;
+
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
     {
         return CanBindMutationGuard(guard);
@@ -1276,6 +1281,10 @@ internal static class DailyV1ActorChoiceExecutionStage
                 throw new InvalidOperationException(
                     "The actor-choice action slot committed but its exact Unity projection could not be published.");
             }
+
+            if (boundary is IDailyV1SelectedActorActionExecutionBoundary selectedMutationBoundary)
+                DailyV1SelectedActorActionExecutionStage.NotifySelectedActionSlotP12MutationCommitted(
+                    graph, actor, selectedMutationBoundary);
         }
         else
         {

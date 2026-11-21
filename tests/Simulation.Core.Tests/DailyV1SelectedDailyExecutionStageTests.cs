@@ -5,6 +5,47 @@ using NUnit.Framework;
 
 public sealed class DailyV1SelectedDailyExecutionStageTests
 {
+    [TestCase(1L, 1, 4, true)]
+    [TestCase(2L, 1, 4, false)]
+    [TestCase(1L, 2, 4, false)]
+    [TestCase(3L, 3, 2, false)]
+    [TestCase(0L, 0, 4, false)]
+    [TestCase(-1L, 1, 4, false)]
+    public void HostPublishedDailyEconomyEpochMatchesExactOwnerMutationCount(
+        long publishedEpochDelta,
+        int committedMutationCount,
+        int mutationUpperBound,
+        bool expected)
+    {
+        Assert.That(
+            DailyV1SelectedDailyExecutionStage.HasExactHostPublishedDailyEconomyMutationEpochDelta(
+                publishedEpochDelta, committedMutationCount, mutationUpperBound),
+            Is.EqualTo(expected));
+    }
+
+    private sealed class CoreMarketOwnerCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly DailyV1CityRuntimeOwners city;
+        private readonly string sectionId;
+
+        internal CoreMarketOwnerCensusProvider(DailyV1CityRuntimeOwners city)
+        {
+            this.city = city ?? throw new ArgumentNullException(nameof(city));
+            string cityKey = P12DCityOwnerImageSectionCodec
+                .EncodeCityKeyForSection(city.RuntimeId);
+            sectionId = DailyV1SelectedOwnerSectionCensusContract
+                .CityMarketStockRowsSectionPrefix + cityKey;
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus() =>
+            new OwnerSectionCensusWitness(
+                sectionId,
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                city.Market,
+                city.Market.Items.Count,
+                city.Market.Revision);
+    }
+
     private sealed class MutableSelectedOwnerCensusProvider : IOwnerSectionCensusProvider
     {
         internal MutableSelectedOwnerCensusProvider(OwnerSectionCensusSnapshot snapshot) =>
@@ -569,17 +610,18 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "An attempted write outside the admitted mutation scope faults the selected census closed.");
     }
 
-    [TestCase(false, false, false, false, false, false, false, false, false, false)]
-    [TestCase(true, false, false, false, false, false, false, false, false, false)]
-    [TestCase(false, true, false, false, false, false, false, false, false, false)]
-    [TestCase(false, false, true, false, false, false, false, false, false, false)]
-    [TestCase(false, false, false, true, false, false, false, false, false, false)]
-    [TestCase(false, false, false, false, true, false, false, false, false, false)]
-    [TestCase(false, false, false, false, false, true, false, false, false, false)]
-    [TestCase(false, false, false, false, false, false, true, false, false, false)]
-    [TestCase(false, false, false, false, false, false, true, true, false, false)]
-    [TestCase(false, false, false, false, false, false, true, false, true, false)]
-    [TestCase(false, false, false, false, false, false, false, false, false, true)]
+    [TestCase(false, false, false, false, false, false, false, false, false, false, false)]
+    [TestCase(true, false, false, false, false, false, false, false, false, false, false)]
+    [TestCase(false, true, false, false, false, false, false, false, false, false, false)]
+    [TestCase(false, false, true, false, false, false, false, false, false, false, false)]
+    [TestCase(false, false, false, true, false, false, false, false, false, false, false)]
+    [TestCase(false, false, false, false, true, false, false, false, false, false, false)]
+    [TestCase(false, false, false, false, false, true, false, false, false, false, false)]
+    [TestCase(false, false, false, false, false, false, true, false, false, false, false)]
+    [TestCase(false, false, false, false, false, false, true, true, false, false, false)]
+    [TestCase(false, false, false, false, false, false, true, false, true, false, false)]
+    [TestCase(false, false, false, false, false, false, false, false, false, true, false)]
+    [TestCase(false, false, false, false, false, false, false, false, false, false, true)]
     public void CoreOnlyActorTurnExecutesAdmittedActionWithCompleteP12Census(
         bool prebindMismatchedCrimeReceiptIdentity,
         bool executeCoreOnlyHideAction,
@@ -590,11 +632,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         bool enableCoreOnlyMerchantTrade,
         bool executeCoreOnlyMerchantScopedKnowledgeMutation,
         bool rejectCoreOnlyCrossThreadKnowledgeMutation,
-        bool executeCoreOnlySteal)
+        bool executeCoreOnlySteal,
+        bool executeCoreOnlyLocalSellGoodsChoice)
     {
         DailyV1EffectiveDefinitions configuredDefinitions = CopyWithMerchantTradeEnabled(
             DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
-            enableCoreOnlyMerchantTrade);
+            enableCoreOnlyMerchantTrade || executeCoreOnlyLocalSellGoodsChoice);
         if (executeCoreOnlyFleeCity || executeCoreOnlySteal)
             configuredDefinitions = CopyWithCrimeAutonomousEnabled(configuredDefinitions, true);
         DailyV1EffectiveDefinitions definitions = CopyWithConfiguredActions(
@@ -606,6 +649,12 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 {
                     configuredDefinitions.Actions.Values.Single(action =>
                         action.Values.actionType?.Value == DailyV1NpcDefinitionRules.StealActionTypeValue)
+                        .DefinitionId
+                }
+                : executeCoreOnlyLocalSellGoodsChoice ? new[]
+                {
+                    configuredDefinitions.Actions.Values.Single(action =>
+                        action.Values.actionType?.Value == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue)
                         .DefinitionId
                 }
                 : new[] { "DESCANSAR" });
@@ -621,6 +670,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         if (executeCoreOnlySteal)
             definitions = CopyWithGuaranteedSuccessfulAction(
                 definitions, DailyV1NpcDefinitionRules.StealActionTypeValue);
+        if (executeCoreOnlyLocalSellGoodsChoice)
+            definitions = CopyWithGuaranteedSuccessfulAction(
+                definitions, DailyV1NpcDefinitionRules.SellGoodsActionTypeValue);
         DailyV1GenesisComposition composition = CreateSelectedGenesis(definitions);
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
         DailyV1StatusDefinition hiddenStatus = definitions.Statuses[
@@ -678,6 +730,41 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 && (stealArrestedStatus == null
                     || owner.Status?.Contains(stealArrestedStatus) != true))
             : null;
+        DailyV1NpcRuntimeOwners localSellChoiceActor = executeCoreOnlyLocalSellGoodsChoice
+            ? graph.Npcs.Single(owner => owner.Definition.DefinitionId == "JORGE")
+            : null;
+        DailyV1ActionDefinition localSellChoiceAction = executeCoreOnlyLocalSellGoodsChoice
+            ? definitions.Actions.Values.Single(action => action.Values.actionType?.Value
+                == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue)
+            : null;
+        PersonId localSellChoicePersonId = executeCoreOnlyLocalSellGoodsChoice
+            ? new PersonId("core-only-local-sell-choice-person")
+            : null;
+        DailyV1ItemDefinition localSellChoiceItem = executeCoreOnlyLocalSellGoodsChoice
+            ? definitions.Items["FERRO"]
+            : null;
+        DailyV1CityRuntimeOwners localSellChoiceCity = executeCoreOnlyLocalSellGoodsChoice
+            ? graph.Cities.Single(city => city.RuntimeId == localSellChoiceActor.Travel.CurrentCityRuntimeId)
+            : null;
+        int localSellInventoryBefore = 0;
+        int localSellMarketBefore = 0;
+        float localSellBalanceBefore = 0f;
+        if (executeCoreOnlyLocalSellGoodsChoice)
+        {
+            Assert.That(localSellChoiceActor.Inventory.TryAddItem(
+                localSellChoiceItem, 5, 10f), Is.True,
+                "The selected host-neutral SellGoods fixture starts with an exact Core inventory owner and stock.");
+            float referencePrice = localSellChoiceActor.Inventory.GetAverageUnitCost(localSellChoiceItem);
+            Assert.That(localSellChoiceActor.CommercialKnowledge.RecordObservation(
+                new DailyV1CommercialMarketObservation(
+                    localSellChoiceCity.LocationRuntimeId, localSellChoiceItem,
+                    referencePrice + 3f, 12,
+                    composition.SimulationTime.AbsoluteDay, composition.SimulationTime.AbsoluteDay,
+                    DailyV1CommercialKnowledgeSource.DirectObservation)), Is.True);
+            localSellInventoryBefore = localSellChoiceActor.Inventory.GetAmount(localSellChoiceItem);
+            localSellMarketBefore = localSellChoiceCity.Market.GetAmount(localSellChoiceItem);
+            localSellBalanceBefore = localSellChoiceActor.MoneyAccount.Balance;
+        }
         PersonId stealActorPersonId = null;
         PersonId stealVictimPersonId = null;
         CrimeSocialAppraisalWorldState stealSocial = null;
@@ -794,26 +881,37 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 "The exact admitted Core FleeCity action slot is prepared before the P12 census baseline.");
             fleeCityTravelPlanRevisionBefore = fleeCityActor.TravelPlan.Revision;
         }
-        if (executeCoreOnlySteal)
+        if (executeCoreOnlySteal || executeCoreOnlyLocalSellGoodsChoice)
         {
-            Assert.That(stealActor, Is.Not.Null,
-                "The authored selected profile provides an alive, present actor whose admitted NPC definition enables autonomous Steal.");
-            Assert.That(stealVictim, Is.Not.Null,
-                "The authored selected profile provides a co-located living victim with sufficient funds.");
-            Assert.That(DailyV1NpcDefinitionRules.HasConfiguredDefaultAction(
-                stealActor.Definition, definitions, stealAction), Is.True,
-                "The daily turn must select Steal through the actor's admitted default-action policy.");
-            Assert.That(DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
-                definitions, stealAction), Is.True);
-            Assert.That(DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
-                definitions, stealAction,
-                out _, out _,
-                out IReadOnlyList<DailyV1StatusDefinition> stealTargetStatusToRemove,
-                out IReadOnlyList<DailyV1StatusDefinition> stealTargetStatusToAdd), Is.True);
-            Assert.That(stealTargetStatusToRemove, Is.Empty);
-            Assert.That(stealTargetStatusToAdd, Is.Empty);
-            stealActorPersonId = new PersonId("core-only-daily-steal-actor");
-            stealVictimPersonId = new PersonId("core-only-daily-steal-victim");
+            if (executeCoreOnlySteal)
+            {
+                Assert.That(stealActor, Is.Not.Null,
+                    "The authored selected profile provides an alive, present actor whose admitted NPC definition enables autonomous Steal.");
+                Assert.That(stealVictim, Is.Not.Null,
+                    "The authored selected profile provides a co-located living victim with sufficient funds.");
+                Assert.That(DailyV1NpcDefinitionRules.HasConfiguredDefaultAction(
+                    stealActor.Definition, definitions, stealAction), Is.True,
+                    "The daily turn must select Steal through the actor's admitted default-action policy.");
+                Assert.That(DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+                    definitions, stealAction), Is.True);
+                Assert.That(DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
+                    definitions, stealAction,
+                    out _, out _,
+                    out IReadOnlyList<DailyV1StatusDefinition> stealTargetStatusToRemove,
+                    out IReadOnlyList<DailyV1StatusDefinition> stealTargetStatusToAdd), Is.True);
+                Assert.That(stealTargetStatusToRemove, Is.Empty);
+                Assert.That(stealTargetStatusToAdd, Is.Empty);
+                stealActorPersonId = new PersonId("core-only-daily-steal-actor");
+                stealVictimPersonId = new PersonId("core-only-daily-steal-victim");
+            }
+            else
+            {
+                Assert.That(localSellChoiceActor, Is.Not.Null);
+                Assert.That(localSellChoiceAction, Is.Not.Null);
+                Assert.That(DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
+                    definitions, localSellChoiceAction), Is.True,
+                    "The accepted actor choice uses a Local SellGoods action enabled by the admitted Core definitions.");
+            }
             DailyV1ExecutionBoundaryState genesisState = composition.ExecutionBoundaryState;
             foreach (DailyV1NpcRuntimeOwners owner in graph.Npcs)
             {
@@ -821,6 +919,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                     ? stealActorPersonId
                     : ReferenceEquals(owner, stealVictim)
                         ? stealVictimPersonId
+                        : ReferenceEquals(owner, localSellChoiceActor)
+                            ? localSellChoicePersonId
                         : new PersonId("core-only-daily-steal-person-" + owner.RuntimeId.Replace("/", "-"));
                 Assert.That(graph.PersonStore.TryRegister(
                     new PersonRuntime(personId), out _), Is.True);
@@ -834,15 +934,18 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 Assert.That(graph.PersonStore.TryBindMaterializedNpc(
                     personId, owner.RuntimeId, out _), Is.True);
             }
-            Assert.That(graph.P12EOwners?.CrimeSocialAppraisal, Is.Not.Null);
-            stealSocial = graph.P12EOwners.CrimeSocialAppraisal;
-            stealOutcomesBefore = stealSocial.TheftOutcomes.Count;
-            stealOutcomeRevisionBefore = stealSocial.TheftOutcomes.P12CensusRevision;
-            stealActorBalanceBefore = stealActor.MoneyAccount.Balance;
-            stealVictimBalanceBefore = stealVictim.MoneyAccount.Balance;
-            stealBalancesBefore = graph.Npcs.ToDictionary(
-                owner => owner.RuntimeId, owner => owner.MoneyAccount.Balance,
-                StringComparer.Ordinal);
+            if (executeCoreOnlySteal)
+            {
+                Assert.That(graph.P12EOwners?.CrimeSocialAppraisal, Is.Not.Null);
+                stealSocial = graph.P12EOwners.CrimeSocialAppraisal;
+                stealOutcomesBefore = stealSocial.TheftOutcomes.Count;
+                stealOutcomeRevisionBefore = stealSocial.TheftOutcomes.P12CensusRevision;
+                stealActorBalanceBefore = stealActor.MoneyAccount.Balance;
+                stealVictimBalanceBefore = stealVictim.MoneyAccount.Balance;
+                stealBalancesBefore = graph.Npcs.ToDictionary(
+                    owner => owner.RuntimeId, owner => owner.MoneyAccount.Balance,
+                    StringComparer.Ordinal);
+            }
         }
         Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero);
         if (expireCoreOnlyHiddenState)
@@ -865,16 +968,41 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         }
         Dictionary<string, OwnerSectionCensusSnapshot> before = initialVector.ToDictionary(
             row => row.SectionId, StringComparer.Ordinal);
+        if (executeCoreOnlyLocalSellGoodsChoice)
+        {
+            string accountSection = DailyV1SelectedOwnerSectionCensusContract
+                .NpcMoneyAccountPrefix + localSellChoiceActor.RuntimeId;
+            string inventorySection = DailyV1SelectedOwnerSectionCensusContract
+                .NpcInventoryPrefix + localSellChoiceActor.RuntimeId;
+            string marketSection = DailyV1SelectedOwnerSectionCensusContract
+                .CityMarketStockRowsSectionPrefix
+                + P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(
+                    localSellChoiceCity.RuntimeId);
+            Assert.That(before[accountSection].OwnerInstanceIdentity,
+                Is.SameAs(localSellChoiceActor.MoneyAccount));
+            Assert.That(before[inventorySection].OwnerInstanceIdentity,
+                Is.SameAs(localSellChoiceActor.Inventory));
+            Assert.That(before[marketSection].OwnerInstanceIdentity,
+                Is.SameAs(localSellChoiceCity.Market));
+        }
         Dictionary<string, IOwnerSectionCensusProvider> liveRuntimeProviders =
-            DailyV1NpcOwnerCensusProviders.CreateRuntimeAuthorityProviders(graph)
+            DailyV1NpcOwnerCensusProviders.CreateInventoryProviders(graph.Npcs)
+                .Concat(DailyV1NpcOwnerCensusProviders.CreateRuntimeAuthorityProviders(graph))
                 .Concat(DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph))
                 .Concat(DailyV1NpcOwnerCensusProviders.CreateCommercialKnowledgeProviders(graph.Npcs))
                 .Concat(DailyV1NpcOwnerCensusProviders.CreateSpatialKnowledgeProviders(graph.Npcs))
                 .Concat(DailyV1NpcOwnerCensusProviders.CreateMoneyAccountProviders(graph.Npcs))
                 .ToDictionary(provider => provider.GetCurrentCensus().SectionId,
                     StringComparer.Ordinal);
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            IOwnerSectionCensusProvider provider = new CoreMarketOwnerCensusProvider(city);
+            liveRuntimeProviders.Add(provider.GetCurrentCensus().SectionId, provider);
+        }
         liveRuntimeProviders[ScheduledDirectiveStore.SectionId] =
             new ScheduledDirectiveCensusProvider(graph.ScheduledDirectives);
+        liveRuntimeProviders[ActorChoiceP11CensusProvider.SectionId] =
+            new ActorChoiceP11CensusProvider(state.SelectedActorChoiceStore);
         if (executeCoreOnlySteal)
         {
             OwnerSectionCensusSnapshot theftOutcomeBaseline = initialVector.Single(row =>
@@ -937,6 +1065,36 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(state.TrySealSelectedOwnerSectionCensusRegistry(registrations), Is.True);
         Assert.That(state.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
 
+        ActorChoiceInput localSellChoiceInput = null;
+        long localSellChoiceRevisionBefore = state.SelectedActorChoiceStore.CensusRevision;
+        if (executeCoreOnlyLocalSellGoodsChoice)
+        {
+            long choiceCaptureEpochBefore = state.MutationEpochState.CurrentEpoch;
+            Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.Application), Is.True,
+                "The trusted local command enters through the selected Core application operation boundary.");
+            try
+            {
+                Assert.That(state.SelectedActorChoiceStore.TryCapture(
+                    "core-only-local-sell-choice",
+                    localSellChoicePersonId,
+                    localSellChoiceAction.DefinitionId,
+                    WorldCommandOrigin.LocalPlayer,
+                    WorldCommandAuthorityMode.Request,
+                    state.SimulationTime.AbsoluteDay,
+                    out localSellChoiceInput,
+                    out ActorChoiceStoreFailureCode choiceFailure), Is.True, choiceFailure.ToString());
+            }
+            finally
+            {
+                Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.Application), Is.True);
+            }
+            Assert.That(state.SelectedActorChoiceStore.CensusRevision,
+                Is.EqualTo(localSellChoiceRevisionBefore + 1L));
+            Assert.That(state.MutationEpochState.CurrentEpoch,
+                Is.EqualTo(choiceCaptureEpochBefore + 1L),
+                "P11 command capture updates the exact owner census and publishes one shared epoch.");
+        }
+
         object crimeReceiptIdentity = initialVector.Single(row =>
             row.SectionId == DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId)
             .OwnerInstanceIdentity;
@@ -989,18 +1147,19 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             Assert.That(state.CurrentCaptureToken, Is.SameAs(priorCaptureToken));
         }
 
-        if (executeCoreOnlySteal)
+        if (executeCoreOnlySteal || executeCoreOnlyLocalSellGoodsChoice)
         {
             Assert.That(state.TryValidateCurrentSelectedOwnerSectionCensusBaselines(), Is.True,
-                "The complete Core P12 census remains current after installing the exact Steal action and Person links.");
+                "The complete Core P12 census remains current after binding the selected actor operation and Person links.");
             Assert.That(state.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(graph), Is.True,
                 "The exact Crime/Justice P12 host binding is established from the sealed census.");
             Assert.That(state.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
-                graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding stealCrimeJusticeBinding), Is.True);
-            Assert.That(stealCrimeJusticeBinding.AdmissionEnabled, Is.True);
-            Assert.That(stealCrimeJusticeBinding.HasExactCoreOwnerRelationships(graph), Is.True);
+                graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding coreCrimeJusticeBinding), Is.True);
+            Assert.That(coreCrimeJusticeBinding.AdmissionEnabled, Is.True);
+            Assert.That(coreCrimeJusticeBinding.HasExactCoreOwnerRelationships(graph), Is.True);
             Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryValidateCoreOnlyStart(
-                state, graph, out string coreOnlyStartDiagnostic), Is.True, coreOnlyStartDiagnostic);
+                state, graph, out string coreOnlyStartDiagnostic), Is.True, coreOnlyStartDiagnostic,
+                "The admitted Core actor boundary permits the pending Local SellGoods choice for its roster turn.");
         }
         long mutationEpochBeforeTurn = state.MutationEpochState.CurrentEpoch;
         bool coreOnlyFleeCityActionSucceeded = false;
@@ -1008,13 +1167,13 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(state.TryBeginAdvance(invalidateCaptureToken: false,
             out DailyV1AdvanceLease lease), Is.True);
         Assert.That(state.TryBeginSelectedRuntimeDailyAdvanceOperation(), Is.True);
-        if (executeCoreOnlySteal)
+        if (executeCoreOnlySteal || executeCoreOnlyLocalSellGoodsChoice)
         {
             Assert.That(state.IsSelectedDailyAdvanceCoreTurnActive, Is.True);
             Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreateCoreOnly(
-                state, graph, out IDailyV1SelectedActorTurnExecutionContext admittedStealContext), Is.True,
-                "The active DailyAdvance must admit the exact Steal actor context.");
-            Assert.That(admittedStealContext, Is.Not.Null);
+                state, graph, out IDailyV1SelectedActorTurnExecutionContext admittedCoreContext), Is.True,
+                "The active DailyAdvance must admit the exact Core actor context, including the queued P11 choice.");
+            Assert.That(admittedCoreContext, Is.Not.Null);
         }
         if (executeCoreOnlyMerchantScopedKnowledgeMutation)
         {
@@ -1273,6 +1432,86 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
         Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(after), Is.True);
         Assert.That(after.Count, Is.EqualTo(initialVector.Length));
+        if (executeCoreOnlyLocalSellGoodsChoice)
+        {
+            Assert.That(state.SelectedActorChoiceStore.TryGet(
+                localSellChoiceInput.InputId, out ActorChoiceInput completedChoice), Is.True);
+            Assert.That(completedChoice.Status, Is.EqualTo(ActorChoiceInputStatus.AttemptReturned));
+            Assert.That(completedChoice.Dispositions.Select(disposition => disposition.Kind),
+                Is.EqualTo(new[]
+                {
+                    ActorChoiceDispositionKind.DispatchStarted,
+                    ActorChoiceDispositionKind.AttemptReturned
+                }));
+            Assert.That(completedChoice.Dispositions[0].DecisionRecordId, Is.Not.Null);
+            NpcDecisionRecord choiceDecision = composition.DecisionStore.Decisions.Single(decision =>
+                decision.ActorRuntimeId == localSellChoiceActor.RuntimeId
+                && decision.Origin == NpcDecisionOrigin.ActorChoice);
+            Assert.That(choiceDecision.ActionDefinitionId,
+                Is.EqualTo(localSellChoiceAction.DefinitionId));
+            Assert.That(localSellChoiceActor.Inventory.GetAmount(localSellChoiceItem),
+                Is.LessThan(localSellInventoryBefore),
+                "Core dispatch executes the requested local sale against the exact Inventory owner.");
+            Assert.That(localSellChoiceCity.Market.GetAmount(localSellChoiceItem),
+                Is.GreaterThan(localSellMarketBefore),
+                "The sale commits through the exact City Market owner.");
+            Assert.That(localSellChoiceActor.MoneyAccount.Balance,
+                Is.GreaterThan(localSellBalanceBefore),
+                "The sale commits its proceeds through the exact actor MoneyAccount owner.");
+            string accountSection = DailyV1SelectedOwnerSectionCensusContract
+                .NpcMoneyAccountPrefix + localSellChoiceActor.RuntimeId;
+            string inventorySection = DailyV1SelectedOwnerSectionCensusContract
+                .NpcInventoryPrefix + localSellChoiceActor.RuntimeId;
+            string marketSection = DailyV1SelectedOwnerSectionCensusContract
+                .CityMarketStockRowsSectionPrefix
+                + P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(
+                    localSellChoiceCity.RuntimeId);
+            OwnerSectionCensusSnapshot accountAfter = after.Single(row =>
+                row.SectionId == accountSection);
+            OwnerSectionCensusSnapshot inventoryAfter = after.Single(row =>
+                row.SectionId == inventorySection);
+            OwnerSectionCensusSnapshot marketAfter = after.Single(row =>
+                row.SectionId == marketSection);
+            Assert.That(accountAfter.OwnerInstanceIdentity,
+                Is.SameAs(localSellChoiceActor.MoneyAccount));
+            Assert.That(inventoryAfter.OwnerInstanceIdentity,
+                Is.SameAs(localSellChoiceActor.Inventory));
+            Assert.That(marketAfter.OwnerInstanceIdentity,
+                Is.SameAs(localSellChoiceCity.Market));
+            Assert.That(accountAfter.Revision,
+                Is.EqualTo(before[accountSection].Revision + 1L));
+            Assert.That(inventoryAfter.Revision,
+                Is.EqualTo(before[inventorySection].Revision + 1L));
+            Assert.That(marketAfter.Revision,
+                Is.GreaterThan(before[marketSection].Revision),
+                "Daily consumption/price updates and the actor sale share this completed daily boundary; the MarketSale boundary separately enforces its exact one-write revision delta.");
+            Assert.That(accountAfter.Revision,
+                Is.EqualTo(localSellChoiceActor.MoneyAccount.Revision));
+            Assert.That(inventoryAfter.Revision,
+                Is.EqualTo(localSellChoiceActor.Inventory.Revision));
+            Assert.That(marketAfter.Revision,
+                Is.EqualTo(localSellChoiceCity.Market.Revision));
+            Assert.That(state.MutationEpochState.CurrentEpoch,
+                Is.GreaterThanOrEqualTo(mutationEpochBeforeTurn + 3L),
+                "The MoneyAccount, Inventory and Market sale commits each publish through the shared P12 epoch.");
+            Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.False);
+            Assert.That(state.SelectedActorChoiceStore.PendingInputs, Is.Empty,
+                "Only terminal actor-choice history remains at the completed P12 boundary.");
+            OwnerSectionCensusSnapshot p11After = after.Single(row =>
+                row.SectionId == ActorChoiceP11CensusProvider.SectionId);
+            OwnerSectionCensusSnapshot p11Before = before[
+                ActorChoiceP11CensusProvider.SectionId];
+            Assert.That(p11After.OwnerInstanceIdentity,
+                Is.SameAs(state.SelectedActorChoiceStore.CensusOwnerIdentity),
+                "The P11 row is bound to ActorChoiceStore's exact census identity token.");
+            Assert.That(p11After.Cardinality,
+                Is.EqualTo(p11Before.Cardinality + 1));
+            Assert.That(p11After.Revision,
+                Is.GreaterThan(localSellChoiceRevisionBefore + 1L),
+                "Core P12 census includes capture and terminal dispatch history on the same ActorChoice owner.");
+            Assert.That(state.CurrentCaptureToken, Is.Null,
+                "The test invokes the selected daily stage inside manually owned scopes, not the outer runtime-advance publisher; committed choice/sale mutations must revoke the old token until the real completed boundary publishes a new one.");
+        }
         if (enableCoreOnlyMerchantTrade)
         {
             string[] commercialPrefixes =
