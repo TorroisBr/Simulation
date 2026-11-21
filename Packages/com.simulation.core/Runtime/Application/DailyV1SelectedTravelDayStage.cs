@@ -551,7 +551,8 @@ internal static class DailyV1SelectedTravelDayStage
                     "The admitted Core travel transition has no P12 mutation protocol.");
             if (p12Protocol != null && !p12Protocol.NotifyCommittedMutations(sectionIds))
                 throw new InvalidOperationException(
-                    "P12 rejected a committed selected travel owner mutation.");
+                    "P12 rejected a committed selected travel owner mutation. Core: "
+                    + (executionState?.LastCoreSelectedTravelMutationRejection ?? "unspecified"));
         }
 
         bool PublishTravelPartyArrival(TravelPartyRuntime party)

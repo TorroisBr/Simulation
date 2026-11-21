@@ -822,8 +822,12 @@ internal static class DailyV1SelectedActionExecutionStage
             {
                 if (!IsCurrent() || result?.Succeeded != true)
                     FaultAndThrow("The Core-only Travel completion is not the exact committed operation.");
-                // Event/log projections remain host output. Authoritative travel,
-                // account, spatial, presence, plan and P12 state are already Core-owned.
+                if (!state.TryRecordSelectedSoloTravelStartedEvent(
+                        graph, actor, result, out bool eventRecorded)
+                    || !eventRecorded)
+                    FaultAndThrow(
+                        "The Core-only Travel start did not publish its exact authoritative domain event. P12: "
+                        + state.LastSelectedP12SoloTravelStartRejection);
             }
 
             public void LogCommercialScouting() { }

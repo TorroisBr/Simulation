@@ -255,6 +255,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private string lastCoreDecisionMutationAdmissionRejection;
     internal string LastCoreDecisionMutationAdmissionRejection =>
         lastCoreDecisionMutationAdmissionRejection;
+    private string lastCoreSelectedTravelMutationRejection;
+    internal string LastCoreSelectedTravelMutationRejection =>
+        lastCoreSelectedTravelMutationRejection;
     private readonly HashSet<string> expectedRuntimeProtocolOperationContracts =
         new HashSet<string>(StringComparer.Ordinal);
     private readonly List<string> activeRuntimeProtocolOperationContracts =
@@ -551,6 +554,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     {
         internal readonly DailyV1SelectedRuntimeOwnerGraph Graph;
         internal readonly DailyV1NpcRuntimeOwners Actor;
+        internal readonly string OriginLocationRuntimeId;
         internal readonly IDailyV1SelectedP12SoloTravelStartCensusPort Protocol;
         internal readonly Thread OwnerThread;
         internal readonly int OwnerManagedThreadId;
@@ -570,6 +574,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         {
             Graph = graph;
             Actor = actor;
+            OriginLocationRuntimeId = actor?.Travel?.CurrentLocationRuntimeId;
             Protocol = protocol;
             OwnerThread = Thread.CurrentThread;
             OwnerManagedThreadId = OwnerThread.ManagedThreadId;
@@ -1556,7 +1561,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     {
         if (graph == null || sectionIds == null
             || !TryGetExactCoreLocalKnowledgeOwnerSections(
-                graph, sectionIds, out _, out string[] orderedSections))
+                graph, sectionIds, out DailyV1NpcRuntimeOwners localKnowledgeOwner,
+                out string[] orderedSections))
             return false;
 
         lock (operationSyncRoot)
@@ -1570,6 +1576,15 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 return TryCanCommitSelectedP12MerchantDailyTradeMutation(
                         orderedSections, out bool merchantHandled)
                     && merchantHandled;
+
+            SelectedP12SoloTravelStartContext soloTravelContext =
+                selectedP12SoloTravelStartContext;
+            if (soloTravelContext != null)
+                return IsExactSelectedSoloTravelSpatialKnowledgeMutation(
+                        soloTravelContext, graph, localKnowledgeOwner, orderedSections)
+                    && TryCanCommitSelectedP12SoloTravelStartMutation(
+                        orderedSections, out bool soloTravelHandled)
+                    && soloTravelHandled;
 
             return IsSelectedDailyAdvanceCoreTurnActiveUnsafe()
                 && selectedP12TravelPartyAdvanceContext == null
@@ -1592,7 +1607,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     {
         if (graph == null || sectionIds == null
             || !TryGetExactCoreLocalKnowledgeOwnerSections(
-                graph, sectionIds, out _, out string[] orderedSections))
+                graph, sectionIds, out DailyV1NpcRuntimeOwners localKnowledgeOwner,
+                out string[] orderedSections))
             return false;
 
         lock (operationSyncRoot)
@@ -1606,6 +1622,15 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 return TryRecordSelectedP12MerchantDailyTradeMutation(
                         orderedSections, out bool merchantHandled)
                     && merchantHandled;
+
+            SelectedP12SoloTravelStartContext soloTravelContext =
+                selectedP12SoloTravelStartContext;
+            if (soloTravelContext != null)
+                return IsExactSelectedSoloTravelSpatialKnowledgeMutation(
+                        soloTravelContext, graph, localKnowledgeOwner, orderedSections)
+                    && TryRecordSelectedP12SoloTravelStartMutation(
+                        orderedSections, out bool soloTravelHandled)
+                    && soloTravelHandled;
 
             if (!IsSelectedDailyAdvanceCoreTurnActiveUnsafe()
                 || selectedP12TravelPartyAdvanceContext != null
@@ -1719,6 +1744,31 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         return true;
     }
 
+    private bool IsExactSelectedSoloTravelSpatialKnowledgeMutation(
+        SelectedP12SoloTravelStartContext context,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners localKnowledgeOwner,
+        IReadOnlyList<string> sectionIds)
+    {
+        if (!IsCurrentSelectedSoloTravelStartContext(context)
+            || !ReferenceEquals(graph, context.Graph)
+            || !ReferenceEquals(localKnowledgeOwner, context.Actor)
+            || !ReferenceEquals(context.Actor.SpatialKnowledge, localKnowledgeOwner)
+            || sectionIds == null || sectionIds.Count != 2)
+            return false;
+
+        string locationsId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix
+            + context.Actor.RuntimeId;
+        string routesId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix
+            + context.Actor.RuntimeId;
+        string[] expected = { locationsId, routesId };
+        Array.Sort(expected, StringComparer.Ordinal);
+        return HaveExactSelectedP12SectionSet(
+            expected, new List<string>(sectionIds));
+    }
+
     /// <summary>
     /// Commits one selected solo travel-day owner transition through the
     /// sealed Core census. The changed cut is restricted to the exact travel
@@ -1730,34 +1780,39 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         DailyV1SelectedRuntimeOwnerGraph graph,
         IReadOnlyCollection<string> sectionIds)
     {
+        lastCoreSelectedTravelMutationRejection = null;
         if (graph == null || sectionIds == null || sectionIds.Count == 0
             || !HasAdmittedSelectedDailyExecution
             || !HasSealedSelectedOwnerSectionCensusRegistry
             || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
             || AdmissionContext?.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || !AdmissionContext.IsOwnedByCurrentThread())
-            return false;
+            return RejectCoreSelectedTravelMutation("AdmissionOrGraphMismatch");
 
         HashSet<string> changed = new HashSet<string>(StringComparer.Ordinal);
         try
         {
             foreach (string sectionId in sectionIds)
                 if (string.IsNullOrWhiteSpace(sectionId) || !changed.Add(sectionId))
-                    return false;
+                    return RejectCoreSelectedTravelMutation("ChangedSectionInvalidOrDuplicate");
         }
-        catch { return false; }
-        if (changed.Count == 0) return false;
+        catch { return RejectCoreSelectedTravelMutation("ChangedSectionEnumerationFailed"); }
+        if (changed.Count == 0) return RejectCoreSelectedTravelMutation("ChangedSectionSetEmpty");
 
         lock (operationSyncRoot)
         {
             if (!HasAdmittedSelectedDailyExecution
                 || !AdmissionContext.IsOwnedByCurrentThread()
-                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph)
-                || !IsSelectedDailyAdvanceCoreTurnActiveUnsafe()
-                || selectedP12TravelPartyAdvanceContext != null
-                || selectedCoreTravelCityCardinalityTransitionSections != null
-                || !CanAdvanceSelectedMutationEpoch)
-                return false;
+                || !ReferenceEquals(selectedRuntimeOwnerGraph, graph))
+                return RejectCoreSelectedTravelMutation("OperationContextChanged");
+            if (!IsSelectedDailyAdvanceCoreTurnActiveUnsafe())
+                return RejectCoreSelectedTravelMutation("DailyAdvanceTurnNotActive");
+            if (selectedP12TravelPartyAdvanceContext != null)
+                return RejectCoreSelectedTravelMutation("TravelPartyAdvanceScopeActive");
+            if (selectedCoreTravelCityCardinalityTransitionSections != null)
+                return RejectCoreSelectedTravelMutation("CityCardinalityTransitionScopeActive");
+            if (!CanAdvanceSelectedMutationEpoch)
+                return RejectCoreSelectedTravelMutation("MutationEpochUnavailable");
 
             HashSet<string> cityCardinalityTransitions = new HashSet<string>(StringComparer.Ordinal);
             HashSet<string> checkedSpatialOwners = new HashSet<string>(StringComparer.Ordinal);
@@ -1767,7 +1822,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                         sectionId, out DailyV1OwnerSectionCensusProviderRegistration registration)
                     || registration == null || registration.Role != OwnerSectionRole.Required
                     || !registration.HasBaseline)
-                    return false;
+                    return RejectCoreSelectedTravelMutation("OwnerRowNotRegistered:" + sectionId);
 
                 bool npcTravel = TryGetSelectedTravelMutationNpc(
                     graph, sectionId, out DailyV1NpcRuntimeOwners npc);
@@ -1778,50 +1833,57 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     out string locationsId, out string routesId);
                 int mutationFamilyCount = (npcTravel ? 1 : 0)
                     + (cityPresence ? 1 : 0) + (spatialKnowledge ? 1 : 0);
-                if (mutationFamilyCount != 1) return false;
+                if (mutationFamilyCount != 1)
+                    return RejectCoreSelectedTravelMutation("OwnerFamilyMismatch:" + sectionId);
 
                 if (spatialKnowledge)
                 {
                     if (!changed.Contains(locationsId) || !changed.Contains(routesId))
-                        return false;
+                        return RejectCoreSelectedTravelMutation("SpatialKnowledgePairIncomplete:" + sectionId);
                     if (!checkedSpatialOwners.Add(spatialRuntimeId)) continue;
                     if (!TryValidateCoreSelectedTravelSpatialMutation(
                             graph, spatialRuntimeId, locationsId, routesId))
-                        return false;
+                        return RejectCoreSelectedTravelMutation("SpatialKnowledgeReceiptMismatch:" + spatialRuntimeId);
                     continue;
                 }
 
                 OwnerSectionCensusWitness witness;
                 try { witness = registration.Provider.GetCurrentCensus(); }
-                catch { return false; }
+                catch { return RejectCoreSelectedTravelMutation("OwnerWitnessReadFailed:" + sectionId); }
                 if (witness == null
                     || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
                     || witness.SchemaVersion != registration.SchemaVersion
                     || !ReferenceEquals(witness.OwnerInstanceIdentity,
                         registration.BaselineOwnerInstanceIdentity))
-                    return false;
+                    return RejectCoreSelectedTravelMutation("OwnerWitnessIdentityMismatch:" + sectionId);
 
                 if (npcTravel)
                 {
-                    if (!ReferenceEquals(registration.BaselineOwnerInstanceIdentity, npc.Travel)
+                    if (!ReferenceEquals(registration.BaselineOwnerInstanceIdentity, npc)
                         || registration.BaselineCardinality != 1
                         || witness.Cardinality != 1
                         || registration.BaselineRevision == long.MaxValue
                         || witness.Revision != registration.BaselineRevision + 1L)
-                        return false;
+                        return RejectCoreSelectedTravelMutation(
+                            "TravelRevisionReceiptMismatch:" + sectionId + ":"
+                            + registration.BaselineRevision.ToString(
+                                System.Globalization.CultureInfo.InvariantCulture)
+                            + "->" + witness.Revision.ToString(
+                                System.Globalization.CultureInfo.InvariantCulture));
                 }
                 else
                 {
                     if (!ReferenceEquals(registration.BaselineOwnerInstanceIdentity, city.NpcPresence)
                         || registration.BaselineRevision == long.MaxValue
                         || witness.Revision != registration.BaselineRevision + 1L)
-                        return false;
+                        return RejectCoreSelectedTravelMutation("CityPresenceRevisionReceiptMismatch:" + sectionId);
 
                     bool oneAdded = registration.BaselineCardinality < int.MaxValue
                         && witness.Cardinality == registration.BaselineCardinality + 1;
                     bool oneRemoved = registration.BaselineCardinality > 0
                         && witness.Cardinality == registration.BaselineCardinality - 1;
-                    if (!oneAdded && !oneRemoved) return false;
+                    if (!oneAdded && !oneRemoved)
+                        return RejectCoreSelectedTravelMutation("CityPresenceCardinalityReceiptMismatch:" + sectionId);
                     if (witness.Cardinality != registration.BaselineCardinality)
                         cityCardinalityTransitions.Add(sectionId);
                 }
@@ -1833,14 +1895,24 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             selectedCoreTravelCityCardinalityTransitionSections = cityCardinalityTransitions;
             try
             {
-                return TryRefreshAndAdvanceSelectedMutationEpoch(
-                    ordered, protocol.TryRefreshCommittedMutationBaselines);
+                if (!TryRefreshAndAdvanceSelectedMutationEpoch(
+                        ordered, protocol.TryRefreshCommittedMutationBaselines))
+                    return RejectCoreSelectedTravelMutation(
+                        "CensusRefreshOrEpochRejected:" +
+                        (lastSelectedOwnerSectionCensusRefreshRejection ?? "Unspecified"));
+                return true;
             }
             finally
             {
                 selectedCoreTravelCityCardinalityTransitionSections = null;
             }
         }
+    }
+
+    private bool RejectCoreSelectedTravelMutation(string rejection)
+    {
+        lastCoreSelectedTravelMutationRejection = rejection;
+        return false;
     }
 
     private static bool TryGetSelectedTravelMutationNpc(
@@ -2633,9 +2705,27 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         return false;
     }
 
-    private bool AllowsCurrentCoreLocalKnowledgeCardinalityTransition(string sectionId) =>
-        selectedCoreLocalKnowledgeCardinalityTransitionSections != null
-        && selectedCoreLocalKnowledgeCardinalityTransitionSections.Contains(sectionId);
+    private bool AllowsCurrentCoreLocalKnowledgeCardinalityTransition(string sectionId)
+    {
+        if (selectedCoreLocalKnowledgeCardinalityTransitionSections != null
+            && selectedCoreLocalKnowledgeCardinalityTransitionSections.Contains(sectionId))
+            return true;
+
+        SelectedP12SoloTravelStartContext context = selectedP12SoloTravelStartContext;
+        if (!IsCurrentSelectedSoloTravelStartContext(context)
+            || !context.ChangedSectionIds.Contains(sectionId)
+            || !context.AllowedSectionIds.Contains(sectionId))
+            return false;
+
+        string expectedLocationsSectionId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix
+            + context.Actor.RuntimeId;
+        string expectedRoutesSectionId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix
+            + context.Actor.RuntimeId;
+        return string.Equals(sectionId, expectedLocationsSectionId, StringComparison.Ordinal)
+            || string.Equals(sectionId, expectedRoutesSectionId, StringComparison.Ordinal);
+    }
 
     internal static bool IsSelectedDynamicOwnerSectionId(string sectionId)
     {
@@ -4617,18 +4707,23 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         {
             SelectedP12SoloTravelStartContext context = selectedP12SoloTravelStartContext;
             handled = context != null;
+            lastSelectedP12SoloTravelStartRejection = null;
             if (context == null) return true;
             if (!IsCurrentSelectedSoloTravelStartContext(context)
                 || !TryGetRequestedSoloTravelStartSections(
                     context, sectionIds, out HashSet<string> requested))
             {
+                lastSelectedP12SoloTravelStartRejection = "AdmissionContextOrSectionMismatch";
                 FaultSelectedSoloTravelStart(context.Protocol);
                 return false;
             }
 
             if (!TryValidateSelectedSoloTravelStartCoreOwnerRowsUnchanged(
-                    context, requested, out HashSet<string> coreOwnedRows))
+                    context, requested, out HashSet<string> coreOwnedRows,
+                    out string ownerRowsRejection))
             {
+                lastSelectedP12SoloTravelStartRejection = ownerRowsRejection
+                    ?? "CoreOwnerRowsChanged";
                 FaultSelectedSoloTravelStart(context.Protocol);
                 return false;
             }
@@ -5538,23 +5633,35 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private static bool TryValidateSelectedSoloTravelStartCoreOwnerRowsUnchanged(
         SelectedP12SoloTravelStartContext context,
         HashSet<string> requested,
-        out HashSet<string> coreOwnedRows)
+        out HashSet<string> coreOwnedRows,
+        out string rejection)
     {
         coreOwnedRows = new HashSet<string>(StringComparer.Ordinal);
-        if (context == null || requested == null) return false;
+        rejection = null;
+        if (context == null || requested == null)
+        {
+            rejection = "CoreOwnerRowsInputMissing";
+            return false;
+        }
         HashSet<string> checkedSpatialOwners = new HashSet<string>(StringComparer.Ordinal);
         foreach (string sectionId in requested)
         {
             if (!context.CoreOwnerSectionBaselines.TryGetValue(
                     sectionId, out SelectedP12OwnerSectionBaseline baseline))
+            {
+                rejection = "OwnerBaselineMissing:" + sectionId;
                 return false;
+            }
 
             if (TryGetSpatialKnowledgeSectionPair(
                     sectionId, out string runtimeId, out string locationsId, out string routesId))
             {
                 if (!string.Equals(runtimeId, context.Actor.RuntimeId, StringComparison.Ordinal)
                     || !requested.Contains(locationsId) || !requested.Contains(routesId))
+                {
+                    rejection = "SpatialKnowledgePairMismatch:" + sectionId;
                     return false;
+                }
                 if (!checkedSpatialOwners.Add(runtimeId)) continue;
                 if (!context.CoreOwnerSectionBaselines.TryGetValue(
                         locationsId, out SelectedP12OwnerSectionBaseline locationsBaseline)
@@ -5571,7 +5678,10 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                     || routes.Revision != routesBaseline.Revision
                     || routes.Cardinality != routesBaseline.Cardinality
                     || locations.Revision != routes.Revision)
+                {
+                    rejection = "SpatialKnowledgeOwnerWitnessChanged:" + runtimeId;
                     return false;
+                }
                 coreOwnedRows.Add(locationsId);
                 coreOwnedRows.Add(routesId);
                 continue;
@@ -5601,12 +5711,28 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 context.Graph, sectionId, out DailyV1CityRuntimeOwners city)
                 && ReferenceEquals(baseline.Owner, city.NpcPresence);
             if ((!exactNpcOwner && !exactRuntimeCounter && !exactCityPresence)
-                || !TryCaptureSelectedP12OwnerSectionWitness(
-                    sectionId, baseline, out OwnerSectionCensusWitness current)
-                || current.Cardinality != baseline.Cardinality
-                || current.Revision != baseline.Revision
-                || (exactCityPresence && !city.NpcPresence.Contains(context.Actor.RuntimeId)))
+                )
+            {
+                rejection = "OwnerIdentityMismatch:" + sectionId;
                 return false;
+            }
+            if (!TryCaptureSelectedP12OwnerSectionWitness(
+                    sectionId, baseline, out OwnerSectionCensusWitness current))
+            {
+                rejection = "OwnerWitnessUnavailable:" + sectionId;
+                return false;
+            }
+            if (current.Cardinality != baseline.Cardinality
+                || current.Revision != baseline.Revision)
+            {
+                rejection = "OwnerRevisionOrCardinalityChanged:" + sectionId;
+                return false;
+            }
+            if (exactCityPresence && !city.NpcPresence.Contains(context.Actor.RuntimeId))
+            {
+                rejection = "CityPresenceChanged:" + sectionId;
+                return false;
+            }
             coreOwnedRows.Add(sectionId);
         }
         return true;
@@ -7959,6 +8085,32 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     {
         lock (operationSyncRoot)
         {
+            SelectedP12SoloTravelStartContext soloTravelContext =
+                selectedP12SoloTravelStartContext;
+            if (soloTravelContext != null)
+            {
+                string soloTravelRejection = !selectedCoreDecisionMutationBoundariesBound
+                    ? "DecisionMutationBoundariesNotBound"
+                    : !CanAdvanceSelectedMutationEpoch
+                        ? "MutationEpochUnavailable"
+                    : !IsExactSelectedSoloTravelIdentityMutation(
+                        soloTravelContext, expectedOwner, sectionId)
+                        ? "ExactOwnerOrSectionMismatch:" + sectionId
+                    : null;
+                bool handled = false;
+                if (soloTravelRejection == null
+                    && !TryCanCommitSelectedP12SoloTravelStartMutation(
+                        new[] { sectionId }, out handled))
+                    soloTravelRejection = "P12OwnerReceiptRejected:" +
+                        (lastSelectedP12SoloTravelStartRejection ?? "Unspecified");
+                else if (soloTravelRejection == null && !handled)
+                    soloTravelRejection = "P12OwnerReceiptNotHandled:" + sectionId;
+                lastCoreDecisionMutationAdmissionRejection = soloTravelRejection;
+                if (soloTravelRejection != null)
+                    FaultSelectedCoreDecisionMutationBoundary();
+                return soloTravelRejection == null;
+            }
+
             string rejection = !selectedCoreDecisionMutationBoundariesBound
                 ? "DecisionMutationBoundariesNotBound"
                 : !IsSelectedDailyAdvanceCoreTurnActiveUnsafe()
@@ -7988,6 +8140,23 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         {
             lock (operationSyncRoot)
             {
+                SelectedP12SoloTravelStartContext soloTravelContext =
+                    selectedP12SoloTravelStartContext;
+                if (soloTravelContext != null)
+                {
+                    if (!selectedCoreDecisionMutationBoundariesBound
+                        || !CanAdvanceSelectedMutationEpoch
+                        || !IsExactSelectedSoloTravelIdentityMutation(
+                            soloTravelContext, expectedOwner, sectionId)
+                        || !TryRecordSelectedP12SoloTravelStartMutation(
+                            new[] { sectionId }, out bool soloTravelHandled)
+                        || !soloTravelHandled)
+                        throw new InvalidOperationException(
+                            "The selected SoloTravel event identity write did not match its exact P12 receipt.");
+                    lastCoreDecisionMutationAdmissionRejection = null;
+                    return;
+                }
+
                 if (!selectedCoreDecisionMutationBoundariesBound
                     || !IsSelectedDailyAdvanceCoreTurnActiveUnsafe()
                     || !CanAdvanceSelectedMutationEpoch
@@ -8006,6 +8175,29 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 "The committed selected Decision/record-sequence owner write could not refresh the Core census and mutation epoch.",
                 exception);
         }
+    }
+
+    private bool IsExactSelectedSoloTravelIdentityMutation(
+        SelectedP12SoloTravelStartContext context,
+        object expectedOwner,
+        string sectionId)
+    {
+        if (!IsCurrentSelectedSoloTravelStartContext(context)
+            || string.IsNullOrWhiteSpace(sectionId)
+            || !context.AllowedSectionIds.Contains(sectionId))
+            return false;
+
+        if (string.Equals(sectionId, RuntimeIdAllocatorCensusProvider.EventsSectionId,
+                StringComparison.Ordinal))
+            return ReferenceEquals(expectedOwner, selectedRuntimeIdAllocator)
+                && ReferenceEquals(expectedOwner, context.Graph.RuntimeIdAllocator);
+
+        if (string.Equals(sectionId, SimulationRecordSequenceCensusProvider.SectionId,
+                StringComparison.Ordinal))
+            return ReferenceEquals(expectedOwner, selectedRecordSequence)
+                && ReferenceEquals(expectedOwner, context.Graph.RecordSequence);
+
+        return false;
     }
 
     private bool IsExactSelectedCoreDecisionMutationOwner(
@@ -8231,6 +8423,96 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 npc.Travel.CurrentLocationRuntimeId,
                 result.OriginDecisionId));
         return true;
+    }
+
+    internal bool TryRecordSelectedSoloTravelStartedEvent(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1SelectedActionExecutionStage.SoloTravelResult result,
+        out bool eventRecorded)
+    {
+        eventRecorded = false;
+        lock (operationSyncRoot)
+        {
+            SelectedP12SoloTravelStartContext context = selectedP12SoloTravelStartContext;
+            DailyV1SelectedTravelTransitionPlan transition = result?.Transition;
+            SpatialRouteRuntime route = result?.Route;
+            string rejection = !IsCurrentSelectedSoloTravelStartContext(context)
+                ? "SoloTravelStartContextUnavailable"
+                : !selectedTravelEventRecordersBound
+                    ? "SoloTravelEventRecordersNotBound"
+                : !AdvanceLeaseHeld
+                    ? "DailyAdvanceLeaseNotHeld"
+                : !ReferenceEquals(graph, context.Graph)
+                    ? "OwnerGraphMismatch"
+                : !ReferenceEquals(actor, context.Actor)
+                    ? "ActorOwnerMismatch"
+                : !ReferenceEquals(actor, transition?.Npc)
+                    ? "TransitionActorMismatch"
+                : result?.Succeeded != true
+                    ? "TravelResultNotSuccessful"
+                : transition.IsCommitted != true
+                    ? "TravelTransitionNotCommitted"
+                : route == null
+                    ? "TravelRouteMissing"
+                : !string.Equals(route.RuntimeId, transition.RouteRuntimeId, StringComparison.Ordinal)
+                    ? "TravelRouteIdentityMismatch"
+                : !string.Equals(route.Origin?.RuntimeId,
+                    context.OriginLocationRuntimeId, StringComparison.Ordinal)
+                    ? "TravelOriginMismatch"
+                : !string.Equals(route.Destination?.RuntimeId,
+                    transition.DestinationLocationRuntimeId, StringComparison.Ordinal)
+                    ? "TravelDestinationMismatch"
+                : !actor.Travel.IsTraveling || !actor.Travel.TravelStartedToday
+                    ? "TravelOwnerNotAtCommittedStartBoundary"
+                : !string.Equals(actor.Travel.CurrentLocationRuntimeId,
+                    transition.CurrentLocationRuntimeId, StringComparison.Ordinal)
+                    ? "TravelCurrentLocationMismatch"
+                : !string.Equals(actor.Travel.DestinationLocationRuntimeId,
+                    transition.DestinationLocationRuntimeId, StringComparison.Ordinal)
+                    ? "TravelDestinationLocationMismatch"
+                : !string.Equals(actor.Travel.DestinationCityRuntimeId,
+                    transition.DestinationCityRuntimeId, StringComparison.Ordinal)
+                    ? "TravelDestinationCityMismatch"
+                : !string.Equals(actor.Travel.TravelRouteRuntimeId,
+                    transition.RouteRuntimeId, StringComparison.Ordinal)
+                    ? "TravelRouteOwnerMismatch"
+                : !string.Equals(actor.Travel.TravelOriginDecisionId,
+                    transition.OriginDecisionId, StringComparison.Ordinal)
+                    ? "TravelOriginDecisionMismatch"
+                : null;
+            if (rejection != null)
+            {
+                lastSelectedP12SoloTravelStartRejection = rejection;
+                FaultSelectedSoloTravelStart(context?.Protocol);
+                return false;
+            }
+
+            if (selectedSoloTravelEventRecorder == null)
+            {
+                lastSelectedP12SoloTravelStartRejection = "SoloTravelEventRecorderMissing";
+                FaultSelectedSoloTravelStart(context.Protocol);
+                return false;
+            }
+            eventRecorded = selectedSoloTravelEventRecorder.Record(
+                (eventId, absoluteDay, recordSequence) => new NpcTravelStartedEvent(
+                    eventId,
+                    absoluteDay,
+                    recordSequence,
+                    actor.RuntimeId,
+                    context.OriginLocationRuntimeId,
+                    transition.DestinationLocationRuntimeId,
+                    transition.RouteRuntimeId,
+                    transition.OriginDecisionId));
+            if (!eventRecorded)
+            {
+                lastSelectedP12SoloTravelStartRejection =
+                    "SoloTravelEventRecordRejected:" + lastCoreDecisionMutationAdmissionRejection;
+                FaultSelectedSoloTravelStart(context.Protocol);
+                return false;
+            }
+            return true;
+        }
     }
 
     private static bool HasSelectedCityAndNpcOwners(DailyV1SelectedRuntimeOwnerGraph graph)

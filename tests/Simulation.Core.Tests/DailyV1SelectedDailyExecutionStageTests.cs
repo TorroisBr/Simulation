@@ -743,16 +743,34 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             : graph.Npcs[0];
         DailyV1NpcRuntimeOwners hider = executeCoreOnlyHideAction ? graph.Npcs[1] : null;
         DailyV1NpcRuntimeOwners fleeCityActor = executeCoreOnlyFleeCity ? graph.Npcs[1] : null;
-        DailyV1NpcRuntimeOwners soloTravelActor = executeCoreOnlySoloTravel ? graph.Npcs[1] : null;
         DailyV1ActionDefinition soloTravelAction = executeCoreOnlySoloTravel
             ? definitions.Actions.Values.Single(action => action.Values.actionType?.Value
                 == DailyV1NpcDefinitionRules.TravelActionTypeValue)
+            : null;
+        DailyV1NpcRuntimeOwners soloTravelActor = executeCoreOnlySoloTravel
+            ? graph.Npcs.FirstOrDefault(owner => owner != null
+                && owner.Lifecycle?.LifeState == NpcLifeState.Alive
+                && owner.Travel != null && !owner.Travel.IsTraveling
+                && owner.HiddenState?.RemainingDays <= 0
+                && owner.MoneyAccount != null
+                && DailyV1NpcDefinitionRules.HasConfiguredDefaultAction(
+                    owner.Definition, definitions, soloTravelAction)
+                && graph.Cities.Any(city => city != null
+                    && string.Equals(city.RuntimeId, owner.Travel.CurrentCityRuntimeId,
+                        StringComparison.Ordinal)
+                    && city.NpcPresence.Contains(owner.RuntimeId)))
             : null;
         DailyV1CityRuntimeOwners soloTravelDestination = null;
         DailyV1CityRuntimeOwners soloTravelOrigin = null;
         float soloTravelCost = 0f;
         float soloTravelOpeningBalance = 0f;
         long soloTravelOpeningRevision = -1L;
+        string soloTravelRouteRuntimeId = null;
+        string soloTravelOriginDecisionId = null;
+        long soloTravelEventDay = -1L;
+        int soloTravelStartedEventsBefore = 0;
+        int soloTravelActorDecisionsBefore = 0;
+        bool soloTravelRouteKnownBefore = false;
         DailyV1NpcRuntimeOwners stealActor = executeCoreOnlySteal
             ? graph.Npcs.FirstOrDefault(owner => owner != null
                 && owner.Travel != null && !owner.Travel.IsTraveling
@@ -945,6 +963,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         if (executeCoreOnlySoloTravel)
         {
             Assert.That(soloTravelActor, Is.Not.Null);
+            Assert.That(DailyV1NpcDefinitionRules.HasConfiguredDefaultAction(
+                soloTravelActor.Definition, definitions, soloTravelAction), Is.True,
+                "The daily actor stage selects Travel only for an NPC whose admitted default-action policy includes it.");
             Assert.That(DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
                 definitions, soloTravelAction), Is.True,
                 "The exact authored Travel action is admitted for host-neutral autonomous selection.");
@@ -966,16 +987,24 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 soloTravelDestination.LocationRuntimeId, soloTravelDestination.RuntimeId,
                 out SpatialRouteRuntime soloTravelRoute, out soloTravelCost), Is.True);
             Assert.That(soloTravelRoute, Is.Not.Null);
-            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
-                definitions, soloTravelAction, null, soloTravelDestination.RuntimeId, null,
-                0, 0f, 1f, NpcTravelReason.None, 0f,
-                "decision/core-only-solo-travel", null, null, null,
-                out DailyV1NpcActionPayloadOwner soloTravelPayload), Is.True);
-            Assert.That(graph.TryCommitCurrentActionSlot(
-                soloTravelActor, soloTravelAction, soloTravelPayload, null), Is.True,
-                "The exact ordinary Travel action slot is installed in the Core owner graph before census sealing.");
+            soloTravelRouteRuntimeId = soloTravelRoute.RuntimeId;
+            soloTravelOriginDecisionId = "decision/core-only-solo-travel";
+            soloTravelEventDay = composition.SimulationTime.AbsoluteDay;
+            soloTravelRouteKnownBefore = soloTravelActor.SpatialKnowledge.KnownRouteRuntimeIds
+                .Contains(soloTravelRouteRuntimeId, StringComparer.Ordinal);
+            Assert.That(soloTravelActor.TravelPlan.TryCommit(
+                soloTravelDestination.LocationRuntimeId, soloTravelDestination.RuntimeId,
+                NpcTravelReason.None, 50f, soloTravelCost,
+                soloTravelOriginDecisionId), Is.True,
+                "The exact Core TravelPlan owner prepares an ordinary route for autonomous DailyAdvance selection.");
             soloTravelOpeningBalance = soloTravelActor.MoneyAccount.Balance;
             soloTravelOpeningRevision = soloTravelActor.Travel.Revision;
+            soloTravelStartedEventsBefore = composition.EventAuthority.EventStore.Events
+                .OfType<NpcTravelStartedEvent>()
+                .Count(domainEvent => string.Equals(
+                    domainEvent.ActorRuntimeId, soloTravelActor.RuntimeId, StringComparison.Ordinal));
+            soloTravelActorDecisionsBefore = composition.DecisionStore.Decisions.Count(decision =>
+                string.Equals(decision.ActorRuntimeId, soloTravelActor.RuntimeId, StringComparison.Ordinal));
         }
         if (executeCoreOnlySteal || executeCoreOnlyLocalSellGoodsChoice)
         {
@@ -1263,7 +1292,6 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         }
         long mutationEpochBeforeTurn = state.MutationEpochState.CurrentEpoch;
         bool coreOnlyFleeCityActionSucceeded = false;
-        bool coreOnlySoloTravelActionSucceeded = false;
         Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
         Assert.That(state.TryBeginAdvance(invalidateCaptureToken: false,
             out DailyV1AdvanceLease lease), Is.True);
@@ -1356,7 +1384,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 Is.EqualTo(merchantRevisionBefore + 1L));
             Assert.That(state.MutationEpochState.CurrentEpoch,
                 Is.EqualTo(merchantEpochBefore + 1L),
-                "The nested Merchant transaction publishes exactly one shared epoch at operation close.");
+                "The nested Merchant transaction publishes exactly one shared epoch at operation close. Rejection="
+                    + state.LastSelectedMerchantDailyTradeRejection + "; census="
+                    + state.LastSelectedOwnerSectionCensusRefreshRejection);
             Assert.That(state.TryValidateCoreSelectedOwnerSectionCensusRows(
                 graph, merchantSectionIds, null), Is.True,
                 "The Merchant commit refreshes all exact CommercialKnowledge census siblings.");
@@ -1401,47 +1431,17 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         }
         if (executeCoreOnlySoloTravel)
         {
-            Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreateCoreOnly(
-                    state, graph,
-                    out IDailyV1SelectedActorTurnExecutionContext travelContext), Is.True,
-                "The normal Core-only actor-turn factory admits an exact ordinary Travel slot under DailyAdvance.");
-            Assert.That(travelContext.Boundary,
-                Is.InstanceOf<DailyV1CoreSelectedActorTurnExecutionBoundary>());
-            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
-                    graph, soloTravelActor, state.SelectedRandomSource,
-                    state.SimulationTime.AbsoluteDay,
-                    (IDailyV1SelectedActorActionExecutionBoundary)travelContext.Boundary,
-                    out coreOnlySoloTravelActionSucceeded, out _, out string travelResultMessage), Is.True,
-                travelResultMessage);
-            Assert.That(coreOnlySoloTravelActionSucceeded, Is.True,
-                "Core starts the exact ordinary solo Travel action without a Unity runtime or projection boundary.");
-            Assert.That(soloTravelActor.Travel.IsTraveling, Is.True);
-            Assert.That(soloTravelActor.Travel.Revision,
-                Is.EqualTo(soloTravelOpeningRevision + 1L));
-            Assert.That(soloTravelActor.MoneyAccount.Balance,
-                Is.EqualTo(soloTravelOpeningBalance - soloTravelCost));
-            Assert.That(soloTravelOrigin.NpcPresence.Contains(soloTravelActor.RuntimeId), Is.False,
-                "The exact Core City presence owner relinquishes the departing actor.");
-            string originPresenceSectionId = DailyV1SelectedOwnerSectionCensusContract
-                .CityImportantNpcSectionIdFor(soloTravelOrigin.RuntimeId);
-            OwnerSectionCensusSnapshot originPresenceBefore = before[originPresenceSectionId];
-            OwnerSectionCensusWitness originPresenceAfter =
-                liveRuntimeProviders[originPresenceSectionId].GetCurrentCensus();
-            Assert.That(originPresenceAfter.OwnerInstanceIdentity,
-                Is.SameAs(soloTravelOrigin.NpcPresence));
-            Assert.That(originPresenceAfter.Revision,
-                Is.EqualTo(originPresenceBefore.Revision + 1L));
-            Assert.That(originPresenceAfter.Cardinality,
-                Is.EqualTo(originPresenceBefore.Cardinality - 1));
-            Assert.That(state.TryValidateCurrentSelectedOwnerSectionCensusBaselines(), Is.True,
-                "The complete selected 89-family census remains current after Core commits Travel.");
-            Assert.That(state.MutationEpochState.CurrentEpoch,
-                Is.EqualTo(mutationEpochBeforeTurn + 1L),
-                "The Core solo Travel operation publishes exactly one P12 mutation epoch.");
+            Assert.That(soloTravelActor.TravelPlan.Matches(
+                soloTravelDestination.LocationRuntimeId, soloTravelDestination.RuntimeId,
+                NpcTravelReason.None, 50f, soloTravelCost,
+                soloTravelOriginDecisionId), Is.True,
+                "The exact admitted TravelPlan is ready for the normal daily actor stage.");
         }
         FakeBoundary dailyBoundary = new FakeBoundary
         {
-            RejectActorTurnHostPorts = true
+            RejectActorTurnHostPorts = true,
+            ExpectedCoreTravelDayActor = executeCoreOnlySoloTravel ? soloTravelActor : null,
+            ExecutionState = state
         };
         try
         {
@@ -1525,14 +1525,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 Assert.That(state.CurrentCaptureToken, Is.Null,
                     "The old continuation token is revoked at the rejected owner boundary.");
             }
-            else if (!executeCoreOnlySoloTravel)
-            {
-                DailyV1SelectedDailyExecutionStage.Advance(state, graph, dailyBoundary);
-            }
             else
             {
-                Assert.That(dailyBoundary.Calls, Is.Empty,
-                    "The exact SoloTravel action already consumed its selected slot within this DailyAdvance; the same day is not dispatched a second time.");
+                DailyV1SelectedDailyExecutionStage.Advance(state, graph, dailyBoundary);
             }
         }
         finally
@@ -1553,14 +1548,11 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             return;
         }
 
-        if (!executeCoreOnlySoloTravel)
-        {
-            Assert.That(dailyBoundary.Calls, Does.Contain("actor-host-ports"),
-                "The production Daily-v1 preparation must attempt the normal host boundary.");
-            Assert.That(dailyBoundary.Calls, Does.Contain("travel-results"),
-                "The production daily stage must continue through its travel and completion phases.");
-            Assert.That(dailyBoundary.Calls, Does.Contain("travel-observation"));
-        }
+        Assert.That(dailyBoundary.Calls, Does.Contain("actor-host-ports"),
+            "The production Daily-v1 preparation must attempt the normal host boundary.");
+        Assert.That(dailyBoundary.Calls, Does.Contain("travel-results"),
+            "The production daily stage must continue through its travel and completion phases.");
+        Assert.That(dailyBoundary.Calls, Does.Contain("travel-observation"));
 
         Assert.That(state.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
             graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding crimeJusticeBinding), Is.True,
@@ -1578,9 +1570,110 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             state, DailyV1CaptureScopeAllowance.None,
             out IReadOnlyList<OwnerSectionCensusSnapshot> after,
             out long epoch,
-            out DailyCaptureEligibilityFailure failure), Is.True, failure.ToString());
+            out DailyCaptureEligibilityFailure failure), Is.True,
+            failure + ":" + state.LastSelectedOwnerSectionCensusRefreshRejection + ":"
+                + state.LastSelectedP12SoloTravelStartRejection);
         Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(after), Is.True);
         Assert.That(after.Count, Is.EqualTo(initialVector.Length));
+        if (executeCoreOnlySoloTravel)
+        {
+            Assert.That(soloTravelActor.Travel.Revision,
+                Is.GreaterThan(soloTravelOpeningRevision));
+            Assert.That(soloTravelActor.MoneyAccount.Balance,
+                Is.EqualTo(soloTravelOpeningBalance - soloTravelCost));
+            Assert.That(soloTravelOrigin.NpcPresence.Contains(soloTravelActor.RuntimeId), Is.False,
+                "Core's selected daily stage removes the actor from the exact origin City owner.");
+
+            string travelSectionId = DailyV1SelectedOwnerSectionCensusContract
+                .NpcSectionIdFor(12, soloTravelActor.RuntimeId);
+            OwnerSectionCensusSnapshot travelAfter = after.Single(row =>
+                row.SectionId == travelSectionId);
+            Assert.That(travelAfter.OwnerInstanceIdentity, Is.SameAs(soloTravelActor));
+            Assert.That(travelAfter.Revision, Is.EqualTo(soloTravelActor.Travel.Revision));
+
+            string originPresenceSectionId = DailyV1SelectedOwnerSectionCensusContract
+                .CityImportantNpcSectionIdFor(soloTravelOrigin.RuntimeId);
+            OwnerSectionCensusSnapshot originPresenceBefore = before[originPresenceSectionId];
+            OwnerSectionCensusSnapshot originPresenceAfter = after.Single(row =>
+                row.SectionId == originPresenceSectionId);
+            Assert.That(originPresenceAfter.OwnerInstanceIdentity,
+                Is.SameAs(soloTravelOrigin.NpcPresence));
+            Assert.That(originPresenceAfter.Cardinality,
+                Is.EqualTo(originPresenceBefore.Cardinality - 1));
+            Assert.That(originPresenceAfter.Revision,
+                Is.EqualTo(soloTravelOrigin.NpcPresence.Revision));
+
+            string locationsSectionId = DailyV1SelectedOwnerSectionCensusContract
+                .NpcSpatialKnowledgeLocationsPrefix + soloTravelActor.RuntimeId;
+            string routesSectionId = DailyV1SelectedOwnerSectionCensusContract
+                .NpcSpatialKnowledgeRoutesPrefix + soloTravelActor.RuntimeId;
+            OwnerSectionCensusSnapshot locationsAfter = after.Single(row =>
+                row.SectionId == locationsSectionId);
+            OwnerSectionCensusSnapshot routesAfter = after.Single(row =>
+                row.SectionId == routesSectionId);
+            Assert.That(locationsAfter.OwnerInstanceIdentity,
+                Is.SameAs(soloTravelActor.SpatialKnowledge));
+            Assert.That(routesAfter.OwnerInstanceIdentity,
+                Is.SameAs(soloTravelActor.SpatialKnowledge));
+            Assert.That(locationsAfter.Revision, Is.EqualTo(soloTravelActor.SpatialKnowledge.Revision));
+            Assert.That(routesAfter.Revision, Is.EqualTo(locationsAfter.Revision),
+                "The location and route knowledge census rows retain their common owner revision.");
+            Assert.That(locationsAfter.Cardinality,
+                Is.EqualTo(soloTravelActor.SpatialKnowledge.KnownLocationRuntimeIds.Count));
+            Assert.That(routesAfter.Cardinality,
+                Is.EqualTo(soloTravelActor.SpatialKnowledge.KnownRouteRuntimeIds.Count));
+            Assert.That(soloTravelActor.SpatialKnowledge.KnowsRoute(soloTravelRouteRuntimeId), Is.True,
+                "Core's ordinary Travel stage commits discovery of its exact route.");
+            if (!soloTravelRouteKnownBefore)
+                Assert.That(routesAfter.Cardinality, Is.GreaterThan(before[routesSectionId].Cardinality),
+                    "The admitted SoloTravel operation records the newly discovered route row.");
+
+            NpcTravelStartedEvent[] actorTravelStartedEvents = composition.EventAuthority.EventStore.Events
+                .OfType<NpcTravelStartedEvent>()
+                .Where(domainEvent => string.Equals(
+                    domainEvent.ActorRuntimeId, soloTravelActor.RuntimeId, StringComparison.Ordinal))
+                .ToArray();
+            Assert.That(actorTravelStartedEvents, Has.Length.EqualTo(soloTravelStartedEventsBefore + 1),
+                "The Core-only action publishes exactly one authoritative TravelStarted event for its actor.");
+            NpcTravelStartedEvent travelStarted = actorTravelStartedEvents.Last();
+            Assert.That(travelStarted.OriginLocationRuntimeId,
+                Is.EqualTo(soloTravelOrigin.LocationRuntimeId));
+            Assert.That(travelStarted.DestinationLocationRuntimeId,
+                Is.EqualTo(soloTravelDestination.LocationRuntimeId));
+            Assert.That(travelStarted.RouteRuntimeId, Is.EqualTo(soloTravelRouteRuntimeId));
+            Assert.That(travelStarted.OriginDecisionId, Is.EqualTo(soloTravelOriginDecisionId));
+            Assert.That(travelStarted.AbsoluteDay, Is.EqualTo(soloTravelEventDay));
+
+            OwnerSectionCensusSnapshot eventCounterBefore = before[
+                RuntimeIdAllocatorCensusProvider.EventsSectionId];
+            OwnerSectionCensusSnapshot eventCounterAfter = after.Single(row =>
+                row.SectionId == RuntimeIdAllocatorCensusProvider.EventsSectionId);
+            Assert.That(eventCounterAfter.OwnerInstanceIdentity,
+                Is.SameAs(eventCounterBefore.OwnerInstanceIdentity));
+            Assert.That(eventCounterAfter.Revision,
+                Is.GreaterThan(eventCounterBefore.Revision));
+            OwnerSectionCensusSnapshot soloTravelSequenceBefore = before[
+                SimulationRecordSequenceCensusProvider.SectionId];
+            OwnerSectionCensusSnapshot soloTravelSequenceAfter = after.Single(row =>
+                row.SectionId == SimulationRecordSequenceCensusProvider.SectionId);
+            Assert.That(soloTravelSequenceAfter.OwnerInstanceIdentity,
+                Is.SameAs(soloTravelSequenceBefore.OwnerInstanceIdentity));
+            Assert.That(soloTravelSequenceAfter.Revision,
+                Is.GreaterThan(soloTravelSequenceBefore.Revision));
+            Assert.That(travelStarted.RecordSequence,
+                Is.GreaterThan(soloTravelSequenceBefore.Revision));
+            Assert.That(travelStarted.RecordSequence,
+                Is.LessThanOrEqualTo(soloTravelSequenceAfter.Revision));
+            Assert.That(state.TryValidateCurrentSelectedOwnerSectionCensusBaselines(), Is.True,
+                "The complete selected 89-family census remains current after the normal Core daily stage.");
+            Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.False);
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(epoch));
+            Assert.That(epoch, Is.GreaterThan(mutationEpochBeforeTurn));
+            Assert.That(composition.DecisionStore.Decisions.Count(decision =>
+                string.Equals(decision.ActorRuntimeId, soloTravelActor.RuntimeId, StringComparison.Ordinal)),
+                Is.EqualTo(soloTravelActorDecisionsBefore),
+                "An already-installed Travel slot is executed without allocating a second autonomous decision.");
+        }
         if (executeCoreOnlyLocalSellGoodsChoice)
         {
             Assert.That(state.SelectedActorChoiceStore.TryGet(
@@ -1755,22 +1848,22 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         else
             Assert.That(decisionAfter.Revision, Is.GreaterThan(decisionBefore.Revision),
                 $"Decision revision must advance for this autonomous-action scenario; before={decisionBefore.Revision}, after={decisionAfter.Revision}, forcedEscape={executeCoreOnlyForcedEscape}.");
-        if (executeCoreOnlyFleeCity || executeCoreOnlySoloTravel)
+        if (executeCoreOnlyFleeCity)
             Assert.That(sequenceAfter.Revision, Is.EqualTo(sequenceBefore.Revision),
-                "The preinstalled FleeCity or ordinary Travel transition emits no decision or record-sequence entry.");
+                "The preinstalled FleeCity transition emits no decision or record-sequence entry.");
+        else if (executeCoreOnlySoloTravel)
+            Assert.That(sequenceAfter.Revision, Is.GreaterThan(sequenceBefore.Revision),
+                "Core publishes the ordinary TravelStarted event through the selected RecordSequence owner.");
         else if (executeCoreOnlySteal)
             Assert.That(sequenceAfter.Revision, Is.GreaterThan(sequenceBefore.Revision),
                 "Core autonomous Steal selection allocates and commits its decision sequence.");
         else
             Assert.That(sequenceAfter.Revision, Is.GreaterThan(sequenceBefore.Revision),
                 $"Record sequence must advance for this autonomous-action scenario; before={sequenceBefore.Revision}, after={sequenceAfter.Revision}, forcedEscape={executeCoreOnlyForcedEscape}.");
-        if (!executeCoreOnlySoloTravel)
-        {
-            Assert.That(staleHiddenActor.Status.Contains(hiddenStatus), Is.False,
-                "The Core-owned daily stage reconciles the expired hidden status against its exact NPC owner.");
-            Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero,
-                "The Core-owned daily stage advances the exact hidden-day owner.");
-        }
+        Assert.That(staleHiddenActor.Status.Contains(hiddenStatus), Is.False,
+            "The Core-owned daily stage reconciles the expired hidden status against its exact NPC owner.");
+        Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero,
+            "The Core-owned daily stage advances the exact hidden-day owner.");
         if (executeCoreOnlyFleeCity)
         {
             Assert.That(coreOnlyFleeCityActionSucceeded, Is.True,
@@ -1800,10 +1893,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 "Core FleeCity publishes its mutation within the active DailyAdvance epoch.");
             Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(epoch));
         }
-        if (!executeCoreOnlySoloTravel)
-            Assert.That(staleHiddenAfter.Revision,
-                Is.EqualTo(staleHiddenBefore.Revision + (expireCoreOnlyHiddenState ? 2L : 1L)),
-                "P12 records hidden-day expiry and status reconciliation on the exact NPC owner.");
+        Assert.That(staleHiddenAfter.Revision,
+            Is.EqualTo(staleHiddenBefore.Revision + (expireCoreOnlyHiddenState ? 2L : 1L)),
+            "P12 records hidden-day expiry and status reconciliation on the exact NPC owner.");
         if (executeCoreOnlyFleeCity)
             Assert.That(coreOnlyFleeCityActionSucceeded, Is.True,
                 "FleeCity completed through the Core actor-turn boundary; the subsequent autonomous pass may clear an ineligible plan slot.");
@@ -3653,6 +3745,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         internal bool SubstituteActorPersonStore { get; set; }
         internal bool UseSelectedDayStartContext { get; set; }
         internal bool RejectActorTurnHostPorts { get; set; }
+        internal DailyV1NpcRuntimeOwners ExpectedCoreTravelDayActor { get; set; }
+        internal DailyV1ExecutionBoundaryState ExecutionState { get; set; }
         internal bool HasUnselectedLiveRuntimeMember { get; set; }
         internal bool CrimeSystemPresent { get; set; }
         internal bool JusticeSystemPresent { get; set; }
@@ -3915,9 +4009,24 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         {
             private readonly FakeBoundary owner;
             internal FakeTravelContext(FakeBoundary owner) => this.owner = owner;
-            public IDailyV1SelectedTravelDayBoundary Boundary => EmptyTravelBoundary.Instance;
-            public IDailyV1SelectedP12TravelPartyAdvanceProtocol P12Protocol =>
-                NoOpTravelPartyP12AdvanceProtocol.Instance;
+            public IDailyV1SelectedTravelDayBoundary Boundary =>
+                owner.ExpectedCoreTravelDayActor == null
+                    ? EmptyTravelBoundary.Instance
+                    : new ExpectedCoreTravelDayBoundary(owner);
+            public IDailyV1SelectedP12TravelPartyAdvanceProtocol P12Protocol
+            {
+                get
+                {
+                    if (owner.ExpectedCoreTravelDayActor == null)
+                        return NoOpTravelPartyP12AdvanceProtocol.Instance;
+                    bool created = DailyV1CoreSelectedP12TravelPartyAdvanceProtocol.TryCreate(
+                        owner.ExecutionState, owner.CurrentGraph,
+                        out DailyV1CoreSelectedP12TravelPartyAdvanceProtocol protocol);
+                    Assert.That(created, Is.True,
+                        "The full DailyAdvance Travel fixture binds the production Core P12 protocol.");
+                    return protocol;
+                }
+            }
             public bool AdvanceSoloTravel => false;
             public bool ExecuteWithinPartyOwnerOperation(Func<bool> operation) => operation?.Invoke() == true;
             public void PublishCompletedTravelResults(
@@ -3925,7 +4034,21 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults)
             {
                 Assert.That(partyArrivals, Is.Empty);
-                Assert.That(soloResults, Is.Empty);
+                if (owner.ExpectedCoreTravelDayActor == null)
+                {
+                    Assert.That(soloResults, Is.Empty);
+                }
+                else
+                {
+                    Assert.That(soloResults, Has.Count.EqualTo(1));
+                    DailyV1SelectedSoloTravelDayResult result = soloResults[0];
+                    Assert.That(result.Npc, Is.SameAs(owner.ExpectedCoreTravelDayActor));
+                    Assert.That(result.WasCommitted, Is.True);
+                    Assert.That(result.ShouldReport, Is.False);
+                    Assert.That(result.Arrived, Is.False);
+                    Assert.That(result.Npc.Travel.TravelStartedToday, Is.False);
+                    Assert.That(result.Npc.Travel.IsTraveling, Is.True);
+                }
                 owner.Calls.Add("travel-results");
             }
             public void ObserveCompletedTravelResults() => owner.Calls.Add("travel-observation");
@@ -3946,6 +4069,57 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 IReadOnlyList<DailyV1SelectedSoloTravelDayResult> soloResults) =>
                 context.PublishCompletedTravelResults(partyArrivals, soloResults);
             public void ObserveCompletedTravelResults() => context.ObserveCompletedTravelResults();
+        }
+
+        private sealed class ExpectedCoreTravelDayBoundary : IDailyV1SelectedTravelDayBoundary
+        {
+            private readonly FakeBoundary owner;
+
+            internal ExpectedCoreTravelDayBoundary(FakeBoundary owner) => this.owner = owner;
+
+            public bool TryPrepareTransition(
+                DailyV1NpcRuntimeOwners npc,
+                DailyV1SelectedTravelTransitionPlan plan,
+                bool arriving,
+                out object projectionReceipt)
+            {
+                bool exact = ReferenceEquals(npc, owner.ExpectedCoreTravelDayActor)
+                    && plan != null
+                    && ReferenceEquals(plan.Npc, npc)
+                    && plan.TravelRevisionChanges
+                    && !arriving
+                    && npc.Travel.TravelStartedToday;
+                projectionReceipt = exact ? plan : null;
+                return exact;
+            }
+
+            public void PublishCommittedTransition(
+                DailyV1NpcRuntimeOwners npc,
+                DailyV1SelectedTravelTransitionPlan plan,
+                bool arriving,
+                object projectionReceipt)
+            {
+                Assert.That(npc, Is.SameAs(owner.ExpectedCoreTravelDayActor));
+                Assert.That(plan, Is.SameAs(projectionReceipt));
+                Assert.That(arriving, Is.False);
+                Assert.That(npc.Travel.TravelStartedToday, Is.False);
+                owner.Calls.Add("core-travel-day-cleanup");
+            }
+
+            public bool PublishTravelPartyArrival(TravelPartyRuntime party) => false;
+
+            public void PublishSoloTravelResult(
+                DailyV1SelectedSoloTravelDayResult result,
+                bool arrivalEventHandledByCore)
+            {
+                Assert.That(result, Is.Not.Null);
+                Assert.That(result.Npc, Is.SameAs(owner.ExpectedCoreTravelDayActor));
+                Assert.That(result.WasCommitted, Is.True);
+                Assert.That(result.ShouldReport, Is.False);
+                Assert.That(result.Arrived, Is.False);
+                Assert.That(arrivalEventHandledByCore, Is.True);
+                owner.Calls.Add("core-travel-day-result");
+            }
         }
 
         private sealed class EmptyTravelBoundary : IDailyV1SelectedTravelDayBoundary
