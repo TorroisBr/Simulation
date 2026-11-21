@@ -656,6 +656,31 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 cardinality(owner), revision(owner));
     }
 
+    private sealed class CityPopulationOperationReceiptsCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly string sectionId;
+        private readonly SettlementPopulationRuntime owner;
+
+        internal CityPopulationOperationReceiptsCensusProvider(
+            string sectionId,
+            SettlementPopulationRuntime owner)
+        {
+            this.sectionId = sectionId ?? throw new ArgumentNullException(nameof(sectionId));
+            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            owner.GetOperationReceiptCensus(out int cardinality, out long revision);
+            return new OwnerSectionCensusWitness(
+                sectionId,
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                owner,
+                cardinality,
+                revision);
+        }
+    }
+
     private sealed class ReferenceIdentityComparer : IEqualityComparer<object>
     {
         internal static readonly ReferenceIdentityComparer Instance = new ReferenceIdentityComparer();
@@ -5394,6 +5419,126 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         }
 
         witnesses = built.AsReadOnly();
+        return true;
+    }
+
+    /// <summary>
+    /// Creates the selected City census sources directly from the exact Core
+    /// City owner graph. Unity may still validate its compatibility projection
+    /// against these sources during setup, but the sealed selected-profile
+    /// registry retains these live Core providers rather than Unity providers.
+    /// </summary>
+    internal static bool TryCreateCoreOwnedCityCensusProviderRegistrations(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+        out string diagnostic)
+    {
+        registrations = null;
+        diagnostic = null;
+        if (graph == null
+            || !TryCreateCoreOwnedCityCensusWitnesses(
+                graph, out IReadOnlyList<OwnerSectionCensusWitness> expectedWitnesses,
+                out diagnostic))
+            return false;
+
+        Dictionary<string, OwnerSectionCensusWitness> expectedById =
+            new Dictionary<string, OwnerSectionCensusWitness>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusWitness witness in expectedWitnesses)
+            if (witness == null || !expectedById.TryAdd(witness.SectionId, witness))
+            {
+                diagnostic = "The selected Core City census contains a duplicate live section identity.";
+                return false;
+            }
+
+        List<DailyV1OwnerSectionCensusProviderRegistration> built =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(expectedWitnesses.Count);
+        HashSet<string> registeredIds = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            {
+                string cityKey = P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(city.RuntimeId);
+                DailyV1OwnerSectionCensusProviderRegistration[] cityRegistrations =
+                {
+                    new DailyV1OwnerSectionCensusProviderRegistration(
+                        DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId),
+                        DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                        OwnerSectionRole.Required,
+                        new P12OwnerSectionCensusProvider<DailyV1CityNpcPresenceOwner>(
+                            DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId),
+                            DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                            city.NpcPresence,
+                            owner => owner.OrderedNpcRuntimeIds.Count,
+                            owner => owner.Revision)),
+                    new DailyV1OwnerSectionCensusProviderRegistration(
+                        DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix + cityKey,
+                        DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                        OwnerSectionRole.Required,
+                        new P12OwnerSectionCensusProvider<DailyV1MarketOwner>(
+                            DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix + cityKey,
+                            DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                            city.Market,
+                            owner => owner.Items.Count,
+                            owner => owner.Revision)),
+                    new DailyV1OwnerSectionCensusProviderRegistration(
+                        DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix + cityKey,
+                        DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                        OwnerSectionRole.Required,
+                        new P12OwnerSectionCensusProvider<SettlementPopulationRuntime>(
+                            DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix + cityKey,
+                            DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                            city.Population,
+                            _ => 1,
+                            owner => owner.Revision)),
+                    new DailyV1OwnerSectionCensusProviderRegistration(
+                        DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix + cityKey,
+                        DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                        OwnerSectionRole.Required,
+                        new CityPopulationOperationReceiptsCensusProvider(
+                            DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix + cityKey,
+                            city.Population))
+                };
+
+                foreach (DailyV1OwnerSectionCensusProviderRegistration registration in cityRegistrations)
+                {
+                    OwnerSectionCensusWitness actual = registration.Provider.GetCurrentCensus();
+                    if (registration == null
+                        || !registeredIds.Add(registration.SectionId)
+                        || registration.Role != OwnerSectionRole.Required
+                        || registration.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion
+                        || !string.Equals(actual?.SectionId, registration.SectionId, StringComparison.Ordinal)
+                        || actual.SchemaVersion != registration.SchemaVersion
+                        || actual.Cardinality < 0
+                        || actual.Revision < 0L
+                        || !expectedById.TryGetValue(registration.SectionId, out OwnerSectionCensusWitness expected)
+                        || !ReferenceEquals(actual.OwnerInstanceIdentity, expected.OwnerInstanceIdentity)
+                        || actual.Cardinality != expected.Cardinality
+                        || actual.Revision != expected.Revision)
+                    {
+                        diagnostic = "A live Core City census provider differs from its exact selected owner at "
+                            + registration?.SectionId + ".";
+                        return false;
+                    }
+                    built.Add(registration);
+                }
+            }
+        }
+        catch (Exception exception) when (
+            exception is ArgumentException
+            || exception is InvalidOperationException
+            || exception is OverflowException)
+        {
+            diagnostic = "The live Core City census providers could not be bound to the selected owner graph.";
+            return false;
+        }
+
+        if (registeredIds.Count != expectedById.Count)
+        {
+            diagnostic = "The live Core City census provider set does not cover every Core City owner row.";
+            return false;
+        }
+
+        registrations = built.AsReadOnly();
         return true;
     }
     private static int CountFamilyRows(

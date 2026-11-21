@@ -3238,6 +3238,87 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void CoreCityCensusRegistrationsUseExactLiveOwnerGraphSources()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session, out _);
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedCityCensusProviderRegistrations(
+            graph,
+            out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(registrations, Has.Count.EqualTo(graph.Cities.Count * 4),
+            "Core composes precisely the four selected census families for each admitted City.");
+
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            string cityKey = P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(city.RuntimeId);
+            AssertCoreCityProvider(
+                registrations,
+                DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId),
+                city.NpcPresence,
+                city.NpcPresence.OrderedNpcRuntimeIds.Count,
+                city.NpcPresence.Revision);
+            AssertCoreCityProvider(
+                registrations,
+                DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix + cityKey,
+                city.Market,
+                city.Market.Items.Count,
+                city.Market.Revision);
+            AssertCoreCityProvider(
+                registrations,
+                DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix + cityKey,
+                city.Population,
+                1,
+                city.Population.Revision);
+            city.Population.GetOperationReceiptCensus(
+                out int receiptCardinality,
+                out long receiptRevision);
+            AssertCoreCityProvider(
+                registrations,
+                DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix + cityKey,
+                city.Population,
+                receiptCardinality,
+                receiptRevision);
+        }
+
+        foreach (IGrouping<object, DailyV1OwnerSectionCensusProviderRegistration> aliasGroup in registrations
+                     .Where(registration => registration.SectionId.StartsWith(
+                         DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix,
+                         StringComparison.Ordinal)
+                         || registration.SectionId.StartsWith(
+                             DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix,
+                             StringComparison.Ordinal))
+                     .GroupBy(registration => registration.Provider.GetCurrentCensus().OwnerInstanceIdentity))
+        {
+            Assert.That(aliasGroup.Count(), Is.EqualTo(2),
+                "The aggregate and operation-receipt rows for each City alias the same population authority.");
+        }
+    }
+
+    private static void AssertCoreCityProvider(
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+        string sectionId,
+        object expectedOwner,
+        int expectedCardinality,
+        long expectedRevision)
+    {
+        DailyV1OwnerSectionCensusProviderRegistration registration =
+            registrations.Single(candidate => candidate.SectionId == sectionId);
+        OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
+        Assert.That(registration.Role, Is.EqualTo(OwnerSectionRole.Required), sectionId);
+        Assert.That(registration.SchemaVersion,
+            Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion), sectionId);
+        Assert.That(registration.HasBaseline, Is.False,
+            "The protocol, not the provider factory, pins the setup-time baseline.");
+        Assert.That(witness.SectionId, Is.EqualTo(sectionId), sectionId);
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expectedOwner), sectionId);
+        Assert.That(witness.Cardinality, Is.EqualTo(expectedCardinality), sectionId);
+        Assert.That(witness.Revision, Is.EqualTo(expectedRevision), sectionId);
+    }
+
+    [Test]
     public void CoreP12FCensusRejectsMissingDuplicateForeignAndStaleOwnerRows()
     {
         CreateApplicationWithAdvanceBoundary(

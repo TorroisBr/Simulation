@@ -804,7 +804,10 @@ public class TesteSimulacao : MonoBehaviour
             if (!simulationRuntime.TryAssessNpcRosterCensus(out ContinuationCensusFailure closeFailure))
                 throw new System.InvalidOperationException(
                     "The P12 bootstrap publication scope did not close with healthy registered-owner quiescence: "
-                    + closeFailure);
+                    + closeFailure
+                    + (string.IsNullOrWhiteSpace(simulationRuntime.NpcRosterCensusFirstFaultDetail)
+                        ? string.Empty
+                        : " (" + simulationRuntime.NpcRosterCensusFirstFaultDetail + ")"));
             if (!simulationRuntime.TryMarkWorldPublishedForFactualRead())
                 throw new System.InvalidOperationException(
                     "The FR-B factual-read surface could not bind to a healthy completed world publication.");
@@ -1471,7 +1474,11 @@ public class TesteSimulacao : MonoBehaviour
                 if (simulationRuntime == null
                     || !simulationRuntime.TryAssessNpcRosterCensus(out closeFailure))
                     throw new System.InvalidOperationException(
-                        "The P12 bootstrap publication scope did not close with healthy registered-owner quiescence: " + closeFailure);
+                        "The P12 bootstrap publication scope did not close with healthy registered-owner quiescence: "
+                        + closeFailure
+                        + (string.IsNullOrWhiteSpace(simulationRuntime.NpcRosterCensusFirstFaultDetail)
+                            ? string.Empty
+                            : " (" + simulationRuntime.NpcRosterCensusFirstFaultDetail + ")"));
             }
 
             if (simulationRuntime == null || !simulationRuntime.TryMarkWorldPublishedForFactualRead())

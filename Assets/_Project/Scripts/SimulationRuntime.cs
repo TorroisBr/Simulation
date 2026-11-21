@@ -4296,9 +4296,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             return;
         }
 
-        if (!protocol.TryAssessOwnerSectionInventory(out _))
+        if (!protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure initialCensusFailure))
         {
-            npcRosterCensusProtocolInitializationFailure = "initial owner-section census failed";
+            string censusDetail = protocol.FirstFaultDetail;
+            npcRosterCensusProtocolInitializationFailure =
+                "initial owner-section census failed (" + initialCensusFailure + ")"
+                + (string.IsNullOrWhiteSpace(censusDetail) ? string.Empty : ": " + censusDetail);
             npcRosterCensusProtocol = null;
             return;
         }
@@ -7035,6 +7038,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         }
         return npcRosterCensusProtocol.TryAssessOwnerSectionInventory(out failure);
     }
+
+    internal string NpcRosterCensusFirstFaultDetail => npcRosterCensusProtocol?.FirstFaultDetail;
 
     /// <summary>Reads the shared epoch for this partial passive NPC/Person census only.</summary>
     public bool TryReadNpcRosterCensusMutationEpoch(
