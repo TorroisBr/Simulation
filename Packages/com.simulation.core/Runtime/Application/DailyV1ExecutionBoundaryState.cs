@@ -246,6 +246,9 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private string lastSelectedMerchantDailyTradeRejection;
     internal string LastSelectedMerchantDailyTradeRejection =>
         lastSelectedMerchantDailyTradeRejection;
+    private string lastSelectedP12SoloTravelStartRejection;
+    internal string LastSelectedP12SoloTravelStartRejection =>
+        lastSelectedP12SoloTravelStartRejection;
     private string lastCoreSelectedP12CrimeJusticeBoundaryRejection;
     internal string LastCoreSelectedP12CrimeJusticeBoundaryRejection =>
         lastCoreSelectedP12CrimeJusticeBoundaryRejection;
@@ -2190,7 +2193,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                         && !AllowsCoreSelectedOwnerSectionCardinalityTransition(sectionId)
                         && !AllowsCurrentCoreMerchantKnowledgeCardinalityTransition(sectionId)
                         && !AllowsCurrentCoreLocalKnowledgeCardinalityTransition(sectionId)
-                        && !AllowsCurrentCoreTravelCityCardinalityTransition(sectionId))
+                        && !AllowsCurrentCoreTravelCityCardinalityTransition(
+                            sectionId, witness, prior))
                     {
                         lastSelectedOwnerSectionCensusRefreshRejection =
                             "ChangedCardinalityNotAdmitted:" + sectionId;
@@ -2557,7 +2561,10 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
-    private bool AllowsCurrentCoreTravelCityCardinalityTransition(string sectionId)
+    private bool AllowsCurrentCoreTravelCityCardinalityTransition(
+        string sectionId,
+        OwnerSectionCensusWitness current,
+        DailyV1OwnerSectionCensusProviderRegistration registration)
     {
         if (string.IsNullOrWhiteSpace(sectionId)) return false;
         SelectedP12TravelPartyAdvanceContext partyContext =
@@ -2566,6 +2573,34 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             && IsCurrentSelectedTravelPartyAdvanceContext(partyContext)
             && partyContext.ChangedSectionIds.Contains(sectionId)
             && partyContext.CoreOwnerSectionBaselines.ContainsKey(sectionId))
+            return true;
+
+        SelectedP12SoloTravelStartContext soloTravelContext =
+            selectedP12SoloTravelStartContext;
+        if (soloTravelContext != null
+            && IsCurrentSelectedSoloTravelStartContext(soloTravelContext)
+            && soloTravelContext.AllowedSectionIds.Contains(sectionId)
+            && soloTravelContext.ChangedSectionIds.Contains(sectionId)
+            && soloTravelContext.CoreOwnerSectionBaselines.TryGetValue(
+                sectionId, out SelectedP12OwnerSectionBaseline committedBaseline)
+            && TryGetSelectedSoloTravelStartCity(
+                soloTravelContext.Graph, sectionId, out DailyV1CityRuntimeOwners originCity)
+            && registration != null
+            && registration.Role == OwnerSectionRole.Required
+            && registration.HasBaseline
+            && registration.BaselineCardinality > 0
+            && registration.BaselineRevision < long.MaxValue
+            && ReferenceEquals(registration.BaselineOwnerInstanceIdentity,
+                originCity.NpcPresence)
+            && ReferenceEquals(committedBaseline.Owner, originCity.NpcPresence)
+            && committedBaseline.Cardinality == registration.BaselineCardinality - 1
+            && committedBaseline.Revision == registration.BaselineRevision + 1L
+            && current != null
+            && current.SchemaVersion == registration.SchemaVersion
+            && ReferenceEquals(current.OwnerInstanceIdentity, committedBaseline.Owner)
+            && current.Cardinality == committedBaseline.Cardinality
+            && current.Revision == committedBaseline.Revision
+            && !originCity.NpcPresence.Contains(soloTravelContext.Actor.RuntimeId))
             return true;
 
         return selectedCoreTravelCityCardinalityTransitionSections != null
@@ -4688,14 +4723,26 @@ internal sealed partial class DailyV1ExecutionBoundaryState
             try
             {
                 if (!IsCurrentSelectedSoloTravelStartContext(context))
+                {
+                    lastSelectedP12SoloTravelStartRejection = "ContextChangedAtClose";
                     FaultSelectedSoloTravelStart(context?.Protocol);
+                }
                 else if (context.ChangedSectionIds.Count != 0
                     && !TryRefreshAndAdvanceSelectedMutationEpoch(
                         ToOrderedSectionArray(context.ChangedSectionIds),
                         context.Protocol.TryRefreshCommittedMutationBaselines))
+                {
+                    lastSelectedP12SoloTravelStartRejection =
+                        lastSelectedOwnerSectionCensusRefreshRejection ??
+                        "OwnerSectionCensusRefreshRejected";
                     FaultSelectedSoloTravelStart(context.Protocol);
+                }
             }
-            catch { FaultSelectedSoloTravelStart(context?.Protocol); }
+            catch
+            {
+                lastSelectedP12SoloTravelStartRejection = "ExceptionAtClose";
+                FaultSelectedSoloTravelStart(context?.Protocol);
+            }
             finally
             {
                 if (ReferenceEquals(selectedP12SoloTravelStartContext, context))

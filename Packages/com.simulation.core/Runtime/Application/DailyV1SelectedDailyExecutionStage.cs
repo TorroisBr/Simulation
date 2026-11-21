@@ -884,7 +884,8 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 || actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
                 || actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue
                 || actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
-                || actionType == DailyV1NpcDefinitionRules.StealActionTypeValue;
+                || actionType == DailyV1NpcDefinitionRules.StealActionTypeValue
+                || actionType == DailyV1NpcDefinitionRules.TravelActionTypeValue;
             bool admittedCoreActorChoiceAction = actionType
                 == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
                 && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
@@ -933,6 +934,10 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 || IsProjectionIndependentCoreGuardArrestAction(graph, actor, installed)
                 || IsProjectionIndependentCoreFleeCityAction(graph, actor, installed)
                 || IsProjectionIndependentCoreStealAction(graph, actor, installed)
+                || DailyV1CoreSelectedActorTurnExecutionBoundary
+                    .IsExactCoreOnlySoloTravelActionSlot(
+                        graph, actor, installed, actor.ActionSlot.CurrentPayload,
+                        requireInstalledSlot: true)
                 || IsProjectionIndependentCoreLocalSellGoodsActionSlot(
                     executionState, graph, actor, installed))
                 continue;

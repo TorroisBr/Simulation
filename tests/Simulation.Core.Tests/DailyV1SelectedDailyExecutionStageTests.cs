@@ -46,6 +46,29 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 city.Market.Revision);
     }
 
+    private sealed class CoreCityPresenceCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly DailyV1CityRuntimeOwners city;
+        private readonly string sectionId;
+
+        internal CoreCityPresenceCensusProvider(DailyV1CityRuntimeOwners city)
+        {
+            this.city = city ?? throw new ArgumentNullException(nameof(city));
+            if (city.NpcPresence == null)
+                throw new ArgumentException("The selected City has no Core presence owner.", nameof(city));
+            sectionId = DailyV1SelectedOwnerSectionCensusContract
+                .CityImportantNpcSectionIdFor(city.RuntimeId);
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus() =>
+            new OwnerSectionCensusWitness(
+                sectionId,
+                DailyV1SelectedOwnerSectionCensusContract.CitySectionSchemaVersion,
+                city.NpcPresence,
+                city.NpcPresence.OrderedNpcRuntimeIds.Count,
+                city.NpcPresence.Revision);
+    }
+
     private sealed class MutableSelectedOwnerCensusProvider : IOwnerSectionCensusProvider
     {
         internal MutableSelectedOwnerCensusProvider(OwnerSectionCensusSnapshot snapshot) =>
@@ -610,19 +633,20 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "An attempted write outside the admitted mutation scope faults the selected census closed.");
     }
 
-    [TestCase(false, false, false, false, false, false, false, false, false, false, false, false)]
-    [TestCase(true, false, false, false, false, false, false, false, false, false, false, false)]
-    [TestCase(false, true, false, false, false, false, false, false, false, false, false, false)]
-    [TestCase(false, false, true, false, false, false, false, false, false, false, false, false)]
-    [TestCase(false, false, false, true, false, false, false, false, false, false, false, false)]
-    [TestCase(false, false, false, false, true, false, false, false, false, false, false, false)]
-    [TestCase(false, false, false, false, false, true, false, false, false, false, false, false)]
-    [TestCase(false, false, false, false, false, false, true, false, false, false, false, false)]
-    [TestCase(false, false, false, false, false, false, true, true, false, false, false, false)]
-    [TestCase(false, false, false, false, false, false, true, false, true, false, false, false)]
-    [TestCase(false, false, false, false, false, false, false, false, false, true, false, false)]
-    [TestCase(false, false, false, false, false, false, false, false, false, false, true, false)]
-    [TestCase(false, false, false, false, false, false, false, false, false, false, true, true)]
+    [TestCase(false, false, false, false, false, false, false, false, false, false, false, false, false)]
+    [TestCase(true, false, false, false, false, false, false, false, false, false, false, false, false)]
+    [TestCase(false, true, false, false, false, false, false, false, false, false, false, false, false)]
+    [TestCase(false, false, true, false, false, false, false, false, false, false, false, false, false)]
+    [TestCase(false, false, false, true, false, false, false, false, false, false, false, false, false)]
+    [TestCase(false, false, false, false, true, false, false, false, false, false, false, false, false)]
+    [TestCase(false, false, false, false, false, true, false, false, false, false, false, false, false)]
+    [TestCase(false, false, false, false, false, false, true, false, false, false, false, false, false)]
+    [TestCase(false, false, false, false, false, false, true, true, false, false, false, false, false)]
+    [TestCase(false, false, false, false, false, false, true, false, true, false, false, false, false)]
+    [TestCase(false, false, false, false, false, false, false, false, false, true, false, false, false)]
+    [TestCase(false, false, false, false, false, false, false, false, false, false, true, false, false)]
+    [TestCase(false, false, false, false, false, false, false, false, false, false, true, true, false)]
+    [TestCase(false, false, false, false, false, false, false, false, false, false, false, false, true)]
     public void CoreOnlyActorTurnExecutesAdmittedActionWithCompleteP12Census(
         bool prebindMismatchedCrimeReceiptIdentity,
         bool executeCoreOnlyHideAction,
@@ -635,7 +659,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         bool rejectCoreOnlyCrossThreadKnowledgeMutation,
         bool executeCoreOnlySteal,
         bool executeCoreOnlyLocalSellGoodsChoice,
-        bool executeCoreOnlyLocalSellGoodsMissingMarketRow)
+        bool executeCoreOnlyLocalSellGoodsMissingMarketRow,
+        bool executeCoreOnlySoloTravel)
     {
         DailyV1EffectiveDefinitions configuredDefinitions = CopyWithMerchantTradeEnabled(
             DailyV1CapturedSelectedContentFixture.CreateDefinitions(),
@@ -644,7 +669,13 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             configuredDefinitions = CopyWithCrimeAutonomousEnabled(configuredDefinitions, true);
         DailyV1EffectiveDefinitions definitions = CopyWithConfiguredActions(
             configuredDefinitions,
-            executeCoreOnlyFleeCity ? new[] { "FUGIR_DA_CIDADE" }
+            executeCoreOnlySoloTravel ? new[]
+                {
+                    configuredDefinitions.Actions.Values.Single(action =>
+                        action.Values.actionType?.Value == DailyV1NpcDefinitionRules.TravelActionTypeValue)
+                        .DefinitionId
+                }
+                : executeCoreOnlyFleeCity ? new[] { "FUGIR_DA_CIDADE" }
                 : executeCoreOnlyHideAction ? new[] { "ESCONDER_SE" }
                 : executeCoreOnlyGuardArrest ? new[] { "PRENDER" }
                 : executeCoreOnlySteal ? new[]
@@ -675,6 +706,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         if (executeCoreOnlyLocalSellGoodsChoice)
             definitions = CopyWithGuaranteedSuccessfulAction(
                 definitions, DailyV1NpcDefinitionRules.SellGoodsActionTypeValue);
+        if (executeCoreOnlySoloTravel)
+            definitions = CopyWithGuaranteedSuccessfulAction(
+                definitions, DailyV1NpcDefinitionRules.TravelActionTypeValue);
         if (executeCoreOnlyLocalSellGoodsMissingMarketRow)
         {
             string startingCityDefinitionId = definitions.Configuration.npcs.Single(row =>
@@ -682,7 +716,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             definitions = CopyWithCityMarketItemRemoved(
                 definitions, startingCityDefinitionId, "FERRO");
         }
-        DailyV1GenesisComposition composition = CreateSelectedGenesis(definitions);
+        DailyV1GenesisComposition composition = CreateSelectedGenesis(
+            definitions, hasSoloTravelOperation: executeCoreOnlySoloTravel);
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
         DailyV1StatusDefinition hiddenStatus = definitions.Statuses[
             definitions.Configuration.hiddenStatus];
@@ -708,6 +743,16 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             : graph.Npcs[0];
         DailyV1NpcRuntimeOwners hider = executeCoreOnlyHideAction ? graph.Npcs[1] : null;
         DailyV1NpcRuntimeOwners fleeCityActor = executeCoreOnlyFleeCity ? graph.Npcs[1] : null;
+        DailyV1NpcRuntimeOwners soloTravelActor = executeCoreOnlySoloTravel ? graph.Npcs[1] : null;
+        DailyV1ActionDefinition soloTravelAction = executeCoreOnlySoloTravel
+            ? definitions.Actions.Values.Single(action => action.Values.actionType?.Value
+                == DailyV1NpcDefinitionRules.TravelActionTypeValue)
+            : null;
+        DailyV1CityRuntimeOwners soloTravelDestination = null;
+        DailyV1CityRuntimeOwners soloTravelOrigin = null;
+        float soloTravelCost = 0f;
+        float soloTravelOpeningBalance = 0f;
+        long soloTravelOpeningRevision = -1L;
         DailyV1NpcRuntimeOwners stealActor = executeCoreOnlySteal
             ? graph.Npcs.FirstOrDefault(owner => owner != null
                 && owner.Travel != null && !owner.Travel.IsTraveling
@@ -897,6 +942,41 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 "The exact admitted Core FleeCity action slot is prepared before the P12 census baseline.");
             fleeCityTravelPlanRevisionBefore = fleeCityActor.TravelPlan.Revision;
         }
+        if (executeCoreOnlySoloTravel)
+        {
+            Assert.That(soloTravelActor, Is.Not.Null);
+            Assert.That(DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+                definitions, soloTravelAction), Is.True,
+                "The exact authored Travel action is admitted for host-neutral autonomous selection.");
+            soloTravelOrigin = graph.Cities.Single(city =>
+                string.Equals(city.RuntimeId,
+                    soloTravelActor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+            soloTravelDestination = graph.Cities.FirstOrDefault(candidate =>
+                candidate != null
+                && !ReferenceEquals(candidate, soloTravelOrigin)
+                && graph.TryPlanSelectedSoloTravel(soloTravelActor,
+                    soloTravelActor.Travel.CurrentLocationRuntimeId,
+                    candidate.LocationRuntimeId, candidate.RuntimeId,
+                    out SpatialRouteRuntime route, out float cost)
+                && route != null && soloTravelActor.MoneyAccount.CanDebit(cost));
+            Assert.That(soloTravelDestination, Is.Not.Null,
+                "The selected Core owner graph has a direct, affordable ordinary Travel destination.");
+            Assert.That(graph.TryPlanSelectedSoloTravel(soloTravelActor,
+                soloTravelActor.Travel.CurrentLocationRuntimeId,
+                soloTravelDestination.LocationRuntimeId, soloTravelDestination.RuntimeId,
+                out SpatialRouteRuntime soloTravelRoute, out soloTravelCost), Is.True);
+            Assert.That(soloTravelRoute, Is.Not.Null);
+            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+                definitions, soloTravelAction, null, soloTravelDestination.RuntimeId, null,
+                0, 0f, 1f, NpcTravelReason.None, 0f,
+                "decision/core-only-solo-travel", null, null, null,
+                out DailyV1NpcActionPayloadOwner soloTravelPayload), Is.True);
+            Assert.That(graph.TryCommitCurrentActionSlot(
+                soloTravelActor, soloTravelAction, soloTravelPayload, null), Is.True,
+                "The exact ordinary Travel action slot is installed in the Core owner graph before census sealing.");
+            soloTravelOpeningBalance = soloTravelActor.MoneyAccount.Balance;
+            soloTravelOpeningRevision = soloTravelActor.Travel.Revision;
+        }
         if (executeCoreOnlySteal || executeCoreOnlyLocalSellGoodsChoice)
         {
             if (executeCoreOnlySteal)
@@ -1012,6 +1092,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                     StringComparer.Ordinal);
         foreach (DailyV1CityRuntimeOwners city in graph.Cities)
         {
+            IOwnerSectionCensusProvider presenceProvider =
+                new CoreCityPresenceCensusProvider(city);
+            liveRuntimeProviders.Add(
+                presenceProvider.GetCurrentCensus().SectionId, presenceProvider);
             IOwnerSectionCensusProvider provider = new CoreMarketOwnerCensusProvider(city);
             liveRuntimeProviders.Add(provider.GetCurrentCensus().SectionId, provider);
         }
@@ -1179,6 +1263,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         }
         long mutationEpochBeforeTurn = state.MutationEpochState.CurrentEpoch;
         bool coreOnlyFleeCityActionSucceeded = false;
+        bool coreOnlySoloTravelActionSucceeded = false;
         Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
         Assert.That(state.TryBeginAdvance(invalidateCaptureToken: false,
             out DailyV1AdvanceLease lease), Is.True);
@@ -1314,6 +1399,46 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             Assert.That(coreOnlyFleeCityActionSucceeded, Is.True,
                 "The admitted Core actor-turn boundary executes its exact FleeCity owner operation.");
         }
+        if (executeCoreOnlySoloTravel)
+        {
+            Assert.That(DailyV1SelectedActorTurnExecutionContextFactory.TryCreateCoreOnly(
+                    state, graph,
+                    out IDailyV1SelectedActorTurnExecutionContext travelContext), Is.True,
+                "The normal Core-only actor-turn factory admits an exact ordinary Travel slot under DailyAdvance.");
+            Assert.That(travelContext.Boundary,
+                Is.InstanceOf<DailyV1CoreSelectedActorTurnExecutionBoundary>());
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                    graph, soloTravelActor, state.SelectedRandomSource,
+                    state.SimulationTime.AbsoluteDay,
+                    (IDailyV1SelectedActorActionExecutionBoundary)travelContext.Boundary,
+                    out coreOnlySoloTravelActionSucceeded, out _, out string travelResultMessage), Is.True,
+                travelResultMessage);
+            Assert.That(coreOnlySoloTravelActionSucceeded, Is.True,
+                "Core starts the exact ordinary solo Travel action without a Unity runtime or projection boundary.");
+            Assert.That(soloTravelActor.Travel.IsTraveling, Is.True);
+            Assert.That(soloTravelActor.Travel.Revision,
+                Is.EqualTo(soloTravelOpeningRevision + 1L));
+            Assert.That(soloTravelActor.MoneyAccount.Balance,
+                Is.EqualTo(soloTravelOpeningBalance - soloTravelCost));
+            Assert.That(soloTravelOrigin.NpcPresence.Contains(soloTravelActor.RuntimeId), Is.False,
+                "The exact Core City presence owner relinquishes the departing actor.");
+            string originPresenceSectionId = DailyV1SelectedOwnerSectionCensusContract
+                .CityImportantNpcSectionIdFor(soloTravelOrigin.RuntimeId);
+            OwnerSectionCensusSnapshot originPresenceBefore = before[originPresenceSectionId];
+            OwnerSectionCensusWitness originPresenceAfter =
+                liveRuntimeProviders[originPresenceSectionId].GetCurrentCensus();
+            Assert.That(originPresenceAfter.OwnerInstanceIdentity,
+                Is.SameAs(soloTravelOrigin.NpcPresence));
+            Assert.That(originPresenceAfter.Revision,
+                Is.EqualTo(originPresenceBefore.Revision + 1L));
+            Assert.That(originPresenceAfter.Cardinality,
+                Is.EqualTo(originPresenceBefore.Cardinality - 1));
+            Assert.That(state.TryValidateCurrentSelectedOwnerSectionCensusBaselines(), Is.True,
+                "The complete selected 89-family census remains current after Core commits Travel.");
+            Assert.That(state.MutationEpochState.CurrentEpoch,
+                Is.EqualTo(mutationEpochBeforeTurn + 1L),
+                "The Core solo Travel operation publishes exactly one P12 mutation epoch.");
+        }
         FakeBoundary dailyBoundary = new FakeBoundary
         {
             RejectActorTurnHostPorts = true
@@ -1400,9 +1525,14 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 Assert.That(state.CurrentCaptureToken, Is.Null,
                     "The old continuation token is revoked at the rejected owner boundary.");
             }
-            else
+            else if (!executeCoreOnlySoloTravel)
             {
                 DailyV1SelectedDailyExecutionStage.Advance(state, graph, dailyBoundary);
+            }
+            else
+            {
+                Assert.That(dailyBoundary.Calls, Is.Empty,
+                    "The exact SoloTravel action already consumed its selected slot within this DailyAdvance; the same day is not dispatched a second time.");
             }
         }
         finally
@@ -1423,11 +1553,14 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             return;
         }
 
-        Assert.That(dailyBoundary.Calls, Does.Contain("actor-host-ports"),
-            "The production Daily-v1 preparation must attempt the normal host boundary.");
-        Assert.That(dailyBoundary.Calls, Does.Contain("travel-results"),
-            "The production daily stage must continue through its travel and completion phases.");
-        Assert.That(dailyBoundary.Calls, Does.Contain("travel-observation"));
+        if (!executeCoreOnlySoloTravel)
+        {
+            Assert.That(dailyBoundary.Calls, Does.Contain("actor-host-ports"),
+                "The production Daily-v1 preparation must attempt the normal host boundary.");
+            Assert.That(dailyBoundary.Calls, Does.Contain("travel-results"),
+                "The production daily stage must continue through its travel and completion phases.");
+            Assert.That(dailyBoundary.Calls, Does.Contain("travel-observation"));
+        }
 
         Assert.That(state.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
             graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding crimeJusticeBinding), Is.True,
@@ -1603,9 +1736,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         OwnerSectionCensusSnapshot staleHiddenBefore = before[staleHiddenSectionId];
         OwnerSectionCensusSnapshot staleHiddenAfter = after.Single(row =>
             row.SectionId == staleHiddenSectionId);
-        if (executeCoreOnlyFleeCity)
+        if (executeCoreOnlyFleeCity || executeCoreOnlySoloTravel)
             Assert.That(decisionAfter.Revision, Is.EqualTo(decisionBefore.Revision),
-                "The preinstalled FleeCity action does not allocate an autonomous decision.");
+                "The preinstalled FleeCity or ordinary Travel action does not allocate an autonomous decision.");
         else if (executeCoreOnlySteal)
         {
             Assert.That(decisionAfter.Revision, Is.GreaterThan(decisionBefore.Revision),
@@ -1622,19 +1755,22 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         else
             Assert.That(decisionAfter.Revision, Is.GreaterThan(decisionBefore.Revision),
                 $"Decision revision must advance for this autonomous-action scenario; before={decisionBefore.Revision}, after={decisionAfter.Revision}, forcedEscape={executeCoreOnlyForcedEscape}.");
-        if (executeCoreOnlyFleeCity)
+        if (executeCoreOnlyFleeCity || executeCoreOnlySoloTravel)
             Assert.That(sequenceAfter.Revision, Is.EqualTo(sequenceBefore.Revision),
-                "The preinstalled FleeCity transition emits no decision or record-sequence entry.");
+                "The preinstalled FleeCity or ordinary Travel transition emits no decision or record-sequence entry.");
         else if (executeCoreOnlySteal)
             Assert.That(sequenceAfter.Revision, Is.GreaterThan(sequenceBefore.Revision),
                 "Core autonomous Steal selection allocates and commits its decision sequence.");
         else
             Assert.That(sequenceAfter.Revision, Is.GreaterThan(sequenceBefore.Revision),
                 $"Record sequence must advance for this autonomous-action scenario; before={sequenceBefore.Revision}, after={sequenceAfter.Revision}, forcedEscape={executeCoreOnlyForcedEscape}.");
-        Assert.That(staleHiddenActor.Status.Contains(hiddenStatus), Is.False,
-            "The Core-owned daily stage reconciles the expired hidden status against its exact NPC owner.");
-        Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero,
-            "The Core-owned daily stage advances the exact hidden-day owner.");
+        if (!executeCoreOnlySoloTravel)
+        {
+            Assert.That(staleHiddenActor.Status.Contains(hiddenStatus), Is.False,
+                "The Core-owned daily stage reconciles the expired hidden status against its exact NPC owner.");
+            Assert.That(staleHiddenActor.HiddenState.RemainingDays, Is.Zero,
+                "The Core-owned daily stage advances the exact hidden-day owner.");
+        }
         if (executeCoreOnlyFleeCity)
         {
             Assert.That(coreOnlyFleeCityActionSucceeded, Is.True,
@@ -1664,9 +1800,10 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
                 "Core FleeCity publishes its mutation within the active DailyAdvance epoch.");
             Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(epoch));
         }
-        Assert.That(staleHiddenAfter.Revision,
-            Is.EqualTo(staleHiddenBefore.Revision + (expireCoreOnlyHiddenState ? 2L : 1L)),
-            "P12 records hidden-day expiry and status reconciliation on the exact NPC owner.");
+        if (!executeCoreOnlySoloTravel)
+            Assert.That(staleHiddenAfter.Revision,
+                Is.EqualTo(staleHiddenBefore.Revision + (expireCoreOnlyHiddenState ? 2L : 1L)),
+                "P12 records hidden-day expiry and status reconciliation on the exact NPC owner.");
         if (executeCoreOnlyFleeCity)
             Assert.That(coreOnlyFleeCityActionSucceeded, Is.True,
                 "FleeCity completed through the Core actor-turn boundary; the subsequent autonomous pass may clear an ineligible plan slot.");

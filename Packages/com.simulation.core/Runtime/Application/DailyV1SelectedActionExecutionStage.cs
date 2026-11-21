@@ -515,6 +515,380 @@ internal static class DailyV1SelectedActionExecutionStage
             return true;
         }
 
+        /// <summary>
+        /// Creates the ordinary, non-commercial Travel boundary entirely from
+        /// the admitted Core owner graph and its complete P12 census. Unity
+        /// projection and event callbacks are deliberately absent from this
+        /// path; trade repositioning and commercial scouting continue through
+        /// their existing host adapter.
+        /// </summary>
+        internal static bool TryCreateCoreOnly(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition expectedAction,
+            out ISelectedSoloTravelActionBoundary boundary)
+        {
+            boundary = null;
+            if (executionState == null || graph == null || actor == null
+                || expectedAction == null
+                || !DailyV1CoreSelectedActorTurnExecutionBoundary
+                    .IsExactCoreOnlySoloTravelActionSlot(
+                        graph, actor, expectedAction, actor.ActionSlot?.CurrentPayload,
+                        requireInstalledSlot: true)
+                || MoneyAccountOwnerBridge.HasP12MutationBoundary(actor.MoneyAccount)
+                || !executionState.TryCreateSelectedP12SoloTravelStartSectionIds(
+                    graph, actor, out IReadOnlyList<string> sectionIds))
+                return false;
+
+            CoreOnlyCensusPort censusPort = new CoreOnlyCensusPort(
+                executionState, graph, actor, sectionIds);
+            DailyV1CoreSelectedP12SoloTravelStartProtocol protocol =
+                new DailyV1CoreSelectedP12SoloTravelStartProtocol(
+                    executionState, graph, censusPort);
+            CoreOnlyProjectionBoundary projection = new CoreOnlyProjectionBoundary(
+                executionState, graph, actor, expectedAction, protocol, sectionIds);
+            return TryCreate(executionState, graph, actor, expectedAction,
+                    protocol, projection, out boundary)
+                && boundary != null;
+        }
+
+        private sealed class CoreOnlyCensusPort
+            : IDailyV1SelectedP12SoloTravelStartCensusPort
+        {
+            private sealed class RuntimeProtocolScope : IDisposable
+            {
+                private readonly DailyV1ExecutionBoundaryState state;
+                private readonly CoreOnlyCensusPort owner;
+                private bool disposed;
+
+                internal RuntimeProtocolScope(
+                    DailyV1ExecutionBoundaryState state,
+                    CoreOnlyCensusPort owner)
+                {
+                    this.state = state;
+                    this.owner = owner;
+                }
+
+                public void Dispose()
+                {
+                    if (disposed) return;
+                    disposed = true;
+                    if (!state.TryEndRuntimeProtocolOperation()) owner.FaultClosed();
+                }
+            }
+
+            private readonly DailyV1ExecutionBoundaryState state;
+            private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+            private readonly DailyV1NpcRuntimeOwners actor;
+            private readonly HashSet<string> allowedSectionIds;
+            private readonly IReadOnlyList<string> exactSectionIds;
+
+            internal CoreOnlyCensusPort(
+                DailyV1ExecutionBoundaryState state,
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                DailyV1NpcRuntimeOwners actor,
+                IReadOnlyList<string> exactSectionIds)
+            {
+                this.state = state ?? throw new ArgumentNullException(nameof(state));
+                this.graph = graph ?? throw new ArgumentNullException(nameof(graph));
+                this.actor = actor ?? throw new ArgumentNullException(nameof(actor));
+                this.exactSectionIds = exactSectionIds
+                    ?? throw new ArgumentNullException(nameof(exactSectionIds));
+                allowedSectionIds = new HashSet<string>(exactSectionIds, StringComparer.Ordinal);
+                if (allowedSectionIds.Count != exactSectionIds.Count)
+                    throw new ArgumentException("The Core Travel P12 cut contains duplicate sections.", nameof(exactSectionIds));
+            }
+
+            public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
+                IsExactAllowedSectionSet(sectionIds)
+                && state.TryValidateCoreSelectedOwnerSectionCensusRows(
+                    graph, sectionIds, null);
+
+            public bool TryEnterOperation(out IDisposable operationScope)
+            {
+                operationScope = null;
+                if (!IsCurrent()
+                    || !state.TryBeginRuntimeProtocolOperation(
+                        DailyV1RuntimeProtocolOperationContracts.SoloTravelStart,
+                        requireNoActiveRuntimeProtocolOperations: false))
+                    return false;
+                operationScope = new RuntimeProtocolScope(state, this);
+                return true;
+            }
+
+            public bool TryRefreshCommittedMutationBaselines(
+                IReadOnlyCollection<string> sectionIds) =>
+                IsAllowedSubset(sectionIds)
+                && state.TryRefreshCoreSelectedOwnerSectionCensusRows(
+                    graph, sectionIds, null);
+
+            public void FaultClosed()
+            {
+                state.MarkSelectedRuntimeCensusProtocolFaulted();
+                state.InvalidateCurrentCaptureToken();
+            }
+
+            private bool IsExactAllowedSectionSet(IEnumerable<string> sectionIds)
+            {
+                if (!IsCurrent() || sectionIds == null) return false;
+                HashSet<string> supplied = new HashSet<string>(StringComparer.Ordinal);
+                try
+                {
+                    foreach (string sectionId in sectionIds)
+                        if (string.IsNullOrWhiteSpace(sectionId)
+                            || !supplied.Add(sectionId)
+                            || !allowedSectionIds.Contains(sectionId)) return false;
+                }
+                catch { return false; }
+                return supplied.Count == allowedSectionIds.Count;
+            }
+
+            private bool IsAllowedSubset(IEnumerable<string> sectionIds)
+            {
+                if (!IsCurrent() || sectionIds == null) return false;
+                int count = 0;
+                HashSet<string> supplied = new HashSet<string>(StringComparer.Ordinal);
+                try
+                {
+                    foreach (string sectionId in sectionIds)
+                    {
+                        if (string.IsNullOrWhiteSpace(sectionId)
+                            || !supplied.Add(sectionId)
+                            || !allowedSectionIds.Contains(sectionId)) return false;
+                        count++;
+                    }
+                }
+                catch { return false; }
+                return count != 0;
+            }
+
+            private bool IsCurrent() =>
+                state.HasAdmittedSelectedDailyExecution
+                && state.AdmissionContext?.IsOwnedByCurrentThread() == true
+                && ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph)
+                && graph.ContainsExactNpcOwner(actor)
+                && ReferenceEquals(actor.Definitions, graph.Definitions);
+        }
+
+        private sealed class CoreOnlyProjectionBoundary
+            : ISelectedSoloTravelActionProjectionBoundary
+        {
+            private readonly DailyV1ExecutionBoundaryState state;
+            private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+            private readonly DailyV1NpcRuntimeOwners actor;
+            private readonly DailyV1ActionDefinition action;
+            private readonly DailyV1NpcActionPayloadOwner payload;
+            private readonly IDailyV1SelectedP12SoloTravelStartProtocol protocol;
+            private readonly IReadOnlyList<string> operationSectionIds;
+            private readonly string moneySectionId;
+            private readonly string travelSectionId;
+            private readonly string planSectionId;
+            private readonly string[] transitionSectionIds;
+            private DailyV1CityNpcPresenceOwner originPresenceOwner;
+            private long originPresenceRevision;
+            private int originPresenceCardinality;
+            private long lastAccountRevision;
+            private readonly float openingBalance;
+
+            internal CoreOnlyProjectionBoundary(
+                DailyV1ExecutionBoundaryState state,
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1ActionDefinition action,
+                IDailyV1SelectedP12SoloTravelStartProtocol protocol,
+                IReadOnlyList<string> operationSectionIds)
+            {
+                this.state = state;
+                this.graph = graph;
+                this.actor = actor;
+                this.action = action;
+                payload = actor.ActionSlot.CurrentPayload;
+                this.protocol = protocol;
+                this.operationSectionIds = operationSectionIds;
+                moneySectionId = DailyV1SelectedOwnerSectionCensusContract
+                    .NpcMoneyAccountPrefix + actor.RuntimeId;
+                travelSectionId = DailyV1SelectedOwnerSectionCensusContract
+                    .NpcSectionIdFor(12, actor.RuntimeId);
+                planSectionId = DailyV1SelectedOwnerSectionCensusContract
+                    .NpcPlanSectionIdFor(
+                        DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind,
+                        actor.RuntimeId);
+                List<string> transitionSections = new List<string> { travelSectionId };
+                foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+                    if (city != null
+                        && graph.ContainsExactCityOwner(city)
+                        && string.Equals(city.RuntimeId,
+                            actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+                        && city.NpcPresence.Contains(actor.RuntimeId))
+                    {
+                        transitionSections.Add(
+                            DailyV1SelectedOwnerSectionCensusContract
+                                .CityImportantNpcSectionIdFor(city.RuntimeId));
+                        originPresenceOwner = city.NpcPresence;
+                        originPresenceRevision = city.NpcPresence.Revision;
+                        originPresenceCardinality = city.NpcPresence.OrderedNpcRuntimeIds.Count;
+                        break;
+                    }
+                transitionSectionIds = transitionSections.ToArray();
+                lastAccountRevision = actor.MoneyAccount.Revision;
+                openingBalance = actor.MoneyAccount.Balance;
+            }
+
+            public bool ExecuteWithinOperation(Func<bool> operation)
+            {
+                if (operation == null) throw new ArgumentNullException(nameof(operation));
+                if (!IsCurrent())
+                {
+                    protocol.FaultClosed();
+                    throw new InvalidOperationException(
+                        "The Core-only solo Travel action lost its exact admitted session.");
+                }
+                if (!protocol.TryBeginOperation(graph, actor, out IDisposable scope)
+                    || scope == null)
+                    throw new InvalidOperationException(
+                        "The Core-only solo Travel action could not begin its exact P12 operation.");
+
+                using (scope)
+                {
+                    try
+                    {
+                        bool succeeded = operation();
+                        if (succeeded && originPresenceOwner != null
+                            && (originPresenceOwner.Contains(actor.RuntimeId)
+                                || originPresenceRevision == long.MaxValue
+                                || originPresenceOwner.Revision != originPresenceRevision + 1L
+                                || originPresenceOwner.OrderedNpcRuntimeIds.Count
+                                    != originPresenceCardinality - 1))
+                        {
+                            protocol.FaultClosed();
+                            throw new InvalidOperationException(
+                                "The committed Core Travel action did not retain its exact origin-presence removal.");
+                        }
+                        if (!TryRecordAccountRevision()
+                            || (!succeeded && actor.MoneyAccount.Balance != openingBalance))
+                        {
+                            protocol.FaultClosed();
+                            return false;
+                        }
+                        return succeeded;
+                    }
+                    catch
+                    {
+                        protocol.FaultClosed();
+                        throw;
+                    }
+                }
+            }
+
+            public bool CanStartTradeReposition() => false;
+            public void LogTradeReposition() { }
+
+            public bool CanPreflightProjectionCommit(
+                DailyV1SelectedTravelTransitionPlan plan) =>
+                IsExactPreparedPlan(plan)
+                && TryCanCommit(operationSectionIds);
+
+            public bool CanCommitPreparedTransition(
+                DailyV1SelectedTravelTransitionPlan plan,
+                SpatialRouteRuntime route,
+                float travelCost) =>
+                IsExactPreparedPlan(plan)
+                && DailyV1SelectedActionExecutionStage
+                    .CanCommitPreparedSoloTravelTransition(
+                        graph, actor, plan, route, travelCost)
+                && TryCanCommit(operationSectionIds);
+
+            public bool TryPrepareTransitionProjection(
+                DailyV1SelectedTravelTransitionPlan plan) => IsExactPreparedPlan(plan);
+
+            public bool CanAdmitPreparedTransition(
+                DailyV1SelectedTravelTransitionPlan plan) =>
+                IsExactPreparedPlan(plan)
+                && TryRecordAccountRevision()
+                && TryCanCommit(transitionSectionIds);
+
+            public void PublishCommittedTransition(
+                DailyV1SelectedTravelTransitionPlan plan)
+            {
+                if (!IsCurrent() || plan == null
+                    || !plan.IsPreparedFor(actor, graph) || !plan.IsCommitted
+                    || !TryRecord(transitionSectionIds))
+                    FaultAndThrow("The Core Travel and City-presence commit did not match its P12 owner receipt.");
+            }
+
+            public void PublishTravelStarted(
+                DailyV1SelectedActionExecutionStage.SoloTravelResult result)
+            {
+                if (!IsCurrent() || result?.Succeeded != true)
+                    FaultAndThrow("The Core-only Travel completion is not the exact committed operation.");
+                // Event/log projections remain host output. Authoritative travel,
+                // account, spatial, presence, plan and P12 state are already Core-owned.
+            }
+
+            public void LogCommercialScouting() { }
+
+            public bool CanProjectTravelPlanClear(DailyV1NpcRuntimeOwners candidate) =>
+                ReferenceEquals(candidate, actor) && IsCurrent();
+
+            public bool CanAdmitTravelPlanClear(DailyV1NpcRuntimeOwners candidate) =>
+                ReferenceEquals(candidate, actor)
+                && IsCurrent()
+                && TryCanCommit(new[] { planSectionId });
+
+            public void PublishCommittedTravelPlanClear(
+                DailyV1NpcRuntimeOwners candidate)
+            {
+                if (!ReferenceEquals(candidate, actor)
+                    || !IsCurrent()
+                    || !TryRecord(new[] { planSectionId }))
+                    FaultAndThrow("The Core TravelPlan clear did not match its P12 owner receipt.");
+            }
+
+            private bool TryRecordAccountRevision()
+            {
+                long current = actor.MoneyAccount.Revision;
+                if (current == lastAccountRevision) return true;
+                if (lastAccountRevision == long.MaxValue
+                    || current != lastAccountRevision + 1L
+                    || !TryRecord(new[] { moneySectionId })) return false;
+                lastAccountRevision = current;
+                return true;
+            }
+
+            private bool TryCanCommit(IReadOnlyList<string> sectionIds) =>
+                IsCurrent()
+                && state.TryCanCommitSelectedP12SoloTravelStartMutation(
+                    sectionIds, out bool handled)
+                && handled;
+
+            private bool TryRecord(IReadOnlyList<string> sectionIds) =>
+                IsCurrent()
+                && state.TryRecordSelectedP12SoloTravelStartMutation(
+                    sectionIds, out bool handled)
+                && handled;
+
+            private bool IsExactPreparedPlan(DailyV1SelectedTravelTransitionPlan plan) =>
+                IsCurrent()
+                && plan != null && plan.IsPreparedFor(actor, graph)
+                && !plan.IsCommitted && !plan.IsNoOp;
+
+            private bool IsCurrent() =>
+                state.HasAdmittedSelectedDailyExecution
+                && state.AdmissionContext?.IsOwnedByCurrentThread() == true
+                && ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph)
+                && graph.ContainsExactNpcOwner(actor)
+                && ReferenceEquals(actor.ActionSlot?.CurrentAction, action)
+                && ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)
+                && ReferenceEquals(payload?.Action, action);
+
+            private void FaultAndThrow(string message)
+            {
+                protocol.FaultClosed();
+                throw new InvalidOperationException(message);
+            }
+        }
+
         private sealed class CoreBoundary : ISelectedSoloTravelActionBoundary
         {
             private readonly DailyV1ExecutionBoundaryState executionState;
