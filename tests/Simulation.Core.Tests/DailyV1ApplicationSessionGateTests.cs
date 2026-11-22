@@ -3993,6 +3993,38 @@ public sealed class DailyV1ApplicationSessionGateTests
             CreateCoreBoundCompleteOwnerSectionVector(session);
         Assert.That(graph.Npcs.Count, Is.GreaterThan(0));
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusProviderRegistrations(
+                    graph,
+                    out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> npcOwnerRegistrations,
+                    out string npcRegistrationDiagnostic),
+            Is.True, npcRegistrationDiagnostic);
+        Assert.That(npcOwnerRegistrations, Has.Count.EqualTo(graph.Npcs.Count * 2));
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            string inventoryId = DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix
+                + npc.RuntimeId;
+            string moneyAccountId = DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix
+                + npc.RuntimeId;
+            DailyV1OwnerSectionCensusProviderRegistration inventoryRegistration =
+                npcOwnerRegistrations.Single(registration => registration.SectionId == inventoryId);
+            DailyV1OwnerSectionCensusProviderRegistration moneyAccountRegistration =
+                npcOwnerRegistrations.Single(registration => registration.SectionId == moneyAccountId);
+            OwnerSectionCensusWitness inventoryWitness = inventoryRegistration.Provider.GetCurrentCensus();
+            OwnerSectionCensusWitness moneyAccountWitness = moneyAccountRegistration.Provider.GetCurrentCensus();
+
+            Assert.That(inventoryRegistration.Role, Is.EqualTo(OwnerSectionRole.Required));
+            Assert.That(inventoryRegistration.SchemaVersion,
+                Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion));
+            Assert.That(inventoryWitness.OwnerInstanceIdentity, Is.SameAs(npc.Inventory));
+            Assert.That(inventoryWitness.Revision, Is.EqualTo(npc.Inventory.Revision));
+            Assert.That(moneyAccountRegistration.Role, Is.EqualTo(OwnerSectionRole.Required));
+            Assert.That(moneyAccountRegistration.SchemaVersion,
+                Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion));
+            Assert.That(moneyAccountWitness.OwnerInstanceIdentity, Is.SameAs(npc.MoneyAccount));
+            Assert.That(moneyAccountWitness.Cardinality, Is.EqualTo(1));
+            Assert.That(moneyAccountWitness.Revision, Is.EqualTo(npc.MoneyAccount.Revision));
+        }
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
                 .TryGetExactCoreOwnedNpcInventoryAndMoneyAccountSectionIds(
                     completeVector, graph,
                     out IReadOnlyList<string> coreOwnedNpcSectionIds,

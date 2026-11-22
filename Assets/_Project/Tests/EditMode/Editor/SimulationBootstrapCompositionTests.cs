@@ -930,6 +930,8 @@ public sealed class SimulationBootstrapCompositionTests
         IDictionary registeredSections = (IDictionary)typeof(ContinuationCensusProtocol)
             .GetField("registeredSections", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(censusProtocol);
+        IDictionary coreRegisteredProviders = ReadSelectedCoreOwnerSectionCensusProviders(
+            simulation.Runtime.ExecutionBoundaryState);
         AssertSelectedDailyV1SectionInventory(runtime, expectedCensusSections, registeredSections);
         foreach (string sectionId in identitySpatialSectionIds)
         {
@@ -945,6 +947,25 @@ public sealed class SimulationBootstrapCompositionTests
                 Is.EqualTo("DailyV1CoreIdentitySpatialOwnerSectionCensusProvider"),
                 "The sealed selected-profile census must retain the Core live owner provider for "
                     + sectionId + ".");
+        }
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            AssertRegisteredCoreNpcProvider(
+                coreRegisteredProviders,
+                DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + npc.RuntimeId,
+                "InventorySectionProvider");
+            AssertRegisteredUnityCompatibilityNpcProvider(
+                registeredSections,
+                DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + npc.RuntimeId,
+                typeof(NpcInventoryCensusProvider));
+            AssertRegisteredCoreNpcProvider(
+                coreRegisteredProviders,
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + npc.RuntimeId,
+                "MoneyAccountSectionProvider");
+            AssertRegisteredUnityCompatibilityNpcProvider(
+                registeredSections,
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + npc.RuntimeId,
+                typeof(NpcMoneyAccountCensusProvider));
         }
         AssertSelectedDailyV1RegisteredOwnerIdentityMap(
             runtime, simulation.Bootstrap, expectedCensusSections, registeredSections);
@@ -3340,8 +3361,25 @@ public sealed class SimulationBootstrapCompositionTests
             addFailure.ToString());
         Assert.That(simulation.TryGetNpcRuntime(added.RuntimeId, out NpcRuntime resolvedAdded), Is.True);
         Assert.That(resolvedAdded, Is.SameAs(added));
-        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long addedEpoch, out _), Is.True);
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long addedEpoch, out ContinuationCensusFailure addedEpochFailure),
+            Is.True, addedEpochFailure + ": " + ReadNpcRosterCensusFaultDetail(runtime));
         Assert.That(addedEpoch, Is.EqualTo(initialEpoch + 1L));
+        IDictionary coreProvidersAfterAdd = ReadSelectedCoreOwnerSectionCensusProviders(
+            runtime.ExecutionBoundaryState);
+        IDictionary compatibilitySectionsAfterAdd = ReadRegisteredNpcCensusSections(runtime);
+        string addedInventoryId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + added.RuntimeId;
+        string addedMoneyAccountId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + added.RuntimeId;
+        AssertRegisteredUnityCompatibilityNpcProvider(
+            compatibilitySectionsAfterAdd, addedInventoryId, typeof(NpcInventoryCensusProvider));
+        AssertRegisteredUnityCompatibilityNpcProvider(
+            compatibilitySectionsAfterAdd, addedMoneyAccountId, typeof(NpcMoneyAccountCensusProvider));
+        AssertCoreRegistryUsesUnityProjectionProvider(
+            coreProvidersAfterAdd, compatibilitySectionsAfterAdd, addedInventoryId);
+        AssertCoreRegistryUsesUnityProjectionProvider(
+            coreProvidersAfterAdd, compatibilitySectionsAfterAdd, addedMoneyAccountId);
         AssertSelectedDailyNpcOwnerFamilies(runtime);
 
         OwnerSectionCensusWitness[] afterAdd = identityProviders
@@ -3473,8 +3511,25 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(registered, Is.SameAs(added));
         Assert.That(simulation.TryGetNpcRuntime(added.RuntimeId, out NpcRuntime projected), Is.True);
         Assert.That(projected, Is.SameAs(added));
-        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochAfterAdd, out _), Is.True);
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long epochAfterAdd, out ContinuationCensusFailure epochAfterAddFailure),
+            Is.True, epochAfterAddFailure + ": " + ReadNpcRosterCensusFaultDetail(runtime));
         Assert.That(epochAfterAdd, Is.EqualTo(epochBefore + 1L));
+        IDictionary coreProvidersAfterAdd = ReadSelectedCoreOwnerSectionCensusProviders(
+            runtime.ExecutionBoundaryState);
+        IDictionary compatibilitySectionsAfterAdd = ReadRegisteredNpcCensusSections(runtime);
+        string addedInventoryId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + added.RuntimeId;
+        string addedMoneyAccountId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + added.RuntimeId;
+        AssertRegisteredCoreNpcProvider(
+            coreProvidersAfterAdd, addedInventoryId, "InventorySectionProvider");
+        AssertRegisteredCoreNpcProvider(
+            coreProvidersAfterAdd, addedMoneyAccountId, "MoneyAccountSectionProvider");
+        AssertRegisteredUnityCompatibilityNpcProvider(
+            compatibilitySectionsAfterAdd, addedInventoryId, typeof(NpcInventoryCensusProvider));
+        AssertRegisteredUnityCompatibilityNpcProvider(
+            compatibilitySectionsAfterAdd, addedMoneyAccountId, typeof(NpcMoneyAccountCensusProvider));
         AssertSelectedDailyNpcOwnerFamilies(runtime);
 
         OwnerSectionCensusWitness[] identityAfterAdd = identityProviders
@@ -3502,6 +3557,10 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(simulation.TryGetNpcRuntime(added.RuntimeId, out NpcRuntime retainedIdentity), Is.True);
         Assert.That(retainedIdentity, Is.SameAs(added),
             "P12 identity census intentionally retains the NPC identity after active-roster removal.");
+        IDictionary coreProvidersAfterRemove = ReadSelectedCoreOwnerSectionCensusProviders(
+            runtime.ExecutionBoundaryState);
+        Assert.That(coreProvidersAfterRemove.Contains(addedInventoryId), Is.False);
+        Assert.That(coreProvidersAfterRemove.Contains(addedMoneyAccountId), Is.False);
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochAfterRemove, out _), Is.True);
         Assert.That(epochAfterRemove, Is.EqualTo(epochAfterAdd + 1L));
         AssertSelectedDailyNpcOwnerFamilies(runtime);
@@ -3542,11 +3601,24 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(runtime.TryRegisterNpc(legacyNpc, out WorldNpcRegistryFailure registerFailure),
             Is.True, registerFailure.ToString());
         Assert.That(legacyNpc.UsesSelectedDailyV1Definitions, Is.False);
+        IDictionary compatibilitySections = ReadRegisteredNpcCensusSections(runtime);
+        IDictionary coreProviders = ReadSelectedCoreOwnerSectionCensusProviders(
+            runtime.ExecutionBoundaryState);
+        string legacyInventoryId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + legacyNpc.RuntimeId;
+        string legacyMoneyAccountId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + legacyNpc.RuntimeId;
+        AssertRegisteredUnityCompatibilityNpcProvider(
+            compatibilitySections, legacyInventoryId, typeof(NpcInventoryCensusProvider));
+        AssertRegisteredUnityCompatibilityNpcProvider(
+            compatibilitySections, legacyMoneyAccountId, typeof(NpcMoneyAccountCensusProvider));
+        AssertCoreRegistryUsesUnityProjectionProvider(coreProviders, compatibilitySections, legacyInventoryId);
+        AssertCoreRegistryUsesUnityProjectionProvider(coreProviders, compatibilitySections, legacyMoneyAccountId);
 
         PersonId personId = new PersonId("mixed-daily-v1-legacy-binding-person");
         PersonRuntime person = new PersonRuntime(personId, runtime.CurrentDay);
         Assert.That(runtime.TryRegisterPerson(person, out PersonStoreFailure personFailure),
-            Is.True, personFailure.ToString());
+            Is.True, personFailure + ": " + ReadNpcRosterCensusFaultDetail(runtime));
         long personStoreRevision = runtime.PersonStore.Revision;
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochBeforeBinding, out _), Is.True);
 
@@ -3566,6 +3638,24 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(boundPerson, Is.SameAs(person));
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochAfterBinding, out _), Is.True);
         Assert.That(epochAfterBinding, Is.EqualTo(epochBeforeBinding + 1L));
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure mixedCensusFailure),
+            Is.True, mixedCensusFailure.ToString());
+        ContinuationCensusProtocol censusProtocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
+            .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(runtime);
+        IDictionary registeredSections = (IDictionary)typeof(ContinuationCensusProtocol)
+            .GetField("registeredSections", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(censusProtocol);
+        AssertRegisteredUnityCompatibilityNpcProvider(
+            registeredSections,
+            DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + legacyNpc.RuntimeId,
+            typeof(NpcInventoryCensusProvider));
+        AssertRegisteredUnityCompatibilityNpcProvider(
+            registeredSections,
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + legacyNpc.RuntimeId,
+            typeof(NpcMoneyAccountCensusProvider));
     }
 
     [Test]
@@ -4849,7 +4939,8 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(materializedCityPresence.Revision, Is.EqualTo(initialCityPresenceRevision + 1));
         Assert.That(censusProtocol.TryReadMutationEpoch(
             out long materializedMutationEpoch,
-            out ContinuationCensusFailure materializedEpochFailure), Is.True, materializedEpochFailure.ToString());
+            out ContinuationCensusFailure materializedEpochFailure), Is.True,
+            materializedEpochFailure + ": " + ReadNpcRosterCensusFaultDetail(runtime));
         Assert.That(materializedMutationEpoch, Is.EqualTo(initialMutationEpoch + 1),
             "Person, NPC-family, and City-presence reconciliation must share one membership epoch.");
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure), Is.True,
@@ -5033,6 +5124,108 @@ public sealed class SimulationBootstrapCompositionTests
         Assert.That(repeatedWitness.OwnerInstanceIdentity, Is.SameAs(witness.OwnerInstanceIdentity));
         Assert.That(repeatedWitness.Cardinality, Is.EqualTo(witness.Cardinality));
         Assert.That(repeatedWitness.Revision, Is.EqualTo(witness.Revision));
+    }
+
+    private static string ReadNpcRosterCensusFaultDetail(SimulationRuntime runtime)
+    {
+        FieldInfo protocolField = typeof(SimulationRuntime).GetField(
+            "npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic);
+        ContinuationCensusProtocol protocol = protocolField == null
+            ? null
+            : (ContinuationCensusProtocol)protocolField.GetValue(runtime);
+        return protocol == null
+            ? "NPC census protocol was not available."
+            : "source=" + protocol.FirstFaultSource + ";detail="
+                + (protocol.FirstFaultDetail ?? "No detail was recorded.");
+    }
+
+    private static IDictionary ReadRegisteredNpcCensusSections(SimulationRuntime runtime)
+    {
+        FieldInfo protocolField = typeof(SimulationRuntime).GetField(
+            "npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic);
+        ContinuationCensusProtocol protocol = protocolField == null
+            ? null
+            : (ContinuationCensusProtocol)protocolField.GetValue(runtime);
+        FieldInfo sectionsField = typeof(ContinuationCensusProtocol).GetField(
+            "registeredSections", BindingFlags.Instance | BindingFlags.NonPublic);
+        return protocol == null || sectionsField == null
+            ? null
+            : (IDictionary)sectionsField.GetValue(protocol);
+    }
+
+    private static IDictionary ReadSelectedCoreOwnerSectionCensusProviders(
+        DailyV1ExecutionBoundaryState executionState)
+    {
+        FieldInfo providersField = typeof(DailyV1ExecutionBoundaryState).GetField(
+            "selectedOwnerSectionCensusProviders", BindingFlags.Instance | BindingFlags.NonPublic);
+        return executionState == null || providersField == null
+            ? null
+            : (IDictionary)providersField.GetValue(executionState);
+    }
+
+    private static IOwnerSectionCensusProvider ReadCoreRegistryProvider(
+        IDictionary coreProviders,
+        string sectionId)
+    {
+        if (coreProviders == null || !coreProviders.Contains(sectionId)) return null;
+        object registration = coreProviders[sectionId];
+        PropertyInfo providerProperty = registration?.GetType().GetProperty(
+            "Provider", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        return providerProperty?.GetValue(registration) as IOwnerSectionCensusProvider;
+    }
+
+    private static IOwnerSectionCensusProvider ReadCompatibilityRegistryProvider(
+        IDictionary registeredSections,
+        string sectionId)
+    {
+        if (registeredSections == null || !registeredSections.Contains(sectionId)) return null;
+        object registeredSection = registeredSections[sectionId];
+        FieldInfo providerField = registeredSection?.GetType().GetField(
+            "Provider", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        return providerField?.GetValue(registeredSection) as IOwnerSectionCensusProvider;
+    }
+
+    private static void AssertCoreRegistryUsesUnityProjectionProvider(
+        IDictionary coreProviders,
+        IDictionary registeredSections,
+        string sectionId)
+    {
+        Assert.That(ReadCoreRegistryProvider(coreProviders, sectionId),
+            Is.SameAs(ReadCompatibilityRegistryProvider(registeredSections, sectionId)), sectionId);
+    }
+
+    private static void AssertRegisteredCoreNpcProvider(
+        IDictionary registeredSections,
+        string sectionId,
+        string expectedProviderTypeName)
+    {
+        Assert.That(registeredSections, Is.Not.Null);
+        Assert.That(registeredSections.Contains(sectionId), Is.True, sectionId);
+        IOwnerSectionCensusProvider provider = ReadCoreRegistryProvider(registeredSections, sectionId);
+        Assert.That(provider, Is.Not.Null, sectionId);
+        Assert.That(provider.GetType().Name, Is.EqualTo(expectedProviderTypeName), sectionId);
+        OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+        Assert.That(witness.SectionId, Is.EqualTo(sectionId));
+        Assert.That(witness.OwnerInstanceIdentity, Is.Not.Null);
+        Assert.That(witness.Revision, Is.GreaterThanOrEqualTo(0L));
+    }
+
+    private static void AssertRegisteredUnityCompatibilityNpcProvider(
+        IDictionary registeredSections,
+        string sectionId,
+        System.Type expectedDeclaringType)
+    {
+        Assert.That(registeredSections, Is.Not.Null);
+        Assert.That(registeredSections.Contains(sectionId), Is.True, sectionId);
+        object registeredSection = registeredSections[sectionId];
+        FieldInfo providerField = registeredSection.GetType().GetField(
+            "Provider", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        Assert.That(providerField, Is.Not.Null, sectionId);
+        IOwnerSectionCensusProvider provider =
+            (IOwnerSectionCensusProvider)providerField.GetValue(registeredSection);
+        Assert.That(provider, Is.Not.Null, sectionId);
+        Assert.That(provider.GetType().DeclaringType, Is.EqualTo(expectedDeclaringType), sectionId);
+        Assert.That(provider.GetCurrentCensus().SectionId, Is.EqualTo(sectionId));
     }
 
     private static void AssertRegisteredRequiredProvider(

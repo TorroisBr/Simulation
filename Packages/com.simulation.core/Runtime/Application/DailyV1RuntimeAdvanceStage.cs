@@ -3434,16 +3434,16 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     }
 
     /// <summary>
-    /// Returns selected NPC Inventory and MoneyAccount witnesses from the
-    /// exact Core owner graph. The dynamic section keys are one-per-NPC and
-    /// preserve their canonical runtime identity.
+    /// Creates live Core registrations for the selected NPC Inventory and
+    /// MoneyAccount owners. The registrations bind exact runtime identities
+    /// and carry the initial owner-local revision/cardinality baseline.
     /// </summary>
-    private static bool TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusWitnesses(
+    internal static bool TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusProviderRegistrations(
         DailyV1SelectedRuntimeOwnerGraph graph,
-        out IReadOnlyList<OwnerSectionCensusWitness> witnesses,
+        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
         out string diagnostic)
     {
-        witnesses = null;
+        registrations = null;
         diagnostic = null;
         if (graph?.Npcs == null)
         {
@@ -3480,26 +3480,32 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return false;
         }
 
-        HashSet<string> expectedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, object> expectedOwnerBySection =
+            new Dictionary<string, object>(StringComparer.Ordinal);
         foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
         {
             if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
-                || !expectedSectionIds.Add(
-                    DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + npc.RuntimeId)
-                || !expectedSectionIds.Add(
-                    DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + npc.RuntimeId))
+                || npc.Inventory == null || npc.MoneyAccount == null
+                || !expectedOwnerBySection.TryAdd(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + npc.RuntimeId,
+                    npc.Inventory)
+                || !expectedOwnerBySection.TryAdd(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + npc.RuntimeId,
+                    npc.MoneyAccount))
             {
-                diagnostic = "The selected Core NPC census graph has a missing or duplicate runtime identity.";
+                diagnostic = "The selected Core NPC census graph has a missing or duplicate runtime identity or owner.";
                 return false;
             }
         }
 
-        OwnerSectionCensusWitness[] built = new OwnerSectionCensusWitness[providers.Count];
+        List<DailyV1OwnerSectionCensusProviderRegistration> built =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(providers.Count);
         HashSet<string> observedSectionIds = new HashSet<string>(StringComparer.Ordinal);
         for (int index = 0; index < providers.Count; index++)
         {
+            IOwnerSectionCensusProvider provider = providers[index];
             OwnerSectionCensusWitness witness;
-            try { witness = providers[index]?.GetCurrentCensus(); }
+            try { witness = provider?.GetCurrentCensus(); }
             catch (Exception exception) when (exception is ArgumentException
                 || exception is InvalidOperationException || exception is OverflowException)
             {
@@ -3513,24 +3519,76 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 || witness.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
                 || witness.Cardinality < 0
                 || witness.Revision < 0L
-                || !expectedSectionIds.Contains(witness.SectionId)
+                || !expectedOwnerBySection.TryGetValue(witness.SectionId, out object expectedOwner)
+                || !ReferenceEquals(witness.OwnerInstanceIdentity, expectedOwner)
                 || !observedSectionIds.Add(witness.SectionId))
             {
-                diagnostic = "A selected Core NPC census provider returned an invalid or duplicate owner witness.";
+                diagnostic = "A selected Core NPC census provider returned an invalid, substituted, or duplicate owner witness.";
                 return false;
             }
-            built[index] = witness;
+
+            if (witness.SectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
+                    StringComparison.Ordinal)
+                && witness.Cardinality != 1)
+            {
+                diagnostic = "Each selected Core NPC MoneyAccount census row must have cardinality exactly one.";
+                return false;
+            }
+
+            built.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                provider,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision,
+                hasBaseline: true));
         }
 
-        if (observedSectionIds.Count != expectedSectionIds.Count)
+        if (observedSectionIds.Count != expectedOwnerBySection.Count)
         {
             diagnostic = "The selected Core NPC census provider set does not cover each exact owner identity.";
             return false;
         }
 
-        Array.Sort(built, (left, right) =>
-            StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+        built.Sort((left, right) => StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+        registrations = built.AsReadOnly();
+        return true;
+    }
+
+    private static bool TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusWitnesses(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IReadOnlyList<OwnerSectionCensusWitness> witnesses,
+        out string diagnostic)
+    {
+        witnesses = null;
+        if (!TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusProviderRegistrations(
+                graph,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+                out diagnostic))
+            return false;
+
+        OwnerSectionCensusWitness[] built = new OwnerSectionCensusWitness[registrations.Count];
+        for (int index = 0; index < registrations.Count; index++)
+        {
+            DailyV1OwnerSectionCensusProviderRegistration registration = registrations[index];
+            if (registration == null || !registration.HasBaseline)
+            {
+                diagnostic = "A selected Core NPC census registration has no initial owner baseline.";
+                return false;
+            }
+            built[index] = new OwnerSectionCensusWitness(
+                registration.SectionId,
+                registration.SchemaVersion,
+                registration.BaselineOwnerInstanceIdentity,
+                registration.BaselineCardinality,
+                registration.BaselineRevision);
+        }
+
         witnesses = Array.AsReadOnly(built);
+        diagnostic = null;
         return true;
     }
 

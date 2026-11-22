@@ -216,6 +216,9 @@ public sealed class ContinuationCensusProtocol
         new Dictionary<string, RegisteredSection>(StringComparer.Ordinal);
     private bool coreOwnedCityCensusProvidersBound;
     private bool coreOwnedIdentitySpatialCensusProvidersBound;
+    private Dictionary<string, IOwnerSectionCensusProvider>
+        coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection =
+            new Dictionary<string, IOwnerSectionCensusProvider>(StringComparer.Ordinal);
     private readonly HashSet<string> expectedOperations = new HashSet<string>(StringComparer.Ordinal);
     private HashSet<string> spatialKnowledgeSectionIds = new HashSet<string>(StringComparer.Ordinal);
     private Dictionary<string, NpcRuntime> spatialKnowledgeNpcOwnersBySection =
@@ -269,10 +272,12 @@ public sealed class ContinuationCensusProtocol
         ? sharedExecutionState.ActiveRuntimeOperationCount
         : standaloneActiveOperationCount;
     internal int ActiveOperationCount => activeOperationCount;
-    private static List<DailyV1OwnerSectionCensusProviderRegistration> CreateCoreOwnerSectionCensusRegistrations(
-        Dictionary<string, RegisteredSection> sections)
+    private List<DailyV1OwnerSectionCensusProviderRegistration> CreateCoreOwnerSectionCensusRegistrations(
+        Dictionary<string, RegisteredSection> sections,
+        Dictionary<string, IOwnerSectionCensusProvider> coreNpcProviders = null)
     {
         if (sections == null) return null;
+        coreNpcProviders ??= coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection;
         List<string> orderedIds = new List<string>(sections.Keys);
         orderedIds.Sort(StringComparer.Ordinal);
         List<DailyV1OwnerSectionCensusProviderRegistration> registrations =
@@ -281,11 +286,15 @@ public sealed class ContinuationCensusProtocol
         {
             RegisteredSection section = sections[sectionId];
             if (section == null || section.Contract == null || section.Provider == null) return null;
+            IOwnerSectionCensusProvider provider = section.Provider;
+            if (coreNpcProviders != null
+                && coreNpcProviders.TryGetValue(sectionId, out IOwnerSectionCensusProvider coreProvider))
+                provider = coreProvider;
             registrations.Add(new DailyV1OwnerSectionCensusProviderRegistration(
                 section.Contract.SectionId,
                 section.Contract.SchemaVersion,
                 section.Contract.Role,
-                section.Provider,
+                provider,
                 section.OwnerInstanceIdentity,
                 section.LastCardinality,
                 section.LastRevision,
@@ -315,27 +324,26 @@ public sealed class ContinuationCensusProtocol
             }
 
             bool committed;
+            Dictionary<string, IOwnerSectionCensusProvider> stagedCoreNpcProviders = null;
             if (requiresSelectedCoreOwnerCensus)
             {
-                List<DailyV1OwnerSectionCensusProviderRegistration> providers =
-                    new List<DailyV1OwnerSectionCensusProviderRegistration>(stagedRegistered.Count);
-                List<string> orderedIds = new List<string>(stagedRegistered.Keys);
-                orderedIds.Sort(StringComparer.Ordinal);
-                foreach (string sectionId in orderedIds)
+                if (runtimeProtocolTransition
+                    && !TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusProviderMap(
+                        stagedExpected,
+                        stagedRegistered,
+                        out stagedCoreNpcProviders,
+                        out string diagnostic))
                 {
-                    RegisteredSection section = stagedRegistered[sectionId];
-                    if (section == null || section.Contract == null || section.Provider == null)
-                        return false;
-                    providers.Add(new DailyV1OwnerSectionCensusProviderRegistration(
-                        section.Contract.SectionId,
-                        section.Contract.SchemaVersion,
-                        section.Contract.Role,
-                        section.Provider,
-                        section.OwnerInstanceIdentity,
-                        section.LastCardinality,
-                        section.LastRevision,
-                        section.HasBaseline));
+                    RecordFirstFaultDetail("CoreNpcInventoryMoneyAccountRegistryCompositionRejected:"
+                        + (diagnostic ?? "Unspecified"));
+                    return false;
                 }
+                if (!runtimeProtocolTransition)
+                    stagedCoreNpcProviders = coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection;
+
+                List<DailyV1OwnerSectionCensusProviderRegistration> providers =
+                    CreateCoreOwnerSectionCensusRegistrations(stagedRegistered, stagedCoreNpcProviders);
+                if (providers == null) return false;
 
                 committed = runtimeProtocolTransition
                     ? sharedExecutionState.TryReplaceSelectedOwnerSectionCensusRegistryDuringRuntimeOperation(
@@ -352,6 +360,8 @@ public sealed class ContinuationCensusProtocol
                     : sharedExecutionState.TryReplaceExpectedOwnerSectionContractInventoryBeforeSeal(
                         identities);
             if (!committed) return false;
+            if (requiresSelectedCoreOwnerCensus)
+                coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection = stagedCoreNpcProviders;
             expectedSectionsSealed = sharedExecutionState.ExpectedOwnerSectionContractInventorySealed;
         }
         // In shared mode these are projections for compatibility operations;
@@ -1488,6 +1498,15 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
+        if (requiresSelectedCoreOwnerCensus
+            && !TryBindCoreOwnedNpcInventoryAndMoneyAccountCensusProviders(out failure))
+        {
+            RecordFirstFaultDetail("CoreOwnedNpcInventoryMoneyAccountProviderBindingRejected");
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
         List<PendingSectionBaseline> observedSections = new List<PendingSectionBaseline>(expectedSections.Count);
         foreach (KeyValuePair<string, OwnerSectionContract> pair in expectedSections)
         {
@@ -1812,6 +1831,241 @@ public sealed class ContinuationCensusProtocol
         failure = ContinuationCensusFailure.None;
         return true;
     }
+
+    /// <summary>
+    /// Binds the selected NPC Inventory and MoneyAccount census rows to the
+    /// exact Core owner graph. A mixed Unity roster keeps its complete host
+    /// census projection; exact selected rows use the live Core providers.
+    /// </summary>
+    private bool TryBindCoreOwnedNpcInventoryAndMoneyAccountCensusProviders(
+        out ContinuationCensusFailure failure)
+    {
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        if (!requiresSelectedCoreOwnerCensus || sharedExecutionState == null)
+        {
+            RecordFirstFaultDetail("CoreNpcInventoryMoneyAccountBindingUnavailable");
+            return false;
+        }
+
+        if (!TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusProviderMap(
+                expectedSections,
+                registeredSections,
+                out Dictionary<string, IOwnerSectionCensusProvider> stagedProviders,
+                out string diagnostic))
+        {
+            RecordFirstFaultDetail("CoreNpcInventoryMoneyAccountBindingRejected:"
+                + (diagnostic ?? "Unspecified"));
+            return false;
+        }
+
+        coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection = stagedProviders;
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    private bool TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusProviderMap(
+        Dictionary<string, OwnerSectionContract> contracts,
+        Dictionary<string, RegisteredSection> sections,
+        out Dictionary<string, IOwnerSectionCensusProvider> coreProvidersBySection,
+        out string diagnostic)
+    {
+        coreProvidersBySection = null;
+        diagnostic = null;
+        if (!requiresSelectedCoreOwnerCensus || sharedExecutionState == null
+            || contracts == null || sections == null)
+        {
+            diagnostic = "Core census composition inputs are unavailable.";
+            return false;
+        }
+
+        DailyV1SelectedRuntimeOwnerGraph graph = sharedExecutionState.SelectedRuntimeOwnerGraph;
+        if (graph == null)
+        {
+            if (coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection.Count != 0)
+            {
+                diagnostic = "The previously bound Core NPC owner graph is no longer available.";
+                return false;
+            }
+
+            coreProvidersBySection = new Dictionary<string, IOwnerSectionCensusProvider>(
+                StringComparer.Ordinal);
+            return true;
+        }
+
+        if (!DailyV1SelectedRuntimeOwnerCensusSource
+                .TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusProviderRegistrations(
+                    graph,
+                    out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+                    out diagnostic)
+            || registrations == null)
+        {
+            return false;
+        }
+
+        HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in contracts.Keys)
+            if (IsSelectedCoreNpcInventoryOrMoneyAccountSection(sectionId))
+                expectedIds.Add(sectionId);
+
+        HashSet<string> registeredIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in sections.Keys)
+            if (IsSelectedCoreNpcInventoryOrMoneyAccountSection(sectionId))
+                registeredIds.Add(sectionId);
+
+        if (!registeredIds.SetEquals(expectedIds))
+        {
+            diagnostic = "The compatibility projection does not match the exact expected NPC owner rows.";
+            return false;
+        }
+
+        HashSet<string> coreIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in registrations)
+        {
+            if (registration == null || registration.Role != OwnerSectionRole.Required
+                || !coreIds.Add(registration.SectionId))
+            {
+                diagnostic = "Core NPC census provider registrations are invalid or duplicated.";
+                return false;
+            }
+        }
+
+        if (!coreIds.IsSubsetOf(expectedIds))
+        {
+            diagnostic = "The Core NPC owner graph is outside the registered owner section inventory.";
+            return false;
+        }
+
+        // A mixed Unity roster may contain host NPCs outside the selected Core
+        // graph. Keep those rows on their existing compatibility providers,
+        // while binding each exact Core owner row independently.
+        foreach (string previouslyBoundId
+            in coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection.Keys)
+        {
+            if (expectedIds.Contains(previouslyBoundId) && !coreIds.Contains(previouslyBoundId))
+            {
+                diagnostic = "A still-registered Core-owned NPC census row disappeared from the Core owner graph.";
+                return false;
+            }
+        }
+
+        Dictionary<string, IOwnerSectionCensusProvider> staged =
+            new Dictionary<string, IOwnerSectionCensusProvider>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in registrations)
+        {
+            if (!contracts.TryGetValue(registration.SectionId,
+                    out OwnerSectionContract contract)
+                || contract.SchemaVersion != registration.SchemaVersion
+                || contract.Role != registration.Role
+                || !sections.TryGetValue(registration.SectionId,
+                    out RegisteredSection prior)
+                || prior?.Contract == null || prior.Provider == null)
+            {
+                diagnostic = "The Core NPC owner contract differs from its Unity projection at "
+                    + registration.SectionId + ".";
+                return false;
+            }
+
+            OwnerSectionCensusWitness projectionWitness;
+            OwnerSectionCensusWitness candidateWitness;
+            try
+            {
+                projectionWitness = prior.Provider.GetCurrentCensus();
+                candidateWitness = registration.Provider.GetCurrentCensus();
+            }
+            catch (Exception exception)
+            {
+                diagnostic = "A Core NPC census source failed to read " + registration.SectionId
+                    + " (" + exception.GetType().Name + ").";
+                return false;
+            }
+
+            if (!HasExactSelectedCoreOwnerWitness(projectionWitness, candidateWitness))
+            {
+                string mismatch = projectionWitness == null ? "ProjectionMissing"
+                    : candidateWitness == null ? "CoreMissing"
+                    : !string.Equals(projectionWitness.SectionId, candidateWitness.SectionId,
+                        StringComparison.Ordinal) ? "SectionId"
+                    : projectionWitness.SchemaVersion != candidateWitness.SchemaVersion ? "Schema"
+                    : !ReferenceEquals(projectionWitness.OwnerInstanceIdentity,
+                        candidateWitness.OwnerInstanceIdentity) ? "OwnerIdentity"
+                    : projectionWitness.Cardinality != candidateWitness.Cardinality ? "Cardinality"
+                    : "Revision";
+                diagnostic = "The Core provider differs from the Unity projection at "
+                    + registration.SectionId + ":" + mismatch + ".";
+                return false;
+            }
+
+            if (!HasSelectedCoreNpcInventoryMoneyAccountWitness(candidateWitness, registration))
+            {
+                diagnostic = "The Core NPC provider returned an invalid owner witness at "
+                    + registration.SectionId + ".";
+                return false;
+            }
+
+            IOwnerSectionCensusProvider provider = registration.Provider;
+            if (coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection.TryGetValue(
+                    registration.SectionId, out IOwnerSectionCensusProvider priorCoreProvider))
+            {
+                OwnerSectionCensusWitness priorCoreWitness;
+                try { priorCoreWitness = priorCoreProvider?.GetCurrentCensus(); }
+                catch (Exception exception)
+                {
+                    diagnostic = "The prior Core NPC provider failed to read "
+                        + registration.SectionId + " (" + exception.GetType().Name + ").";
+                    return false;
+                }
+                if (!HasExactSelectedCoreOwnerWitness(priorCoreWitness, candidateWitness))
+                {
+                    diagnostic = "The Core NPC provider identity changed without a roster transition at "
+                        + registration.SectionId + ".";
+                    return false;
+                }
+                provider = priorCoreProvider;
+            }
+            staged.Add(registration.SectionId, provider);
+        }
+
+        coreProvidersBySection = staged;
+        return true;
+    }
+
+    private static bool IsSelectedCoreNpcInventoryOrMoneyAccountSection(string sectionId) =>
+        !string.IsNullOrWhiteSpace(sectionId)
+        && (sectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix,
+                StringComparison.Ordinal)
+            || sectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
+                StringComparison.Ordinal));
+
+    private static bool HasSelectedCoreNpcInventoryMoneyAccountWitness(
+        OwnerSectionCensusWitness witness,
+        DailyV1OwnerSectionCensusProviderRegistration registration) =>
+        witness != null && registration != null
+        && registration.Role == OwnerSectionRole.Required
+        && string.Equals(witness.SectionId, registration.SectionId, StringComparison.Ordinal)
+        && witness.SchemaVersion == registration.SchemaVersion
+        && witness.OwnerInstanceIdentity != null
+        && witness.Cardinality >= 0 && witness.Revision >= 0L
+        && (!registration.HasBaseline
+            || (ReferenceEquals(witness.OwnerInstanceIdentity,
+                    registration.BaselineOwnerInstanceIdentity)
+                && witness.Cardinality == registration.BaselineCardinality
+                && witness.Revision == registration.BaselineRevision))
+        && (!witness.SectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
+                StringComparison.Ordinal)
+            || witness.Cardinality == 1);
+
+    private static bool HasExactSelectedCoreOwnerWitness(
+        OwnerSectionCensusWitness projection,
+        OwnerSectionCensusWitness core) =>
+        projection != null && core != null
+        && string.Equals(projection.SectionId, core.SectionId, StringComparison.Ordinal)
+        && projection.SchemaVersion == core.SchemaVersion
+        && ReferenceEquals(projection.OwnerInstanceIdentity, core.OwnerInstanceIdentity)
+        && projection.Cardinality == core.Cardinality
+        && projection.Revision == core.Revision;
 
     private static bool HasExactSelectedCoreIdentitySpatialWitness(
         OwnerSectionCensusWitness projection,
