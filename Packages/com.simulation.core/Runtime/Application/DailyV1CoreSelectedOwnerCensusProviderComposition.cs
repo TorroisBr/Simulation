@@ -126,6 +126,295 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
         return true;
     }
 
+    /// <summary>
+    /// Installs and seals the existing Core-owned selected-profile census for
+    /// a detached application start. This is intentionally fail-closed: the
+    /// Core composition must cover the exact live graph's complete P12 section
+    /// inventory before anything is registered in the execution boundary.
+    /// Host-projected rows are never synthesized here.
+    /// </summary>
+    internal static bool TryInstallCompleteProfileForApplicationStart(
+        DailyV1ActiveRuntimeSession session,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = session?.OwnerGraph;
+        DailyV1ExecutionBoundaryState executionState = session?.ExecutionBoundaryState;
+        if (session == null || graph == null || executionState == null
+            || !ReferenceEquals(graph.Definitions, session.Definitions)
+            || !graph.MatchesExactOwnerInstances(graph.Cities, graph.Npcs))
+        {
+            diagnostic = "The detached Core start requires the exact admitted session owner graph.";
+            return false;
+        }
+
+        if (executionState.HasSealedSelectedOwnerSectionCensusRegistry)
+        {
+            if (executionState.IsSelectedRuntimeCensusProtocolReadyForPublication)
+                return true;
+            diagnostic = "The detached Core start found a sealed but unpublished selected-owner census protocol.";
+            return false;
+        }
+
+        if (!TryCreate(graph,
+                out DailyV1CoreSelectedOwnerCensusProviderComposition composition,
+                out diagnostic)
+            || composition == null)
+        {
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "The detached Core start could not compose live selected-owner census providers.";
+            return false;
+        }
+
+        if (!TryCreateExpectedSectionIds(graph, out HashSet<string> expectedIds, out diagnostic))
+            return false;
+
+        HashSet<string> actualIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in composition.Registrations)
+        {
+            if (registration == null || string.IsNullOrWhiteSpace(registration.SectionId)
+                || !actualIds.Add(registration.SectionId))
+            {
+                diagnostic = "The detached Core start found an invalid or duplicate Core census provider registration.";
+                return false;
+            }
+        }
+
+        List<string> missingIds = new List<string>();
+        foreach (string expectedId in expectedIds)
+            if (!actualIds.Contains(expectedId)) missingIds.Add(expectedId);
+        List<string> unexpectedIds = new List<string>();
+        foreach (string actualId in actualIds)
+            if (!expectedIds.Contains(actualId)) unexpectedIds.Add(actualId);
+        missingIds.Sort(StringComparer.Ordinal);
+        unexpectedIds.Sort(StringComparer.Ordinal);
+        if (missingIds.Count != 0 || unexpectedIds.Count != 0)
+        {
+            diagnostic = "The detached Core start cannot establish the complete 89-family selected Daily-v1 census. "
+                + "Missing provider sections: [" + string.Join(", ", missingIds) + "]; "
+                + "unexpected provider sections: [" + string.Join(", ", unexpectedIds) + "]. "
+                + "No partial census was registered.";
+            return false;
+        }
+
+        List<DailyV1OwnerSectionContractIdentity> contracts =
+            new List<DailyV1OwnerSectionContractIdentity>(composition.Registrations.Count);
+        List<OwnerSectionCensusSnapshot> snapshots =
+            new List<OwnerSectionCensusSnapshot>(composition.Registrations.Count);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in composition.Registrations)
+        {
+            if (!TryGetExpectedRole(registration.SectionId, out OwnerSectionRole expectedRole)
+                || registration.Role != expectedRole
+                || registration.SchemaVersion <= 0
+                || registration.Provider == null)
+            {
+                diagnostic = "The detached Core start found a provider with an invalid selected-profile contract at "
+                    + registration.SectionId + ".";
+                return false;
+            }
+
+            OwnerSectionCensusWitness witness;
+            try { witness = registration.Provider.GetCurrentCensus(); }
+            catch (Exception exception) when (exception is ArgumentException
+                || exception is InvalidOperationException || exception is OverflowException)
+            {
+                diagnostic = "The detached Core start could not read the live provider at "
+                    + registration.SectionId + ".";
+                return false;
+            }
+
+            if (witness == null
+                || !string.Equals(witness.SectionId, registration.SectionId, StringComparison.Ordinal)
+                || witness.SchemaVersion != registration.SchemaVersion
+                || witness.OwnerInstanceIdentity == null
+                || witness.Cardinality < 0
+                || witness.Revision < 0L
+                || (expectedRole == OwnerSectionRole.ExplicitlyEmpty && witness.Cardinality != 0)
+                || (registration.HasBaseline
+                    && (!ReferenceEquals(registration.BaselineOwnerInstanceIdentity,
+                            witness.OwnerInstanceIdentity)
+                        || registration.BaselineCardinality != witness.Cardinality
+                        || registration.BaselineRevision != witness.Revision)))
+            {
+                diagnostic = "The detached Core start found a stale or invalid live provider witness at "
+                    + registration.SectionId + ".";
+                return false;
+            }
+
+            contracts.Add(new DailyV1OwnerSectionContractIdentity(
+                registration.SectionId, registration.SchemaVersion, expectedRole));
+            snapshots.Add(new OwnerSectionCensusSnapshot(
+                registration.SectionId, registration.SchemaVersion, expectedRole,
+                witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision));
+        }
+
+        if (!DailyV1SelectedOwnerSectionCensusContract.IsCompleteSnapshot(snapshots.AsReadOnly()))
+        {
+            diagnostic = "The detached Core start's live provider witnesses do not satisfy the exact 89-family "
+                + "selected Daily-v1 census shape, cardinality, or alias-identity contract.";
+            return false;
+        }
+
+        if (!executionState.TryReplaceSelectedOwnerSectionCensusRegistryBeforeSeal(
+                contracts, composition.Registrations)
+            || !executionState.TrySealExpectedOwnerSectionContractInventory())
+        {
+            diagnostic = "The detached Core start could not bind the complete census to its exact owner thread and execution boundary.";
+            return false;
+        }
+
+        if (!executionState.TrySealSelectedOwnerSectionCensusRegistryFromLiveProviders(
+                composition.Registrations,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> sealedProviders)
+            || sealedProviders == null
+            || !executionState.IsSelectedRuntimeCensusProtocolReadyForPublication)
+        {
+            diagnostic = "The detached Core start could not establish a stable complete census baseline on the admitted owner thread.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryCreateExpectedSectionIds(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out HashSet<string> sectionIds,
+        out string diagnostic)
+    {
+        sectionIds = new HashSet<string>(StringComparer.Ordinal);
+        diagnostic = null;
+        if (graph?.PersonStore == null || graph.Cities == null || graph.Npcs == null
+            || graph.Cities.Count == 0 || graph.Npcs.Count == 0)
+        {
+            diagnostic = "The detached Core start requires the admitted Daily-v1 City, NPC, and PersonStore owner graph.";
+            return false;
+        }
+
+        foreach (string sectionId in DailyV1SelectedOwnerSectionCensusContract.FixedRequired)
+            if (!TryAddExpectedId(sectionIds, sectionId, out diagnostic)) return false;
+        foreach (string sectionId in DailyV1SelectedOwnerSectionCensusContract.FixedEmpty)
+            if (!TryAddExpectedId(sectionIds, sectionId, out diagnostic)) return false;
+
+        foreach (DailyV1NpcRuntimeOwners owner in graph.Npcs)
+        {
+            if (owner == null || string.IsNullOrWhiteSpace(owner.RuntimeId))
+            {
+                diagnostic = "The detached Core start found an NPC without its admitted RuntimeId.";
+                return false;
+            }
+            foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
+                if (!TryAddExpectedId(sectionIds, prefix + owner.RuntimeId, out diagnostic)) return false;
+
+            string residenceId;
+            if (graph.PersonStore.TryGetByMaterializedNpcRuntimeId(owner.RuntimeId, out PersonRuntime person))
+            {
+                try
+                {
+                    residenceId = DailyV1SelectedOwnerSectionCensusContract
+                        .NpcLifeResidenceSectionIdFor(person.PersonId);
+                }
+                catch (ArgumentException)
+                {
+                    diagnostic = "The detached Core start found an invalid PersonId for NPC residence census.";
+                    return false;
+                }
+            }
+            else
+            {
+                residenceId = DailyV1SelectedOwnerSectionCensusContract
+                    .NpcResidenceSectionIdFor(owner.RuntimeId);
+            }
+            if (!TryAddExpectedId(sectionIds, residenceId, out diagnostic)) return false;
+        }
+
+        foreach (DailyV1CityRuntimeOwners owner in graph.Cities)
+        {
+            if (owner == null || string.IsNullOrWhiteSpace(owner.RuntimeId))
+            {
+                diagnostic = "The detached Core start found a City without its admitted RuntimeId.";
+                return false;
+            }
+            string encodedCityKey;
+            try
+            {
+                encodedCityKey = P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(owner.RuntimeId);
+            }
+            catch (ArgumentException)
+            {
+                diagnostic = "The detached Core start found a City RuntimeId that cannot be represented by the P12 section contract.";
+                return false;
+            }
+            if (!TryAddExpectedId(sectionIds,
+                    DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(owner.RuntimeId),
+                    out diagnostic)
+                || !TryAddExpectedId(sectionIds,
+                    DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix + encodedCityKey,
+                    out diagnostic)
+                || !TryAddExpectedId(sectionIds,
+                    DailyV1SelectedOwnerSectionCensusContract.CityPopulationAggregateSectionPrefix + encodedCityKey,
+                    out diagnostic)
+                || !TryAddExpectedId(sectionIds,
+                    DailyV1SelectedOwnerSectionCensusContract.CityPopulationOperationReceiptsSectionPrefix + encodedCityKey,
+                    out diagnostic))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryAddExpectedId(HashSet<string> ids, string sectionId, out string diagnostic)
+    {
+        diagnostic = null;
+        if (string.IsNullOrWhiteSpace(sectionId) || !ids.Add(sectionId))
+        {
+            diagnostic = "The detached Core start found an invalid or duplicate section identity in the selected-profile census contract.";
+            return false;
+        }
+        return true;
+    }
+
+    private static bool TryGetExpectedRole(string sectionId, out OwnerSectionRole role)
+    {
+        if (ContainsOrdinal(DailyV1SelectedOwnerSectionCensusContract.FixedEmpty, sectionId))
+        {
+            role = OwnerSectionRole.ExplicitlyEmpty;
+            return true;
+        }
+        if (ContainsOrdinal(DailyV1SelectedOwnerSectionCensusContract.FixedRequired, sectionId))
+        {
+            role = OwnerSectionRole.Required;
+            return true;
+        }
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
+            if (sectionId.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                role = OwnerSectionRole.Required;
+                return true;
+            }
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.CityPrefixes)
+            if (sectionId.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                role = OwnerSectionRole.Required;
+                return true;
+            }
+        if (sectionId.StartsWith(DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix, StringComparison.Ordinal)
+            || sectionId.StartsWith(DailyV1SelectedOwnerSectionCensusContract.PersonLifeResidencePrefix, StringComparison.Ordinal))
+        {
+            role = OwnerSectionRole.Required;
+            return true;
+        }
+        role = default;
+        return false;
+    }
+
+    private static bool ContainsOrdinal(IReadOnlyList<string> values, string value)
+    {
+        if (values == null || value == null) return false;
+        for (int index = 0; index < values.Count; index++)
+            if (string.Equals(values[index], value, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
     private static bool TryNormalizeGroup(
         IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> source,
         Predicate<string> sectionPredicate,

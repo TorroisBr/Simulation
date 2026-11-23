@@ -758,6 +758,10 @@ internal sealed class DailyV1Application
                 && preparation.PersistenceResult.Code == P12AResultCode.NoSave
                 && preparation.CoreSession != null)
             {
+                if (!DailyV1CoreSelectedOwnerCensusProviderComposition
+                        .TryInstallCompleteProfileForApplicationStart(preparation.CoreSession, out diagnostic))
+                    return false;
+
                 if (!TryCreateDotNetRuntimeBoundary(
                         runtimePortsFactory, preparation, preparation.CoreSession,
                         out IDailyV1SelectedRuntimeAdvanceHostPorts genesisHostPorts,
@@ -830,6 +834,10 @@ internal sealed class DailyV1Application
             }
 
             DailyV1ActiveRuntimeSession restoredSession = restoreStages.CoreSession;
+            if (!DailyV1CoreSelectedOwnerCensusProviderComposition
+                    .TryInstallCompleteProfileForApplicationStart(restoredSession, out diagnostic))
+                return false;
+
             if (!TryCreateDotNetRuntimeBoundary(
                     runtimePortsFactory, preparation, restoredSession,
                     out IDailyV1SelectedRuntimeAdvanceHostPorts restoredHostPorts,

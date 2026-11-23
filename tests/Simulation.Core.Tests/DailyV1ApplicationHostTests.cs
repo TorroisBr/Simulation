@@ -643,7 +643,38 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
         Assert.That(application.ActiveSession, Is.Null,
             "The production .NET start path must not publish a session without the complete sealed census.");
-        Assert.That(diagnostic, Does.Contain("sealed selected owner census"));
+        Assert.That(diagnostic, Does.Contain("complete 89-family selected Daily-v1 census"));
+        Assert.That(diagnostic, Does.Contain("Missing provider sections:"));
+        Assert.That(diagnostic, Does.Contain("No partial census was registered."));
+        Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreate(
+            preparation.CoreSession.OwnerGraph,
+            out DailyV1CoreSelectedOwnerCensusProviderComposition coreComposition,
+            out string compositionDiagnostic), Is.True, compositionDiagnostic);
+        HashSet<string> testProfileSectionIds = new HashSet<string>(
+            DailyV1ApplicationSessionGateTests.CreateCoreBoundCompleteOwnerSectionVector(
+                    preparation.CoreSession)
+                .Select(snapshot => snapshot.SectionId),
+            StringComparer.Ordinal);
+        HashSet<string> coreProviderSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in coreComposition.Registrations)
+        {
+            Assert.That(testProfileSectionIds.Contains(registration.SectionId), Is.True,
+                "The Core provider composition must not add rows outside the test's exact selected-profile vector.");
+            coreProviderSectionIds.Add(registration.SectionId);
+        }
+        List<string> exactMissingSectionIds = new List<string>();
+        foreach (string sectionId in testProfileSectionIds)
+        {
+            if (coreProviderSectionIds.Contains(sectionId)) continue;
+            exactMissingSectionIds.Add(sectionId);
+            Assert.That(diagnostic, Does.Contain(sectionId),
+                "The production start diagnostic must name each exact missing provider section.");
+        }
+        Assert.That(exactMissingSectionIds, Is.Not.Empty,
+            "This fixture demonstrates the remaining Core-owned census gap without registering synthetic providers.");
+        Assert.That(preparation.CoreSession.ExecutionBoundaryState
+            .HasSealedSelectedOwnerSectionCensusRegistry, Is.False,
+            "A partial Core provider set must not be registered or sealed.");
 
         Assert.That(application.TryStartDotNetOnExistingApplication(
                 definitions, host,
@@ -951,44 +982,28 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
-    public void DotNetGenesisStartPublishesTheExactCoreSessionWithoutUnityProjection()
+    public void TestOnlyGenesisCommitGatePublishesPreparedSessionWithFixtureCensusReadiness()
     {
         DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
         DailyV1Application application = new DailyV1Application();
         DailyV1ApplicationHost host = new DailyV1ApplicationHost(
             "detached-core-start-root", new MissingSlotOperations(),
             stageCompleted: null, logOutput: null, dotNetIdentity: DotNetIdentity());
-        int runtimeFactoryCalls = 0;
-
-        bool BindCoreRuntimeBoundary(
-            DailyV1ApplicationStartPreparation preparation,
-            DailyV1ActiveRuntimeSession candidateCoreSession,
-            out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
-            out string diagnostic)
-        {
-            runtimeFactoryCalls++;
-            Assert.That(preparation.Application, Is.SameAs(application));
-            Assert.That(candidateCoreSession, Is.SameAs(preparation.CoreSession));
-            Assert.That(preparation.Kind,
-                Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
-            DailyV1ApplicationSessionGateTests.BindCoreSelectedCensusRegistryAndMarkReadyForTests(
-                candidateCoreSession);
-            candidateHostPorts = new MinimalSelectedRuntimeAdvanceHostPorts(
-                candidateCoreSession.ExecutionBoundaryState);
-            diagnostic = null;
-            return true;
-        }
-
-        Assert.That(application.TryStartDotNetOnExistingApplication(
-            definitions, host, BindCoreRuntimeBoundary,
-            out DailyV1ApplicationStartPreparation preparation,
-            out P12AResult persistenceResult,
-            out string diagnostic), Is.True, diagnostic);
-
-        Assert.That(runtimeFactoryCalls, Is.EqualTo(1));
+        Assert.That(application.TryPrepareStartOnExistingApplication(
+                definitions, host,
+                out DailyV1ApplicationStartPreparation preparation,
+                out P12AResult persistenceResult,
+                out string diagnostic), Is.True, diagnostic);
         Assert.That(preparation.Kind,
             Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
         Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        DailyV1ApplicationSessionGateTests.BindCoreSelectedCensusRegistryAndMarkReadyForTests(
+            preparation.CoreSession);
+        IDailyV1SelectedRuntimeAdvanceHostPorts testOnlyPorts =
+            new MinimalSelectedRuntimeAdvanceHostPorts(
+                preparation.CoreSession.ExecutionBoundaryState);
+        Assert.That(application.TryCommitInitialGenesisWithoutHostProjection(
+                preparation, testOnlyPorts, out diagnostic), Is.True, diagnostic);
         Assert.That(application.ActiveSession, Is.SameAs(preparation.CoreSession));
         Assert.That(application.ActiveSession.Definitions, Is.SameAs(definitions));
         Assert.That(application.ActiveSession.RuntimeAdvanceBoundary, Is.Not.Null);
