@@ -4071,6 +4071,25 @@ public sealed class DailyV1ApplicationSessionGateTests
         CreateApplicationWithAdvanceBoundary(
             null, out DailyV1ActiveRuntimeSession session, out _);
         DailyV1SelectedRuntimeOwnerGraph sourceGraph = session.OwnerGraph;
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+                sourceGraph.Definitions,
+                sourceGraph.Cities,
+                Array.Empty<DailyV1NpcRuntimeOwners>(),
+                sourceGraph.SpatialNetwork,
+                null,
+                null,
+                null,
+                null,
+                out DailyV1SelectedRuntimeOwnerGraph missingPersonStoreGraph),
+            Is.True);
+        Assert.That(DailyV1CorePersonStoreCensusComposition.TryCreateProviderRegistrations(
+                missingPersonStoreGraph,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> missingOwnerRegistrations,
+                out string missingOwnerDiagnostic),
+            Is.False);
+        Assert.That(missingOwnerRegistrations, Is.Null);
+        Assert.That(missingOwnerDiagnostic, Is.Not.Null.And.Not.Empty);
+
         Assert.That(sourceGraph.Npcs, Is.Not.Empty);
 
         Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
@@ -4096,6 +4115,114 @@ public sealed class DailyV1ApplicationSessionGateTests
             "An empty selected NPC graph has no per-NPC Core owner sections; it does not imply a missing provider.");
     }
 
+    [Test]
+    public void CorePersonStoreCensusCompositionUsesExactSessionOwnerAndSortedAliasPair()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session, out _);
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+
+        Assert.That(DailyV1CorePersonStoreCensusComposition.TryCreateProviderRegistrations(
+                graph,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+                out string diagnostic),
+            Is.True, diagnostic);
+        Assert.That(registrations, Has.Count.EqualTo(2));
+        Assert.That(registrations.Select(registration => registration.SectionId).ToArray(),
+            Is.EqualTo(registrations.Select(registration => registration.SectionId)
+                .OrderBy(sectionId => sectionId, StringComparer.Ordinal).ToArray()));
+
+        Dictionary<string, OwnerSectionCensusWitness> witnesses =
+            new Dictionary<string, OwnerSectionCensusWitness>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in registrations)
+        {
+            OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
+            Assert.That(registration.Role, Is.EqualTo(OwnerSectionRole.Required));
+            Assert.That(registration.HasBaseline, Is.True);
+            Assert.That(witness.SectionId, Is.EqualTo(registration.SectionId));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(graph.PersonStore));
+            Assert.That(registration.BaselineOwnerInstanceIdentity, Is.SameAs(graph.PersonStore));
+            Assert.That(witness.Cardinality, Is.EqualTo(registration.BaselineCardinality));
+            Assert.That(witness.Revision, Is.EqualTo(registration.BaselineRevision));
+            witnesses.Add(witness.SectionId, witness);
+        }
+
+        OwnerSectionCensusWitness membership =
+            witnesses[DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId];
+        OwnerSectionCensusWitness materialization =
+            witnesses[DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId];
+        Assert.That(membership.OwnerInstanceIdentity, Is.SameAs(materialization.OwnerInstanceIdentity));
+        Assert.That(membership.Revision, Is.EqualTo(materialization.Revision));
+    }
+
+    [Test]
+    public void CorePersonStoreCensusCompositionKeepsValidEmptyOwnerPairAndRejectsMissingGraph()
+    {
+        Assert.That(DailyV1CorePersonStoreCensusComposition.TryCreateProviderRegistrations(
+                null,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> missingRegistrations,
+                out string missingDiagnostic),
+            Is.False);
+        Assert.That(missingRegistrations, Is.Null);
+        Assert.That(missingDiagnostic, Is.Not.Null.And.Not.Empty);
+
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session, out _);
+        DailyV1SelectedRuntimeOwnerGraph sourceGraph = session.OwnerGraph;
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+                sourceGraph.Definitions,
+                sourceGraph.Cities,
+                Array.Empty<DailyV1NpcRuntimeOwners>(),
+                sourceGraph.SpatialNetwork,
+                null,
+                null,
+                null,
+                null,
+                out DailyV1SelectedRuntimeOwnerGraph missingPersonStoreGraph),
+            Is.True);
+        Assert.That(DailyV1CorePersonStoreCensusComposition.TryCreateProviderRegistrations(
+                missingPersonStoreGraph,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> missingOwnerRegistrations,
+                out string missingOwnerDiagnostic),
+            Is.False);
+        Assert.That(missingOwnerRegistrations, Is.Null);
+        Assert.That(missingOwnerDiagnostic, Is.Not.Null.And.Not.Empty);
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+                sourceGraph.Definitions,
+                sourceGraph.Cities,
+                Array.Empty<DailyV1NpcRuntimeOwners>(),
+                sourceGraph.SpatialNetwork,
+                null,
+                null,
+                null,
+                new PersonStore(),
+                out DailyV1SelectedRuntimeOwnerGraph emptyGraph),
+            Is.True);
+        Assert.That(emptyGraph.Npcs, Is.Empty);
+
+        Assert.That(DailyV1CorePersonStoreCensusComposition.TryCreateProviderRegistrations(
+                emptyGraph,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> emptyRegistrations,
+                out string emptyDiagnostic),
+            Is.True, emptyDiagnostic);
+        Assert.That(emptyRegistrations, Has.Count.EqualTo(2),
+            "A valid empty PersonStore still has its complete two-section provider set.");
+        Assert.That(emptyRegistrations.Select(registration => registration.SectionId).ToArray(),
+            Is.EqualTo(new[]
+            {
+                DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId
+            }));
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in emptyRegistrations)
+        {
+            OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(emptyGraph.PersonStore));
+            Assert.That(witness.Cardinality, Is.Zero);
+        }
+    }
     [Test]
     public void CoreP12FCensusRecomposesExactSelectedNpcInventoryAndMoneyAccountHostOmission()
     {

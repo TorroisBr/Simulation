@@ -210,6 +210,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelPartyChargeExecution.cs" Link="City/DailyV1SelectedTravelPartyChargeExecution.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelPartyStartExecution.cs" Link="City/DailyV1SelectedTravelPartyStartExecution.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedRuntimeOwnerGraph.cs" Link="Application/DailyV1SelectedRuntimeOwnerGraph.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1CorePersonStoreCensusComposition.cs" Link="Application/DailyV1CorePersonStoreCensusComposition.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedLocalKnowledgeOwnerBinding.cs" Link="Application/DailyV1SelectedLocalKnowledgeOwnerBinding.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedActionExecutionStage.cs" Link="Application/DailyV1SelectedActionExecutionStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedCrimeActionExecutionStage.cs" Link="Application/DailyV1SelectedCrimeActionExecutionStage.cs" />
@@ -217,6 +218,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedTravelDayStage.cs" Link="Application/DailyV1SelectedTravelDayStage.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Travel/TravelPartyOwners.cs" Link="Travel/TravelPartyOwners.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonStore.cs" Link="Person/PersonStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonStoreCensusProviders.cs" Link="Person/PersonStoreCensusProviders.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonRuntimeOwnerBridge.cs" Link="Person/PersonRuntimeOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonAgeCalculator.cs" Link="Person/PersonAgeCalculator.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonMaturityCalculator.cs" Link="Person/PersonMaturityCalculator.cs" />

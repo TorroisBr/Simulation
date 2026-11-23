@@ -214,6 +214,10 @@ public sealed class ContinuationCensusProtocol
         new Dictionary<string, OwnerSectionContract>(StringComparer.Ordinal);
     private Dictionary<string, RegisteredSection> registeredSections =
         new Dictionary<string, RegisteredSection>(StringComparer.Ordinal);
+    private bool coreOwnedPersonStoreCensusProvidersBound;
+    private PersonStore coreOwnedPersonStoreCensusOwner;
+    private Dictionary<string, IOwnerSectionCensusProvider> coreOwnedPersonStoreCensusProvidersBySection =
+        new Dictionary<string, IOwnerSectionCensusProvider>(StringComparer.Ordinal);
     private bool coreOwnedCityCensusProvidersBound;
     private bool coreOwnedIdentitySpatialCensusProvidersBound;
     private Dictionary<string, IOwnerSectionCensusProvider>
@@ -369,6 +373,7 @@ public sealed class ContinuationCensusProtocol
         expectedSections = stagedExpected;
         return true;
     }
+
     private void RefreshExpectedSectionProjectionFromCore()
     {
         IReadOnlyList<DailyV1OwnerSectionContractIdentity> contracts =
@@ -1481,6 +1486,14 @@ public sealed class ContinuationCensusProtocol
             return FailOwnerCoverage("NpcReceiptOwnerRosterMismatch", out failure);
 
         if (requiresSelectedCoreOwnerCensus
+            && !TryBindCoreOwnedPersonStoreCensusProviders(out failure))
+        {
+            RecordFirstFaultDetail("CoreOwnedPersonStoreProviderBindingRejected");
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        if (requiresSelectedCoreOwnerCensus
             && !TryBindCoreOwnedCityCensusProviders(out failure))
         {
             RecordFirstFaultDetail("CoreOwnedCityProviderBindingRejected");
@@ -1614,6 +1627,177 @@ public sealed class ContinuationCensusProtocol
     /// a compatibility projection check at this boundary; they are not
     /// retained as the authoritative source for the sealed Core registry.
     /// </summary>
+    private bool TryBindCoreOwnedPersonStoreCensusProviders(
+        out ContinuationCensusFailure failure)
+    {
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        if (!requiresSelectedCoreOwnerCensus || sharedExecutionState == null)
+        {
+            RecordFirstFaultDetail("CorePersonStoreBindingUnavailable");
+            return false;
+        }
+
+        DailyV1SelectedRuntimeOwnerGraph graph = sharedExecutionState.SelectedRuntimeOwnerGraph;
+        if (graph == null)
+        {
+            if (coreOwnedPersonStoreCensusProvidersBound)
+            {
+                RecordFirstFaultDetail("CorePersonStoreOwnerGraphMissingAfterBinding");
+                return false;
+            }
+
+            failure = ContinuationCensusFailure.None;
+            return true;
+        }
+
+        if (graph.PersonStore == null
+            || (coreOwnedPersonStoreCensusProvidersBound
+                && !ReferenceEquals(coreOwnedPersonStoreCensusOwner, graph.PersonStore)))
+        {
+            RecordFirstFaultDetail("CorePersonStoreOwnerIdentityChanged");
+            return false;
+        }
+
+        if (!DailyV1CorePersonStoreCensusComposition.TryCreateProviderRegistrations(
+                graph,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> coreProviders,
+                out string coreDiagnostic)
+            || coreProviders == null)
+        {
+            RecordFirstFaultDetail("CorePersonStoreProviderConstructionRejected:"
+                + (coreDiagnostic ?? "NoProviders"));
+            return false;
+        }
+
+        HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in expectedSections.Keys)
+            if (IsSelectedCorePersonStoreCensusSection(sectionId))
+                expectedIds.Add(sectionId);
+
+        HashSet<string> registeredIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in registeredSections.Keys)
+            if (IsSelectedCorePersonStoreCensusSection(sectionId))
+                registeredIds.Add(sectionId);
+
+        HashSet<string> coreIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in coreProviders)
+        {
+            if (registration == null
+                || registration.Role != OwnerSectionRole.Required
+                || !coreIds.Add(registration.SectionId))
+            {
+                RecordFirstFaultDetail("CorePersonStoreProviderRegistrationInvalid");
+                return false;
+            }
+        }
+
+        if (expectedIds.Count != 2
+            || !expectedIds.SetEquals(registeredIds)
+            || !expectedIds.SetEquals(coreIds))
+        {
+            RecordFirstFaultDetail("CorePersonStoreSectionSetMismatch:expected="
+                + expectedIds.Count + ":registered=" + registeredIds.Count + ":core=" + coreIds.Count);
+            return false;
+        }
+
+        Dictionary<string, RegisteredSection> stagedSections =
+            new Dictionary<string, RegisteredSection>(registeredSections, StringComparer.Ordinal);
+        Dictionary<string, IOwnerSectionCensusProvider> stagedCoreProviders =
+            coreOwnedPersonStoreCensusProvidersBound
+                ? coreOwnedPersonStoreCensusProvidersBySection
+                : new Dictionary<string, IOwnerSectionCensusProvider>(StringComparer.Ordinal);
+
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in coreProviders)
+        {
+            if (!expectedSections.TryGetValue(registration.SectionId, out OwnerSectionContract contract)
+                || contract.SchemaVersion != registration.SchemaVersion
+                || contract.Role != registration.Role
+                || !registeredSections.TryGetValue(registration.SectionId, out RegisteredSection prior)
+                || prior == null || prior.Contract == null || prior.Provider == null
+                || !registration.HasBaseline
+                || registration.BaselineOwnerInstanceIdentity == null)
+            {
+                RecordFirstFaultDetail("CorePersonStoreSectionContractMismatch:" + registration.SectionId);
+                return false;
+            }
+
+            OwnerSectionCensusWitness projection;
+            OwnerSectionCensusWitness core;
+            try
+            {
+                projection = prior.Provider.GetCurrentCensus();
+                core = registration.Provider.GetCurrentCensus();
+            }
+            catch (Exception exception)
+            {
+                RecordFirstFaultDetail("CorePersonStoreProviderReadFailed:"
+                    + registration.SectionId + ":" + exception.GetType().Name);
+                return false;
+            }
+
+            if (projection == null || core == null
+                || !string.Equals(projection.SectionId, core.SectionId, StringComparison.Ordinal)
+                || projection.SchemaVersion != core.SchemaVersion
+                || !ReferenceEquals(projection.OwnerInstanceIdentity, core.OwnerInstanceIdentity)
+                || projection.Cardinality != core.Cardinality
+                || projection.Revision != core.Revision
+                || !string.Equals(core.SectionId, registration.SectionId, StringComparison.Ordinal)
+                || core.SchemaVersion != registration.SchemaVersion
+                || !ReferenceEquals(core.OwnerInstanceIdentity,
+                    registration.BaselineOwnerInstanceIdentity)
+                || core.Cardinality != registration.BaselineCardinality
+                || core.Revision != registration.BaselineRevision)
+            {
+                RecordFirstFaultDetail("CorePersonStoreProjectionMismatch:" + registration.SectionId);
+                return false;
+            }
+
+            if (coreOwnedPersonStoreCensusProvidersBound)
+            {
+                if (!coreOwnedPersonStoreCensusProvidersBySection.TryGetValue(
+                        registration.SectionId, out IOwnerSectionCensusProvider boundProvider)
+                    || !ReferenceEquals(prior.Provider, boundProvider))
+                {
+                    RecordFirstFaultDetail("CorePersonStoreProviderBindingChanged:"
+                        + registration.SectionId);
+                    return false;
+                }
+            }
+            else
+            {
+                RegisteredSection replacement = new RegisteredSection(contract, registration.Provider);
+                SetBaseline(replacement, core);
+                stagedSections[registration.SectionId] = replacement;
+                stagedCoreProviders.Add(registration.SectionId, registration.Provider);
+            }
+        }
+
+        if (!coreOwnedPersonStoreCensusProvidersBound)
+        {
+            if (stagedCoreProviders.Count != expectedIds.Count)
+            {
+                RecordFirstFaultDetail("CorePersonStoreProviderBindingIncomplete");
+                return false;
+            }
+
+            registeredSections = stagedSections;
+            coreOwnedPersonStoreCensusProvidersBySection = stagedCoreProviders;
+            coreOwnedPersonStoreCensusOwner = graph.PersonStore;
+            coreOwnedPersonStoreCensusProvidersBound = true;
+        }
+
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    private static bool IsSelectedCorePersonStoreCensusSection(string sectionId) =>
+        string.Equals(sectionId,
+            DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId,
+            StringComparison.Ordinal)
+        || string.Equals(sectionId,
+            DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId,
+            StringComparison.Ordinal);
+
     private bool TryBindCoreOwnedCityCensusProviders(
         out ContinuationCensusFailure failure)
     {

@@ -3528,6 +3528,30 @@ public sealed class SimulationBootstrapCompositionTests
 
         SimulationRuntime runtime = simulation.Bootstrap.Runtime;
         DailyV1SelectedRuntimeOwnerGraph graphBefore = runtime.SelectedRuntimeOwnerGraph;
+        IDictionary personCoreProviders = ReadSelectedCoreOwnerSectionCensusProviders(
+            runtime.ExecutionBoundaryState);
+        IDictionary personProjectionProviders = ReadRegisteredNpcCensusSections(runtime);
+        string[] personStoreSectionIds =
+        {
+            DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId
+        };
+        foreach (string sectionId in personStoreSectionIds)
+        {
+            IOwnerSectionCensusProvider provider = ReadCoreRegistryProvider(personCoreProviders, sectionId);
+            Assert.That(provider, Is.Not.Null, sectionId);
+            Assert.That(provider.GetCurrentCensus().OwnerInstanceIdentity,
+                Is.SameAs(runtime.SelectedRuntimeOwnerGraph.PersonStore), sectionId);
+            Assert.That(provider.GetType(), Is.EqualTo(
+                string.Equals(sectionId,
+                    DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId,
+                    System.StringComparison.Ordinal)
+                    ? typeof(PersonMembershipCensusProvider)
+                    : typeof(PersonMaterializationBindingCensusProvider)), sectionId);
+            Assert.That(ReadCompatibilityRegistryProvider(personProjectionProviders, sectionId),
+                Is.SameAs(provider), sectionId);
+        }
+
         DailyV1ExecutionBoundaryState executionState = ReadPrivateField<DailyV1ExecutionBoundaryState>(
             runtime, "dailyExecutionBoundary");
         IReadOnlyList<DailyV1ActorTurnRosterProjection> rosterBefore =
