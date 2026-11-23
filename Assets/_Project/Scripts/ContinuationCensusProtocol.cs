@@ -1833,7 +1833,7 @@ public sealed class ContinuationCensusProtocol
     }
 
     /// <summary>
-    /// Binds the selected NPC Inventory and MoneyAccount census rows to the
+    /// Binds every census row owned by the selected Core NPC graph to the
     /// exact Core owner graph. A mixed Unity roster keeps its complete host
     /// census projection; exact selected rows use the live Core providers.
     /// </summary>
