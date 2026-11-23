@@ -1065,6 +1065,29 @@ public sealed class DailyV1ExecutionBoundaryStateTests
     }
 
     [Test]
+    public void CoreLiveProviderSealRejectsAnActiveAdvanceLeaseWithoutPartialSeal()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture(
+            sealProviderRegistry: false, markReady: false);
+        Assert.That(fixture.State.TryAcquireAdvanceLease(out DailyV1AdvanceLease lease), Is.True);
+        Assert.That(fixture.State.AdvanceLeaseHeld, Is.True);
+
+        Assert.That(fixture.State.TrySealSelectedOwnerSectionCensusRegistryFromLiveProviders(
+            fixture.OrderedRegistrations(),
+            out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> duringLease), Is.False);
+        Assert.That(duringLease, Is.Null);
+        Assert.That(fixture.State.HasSealedSelectedOwnerSectionCensusRegistry, Is.False);
+        Assert.That(fixture.State.IsSelectedRuntimeCensusProtocolReadyForPublication, Is.False);
+
+        lease.Dispose();
+        Assert.That(fixture.State.TrySealSelectedOwnerSectionCensusRegistryFromLiveProviders(
+            fixture.OrderedRegistrations(),
+            out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> afterLease), Is.True);
+        Assert.That(afterLease, Is.Not.Null);
+        Assert.That(fixture.State.IsSelectedRuntimeCensusProtocolReadyForPublication, Is.True);
+    }
+
+    [Test]
     public void CoreLiveProviderSealRejectsWitnessDriftDuringInitialSampling()
     {
         CensusRegistryFixture fixture = CreateCensusRegistryFixture(

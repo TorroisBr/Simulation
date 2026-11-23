@@ -1378,6 +1378,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || !runtimeIdentityBound
                 || !runtimeConfigurationBound
                 || activeOperationScopes.Count != 0
+                || advanceLease != null
                 || mutationEpochState.HasActiveReservation
                 || exclusiveSessionReplacementInProgress)
                 return false;
@@ -1444,6 +1445,7 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 || !runtimeIdentityBound
                 || !runtimeConfigurationBound
                 || activeOperationScopes.Count != 0
+                || advanceLease != null
                 || mutationEpochState.HasActiveReservation
                 || mutationEpochState.CurrentEpoch != startingMutationEpoch
                 || exclusiveSessionReplacementInProgress)
