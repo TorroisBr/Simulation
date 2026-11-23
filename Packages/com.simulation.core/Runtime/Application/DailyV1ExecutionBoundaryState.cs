@@ -1353,6 +1353,110 @@ internal sealed partial class DailyV1ExecutionBoundaryState
         }
     }
 
+
+    /// <summary>
+    /// Samples the staged live provider adapters, establishes their first
+    /// committed baselines, and seals the existing Core-owned census registry.
+    /// Core publishes census readiness only after the complete selected
+    /// contract and current owner-thread witnesses have passed validation.
+    /// </summary>
+    internal bool TrySealSelectedOwnerSectionCensusRegistryFromLiveProviders(
+        IEnumerable<DailyV1OwnerSectionCensusProviderRegistration> providers,
+        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> sealedProviders)
+    {
+        sealedProviders = null;
+        Dictionary<string, DailyV1OwnerSectionContractIdentity> contracts;
+        long expectedInventoryRevision;
+        long startingMutationEpoch;
+        lock (operationSyncRoot)
+        {
+            if (!expectedOwnerSectionContractInventorySealed
+                || selectedRuntimeCensusProtocolFaulted
+                || AdmissionContext == null
+                || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !runtimeIdentityBound
+                || !runtimeConfigurationBound
+                || activeOperationScopes.Count != 0
+                || mutationEpochState.HasActiveReservation
+                || exclusiveSessionReplacementInProgress)
+                return false;
+
+            contracts = expectedOwnerSectionContracts;
+            expectedInventoryRevision = expectedOwnerSectionContractInventoryRevision;
+            startingMutationEpoch = mutationEpochState.CurrentEpoch;
+        }
+
+        if (!TryCreateSelectedOwnerSectionCensusProviderMap(
+                providers, contracts, requireBaseline: false,
+                out Dictionary<string, DailyV1OwnerSectionCensusProviderRegistration> stagedProviders)
+            || stagedProviders.Count != contracts.Count)
+            return false;
+
+        List<string> orderedIds = new List<string>(stagedProviders.Keys);
+        orderedIds.Sort(StringComparer.Ordinal);
+        List<DailyV1OwnerSectionCensusProviderRegistration> baselinedProviders =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(orderedIds.Count);
+        foreach (string sectionId in orderedIds)
+        {
+            DailyV1OwnerSectionCensusProviderRegistration registration = stagedProviders[sectionId];
+            if (!contracts.TryGetValue(sectionId, out DailyV1OwnerSectionContractIdentity contract))
+                return false;
+
+            OwnerSectionCensusWitness witness;
+            try { witness = registration.Provider.GetCurrentCensus(); }
+            catch { return false; }
+            if (witness == null
+                || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
+                || witness.SchemaVersion != contract.SchemaVersion
+                || witness.OwnerInstanceIdentity == null
+                || witness.Cardinality < 0
+                || witness.Revision < 0L
+                || ((contract.Role == OwnerSectionRole.ExplicitlyEmpty
+                        || contract.Role == OwnerSectionRole.Excluded)
+                    && witness.Cardinality != 0)
+                || (registration.HasBaseline
+                    && (!ReferenceEquals(registration.BaselineOwnerInstanceIdentity,
+                            witness.OwnerInstanceIdentity)
+                        || registration.BaselineCardinality != witness.Cardinality
+                        || registration.BaselineRevision != witness.Revision)))
+                return false;
+
+            baselinedProviders.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                sectionId,
+                contract.SchemaVersion,
+                contract.Role,
+                registration.Provider,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision,
+                hasBaseline: true));
+        }
+
+        lock (operationSyncRoot)
+        {
+            if (!expectedOwnerSectionContractInventorySealed
+                || expectedOwnerSectionContractInventoryRevision != expectedInventoryRevision
+                || selectedRuntimeCensusProtocolFaulted
+                || AdmissionContext == null
+                || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !runtimeIdentityBound
+                || !runtimeConfigurationBound
+                || activeOperationScopes.Count != 0
+                || mutationEpochState.HasActiveReservation
+                || mutationEpochState.CurrentEpoch != startingMutationEpoch
+                || exclusiveSessionReplacementInProgress)
+                return false;
+        }
+
+        if (!TrySealSelectedOwnerSectionCensusRegistry(baselinedProviders)
+            || !TryMarkSelectedRuntimeCensusProtocolReady())
+            return false;
+
+        sealedProviders = Array.AsReadOnly(baselinedProviders.ToArray());
+        return true;
+    }
     private static bool HasExactSelectedOwnerSectionCensusBaseline(
         Dictionary<string, DailyV1OwnerSectionCensusProviderRegistration> left,
         Dictionary<string, DailyV1OwnerSectionCensusProviderRegistration> right)

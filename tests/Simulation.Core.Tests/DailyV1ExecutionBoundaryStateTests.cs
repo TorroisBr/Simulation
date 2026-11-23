@@ -15,7 +15,13 @@ public sealed class DailyV1ExecutionBoundaryStateTests
         }
 
         internal OwnerSectionCensusWitness Witness { get; set; }
-        public OwnerSectionCensusWitness GetCurrentCensus() => Witness;
+        internal Action OnRead { get; set; }
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            OwnerSectionCensusWitness observed = Witness;
+            OnRead?.Invoke();
+            return observed;
+        }
     }
 
     private sealed class CensusRegistryFixture
@@ -997,6 +1003,89 @@ public sealed class DailyV1ExecutionBoundaryStateTests
             "A rejected dynamic replacement does not publish the staged witness baseline.");
     }
 
+    [Test]
+    public void CoreLiveProviderSealSamplesAndPublishesTheExactProfileInOrdinalOrder()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture(
+            sealProviderRegistry: false, markReady: false);
+        Assert.That(fixture.State.HasSealedSelectedOwnerSectionCensusRegistry, Is.False);
+
+        Assert.That(fixture.State.TrySealSelectedOwnerSectionCensusRegistryFromLiveProviders(
+            fixture.OrderedRegistrations(),
+            out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> sealedProviders), Is.True);
+        Assert.That(sealedProviders, Is.Not.Null);
+        Assert.That(sealedProviders.Count, Is.EqualTo(fixture.Contracts.Count));
+        Assert.That(sealedProviders.Select(provider => provider.SectionId),
+            Is.EqualTo(sealedProviders.Select(provider => provider.SectionId).OrderBy(id => id, StringComparer.Ordinal)));
+        Assert.That(fixture.State.HasSealedSelectedOwnerSectionCensusRegistry, Is.True);
+        Assert.That(fixture.State.IsSelectedRuntimeCensusProtocolReadyForPublication, Is.True);
+
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in sealedProviders)
+        {
+            Assert.That(registration.HasBaseline, Is.True);
+            Assert.That(fixture.Providers.TryGetValue(registration.SectionId, out MutableCensusProvider provider), Is.True);
+            OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
+            Assert.That(registration.Provider, Is.SameAs(provider));
+            Assert.That(registration.BaselineOwnerInstanceIdentity, Is.SameAs(witness.OwnerInstanceIdentity));
+            Assert.That(registration.BaselineCardinality, Is.EqualTo(witness.Cardinality));
+            Assert.That(registration.BaselineRevision, Is.EqualTo(witness.Revision));
+        }
+
+        DailyV1OwnerSectionCensusProviderRegistration[] exactEmpty = sealedProviders
+            .Where(provider => provider.Role == OwnerSectionRole.ExplicitlyEmpty).ToArray();
+        Assert.That(exactEmpty.Length, Is.GreaterThan(0));
+        Assert.That(exactEmpty.All(provider => provider.BaselineCardinality == 0), Is.True);
+    }
+
+    [Test]
+    public void CoreLiveProviderSealRejectsMissingRowsAndNonzeroExplicitEmptyAtomically()
+    {
+        CensusRegistryFixture missingFixture = CreateCensusRegistryFixture(
+            sealProviderRegistry: false, markReady: false);
+        List<DailyV1OwnerSectionCensusProviderRegistration> missing =
+            missingFixture.OrderedRegistrations();
+        missing.RemoveAt(0);
+        Assert.That(missingFixture.State.TrySealSelectedOwnerSectionCensusRegistryFromLiveProviders(
+            missing, out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> missingResult), Is.False);
+        Assert.That(missingResult, Is.Null);
+        Assert.That(missingFixture.State.HasSealedSelectedOwnerSectionCensusRegistry, Is.False);
+
+        CensusRegistryFixture emptyFixture = CreateCensusRegistryFixture(
+            sealProviderRegistry: false, markReady: false);
+        string emptyId = DailyV1SelectedOwnerSectionCensusContract.FixedEmpty[0];
+        MutableCensusProvider emptyProvider = emptyFixture.Providers[emptyId];
+        OwnerSectionCensusWitness prior = emptyProvider.Witness;
+        emptyProvider.Witness = new OwnerSectionCensusWitness(
+            prior.SectionId, prior.SchemaVersion, prior.OwnerInstanceIdentity, 1, prior.Revision);
+        Assert.That(emptyFixture.State.TrySealSelectedOwnerSectionCensusRegistryFromLiveProviders(
+            emptyFixture.OrderedRegistrations(),
+            out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> emptyResult), Is.False);
+        Assert.That(emptyResult, Is.Null);
+        Assert.That(emptyFixture.State.HasSealedSelectedOwnerSectionCensusRegistry, Is.False);
+    }
+
+    [Test]
+    public void CoreLiveProviderSealRejectsWitnessDriftDuringInitialSampling()
+    {
+        CensusRegistryFixture fixture = CreateCensusRegistryFixture(
+            sealProviderRegistry: false, markReady: false);
+        string sectionId = DailyV1SelectedOwnerSectionCensusContract.FixedRequired[0];
+        MutableCensusProvider provider = fixture.Providers[sectionId];
+        OwnerSectionCensusWitness prior = provider.Witness;
+        provider.OnRead = () =>
+        {
+            provider.OnRead = null;
+            provider.Witness = new OwnerSectionCensusWitness(
+                prior.SectionId, prior.SchemaVersion, prior.OwnerInstanceIdentity,
+                prior.Cardinality, prior.Revision + 1L);
+        };
+
+        Assert.That(fixture.State.TrySealSelectedOwnerSectionCensusRegistryFromLiveProviders(
+            fixture.OrderedRegistrations(),
+            out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> result), Is.False);
+        Assert.That(result, Is.Null);
+        Assert.That(fixture.State.HasSealedSelectedOwnerSectionCensusRegistry, Is.False);
+    }
     private static List<OwnerSectionCensusSnapshot> AddSecondNpcToFixture(
         CensusRegistryFixture fixture)
     {
@@ -1022,7 +1111,8 @@ public sealed class DailyV1ExecutionBoundaryStateTests
         return contracts;
     }
 
-    private static CensusRegistryFixture CreateCensusRegistryFixture()
+    private static CensusRegistryFixture CreateCensusRegistryFixture(
+        bool sealProviderRegistry = true, bool markReady = true)
     {
         CensusRegistryFixture fixture = new CensusRegistryFixture();
         SimulationRuntimeAdmissionContext admission =
@@ -1038,7 +1128,8 @@ public sealed class DailyV1ExecutionBoundaryStateTests
         {
             MutableCensusProvider provider = new MutableCensusProvider(snapshot);
             fixture.Providers.Add(snapshot.SectionId, provider);
-            fixture.Registrations.Add(snapshot.SectionId, CreateRegistration(provider));
+            fixture.Registrations.Add(snapshot.SectionId,
+                CreateRegistration(provider, hasBaseline: sealProviderRegistry));
             fixture.Contracts.Add(new DailyV1OwnerSectionContractIdentity(
                 snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role));
         }
@@ -1046,21 +1137,34 @@ public sealed class DailyV1ExecutionBoundaryStateTests
         Assert.That(fixture.State.TryReplaceSelectedOwnerSectionCensusRegistryBeforeSeal(
             fixture.Contracts, fixture.OrderedRegistrations()), Is.True);
         Assert.That(fixture.State.TrySealExpectedOwnerSectionContractInventory(), Is.True);
-        Assert.That(fixture.State.TrySealSelectedOwnerSectionCensusRegistry(
-            fixture.OrderedRegistrations()), Is.True);
+        if (sealProviderRegistry)
+            Assert.That(fixture.State.TrySealSelectedOwnerSectionCensusRegistry(
+                fixture.OrderedRegistrations()), Is.True);
 
         foreach (string operationContractId
             in DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
                 hasRuntimeAdmission: true, hasTravelPartySystem: false, hasTravelSystem: false))
             Assert.That(fixture.State.TryRegisterRuntimeProtocolOperationContract(operationContractId), Is.True);
         Assert.That(fixture.State.TrySealRuntimeProtocolOperationInventory(), Is.True);
-        Assert.That(fixture.State.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
+        if (markReady)
+        {
+            Assert.That(sealProviderRegistry, Is.True);
+            Assert.That(fixture.State.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
+        }
         return fixture;
     }
 
     private static DailyV1OwnerSectionCensusProviderRegistration CreateRegistration(
-        MutableCensusProvider provider) =>
-        new DailyV1OwnerSectionCensusProviderRegistration(
+        MutableCensusProvider provider, bool hasBaseline = true)
+    {
+        if (!hasBaseline)
+            return new DailyV1OwnerSectionCensusProviderRegistration(
+                provider.Witness.SectionId,
+                provider.Witness.SchemaVersion,
+                RoleForSection(provider.Witness.SectionId),
+                provider);
+
+        return new DailyV1OwnerSectionCensusProviderRegistration(
             provider.Witness.SectionId,
             provider.Witness.SchemaVersion,
             RoleForSection(provider.Witness.SectionId),
@@ -1069,7 +1173,7 @@ public sealed class DailyV1ExecutionBoundaryStateTests
             provider.Witness.Cardinality,
             provider.Witness.Revision,
             hasBaseline: true);
-
+    }
     private static OwnerSectionRole RoleForSection(string sectionId)
     {
         foreach (string id in DailyV1SelectedOwnerSectionCensusContract.FixedEmpty)

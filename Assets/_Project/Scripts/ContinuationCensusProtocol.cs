@@ -1507,6 +1507,21 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
+        if (requiresSelectedCoreOwnerCensus)
+        {
+            if (!sharedExecutionState.TrySealSelectedOwnerSectionCensusRegistryFromLiveProviders(
+                    CreateCoreOwnerSectionCensusRegistrations(registeredSections),
+                    out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> sealedProviders)
+                || !TryApplyCoreSealedCensusBaselines(sealedProviders, out failure))
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+
+            return true;
+        }
+
         List<PendingSectionBaseline> observedSections = new List<PendingSectionBaseline>(expectedSections.Count);
         foreach (KeyValuePair<string, OwnerSectionContract> pair in expectedSections)
         {
@@ -1529,27 +1544,62 @@ public sealed class ContinuationCensusProtocol
         foreach (PendingSectionBaseline observed in observedSections)
             SetBaseline(observed.Section, observed.Witness);
 
-        if (requiresSelectedCoreOwnerCensus
-            && !sharedExecutionState.TrySealSelectedOwnerSectionCensusRegistry(
-                CreateCoreOwnerSectionCensusRegistrations(registeredSections)))
-        {
-            Fault();
-            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-
-        if (requiresSelectedCoreOwnerCensus
-            && !sharedExecutionState.TryMarkSelectedRuntimeCensusProtocolReady())
-        {
-            Fault();
-            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
-            return false;
-        }
-
         failure = ContinuationCensusFailure.None;
         return true;
     }
 
+    private bool TryApplyCoreSealedCensusBaselines(
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> sealedProviders,
+        out ContinuationCensusFailure failure)
+    {
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        if (sealedProviders == null || sealedProviders.Count != expectedSections.Count
+            || sealedProviders.Count != registeredSections.Count)
+            return false;
+
+        HashSet<string> applied = new HashSet<string>(StringComparer.Ordinal);
+        List<PendingSectionBaseline> pendingBaselines = new List<PendingSectionBaseline>(sealedProviders.Count);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in sealedProviders)
+        {
+            if (registration == null || !registration.HasBaseline
+                || registration.BaselineOwnerInstanceIdentity == null
+                || registration.BaselineCardinality < 0 || registration.BaselineRevision < 0L
+                || !applied.Add(registration.SectionId)
+                || !expectedSections.TryGetValue(registration.SectionId, out OwnerSectionContract contract)
+                || contract.SchemaVersion != registration.SchemaVersion
+                || contract.Role != registration.Role
+                || !registeredSections.TryGetValue(registration.SectionId, out RegisteredSection section)
+                || section == null || section.Contract == null
+                || section.Contract.SchemaVersion != registration.SchemaVersion
+                || section.Contract.Role != registration.Role)
+                return false;
+
+            bool isBoundCoreNpcProvider =
+                coreOwnedSelectedNpcCensusProvidersBySection.TryGetValue(
+                    registration.SectionId, out IOwnerSectionCensusProvider coreNpcProvider)
+                && ReferenceEquals(coreNpcProvider, registration.Provider);
+            if (!ReferenceEquals(section.Provider, registration.Provider)
+                && !isBoundCoreNpcProvider)
+                return false;
+
+            pendingBaselines.Add(new PendingSectionBaseline(section, new OwnerSectionCensusWitness(
+                registration.SectionId,
+                registration.SchemaVersion,
+                registration.BaselineOwnerInstanceIdentity,
+                registration.BaselineCardinality,
+                registration.BaselineRevision)));
+        }
+
+        if (!applied.SetEquals(expectedSections.Keys)
+            || !applied.SetEquals(registeredSections.Keys))
+            return false;
+
+        foreach (PendingSectionBaseline baseline in pendingBaselines)
+            SetBaseline(baseline.Section, baseline.Witness);
+
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
     private bool FailOwnerCoverage(string detail, out ContinuationCensusFailure failure)
     {
         RecordFirstFaultDetail(detail);
