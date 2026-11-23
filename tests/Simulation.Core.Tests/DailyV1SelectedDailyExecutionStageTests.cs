@@ -719,6 +719,7 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         DailyV1GenesisComposition composition = CreateSelectedGenesis(
             definitions, hasSoloTravelOperation: executeCoreOnlySoloTravel);
         DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+
         DailyV1StatusDefinition hiddenStatus = definitions.Statuses[
             definitions.Configuration.hiddenStatus];
         DailyV1ActionDefinition stealAction = executeCoreOnlySteal
@@ -1126,6 +1127,35 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
         OwnerSectionCensusSnapshot[] initialVector =
             DailyV1ApplicationSessionGateTests.CreateCoreBoundCompleteOwnerSectionVector(session);
+        Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreate(
+                graph,
+                out DailyV1CoreSelectedOwnerCensusProviderComposition coreCensusComposition,
+                out string coreCensusDiagnostic), Is.True, coreCensusDiagnostic);
+        Assert.That(coreCensusComposition.OwnerGraph, Is.SameAs(graph));
+        Assert.That(coreCensusComposition.PersonStoreRegistrations.Count, Is.EqualTo(2));
+        Assert.That(coreCensusComposition.CityRegistrations.Count, Is.GreaterThan(0));
+        Assert.That(coreCensusComposition.IdentitySpatialRegistrations.Count, Is.GreaterThan(0));
+        Assert.That(coreCensusComposition.SelectedNpcRegistrations.Count, Is.GreaterThan(0));
+        string[] composedSectionIds = coreCensusComposition.Registrations
+            .Select(row => row.SectionId).ToArray();
+        Assert.That(composedSectionIds,
+            Is.EqualTo(composedSectionIds.OrderBy(sectionId => sectionId, StringComparer.Ordinal).ToArray()));
+        Assert.That(composedSectionIds.Distinct().Count(),
+            Is.EqualTo(coreCensusComposition.Registrations.Count));
+        Dictionary<string, OwnerSectionCensusSnapshot> completeRows = initialVector.ToDictionary(
+            row => row.SectionId, StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration
+            in coreCensusComposition.Registrations)
+        {
+            Assert.That(completeRows.TryGetValue(registration.SectionId,
+                out OwnerSectionCensusSnapshot snapshot), Is.True, registration.SectionId);
+            Assert.That(registration.Role, Is.EqualTo(snapshot.Role), registration.SectionId);
+            Assert.That(registration.SchemaVersion, Is.EqualTo(snapshot.SchemaVersion), registration.SectionId);
+            Assert.That(registration.BaselineOwnerInstanceIdentity,
+                Is.SameAs(snapshot.OwnerInstanceIdentity), registration.SectionId);
+            Assert.That(registration.BaselineCardinality, Is.EqualTo(snapshot.Cardinality), registration.SectionId);
+            Assert.That(registration.BaselineRevision, Is.EqualTo(snapshot.Revision), registration.SectionId);
+        }
         if (executeCoreOnlySteal)
         {
             Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
@@ -1199,6 +1229,9 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             row.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
         liveRuntimeProviders[DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId] =
             new CoreJusticeRecordsCensusProvider(graph.JusticeRecordsOwner, justiceRecordsBaseline);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration
+            in coreCensusComposition.Registrations)
+            liveRuntimeProviders[registration.SectionId] = registration.Provider;
         List<DailyV1OwnerSectionContractIdentity> contracts =
             new List<DailyV1OwnerSectionContractIdentity>(initialVector.Length);
         List<DailyV1OwnerSectionCensusProviderRegistration> registrations =

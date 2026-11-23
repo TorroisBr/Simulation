@@ -335,6 +335,7 @@ public sealed class ContinuationCensusProtocol
                     && !TryCreateCoreOwnedSelectedNpcCensusProviderMap(
                         stagedExpected,
                         stagedRegistered,
+                        null,
                         out stagedCoreNpcProviders,
                         out string diagnostic))
                 {
@@ -1485,8 +1486,24 @@ public sealed class ContinuationCensusProtocol
             && !TryValidateNpcReceiptOwnerFamilyMatchesRoster(out failure))
             return FailOwnerCoverage("NpcReceiptOwnerRosterMismatch", out failure);
 
+        DailyV1CoreSelectedOwnerCensusProviderComposition coreCensusComposition = null;
+        DailyV1SelectedRuntimeOwnerGraph selectedCoreOwnerGraph =
+            sharedExecutionState?.SelectedRuntimeOwnerGraph;
+        if (requiresSelectedCoreOwnerCensus && selectedCoreOwnerGraph != null
+            && !DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreate(
+                selectedCoreOwnerGraph,
+                out coreCensusComposition,
+                out string coreCensusDiagnostic))
+        {
+            RecordFirstFaultDetail("CoreSelectedOwnerProviderCompositionRejected:"
+                + (coreCensusDiagnostic ?? "Unspecified"));
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
         if (requiresSelectedCoreOwnerCensus
-            && !TryBindCoreOwnedPersonStoreCensusProviders(out failure))
+            && !TryBindCoreOwnedPersonStoreCensusProviders(coreCensusComposition, out failure))
         {
             RecordFirstFaultDetail("CoreOwnedPersonStoreProviderBindingRejected");
             Fault();
@@ -1494,7 +1511,7 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
         if (requiresSelectedCoreOwnerCensus
-            && !TryBindCoreOwnedCityCensusProviders(out failure))
+            && !TryBindCoreOwnedCityCensusProviders(coreCensusComposition, out failure))
         {
             RecordFirstFaultDetail("CoreOwnedCityProviderBindingRejected");
             Fault();
@@ -1503,7 +1520,7 @@ public sealed class ContinuationCensusProtocol
         }
 
         if (requiresSelectedCoreOwnerCensus
-            && !TryBindCoreOwnedIdentitySpatialCensusProviders(out failure))
+            && !TryBindCoreOwnedIdentitySpatialCensusProviders(coreCensusComposition, out failure))
         {
             RecordFirstFaultDetail("CoreOwnedIdentitySpatialProviderBindingRejected");
             Fault();
@@ -1512,7 +1529,7 @@ public sealed class ContinuationCensusProtocol
         }
 
         if (requiresSelectedCoreOwnerCensus
-            && !TryBindCoreOwnedSelectedNpcCensusProviders(out failure))
+            && !TryBindCoreOwnedSelectedNpcCensusProviders(coreCensusComposition, out failure))
         {
             RecordFirstFaultDetail("CoreOwnedSelectedNpcProviderBindingRejected");
             Fault();
@@ -1628,6 +1645,7 @@ public sealed class ContinuationCensusProtocol
     /// retained as the authoritative source for the sealed Core registry.
     /// </summary>
     private bool TryBindCoreOwnedPersonStoreCensusProviders(
+        DailyV1CoreSelectedOwnerCensusProviderComposition composition,
         out ContinuationCensusFailure failure)
     {
         failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -1658,16 +1676,14 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        if (!DailyV1CorePersonStoreCensusComposition.TryCreateProviderRegistrations(
-                graph,
-                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> coreProviders,
-                out string coreDiagnostic)
-            || coreProviders == null)
+        if (composition == null || !ReferenceEquals(composition.OwnerGraph, graph))
         {
-            RecordFirstFaultDetail("CorePersonStoreProviderConstructionRejected:"
-                + (coreDiagnostic ?? "NoProviders"));
+            RecordFirstFaultDetail("CorePersonStoreProviderCompositionMissingOrStale");
             return false;
         }
+
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> coreProviders =
+            composition.PersonStoreRegistrations;
 
         HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (string sectionId in expectedSections.Keys)
@@ -1799,6 +1815,7 @@ public sealed class ContinuationCensusProtocol
             StringComparison.Ordinal);
 
     private bool TryBindCoreOwnedCityCensusProviders(
+        DailyV1CoreSelectedOwnerCensusProviderComposition composition,
         out ContinuationCensusFailure failure)
     {
         failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -1824,13 +1841,17 @@ public sealed class ContinuationCensusProtocol
             return true;
         }
 
-        if (!DailyV1SelectedRuntimeOwnerCensusSource.TryCreateCoreOwnedCityCensusProviderRegistrations(
-                graph,
-                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> coreProviders,
-                out string coreDiagnostic)
-            || coreProviders == null || coreProviders.Count == 0)
+        if (composition == null || !ReferenceEquals(composition.OwnerGraph, graph))
         {
-            RecordFirstFaultDetail("CoreCityProviderConstructionRejected:" + (coreDiagnostic ?? "NoProviders"));
+            RecordFirstFaultDetail("CoreCityProviderCompositionMissingOrStale");
+            return false;
+        }
+
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> coreProviders =
+            composition.CityRegistrations;
+        if (coreProviders == null || coreProviders.Count == 0)
+        {
+            RecordFirstFaultDetail("CoreCityProviderCompositionIncomplete");
             return false;
         }
 
@@ -1931,6 +1952,7 @@ public sealed class ContinuationCensusProtocol
     /// sealed registry used by Core capture.
     /// </summary>
     private bool TryBindCoreOwnedIdentitySpatialCensusProviders(
+        DailyV1CoreSelectedOwnerCensusProviderComposition composition,
         out ContinuationCensusFailure failure)
     {
         failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -1953,15 +1975,17 @@ public sealed class ContinuationCensusProtocol
             return true;
         }
 
-        if (!DailyV1SelectedRuntimeOwnerCensusSource
-                .TryCreateCoreOwnedIdentitySpatialCensusProviderRegistrations(
-                    graph,
-                    out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> coreProviders,
-                    out string coreDiagnostic)
-            || coreProviders == null || coreProviders.Count == 0)
+        if (composition == null || !ReferenceEquals(composition.OwnerGraph, graph))
         {
-            RecordFirstFaultDetail("CoreIdentitySpatialProviderConstructionRejected:"
-                + (coreDiagnostic ?? "NoProviders"));
+            RecordFirstFaultDetail("CoreIdentitySpatialProviderCompositionMissingOrStale");
+            return false;
+        }
+
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> coreProviders =
+            composition.IdentitySpatialRegistrations;
+        if (coreProviders == null || coreProviders.Count == 0)
+        {
+            RecordFirstFaultDetail("CoreIdentitySpatialProviderCompositionIncomplete");
             return false;
         }
 
@@ -2072,6 +2096,7 @@ public sealed class ContinuationCensusProtocol
     /// census projection; exact selected rows use the live Core providers.
     /// </summary>
     private bool TryBindCoreOwnedSelectedNpcCensusProviders(
+        DailyV1CoreSelectedOwnerCensusProviderComposition composition,
         out ContinuationCensusFailure failure)
     {
         failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -2081,9 +2106,17 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
+        if (composition != null
+            && !ReferenceEquals(composition.OwnerGraph, sharedExecutionState.SelectedRuntimeOwnerGraph))
+        {
+            RecordFirstFaultDetail("CoreSelectedNpcProviderCompositionMissingOrStale");
+            return false;
+        }
+
         if (!TryCreateCoreOwnedSelectedNpcCensusProviderMap(
                 expectedSections,
                 registeredSections,
+                composition?.SelectedNpcRegistrations,
                 out Dictionary<string, IOwnerSectionCensusProvider> stagedProviders,
                 out string diagnostic))
         {
@@ -2100,6 +2133,7 @@ public sealed class ContinuationCensusProtocol
     private bool TryCreateCoreOwnedSelectedNpcCensusProviderMap(
         Dictionary<string, OwnerSectionContract> contracts,
         Dictionary<string, RegisteredSection> sections,
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> composedRegistrations,
         out Dictionary<string, IOwnerSectionCensusProvider> coreProvidersBySection,
         out string diagnostic)
     {
@@ -2126,14 +2160,17 @@ public sealed class ContinuationCensusProtocol
             return true;
         }
 
-        if (!DailyV1SelectedRuntimeOwnerCensusSource
-                .TryCreateCoreOwnedSelectedNpcCensusProviderRegistrations(
-                    graph,
-                    out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
-                    out diagnostic)
-            || registrations == null)
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations =
+            composedRegistrations;
+        if (registrations == null)
         {
-            return false;
+            if (!DailyV1SelectedRuntimeOwnerCensusSource
+                    .TryCreateCoreOwnedSelectedNpcCensusProviderRegistrations(
+                        graph,
+                        out registrations,
+                        out diagnostic)
+                || registrations == null)
+                return false;
         }
 
         HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
