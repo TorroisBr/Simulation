@@ -1475,7 +1475,33 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         out IReadOnlyList<OwnerSectionCensusSnapshot> composedSections,
         out string diagnostic)
     {
+        return TryRebindCoreOwnedP12EOwnerSectionsCore(
+            graph, hostSections, includeProviderRegistrations: false,
+            out composedSections, out _, out diagnostic);
+    }
+
+    internal static bool TryRebindCoreOwnedP12EOwnerSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> composedSections,
+        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> providerRegistrations,
+        out string diagnostic)
+    {
+        return TryRebindCoreOwnedP12EOwnerSectionsCore(
+            graph, hostSections, includeProviderRegistrations: true,
+            out composedSections, out providerRegistrations, out diagnostic);
+    }
+
+    private static bool TryRebindCoreOwnedP12EOwnerSectionsCore(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        bool includeProviderRegistrations,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> composedSections,
+        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> providerRegistrations,
+        out string diagnostic)
+    {
         composedSections = null;
+        providerRegistrations = null;
         diagnostic = null;
         if (graph == null || hostSections == null)
         {
@@ -1489,13 +1515,19 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             OwnerSectionCensusSnapshot[] unchanged = new OwnerSectionCensusSnapshot[hostSections.Count];
             for (int i = 0; i < unchanged.Length; i++) unchanged[i] = hostSections[i];
             composedSections = Array.AsReadOnly(unchanged);
+            if (includeProviderRegistrations)
+                providerRegistrations = Array.Empty<DailyV1OwnerSectionCensusProviderRegistration>();
             return true;
         }
 
         List<OwnerSectionCensusSnapshot> expected = new List<OwnerSectionCensusSnapshot>(23);
+        List<DailyV1OwnerSectionCensusProviderRegistration> builtRegistrations =
+            includeProviderRegistrations
+                ? new List<DailyV1OwnerSectionCensusProviderRegistration>(23)
+                : null;
         IReadOnlyList<IOwnerSectionCensusProvider> institutionOffice =
             InstitutionOfficeCensusProvider.CreateProviders(owners.Institutions, owners.Offices);
-        if (!TryAppendCoreP12EOwnerProviders(expected, institutionOffice,
+        if (!TryAppendCoreP12EOwnerProviders(expected, builtRegistrations, institutionOffice,
                 new[]
                 {
                     InstitutionOfficeCensusProvider.InstitutionsSectionId,
@@ -1522,7 +1554,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             propertyProviders != null && propertyProviders.Count > 1 ? propertyProviders[1] : null,
             new EstateCensusProvider(owners.Estates)
         };
-        if (!TryAppendCoreP12EOwnerProviders(expected, propertyEstate,
+        if (!TryAppendCoreP12EOwnerProviders(expected, builtRegistrations, propertyEstate,
                 new[]
                 {
                     PropertyOwnershipCensusProvider.OwnershipSectionId,
@@ -1539,22 +1571,22 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 out diagnostic))
             return false;
 
-        if (!TryAppendCoreP12EOwnerProviders(expected,
+        if (!TryAppendCoreP12EOwnerProviders(expected, builtRegistrations,
                 FactionStoreCensusProvider.CreateProviders(owners.Factions),
                 new[] { FactionStoreCensusProvider.FactionsSectionId, FactionStoreCensusProvider.AffiliationsSectionId },
                 new[] { FactionStoreCensusProvider.SchemaVersion, FactionStoreCensusProvider.SchemaVersion },
                 new object[] { owners.Factions, owners.Factions }, out diagnostic)
-            || !TryAppendCoreP12EOwnerProviders(expected,
+            || !TryAppendCoreP12EOwnerProviders(expected, builtRegistrations,
                 PoliticalClaimStoreCensusProvider.CreateProviders(owners.PoliticalClaims),
                 new[] { PoliticalClaimStoreCensusProvider.ClaimsSectionId, PoliticalClaimStoreCensusProvider.RecognitionsSectionId },
                 new[] { PoliticalClaimStoreCensusProvider.SchemaVersion, PoliticalClaimStoreCensusProvider.SchemaVersion },
                 new object[] { owners.PoliticalClaims, owners.PoliticalClaims }, out diagnostic)
-            || !TryAppendCoreP12EOwnerProviders(expected,
+            || !TryAppendCoreP12EOwnerProviders(expected, builtRegistrations,
                 PoliticalSupportStoreCensusProvider.CreateProviders(owners.PoliticalSupport),
                 new[] { PoliticalSupportStoreCensusProvider.RelationsSectionId },
                 new[] { PoliticalSupportStoreCensusProvider.SchemaVersion },
                 new object[] { owners.PoliticalSupport }, out diagnostic)
-            || !TryAppendCoreP12EOwnerProviders(expected,
+            || !TryAppendCoreP12EOwnerProviders(expected, builtRegistrations,
                 new IOwnerSectionCensusProvider[]
                 {
                     new P12OwnerSectionCensusProvider<TheftOutcomeStore>(
@@ -1594,7 +1626,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                     owners.CrimeSocialAppraisal.CrimeKnowledge,
                     owners.CrimeSocialAppraisal.SocialReactions
                 }, out diagnostic)
-            || !TryAppendCoreP12EOwnerProviders(expected,
+            || !TryAppendCoreP12EOwnerProviders(expected, builtRegistrations,
                 ArmedForceStoreCensusProvider.CreateProviders(owners.ArmedForces),
                 new[]
                 {
@@ -1609,27 +1641,27 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                     ArmedForceStoreCensusProvider.SchemaVersion
                 },
                 new object[] { owners.ArmedForces, owners.ArmedForces, owners.ArmedForces }, out diagnostic)
-            || !TryAppendCoreP12EOwnerProviders(expected,
+            || !TryAppendCoreP12EOwnerProviders(expected, builtRegistrations,
                 new[] { (IOwnerSectionCensusProvider)new ContingentManpowerCensusProvider(owners.Manpower) },
                 new[] { ContingentManpowerCensusProvider.SectionId },
                 new[] { ContingentManpowerCensusProvider.SchemaVersion },
                 new object[] { owners.Manpower }, out diagnostic)
-            || !TryAppendCoreP12EOwnerProviders(expected,
+            || !TryAppendCoreP12EOwnerProviders(expected, builtRegistrations,
                 new[] { (IOwnerSectionCensusProvider)new ArmedForceSpatialCensusProvider(owners.Positions) },
                 new[] { ArmedForceSpatialCensusProvider.SectionId },
                 new[] { ArmedForceSpatialCensusProvider.SchemaVersion },
                 new object[] { owners.Positions }, out diagnostic)
-            || !TryAppendCoreP12EOwnerProviders(expected,
+            || !TryAppendCoreP12EOwnerProviders(expected, builtRegistrations,
                 new[] { (IOwnerSectionCensusProvider)new PersistentConflictCensusProvider(owners.Conflicts) },
                 new[] { PersistentConflictCensusProvider.SectionId },
                 new[] { PersistentConflictCensusProvider.SchemaVersion },
                 new object[] { owners.Conflicts }, out diagnostic)
-            || !TryAppendCoreP12EOwnerProviders(expected,
+            || !TryAppendCoreP12EOwnerProviders(expected, builtRegistrations,
                 new[] { (IOwnerSectionCensusProvider)new PersistentWarCensusProvider(owners.Wars) },
                 new[] { PersistentWarCensusProvider.SectionId },
                 new[] { PersistentWarCensusProvider.SchemaVersion },
                 new object[] { owners.Wars }, out diagnostic)
-            || !TryAppendCoreP12EOwnerProviders(expected,
+            || !TryAppendCoreP12EOwnerProviders(expected, builtRegistrations,
                 new[] { (IOwnerSectionCensusProvider)new PersistentBattleCensusProvider(owners.Battles) },
                 new[] { PersistentBattleCensusProvider.SectionId },
                 new[] { PersistentBattleCensusProvider.SchemaVersion },
@@ -1682,11 +1714,18 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         if (present == 0) composed.AddRange(expected);
         composed.Sort((left, right) => StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
         composedSections = Array.AsReadOnly(composed.ToArray());
+        if (includeProviderRegistrations)
+        {
+            builtRegistrations.Sort(
+                (left, right) => StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+            providerRegistrations = builtRegistrations.AsReadOnly();
+        }
         return true;
     }
 
     private static bool TryAppendCoreP12EOwnerProviders(
         List<OwnerSectionCensusSnapshot> target,
+        List<DailyV1OwnerSectionCensusProviderRegistration> registrations,
         IReadOnlyList<IOwnerSectionCensusProvider> providers,
         IReadOnlyList<string> sectionIds,
         IReadOnlyList<int> schemaVersions,
@@ -1726,6 +1765,16 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                     witness.OwnerInstanceIdentity,
                     witness.Cardinality,
                     witness.Revision));
+                if (registrations != null)
+                    registrations.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                        witness.SectionId,
+                        witness.SchemaVersion,
+                        OwnerSectionRole.Required,
+                        providers[i],
+                        witness.OwnerInstanceIdentity,
+                        witness.Cardinality,
+                        witness.Revision,
+                        hasBaseline: true));
             }
             return true;
         }

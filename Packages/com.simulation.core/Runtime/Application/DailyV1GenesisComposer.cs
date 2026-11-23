@@ -307,6 +307,13 @@ internal static class DailyV1GenesisComposer
                             out P12ECoreOwnerRestoreStage p12EOwners)
                         || !graph.TryBindP12EOwners(p12EOwners)
                         || !ReferenceEquals(graph.P12EOwners, p12EOwners)
+                        || !graph.TryBindPoliticalKnowledgeStore(new PoliticalKnowledgeStore(
+                            personStore,
+                            p12EOwners.Institutions,
+                            p12EOwners.PoliticalClaims,
+                            p12EOwners.Factions,
+                            p12EOwners.Offices,
+                            p12EOwners.PropertyOwnership))
                         || !executionBoundaryState.TryBindSelectedRuntimeOwnerGraph(graph)
                         || !executionBoundaryState.TryBindInitialSelectedRuntimeActorRosterFromOwnerGraph()
                         || !executionBoundaryState.TryBindSelectedRuntimeExecutionRoots(
@@ -315,7 +322,7 @@ internal static class DailyV1GenesisComposer
                             recordSequence,
                             decisionStore,
                             actorChoiceStore))
-                        return Fail("The selected Core runtime could not bind its complete P12-E Genesis owner set and execution roots.", out diagnostic);
+                        return Fail("The selected Core runtime could not bind its complete P12-E/P12-F Genesis owner set and execution roots.", out diagnostic);
                     composition = new DailyV1GenesisComposition(
                         definitions, p9ProfileFingerprint, p9ProvenanceRecords, p9ManifestSnapshot,
                         worldId, runtimeIds, time, randomSource, recordSequence,

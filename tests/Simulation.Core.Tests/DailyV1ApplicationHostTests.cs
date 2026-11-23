@@ -646,10 +646,90 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(diagnostic, Does.Contain("complete 89-family selected Daily-v1 census"));
         Assert.That(diagnostic, Does.Contain("Missing provider sections:"));
         Assert.That(diagnostic, Does.Contain("No partial census was registered."));
-        Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreate(
-            preparation.CoreSession.OwnerGraph,
+        Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreateForApplicationStart(
+            preparation.CoreSession,
             out DailyV1CoreSelectedOwnerCensusProviderComposition coreComposition,
             out string compositionDiagnostic), Is.True, compositionDiagnostic);
+        Assert.That(coreComposition.P12FOwnerRegistrations, Has.Count.EqualTo(6),
+            "Detached Core startup composes the five exact P12-F owners and the bound PoliticalDecision owner.");
+        Assert.That(coreComposition.ExactEmptyProfileRegistrations, Has.Count.EqualTo(2),
+            "Detached Core startup binds only the existing exact-empty site and decision-receipt owners.");
+        DailyV1ActiveRuntimeSession coreSession = preparation.CoreSession;
+        OwnerSectionCensusWitness decisionReceiptWitness =
+            coreSession.EventAuthority.DecisionOccurrenceReceipts.GetCensus();
+        Dictionary<string, object> expectedExactEmptyOwners = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            [DailyV1SelectedOwnerSectionCensusContract.ExplorableSiteSectionId] =
+                coreSession.OwnerGraph.ExplorableSites,
+            [DailyV1DecisionOccurrenceReceiptAuthority.SectionId] =
+                decisionReceiptWitness.OwnerInstanceIdentity
+        };
+        Assert.That(coreComposition.ExactEmptyProfileRegistrations.Select(row => row.SectionId),
+            Is.EquivalentTo(expectedExactEmptyOwners.Keys));
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration
+            in coreComposition.ExactEmptyProfileRegistrations)
+        {
+            Assert.That(expectedExactEmptyOwners.TryGetValue(registration.SectionId, out object expectedOwner), Is.True);
+            Assert.That(registration.Role, Is.EqualTo(OwnerSectionRole.ExplicitlyEmpty));
+            Assert.That(registration.HasBaseline, Is.True);
+            Assert.That(registration.BaselineOwnerInstanceIdentity, Is.SameAs(expectedOwner));
+            Assert.That(registration.BaselineCardinality, Is.Zero);
+            Assert.That(registration.BaselineRevision, Is.Zero);
+            OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expectedOwner));
+            Assert.That(witness.Cardinality, Is.Zero);
+            Assert.That(witness.Revision, Is.Zero);
+        }
+        Assert.That(coreComposition.JusticeRecordsRegistrations, Has.Count.EqualTo(1),
+            "The selected Core Justice owner is witnessed directly without borrowing a Unity JusticeSystem identity.");
+        DailyV1OwnerSectionCensusProviderRegistration justiceRecordsRegistration =
+            coreComposition.JusticeRecordsRegistrations.Single();
+        Assert.That(justiceRecordsRegistration.SectionId,
+            Is.EqualTo(DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId));
+        Assert.That(justiceRecordsRegistration.Role, Is.EqualTo(OwnerSectionRole.Required));
+        Assert.That(justiceRecordsRegistration.HasBaseline, Is.True);
+        Assert.That(justiceRecordsRegistration.BaselineOwnerInstanceIdentity,
+            Is.SameAs(coreSession.OwnerGraph.JusticeRecordsOwner));
+        OwnerSectionCensusWitness justiceRecordsWitness =
+            justiceRecordsRegistration.Provider.GetCurrentCensus();
+        Assert.That(justiceRecordsWitness.OwnerInstanceIdentity,
+            Is.SameAs(coreSession.OwnerGraph.JusticeRecordsOwner));
+        Assert.That(justiceRecordsWitness.Cardinality,
+            Is.EqualTo(coreSession.OwnerGraph.JusticeRecordsOwner.WantedRecords.Count
+                + coreSession.OwnerGraph.JusticeRecordsOwner.Sentences.Count));
+        Assert.That(justiceRecordsWitness.Revision,
+            Is.EqualTo(coreSession.OwnerGraph.JusticeRecordsOwner.Revision));
+        Dictionary<string, object> expectedP12FOwners = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            [ActorChoiceP11CensusProvider.SectionId] =
+                preparation.CoreSession.ExecutionBoundaryState.SelectedActorChoiceStore.CensusOwnerIdentity,
+            [ScheduledDirectiveCensusProvider.SectionId] =
+                preparation.CoreSession.OwnerGraph.ScheduledDirectives,
+            [TravelPartyCensusProvider.SectionId] =
+                preparation.CoreSession.OwnerGraph.TravelParties,
+            [ExpeditionCensusProvider.SectionId] =
+                preparation.CoreSession.OwnerGraph.Expeditions,
+            [PoliticalKnowledgeStoreCensusProvider.SectionId] =
+                preparation.CoreSession.OwnerGraph.PoliticalKnowledgeStore,
+            [PoliticalDecisionStoreCensusProvider.SectionId] =
+                preparation.CoreSession.OwnerGraph.PoliticalDecisionStore
+        };
+        Assert.That(coreComposition.P12FOwnerRegistrations.Select(row => row.SectionId),
+            Is.EquivalentTo(expectedP12FOwners.Keys));
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration
+            in coreComposition.P12FOwnerRegistrations)
+        {
+            Assert.That(expectedP12FOwners.TryGetValue(registration.SectionId, out object expectedOwner), Is.True);
+            Assert.That(registration.Role, Is.EqualTo(OwnerSectionRole.Required));
+            Assert.That(registration.HasBaseline, Is.True);
+            Assert.That(registration.BaselineOwnerInstanceIdentity, Is.SameAs(expectedOwner));
+            OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
+            Assert.That(witness.SectionId, Is.EqualTo(registration.SectionId));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(registration.SchemaVersion));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expectedOwner));
+            Assert.That(witness.Cardinality, Is.EqualTo(registration.BaselineCardinality));
+            Assert.That(witness.Revision, Is.EqualTo(registration.BaselineRevision));
+        }
         HashSet<string> testProfileSectionIds = new HashSet<string>(
             DailyV1ApplicationSessionGateTests.CreateCoreBoundCompleteOwnerSectionVector(
                     preparation.CoreSession)
@@ -727,6 +807,92 @@ public sealed class DailyV1ApplicationHostTests
             Is.True, preparationDiagnostic);
 
         DailyV1SelectedRuntimeOwnerGraph sourceGraph = session.OwnerGraph;
+        Assert.That(sourceGraph.P12EOwners, Is.Not.Null);
+        Assert.That(sourceGraph.GenealogyStore, Is.Not.Null);
+        Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreate(
+                sourceGraph,
+                out DailyV1CoreSelectedOwnerCensusProviderComposition boundComposition,
+                out string boundCompositionDiagnostic), Is.True, boundCompositionDiagnostic);
+        string[] expectedP12EOwnerSections =
+        {
+            InstitutionOfficeCensusProvider.InstitutionsSectionId,
+            InstitutionOfficeCensusProvider.OfficesSectionId,
+            InstitutionOfficeCensusProvider.IncumbenciesSectionId,
+            InstitutionOfficeCensusProvider.TenuresSectionId,
+            PropertyOwnershipCensusProvider.OwnershipSectionId,
+            PropertyOwnershipCensusProvider.TransferHistorySectionId,
+            EstateCensusProvider.SectionId,
+            FactionStoreCensusProvider.FactionsSectionId,
+            FactionStoreCensusProvider.AffiliationsSectionId,
+            PoliticalClaimStoreCensusProvider.ClaimsSectionId,
+            PoliticalClaimStoreCensusProvider.RecognitionsSectionId,
+            PoliticalSupportStoreCensusProvider.RelationsSectionId,
+            P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId,
+            P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId,
+            P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId,
+            ArmedForceStoreCensusProvider.ForcesSectionId,
+            ArmedForceStoreCensusProvider.ContingentsSectionId,
+            ArmedForceStoreCensusProvider.RelevantPersonReferencesSectionId,
+            ContingentManpowerCensusProvider.SectionId,
+            ArmedForceSpatialCensusProvider.SectionId,
+            PersistentConflictCensusProvider.SectionId,
+            PersistentWarCensusProvider.SectionId,
+            PersistentBattleCensusProvider.SectionId
+        };
+        Assert.That(boundComposition.P12EOwnerRegistrations, Has.Count.EqualTo(23));
+        Assert.That(boundComposition.P12EOwnerRegistrations.Select(registration => registration.SectionId),
+            Is.EquivalentTo(expectedP12EOwnerSections));
+        Dictionary<string, object> expectedP12EOwners = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            [InstitutionOfficeCensusProvider.InstitutionsSectionId] = sourceGraph.P12EOwners.Institutions,
+            [InstitutionOfficeCensusProvider.OfficesSectionId] = sourceGraph.P12EOwners.Offices,
+            [InstitutionOfficeCensusProvider.IncumbenciesSectionId] = sourceGraph.P12EOwners.Offices,
+            [InstitutionOfficeCensusProvider.TenuresSectionId] = sourceGraph.P12EOwners.Offices,
+            [PropertyOwnershipCensusProvider.OwnershipSectionId] = sourceGraph.P12EOwners.PropertyOwnership,
+            [PropertyOwnershipCensusProvider.TransferHistorySectionId] = sourceGraph.P12EOwners.PropertyOwnership,
+            [EstateCensusProvider.SectionId] = sourceGraph.P12EOwners.Estates,
+            [FactionStoreCensusProvider.FactionsSectionId] = sourceGraph.P12EOwners.Factions,
+            [FactionStoreCensusProvider.AffiliationsSectionId] = sourceGraph.P12EOwners.Factions,
+            [PoliticalClaimStoreCensusProvider.ClaimsSectionId] = sourceGraph.P12EOwners.PoliticalClaims,
+            [PoliticalClaimStoreCensusProvider.RecognitionsSectionId] = sourceGraph.P12EOwners.PoliticalClaims,
+            [PoliticalSupportStoreCensusProvider.RelationsSectionId] = sourceGraph.P12EOwners.PoliticalSupport,
+            [P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId] = sourceGraph.P12EOwners.CrimeSocialAppraisal.TheftOutcomes,
+            [P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId] = sourceGraph.P12EOwners.CrimeSocialAppraisal.CrimeKnowledge,
+            [P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId] = sourceGraph.P12EOwners.CrimeSocialAppraisal.SocialReactions,
+            [ArmedForceStoreCensusProvider.ForcesSectionId] = sourceGraph.P12EOwners.ArmedForces,
+            [ArmedForceStoreCensusProvider.ContingentsSectionId] = sourceGraph.P12EOwners.ArmedForces,
+            [ArmedForceStoreCensusProvider.RelevantPersonReferencesSectionId] = sourceGraph.P12EOwners.ArmedForces,
+            [ContingentManpowerCensusProvider.SectionId] = sourceGraph.P12EOwners.Manpower,
+            [ArmedForceSpatialCensusProvider.SectionId] = sourceGraph.P12EOwners.Positions,
+            [PersistentConflictCensusProvider.SectionId] = sourceGraph.P12EOwners.Conflicts,
+            [PersistentWarCensusProvider.SectionId] = sourceGraph.P12EOwners.Wars,
+            [PersistentBattleCensusProvider.SectionId] = sourceGraph.P12EOwners.Battles
+        };
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration
+            in boundComposition.P12EOwnerRegistrations)
+        {
+            OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
+            Assert.That(registration.Role, Is.EqualTo(OwnerSectionRole.Required));
+            Assert.That(registration.HasBaseline, Is.True);
+            Assert.That(registration.BaselineOwnerInstanceIdentity,
+                Is.SameAs(expectedP12EOwners[registration.SectionId]));
+            Assert.That(witness.SectionId, Is.EqualTo(registration.SectionId));
+            Assert.That(witness.OwnerInstanceIdentity,
+                Is.SameAs(expectedP12EOwners[registration.SectionId]));
+            Assert.That(registration.BaselineCardinality, Is.EqualTo(witness.Cardinality));
+            Assert.That(registration.BaselineRevision, Is.EqualTo(witness.Revision));
+        }
+        Assert.That(boundComposition.GenealogyRegistrations, Has.Count.EqualTo(1));
+        DailyV1OwnerSectionCensusProviderRegistration genealogyRegistration =
+            boundComposition.GenealogyRegistrations.Single();
+        OwnerSectionCensusWitness genealogyWitness = genealogyRegistration.Provider.GetCurrentCensus();
+        Assert.That(genealogyRegistration.SectionId, Is.EqualTo(GenealogyCensusProvider.SectionId));
+        Assert.That(genealogyRegistration.SchemaVersion, Is.EqualTo(GenealogyCensusProvider.SchemaVersion));
+        Assert.That(genealogyRegistration.Role, Is.EqualTo(OwnerSectionRole.Required));
+        Assert.That(genealogyRegistration.BaselineOwnerInstanceIdentity,
+            Is.SameAs(sourceGraph.GenealogyStore));
+        Assert.That(genealogyRegistration.BaselineCardinality, Is.EqualTo(genealogyWitness.Cardinality));
+        Assert.That(genealogyRegistration.BaselineRevision, Is.EqualTo(genealogyWitness.Revision));
         Assert.That(PersonStore.TryCreateFromOwnerSnapshot(
                 sourceGraph.PersonStore.CaptureOwnerSnapshot(),
                 out PersonStore personStore, out PersonStoreOwnerSnapshotFailureCode cloneFailure),
@@ -749,6 +915,19 @@ public sealed class DailyV1ApplicationHostTests
                 personStore,
                 out DailyV1SelectedRuntimeOwnerGraph graphWithStandalonePerson),
             Is.True, "The selected owner graph permits an unmaterialized PersonStore member.");
+        Assert.That(graphWithStandalonePerson.RuntimeIdAllocator, Is.Null);
+        Assert.That(graphWithStandalonePerson.RecordSequence, Is.Null);
+        Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreate(
+                graphWithStandalonePerson,
+                out DailyV1CoreSelectedOwnerCensusProviderComposition missingRootsComposition,
+                out string missingRootsDiagnostic), Is.False);
+        Assert.That(missingRootsComposition, Is.Null);
+        Assert.That(missingRootsDiagnostic, Does.Contain(
+            "requires the exact RuntimeIdAllocator and SimulationRecordSequence"));
+        Assert.That(graphWithStandalonePerson.TryBindRuntimeIdAllocator(
+                sourceGraph.RuntimeIdAllocator), Is.True);
+        Assert.That(graphWithStandalonePerson.TryBindRecordSequence(
+                sourceGraph.RecordSequence), Is.True);
         string standaloneSectionId =
             DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(
                 standalonePerson.PersonId);
@@ -762,6 +941,65 @@ public sealed class DailyV1ApplicationHostTests
                 graphWithStandalonePerson,
                 out DailyV1CoreSelectedOwnerCensusProviderComposition composition,
                 out string compositionDiagnostic), Is.True, compositionDiagnostic);
+        Assert.That(composition.P12EOwnerRegistrations, Is.Empty,
+            "An unbound P12-E stage is not fabricated by the partial composition.");
+        Assert.That(composition.GenealogyRegistrations, Is.Empty,
+            "An unbound Genealogy owner is not fabricated by the partial composition.");
+        Assert.That(composition.P12CRootRegistrations, Has.Count.EqualTo(4));
+        Assert.That(composition.P12CRootRegistrations.Select(registration => registration.SectionId),
+            Is.EquivalentTo(new[]
+            {
+                RuntimeIdAllocatorCensusProvider.EventsSectionId,
+                RuntimeIdAllocatorCensusProvider.DecisionsSectionId,
+                RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId,
+                SimulationRecordSequenceCensusProvider.SectionId
+            }));
+        Assert.That(composition.P12CRootRegistrations.All(registration =>
+                registration.Role == OwnerSectionRole.Required
+                && registration.HasBaseline
+                && registration.BaselineCardinality == 1
+                && registration.BaselineRevision >= 0L),
+            Is.True);
+
+        RuntimeIdAllocatorOwnerBridge.CaptureCensusIdentity(
+            sourceGraph.RuntimeIdAllocator, RuntimeIdAllocatorCensusCounter.Events,
+            out object eventOwnerIdentity, out long eventRevision);
+        OwnerSectionCensusWitness eventWitness = composition.P12CRootRegistrations
+            .Single(registration => registration.SectionId == RuntimeIdAllocatorCensusProvider.EventsSectionId)
+            .Provider.GetCurrentCensus();
+        Assert.That(eventWitness.SchemaVersion, Is.EqualTo(RuntimeIdAllocatorCensusProvider.SchemaVersion));
+        Assert.That(eventWitness.OwnerInstanceIdentity, Is.SameAs(eventOwnerIdentity));
+        Assert.That(eventWitness.Revision, Is.EqualTo(eventRevision));
+
+        RuntimeIdAllocatorOwnerBridge.CaptureCensusIdentity(
+            sourceGraph.RuntimeIdAllocator, RuntimeIdAllocatorCensusCounter.Decisions,
+            out object decisionOwnerIdentity, out long decisionRevision);
+        OwnerSectionCensusWitness decisionWitness = composition.P12CRootRegistrations
+            .Single(registration => registration.SectionId == RuntimeIdAllocatorCensusProvider.DecisionsSectionId)
+            .Provider.GetCurrentCensus();
+        Assert.That(decisionWitness.SchemaVersion, Is.EqualTo(RuntimeIdAllocatorCensusProvider.SchemaVersion));
+        Assert.That(decisionWitness.OwnerInstanceIdentity, Is.SameAs(decisionOwnerIdentity));
+        Assert.That(decisionWitness.Revision, Is.EqualTo(decisionRevision));
+
+        RuntimeIdAllocatorOwnerBridge.CaptureCensusIdentity(
+            sourceGraph.RuntimeIdAllocator, RuntimeIdAllocatorCensusCounter.TravelParties,
+            out object travelPartyOwnerIdentity, out long travelPartyRevision);
+        OwnerSectionCensusWitness travelPartyWitness = composition.P12CRootRegistrations
+            .Single(registration => registration.SectionId == RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId)
+            .Provider.GetCurrentCensus();
+        Assert.That(travelPartyWitness.SchemaVersion, Is.EqualTo(RuntimeIdAllocatorCensusProvider.SchemaVersion));
+        Assert.That(travelPartyWitness.OwnerInstanceIdentity, Is.SameAs(travelPartyOwnerIdentity));
+        Assert.That(travelPartyWitness.Revision, Is.EqualTo(travelPartyRevision));
+
+        SimulationRecordSequenceOwnerBridge.CaptureCensusIdentity(
+            sourceGraph.RecordSequence, out object sequenceOwnerIdentity, out long sequenceRevision);
+        OwnerSectionCensusWitness sequenceWitness = composition.P12CRootRegistrations
+            .Single(registration => registration.SectionId == SimulationRecordSequenceCensusProvider.SectionId)
+            .Provider.GetCurrentCensus();
+        Assert.That(sequenceWitness.SchemaVersion, Is.EqualTo(SimulationRecordSequenceCensusProvider.SchemaVersion));
+        Assert.That(sequenceWitness.OwnerInstanceIdentity, Is.SameAs(sequenceOwnerIdentity));
+        Assert.That(sequenceWitness.Revision, Is.EqualTo(sequenceRevision));
+
         DailyV1OwnerSectionCensusProviderRegistration standaloneRegistration =
             composition.Registrations.SingleOrDefault(registration =>
                 string.Equals(registration.SectionId, standaloneSectionId, StringComparison.Ordinal));
