@@ -141,3 +141,57 @@ Private Unity manifests and original XML/logs remain in their existing E: eviden
   later relevant Core/test/tool input change requires validation, capture that
   run under a newly verified owner-only E: evidence root and retain its complete
   source context at execution time.
+
+## Exact host-projected receipt-gap assertion and full CoreValidation — 2026-11-23
+
+### Test correction and independent code review
+
+- The test now fixes the proving roster at ten selected NPC owner rows and
+  asserts the exact current missing set: the Crime P18 receipt row, the Justice
+  P18 receipt row, the Economy keyed-sale receipt row, and the local-observation
+  and merchant-trade receipt rows for each selected NPC. It checks set equality
+  and cardinality 23, so additional or disappearing provider gaps fail the
+  regression. No provider, production code, or census rule was changed.
+- Independent exact-tip code/test review: PASS for test-only commit
+  `348f3732aa12d7324fad2127819b877adee6901d`, parent
+  `26dec174796906de261947e9500288e6f5ef606f`. The reviewer confirmed the exact
+  23-row boundary and that the 89-family fail-closed contract is preserved.
+  The reviewer could not independently open the private TRX manifest and
+  reports; this is not represented as independent validation-evidence review.
+
+### Full official CoreValidation
+
+- Run `1736e0d656db4cb9b3a984bee79ae93f` passed the complete default
+  CoreValidation workflow, including Core tests cold/warm (1,195/1,195 each),
+  build, CalendarDemo cold/warm, and Simulation.Lab build/cold/warm.
+- Exact source commit: `348f3732aa12d7324fad2127819b877adee6901d`;
+  committed tree: `f1c622394c033f7636f9a9ae7585b22d86b01d82`;
+  working-input digest: `b437ef78f1ea4dbc0acc5010756976f965c17ad100df842286d58093dbed1957`.
+  The changed test source SHA-256 is
+  `50d1486100e6136dd1e9ad238a1bbfdb7c57a78a2a9157a1aad99759bb26b698`.
+- The protected run manifest SHA-256 is
+  `7aca58cba7827fc02e3d1ef59924e694dd2de6f942d135f89b63f318e7bc34aa`.
+  The official protected-evidence-directory verifier passed for this new run.
+  Original cold/warm TRX and logs remain in private evidence storage and were
+  not modified or copied into this record.
+- The runner reported `LibraryAbsent=False`: this run verifies CoreValidation
+  in the current worktree but does not establish a Library-free .NET checkout.
+  The earlier `-SkipLab` run was incomplete for this checkout and is not used
+  as the full validation result.
+- The existing older CoreValidation run remains unchanged; its evidence root
+  still fails the owner-only ACL check. The fresh run was required by the test
+  source change, not performed solely to normalize historical reports.
+
+### .NET publication limitation
+
+- No `dotnet-trx-source-context-v1` record or compliant normalized .NET package
+  was produced. The current evidence policy says the .NET adapter is not yet
+  delivered for use; raw runner output remains private even when its new
+  evidence directory passes ACL verification. Hashes and a local result record
+  are not a substitute for the required package and independent original
+  comparison. The older TRX cannot be normalized through the approved path from
+  its ACL-failing root; originals remain preserved and untouched.
+- Unity production sources and Unity EditMode test inputs did not change in
+  this test-only follow-up. Previously verified EditMode 3,325/3,325 and Smoke
+  5/5 evidence remains applicable to those unchanged Unity inputs; this
+  follow-up does not claim a new Unity run.
