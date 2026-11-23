@@ -754,8 +754,27 @@ public sealed class DailyV1ApplicationHostTests
             Assert.That(diagnostic, Does.Contain(sectionId),
                 "The production start diagnostic must name each exact missing provider section.");
         }
-        Assert.That(exactMissingSectionIds, Is.Not.Empty,
-            "This fixture demonstrates the remaining Core-owned census gap without registering synthetic providers.");
+        HashSet<string> expectedHostProjectedSectionIds = new HashSet<string>(new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+            "p12e.economy-keyed-sale-receipts"
+        }, StringComparer.Ordinal);
+        Assert.That(preparation.CoreSession.OwnerGraph.Npcs.Count, Is.EqualTo(10),
+            "This proving fixture has ten selected NPC owner rows; its exact host-projected receipt gap depends on that roster.");
+        foreach (DailyV1NpcRuntimeOwners npcOwner in preparation.CoreSession.OwnerGraph.Npcs)
+        {
+            Assert.That(expectedHostProjectedSectionIds.Add(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsSectionIdFor(npcOwner.RuntimeId)),
+                Is.True, "Each selected NPC contributes one distinct local-observation receipt row.");
+            Assert.That(expectedHostProjectedSectionIds.Add(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsSectionIdFor(npcOwner.RuntimeId)),
+                Is.True, "Each selected NPC contributes one distinct merchant-trade receipt row.");
+        }
+        Assert.That(expectedHostProjectedSectionIds.Count, Is.EqualTo(23),
+            "The exact host-projected receipt boundary is three fixed rows plus two rows for each of ten selected NPCs.");
+        Assert.That(exactMissingSectionIds, Is.EquivalentTo(expectedHostProjectedSectionIds),
+            "The complete selected census has exactly these current Unity-host-projected receipt rows missing from Core composition.");
         TestContext.Progress.WriteLine(
             "Current Core startup provider gaps: " + string.Join(", ", exactMissingSectionIds));
         Assert.That(preparation.CoreSession.ExecutionBoundaryState
