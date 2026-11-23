@@ -46,6 +46,27 @@ public sealed class PersonMaterializationBindingCensusProvider : IOwnerSectionCe
     }
 }
 
+/// <summary>
+/// Passive P12 census evidence for one Person's authoritative life/residence
+/// owner. The PersonStore composition owns provider membership; this provider
+/// reads the exact PersonRuntime instance and does not establish capture
+/// eligibility.
+/// </summary>
+public sealed class DailyV1CorePersonLifeResidenceCensusProvider : IOwnerSectionCensusProvider
+{
+    private readonly PersonRuntime owner;
+
+    public DailyV1CorePersonLifeResidenceCensusProvider(PersonRuntime owner)
+    {
+        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+    }
+
+    public OwnerSectionCensusWitness GetCurrentCensus()
+    {
+        return owner.GetLifeResidenceCensusWitness();
+    }
+}
+
 /// <summary>Creates the fixed census provider set for one installed PersonStore.</summary>
 public static class PersonStoreCensusProvider
 {

@@ -113,4 +113,86 @@ internal static class DailyV1CorePersonStoreCensusComposition
         registrations = built.AsReadOnly();
         return true;
     }
+
+    internal static bool TryCreateLifeResidenceProviderRegistrations(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+        out string diagnostic)
+    {
+        registrations = null;
+        diagnostic = null;
+        PersonStore owner = graph?.PersonStore;
+        if (owner == null || owner.Persons == null)
+        {
+            diagnostic = "The Core Person life/residence census requires its exact selected owner graph.";
+            return false;
+        }
+
+        List<DailyV1OwnerSectionCensusProviderRegistration> built =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(owner.Persons.Count);
+        HashSet<string> observedIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<PersonRuntime> observedOwners = new HashSet<PersonRuntime>();
+        foreach (PersonRuntime person in owner.Persons)
+        {
+            if (person == null || person.PersonId == null
+                || string.IsNullOrWhiteSpace(person.PersonId.Value)
+                || !observedOwners.Add(person))
+            {
+                diagnostic = "The Core PersonStore contains a missing or duplicate life/residence owner.";
+                return false;
+            }
+
+            string sectionId;
+            try
+            {
+                sectionId = DailyV1SelectedOwnerSectionCensusContract
+                    .NpcLifeResidenceSectionIdFor(person.PersonId);
+            }
+            catch (ArgumentException)
+            {
+                diagnostic = "A Core PersonStore member has an invalid life/residence census identity.";
+                return false;
+            }
+
+            IOwnerSectionCensusProvider provider =
+                new DailyV1CorePersonLifeResidenceCensusProvider(person);
+            OwnerSectionCensusWitness witness;
+            try
+            {
+                witness = provider.GetCurrentCensus();
+            }
+            catch (Exception exception) when (exception is ArgumentException
+                || exception is InvalidOperationException || exception is OverflowException)
+            {
+                diagnostic = "A Core Person life/residence provider could not read its live witness.";
+                return false;
+            }
+
+            if (witness == null
+                || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
+                || witness.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+                || !ReferenceEquals(witness.OwnerInstanceIdentity, person)
+                || witness.Cardinality != 1
+                || witness.Revision < 0L
+                || !observedIds.Add(sectionId))
+            {
+                diagnostic = "A Core Person life/residence provider returned a duplicate or substituted owner witness.";
+                return false;
+            }
+
+            built.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                sectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                provider,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision,
+                hasBaseline: true));
+        }
+
+        built.Sort((left, right) => StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+        registrations = built.AsReadOnly();
+        return true;
+    }
 }

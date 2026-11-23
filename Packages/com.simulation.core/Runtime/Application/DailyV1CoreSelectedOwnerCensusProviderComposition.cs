@@ -6,6 +6,7 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
     private DailyV1CoreSelectedOwnerCensusProviderComposition(
         DailyV1SelectedRuntimeOwnerGraph ownerGraph,
         IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> personStore,
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> personLifeResidence,
         IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> cities,
         IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> identitySpatial,
         IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> selectedNpcs,
@@ -13,6 +14,7 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
     {
         OwnerGraph = ownerGraph;
         PersonStoreRegistrations = personStore;
+        PersonLifeResidenceRegistrations = personLifeResidence;
         CityRegistrations = cities;
         IdentitySpatialRegistrations = identitySpatial;
         SelectedNpcRegistrations = selectedNpcs;
@@ -21,6 +23,7 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
 
     internal DailyV1SelectedRuntimeOwnerGraph OwnerGraph { get; }
     internal IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> PersonStoreRegistrations { get; }
+    internal IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> PersonLifeResidenceRegistrations { get; }
     internal IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> CityRegistrations { get; }
     internal IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> IdentitySpatialRegistrations { get; }
     internal IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> SelectedNpcRegistrations { get; }
@@ -45,6 +48,10 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
         if (!DailyV1CorePersonStoreCensusComposition.TryCreateProviderRegistrations(
                 graph,
                 out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> personStoreSource,
+                out diagnostic)
+            || !DailyV1CorePersonStoreCensusComposition.TryCreateLifeResidenceProviderRegistrations(
+                graph,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> personLifeResidenceSource,
                 out diagnostic)
             || !DailyV1SelectedRuntimeOwnerCensusSource
                 .TryCreateCoreOwnedCityCensusProviderRegistrations(
@@ -77,6 +84,15 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
                 out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> personStore,
                 out diagnostic)
             || !TryNormalizeGroup(
+                personLifeResidenceSource,
+                IsPersonLifeResidenceSection,
+                expectedOwner: null,
+                "Person life/residence",
+                expectedCount: graph.PersonStore.Persons.Count,
+                allowEmpty: true,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> personLifeResidence,
+                out diagnostic)
+            || !TryNormalizeGroup(
                 citySource,
                 IsCitySection,
                 expectedOwner: null,
@@ -107,9 +123,11 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
 
         List<DailyV1OwnerSectionCensusProviderRegistration> all =
             new List<DailyV1OwnerSectionCensusProviderRegistration>(
-                personStore.Count + cities.Count + identitySpatial.Count + selectedNpcs.Count);
+                personStore.Count + personLifeResidence.Count + cities.Count
+                + identitySpatial.Count + selectedNpcs.Count);
         HashSet<string> allIds = new HashSet<string>(StringComparer.Ordinal);
         if (!TryAddGroup(personStore, all, allIds, out diagnostic)
+            || !TryAddGroup(personLifeResidence, all, allIds, out diagnostic)
             || !TryAddGroup(cities, all, allIds, out diagnostic)
             || !TryAddGroup(identitySpatial, all, allIds, out diagnostic)
             || !TryAddGroup(selectedNpcs, all, allIds, out diagnostic))
@@ -119,6 +137,7 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
         composition = new DailyV1CoreSelectedOwnerCensusProviderComposition(
             graph,
             personStore,
+            personLifeResidence,
             cities,
             identitySpatial,
             selectedNpcs,
@@ -276,7 +295,7 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
         return true;
     }
 
-    private static bool TryCreateExpectedSectionIds(
+    internal static bool TryCreateExpectedSectionIds(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out HashSet<string> sectionIds,
         out string diagnostic)
@@ -295,6 +314,34 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
         foreach (string sectionId in DailyV1SelectedOwnerSectionCensusContract.FixedEmpty)
             if (!TryAddExpectedId(sectionIds, sectionId, out diagnostic)) return false;
 
+        HashSet<string> personIds = new HashSet<string>(StringComparer.Ordinal);
+        HashSet<PersonRuntime> personOwners = new HashSet<PersonRuntime>();
+        foreach (PersonRuntime person in graph.PersonStore.Persons)
+        {
+            if (person == null || person.PersonId == null
+                || string.IsNullOrWhiteSpace(person.PersonId.Value)
+                || !personIds.Add(person.PersonId.Value)
+                || !personOwners.Add(person))
+            {
+                diagnostic = "The detached Core start found a missing or duplicate PersonStore life/residence owner.";
+                return false;
+            }
+
+            string personResidenceId;
+            try
+            {
+                personResidenceId = DailyV1SelectedOwnerSectionCensusContract
+                    .NpcLifeResidenceSectionIdFor(person.PersonId);
+            }
+            catch (ArgumentException)
+            {
+                diagnostic = "The detached Core start found a PersonId that cannot be represented by the P12 section contract.";
+                return false;
+            }
+
+            if (!TryAddExpectedId(sectionIds, personResidenceId, out diagnostic)) return false;
+        }
+
         foreach (DailyV1NpcRuntimeOwners owner in graph.Npcs)
         {
             if (owner == null || string.IsNullOrWhiteSpace(owner.RuntimeId))
@@ -305,26 +352,23 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
             foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
                 if (!TryAddExpectedId(sectionIds, prefix + owner.RuntimeId, out diagnostic)) return false;
 
-            string residenceId;
             if (graph.PersonStore.TryGetByMaterializedNpcRuntimeId(owner.RuntimeId, out PersonRuntime person))
             {
-                try
+                if (person == null || person.PersonId == null
+                    || !personIds.Contains(person.PersonId.Value)
+                    || !graph.PersonStore.TryGet(person.PersonId, out PersonRuntime indexedPerson)
+                    || !ReferenceEquals(indexedPerson, person))
                 {
-                    residenceId = DailyV1SelectedOwnerSectionCensusContract
-                        .NpcLifeResidenceSectionIdFor(person.PersonId);
-                }
-                catch (ArgumentException)
-                {
-                    diagnostic = "The detached Core start found an invalid PersonId for NPC residence census.";
+                    diagnostic = "The detached Core start found an NPC-to-Person binding outside the exact PersonStore owner set.";
                     return false;
                 }
             }
             else
             {
-                residenceId = DailyV1SelectedOwnerSectionCensusContract
-                    .NpcResidenceSectionIdFor(owner.RuntimeId);
+                if (!TryAddExpectedId(sectionIds,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(owner.RuntimeId),
+                        out diagnostic)) return false;
             }
-            if (!TryAddExpectedId(sectionIds, residenceId, out diagnostic)) return false;
         }
 
         foreach (DailyV1CityRuntimeOwners owner in graph.Cities)
@@ -532,6 +576,12 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
             StringComparison.Ordinal)
         || string.Equals(sectionId,
             DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId,
+            StringComparison.Ordinal);
+
+    private static bool IsPersonLifeResidenceSection(string sectionId) =>
+        !string.IsNullOrWhiteSpace(sectionId)
+        && sectionId.StartsWith(
+            DailyV1SelectedOwnerSectionCensusContract.PersonLifeResidencePrefix,
             StringComparison.Ordinal);
 
     private static bool IsCitySection(string sectionId)

@@ -655,6 +655,10 @@ public sealed class DailyV1ApplicationHostTests
                     preparation.CoreSession)
                 .Select(snapshot => snapshot.SectionId),
             StringComparer.Ordinal);
+        foreach (PersonRuntime person in preparation.CoreSession.OwnerGraph.PersonStore.Persons)
+            testProfileSectionIds.Add(
+                DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(
+                    person.PersonId));
         HashSet<string> coreProviderSectionIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (DailyV1OwnerSectionCensusProviderRegistration registration in coreComposition.Registrations)
         {
@@ -672,6 +676,8 @@ public sealed class DailyV1ApplicationHostTests
         }
         Assert.That(exactMissingSectionIds, Is.Not.Empty,
             "This fixture demonstrates the remaining Core-owned census gap without registering synthetic providers.");
+        TestContext.Progress.WriteLine(
+            "Current Core startup provider gaps: " + string.Join(", ", exactMissingSectionIds));
         Assert.That(preparation.CoreSession.ExecutionBoundaryState
             .HasSealedSelectedOwnerSectionCensusRegistry, Is.False,
             "A partial Core provider set must not be registered or sealed.");
@@ -705,6 +711,69 @@ public sealed class DailyV1ApplicationHostTests
             "Neither commit entry point may bind a failed private candidate after terminalization.");
         Assert.That(application.ActiveSession, Is.Null,
             "A previously returned preparation cannot bypass failed-start terminalization.");
+    }
+
+    [Test]
+    public void CoreCensusExpectedIdsIncludeUnmaterializedPersonStoreMembers()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+                definitions, allocateWorldId: null, stageCompleted: null,
+                out _, out DailyV1ActiveRuntimeSession session, out string preparationDiagnostic),
+            Is.True, preparationDiagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph sourceGraph = session.OwnerGraph;
+        Assert.That(PersonStore.TryCreateFromOwnerSnapshot(
+                sourceGraph.PersonStore.CaptureOwnerSnapshot(),
+                out PersonStore personStore, out PersonStoreOwnerSnapshotFailureCode cloneFailure),
+            Is.True, cloneFailure.ToString());
+        PersonRuntime standalonePerson = new PersonRuntime(
+            new PersonId("core-start-unmaterialized-person"));
+        Assert.That(standalonePerson.IsMaterialized, Is.False);
+        Assert.That(personStore.TryRegister(
+                standalonePerson, out PersonStoreFailure registerFailure),
+            Is.True, registerFailure.ToString());
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+                sourceGraph.Definitions,
+                sourceGraph.Cities,
+                sourceGraph.Npcs,
+                sourceGraph.SpatialNetwork,
+                sourceGraph.JusticeRecordsOwner,
+                sourceGraph.TravelParties,
+                sourceGraph.RuntimeIdentityIndex,
+                personStore,
+                out DailyV1SelectedRuntimeOwnerGraph graphWithStandalonePerson),
+            Is.True, "The selected owner graph permits an unmaterialized PersonStore member.");
+        string standaloneSectionId =
+            DailyV1SelectedOwnerSectionCensusContract.NpcLifeResidenceSectionIdFor(
+                standalonePerson.PersonId);
+
+        Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreateExpectedSectionIds(
+                graphWithStandalonePerson, out HashSet<string> expectedIds, out string expectedDiagnostic),
+            Is.True, expectedDiagnostic);
+        Assert.That(expectedIds.Contains(standaloneSectionId), Is.True,
+            "The full P12 census includes one life/residence row for every PersonStore member, even without an NPC materialization.");
+        Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreate(
+                graphWithStandalonePerson,
+                out DailyV1CoreSelectedOwnerCensusProviderComposition composition,
+                out string compositionDiagnostic), Is.True, compositionDiagnostic);
+        DailyV1OwnerSectionCensusProviderRegistration standaloneRegistration =
+            composition.Registrations.SingleOrDefault(registration =>
+                string.Equals(registration.SectionId, standaloneSectionId, StringComparison.Ordinal));
+        Assert.That(standaloneRegistration, Is.Not.Null,
+            "The Core PersonStore composition must supply a real provider for each unmaterialized Person.");
+        OwnerSectionCensusWitness standaloneWitness =
+            standaloneRegistration.Provider.GetCurrentCensus();
+        Assert.That(standaloneWitness.SectionId, Is.EqualTo(standaloneSectionId));
+        Assert.That(standaloneWitness.OwnerInstanceIdentity, Is.SameAs(standalonePerson));
+        Assert.That(standaloneWitness.Cardinality, Is.EqualTo(1));
+        Assert.That(standaloneWitness.Revision, Is.EqualTo(
+            PersonRuntimeOwnerBridge.GetLifeResidenceRevision(standalonePerson)));
     }
 
     [Test]
