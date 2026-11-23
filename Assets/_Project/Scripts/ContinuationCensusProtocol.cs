@@ -217,7 +217,7 @@ public sealed class ContinuationCensusProtocol
     private bool coreOwnedCityCensusProvidersBound;
     private bool coreOwnedIdentitySpatialCensusProvidersBound;
     private Dictionary<string, IOwnerSectionCensusProvider>
-        coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection =
+        coreOwnedSelectedNpcCensusProvidersBySection =
             new Dictionary<string, IOwnerSectionCensusProvider>(StringComparer.Ordinal);
     private readonly HashSet<string> expectedOperations = new HashSet<string>(StringComparer.Ordinal);
     private HashSet<string> spatialKnowledgeSectionIds = new HashSet<string>(StringComparer.Ordinal);
@@ -277,7 +277,7 @@ public sealed class ContinuationCensusProtocol
         Dictionary<string, IOwnerSectionCensusProvider> coreNpcProviders = null)
     {
         if (sections == null) return null;
-        coreNpcProviders ??= coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection;
+        coreNpcProviders ??= coreOwnedSelectedNpcCensusProvidersBySection;
         List<string> orderedIds = new List<string>(sections.Keys);
         orderedIds.Sort(StringComparer.Ordinal);
         List<DailyV1OwnerSectionCensusProviderRegistration> registrations =
@@ -328,18 +328,18 @@ public sealed class ContinuationCensusProtocol
             if (requiresSelectedCoreOwnerCensus)
             {
                 if (runtimeProtocolTransition
-                    && !TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusProviderMap(
+                    && !TryCreateCoreOwnedSelectedNpcCensusProviderMap(
                         stagedExpected,
                         stagedRegistered,
                         out stagedCoreNpcProviders,
                         out string diagnostic))
                 {
-                    RecordFirstFaultDetail("CoreNpcInventoryMoneyAccountRegistryCompositionRejected:"
+                    RecordFirstFaultDetail("CoreSelectedNpcOwnerRegistryCompositionRejected:"
                         + (diagnostic ?? "Unspecified"));
                     return false;
                 }
                 if (!runtimeProtocolTransition)
-                    stagedCoreNpcProviders = coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection;
+                    stagedCoreNpcProviders = coreOwnedSelectedNpcCensusProvidersBySection;
 
                 List<DailyV1OwnerSectionCensusProviderRegistration> providers =
                     CreateCoreOwnerSectionCensusRegistrations(stagedRegistered, stagedCoreNpcProviders);
@@ -361,7 +361,7 @@ public sealed class ContinuationCensusProtocol
                         identities);
             if (!committed) return false;
             if (requiresSelectedCoreOwnerCensus)
-                coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection = stagedCoreNpcProviders;
+                coreOwnedSelectedNpcCensusProvidersBySection = stagedCoreNpcProviders;
             expectedSectionsSealed = sharedExecutionState.ExpectedOwnerSectionContractInventorySealed;
         }
         // In shared mode these are projections for compatibility operations;
@@ -1499,9 +1499,9 @@ public sealed class ContinuationCensusProtocol
         }
 
         if (requiresSelectedCoreOwnerCensus
-            && !TryBindCoreOwnedNpcInventoryAndMoneyAccountCensusProviders(out failure))
+            && !TryBindCoreOwnedSelectedNpcCensusProviders(out failure))
         {
-            RecordFirstFaultDetail("CoreOwnedNpcInventoryMoneyAccountProviderBindingRejected");
+            RecordFirstFaultDetail("CoreOwnedSelectedNpcProviderBindingRejected");
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1837,33 +1837,33 @@ public sealed class ContinuationCensusProtocol
     /// exact Core owner graph. A mixed Unity roster keeps its complete host
     /// census projection; exact selected rows use the live Core providers.
     /// </summary>
-    private bool TryBindCoreOwnedNpcInventoryAndMoneyAccountCensusProviders(
+    private bool TryBindCoreOwnedSelectedNpcCensusProviders(
         out ContinuationCensusFailure failure)
     {
         failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
         if (!requiresSelectedCoreOwnerCensus || sharedExecutionState == null)
         {
-            RecordFirstFaultDetail("CoreNpcInventoryMoneyAccountBindingUnavailable");
+            RecordFirstFaultDetail("CoreSelectedNpcOwnerBindingUnavailable");
             return false;
         }
 
-        if (!TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusProviderMap(
+        if (!TryCreateCoreOwnedSelectedNpcCensusProviderMap(
                 expectedSections,
                 registeredSections,
                 out Dictionary<string, IOwnerSectionCensusProvider> stagedProviders,
                 out string diagnostic))
         {
-            RecordFirstFaultDetail("CoreNpcInventoryMoneyAccountBindingRejected:"
+            RecordFirstFaultDetail("CoreSelectedNpcOwnerBindingRejected:"
                 + (diagnostic ?? "Unspecified"));
             return false;
         }
 
-        coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection = stagedProviders;
+        coreOwnedSelectedNpcCensusProvidersBySection = stagedProviders;
         failure = ContinuationCensusFailure.None;
         return true;
     }
 
-    private bool TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusProviderMap(
+    private bool TryCreateCoreOwnedSelectedNpcCensusProviderMap(
         Dictionary<string, OwnerSectionContract> contracts,
         Dictionary<string, RegisteredSection> sections,
         out Dictionary<string, IOwnerSectionCensusProvider> coreProvidersBySection,
@@ -1881,7 +1881,7 @@ public sealed class ContinuationCensusProtocol
         DailyV1SelectedRuntimeOwnerGraph graph = sharedExecutionState.SelectedRuntimeOwnerGraph;
         if (graph == null)
         {
-            if (coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection.Count != 0)
+            if (coreOwnedSelectedNpcCensusProvidersBySection.Count != 0)
             {
                 diagnostic = "The previously bound Core NPC owner graph is no longer available.";
                 return false;
@@ -1893,7 +1893,7 @@ public sealed class ContinuationCensusProtocol
         }
 
         if (!DailyV1SelectedRuntimeOwnerCensusSource
-                .TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusProviderRegistrations(
+                .TryCreateCoreOwnedSelectedNpcCensusProviderRegistrations(
                     graph,
                     out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
                     out diagnostic)
@@ -1904,12 +1904,12 @@ public sealed class ContinuationCensusProtocol
 
         HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (string sectionId in contracts.Keys)
-            if (IsSelectedCoreNpcInventoryOrMoneyAccountSection(sectionId))
+            if (IsCoreOwnedSelectedNpcCensusSection(sectionId))
                 expectedIds.Add(sectionId);
 
         HashSet<string> registeredIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (string sectionId in sections.Keys)
-            if (IsSelectedCoreNpcInventoryOrMoneyAccountSection(sectionId))
+            if (IsCoreOwnedSelectedNpcCensusSection(sectionId))
                 registeredIds.Add(sectionId);
 
         if (!registeredIds.SetEquals(expectedIds))
@@ -1939,7 +1939,7 @@ public sealed class ContinuationCensusProtocol
         // graph. Keep those rows on their existing compatibility providers,
         // while binding each exact Core owner row independently.
         foreach (string previouslyBoundId
-            in coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection.Keys)
+            in coreOwnedSelectedNpcCensusProvidersBySection.Keys)
         {
             if (expectedIds.Contains(previouslyBoundId) && !coreIds.Contains(previouslyBoundId))
             {
@@ -1995,7 +1995,7 @@ public sealed class ContinuationCensusProtocol
                 return false;
             }
 
-            if (!HasSelectedCoreNpcInventoryMoneyAccountWitness(candidateWitness, registration))
+            if (!HasCoreOwnedSelectedNpcWitness(candidateWitness, registration))
             {
                 diagnostic = "The Core NPC provider returned an invalid owner witness at "
                     + registration.SectionId + ".";
@@ -2003,7 +2003,7 @@ public sealed class ContinuationCensusProtocol
             }
 
             IOwnerSectionCensusProvider provider = registration.Provider;
-            if (coreOwnedNpcInventoryAndMoneyAccountCensusProvidersBySection.TryGetValue(
+            if (coreOwnedSelectedNpcCensusProvidersBySection.TryGetValue(
                     registration.SectionId, out IOwnerSectionCensusProvider priorCoreProvider))
             {
                 OwnerSectionCensusWitness priorCoreWitness;
@@ -2029,19 +2029,14 @@ public sealed class ContinuationCensusProtocol
         return true;
     }
 
-    private static bool IsSelectedCoreNpcInventoryOrMoneyAccountSection(string sectionId) =>
-        !string.IsNullOrWhiteSpace(sectionId)
-        && (sectionId.StartsWith(
-                DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix,
-                StringComparison.Ordinal)
-            || sectionId.StartsWith(
-                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
-                StringComparison.Ordinal));
+    private static bool IsCoreOwnedSelectedNpcCensusSection(string sectionId) =>
+        DailyV1SelectedRuntimeOwnerCensusSource.IsCoreOwnedSelectedNpcCensusSectionId(sectionId);
 
-    private static bool HasSelectedCoreNpcInventoryMoneyAccountWitness(
+    private static bool HasCoreOwnedSelectedNpcWitness(
         OwnerSectionCensusWitness witness,
         DailyV1OwnerSectionCensusProviderRegistration registration) =>
         witness != null && registration != null
+        && IsCoreOwnedSelectedNpcCensusSection(witness.SectionId)
         && registration.Role == OwnerSectionRole.Required
         && string.Equals(witness.SectionId, registration.SectionId, StringComparison.Ordinal)
         && witness.SchemaVersion == registration.SchemaVersion
@@ -2056,7 +2051,6 @@ public sealed class ContinuationCensusProtocol
                 DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
                 StringComparison.Ordinal)
             || witness.Cardinality == 1);
-
     private static bool HasExactSelectedCoreOwnerWitness(
         OwnerSectionCensusWitness projection,
         OwnerSectionCensusWitness core) =>

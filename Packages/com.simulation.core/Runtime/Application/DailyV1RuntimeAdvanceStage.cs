@@ -3434,10 +3434,115 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     }
 
     /// <summary>
-    /// Creates live Core registrations for the selected NPC Inventory and
-    /// MoneyAccount owners. The registrations bind exact runtime identities
-    /// and carry the initial owner-local revision/cardinality baseline.
+    /// Creates live Core registrations for every selected NPC owner family
+    /// currently composed by Core. The registrations bind exact runtime
+    /// identities and carry each owner's initial revision/cardinality baseline.
     /// </summary>
+    internal static bool TryCreateCoreOwnedSelectedNpcCensusProviderRegistrations(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+        out string diagnostic)
+    {
+        registrations = null;
+        diagnostic = null;
+        if (graph?.Npcs == null)
+        {
+            diagnostic = "The selected Core NPC census requires its exact owner graph.";
+            return false;
+        }
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers;
+        try
+        {
+            providers = DailyV1NpcOwnerCensusProviders.CreateSelectedCoreOwnerProviders(graph);
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException)
+        {
+            diagnostic = "The complete Core-owned NPC census provider set could not bind to the owner graph.";
+            return false;
+        }
+
+        if (providers == null)
+        {
+            diagnostic = "The selected Core NPC owner graph produced no census provider set.";
+            return false;
+        }
+
+        List<DailyV1OwnerSectionCensusProviderRegistration> built =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(providers.Count);
+        HashSet<string> observedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (IOwnerSectionCensusProvider provider in providers)
+        {
+            OwnerSectionCensusWitness witness;
+            try { witness = provider?.GetCurrentCensus(); }
+            catch (Exception exception) when (exception is ArgumentException
+                || exception is InvalidOperationException || exception is OverflowException)
+            {
+                diagnostic = "A Core-owned selected NPC provider failed to read its live witness.";
+                return false;
+            }
+
+            if (witness == null
+                || !IsCoreOwnedSelectedNpcCensusSectionId(witness.SectionId)
+                || witness.OwnerInstanceIdentity == null
+                || witness.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+                || witness.Cardinality < 0
+                || witness.Revision < 0L
+                || !observedSectionIds.Add(witness.SectionId)
+                || (witness.SectionId.StartsWith(
+                        DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
+                        StringComparison.Ordinal)
+                    && witness.Cardinality != 1))
+            {
+                diagnostic = "A Core-owned selected NPC provider returned an invalid, duplicate, or substituted witness.";
+                return false;
+            }
+
+            built.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                provider,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision,
+                hasBaseline: true));
+        }
+
+        built.Sort((left, right) => StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+        registrations = built.AsReadOnly();
+        return true;
+    }
+
+    internal static bool IsCoreOwnedSelectedNpcCensusSectionId(string sectionId)
+    {
+        if (string.IsNullOrWhiteSpace(sectionId)
+            || sectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
+                StringComparison.Ordinal)
+            || sectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
+                StringComparison.Ordinal))
+            return false;
+
+        if (sectionId.StartsWith(
+            DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix,
+            StringComparison.Ordinal))
+            return true;
+
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
+            if (!string.Equals(prefix,
+                    DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
+                    StringComparison.Ordinal)
+                && !string.Equals(prefix,
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
+                    StringComparison.Ordinal)
+                && sectionId.StartsWith(prefix, StringComparison.Ordinal))
+                return true;
+
+        return false;
+    }
     internal static bool TryCreateCoreOwnedNpcInventoryAndMoneyAccountCensusProviderRegistrations(
         DailyV1SelectedRuntimeOwnerGraph graph,
         out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,

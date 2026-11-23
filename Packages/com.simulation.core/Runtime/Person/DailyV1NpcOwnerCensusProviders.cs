@@ -2,10 +2,9 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// Creates selected-profile Inventory, MoneyAccount, CommercialKnowledge, and
-/// SpatialKnowledge census witnesses directly from the exact Core NPC owners.
-/// Unity projections may alias these objects, but they do not select or read
-/// persisted owners.
+/// Creates selected-profile NPC census witnesses directly from the exact Core
+/// owner graph. Unity projections may alias these objects, but they do not
+/// select or read persisted owners.
 /// </summary>
 internal static class DailyV1NpcOwnerCensusProviders
 {
@@ -650,6 +649,124 @@ internal static class DailyV1NpcOwnerCensusProviders
         return Array.AsReadOnly(providers);
     }
 
+    /// <summary>
+    /// Composes the live provider set for every selected NPC owner family
+    /// currently owned by Core. The two P18 receipt families are excluded:
+    /// their exact-zero authorities remain host-projected until those owners
+    /// themselves are part of the Core graph.
+    /// </summary>
+    internal static IReadOnlyList<IOwnerSectionCensusProvider> CreateSelectedCoreOwnerProviders(
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph == null || graph.Npcs == null)
+            throw new ArgumentException(
+                "Selected NPC census composition requires a Core owner graph.",
+                nameof(graph));
+
+        ValidateRoster(graph.Npcs);
+        List<IOwnerSectionCensusProvider> providers = new List<IOwnerSectionCensusProvider>();
+        providers.AddRange(CreateKnowledgeAndPlanProviders(graph));
+        providers.AddRange(CreateRuntimeAuthorityProviders(graph));
+        providers.AddRange(CreateInventoryProviders(graph.Npcs));
+        providers.AddRange(CreateMoneyAccountProviders(graph.Npcs));
+        providers.AddRange(CreateCommercialKnowledgeProviders(graph.Npcs));
+        providers.AddRange(CreateSpatialKnowledgeProviders(graph.Npcs));
+
+        HashSet<string> expectedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
+            {
+                if (string.Equals(prefix,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
+                        StringComparison.Ordinal)
+                    || string.Equals(prefix,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
+                        StringComparison.Ordinal))
+                    continue;
+
+                if (!expectedSectionIds.Add(prefix + npc.RuntimeId))
+                    throw new InvalidOperationException(
+                        "The selected Core NPC census graph contains duplicate owner section identities.");
+            }
+
+            if (!graph.PersonStore.TryGetByMaterializedNpcRuntimeId(npc.RuntimeId, out _)
+                && !expectedSectionIds.Add(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(npc.RuntimeId)))
+                throw new InvalidOperationException(
+                    "The selected Core NPC census graph contains a duplicate non-Person residence identity.");
+        }
+
+        if (providers.Count != expectedSectionIds.Count)
+            throw new InvalidOperationException(
+                "The selected Core NPC census providers do not cover the complete Core-owned family set.");
+
+        HashSet<string> observedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, object> aliasOwners = new Dictionary<string, object>(StringComparer.Ordinal);
+        List<KeyValuePair<string, IOwnerSectionCensusProvider>> ordered =
+            new List<KeyValuePair<string, IOwnerSectionCensusProvider>>(providers.Count);
+        foreach (IOwnerSectionCensusProvider provider in providers)
+        {
+            OwnerSectionCensusWitness witness = provider?.GetCurrentCensus();
+            if (witness == null
+                || string.IsNullOrWhiteSpace(witness.SectionId)
+                || witness.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+                || witness.OwnerInstanceIdentity == null
+                || witness.Cardinality < 0
+                || witness.Revision < 0L
+                || !expectedSectionIds.Contains(witness.SectionId)
+                || !observedSectionIds.Add(witness.SectionId))
+                throw new InvalidOperationException(
+                    "A selected Core NPC census provider returned an invalid or duplicate owner witness.");
+
+            if (witness.SectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
+                    StringComparison.Ordinal)
+                && witness.Cardinality != 1)
+                throw new InvalidOperationException(
+                    "Each selected Core NPC MoneyAccount census row must have cardinality exactly one.");
+
+            for (int groupIndex = 0;
+                groupIndex < DailyV1SelectedOwnerSectionCensusContract.NpcAliasFamilies.Count;
+                groupIndex++)
+            {
+                IReadOnlyList<string> aliasFamily =
+                    DailyV1SelectedOwnerSectionCensusContract.NpcAliasFamilies[groupIndex];
+                foreach (string prefix in aliasFamily)
+                {
+                    if (!witness.SectionId.StartsWith(prefix, StringComparison.Ordinal))
+                        continue;
+
+                    string runtimeId = witness.SectionId.Substring(prefix.Length);
+                    string aliasKey = groupIndex + "\u001f" + runtimeId;
+                    if (aliasOwners.TryGetValue(aliasKey, out object priorOwner))
+                    {
+                        if (!ReferenceEquals(priorOwner, witness.OwnerInstanceIdentity))
+                            throw new InvalidOperationException(
+                                "A selected Core NPC census alias family substituted its owner identity.");
+                    }
+                    else
+                    {
+                        aliasOwners.Add(aliasKey, witness.OwnerInstanceIdentity);
+                    }
+                    break;
+                }
+            }
+
+            ordered.Add(new KeyValuePair<string, IOwnerSectionCensusProvider>(
+                witness.SectionId, provider));
+        }
+
+        if (!observedSectionIds.SetEquals(expectedSectionIds))
+            throw new InvalidOperationException(
+                "The selected Core NPC census provider set is incomplete.");
+
+        ordered.Sort((left, right) => StringComparer.Ordinal.Compare(left.Key, right.Key));
+        IOwnerSectionCensusProvider[] result = new IOwnerSectionCensusProvider[ordered.Count];
+        for (int index = 0; index < ordered.Count; index++)
+            result[index] = ordered[index].Value;
+        return Array.AsReadOnly(result);
+    }
     private static void ValidateRoster(IReadOnlyList<DailyV1NpcRuntimeOwners> roster)
     {
         if (roster == null) throw new ArgumentNullException(nameof(roster));

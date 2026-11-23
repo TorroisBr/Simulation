@@ -3966,6 +3966,137 @@ public sealed class DailyV1ApplicationSessionGateTests
     }
 
     [Test]
+    public void CoreSelectedNpcCensusProviderCompositionCoversEveryOwnedFamily()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session, out _);
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+        Assert.That(graph.Npcs, Is.Not.Empty);
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryCreateCoreOwnedSelectedNpcCensusProviderRegistrations(
+                    graph,
+                    out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+                    out string diagnostic),
+            Is.True, diagnostic);
+
+        HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
+            {
+                if (string.Equals(prefix,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
+                        StringComparison.Ordinal)
+                    || string.Equals(prefix,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
+                        StringComparison.Ordinal))
+                    continue;
+
+                Assert.That(expectedIds.Add(prefix + npc.RuntimeId), Is.True);
+            }
+
+            if (!graph.PersonStore.TryGetByMaterializedNpcRuntimeId(npc.RuntimeId, out _))
+                Assert.That(expectedIds.Add(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(npc.RuntimeId)),
+                    Is.True);
+        }
+
+        Assert.That(registrations.Select(registration => registration.SectionId).ToArray(),
+            Is.EqualTo(expectedIds.OrderBy(sectionId => sectionId, StringComparer.Ordinal).ToArray()),
+            "Core composes exactly the selected NPC owner families it owns, in deterministic identity order.");
+
+        Dictionary<string, OwnerSectionCensusWitness> witnesses =
+            new Dictionary<string, OwnerSectionCensusWitness>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in registrations)
+        {
+            OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
+            Assert.That(registration.Role, Is.EqualTo(OwnerSectionRole.Required), registration.SectionId);
+            Assert.That(registration.HasBaseline, Is.True, registration.SectionId);
+            Assert.That(witness.SectionId, Is.EqualTo(registration.SectionId));
+            Assert.That(witness.SchemaVersion, Is.EqualTo(registration.SchemaVersion));
+            Assert.That(witness.OwnerInstanceIdentity,
+                Is.SameAs(registration.BaselineOwnerInstanceIdentity), registration.SectionId);
+            Assert.That(witness.Cardinality, Is.EqualTo(registration.BaselineCardinality), registration.SectionId);
+            Assert.That(witness.Revision, Is.EqualTo(registration.BaselineRevision), registration.SectionId);
+            Assert.That(witness.OwnerInstanceIdentity, Is.Not.Null, registration.SectionId);
+            Assert.That(witness.Cardinality, Is.GreaterThanOrEqualTo(0), registration.SectionId);
+            Assert.That(witness.Revision, Is.GreaterThanOrEqualTo(0L), registration.SectionId);
+            witnesses.Add(witness.SectionId, witness);
+        }
+
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            string moneyAccountId =
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + npc.RuntimeId;
+            Assert.That(witnesses[moneyAccountId].OwnerInstanceIdentity, Is.SameAs(npc.MoneyAccount));
+            Assert.That(witnesses[moneyAccountId].Cardinality, Is.EqualTo(1), moneyAccountId);
+
+            for (int familyIndex = 0;
+                familyIndex < DailyV1SelectedOwnerSectionCensusContract.NpcAliasFamilies.Count;
+                familyIndex++)
+            {
+                object aliasOwner = null;
+                foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcAliasFamilies[familyIndex])
+                {
+                    if (!witnesses.TryGetValue(prefix + npc.RuntimeId,
+                            out OwnerSectionCensusWitness witness))
+                        continue;
+
+                    if (aliasOwner == null)
+                        aliasOwner = witness.OwnerInstanceIdentity;
+                    else
+                        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(aliasOwner),
+                            "Core preserves the exact owner identity for selected alias family " + familyIndex
+                            + " and NPC " + npc.RuntimeId + ".");
+                }
+            }
+        }
+
+        Assert.That(witnesses.Keys.Any(sectionId =>
+                sectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
+                    StringComparison.Ordinal)
+                || sectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
+                    StringComparison.Ordinal)),
+            Is.False,
+            "P18 receipt authorities remain host-projected until their owners are in the Core graph.");
+    }
+
+    [Test]
+    public void CoreSelectedNpcCensusProviderCompositionAllowsEmptySelectedRoster()
+    {
+        CreateApplicationWithAdvanceBoundary(
+            null, out DailyV1ActiveRuntimeSession session, out _);
+        DailyV1SelectedRuntimeOwnerGraph sourceGraph = session.OwnerGraph;
+        Assert.That(sourceGraph.Npcs, Is.Not.Empty);
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreate(
+                sourceGraph.Definitions,
+                sourceGraph.Cities,
+                Array.Empty<DailyV1NpcRuntimeOwners>(),
+                sourceGraph.SpatialNetwork,
+                null,
+                null,
+                null,
+                new PersonStore(),
+                out DailyV1SelectedRuntimeOwnerGraph emptyGraph),
+            Is.True);
+        Assert.That(emptyGraph.Npcs, Is.Empty);
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                .TryCreateCoreOwnedSelectedNpcCensusProviderRegistrations(
+                    emptyGraph,
+                    out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+                    out string diagnostic),
+            Is.True, diagnostic);
+        Assert.That(registrations, Is.Empty,
+            "An empty selected NPC graph has no per-NPC Core owner sections; it does not imply a missing provider.");
+    }
+
+    [Test]
     public void CoreP12FCensusRecomposesExactSelectedNpcInventoryAndMoneyAccountHostOmission()
     {
         DailyV1Application application = CreateApplicationWithAdvanceBoundary(

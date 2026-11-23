@@ -967,6 +967,66 @@ public sealed class SimulationBootstrapCompositionTests
                 DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + npc.RuntimeId,
                 typeof(NpcMoneyAccountCensusProvider));
         }
+        HashSet<string> expectedCoreNpcProviderIds = new HashSet<string>(System.StringComparer.Ordinal);
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
+            {
+                if (string.Equals(prefix,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
+                        System.StringComparison.Ordinal)
+                    || string.Equals(prefix,
+                        DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
+                        System.StringComparison.Ordinal))
+                    continue;
+
+                expectedCoreNpcProviderIds.Add(prefix + npc.RuntimeId);
+            }
+
+            if (!runtime.SelectedRuntimeOwnerGraph.PersonStore.TryGetByMaterializedNpcRuntimeId(
+                    npc.RuntimeId, out _))
+                expectedCoreNpcProviderIds.Add(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(npc.RuntimeId));
+        }
+
+        HashSet<string> actualCoreNpcProviderIds = new HashSet<string>(
+            coreRegisteredProviders.Keys.Cast<string>().Where(
+                DailyV1SelectedRuntimeOwnerCensusSource.IsCoreOwnedSelectedNpcCensusSectionId),
+            System.StringComparer.Ordinal);
+        Assert.That(actualCoreNpcProviderIds.SetEquals(expectedCoreNpcProviderIds), Is.True,
+            "The selected Core census registry contains exactly the NPC families owned by the Core graph.");
+        foreach (string sectionId in expectedCoreNpcProviderIds)
+        {
+            IOwnerSectionCensusProvider coreProvider = ReadCoreRegistryProvider(
+                coreRegisteredProviders, sectionId);
+            IOwnerSectionCensusProvider compatibilityProvider = ReadCompatibilityRegistryProvider(
+                registeredSections, sectionId);
+            Assert.That(coreProvider, Is.Not.Null, sectionId);
+            Assert.That(compatibilityProvider, Is.Not.Null, sectionId);
+            Assert.That(coreProvider, Is.Not.SameAs(compatibilityProvider), sectionId);
+            OwnerSectionCensusWitness coreWitness = coreProvider.GetCurrentCensus();
+            OwnerSectionCensusWitness compatibilityWitness = compatibilityProvider.GetCurrentCensus();
+            Assert.That(coreWitness.SectionId, Is.EqualTo(compatibilityWitness.SectionId), sectionId);
+            Assert.That(coreWitness.SchemaVersion, Is.EqualTo(compatibilityWitness.SchemaVersion), sectionId);
+            Assert.That(coreWitness.OwnerInstanceIdentity,
+                Is.SameAs(compatibilityWitness.OwnerInstanceIdentity), sectionId);
+            Assert.That(coreWitness.Cardinality, Is.EqualTo(compatibilityWitness.Cardinality), sectionId);
+            Assert.That(coreWitness.Revision, Is.EqualTo(compatibilityWitness.Revision), sectionId);
+        }
+
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            AssertCoreRegistryUsesUnityProjectionProvider(
+                coreRegisteredProviders,
+                registeredSections,
+                DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix
+                    + npc.RuntimeId);
+            AssertCoreRegistryUsesUnityProjectionProvider(
+                coreRegisteredProviders,
+                registeredSections,
+                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix
+                    + npc.RuntimeId);
+        }
         AssertSelectedDailyV1RegisteredOwnerIdentityMap(
             runtime, simulation.Bootstrap, expectedCensusSections, registeredSections);
         AssertSelectedDailyV1NonVectorOwnerDisposition(
