@@ -19,7 +19,7 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
     private readonly EconomyTransactionService transactionService;
     private readonly EffectiveCrimeConfiguration configuration;
     private readonly IAuthoritativeRandomSource randomSource;
-    private readonly DailyV1CrimeP18ReceiptOwner p18ReceiptOwner = new DailyV1CrimeP18ReceiptOwner();
+    private DailyV1CrimeP18ReceiptOwner p18ReceiptOwner = new DailyV1CrimeP18ReceiptOwner();
     private bool p12DailyProfileReceiptBoundaryBound;
     private SimulationTime simulationTime;
     private ITheftOutcomeSink theftOutcomeSink;
@@ -98,7 +98,24 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
     public ITheftOutcomeSink TheftOutcomeSink => theftOutcomeSink;
     public SimulationTime SimulationTime => simulationTime;
     internal JusticeSystem JusticeOwner => justiceSystem;
+    internal DailyV1CrimeP18ReceiptOwner CoreP18ReceiptOwner => p18ReceiptOwner;
     internal long P12P18ReceiptCensusRevision => p18ReceiptOwner.CensusRevision;
+
+    internal bool TryBindCoreP18ReceiptOwner(DailyV1CrimeP18ReceiptOwner owner)
+    {
+        if (owner == null) return false;
+        if (ReferenceEquals(p18ReceiptOwner, owner)) return true;
+        if (owner.WasRestored || !owner.IsExactEmpty) return false;
+        if (p18ReceiptOwner.WasRestored)
+        {
+            if (!p18ReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(
+                    out P12ACrimeReceiptOwnerSnapshot snapshot)
+                || !owner.TryInstallP12AReceiptOwnerSnapshot(snapshot)) return false;
+        }
+        else if (!p18ReceiptOwner.IsExactEmpty) return false;
+        p18ReceiptOwner = owner;
+        return true;
+    }
 
     internal bool TryBindP12DailyProfileReceiptBoundary()
     {

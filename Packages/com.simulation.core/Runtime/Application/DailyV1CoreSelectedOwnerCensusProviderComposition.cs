@@ -10,6 +10,7 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
         IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> p12cRoots,
         IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> p12eOwners,
         IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> genealogy,
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> p18Receipts,
         IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> justiceRecords,
         IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> p12dExactEmptyOwners,
         IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> p12fOwners,
@@ -24,6 +25,7 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
         P12CRootRegistrations = p12cRoots;
         P12EOwnerRegistrations = p12eOwners;
         GenealogyRegistrations = genealogy;
+        P18ReceiptRegistrations = p18Receipts;
         JusticeRecordsRegistrations = justiceRecords;
         ExactEmptyProfileRegistrations = p12dExactEmptyOwners;
         P12FOwnerRegistrations = p12fOwners;
@@ -39,6 +41,7 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
     internal IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> P12CRootRegistrations { get; }
     internal IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> P12EOwnerRegistrations { get; }
     internal IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> GenealogyRegistrations { get; }
+    internal IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> P18ReceiptRegistrations { get; }
     internal IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> JusticeRecordsRegistrations { get; }
     internal IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> ExactEmptyProfileRegistrations { get; }
     internal IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> P12FOwnerRegistrations { get; }
@@ -82,6 +85,10 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
             || !TryCreateGenealogyProviderRegistrations(
                 graph,
                 out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> genealogySource,
+                out diagnostic)
+            || !TryCreateP18ReceiptProviderRegistrations(
+                graph,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> p18ReceiptSource,
                 out diagnostic)
             || !DailyV1SelectedRuntimeOwnerCensusSource
                 .TryCreateCoreOwnedCityCensusProviderRegistrations(
@@ -150,6 +157,15 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
                 out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> genealogy,
                 out diagnostic)
             || !TryNormalizeGroup(
+                p18ReceiptSource,
+                IsP18ReceiptSection,
+                expectedOwner: null,
+                "P18 receipt owners",
+                expectedCount: 2,
+                allowEmpty: false,
+                out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> p18Receipts,
+                out diagnostic)
+            || !TryNormalizeGroup(
                 citySource,
                 IsCitySection,
                 expectedOwner: null,
@@ -181,7 +197,7 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
         List<DailyV1OwnerSectionCensusProviderRegistration> all =
             new List<DailyV1OwnerSectionCensusProviderRegistration>(
                 personStore.Count + personLifeResidence.Count + p12cRoots.Count
-                + p12eOwners.Count + genealogy.Count + cities.Count
+                + p12eOwners.Count + genealogy.Count + p18Receipts.Count + cities.Count
                 + identitySpatial.Count + selectedNpcs.Count);
         HashSet<string> allIds = new HashSet<string>(StringComparer.Ordinal);
         if (!TryAddGroup(personStore, all, allIds, out diagnostic)
@@ -189,6 +205,7 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
             || !TryAddGroup(p12cRoots, all, allIds, out diagnostic)
             || !TryAddGroup(p12eOwners, all, allIds, out diagnostic)
             || !TryAddGroup(genealogy, all, allIds, out diagnostic)
+            || !TryAddGroup(p18Receipts, all, allIds, out diagnostic)
             || !TryAddGroup(cities, all, allIds, out diagnostic)
             || !TryAddGroup(identitySpatial, all, allIds, out diagnostic)
             || !TryAddGroup(selectedNpcs, all, allIds, out diagnostic))
@@ -202,6 +219,7 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
             p12cRoots,
             p12eOwners,
             genealogy,
+            p18Receipts,
             Array.Empty<DailyV1OwnerSectionCensusProviderRegistration>(),
             Array.Empty<DailyV1OwnerSectionCensusProviderRegistration>(),
             Array.Empty<DailyV1OwnerSectionCensusProviderRegistration>(),
@@ -295,6 +313,7 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
             existing.P12CRootRegistrations,
             existing.P12EOwnerRegistrations,
             existing.GenealogyRegistrations,
+            existing.P18ReceiptRegistrations,
             justiceRecords,
             p12dExactEmptyOwners,
             p12fOwners,
@@ -344,6 +363,54 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
                 witness.Revision,
                 hasBaseline: true)
         });
+        return true;
+    }
+
+    private static bool TryCreateP18ReceiptProviderRegistrations(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations,
+        out string diagnostic)
+    {
+        registrations = Array.Empty<DailyV1OwnerSectionCensusProviderRegistration>();
+        diagnostic = null;
+        if (graph?.CrimeP18ReceiptOwner == null || graph.JusticeP18ReceiptOwner == null
+            || graph.JusticeRecordsOwner == null)
+        {
+            diagnostic = "The selected Core graph requires its exact Crime and Justice P18 receipt owners.";
+            return false;
+        }
+
+        IOwnerSectionCensusProvider[] providers =
+        {
+            new CrimeP18ReceiptCensusProvider(graph.CrimeP18ReceiptOwner),
+            new JusticeP18ReceiptCensusProvider(graph, graph.JusticeP18ReceiptOwner)
+        };
+        List<DailyV1OwnerSectionCensusProviderRegistration> built =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(providers.Length);
+        HashSet<string> observed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (IOwnerSectionCensusProvider provider in providers)
+        {
+            if (!TryReadWitness(provider, out OwnerSectionCensusWitness witness, out diagnostic)
+                || witness == null
+                || !IsP18ReceiptSection(witness.SectionId)
+                || witness.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+                || !observed.Add(witness.SectionId))
+            {
+                diagnostic = "The selected Core graph could not witness two distinct P18 receipt owners.";
+                return false;
+            }
+            built.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                witness.SectionId,
+                witness.SchemaVersion,
+                OwnerSectionRole.Required,
+                provider,
+                witness.OwnerInstanceIdentity,
+                witness.Cardinality,
+                witness.Revision,
+                hasBaseline: true));
+        }
+
+        registrations = built.AsReadOnly();
         return true;
     }
 
@@ -1230,6 +1297,14 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
     private static bool IsGenealogySection(string sectionId) =>
         string.Equals(sectionId, GenealogyCensusProvider.SectionId, StringComparison.Ordinal);
 
+    private static bool IsP18ReceiptSection(string sectionId) =>
+        string.Equals(sectionId,
+            DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
+            StringComparison.Ordinal)
+        || string.Equals(sectionId,
+            DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+            StringComparison.Ordinal);
+
     private static bool IsP12FOwnerSection(string sectionId)
     {
         foreach (string expected in DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedP12FSectionIds)
@@ -1371,6 +1446,60 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
                 owner,
                 cardinality,
                 owner.Revision);
+        }
+    }
+
+    private sealed class CrimeP18ReceiptCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly DailyV1CrimeP18ReceiptOwner owner;
+
+        internal CrimeP18ReceiptCensusProvider(DailyV1CrimeP18ReceiptOwner owner)
+        {
+            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            if (!owner.TryCaptureP12AReceiptOwnerSnapshot(out _)
+                || owner.CensusCardinality < 0
+                || owner.CensusRevision < 0L)
+                throw new InvalidOperationException("The selected Core Crime P18 receipt owner is unavailable or malformed.");
+            return new OwnerSectionCensusWitness(
+                DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                owner,
+                owner.CensusCardinality,
+                owner.CensusRevision);
+        }
+    }
+
+    private sealed class JusticeP18ReceiptCensusProvider : IOwnerSectionCensusProvider
+    {
+        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+        private readonly DailyV1JusticeP18ReceiptOwner owner;
+
+        internal JusticeP18ReceiptCensusProvider(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1JusticeP18ReceiptOwner owner)
+        {
+            this.graph = graph ?? throw new ArgumentNullException(nameof(graph));
+            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            if (!ReferenceEquals(graph.JusticeP18ReceiptOwner, owner)
+                || graph.JusticeRecordsOwner == null
+                || !owner.TryCaptureP12AReceiptOwnerSnapshot(out _)
+                || owner.CensusCardinality < 0
+                || owner.CensusRevision < 0L)
+                throw new InvalidOperationException("The selected Core Justice P18 receipt owner is unavailable or malformed.");
+            return new OwnerSectionCensusWitness(
+                DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                graph.JusticeRecordsOwner,
+                owner.CensusCardinality,
+                owner.CensusRevision);
         }
     }
 }

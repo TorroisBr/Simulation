@@ -17,6 +17,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal IReadOnlyList<DailyV1NpcRuntimeOwners> Npcs => npcs;
     internal SpatialNetworkOwner SpatialNetwork { get; }
     internal DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
+    internal DailyV1CrimeP18ReceiptOwner CrimeP18ReceiptOwner { get; private set; }
+    internal DailyV1JusticeP18ReceiptOwner JusticeP18ReceiptOwner { get; private set; }
     internal TravelPartyStore TravelParties { get; }
     internal DailyV1KeyedSaleReceiptOwner KeyedSaleReceipts { get; private set; }
     internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex { get; }
@@ -57,6 +59,8 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         this.npcs = npcs.AsReadOnly();
         SpatialNetwork = spatialNetwork;
         JusticeRecordsOwner = justiceRecordsOwner;
+        CrimeP18ReceiptOwner = new DailyV1CrimeP18ReceiptOwner();
+        JusticeP18ReceiptOwner = new DailyV1JusticeP18ReceiptOwner();
         TravelParties = travelParties;
         KeyedSaleReceipts = new DailyV1KeyedSaleReceiptOwner();
         RuntimeIdentityIndex = runtimeIdentityIndex;
@@ -77,6 +81,36 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
             || KeyedSaleReceipts.Revision != 0L)
             return false;
         KeyedSaleReceipts = owner;
+        return true;
+    }
+
+    /// <summary>
+    /// Rebinds an unpublished membership graph to the same Core Crime P18
+    /// receipt authority as its source graph. The replacement graph's
+    /// constructor-created owner must still be exact-empty.
+    /// </summary>
+    internal bool TryBindCrimeP18ReceiptOwner(DailyV1CrimeP18ReceiptOwner owner)
+    {
+        if (owner == null) return false;
+        if (ReferenceEquals(CrimeP18ReceiptOwner, owner)) return true;
+        if (CrimeP18ReceiptOwner == null || !CrimeP18ReceiptOwner.IsExactEmpty)
+            return false;
+        CrimeP18ReceiptOwner = owner;
+        return true;
+    }
+
+    /// <summary>
+    /// Rebinds an unpublished membership graph to the same Core Justice P18
+    /// receipt authority as its source graph. The replacement graph's
+    /// constructor-created owner must still be exact-empty.
+    /// </summary>
+    internal bool TryBindJusticeP18ReceiptOwner(DailyV1JusticeP18ReceiptOwner owner)
+    {
+        if (owner == null) return false;
+        if (ReferenceEquals(JusticeP18ReceiptOwner, owner)) return true;
+        if (JusticeP18ReceiptOwner == null || !JusticeP18ReceiptOwner.IsExactEmpty)
+            return false;
+        JusticeP18ReceiptOwner = owner;
         return true;
     }
 
@@ -1377,7 +1411,9 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 pendingNpcIdentityId, pendingNpcMembershipDelta, out graph))
             return false;
 
-        if (!graph.TryBindKeyedSaleReceiptOwner(KeyedSaleReceipts))
+        if (!graph.TryBindKeyedSaleReceiptOwner(KeyedSaleReceipts)
+            || !graph.TryBindCrimeP18ReceiptOwner(CrimeP18ReceiptOwner)
+            || !graph.TryBindJusticeP18ReceiptOwner(JusticeP18ReceiptOwner))
         {
             graph = null;
             return false;

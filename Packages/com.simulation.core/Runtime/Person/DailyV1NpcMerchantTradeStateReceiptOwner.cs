@@ -379,3 +379,193 @@ internal sealed class DailyV1NpcMerchantTradeStateReceiptCommit : IBoundaryConti
         return Owner.TryCommit(this, out failure);
     }
 }
+
+/// <summary>
+/// Engine-free facts retained by the selected NPC's LocalObservation receipt
+/// authority. Source object snapshots remain transient in the Unity operation
+/// adapter; receipt identity and revision authority live in Simulation.Core.
+/// </summary>
+internal sealed class DailyV1NpcLocalObservationReceiptState
+{
+    internal string OperationIdentity { get; }
+    internal string DescriptorFingerprint { get; }
+    internal string SnapshotFingerprint { get; }
+    internal string ActorRuntimeId { get; }
+    internal string PersonId { get; }
+    internal long AbsoluteDay { get; }
+    internal int LocationCount { get; }
+    internal int MarketObservationCount { get; }
+    internal bool LiquidityObserved { get; }
+    internal long SpatialRevisionBefore { get; }
+    internal long SpatialRevisionAfter { get; }
+    internal long CommercialRevisionBefore { get; }
+    internal long CommercialRevisionAfter { get; }
+    internal long OwnerRevisionBefore { get; }
+    internal long OwnerRevisionAfter { get; }
+
+    internal DailyV1NpcLocalObservationReceiptState(string operationIdentity,
+        string descriptorFingerprint, string snapshotFingerprint, string actorRuntimeId,
+        string personId, long absoluteDay, int locationCount, int marketObservationCount,
+        bool liquidityObserved, long spatialRevisionBefore, long spatialRevisionAfter,
+        long commercialRevisionBefore, long commercialRevisionAfter,
+        long ownerRevisionBefore, long ownerRevisionAfter)
+    {
+        OperationIdentity = operationIdentity;
+        DescriptorFingerprint = descriptorFingerprint;
+        SnapshotFingerprint = snapshotFingerprint;
+        ActorRuntimeId = actorRuntimeId;
+        PersonId = personId;
+        AbsoluteDay = absoluteDay;
+        LocationCount = locationCount;
+        MarketObservationCount = marketObservationCount;
+        LiquidityObserved = liquidityObserved;
+        SpatialRevisionBefore = spatialRevisionBefore;
+        SpatialRevisionAfter = spatialRevisionAfter;
+        CommercialRevisionBefore = commercialRevisionBefore;
+        CommercialRevisionAfter = commercialRevisionAfter;
+        OwnerRevisionBefore = ownerRevisionBefore;
+        OwnerRevisionAfter = ownerRevisionAfter;
+    }
+}
+
+/// <summary>Preallocated single-owner receipt publication for an atomic observation.</summary>
+internal sealed class DailyV1NpcLocalObservationReceiptInstall
+{
+    internal DailyV1NpcLocalObservationReceiptOwner Owner { get; }
+    internal List<DailyV1NpcLocalObservationReceiptState> ExpectedReceipts { get; }
+    internal List<DailyV1NpcLocalObservationReceiptState> NextReceipts { get; }
+    internal DailyV1NpcLocalObservationReceiptState Receipt { get; }
+    internal long ExpectedRevision { get; }
+
+    internal DailyV1NpcLocalObservationReceiptInstall(
+        DailyV1NpcLocalObservationReceiptOwner owner,
+        List<DailyV1NpcLocalObservationReceiptState> expectedReceipts,
+        List<DailyV1NpcLocalObservationReceiptState> nextReceipts,
+        DailyV1NpcLocalObservationReceiptState receipt,
+        long expectedRevision)
+    {
+        Owner = owner;
+        ExpectedReceipts = expectedReceipts;
+        NextReceipts = nextReceipts;
+        Receipt = receipt;
+        ExpectedRevision = expectedRevision;
+    }
+}
+
+/// <summary>
+/// Core authority for one selected NPC's LocalObservation receipts. P12
+/// Daily-v1 admits the owner only while this ledger is exact-empty; production
+/// and idempotency behavior is preserved by the existing operation adapter.
+/// </summary>
+internal sealed class DailyV1NpcLocalObservationReceiptOwner
+{
+    private readonly DailyV1NpcRuntimeOwners actor;
+    private List<DailyV1NpcLocalObservationReceiptState> receipts =
+        new List<DailyV1NpcLocalObservationReceiptState>();
+    private long revision;
+
+    internal string RuntimeId => actor.RuntimeId;
+    internal long Revision => revision;
+    internal bool IsExactEmpty => receipts != null && receipts.Count == 0 && revision == 0L;
+
+    internal DailyV1NpcLocalObservationReceiptOwner(DailyV1NpcRuntimeOwners actor)
+    {
+        this.actor = actor ?? throw new ArgumentNullException(nameof(actor));
+    }
+
+    internal bool TryReadP12ReceiptCensus(out int cardinality, out long ownerRevision)
+    {
+        cardinality = 0;
+        ownerRevision = 0L;
+        if (receipts == null || revision < 0L) return false;
+        cardinality = receipts.Count;
+        ownerRevision = revision;
+        return true;
+    }
+
+    internal bool TryResolve(string operationIdentity,
+        out DailyV1NpcLocalObservationReceiptState receipt)
+    {
+        receipt = null;
+        if (string.IsNullOrWhiteSpace(operationIdentity) || receipts == null) return false;
+        foreach (DailyV1NpcLocalObservationReceiptState candidate in receipts)
+        {
+            if (candidate == null || !string.Equals(candidate.OperationIdentity,
+                    operationIdentity, StringComparison.Ordinal)) continue;
+            if (!IsValidReceipt(candidate) || !string.Equals(candidate.ActorRuntimeId,
+                    RuntimeId, StringComparison.Ordinal)) return false;
+            receipt = candidate;
+            return true;
+        }
+        return false;
+    }
+
+    internal bool TryPrepareInstall(long expectedRevision,
+        DailyV1NpcLocalObservationReceiptState receipt,
+        out DailyV1NpcLocalObservationReceiptInstall install)
+    {
+        install = null;
+        if (receipts == null || revision != expectedRevision
+            || expectedRevision < 0L || expectedRevision == long.MaxValue
+            || !IsValidReceipt(receipt)
+            || !string.Equals(receipt.ActorRuntimeId, RuntimeId, StringComparison.Ordinal)
+            || receipt.OwnerRevisionBefore != expectedRevision
+            || receipt.OwnerRevisionAfter != expectedRevision + 1L)
+            return false;
+
+        foreach (DailyV1NpcLocalObservationReceiptState existing in receipts)
+            if (existing == null || string.Equals(existing.OperationIdentity,
+                    receipt.OperationIdentity, StringComparison.Ordinal))
+                return false;
+
+        List<DailyV1NpcLocalObservationReceiptState> next =
+            new List<DailyV1NpcLocalObservationReceiptState>(receipts) { receipt };
+        install = new DailyV1NpcLocalObservationReceiptInstall(
+            this, receipts, next, receipt, expectedRevision);
+        return true;
+    }
+
+    internal bool CanInstall(DailyV1NpcLocalObservationReceiptInstall install)
+    {
+        if (install == null || !ReferenceEquals(install.Owner, this)
+            || !ReferenceEquals(receipts, install.ExpectedReceipts)
+            || revision != install.ExpectedRevision
+            || install.NextReceipts == null
+            || install.NextReceipts.Count != receipts.Count + 1
+            || !ReferenceEquals(install.NextReceipts[install.NextReceipts.Count - 1], install.Receipt)
+            || !IsValidReceipt(install.Receipt)
+            || install.Receipt.OwnerRevisionBefore != revision
+            || install.Receipt.OwnerRevisionAfter != revision + 1L)
+            return false;
+
+        for (int i = 0; i < receipts.Count; i++)
+            if (!ReferenceEquals(receipts[i], install.NextReceipts[i])) return false;
+        return true;
+    }
+
+    // Called only after CanInstall has passed inside the serialized operation
+    // window, alongside the already-preflighted child-owner installs.
+    internal void InstallPrepared(DailyV1NpcLocalObservationReceiptInstall install)
+    {
+        receipts = install.NextReceipts;
+        revision = install.Receipt.OwnerRevisionAfter;
+    }
+
+    private bool IsValidReceipt(DailyV1NpcLocalObservationReceiptState receipt) =>
+        receipt != null
+        && !string.IsNullOrWhiteSpace(receipt.OperationIdentity)
+        && !string.IsNullOrWhiteSpace(receipt.DescriptorFingerprint)
+        && !string.IsNullOrWhiteSpace(receipt.SnapshotFingerprint)
+        && !string.IsNullOrWhiteSpace(receipt.ActorRuntimeId)
+        && receipt.PersonId != null
+        && receipt.AbsoluteDay > 0L
+        && receipt.LocationCount >= 0
+        && receipt.MarketObservationCount >= 0
+        && receipt.SpatialRevisionBefore >= 0L
+        && receipt.SpatialRevisionAfter >= receipt.SpatialRevisionBefore
+        && receipt.CommercialRevisionBefore >= 0L
+        && receipt.CommercialRevisionAfter >= receipt.CommercialRevisionBefore
+        && receipt.OwnerRevisionBefore >= 0L
+        && receipt.OwnerRevisionBefore < long.MaxValue
+        && receipt.OwnerRevisionAfter == receipt.OwnerRevisionBefore + 1L;
+}

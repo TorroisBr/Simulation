@@ -3413,6 +3413,19 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
         }
         if (selectedOwnerGraph != null
+            && runtimeAdmissionContext?.Profile
+                == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+        {
+            if ((this.crimeSystem != null
+                    && !this.crimeSystem.TryBindCoreP18ReceiptOwner(
+                        selectedOwnerGraph.CrimeP18ReceiptOwner))
+                || (this.justiceSystem != null
+                    && !this.justiceSystem.TryBindCoreP18ReceiptOwner(
+                        selectedOwnerGraph.JusticeP18ReceiptOwner)))
+                throw new InvalidOperationException(
+                    "The selected Daily-v1 host could not bind Crime and Justice receipt adapters to the exact Core graph owners.");
+        }
+        if (selectedOwnerGraph != null
             && this.economyTransactionService != null
             && !this.economyTransactionService.TryBindSelectedOwnerGraph(selectedOwnerGraph))
             throw new InvalidOperationException(
@@ -12140,6 +12153,8 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             || !ReferenceEquals(current.Definitions, graph.Definitions)
             || !ReferenceEquals(current.SpatialNetwork, graph.SpatialNetwork)
             || !ReferenceEquals(graph.JusticeRecordsOwner, exactJusticeOwner)
+            || !graph.TryBindCrimeP18ReceiptOwner(current.CrimeP18ReceiptOwner)
+            || !graph.TryBindJusticeP18ReceiptOwner(current.JusticeP18ReceiptOwner)
             || !ReferenceEquals(graph.TravelParties,
                 travelPartySystem?.Store ?? travelSystem?.SelectedTravelPartyStore)
             || !ReferenceEquals(graph.ScheduledDirectives,
@@ -12153,6 +12168,12 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
             || !graph.MatchesExactOwnerInstances(
                 cities.Select(city => city?.SelectedRuntimeOwners),
                 npcRuntimes.Select(npc => npc?.SelectedRuntimeOwners).Where(owner => owner != null)))
+            return false;
+
+        if ((crimeSystem != null
+                && !ReferenceEquals(crimeSystem.CoreP18ReceiptOwner, current.CrimeP18ReceiptOwner))
+            || (justiceSystem != null
+                && !ReferenceEquals(justiceSystem.CoreP18ReceiptOwner, current.JusticeP18ReceiptOwner)))
             return false;
 
         if (!graph.TryBindPersonStore(personStore))

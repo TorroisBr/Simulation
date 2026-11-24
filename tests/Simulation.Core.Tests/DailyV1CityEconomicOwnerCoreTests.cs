@@ -697,7 +697,11 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
             rows.Add(new OwnerSectionCensusSnapshot(
                 DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsSectionIdFor(runtimeId),
                 DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
-                OwnerSectionRole.Required, new object(), 0, 0L));
+                OwnerSectionRole.Required,
+                selectedOwners.TryGetValue(runtimeId, out DailyV1NpcRuntimeOwners localOwner)
+                    ? localOwner.LocalObservationReceipts
+                    : new object(),
+                0, 0L));
             rows.Add(new OwnerSectionCensusSnapshot(
                 DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsSectionIdFor(runtimeId),
                 DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,

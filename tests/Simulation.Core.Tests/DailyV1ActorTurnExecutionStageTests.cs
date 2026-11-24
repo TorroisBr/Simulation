@@ -265,6 +265,43 @@ public sealed class DailyV1ActorTurnExecutionStageTests
     }
 
     [Test]
+    public void SelectedNpcMembershipGraphRetainsExactCrimeAndJusticeP18ReceiptOwners()
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners first);
+        DailyV1CrimeP18ReceiptOwner crimeReceipts = graph.CrimeP18ReceiptOwner;
+        DailyV1JusticeP18ReceiptOwner justiceReceipts = graph.JusticeP18ReceiptOwner;
+        Assert.That(crimeReceipts.TryPrepare(
+            "membership-crime-receipt", "membership-crime-fingerprint",
+            out DailyV1CrimeP18ReceiptMutation crimeMutation), Is.True);
+        Assert.That(crimeReceipts.CanCommit(crimeMutation), Is.True);
+        crimeReceipts.InstallPrepared(crimeMutation);
+        Assert.That(justiceReceipts.TryPrepare(
+            DailyV1JusticeP18ReceiptKind.BeginDay,
+            "membership-justice-receipt", "membership-justice-fingerprint",
+            out DailyV1JusticeP18ReceiptMutation justiceMutation), Is.True);
+        Assert.That(justiceReceipts.CanCommit(justiceMutation), Is.True);
+        justiceReceipts.InstallPrepared(justiceMutation);
+
+        DailyV1NpcDefinition addedDefinition = graph.Definitions.Npcs.Values
+            .First(definition => !string.Equals(
+                definition.DefinitionId, first.Definition.DefinitionId, System.StringComparison.Ordinal));
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
+            "npc/p18-receipt-membership-add", graph.Definitions, addedDefinition, 0f,
+            out DailyV1NpcRuntimeOwners addedOwner), Is.True);
+        Assert.That(graph.TryCreateWithAddedNpc(
+            addedOwner, out DailyV1SelectedRuntimeOwnerGraph replacementGraph), Is.True);
+
+        Assert.That(replacementGraph.CrimeP18ReceiptOwner, Is.SameAs(crimeReceipts));
+        Assert.That(replacementGraph.JusticeP18ReceiptOwner, Is.SameAs(justiceReceipts));
+        Assert.That(replacementGraph.CrimeP18ReceiptOwner.CensusCardinality, Is.EqualTo(1));
+        Assert.That(replacementGraph.CrimeP18ReceiptOwner.CensusRevision, Is.EqualTo(2L),
+            "Crime census revision preserves the established step-revision plus receipt-count formula.");
+        Assert.That(replacementGraph.JusticeP18ReceiptOwner.CensusCardinality, Is.EqualTo(1));
+        Assert.That(replacementGraph.JusticeP18ReceiptOwner.CensusRevision, Is.EqualTo(2L),
+            "Justice census revision preserves the established per-step revision plus receipt-count formula.");
+    }
+
+    [Test]
     public void SelectedNpcMembershipChangePublishesAndRollsBackGraphAndRosterTogether()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateGraph(out DailyV1NpcRuntimeOwners first);

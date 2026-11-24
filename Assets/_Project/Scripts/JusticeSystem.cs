@@ -23,7 +23,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     private const string SyncWantedStatusesOperationVersion = "1";
     private const string SyncWantedStatusesSnapshotVersion = "justice-sync-wanted-statuses-owner-v1";
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
-    private readonly DailyV1JusticeP18ReceiptOwner p18ReceiptOwner = new DailyV1JusticeP18ReceiptOwner();
+    private DailyV1JusticeP18ReceiptOwner p18ReceiptOwner = new DailyV1JusticeP18ReceiptOwner();
     private bool p12DailyProfileReceiptBoundaryBound;
     private readonly DailyV1JusticeRecordsOwner justiceRecordsOwner;
     private readonly Dictionary<DailyV1JusticeWantedRecordOwner, WantedRecordRuntime> wantedRecordViews =
@@ -46,6 +46,22 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     internal int P12WantedRecordCount => wantedRecords?.Count ?? -1;
     internal int P12PrisonSentenceCount => prisonSentences?.Count ?? -1;
     internal long P12P18ReceiptCensusRevision => p18ReceiptOwner.CensusRevision;
+    internal DailyV1JusticeP18ReceiptOwner CoreP18ReceiptOwner => p18ReceiptOwner;
+    internal bool TryBindCoreP18ReceiptOwner(DailyV1JusticeP18ReceiptOwner owner)
+    {
+        if (owner == null) return false;
+        if (ReferenceEquals(p18ReceiptOwner, owner)) return true;
+        if (owner.WasRestored || !owner.IsExactEmpty) return false;
+        if (p18ReceiptOwner.WasRestored)
+        {
+            if (!p18ReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(
+                    out P12AJusticeReceiptOwnerSnapshot snapshot)
+                || !owner.TryInstallP12AReceiptOwnerSnapshot(snapshot)) return false;
+        }
+        else if (!p18ReceiptOwner.IsExactEmpty) return false;
+        p18ReceiptOwner = owner;
+        return true;
+    }
     internal bool TryCaptureP12AReceiptOwnerSnapshot(out P12AJusticeReceiptOwnerSnapshot snapshot) =>
         p18ReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(out snapshot);
     internal bool TryInstallP12AReceiptOwnerSnapshot(P12AJusticeReceiptOwnerSnapshot snapshot) =>

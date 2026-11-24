@@ -145,6 +145,32 @@ internal static class DailyV1NpcOwnerCensusProviders
         }
     }
 
+    private sealed class LocalObservationReceiptSectionProvider : IOwnerSectionCensusProvider
+    {
+        private readonly DailyV1NpcRuntimeOwners npcOwner;
+        private readonly string sectionId;
+
+        internal LocalObservationReceiptSectionProvider(DailyV1NpcRuntimeOwners npcOwner)
+        {
+            this.npcOwner = npcOwner ?? throw new ArgumentNullException(nameof(npcOwner));
+            sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix
+                + npcOwner.RuntimeId;
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            DailyV1NpcLocalObservationReceiptOwner owner = npcOwner.LocalObservationReceipts;
+            if (owner == null
+                || !owner.TryReadP12ReceiptCensus(out int cardinality, out long revision)
+                || cardinality != 0 || revision != 0L)
+                throw new InvalidOperationException(
+                    "The selected Daily-v1 LocalObservation receipt owner must remain exact-empty.");
+            return new OwnerSectionCensusWitness(sectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                owner, cardinality, revision);
+        }
+    }
+
     private enum CommercialKnowledgeSection
     {
         Markets,
@@ -697,9 +723,9 @@ internal static class DailyV1NpcOwnerCensusProviders
 
     /// <summary>
     /// Composes the live provider set for every selected NPC owner family
-    /// currently owned by Core. Local-observation receipts remain host-projected;
-    /// merchant-trade receipts use the Core owner but must stay exact-empty in
-    /// the admitted P12 Daily-v1 profile.
+    /// currently owned by Core. Both LocalObservation and merchant-trade
+    /// receipts bind to their exact Core owners and stay exact-empty in the
+    /// admitted P12 Daily-v1 profile.
     /// </summary>
     internal static IReadOnlyList<IOwnerSectionCensusProvider> CreateSelectedCoreOwnerProviders(
         DailyV1SelectedRuntimeOwnerGraph graph)
@@ -717,6 +743,7 @@ internal static class DailyV1NpcOwnerCensusProviders
         providers.AddRange(CreateMoneyAccountProviders(graph.Npcs));
         providers.AddRange(CreateCommercialKnowledgeProviders(graph.Npcs));
         providers.AddRange(CreateSpatialKnowledgeProviders(graph.Npcs));
+        providers.AddRange(CreateLocalObservationReceiptProviders(graph.Npcs));
         providers.AddRange(CreateMerchantTradeStateReceiptProviders(graph.Npcs));
 
         HashSet<string> expectedSectionIds = new HashSet<string>(StringComparer.Ordinal);
@@ -724,11 +751,6 @@ internal static class DailyV1NpcOwnerCensusProviders
         {
             foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
             {
-                if (string.Equals(prefix,
-                        DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
-                        StringComparison.Ordinal))
-                    continue;
-
                 if (!expectedSectionIds.Add(prefix + npc.RuntimeId))
                     throw new InvalidOperationException(
                         "The selected Core NPC census graph contains duplicate owner section identities.");
@@ -810,6 +832,26 @@ internal static class DailyV1NpcOwnerCensusProviders
         for (int index = 0; index < ordered.Count; index++)
             result[index] = ordered[index].Value;
         return Array.AsReadOnly(result);
+    }
+
+    private static IReadOnlyList<IOwnerSectionCensusProvider> CreateLocalObservationReceiptProviders(
+        IReadOnlyList<DailyV1NpcRuntimeOwners> roster)
+    {
+        ValidateRoster(roster);
+        List<DailyV1NpcRuntimeOwners> ordered = OrderByRuntimeId(roster);
+        HashSet<DailyV1NpcLocalObservationReceiptOwner> owners =
+            new HashSet<DailyV1NpcLocalObservationReceiptOwner>();
+        IOwnerSectionCensusProvider[] providers = new IOwnerSectionCensusProvider[ordered.Count];
+        for (int index = 0; index < ordered.Count; index++)
+        {
+            DailyV1NpcRuntimeOwners npc = ordered[index];
+            DailyV1NpcLocalObservationReceiptOwner owner = npc.LocalObservationReceipts;
+            if (owner == null || !owners.Add(owner) || !owner.IsExactEmpty)
+                throw new InvalidOperationException(
+                    "Selected LocalObservation census requires one distinct exact-empty Core owner per NPC.");
+            providers[index] = new LocalObservationReceiptSectionProvider(npc);
+        }
+        return Array.AsReadOnly(providers);
     }
     private static void ValidateRoster(IReadOnlyList<DailyV1NpcRuntimeOwners> roster)
     {

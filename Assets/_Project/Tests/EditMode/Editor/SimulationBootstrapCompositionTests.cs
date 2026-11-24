@@ -972,11 +972,6 @@ public sealed class SimulationBootstrapCompositionTests
         {
             foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
             {
-                if (string.Equals(prefix,
-                        DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
-                        System.StringComparison.Ordinal))
-                    continue;
-
                 expectedCoreNpcProviderIds.Add(prefix + npc.RuntimeId);
             }
 
@@ -1017,11 +1012,33 @@ public sealed class SimulationBootstrapCompositionTests
 
         foreach (NpcRuntime npc in runtime.NpcRuntimes)
         {
-            AssertCoreRegistryUsesUnityProjectionProvider(
-                coreRegisteredProviders,
-                registeredSections,
+            string localObservationSectionId =
                 DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix
-                    + npc.RuntimeId);
+                    + npc.RuntimeId;
+            IOwnerSectionCensusProvider localObservationCoreProvider = ReadCoreRegistryProvider(
+                coreRegisteredProviders, localObservationSectionId);
+            IOwnerSectionCensusProvider localObservationCompatibilityProvider = ReadCompatibilityRegistryProvider(
+                registeredSections, localObservationSectionId);
+            Assert.That(localObservationCoreProvider, Is.Not.Null, localObservationSectionId);
+            Assert.That(localObservationCoreProvider.GetType().Name,
+                Is.EqualTo("LocalObservationReceiptSectionProvider"), localObservationSectionId);
+            Assert.That(localObservationCompatibilityProvider, Is.Not.Null, localObservationSectionId);
+            Assert.That(localObservationCoreProvider, Is.Not.SameAs(localObservationCompatibilityProvider),
+                localObservationSectionId);
+            OwnerSectionCensusWitness localObservationCoreWitness =
+                localObservationCoreProvider.GetCurrentCensus();
+            OwnerSectionCensusWitness localObservationCompatibilityWitness =
+                localObservationCompatibilityProvider.GetCurrentCensus();
+            Assert.That(localObservationCoreWitness.OwnerInstanceIdentity,
+                Is.SameAs(npc.SelectedRuntimeOwners.LocalObservationReceipts), localObservationSectionId);
+            Assert.That(localObservationCoreWitness.Cardinality, Is.Zero, localObservationSectionId);
+            Assert.That(localObservationCoreWitness.Revision, Is.Zero, localObservationSectionId);
+            Assert.That(localObservationCompatibilityWitness.OwnerInstanceIdentity,
+                Is.SameAs(localObservationCoreWitness.OwnerInstanceIdentity), localObservationSectionId);
+            Assert.That(localObservationCompatibilityWitness.Cardinality,
+                Is.EqualTo(localObservationCoreWitness.Cardinality), localObservationSectionId);
+            Assert.That(localObservationCompatibilityWitness.Revision,
+                Is.EqualTo(localObservationCoreWitness.Revision), localObservationSectionId);
             string merchantReceiptSectionId =
                 DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix
                     + npc.RuntimeId;
@@ -3923,7 +3940,8 @@ public sealed class SimulationBootstrapCompositionTests
                 receiptProviders,
                 P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(npc.RuntimeId),
                 npc,
-                npc.ExistingLocalKnowledgeObservationRuntime);
+                (object)npc.SelectedRuntimeOwners?.LocalObservationReceipts
+                    ?? npc.ExistingLocalKnowledgeObservationRuntime);
             AssertNpcReceiptWitness(
                 receiptProviders,
                 P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(npc.RuntimeId),
@@ -4250,7 +4268,8 @@ public sealed class SimulationBootstrapCompositionTests
                     ?? (object)ReadNonPublicProperty(npc, "ExistingTravelPlan"));
             AddExpectedDailyV1OwnerIdentity(
                 expected, P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(runtimeId),
-                ReadNonPublicProperty(npc, "ExistingLocalKnowledgeObservationRuntime"));
+                (object)selectedOwners?.LocalObservationReceipts
+                    ?? ReadNonPublicProperty(npc, "ExistingLocalKnowledgeObservationRuntime"));
             AddExpectedDailyV1OwnerIdentity(
                 expected, P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(runtimeId),
                 selectedOwners != null

@@ -839,7 +839,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             sections = sections.Where(section => !coreP12EOwnerSectionIds.Contains(section.SectionId))
                 .Concat(exactP12EOwnerRows).ToArray();
         }
-        return RebindCoreJusticeOwnerSectionVector(graph, sections);
+        return RebindCoreP18ReceiptOwnerSectionVector(graph, sections);
     }
 
     private static PoliticalKnowledgeStore CreateAndBindCorePoliticalKnowledgeStore(
@@ -865,7 +865,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         DailyV1ActiveRuntimeSession session)
     {
         OwnerSectionCensusSnapshot[] existing = CreateCoreBoundP12FSectionVectorWithoutCity(session);
-        OwnerSectionCensusSnapshot[] selected = RebindCoreJusticeOwnerSectionVector(
+        OwnerSectionCensusSnapshot[] selected = RebindCoreP18ReceiptOwnerSectionVector(
             session.OwnerGraph, ReplaceCityOwnerSectionVector(session, existing));
         return RebindToSealedCoreCensusBaseline(session, selected);
     }
@@ -903,9 +903,20 @@ public sealed class DailyV1ApplicationSessionGateTests
         return rebound;
     }
 
-    private static OwnerSectionCensusSnapshot[] RebindCoreJusticeOwnerSectionVector(
+    private static OwnerSectionCensusSnapshot[] RebindCoreP18ReceiptOwnerSectionVector(
         DailyV1SelectedRuntimeOwnerGraph graph, OwnerSectionCensusSnapshot[] sections)
     {
+        DailyV1CrimeP18ReceiptOwner crimeReceiptOwner = graph?.CrimeP18ReceiptOwner;
+        Assert.That(crimeReceiptOwner, Is.Not.Null);
+        int crimeReceiptsIndex = Array.FindIndex(sections, section => string.Equals(section.SectionId,
+            DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId, StringComparison.Ordinal));
+        Assert.That(crimeReceiptsIndex, Is.GreaterThanOrEqualTo(0));
+        sections[crimeReceiptsIndex] = new OwnerSectionCensusSnapshot(
+            DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+            OwnerSectionRole.Required, crimeReceiptOwner,
+            crimeReceiptOwner.CensusCardinality, crimeReceiptOwner.CensusRevision);
+
         DailyV1JusticeRecordsOwner justiceOwner = graph?.JusticeRecordsOwner;
         Assert.That(justiceOwner, Is.Not.Null);
         int recordCardinality = checked(justiceOwner.WantedRecords.Count + justiceOwner.Sentences.Count);
@@ -915,7 +926,9 @@ public sealed class DailyV1ApplicationSessionGateTests
             DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId, StringComparison.Ordinal));
         Assert.That(recordsIndex, Is.GreaterThanOrEqualTo(0));
         Assert.That(receiptsIndex, Is.GreaterThanOrEqualTo(0));
-        object justiceProjectionIdentity = sections[recordsIndex].OwnerInstanceIdentity;
+        DailyV1JusticeP18ReceiptOwner justiceReceiptOwner = graph.JusticeP18ReceiptOwner;
+        Assert.That(justiceReceiptOwner, Is.Not.Null);
+        object justiceProjectionIdentity = justiceOwner;
         sections[recordsIndex] = new OwnerSectionCensusSnapshot(
             DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
             DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
@@ -923,7 +936,8 @@ public sealed class DailyV1ApplicationSessionGateTests
         sections[receiptsIndex] = new OwnerSectionCensusSnapshot(
             DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
             DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
-            OwnerSectionRole.Required, justiceProjectionIdentity, 1, sections[receiptsIndex].Revision);
+            OwnerSectionRole.Required, justiceProjectionIdentity,
+            justiceReceiptOwner.CensusCardinality, justiceReceiptOwner.CensusRevision);
         return sections;
     }
 
@@ -988,7 +1002,7 @@ public sealed class DailyV1ApplicationSessionGateTests
             sections = sections.Where(section => !coreP12EOwnerSectionIds.Contains(section.SectionId))
                 .Concat(exactP12EOwnerRows).ToArray();
         }
-        return RebindCoreJusticeOwnerSectionVector(graph, sections);
+        return RebindCoreP18ReceiptOwnerSectionVector(graph, sections);
     }
 
     private static OwnerSectionCensusSnapshot[] ReplaceSelectedNpcOwnerSectionVector(
@@ -1023,6 +1037,10 @@ public sealed class DailyV1ApplicationSessionGateTests
             Assert.That(owner.Inventory.TryGetCensusCardinality(out int inventoryCardinality), Is.True);
             Assert.That(owner.CommercialKnowledge.TryReadCensus(
                 out int markets, out int liquidity, out int receipts, out long commercialRevision), Is.True);
+            Assert.That(owner.LocalObservationReceipts.TryReadP12ReceiptCensus(
+                out int localObservationReceiptCardinality,
+                out long localObservationReceiptRevision), Is.True);
+            Assert.That(owner.LocalObservationReceipts.IsExactEmpty, Is.True);
             object actorLifecycleAndResidenceIdentity = owner;
             Add(0, owner.ExplorableSiteKnowledge, owner.ExplorableSiteKnowledge.Observations.Count,
                 owner.ExplorableSiteKnowledge.Revision);
@@ -1056,7 +1074,8 @@ public sealed class DailyV1ApplicationSessionGateTests
             Add(14, owner.MoneyAccount, 1, owner.MoneyAccount.Revision);
             Add(15, owner.MerchantTradePlan, 1, owner.MerchantTradePlan.Revision);
             Add(16, owner.TravelPlan, 1, owner.TravelPlan.Revision);
-            Add(17, new object(), 0, 0L);
+            Add(17, owner.LocalObservationReceipts,
+                localObservationReceiptCardinality, localObservationReceiptRevision);
             Assert.That(owner.MerchantTradeStateReceipts.TryReadP12ReceiptCensus(
                 out int merchantReceiptCardinality, out long merchantReceiptRevision), Is.True);
             Add(18, owner.MerchantTradeStateReceipts,
@@ -3989,11 +4008,6 @@ public sealed class DailyV1ApplicationSessionGateTests
         {
             foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
             {
-                if (string.Equals(prefix,
-                        DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
-                        StringComparison.Ordinal))
-                    continue;
-
                 Assert.That(expectedIds.Add(prefix + npc.RuntimeId), Is.True);
             }
 
@@ -4058,10 +4072,18 @@ public sealed class DailyV1ApplicationSessionGateTests
                 sectionId.StartsWith(
                     DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
                     StringComparison.Ordinal)),
-            Is.False,
-            "Local-observation receipts remain host-projected until their owner is in the Core graph.");
+            Is.True,
+            "Selected local-observation receipts are censused from the exact Core owner graph.");
         foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
         {
+            OwnerSectionCensusWitness localObservationReceipt = witnesses[
+                DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix
+                + npc.RuntimeId];
+            Assert.That(localObservationReceipt.OwnerInstanceIdentity,
+                Is.SameAs(npc.LocalObservationReceipts));
+            Assert.That(localObservationReceipt.Cardinality, Is.Zero);
+            Assert.That(localObservationReceipt.Revision, Is.Zero);
+
             OwnerSectionCensusWitness merchantReceipt = witnesses[
                 DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix
                 + npc.RuntimeId];

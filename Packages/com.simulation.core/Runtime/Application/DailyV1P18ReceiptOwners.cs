@@ -31,6 +31,9 @@ internal sealed class DailyV1CrimeP18ReceiptOwner
 
     internal long StepRevision => state.StepRevision;
     internal long CensusRevision => state.CensusRevision;
+    internal int CensusCardinality => state != null && state.IsValid
+        ? 1
+        : -1;
     internal bool IsExactEmpty => state != null && state.IsValid
         && state.StepRevision == 0L && state.Receipts.Count == 0;
     internal bool WasRestored => restored;
@@ -190,6 +193,9 @@ internal sealed class DailyV1JusticeP18ReceiptOwner
     internal long AdvanceSentencesRevision => state.AdvanceSentencesRevision;
     internal long SyncWantedStatusesRevision => state.SyncWantedStatusesRevision;
     internal long CensusRevision => state.CensusRevision;
+    internal int CensusCardinality => state != null && state.IsValid
+        ? 1
+        : -1;
     internal bool IsExactEmpty => state != null && state.IsValid
         && state.BeginDayRevision == 0L && state.BeginDayReceipts.Count == 0
         && state.AdvanceSentencesRevision == 0L && state.AdvanceSentencesReceipts.Count == 0

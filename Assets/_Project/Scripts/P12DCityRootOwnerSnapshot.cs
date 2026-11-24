@@ -1095,7 +1095,11 @@ internal sealed class P12DCityNpcProjectionCaptureEvidence
         for (int i = 0; i < roster.Count; i++)
         {
             NpcRuntime npc = roster[i];
-            object localOwner = npc?.ExistingLocalKnowledgeObservationRuntime;
+            object localOwner = npc == null
+                ? null
+                : npc.SelectedRuntimeOwners != null
+                    ? (object)npc.SelectedRuntimeOwners.LocalObservationReceipts
+                    : npc.ExistingLocalKnowledgeObservationRuntime;
             object merchantOwner = npc == null
                 ? null
                 : npc.SelectedRuntimeOwners != null
@@ -1154,7 +1158,9 @@ internal sealed class P12DCityNpcProjectionCaptureEvidence
                 return false;
             }
 
-            object localOwner = npc.ExistingLocalKnowledgeObservationRuntime;
+            object localOwner = npc.SelectedRuntimeOwners != null
+                ? (object)npc.SelectedRuntimeOwners.LocalObservationReceipts
+                : npc.ExistingLocalKnowledgeObservationRuntime;
             object merchantOwner = npc.SelectedRuntimeOwners != null
                 ? (object)npc.SelectedRuntimeOwners.MerchantTradeStateReceipts
                 : npc.ExistingMerchantTradeStateRuntime;
@@ -1163,8 +1169,8 @@ internal sealed class P12DCityNpcProjectionCaptureEvidence
                 || ReferenceEquals(localOwner, merchantOwner)
                 || ContainsReference(receiptOwnerIdentities, localOwner)
                 || ContainsReference(receiptOwnerIdentities, merchantOwner)
-                || !((NpcLocalKnowledgeObservationRuntime)localOwner)
-                    .TryReadP12ReceiptCensus(out int localCount, out long localRevision)
+                || !TryReadLocalReceiptCensus(localOwner,
+                    out int localCount, out long localRevision)
                 || localCount != 0
                 || localRevision != 0L
                 || !TryReadMerchantReceiptCensus(merchantOwner,
@@ -1248,6 +1254,20 @@ internal sealed class P12DCityNpcProjectionCaptureEvidence
         if (owner is DailyV1NpcMerchantTradeStateReceiptOwner coreOwner)
             return coreOwner.TryReadP12ReceiptCensus(out cardinality, out revision);
         if (owner is NpcMerchantTradeStateRuntime unityOwner)
+            return unityOwner.TryReadP12ReceiptCensus(out cardinality, out revision);
+        return false;
+    }
+
+    private static bool TryReadLocalReceiptCensus(
+        object owner,
+        out int cardinality,
+        out long revision)
+    {
+        cardinality = 0;
+        revision = 0L;
+        if (owner is DailyV1NpcLocalObservationReceiptOwner coreOwner)
+            return coreOwner.TryReadP12ReceiptCensus(out cardinality, out revision);
+        if (owner is NpcLocalKnowledgeObservationRuntime unityOwner)
             return unityOwner.TryReadP12ReceiptCensus(out cardinality, out revision);
         return false;
     }

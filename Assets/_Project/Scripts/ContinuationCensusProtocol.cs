@@ -4228,7 +4228,9 @@ public sealed class ContinuationCensusProtocol
                         ? P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(provider.RuntimeId)
                         : null;
                 object expectedOwner = provider.Kind == P12DNpcReceiptOwnerCensusProvider.ReceiptOwnerKind.LocalObservation
-                    ? (object)provider.NpcOwner.ExistingLocalKnowledgeObservationRuntime
+                    ? provider.NpcOwner.SelectedRuntimeOwners != null
+                        ? (object)provider.NpcOwner.SelectedRuntimeOwners.LocalObservationReceipts
+                        : provider.NpcOwner.ExistingLocalKnowledgeObservationRuntime
                     : provider.Kind == P12DNpcReceiptOwnerCensusProvider.ReceiptOwnerKind.MerchantTradeState
                         ? provider.NpcOwner.SelectedRuntimeOwners != null
                             ? (object)provider.NpcOwner.SelectedRuntimeOwners.MerchantTradeStateReceipts

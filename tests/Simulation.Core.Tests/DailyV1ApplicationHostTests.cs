@@ -690,8 +690,148 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(populatedDiagnostic,
             Does.Contain("exact-empty P18-D keyed-sale receipt owner"));
     }
+
     [Test]
-    public void DetachedCoreStartFailsClosedUntilTheProductionOwnerCensusIsSealed()
+    public void P18ReceiptCensusProvidersReadLiveCoreOwnerCardinalityAndRevision()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "p18-receipt-live-census-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, dotNetIdentity: DotNetIdentity());
+
+        Assert.That(application.TryStartDotNetOnExistingApplication(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out _, out _), Is.False);
+        DailyV1ActiveRuntimeSession session = preparation?.CoreSession;
+        Assert.That(session, Is.Not.Null);
+        DailyV1CrimeP18ReceiptOwner crime = session.OwnerGraph.CrimeP18ReceiptOwner;
+        DailyV1JusticeP18ReceiptOwner justice = session.OwnerGraph.JusticeP18ReceiptOwner;
+
+        Assert.That(crime.TryPrepare(
+            "census-crime-receipt", "census-crime-fingerprint",
+            out DailyV1CrimeP18ReceiptMutation crimeMutation), Is.True);
+        Assert.That(crime.CanCommit(crimeMutation), Is.True);
+        crime.InstallPrepared(crimeMutation);
+        Assert.That(justice.TryPrepare(
+            DailyV1JusticeP18ReceiptKind.BeginDay,
+            "census-justice-receipt", "census-justice-fingerprint",
+            out DailyV1JusticeP18ReceiptMutation justiceMutation), Is.True);
+        Assert.That(justice.CanCommit(justiceMutation), Is.True);
+        justice.InstallPrepared(justiceMutation);
+        Assert.That(crime.TryPrepare(
+            "census-crime-receipt-2", "census-crime-fingerprint-2",
+            out crimeMutation), Is.True);
+        Assert.That(crime.CanCommit(crimeMutation), Is.True);
+        crime.InstallPrepared(crimeMutation);
+        Assert.That(justice.TryPrepare(
+            DailyV1JusticeP18ReceiptKind.AdvanceSentences,
+            "census-justice-receipt-2", "census-justice-fingerprint-2",
+            out justiceMutation), Is.True);
+        Assert.That(justice.CanCommit(justiceMutation), Is.True);
+        justice.InstallPrepared(justiceMutation);
+
+        Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreateForApplicationStart(
+            session,
+            out DailyV1CoreSelectedOwnerCensusProviderComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+        Assert.That(composition.P18ReceiptRegistrations, Has.Count.EqualTo(2));
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration
+            in composition.P18ReceiptRegistrations)
+        {
+            OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
+            Assert.That(registration.Role, Is.EqualTo(OwnerSectionRole.Required));
+            Assert.That(registration.BaselineOwnerInstanceIdentity,
+                Is.SameAs(witness.OwnerInstanceIdentity));
+            Assert.That(witness.Cardinality, Is.EqualTo(1));
+            Assert.That(witness.Revision, Is.EqualTo(4L),
+                "The live census preserves the receipt owner's established composite revision semantics.");
+        }
+        Assert.That(composition.P18ReceiptRegistrations.Single(registration => string.Equals(
+            registration.SectionId, DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
+            StringComparison.Ordinal)).BaselineOwnerInstanceIdentity, Is.SameAs(crime));
+        Assert.That(composition.P18ReceiptRegistrations.Single(registration => string.Equals(
+            registration.SectionId, DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+            StringComparison.Ordinal)).BaselineOwnerInstanceIdentity,
+            Is.SameAs(session.OwnerGraph.JusticeRecordsOwner),
+            "The Justice receipt row keeps the exact shared identity required by the P12 JusticeRecords alias contract.");
+    }
+
+    [Test]
+    public void CoreLocalObservationReceiptOwnerPublishesPreparedStateAndRejectsStaleInstall()
+    {
+        DailyV1NpcRuntimeOwners npc = CreatePreparedCoreSession().OwnerGraph.Npcs[0];
+        DailyV1NpcLocalObservationReceiptOwner owner = npc.LocalObservationReceipts;
+        Assert.That(owner.IsExactEmpty, Is.True);
+        Assert.That(owner.TryReadP12ReceiptCensus(out int emptyCount, out long emptyRevision), Is.True);
+        Assert.That(emptyCount, Is.Zero);
+        Assert.That(emptyRevision, Is.Zero);
+
+        DailyV1NpcLocalObservationReceiptState first = CreateLocalObservationReceipt(
+            npc.RuntimeId, "local-observation-1", 0L, 1L);
+        DailyV1NpcLocalObservationReceiptState stale = CreateLocalObservationReceipt(
+            npc.RuntimeId, "local-observation-2", 0L, 1L);
+        Assert.That(owner.TryPrepareInstall(0L, first,
+            out DailyV1NpcLocalObservationReceiptInstall firstInstall), Is.True);
+        Assert.That(owner.TryPrepareInstall(0L, stale,
+            out DailyV1NpcLocalObservationReceiptInstall staleInstall), Is.True);
+        Assert.That(owner.CanInstall(firstInstall), Is.True);
+        Assert.That(owner.TryReadP12ReceiptCensus(out int beforeCommitCount, out long beforeCommitRevision), Is.True);
+        Assert.That(beforeCommitCount, Is.Zero);
+        Assert.That(beforeCommitRevision, Is.Zero);
+
+        owner.InstallPrepared(firstInstall);
+        Assert.That(owner.IsExactEmpty, Is.False);
+        Assert.That(owner.TryReadP12ReceiptCensus(out int populatedCount, out long populatedRevision), Is.True);
+        Assert.That(populatedCount, Is.EqualTo(1));
+        Assert.That(populatedRevision, Is.EqualTo(1L));
+        Assert.That(owner.TryResolve(first.OperationIdentity,
+            out DailyV1NpcLocalObservationReceiptState resolved), Is.True);
+        Assert.That(resolved, Is.SameAs(first));
+        Assert.That(owner.CanInstall(staleInstall), Is.False,
+            "A prepared receipt cannot publish over a changed owner revision or ledger identity.");
+        Assert.That(owner.TryPrepareInstall(1L, first,
+            out DailyV1NpcLocalObservationReceiptInstall duplicateInstall), Is.False,
+            "An operation identity is idempotent only through replay matching, never by duplicate append.");
+    }
+
+    private static DailyV1NpcLocalObservationReceiptState CreateLocalObservationReceipt(
+        string runtimeId, string operationId, long ownerBefore, long ownerAfter) =>
+        new DailyV1NpcLocalObservationReceiptState(
+            operationId,
+            operationId + "/descriptor",
+            operationId + "/snapshot",
+            runtimeId,
+            string.Empty,
+            absoluteDay: 1L,
+            locationCount: 1,
+            marketObservationCount: 0,
+            liquidityObserved: false,
+            spatialRevisionBefore: 0L,
+            spatialRevisionAfter: 1L,
+            commercialRevisionBefore: 0L,
+            commercialRevisionAfter: 0L,
+            ownerRevisionBefore: ownerBefore,
+            ownerRevisionAfter: ownerAfter);
+
+    private static DailyV1ActiveRuntimeSession CreatePreparedCoreSession()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        AdmitMissingSlot(application);
+        Assert.That(application.TryPrepareInitialGenesis(
+                definitions, allocateWorldId: null, stageCompleted: null,
+                out _, out DailyV1ActiveRuntimeSession session, out string diagnostic),
+            Is.True, diagnostic);
+        return session;
+    }
+
+    [Test]
+    public void DetachedCoreStartSealsCompleteReceiptCensusThenFailsClosedOnMissingOperationInventory()
     {
         DailyV1EffectiveDefinitions definitions =
             DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -711,9 +851,8 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
         Assert.That(application.ActiveSession, Is.Null,
             "The production .NET start path must not publish a session without the complete sealed census.");
-        Assert.That(diagnostic, Does.Contain("complete 89-family selected Daily-v1 census"));
-        Assert.That(diagnostic, Does.Contain("Missing provider sections:"));
-        Assert.That(diagnostic, Does.Contain("No partial census was registered."));
+        Assert.That(diagnostic, Does.Contain("stable complete census baseline"),
+            "The complete receipt inventory now advances to the subsequent runtime-operation readiness gate.");
         Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreateForApplicationStart(
             preparation.CoreSession,
             out DailyV1CoreSelectedOwnerCensusProviderComposition coreComposition,
@@ -769,6 +908,29 @@ public sealed class DailyV1ApplicationHostTests
                 + coreSession.OwnerGraph.JusticeRecordsOwner.Sentences.Count));
         Assert.That(justiceRecordsWitness.Revision,
             Is.EqualTo(coreSession.OwnerGraph.JusticeRecordsOwner.Revision));
+        Assert.That(coreComposition.P18ReceiptRegistrations, Has.Count.EqualTo(2),
+            "The Core graph directly composes both existing P18 receipt authorities into the selected census.");
+        Dictionary<string, object> expectedP18ReceiptOwners = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            [DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId] =
+                coreSession.OwnerGraph.CrimeP18ReceiptOwner,
+            [DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId] =
+                coreSession.OwnerGraph.JusticeRecordsOwner
+        };
+        Assert.That(coreComposition.P18ReceiptRegistrations.Select(row => row.SectionId),
+            Is.EquivalentTo(expectedP18ReceiptOwners.Keys));
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration
+            in coreComposition.P18ReceiptRegistrations)
+        {
+            Assert.That(expectedP18ReceiptOwners.TryGetValue(registration.SectionId, out object expectedOwner), Is.True);
+            Assert.That(registration.Role, Is.EqualTo(OwnerSectionRole.Required));
+            Assert.That(registration.HasBaseline, Is.True);
+            Assert.That(registration.BaselineOwnerInstanceIdentity, Is.SameAs(expectedOwner));
+            OwnerSectionCensusWitness witness = registration.Provider.GetCurrentCensus();
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(expectedOwner));
+            Assert.That(witness.Cardinality, Is.EqualTo(registration.BaselineCardinality));
+            Assert.That(witness.Revision, Is.EqualTo(registration.BaselineRevision));
+        }
         Dictionary<string, object> expectedP12FOwners = new Dictionary<string, object>(StringComparer.Ordinal)
         {
             [ActorChoiceP11CensusProvider.SectionId] =
@@ -842,18 +1004,29 @@ public sealed class DailyV1ApplicationHostTests
             Assert.That(diagnostic, Does.Contain(sectionId),
                 "The production start diagnostic must name each exact missing provider section.");
         }
-        HashSet<string> expectedHostProjectedSectionIds = new HashSet<string>(new[]
-        {
-            DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
-            DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
-        }, StringComparer.Ordinal);
+        HashSet<string> expectedCoreLocalObservationSectionIds = new HashSet<string>(StringComparer.Ordinal);
         Assert.That(preparation.CoreSession.OwnerGraph.Npcs.Count, Is.EqualTo(10),
             "This proving fixture has ten selected NPC owner rows; its exact host-projected receipt gap depends on that roster.");
         foreach (DailyV1NpcRuntimeOwners npcOwner in preparation.CoreSession.OwnerGraph.Npcs)
         {
-            Assert.That(expectedHostProjectedSectionIds.Add(
+            Assert.That(expectedCoreLocalObservationSectionIds.Add(
                     DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsSectionIdFor(npcOwner.RuntimeId)),
                 Is.True, "Each selected NPC contributes one distinct local-observation receipt row.");
+            string localObservationSectionId =
+                DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsSectionIdFor(npcOwner.RuntimeId);
+            Assert.That(coreProviderSectionIds.Contains(localObservationSectionId), Is.True,
+                "The selected local-observation receipt section is now registered from the exact Core owner.");
+            DailyV1OwnerSectionCensusProviderRegistration localObservationRegistration =
+                coreComposition.Registrations.Single(registration =>
+                    string.Equals(registration.SectionId, localObservationSectionId, StringComparison.Ordinal));
+            Assert.That(localObservationRegistration.BaselineOwnerInstanceIdentity,
+                Is.SameAs(npcOwner.LocalObservationReceipts));
+            OwnerSectionCensusWitness localObservationWitness =
+                localObservationRegistration.Provider.GetCurrentCensus();
+            Assert.That(localObservationWitness.OwnerInstanceIdentity,
+                Is.SameAs(npcOwner.LocalObservationReceipts));
+            Assert.That(localObservationWitness.Cardinality, Is.Zero);
+            Assert.That(localObservationWitness.Revision, Is.Zero);
             string merchantReceiptSectionId =
                 DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsSectionIdFor(npcOwner.RuntimeId);
             Assert.That(coreProviderSectionIds.Contains(merchantReceiptSectionId), Is.True,
@@ -870,15 +1043,13 @@ public sealed class DailyV1ApplicationHostTests
                 "P18 receipt production remains excluded from the P12 Daily-v1 profile.");
             Assert.That(merchantReceiptWitness.Revision, Is.Zero);
         }
-        Assert.That(expectedHostProjectedSectionIds.Count, Is.EqualTo(12),
-            "The exact host-projected receipt gap is two fixed rows plus one LocalObservation row for each of ten selected NPCs.");
-        Assert.That(exactMissingSectionIds, Is.EquivalentTo(expectedHostProjectedSectionIds),
-            "The complete selected census has exactly these host-projected receipt rows missing from Core composition.");
-        TestContext.Progress.WriteLine(
-            "Current Core startup provider gaps: " + string.Join(", ", exactMissingSectionIds));
+        Assert.That(expectedCoreLocalObservationSectionIds.Count, Is.EqualTo(10));
+        Assert.That(exactMissingSectionIds, Is.Empty,
+            "Core registration now covers every row in the complete selected Daily-v1 89-family vector.");
+        Assert.That(coreProviderSectionIds, Is.EquivalentTo(testProfileSectionIds));
         Assert.That(preparation.CoreSession.ExecutionBoundaryState
-            .HasSealedSelectedOwnerSectionCensusRegistry, Is.False,
-            "A partial Core provider set must not be registered or sealed.");
+            .HasSealedSelectedOwnerSectionCensusRegistry, Is.True,
+            "The full 89-family Core census is sealed even though this host deliberately lacks its runtime operation inventory.");
 
         Assert.That(application.TryStartDotNetOnExistingApplication(
                 definitions, host,

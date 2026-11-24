@@ -53,7 +53,9 @@ public static class P12DNpcReceiptOwnerCensusProvider
         public OwnerSectionCensusWitness GetCurrentCensus()
         {
             object currentOwner = kind == ReceiptOwnerKind.LocalObservation
-                ? (object)npcOwner.ExistingLocalKnowledgeObservationRuntime
+                ? npcOwner.SelectedRuntimeOwners != null
+                    ? (object)npcOwner.SelectedRuntimeOwners.LocalObservationReceipts
+                    : npcOwner.ExistingLocalKnowledgeObservationRuntime
                 : npcOwner.SelectedRuntimeOwners != null
                     ? (object)npcOwner.SelectedRuntimeOwners.MerchantTradeStateReceipts
                     : npcOwner.ExistingMerchantTradeStateRuntime;
@@ -118,8 +120,9 @@ public static class P12DNpcReceiptOwnerCensusProvider
                     nameof(roster));
             }
 
-            NpcLocalKnowledgeObservationRuntime localObservation =
-                npc.ExistingLocalKnowledgeObservationRuntime;
+            object localObservation = npc.SelectedRuntimeOwners != null
+                ? (object)npc.SelectedRuntimeOwners.LocalObservationReceipts
+                : npc.ExistingLocalKnowledgeObservationRuntime;
             object merchantTradeState = npc.SelectedRuntimeOwners != null
                 ? (object)npc.SelectedRuntimeOwners.MerchantTradeStateReceipts
                 : npc.ExistingMerchantTradeStateRuntime;
@@ -147,7 +150,9 @@ public static class P12DNpcReceiptOwnerCensusProvider
                 : npc.ExistingMerchantTradeStateRuntime;
             SectionProvider localObservationProvider = new SectionProvider(
                 npc,
-                npc.ExistingLocalKnowledgeObservationRuntime,
+                npc.SelectedRuntimeOwners != null
+                    ? (object)npc.SelectedRuntimeOwners.LocalObservationReceipts
+                    : npc.ExistingLocalKnowledgeObservationRuntime,
                 ReceiptOwnerKind.LocalObservation,
                 LocalObservationSectionIdFor(npc.RuntimeId));
             SectionProvider merchantTradeStateProvider = new SectionProvider(
@@ -212,6 +217,11 @@ public static class P12DNpcReceiptOwnerCensusProvider
     {
         cardinality = 0;
         revision = 0L;
+        if (kind == ReceiptOwnerKind.LocalObservation
+            && owner is DailyV1NpcLocalObservationReceiptOwner coreLocalObservation)
+        {
+            return coreLocalObservation.TryReadP12ReceiptCensus(out cardinality, out revision);
+        }
         if (kind == ReceiptOwnerKind.LocalObservation
             && owner is NpcLocalKnowledgeObservationRuntime localObservation)
         {

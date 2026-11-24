@@ -2522,10 +2522,10 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     }
 
     /// <summary>
-    /// Enforces the P12-D receipt boundary: LocalObservation remains host-owned,
-    /// while selected Merchant receipt rows bind to their exact Core owner.
-    /// Both remain exact-zero in this profile, without exporting or replaying
-    /// receipt data.
+    /// Enforces the P12-D receipt boundary: selected LocalObservation and
+    /// Merchant receipt rows bind to their exact Core owners. Compatibility
+    /// hosts still supply only unselected NPC rows. Both receipt families
+    /// remain exact-zero in this profile, without exporting or replaying data.
     /// </summary>
     internal static bool TryValidateExcludedNpcReceiptSections(
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -2616,9 +2616,14 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
 
         foreach (string runtimeId in selectedRuntimeIds)
         {
-            if (!localRows.ContainsKey(runtimeId)
+            if (!localRows.TryGetValue(runtimeId, out OwnerSectionCensusSnapshot localRow)
                 || !merchantRows.TryGetValue(runtimeId, out OwnerSectionCensusSnapshot merchantRow)
                 || !selectedNpcOwners.TryGetValue(runtimeId, out DailyV1NpcRuntimeOwners npcOwner)
+                || npcOwner.LocalObservationReceipts == null
+                || !npcOwner.LocalObservationReceipts.IsExactEmpty
+                || !ReferenceEquals(
+                    localRow.OwnerInstanceIdentity,
+                    npcOwner.LocalObservationReceipts)
                 || npcOwner.MerchantTradeStateReceipts == null
                 || !npcOwner.MerchantTradeStateReceipts.IsExactEmpty
                 || !ReferenceEquals(
@@ -3709,11 +3714,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
 
     internal static bool IsCoreOwnedSelectedNpcCensusSectionId(string sectionId)
     {
-        if (string.IsNullOrWhiteSpace(sectionId)
-            || sectionId.StartsWith(
-                DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
-                StringComparison.Ordinal))
-            return false;
+        if (string.IsNullOrWhiteSpace(sectionId)) return false;
 
         if (sectionId.StartsWith(
             DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix,
@@ -3721,10 +3722,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             return true;
 
         foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
-            if (!string.Equals(prefix,
-                    DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
-                    StringComparison.Ordinal)
-                && sectionId.StartsWith(prefix, StringComparison.Ordinal))
+            if (sectionId.StartsWith(prefix, StringComparison.Ordinal))
                 return true;
 
         return false;

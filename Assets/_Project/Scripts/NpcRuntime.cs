@@ -1506,12 +1506,20 @@ public class NpcRuntime : ICapabilityConditionSource
 
             if (selectedOwners == null
                 || !string.Equals(selectedOwners.RuntimeId, runtimeId, StringComparison.Ordinal)
+                || localKnowledgeObservationRuntime == null
+                || !localKnowledgeObservationRuntime.CanBindSelectedOwner(
+                    selectedOwners.LocalObservationReceipts)
                 || (serializedSpatialOwner != null
                     && !ReferenceEquals(serializedSpatialOwner, selectedOwners.SpatialKnowledge)))
                 throw new ArgumentException(
                     "The selected NPC SpatialKnowledge owner must be the exact Core owner composed for the runtime.",
                     nameof(selectedDefinition));
 
+            if (!localKnowledgeObservationRuntime.TryBindSelectedOwner(
+                    selectedOwners.LocalObservationReceipts))
+                throw new ArgumentException(
+                    "The Unity LocalObservation adapter could not bind the selected Core receipt owner.",
+                    nameof(selectedDefinition));
             selectedRuntimeOwners = selectedOwners;
             spatialKnowledge ??= new SpatialKnowledgeSerializationAdapter();
             if (!spatialKnowledge.TryBind(selectedOwners.SpatialKnowledge))
@@ -1752,6 +1760,12 @@ public class NpcRuntime : ICapabilityConditionSource
                 && ExistingInventory.SelectedDailyV1Owner != null
                 && !ExistingInventory.TryBindSelectedDailyV1Owner(definitions, bindings))
                 return false;
+            if (localKnowledgeObservationRuntime == null
+                || !localKnowledgeObservationRuntime.CanBindSelectedOwner(
+                    selectedRuntimeOwners.LocalObservationReceipts)
+                || !localKnowledgeObservationRuntime.TryBindSelectedOwner(
+                    selectedRuntimeOwners.LocalObservationReceipts))
+                return false;
             if (CommercialKnowledge.SelectedOwner == null
                 || !ReferenceEquals(CommercialKnowledge.SelectedOwner,
                     selectedRuntimeOwners.CommercialKnowledge)
@@ -1810,6 +1824,10 @@ public class NpcRuntime : ICapabilityConditionSource
                 ExistingSpatialKnowledge,
                 out DailyV1NpcRuntimeOwners stagedOwners))
             return false;
+        if (localKnowledgeObservationRuntime == null
+            || !localKnowledgeObservationRuntime.CanBindSelectedOwner(
+                stagedOwners.LocalObservationReceipts))
+            return false;
         if (!stagedOwners.ActionSlot.TrySetCurrentAction(stagedCurrentAction, stagedCurrentActionPayload)
             || !stagedOwners.ActionSlot.TryInstallRevision(currentActionRevision)
             || !stagedOwners.Lifecycle.TryInstallState(lifeState, injurySeverity, lifeStateRevision)
@@ -1842,6 +1860,8 @@ public class NpcRuntime : ICapabilityConditionSource
             || !ExplorableSiteKnowledge.TryBindSelectedOwner(stagedOwners.ExplorableSiteKnowledge)
             || !AdventureSiteIntelKnowledge.TryBindSelectedOwner(stagedOwners.AdventureSiteIntelKnowledge))
             return false;
+        if (!localKnowledgeObservationRuntime.TryBindSelectedOwner(
+                stagedOwners.LocalObservationReceipts)) return false;
         selectedRuntimeOwners = stagedOwners;
         p12CrimeJusticeRevision = 0L;
         selectedDefinitionBindings = bindings;
@@ -2079,6 +2099,9 @@ public class NpcRuntime : ICapabilityConditionSource
                 : DailyV1NpcRuntimeOwners.TryCreateRestoredP12DOwner(
                     restoreState, out stagedSelectedOwners);
             if (!selectedOwnerMatches
+                || localKnowledgeObservationRuntime == null
+                || !localKnowledgeObservationRuntime.CanBindSelectedOwner(
+                    stagedSelectedOwners.LocalObservationReceipts)
                 || !state.TravelPlan.TryBindSelectedOwner(stagedSelectedOwners.TravelPlan)
                 || (state.CurrentActionRuntime != null
                     && !ReferenceEquals(state.CurrentActionRuntime.SelectedOwner,
@@ -2112,6 +2135,9 @@ public class NpcRuntime : ICapabilityConditionSource
         personIdentity = stagedPersonId;
         personIdValue = stagedPersonId?.Value;
         personRuntime = state.PersonRuntime;
+        if (stagedSelectedOwners != null
+            && !localKnowledgeObservationRuntime.TryBindSelectedOwner(
+                stagedSelectedOwners.LocalObservationReceipts)) return false;
         selectedRuntimeOwners = stagedSelectedOwners;
         selectedDefinitionBindings = null;
         residenceSettlementRuntimeId = stagedSelectedOwners == null
