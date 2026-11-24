@@ -613,6 +613,7 @@ public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpc
                 seller,
                 market,
                 selectedItem,
+                actionRuntime.TargetItem,
                 actionRuntime.Amount);
         }
         else

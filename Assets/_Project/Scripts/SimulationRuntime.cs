@@ -3412,6 +3412,11 @@ public sealed partial class SimulationRuntime : IFactualReadRuntimeState,
         {
             throw new InvalidOperationException("The selected owner graph could not be bound to this runtime boundary.");
         }
+        if (selectedOwnerGraph != null
+            && this.economyTransactionService != null
+            && !this.economyTransactionService.TryBindSelectedOwnerGraph(selectedOwnerGraph))
+            throw new InvalidOperationException(
+                "The selected runtime owner graph could not bind the exact Core keyed-sale receipt authority.");
         if (selectedOwnerGraph != null && this.politicalKnowledgeStore != null
             && !selectedOwnerGraph.TryBindPoliticalKnowledgeStore(this.politicalKnowledgeStore))
             throw new InvalidOperationException(

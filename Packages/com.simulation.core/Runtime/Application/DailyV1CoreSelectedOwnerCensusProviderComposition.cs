@@ -356,6 +356,7 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
         diagnostic = null;
         DailyV1SelectedRuntimeOwnerGraph graph = session?.OwnerGraph;
         ExplorableSiteStore owner = graph?.ExplorableSites;
+        DailyV1KeyedSaleReceiptOwner keyedSaleReceipts = graph?.KeyedSaleReceipts;
         DailyV1ExecutionBoundaryState executionState = session?.ExecutionBoundaryState;
         DailyV1DecisionOccurrenceReceiptAuthority decisionReceipts =
             session?.EventAuthority?.DecisionOccurrenceReceipts;
@@ -403,6 +404,20 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
             return false;
         }
 
+        IOwnerSectionCensusProvider keyedSaleReceiptsProvider = keyedSaleReceipts;
+        if (!TryReadWitness(keyedSaleReceiptsProvider, out OwnerSectionCensusWitness keyedSaleWitness, out diagnostic)
+            || keyedSaleWitness == null
+            || !string.Equals(keyedSaleWitness.SectionId,
+                DailyV1KeyedSaleReceiptOwner.SectionId, StringComparison.Ordinal)
+            || keyedSaleWitness.SchemaVersion != DailyV1KeyedSaleReceiptOwner.SchemaVersion
+            || !ReferenceEquals(keyedSaleWitness.OwnerInstanceIdentity, keyedSaleReceipts)
+            || keyedSaleWitness.Cardinality != 0
+            || keyedSaleWitness.Revision != 0L)
+        {
+            diagnostic = "The selected Core startup could not witness its exact-empty P18-D keyed-sale receipt owner under the P12 exclusion contract.";
+            return false;
+        }
+
         registrations = Array.AsReadOnly(new[]
         {
             new DailyV1OwnerSectionCensusProviderRegistration(
@@ -422,6 +437,15 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
                 decisionWitness.OwnerInstanceIdentity,
                 decisionWitness.Cardinality,
                 decisionWitness.Revision,
+                hasBaseline: true),
+            new DailyV1OwnerSectionCensusProviderRegistration(
+                keyedSaleWitness.SectionId,
+                keyedSaleWitness.SchemaVersion,
+                OwnerSectionRole.ExplicitlyEmpty,
+                keyedSaleReceiptsProvider,
+                keyedSaleWitness.OwnerInstanceIdentity,
+                keyedSaleWitness.Cardinality,
+                keyedSaleWitness.Revision,
                 hasBaseline: true)
         });
         return true;

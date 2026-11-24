@@ -6,6 +6,128 @@ using NUnit.Framework;
 public sealed class DailyV1SelectedOpenMarketSaleTests
 {
     [Test]
+    public void CoreKeyedSaleOwnsCommitReplayAndProposalCollision()
+    {
+        CreateFixture(out DailyV1EffectiveDefinitions definitions,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners npc,
+            out DailyV1CityRuntimeOwners city,
+            out DailyV1ItemDefinition item);
+        string actorPersonId = "core-keyed-sale-person/" + npc.RuntimeId;
+        DailyV1ActionDefinition sellGoodsAction = definitions.Actions.Values.Single(action =>
+            action.Values.actionType?.Value == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue);
+        long inventoryRevisionBefore = npc.Inventory.Revision;
+        long marketRevisionBefore = city.Market.Revision;
+        long moneyRevisionBefore = npc.MoneyAccount.Revision;
+        int inventoryBefore = npc.Inventory.GetAmount(item);
+        int marketBefore = city.Market.GetAmount(item);
+        float balanceBefore = npc.MoneyAccount.Balance;
+
+        KeyedSaleReceipt committed = ExecuteKeyedSale(
+            graph, npc, city, item, actorPersonId, sellGoodsAction,
+            "core-keyed-sale-proposal", "core-keyed-sale-fingerprint", 1);
+
+        Assert.That(committed.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
+        Assert.That(committed.Result.Success, Is.True);
+        Assert.That(committed.Snapshot.ActorPersonId, Is.EqualTo(actorPersonId));
+        Assert.That(committed.Snapshot.SellerRuntimeId, Is.EqualTo(npc.RuntimeId));
+        Assert.That(committed.Snapshot.SellerCityRuntimeId, Is.EqualTo(city.RuntimeId));
+        Assert.That(npc.Inventory.GetAmount(item), Is.EqualTo(inventoryBefore - committed.Result.Quantity));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(marketBefore + committed.Result.Quantity));
+        Assert.That(npc.MoneyAccount.Balance,
+            Is.EqualTo(balanceBefore + committed.Result.TotalPrice).Within(0.001f));
+        Assert.That(npc.Inventory.Revision, Is.EqualTo(inventoryRevisionBefore + 1));
+        Assert.That(city.Market.Revision, Is.EqualTo(marketRevisionBefore + 1));
+        Assert.That(npc.MoneyAccount.Revision, Is.EqualTo(moneyRevisionBefore + 1));
+        Assert.That(graph.KeyedSaleReceipts.Count, Is.EqualTo(1));
+        Assert.That(graph.KeyedSaleReceipts.Revision, Is.EqualTo(1));
+
+        OwnerSectionCensusWitness witness = graph.KeyedSaleReceipts.GetCurrentCensus();
+        Assert.That(witness.SectionId, Is.EqualTo(DailyV1KeyedSaleReceiptOwner.SectionId));
+        Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(graph.KeyedSaleReceipts));
+        Assert.That(witness.Cardinality, Is.EqualTo(1));
+        Assert.That(witness.Revision, Is.EqualTo(1));
+
+        KeyedSaleReceipt replay = ExecuteKeyedSale(
+            graph, npc, city, item, actorPersonId, sellGoodsAction,
+            "core-keyed-sale-proposal", "core-keyed-sale-fingerprint", 1);
+        Assert.That(replay, Is.SameAs(committed));
+        Assert.That(graph.KeyedSaleReceipts.Revision, Is.EqualTo(1));
+        Assert.That(npc.Inventory.Revision, Is.EqualTo(inventoryRevisionBefore + 1));
+        Assert.That(city.Market.Revision, Is.EqualTo(marketRevisionBefore + 1));
+        Assert.That(npc.MoneyAccount.Revision, Is.EqualTo(moneyRevisionBefore + 1));
+
+        KeyedSaleReceipt collision = ExecuteKeyedSale(
+            graph, npc, city, item, actorPersonId, sellGoodsAction,
+            "core-keyed-sale-proposal", "different-core-keyed-sale-fingerprint", 1);
+        Assert.That(collision.Outcome, Is.EqualTo(KeyedSaleOutcome.FingerprintCollision));
+        Assert.That(graph.KeyedSaleReceipts.Revision, Is.EqualTo(1));
+        Assert.That(npc.Inventory.Revision, Is.EqualTo(inventoryRevisionBefore + 1));
+        Assert.That(city.Market.Revision, Is.EqualTo(marketRevisionBefore + 1));
+        Assert.That(npc.MoneyAccount.Revision, Is.EqualTo(moneyRevisionBefore + 1));
+    }
+
+    [Test]
+    public void CoreKeyedSaleStoresTerminalRejectionWithoutEconomicMutation()
+    {
+        CreateFixture(out DailyV1EffectiveDefinitions definitions,
+            out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners npc,
+            out DailyV1CityRuntimeOwners city,
+            out DailyV1ItemDefinition item);
+        string actorPersonId = "core-keyed-sale-person/" + npc.RuntimeId;
+        DailyV1ActionDefinition sellGoodsAction = definitions.Actions.Values.Single(action =>
+            action.Values.actionType?.Value == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue);
+        long inventoryRevisionBefore = npc.Inventory.Revision;
+        long marketRevisionBefore = city.Market.Revision;
+        long moneyRevisionBefore = npc.MoneyAccount.Revision;
+        int inventoryBefore = npc.Inventory.GetAmount(item);
+        int marketBefore = city.Market.GetAmount(item);
+        float balanceBefore = npc.MoneyAccount.Balance;
+
+        KeyedSaleReceipt rejected = ExecuteKeyedSale(
+            graph, npc, city, item, actorPersonId, sellGoodsAction,
+            "core-keyed-sale-invalid-quantity", "core-keyed-sale-invalid-quantity-fingerprint", 0);
+
+        Assert.That(rejected.Outcome, Is.EqualTo(KeyedSaleOutcome.TerminalRejection));
+        Assert.That(rejected.Result.Success, Is.False);
+        Assert.That(rejected.Result.FailureReason,
+            Is.EqualTo(EconomyTransactionFailureReason.InvalidQuantity));
+        Assert.That(graph.KeyedSaleReceipts.Count, Is.EqualTo(1));
+        Assert.That(graph.KeyedSaleReceipts.Revision, Is.EqualTo(1));
+        Assert.That(npc.Inventory.GetAmount(item), Is.EqualTo(inventoryBefore));
+        Assert.That(city.Market.GetAmount(item), Is.EqualTo(marketBefore));
+        Assert.That(npc.MoneyAccount.Balance, Is.EqualTo(balanceBefore));
+        Assert.That(npc.Inventory.Revision, Is.EqualTo(inventoryRevisionBefore));
+        Assert.That(city.Market.Revision, Is.EqualTo(marketRevisionBefore));
+        Assert.That(npc.MoneyAccount.Revision, Is.EqualTo(moneyRevisionBefore));
+
+        KeyedSaleReceipt replay = ExecuteKeyedSale(
+            graph, npc, city, item, actorPersonId, sellGoodsAction,
+            "core-keyed-sale-invalid-quantity", "core-keyed-sale-invalid-quantity-fingerprint", 0);
+        Assert.That(replay, Is.SameAs(rejected));
+        Assert.That(graph.KeyedSaleReceipts.Revision, Is.EqualTo(1));
+    }
+
+    private static KeyedSaleReceipt ExecuteKeyedSale(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1CityRuntimeOwners city,
+        DailyV1ItemDefinition item,
+        string actorPersonId,
+        DailyV1ActionDefinition action,
+        string proposalId,
+        string callerFingerprint,
+        int quantity)
+    {
+        return DailyV1SelectedKeyedMarketSaleOperation.TryExecute(
+            graph, npc, city, item, proposalId, callerFingerprint,
+            "core-keyed-sale-input", "core-keyed-sale-request", actorPersonId,
+            action.DefinitionId, 1, "p18d-core-keyed-sale-test-profile", "42",
+            city.LocationRuntimeId, quantity);
+    }
+
+    [Test]
     public void CoreExecutionOwnsSelectedSaleAndCompletesP12BoundaryAfterOwnerCommit()
     {
         CreateFixture(out _, out DailyV1SelectedRuntimeOwnerGraph graph,

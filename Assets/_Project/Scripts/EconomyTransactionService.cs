@@ -2,60 +2,6 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum KeyedSaleOutcome { Committed, TerminalRejection, ProvenNoInstall, Unresolved, FingerprintCollision }
-
-public sealed class KeyedSaleSnapshot
-{
-    public string ActorChoiceInputId { get; }
-    public string RequestId { get; }
-    public string ActorPersonId { get; }
-    public string ProposalId { get; }
-    public string ActionSemanticId { get; }
-    public int ActionVersion { get; }
-    public string ProfileId { get; }
-    public string LogicalTick { get; }
-    public string MarketSiteId { get; }
-    public string CounterpartyId { get; }
-    public string ItemDefinitionId { get; }
-    public MarketLiquidityMode LiquidityMode { get; }
-    public float UnitPrice { get; }
-    public int MarketStock { get; }
-    public int SellerInventory { get; }
-    public float SellerBalance { get; }
-    public float CounterpartyBalance { get; }
-    public int RequestedQuantity { get; }
-    public int EffectiveQuantity { get; }
-    public string SellerRuntimeId { get; }
-    public string SellerCityRuntimeId { get; }
-    public bool SellerWasAlive { get; }
-    public bool SellerCouldReceive { get; }
-    public bool CounterpartyCouldPay { get; }
-    public bool MarketCouldAcceptStock { get; }
-    public long InventoryRevision { get; }
-    public long MarketRevision { get; }
-    public long SellerMoneyRevision { get; }
-    public long CounterpartyMoneyRevision { get; }
-    internal KeyedSaleSnapshot(string input, string request, string actor, string proposal, string action, int version, string profile, string tick, string site, string sellerRuntime, string sellerCityRuntime, string counterparty, string item, MarketLiquidityMode mode, float price, int stock, int inventory, float sellerBalance, float counterpartyBalance, int requested, int effective, bool alive, bool canReceive, bool counterpartyCanPay, bool marketCanAccept, long inventoryRevision, long marketRevision, long sellerMoneyRevision, long counterpartyMoneyRevision)
-    { ActorChoiceInputId=input; RequestId=request; ActorPersonId=actor; ProposalId=proposal; ActionSemanticId=action; ActionVersion=version; ProfileId=profile; LogicalTick=tick; MarketSiteId=site; SellerRuntimeId=sellerRuntime; SellerCityRuntimeId=sellerCityRuntime; CounterpartyId=counterparty; ItemDefinitionId=item; LiquidityMode=mode; UnitPrice=price; MarketStock=stock; SellerInventory=inventory; SellerBalance=sellerBalance; CounterpartyBalance=counterpartyBalance; RequestedQuantity=requested; EffectiveQuantity=effective; SellerWasAlive=alive; SellerCouldReceive=canReceive; CounterpartyCouldPay=counterpartyCanPay; MarketCouldAcceptStock=marketCanAccept; InventoryRevision=inventoryRevision; MarketRevision=marketRevision; SellerMoneyRevision=sellerMoneyRevision; CounterpartyMoneyRevision=counterpartyMoneyRevision; }
-}
-
-public sealed class KeyedSaleReceipt
-{
-    public string ProposalId { get; }
-    public string Fingerprint { get; }
-    internal string CallerFingerprint { get; }
-    public KeyedSaleOutcome Outcome { get; }
-    public KeyedSaleSnapshot Snapshot { get; }
-    public EconomyTransactionResult Result { get; }
-    private KeyedSaleReceipt(string id, string fingerprint, string callerFingerprint, KeyedSaleOutcome outcome, KeyedSaleSnapshot snapshot, EconomyTransactionResult result) { ProposalId=id; Fingerprint=fingerprint; CallerFingerprint=callerFingerprint; Outcome=outcome; Snapshot=snapshot; Result=result; }
-    internal static KeyedSaleReceipt Committed(string id,string fp,string callerFp,KeyedSaleSnapshot s,EconomyTransactionResult r) => new KeyedSaleReceipt(id,fp,callerFp,KeyedSaleOutcome.Committed,s,r);
-    internal static KeyedSaleReceipt Terminal(string id,string fp,string callerFp,KeyedSaleSnapshot s,EconomyTransactionResult r) => new KeyedSaleReceipt(id,fp,callerFp,KeyedSaleOutcome.TerminalRejection,s,r);
-    internal static KeyedSaleReceipt ProvenNoInstall(string id,string fp,string callerFp,KeyedSaleSnapshot s,EconomyTransactionResult r) => new KeyedSaleReceipt(id,fp,callerFp,KeyedSaleOutcome.ProvenNoInstall,s,r);
-    internal static KeyedSaleReceipt Unresolved(string id,string fp,string callerFp,KeyedSaleSnapshot s,EconomyTransactionResult r) => new KeyedSaleReceipt(id,fp,callerFp,KeyedSaleOutcome.Unresolved,s,r);
-    internal static KeyedSaleReceipt Rejected(string id,string fp,KeyedSaleSnapshot s,EconomyTransactionFailureReason reason) => Terminal(id,fp,fp,s,EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale,MoneyEffect.ExplicitSource,reason));
-    internal static KeyedSaleReceipt Collision(string id,string fp,string callerFp = null) => new KeyedSaleReceipt(id,fp,callerFp,KeyedSaleOutcome.FingerprintCollision,null,EconomyTransactionResult.CreateFailure(EconomyTransactionType.OpenMarketSale,MoneyEffect.ExplicitSource,EconomyTransactionFailureReason.InvalidInput));
-}
-
 public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
 {
     private readonly struct TradeItem
@@ -72,10 +18,10 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
     public const string KeyedSaleReceiptSectionId = "p12e.economy-keyed-sale-receipts";
     public const int KeyedSaleReceiptSectionSchemaVersion = 1;
 
-    private readonly List<KeyedSaleReceipt> keyedSaleReceipts = new List<KeyedSaleReceipt>();
-    private readonly object keyedSaleReceiptsOwnerIdentity = new object();
-    private long keyedSaleReceiptsRevision;
+    private DailyV1KeyedSaleReceiptOwner keyedSaleReceipts = new DailyV1KeyedSaleReceiptOwner();
     private SimulationRuntime p12CensusRuntime;
+    private DailyV1SelectedRuntimeOwnerGraph boundSelectedOwnerGraph;
+    internal DailyV1KeyedSaleReceiptOwner KeyedSaleReceipts => keyedSaleReceipts;
 
     /// <summary>
     /// Reports the exact live cardinality and revision of the keyed-sale receipt
@@ -83,12 +29,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
     /// </summary>
     public OwnerSectionCensusWitness GetKeyedSaleReceiptCensus()
     {
-        return new OwnerSectionCensusWitness(
-            KeyedSaleReceiptSectionId,
-            KeyedSaleReceiptSectionSchemaVersion,
-            keyedSaleReceiptsOwnerIdentity,
-            keyedSaleReceipts.Count,
-            keyedSaleReceiptsRevision);
+        return keyedSaleReceipts.GetCurrentCensus();
     }
 
     OwnerSectionCensusWitness IOwnerSectionCensusProvider.GetCurrentCensus()
@@ -102,6 +43,33 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         if (p12CensusRuntime != null && !ReferenceEquals(p12CensusRuntime, runtime))
             throw new InvalidOperationException("EconomyTransactionService cannot be rebound to a different P12 runtime.");
         p12CensusRuntime = runtime;
+    }
+
+    internal bool TryBindSelectedOwnerGraph(DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        DailyV1KeyedSaleReceiptOwner graphOwner = graph?.KeyedSaleReceipts;
+        if (graphOwner == null) return false;
+        if (boundSelectedOwnerGraph != null && !ReferenceEquals(boundSelectedOwnerGraph, graph))
+            return false;
+        if (ReferenceEquals(keyedSaleReceipts, graphOwner))
+        {
+            boundSelectedOwnerGraph = graph;
+            return true;
+        }
+
+        bool serviceOwnerEmpty = keyedSaleReceipts.Count == 0 && keyedSaleReceipts.Revision == 0L;
+        bool graphOwnerEmpty = graphOwner.Count == 0 && graphOwner.Revision == 0L;
+        if (serviceOwnerEmpty)
+        {
+            keyedSaleReceipts = graphOwner;
+            boundSelectedOwnerGraph = graph;
+            return true;
+        }
+
+        if (!graphOwnerEmpty || !graph.TryBindKeyedSaleReceiptOwner(keyedSaleReceipts))
+            return false;
+        boundSelectedOwnerGraph = graph;
+        return true;
     }
 
     private void NotifyNpcTradeOwnerMutation(bool tracking, string sectionId, bool ownerNotifiesCommit)
@@ -124,13 +92,54 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         string proposalId, string fingerprint, string actorChoiceInputId, string requestId,
         string actorPersonId, string actionSemanticId, int actionVersion, string profileId,
         string logicalTick, string marketSiteId, NpcRuntime seller, MarketRuntime market,
-        DailyV1ItemDefinition item, int requestedQuantity)
+        DailyV1ItemDefinition item, ItemData compatibilityItem, int requestedQuantity)
     {
-        return ExecuteKeyedMarketSale(proposalId, fingerprint, actorChoiceInputId, requestId,
-            actorPersonId, actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
-            seller, market, new TradeItem(item), requestedQuantity);
-    }
+        DailyV1SelectedRuntimeOwnerGraph graph = seller?.SelectedRuntimeOwnerGraph;
+        if (graph == null)
+        {
+            return ExecuteKeyedMarketSale(proposalId, fingerprint, actorChoiceInputId, requestId,
+                actorPersonId, actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
+                seller, market, new TradeItem(compatibilityItem), requestedQuantity);
+        }
 
+        DailyV1NpcRuntimeOwners sellerOwner = seller?.SelectedRuntimeOwners;
+        DailyV1CityRuntimeOwners cityOwner = null;
+        DailyV1MarketOwner marketOwner = market?.SelectedDailyV1Owner;
+        if (marketOwner != null)
+        {
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+            {
+                if (!ReferenceEquals(candidate?.Market, marketOwner)) continue;
+                if (cityOwner != null)
+                {
+                    cityOwner = null;
+                    break;
+                }
+                cityOwner = candidate;
+            }
+        }
+
+        // A runtime-wide graph can be visible to a mixed-roster member whose exact
+        // seller or market owner is outside that graph. Keep that keyed request on
+        // the compatibility transaction path, while retaining the one shared Core
+        // receipt authority for replay, collision, and P12 exact-empty rejection.
+        if (sellerOwner == null
+            || !graph.ContainsExactNpcOwner(sellerOwner)
+            || marketOwner == null
+            || cityOwner == null
+            || !graph.ContainsExactCityOwner(cityOwner)
+            || !ReferenceEquals(cityOwner.Market, marketOwner))
+        {
+            return ExecuteKeyedMarketSale(proposalId, fingerprint, actorChoiceInputId,
+                requestId, actorPersonId, actionSemanticId, actionVersion, profileId,
+                logicalTick, marketSiteId, seller, market, new TradeItem(compatibilityItem), requestedQuantity);
+        }
+
+        return DailyV1SelectedKeyedMarketSaleOperation.TryExecute(
+            graph, sellerOwner, cityOwner, item, proposalId, fingerprint,
+            actorChoiceInputId, requestId, actorPersonId, actionSemanticId,
+            actionVersion, profileId, logicalTick, marketSiteId, requestedQuantity);
+    }
     private KeyedSaleReceipt ExecuteKeyedMarketSale(
         string proposalId, string fingerprint, string actorChoiceInputId, string requestId,
         string actorPersonId, string actionSemanticId, int actionVersion, string profileId,
@@ -157,7 +166,7 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
 
         // The receipt revision is part of the census contract. Refuse new
         // installs if it cannot advance without wrapping or reusing a stamp.
-        if (keyedSaleReceiptsRevision == long.MaxValue)
+        if (keyedSaleReceipts.Revision == long.MaxValue)
         {
             return KeyedSaleReceipt.Rejected(
                 proposalId,
@@ -214,7 +223,9 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         float counterpartyBalanceReplacement = counterpartyAccount != null ? counterpartyAccount.Balance - total : 0f;
         KeyedSaleReceipt committed = KeyedSaleReceipt.Committed(proposalId, canonicalFingerprint, fingerprint, snapshot, result);
         KeyedSaleReceipt unresolved = KeyedSaleReceipt.Unresolved(proposalId, canonicalFingerprint, fingerprint, snapshot, result);
-        if (keyedSaleReceipts.Capacity < keyedSaleReceipts.Count + 1) keyedSaleReceipts.Capacity = keyedSaleReceipts.Count + 1;
+        if (!keyedSaleReceipts.PrepareStore(proposalId))
+            return KeyedSaleReceipt.Rejected(proposalId, fingerprint, snapshot,
+                EconomyTransactionFailureReason.TransactionCommitFailed);
         bool ready = seller.Inventory.CanInstall(invRev) && market.CanInstall(marketRev)
             && MoneyAccountOwnerBridge.CanInstall(sellerAccount, sellerMoneyRev, sellerBalanceReplacement)
             && (counterpartyAccount == null || MoneyAccountOwnerBridge.CanInstall(counterpartyAccount, counterpartyMoneyRev, counterpartyBalanceReplacement));
@@ -298,47 +309,19 @@ public sealed class EconomyTransactionService : IOwnerSectionCensusProvider
         int actionVersion, string profileId, string logicalTick, string marketSiteId,
         string itemDefinitionId, int requestedQuantity)
     {
-        // Mutable execution-time truth belongs in KeyedSaleSnapshot. This key is
-        // causal request identity and must survive actor rematerialization, movement,
-        // and changes to market state after a committed operation.
-        return CreateCanonicalFingerprint(
+        return DailyV1KeyedSaleReceiptOwner.CreateRequestFingerprint(
             proposalId, callerFingerprint, actorChoiceInputId, requestId, actorPersonId,
             actionSemanticId, actionVersion, profileId, logicalTick, marketSiteId,
             itemDefinitionId, requestedQuantity);
     }
-
-    private static string CreateCanonicalFingerprint(params object[] values)
-    {
-        System.Text.StringBuilder builder = new System.Text.StringBuilder();
-        for (int i = 0; i < values.Length; i++)
-        {
-            string value = values[i] == null
-                ? null
-                : values[i] is IFormattable formattable
-                    ? formattable.ToString(null, System.Globalization.CultureInfo.InvariantCulture)
-                    : values[i].ToString();
-            if (value == null) builder.Append("-1:");
-            else builder.Append(value.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append(':').Append(value);
-            builder.Append('|');
-        }
-        return builder.ToString();
-    }
-
     private void StoreReceipt(KeyedSaleReceipt receipt)
     {
-        long nextRevision = keyedSaleReceiptsRevision + 1L;
-        for (int i = 0; i < keyedSaleReceipts.Count; i++)
-            if (string.Equals(keyedSaleReceipts[i].ProposalId, receipt.ProposalId, StringComparison.Ordinal))
-            {
-                keyedSaleReceipts[i] = receipt;
-                keyedSaleReceiptsRevision = nextRevision;
-                return;
-            }
-        if (keyedSaleReceipts.Capacity < keyedSaleReceipts.Count + 1) keyedSaleReceipts.Capacity = keyedSaleReceipts.Count + 1;
-        keyedSaleReceipts.Add(receipt);
-        keyedSaleReceiptsRevision = nextRevision;
+        if (receipt == null
+            || !keyedSaleReceipts.PrepareStore(receipt.ProposalId)
+            || !keyedSaleReceipts.TryStore(receipt))
+            throw new InvalidOperationException(
+                "The preflighted Core keyed-sale receipt owner rejected its prepared receipt.");
     }
-
     private static EconomyTransactionResult ValidateSale(NpcRuntime npc, MarketRuntime market, TradeItem item, int requested, MarketLiquidityMode mode)
     {
         // Reuse the established sale preconditions and calculations without applying its mutations.

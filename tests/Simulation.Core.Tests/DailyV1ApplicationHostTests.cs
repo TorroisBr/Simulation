@@ -623,6 +623,74 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
+    public void PopulatedCoreKeyedSaleReceiptRejectsP12ExactEmptyComposition()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application application = new DailyV1Application();
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            "keyed-sale-p12-empty-boundary-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, dotNetIdentity: DotNetIdentity());
+
+        Assert.That(application.TryStartDotNetOnExistingApplication(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult persistenceResult,
+            out string startDiagnostic), Is.False);
+        Assert.That(preparation?.CoreSession, Is.Not.Null);
+        DailyV1ActiveRuntimeSession session = preparation.CoreSession;
+        Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreateForApplicationStart(
+            session,
+            out DailyV1CoreSelectedOwnerCensusProviderComposition emptyComposition,
+            out string emptyDiagnostic), Is.True, emptyDiagnostic);
+        Assert.That(emptyComposition.Registrations.Single(registration => string.Equals(
+            registration.SectionId, DailyV1KeyedSaleReceiptOwner.SectionId,
+            StringComparison.Ordinal)).BaselineCardinality, Is.Zero);
+
+        DailyV1SelectedRuntimeOwnerGraph graph = session.OwnerGraph;
+        DailyV1NpcRuntimeOwners seller = graph.Npcs.First(npc =>
+            npc?.Lifecycle?.LifeState == NpcLifeState.Alive
+            && npc.Travel?.CurrentCityRuntimeId != null
+            && npc.Travel.CurrentLocationRuntimeId != null
+            && graph.Cities.Any(city => string.Equals(
+                city.RuntimeId, npc.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+                && string.Equals(city.LocationRuntimeId,
+                    npc.Travel.CurrentLocationRuntimeId, StringComparison.Ordinal)));
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(candidate =>
+            string.Equals(candidate.RuntimeId, seller.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+            && string.Equals(candidate.LocationRuntimeId,
+                seller.Travel.CurrentLocationRuntimeId, StringComparison.Ordinal));
+        DailyV1ItemDefinition item = definitions.Items["TECIDO"];
+        DailyV1ActionDefinition action = definitions.Actions.Values.Single(candidate =>
+            candidate.Values.actionType?.Value == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue);
+
+        KeyedSaleReceipt receipt = DailyV1SelectedKeyedMarketSaleOperation.TryExecute(
+            graph, seller, city, item,
+            "p12-exact-empty-keyed-sale-proposal",
+            "p12-exact-empty-keyed-sale-fingerprint",
+            "p12-exact-empty-keyed-sale-input",
+            "p12-exact-empty-keyed-sale-request",
+            "unbound-test-person/" + seller.RuntimeId,
+            action.DefinitionId, 1, "selected-daily-v1-test", "0",
+            city.LocationRuntimeId, 0);
+
+        Assert.That(receipt.Outcome, Is.EqualTo(KeyedSaleOutcome.TerminalRejection));
+        Assert.That(receipt.Result.FailureReason,
+            Is.EqualTo(EconomyTransactionFailureReason.InvalidQuantity));
+        Assert.That(graph.KeyedSaleReceipts.Count, Is.EqualTo(1));
+        Assert.That(graph.KeyedSaleReceipts.Revision, Is.EqualTo(1));
+        Assert.That(graph.KeyedSaleReceipts.GetCurrentCensus().OwnerInstanceIdentity,
+            Is.SameAs(graph.KeyedSaleReceipts));
+
+        Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreateForApplicationStart(
+            session,
+            out _,
+            out string populatedDiagnostic), Is.False,
+            "P12 Daily-v1 has no keyed-sale receipt payload and must reject a populated Core receipt owner.");
+        Assert.That(populatedDiagnostic,
+            Does.Contain("exact-empty P18-D keyed-sale receipt owner"));
+    }
+    [Test]
     public void DetachedCoreStartFailsClosedUntilTheProductionOwnerCensusIsSealed()
     {
         DailyV1EffectiveDefinitions definitions =
@@ -652,8 +720,8 @@ public sealed class DailyV1ApplicationHostTests
             out string compositionDiagnostic), Is.True, compositionDiagnostic);
         Assert.That(coreComposition.P12FOwnerRegistrations, Has.Count.EqualTo(6),
             "Detached Core startup composes the five exact P12-F owners and the bound PoliticalDecision owner.");
-        Assert.That(coreComposition.ExactEmptyProfileRegistrations, Has.Count.EqualTo(2),
-            "Detached Core startup binds only the existing exact-empty site and decision-receipt owners.");
+        Assert.That(coreComposition.ExactEmptyProfileRegistrations, Has.Count.EqualTo(3),
+            "Detached Core startup binds the exact-empty site, decision-receipt, and keyed-sale receipt owners.");
         DailyV1ActiveRuntimeSession coreSession = preparation.CoreSession;
         OwnerSectionCensusWitness decisionReceiptWitness =
             coreSession.EventAuthority.DecisionOccurrenceReceipts.GetCensus();
@@ -662,7 +730,9 @@ public sealed class DailyV1ApplicationHostTests
             [DailyV1SelectedOwnerSectionCensusContract.ExplorableSiteSectionId] =
                 coreSession.OwnerGraph.ExplorableSites,
             [DailyV1DecisionOccurrenceReceiptAuthority.SectionId] =
-                decisionReceiptWitness.OwnerInstanceIdentity
+                decisionReceiptWitness.OwnerInstanceIdentity,
+            [DailyV1KeyedSaleReceiptOwner.SectionId] =
+                coreSession.OwnerGraph.KeyedSaleReceipts
         };
         Assert.That(coreComposition.ExactEmptyProfileRegistrations.Select(row => row.SectionId),
             Is.EquivalentTo(expectedExactEmptyOwners.Keys));
@@ -746,6 +816,24 @@ public sealed class DailyV1ApplicationHostTests
                 "The Core provider composition must not add rows outside the test's exact selected-profile vector.");
             coreProviderSectionIds.Add(registration.SectionId);
         }
+        DailyV1OwnerSectionCensusProviderRegistration keyedSaleReceiptRegistration =
+            coreComposition.Registrations.Single(registration => string.Equals(
+                registration.SectionId,
+                DailyV1KeyedSaleReceiptOwner.SectionId,
+                StringComparison.Ordinal));
+        Assert.That(keyedSaleReceiptRegistration.Role, Is.EqualTo(OwnerSectionRole.ExplicitlyEmpty));
+        Assert.That(keyedSaleReceiptRegistration.Provider,
+            Is.SameAs(preparation.CoreSession.OwnerGraph.KeyedSaleReceipts));
+        Assert.That(keyedSaleReceiptRegistration.BaselineOwnerInstanceIdentity,
+            Is.SameAs(preparation.CoreSession.OwnerGraph.KeyedSaleReceipts));
+        Assert.That(keyedSaleReceiptRegistration.BaselineCardinality, Is.Zero);
+        Assert.That(keyedSaleReceiptRegistration.BaselineRevision, Is.Zero);
+        OwnerSectionCensusWitness keyedSaleReceiptWitness =
+            keyedSaleReceiptRegistration.Provider.GetCurrentCensus();
+        Assert.That(keyedSaleReceiptWitness.OwnerInstanceIdentity,
+            Is.SameAs(preparation.CoreSession.OwnerGraph.KeyedSaleReceipts));
+        Assert.That(keyedSaleReceiptWitness.Cardinality, Is.Zero);
+        Assert.That(keyedSaleReceiptWitness.Revision, Is.Zero);
         List<string> exactMissingSectionIds = new List<string>();
         foreach (string sectionId in testProfileSectionIds)
         {
@@ -758,7 +846,6 @@ public sealed class DailyV1ApplicationHostTests
         {
             DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
             DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
-            "p12e.economy-keyed-sale-receipts"
         }, StringComparer.Ordinal);
         Assert.That(preparation.CoreSession.OwnerGraph.Npcs.Count, Is.EqualTo(10),
             "This proving fixture has ten selected NPC owner rows; its exact host-projected receipt gap depends on that roster.");
@@ -783,8 +870,8 @@ public sealed class DailyV1ApplicationHostTests
                 "P18 receipt production remains excluded from the P12 Daily-v1 profile.");
             Assert.That(merchantReceiptWitness.Revision, Is.Zero);
         }
-        Assert.That(expectedHostProjectedSectionIds.Count, Is.EqualTo(13),
-            "The exact host-projected receipt gap is three fixed rows plus one LocalObservation row for each of ten selected NPCs.");
+        Assert.That(expectedHostProjectedSectionIds.Count, Is.EqualTo(12),
+            "The exact host-projected receipt gap is two fixed rows plus one LocalObservation row for each of ten selected NPCs.");
         Assert.That(exactMissingSectionIds, Is.EquivalentTo(expectedHostProjectedSectionIds),
             "The complete selected census has exactly these host-projected receipt rows missing from Core composition.");
         TestContext.Progress.WriteLine(

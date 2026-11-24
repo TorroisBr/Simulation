@@ -118,7 +118,7 @@ public sealed class EconomyTransactionTests
         Assert.That(service.GetKeyedSaleReceiptCensus().OwnerInstanceIdentity, Is.SameAs(emptyCensus.OwnerInstanceIdentity));
 
         KeyedSaleReceipt first = service.TryExecuteKeyedMarketSale("proposal-1", "fingerprint-1", "input-1", "request-1", "person-1", "sell", 1, "profile", "tick-1", "site-1", seller, city.Market, item, 2);
-        Assert.That(first.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
+        Assert.That(first.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed), first.Result.FailureReason.ToString());
         Assert.That(first.Result.Quantity, Is.EqualTo(2));
         Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(1));
         Assert.That(seller.Money, Is.EqualTo(first.Result.TotalPrice));
@@ -163,7 +163,7 @@ public sealed class EconomyTransactionTests
         otherSeller.Inventory.AddItem(otherItem, 3);
         EconomyTransactionService service = new EconomyTransactionService();
         KeyedSaleReceipt first = service.TryExecuteKeyedMarketSale("fingerprint-proposal", "same-caller-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1);
-        Assert.That(first.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
+        Assert.That(first.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed), first.Result.FailureReason.ToString());
 
         Func<KeyedSaleReceipt>[] changed =
         {
@@ -417,8 +417,10 @@ public sealed class EconomyTransactionTests
         SetRevision(seller.MoneyAccount, long.MaxValue);
         KeyedSaleReceipt provenNoInstall = service.TryExecuteKeyedMarketSale("unresolved-proposal", "unresolved-fp", "input", "request", "person", "sell", 1, "profile", "tick", "site", seller, city.Market, item, 1);
         Assert.That(provenNoInstall.Outcome, Is.EqualTo(KeyedSaleOutcome.ProvenNoInstall));
-        FieldInfo tableField = typeof(EconomyTransactionService).GetField("keyedSaleReceipts", BindingFlags.Instance | BindingFlags.NonPublic);
-        List<KeyedSaleReceipt> receipts = (List<KeyedSaleReceipt>)tableField.GetValue(service);
+        FieldInfo ownerField = typeof(EconomyTransactionService).GetField("keyedSaleReceipts", BindingFlags.Instance | BindingFlags.NonPublic);
+        object receiptOwner = ownerField.GetValue(service);
+        FieldInfo tableField = receiptOwner.GetType().GetField("receipts", BindingFlags.Instance | BindingFlags.NonPublic);
+        List<KeyedSaleReceipt> receipts = (List<KeyedSaleReceipt>)tableField.GetValue(receiptOwner);
         MethodInfo unresolvedFactory = typeof(KeyedSaleReceipt).GetMethod("Unresolved", BindingFlags.Static | BindingFlags.NonPublic);
         KeyedSaleReceipt unresolved = (KeyedSaleReceipt)unresolvedFactory.Invoke(null, new object[] { provenNoInstall.ProposalId, provenNoInstall.Fingerprint, "unresolved-fp", provenNoInstall.Snapshot, provenNoInstall.Result });
         receipts[0] = unresolved;
@@ -1567,6 +1569,8 @@ public sealed class EconomyTransactionTests
         merchantSystem.AdvanceNpcTradeState(merchant);
         Assert.That(merchant.MerchantTradePlan.IsActive, Is.False,
             "After the exact owner inventory is depleted, normalization clears the selected merchant plan.");
+
+        AssertMixedRosterTypedKeyedSaleFallback(merchantSystem, merchant, actor, itemAsset, item);
     }
 
     [Test]
@@ -1922,6 +1926,45 @@ public sealed class EconomyTransactionTests
         return new NpcRuntime(id, SimulationTestFactory.CreateNpc(id), city, money);
     }
 
+    private static void AssertMixedRosterTypedKeyedSaleFallback(
+        MerchantSystem ms, NpcRuntime selectedSeller, PersonId actor,
+        ItemData asset, DailyV1ItemDefinition item)
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = selectedSeller.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+        CityRuntime compatibilityCity = SimulationTestFactory.CreateCity("mixed-city", "mixed-location",
+            SimulationTestFactory.CreateMarketItem(asset, 4, 8));
+        NpcRuntime compatibilitySeller = CreateNpc("mixed-legacy-seller", 0f, compatibilityCity);
+        compatibilitySeller.Inventory.AddItem(asset, 2);
+        Assert.That(compatibilitySeller.TryBindSelectedRuntimeOwnerGraphProvider(() => graph), Is.True);
+
+        EconomyTransactionService service = (EconomyTransactionService)
+            typeof(MerchantSystem).GetField("transactionService", BindingFlags.Instance | BindingFlags.NonPublic)
+                .GetValue(ms);
+        OwnerSectionCensusWitness before = service.GetKeyedSaleReceiptCensus();
+        int amount = compatibilitySeller.Inventory.GetAmount(asset);
+        int stock = compatibilityCity.Market.GetAmount(asset);
+        Func<KeyedSaleReceipt> execute = () => service.TryExecuteKeyedMarketSale(
+            "mixed-proposal", "mixed-fingerprint", "mixed-input", "mixed-request",
+            actor.Value, "sell", 1, "UnityBootstrap-Daily-v1", "2", "mixed-location",
+            compatibilitySeller, compatibilityCity.Market, item, asset, 1);
+
+        KeyedSaleReceipt first = execute();
+        Assert.That(first.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed), first.Result.FailureReason.ToString());
+        Assert.That(compatibilitySeller.Inventory.GetAmount(asset), Is.EqualTo(amount - 1));
+        Assert.That(compatibilityCity.Market.GetAmount(asset), Is.EqualTo(stock + 1));
+        OwnerSectionCensusWitness after = service.GetKeyedSaleReceiptCensus();
+        Assert.That(after.Cardinality, Is.EqualTo(before.Cardinality + 1));
+        Assert.That(after.Revision, Is.EqualTo(before.Revision + 1));
+
+        KeyedSaleReceipt replay = execute();
+        Assert.That(replay.Outcome, Is.EqualTo(KeyedSaleOutcome.Committed));
+        Assert.That(compatibilitySeller.Inventory.GetAmount(asset), Is.EqualTo(amount - 1));
+        Assert.That(compatibilityCity.Market.GetAmount(asset), Is.EqualTo(stock + 1));
+        OwnerSectionCensusWitness afterReplay = service.GetKeyedSaleReceiptCensus();
+        Assert.That(afterReplay.Cardinality, Is.EqualTo(after.Cardinality));
+        Assert.That(afterReplay.Revision, Is.EqualTo(after.Revision));
+    }
     private static void BindP12CensusRuntime(EconomyTransactionService service, SimulationRuntime runtime)
     {
         MethodInfo bind = typeof(SimulationRuntime).GetMethod(

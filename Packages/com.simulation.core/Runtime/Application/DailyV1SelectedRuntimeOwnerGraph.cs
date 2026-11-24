@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
 /// <summary>
-/// Read-only join of the exact selected City and NPC owner compositions held
-/// by one runtime. The graph indexes the existing authorities and owns no
-/// mutable simulation state itself.
+/// Join of the exact selected City and NPC owner compositions held by one
+/// runtime. It indexes exact owner instances and retains the shared Core
+/// keyed-sale receipt authority used by execution, census, and restoration.
 /// </summary>
 internal sealed class DailyV1SelectedRuntimeOwnerGraph
 {
@@ -18,6 +18,7 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
     internal SpatialNetworkOwner SpatialNetwork { get; }
     internal DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
     internal TravelPartyStore TravelParties { get; }
+    internal DailyV1KeyedSaleReceiptOwner KeyedSaleReceipts { get; private set; }
     internal DailyV1RuntimeIdentityIndex RuntimeIdentityIndex { get; }
     internal ExpeditionStore Expeditions { get; private set; }
     internal ExplorableSiteStore ExplorableSites { get; private set; }
@@ -57,8 +58,26 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
         SpatialNetwork = spatialNetwork;
         JusticeRecordsOwner = justiceRecordsOwner;
         TravelParties = travelParties;
+        KeyedSaleReceipts = new DailyV1KeyedSaleReceiptOwner();
         RuntimeIdentityIndex = runtimeIdentityIndex;
         PersonStore = personStore;
+    }
+
+    /// <summary>
+    /// Rebinds a newly constructed, unpublished membership graph to the same
+    /// receipt authority as its source graph. The replacement graph's
+    /// constructor-created owner must still be exact-empty.
+    /// </summary>
+    internal bool TryBindKeyedSaleReceiptOwner(DailyV1KeyedSaleReceiptOwner owner)
+    {
+        if (owner == null) return false;
+        if (ReferenceEquals(KeyedSaleReceipts, owner)) return true;
+        if (KeyedSaleReceipts == null
+            || KeyedSaleReceipts.Count != 0
+            || KeyedSaleReceipts.Revision != 0L)
+            return false;
+        KeyedSaleReceipts = owner;
+        return true;
     }
 
     /// <summary>
@@ -1358,6 +1377,11 @@ internal sealed class DailyV1SelectedRuntimeOwnerGraph
                 pendingNpcIdentityId, pendingNpcMembershipDelta, out graph))
             return false;
 
+        if (!graph.TryBindKeyedSaleReceiptOwner(KeyedSaleReceipts))
+        {
+            graph = null;
+            return false;
+        }
         if ((GenealogyStore != null && !graph.TryBindGenealogyStore(GenealogyStore))
             || (PoliticalKnowledgeStore != null
                 && !graph.TryBindPoliticalKnowledgeStore(PoliticalKnowledgeStore))

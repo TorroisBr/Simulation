@@ -1911,8 +1911,8 @@ public sealed class SimulationRuntimeAdmissionTests
         EconomyTransactionService economyTransactionService = new EconomyTransactionService();
         object owner = receiptOwner == "decision"
             ? GetDecisionOccurrenceReceiptAuthority(records.DecisionRecorder)
-            : economyTransactionService;
-        string stateField = receiptOwner == "decision" ? "receipts" : "keyedSaleReceipts";
+            : GetEconomyKeyedSaleReceiptOwner(economyTransactionService);
+        const string stateField = "receipts";
         FieldInfo state = owner.GetType().GetField(
             stateField, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(state, Is.Not.Null);
@@ -1960,13 +1960,9 @@ public sealed class SimulationRuntimeAdmissionTests
 
         object owner = receiptOwner == "decision"
             ? GetDecisionOccurrenceReceiptAuthority(records.DecisionRecorder)
-            : economyTransactionService;
-        string stateField = receiptOwner == "decision"
-            ? "receipts"
-            : "keyedSaleReceipts";
-        string revisionField = receiptOwner == "decision"
-            ? "revision"
-            : "keyedSaleReceiptsRevision";
+            : GetEconomyKeyedSaleReceiptOwner(economyTransactionService);
+        const string stateField = "receipts";
+        const string revisionField = "revision";
         if (driftKind == "revision")
         {
             FieldInfo revision = owner.GetType().GetField(
@@ -1990,6 +1986,16 @@ public sealed class SimulationRuntimeAdmissionTests
 
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure driftFailure), Is.False);
         Assert.That(driftFailure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+    }
+
+    private static object GetEconomyKeyedSaleReceiptOwner(EconomyTransactionService service)
+    {
+        FieldInfo ownerField = typeof(EconomyTransactionService).GetField(
+            "keyedSaleReceipts", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(ownerField, Is.Not.Null);
+        object owner = ownerField.GetValue(service);
+        Assert.That(owner, Is.Not.Null);
+        return owner;
     }
 
     private static object GetDecisionOccurrenceReceiptAuthority(NpcDecisionRecorder recorder)
