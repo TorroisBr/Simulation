@@ -13,6 +13,13 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
     [TearDown]
     public void TearDown() => SimulationTestFactory.CleanupDefinitions();
 
+    private static DailyV1JusticeP18ReceiptOwner GetReceiptOwner(JusticeSystem system)
+    {
+        FieldInfo ownerField = typeof(JusticeSystem).GetField("p18ReceiptOwner",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(ownerField, Is.Not.Null);
+        return (DailyV1JusticeP18ReceiptOwner)ownerField.GetValue(system);
+    }
     [Test]
     public void P12BoundJusticeAcceptsNewWantedAndSentenceRowsThroughOwnerInsertion()
     {
@@ -242,11 +249,11 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken currentToken,
             out tokenFailure), Is.True, tokenFailure.ToString());
 
-        FieldInfo receiptRevision = typeof(JusticeSystem).GetField(
-            "beginDayStepRevision", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(receiptRevision, Is.Not.Null);
-        receiptRevision.SetValue(justice, 1L);
-        Assert.That(justice.P12P18ReceiptCensusRevision, Is.EqualTo(1L));
+        DailyV1JusticeP18ReceiptOwner justiceReceipts = GetReceiptOwner(justice);
+        Assert.That(justiceReceipts.TryPrepare(DailyV1JusticeP18ReceiptKind.BeginDay,
+            "p12e-capture-nonzero", "p12e-capture-fingerprint", out var receiptMutation), Is.True);
+        justiceReceipts.InstallPrepared(receiptMutation);
+        Assert.That(justice.P12P18ReceiptCensusRevision, Is.EqualTo(2L));
         Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(runtime, currentToken, currentToken.OwnerSections,
             out P12EJusticeRecordsOwnerSnapshot nonzeroReceipt, out _), Is.False);
         Assert.That(nonzeroReceipt, Is.Null);
@@ -284,11 +291,11 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That((bool)validate.Invoke(null, new object[] { wrongOwner, owner }), Is.False);
         Assert.That((bool)validate.Invoke(null, new object[] { null, owner }), Is.False);
 
-        FieldInfo receiptRevision = typeof(JusticeSystem).GetField(
-            "beginDayStepRevision", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(receiptRevision, Is.Not.Null);
-        receiptRevision.SetValue(owner, 1L);
-        Assert.That(owner.P12P18ReceiptCensusRevision, Is.EqualTo(1L));
+        DailyV1JusticeP18ReceiptOwner justiceReceipts = GetReceiptOwner(owner);
+        Assert.That(justiceReceipts.TryPrepare(DailyV1JusticeP18ReceiptKind.BeginDay,
+            "p12e-witness-nonzero", "p12e-witness-fingerprint", out var receiptMutation), Is.True);
+        justiceReceipts.InstallPrepared(receiptMutation);
+        Assert.That(owner.P12P18ReceiptCensusRevision, Is.EqualTo(2L));
         OwnerSectionCensusSnapshot matchingNonzeroRevision = new OwnerSectionCensusSnapshot(
             exactZero.SectionId, exactZero.SchemaVersion, exactZero.Role,
             owner, 1, owner.P12P18ReceiptCensusRevision);

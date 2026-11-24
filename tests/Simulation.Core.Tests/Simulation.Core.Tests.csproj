@@ -31,6 +31,7 @@
     <Compile Include="DailyV1MutationEpochStateTests.cs" />
     <Compile Include="DailyV1RuntimeIdentityIndexTests.cs" />
     <Compile Include="P12ARuntimeIdentityOwnerCodecTests.cs" Link="Persistence/P12ARuntimeIdentityOwnerCodecTests.cs" />
+    <Compile Include="DailyV1P18ReceiptOwnerTests.cs" Link="Application/DailyV1P18ReceiptOwnerTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12ANpcOwnerDecoderTests.cs" Link="Persistence/P12ANpcOwnerDecoderTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12EPropertyEstateOwnerCodecTests.cs" Link="Persistence/P12EPropertyEstateOwnerCodecTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12EFactionOwnerCodecTests.cs" Link="Persistence/P12EFactionOwnerCodecTests.cs" />

@@ -23,8 +23,8 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     private const string SyncWantedStatusesOperationVersion = "1";
     private const string SyncWantedStatusesSnapshotVersion = "justice-sync-wanted-statuses-owner-v1";
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+    private readonly DailyV1JusticeP18ReceiptOwner p18ReceiptOwner = new DailyV1JusticeP18ReceiptOwner();
     private bool p12DailyProfileReceiptBoundaryBound;
-    private bool p12AReceiptStateInstalled;
     private readonly DailyV1JusticeRecordsOwner justiceRecordsOwner;
     private readonly Dictionary<DailyV1JusticeWantedRecordOwner, WantedRecordRuntime> wantedRecordViews =
         new Dictionary<DailyV1JusticeWantedRecordOwner, WantedRecordRuntime>();
@@ -34,15 +34,6 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         new Dictionary<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime>();
     private readonly IList<WantedRecordRuntime> wantedRecords;
     private readonly IList<PrisonSentenceRuntime> prisonSentences;
-    private Dictionary<string, JusticeBeginDayReceipt> beginDayStepReceipts =
-        new Dictionary<string, JusticeBeginDayReceipt>(StringComparer.Ordinal);
-    private long beginDayStepRevision;
-    private Dictionary<string, JusticeAdvanceSentencesReceipt> advanceSentencesStepReceipts =
-        new Dictionary<string, JusticeAdvanceSentencesReceipt>(StringComparer.Ordinal);
-    private long advanceSentencesStepRevision;
-    private Dictionary<string, JusticeSyncWantedStatusesReceipt> syncWantedStatusesStepReceipts =
-        new Dictionary<string, JusticeSyncWantedStatusesReceipt>(StringComparer.Ordinal);
-    private long syncWantedStatusesStepRevision;
     private readonly NpcStatusData freeStatus;
     private readonly NpcStatusData wantedStatus;
     private readonly NpcStatusData arrestedStatus;
@@ -54,87 +45,20 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     internal DailyV1JusticeRecordsOwner CoreOwner => justiceRecordsOwner;
     internal int P12WantedRecordCount => wantedRecords?.Count ?? -1;
     internal int P12PrisonSentenceCount => prisonSentences?.Count ?? -1;
-    internal long P12P18ReceiptCensusRevision
-    {
-        get
-        {
-            if (beginDayStepReceipts == null || advanceSentencesStepReceipts == null
-                || syncWantedStatusesStepReceipts == null
-                || beginDayStepRevision < 0L || advanceSentencesStepRevision < 0L
-                || syncWantedStatusesStepRevision < 0L)
-                throw new InvalidOperationException("Justice P18 receipt state is invalid.");
-            return checked(checked(beginDayStepRevision + beginDayStepReceipts.Count)
-                + checked(advanceSentencesStepRevision + advanceSentencesStepReceipts.Count)
-                + checked(syncWantedStatusesStepRevision + syncWantedStatusesStepReceipts.Count));
-        }
-    }
-
-    internal bool TryCaptureP12AReceiptOwnerSnapshot(out P12AJusticeReceiptOwnerSnapshot snapshot)
-    {
-        snapshot = null;
-        if (beginDayStepReceipts == null || advanceSentencesStepReceipts == null
-            || syncWantedStatusesStepReceipts == null || beginDayStepRevision < 0L
-            || advanceSentencesStepRevision < 0L || syncWantedStatusesStepRevision < 0L) return false;
-        try
-        {
-            P12AJusticeReceiptOwnerSnapshot candidate = new P12AJusticeReceiptOwnerSnapshot(
-                beginDayStepRevision, SnapshotReceipts(beginDayStepReceipts,
-                    receipt => new P12AReceiptValue(receipt.ExecutionStepIdentity, receipt.DescriptorFingerprint,
-                        receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter)),
-                advanceSentencesStepRevision, SnapshotReceipts(advanceSentencesStepReceipts,
-                    receipt => new P12AReceiptValue(receipt.ExecutionStepIdentity, receipt.DescriptorFingerprint,
-                        receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter)),
-                syncWantedStatusesStepRevision, SnapshotReceipts(syncWantedStatusesStepReceipts,
-                    receipt => new P12AReceiptValue(receipt.ExecutionStepIdentity, receipt.DescriptorFingerprint,
-                        receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter)));
-            if (!candidate.IsValid || candidate.CensusRevision != P12P18ReceiptCensusRevision) return false;
-            snapshot = candidate;
-            return true;
-        }
-        catch (OverflowException) { return false; }
-    }
-
-    internal bool TryInstallP12AReceiptOwnerSnapshot(P12AJusticeReceiptOwnerSnapshot snapshot)
-    {
-        if (snapshot == null || !snapshot.IsValid || p12AReceiptStateInstalled
-            || beginDayStepReceipts == null || advanceSentencesStepReceipts == null
-            || syncWantedStatusesStepReceipts == null || beginDayStepRevision != 0L
-            || advanceSentencesStepRevision != 0L || syncWantedStatusesStepRevision != 0L
-            || beginDayStepReceipts.Count != 0 || advanceSentencesStepReceipts.Count != 0
-            || syncWantedStatusesStepReceipts.Count != 0) return false;
-        Dictionary<string, JusticeBeginDayReceipt> begin = new Dictionary<string, JusticeBeginDayReceipt>(StringComparer.Ordinal);
-        foreach (P12AReceiptValue value in snapshot.BeginDayReceipts)
-        {
-            if (begin.ContainsKey(value.Identity)) return false;
-            begin.Add(value.Identity, new JusticeBeginDayReceipt(value.Identity, value.DescriptorFingerprint,
-                value.RevisionBefore, value.RevisionAfter));
-        }
-        Dictionary<string, JusticeAdvanceSentencesReceipt> advance =
-            new Dictionary<string, JusticeAdvanceSentencesReceipt>(StringComparer.Ordinal);
-        foreach (P12AReceiptValue value in snapshot.AdvanceSentencesReceipts)
-        {
-            if (advance.ContainsKey(value.Identity)) return false;
-            advance.Add(value.Identity, new JusticeAdvanceSentencesReceipt(value.Identity, value.DescriptorFingerprint,
-                value.RevisionBefore, value.RevisionAfter));
-        }
-        Dictionary<string, JusticeSyncWantedStatusesReceipt> sync =
-            new Dictionary<string, JusticeSyncWantedStatusesReceipt>(StringComparer.Ordinal);
-        foreach (P12AReceiptValue value in snapshot.SyncWantedStatusesReceipts)
-        {
-            if (sync.ContainsKey(value.Identity)) return false;
-            sync.Add(value.Identity, new JusticeSyncWantedStatusesReceipt(value.Identity, value.DescriptorFingerprint,
-                value.RevisionBefore, value.RevisionAfter));
-        }
-        beginDayStepReceipts = begin;
-        advanceSentencesStepReceipts = advance;
-        syncWantedStatusesStepReceipts = sync;
-        beginDayStepRevision = snapshot.BeginDayRevision;
-        advanceSentencesStepRevision = snapshot.AdvanceSentencesRevision;
-        syncWantedStatusesStepRevision = snapshot.SyncWantedStatusesRevision;
-        p12AReceiptStateInstalled = true;
-        return P12P18ReceiptCensusRevision == snapshot.CensusRevision;
-    }
-
+    internal long P12P18ReceiptCensusRevision => p18ReceiptOwner.CensusRevision;
+    internal bool TryCaptureP12AReceiptOwnerSnapshot(out P12AJusticeReceiptOwnerSnapshot snapshot) =>
+        p18ReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(out snapshot);
+    internal bool TryInstallP12AReceiptOwnerSnapshot(P12AJusticeReceiptOwnerSnapshot snapshot) =>
+        p18ReceiptOwner.TryInstallP12AReceiptOwnerSnapshot(snapshot);
+    private static JusticeBeginDayReceipt ProjectBeginDayReceipt(P12AReceiptValue value) =>
+        value == null ? null : new JusticeBeginDayReceipt(value.Identity, value.DescriptorFingerprint,
+            value.RevisionBefore, value.RevisionAfter);
+    private static JusticeAdvanceSentencesReceipt ProjectAdvanceSentencesReceipt(P12AReceiptValue value) =>
+        value == null ? null : new JusticeAdvanceSentencesReceipt(value.Identity, value.DescriptorFingerprint,
+            value.RevisionBefore, value.RevisionAfter);
+    private static JusticeSyncWantedStatusesReceipt ProjectSyncWantedStatusesReceipt(P12AReceiptValue value) =>
+        value == null ? null : new JusticeSyncWantedStatusesReceipt(value.Identity, value.DescriptorFingerprint,
+            value.RevisionBefore, value.RevisionAfter);
     public JusticeSystem(
         NpcStatusData freeStatus,
         NpcStatusData wantedStatus,
@@ -319,7 +243,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         step = null;
         failure = TimelineFailure.ContinuationFailed;
         if (operation == null || ordinal < 0 || !mutationGuardBinding.CanMutate
-            || beginDayStepRevision == long.MaxValue
+            || p18ReceiptOwner.BeginDayRevision == long.MaxValue
             || !TryCaptureBeginDaySnapshot(out _, out string ownerRevision))
         {
             return false;
@@ -338,116 +262,43 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     }
 
     /// <summary>Looks up an exact P18 boundary-step receipt without reading mutable sentence state.</summary>
-    public bool TryResolveBeginDayReceipt(
-        BoundaryContinuationManifest manifest,
-        BoundaryContinuationStep step,
-        out JusticeBeginDayReceipt receipt,
-        out TimelineFailure failure)
+    public bool TryResolveBeginDayReceipt(BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step, out JusticeBeginDayReceipt receipt, out TimelineFailure failure)
     {
         receipt = null;
         if (!TryGetBeginDayIdentity(manifest, step, out string identity, out string fingerprint))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        if (beginDayStepReceipts == null)
-        {
-            beginDayStepReceipts = new Dictionary<string, JusticeBeginDayReceipt>(StringComparer.Ordinal);
-        }
-
-        if (!beginDayStepReceipts.TryGetValue(identity, out JusticeBeginDayReceipt existing))
-        {
-            failure = TimelineFailure.None;
-            return false;
-        }
-
-        if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        receipt = existing;
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        if (!p18ReceiptOwner.TryResolve(DailyV1JusticeP18ReceiptKind.BeginDay, identity, out P12AReceiptValue value))
+        { failure = TimelineFailure.None; return false; }
+        if (!string.Equals(value.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        receipt = ProjectBeginDayReceipt(value);
         failure = TimelineFailure.None;
         return true;
     }
-
-    /// <summary>Stages the justice-owned reset and occurrence receipt as one boundary-step commit.</summary>
-    public bool TryPrepareBeginDayStep(
-        BoundaryContinuationManifest manifest,
-        BoundaryContinuationStep step,
-        out IBoundaryContinuationStepCommit prepared,
-        out TimelineFailure failure)
+    public bool TryPrepareBeginDayStep(BoundaryContinuationManifest manifest, BoundaryContinuationStep step,
+        out IBoundaryContinuationStepCommit prepared, out TimelineFailure failure)
     {
         prepared = null;
-        if (!TryGetBeginDayIdentity(manifest, step, out string identity, out string fingerprint))
+        if (!TryGetBeginDayIdentity(manifest, step, out string identity, out string fingerprint)
+            || !p18ReceiptOwner.TryPrepare(DailyV1JusticeP18ReceiptKind.BeginDay, identity, fingerprint, out var mutation))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        JusticeBeginDayReceipt receipt = ProjectBeginDayReceipt(mutation.Receipt);
+        if (mutation.IsReplay)
         {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        if (beginDayStepReceipts == null)
-        {
-            beginDayStepReceipts = new Dictionary<string, JusticeBeginDayReceipt>(StringComparer.Ordinal);
-        }
-
-        if (beginDayStepReceipts.TryGetValue(identity, out JusticeBeginDayReceipt existing))
-        {
-            if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.ContinuationFailed;
-                return false;
-            }
-
-            prepared = new JusticeBeginDayCommit(
-                this,
-                existing,
-                Array.Empty<JusticeBeginDaySentenceSnapshot>(),
-                true,
-                fingerprint,
-                step.OwnerRevision,
-                beginDayStepRevision,
-                beginDayStepReceipts,
-                beginDayStepReceipts);
+            prepared = new JusticeBeginDayCommit(this, receipt, mutation,
+                Array.Empty<JusticeBeginDaySentenceSnapshot>(), true, step.OwnerRevision);
             failure = TimelineFailure.None;
             return true;
         }
-
-        if (!mutationGuardBinding.CanMutate || beginDayStepRevision == long.MaxValue
-            || !TryCaptureBeginDaySnapshot(
-                out List<JusticeBeginDaySentenceSnapshot> snapshots,
-                out string currentOwnerRevision)
+        if (!mutationGuardBinding.CanMutate
+            || !TryCaptureBeginDaySnapshot(out List<JusticeBeginDaySentenceSnapshot> snapshots, out string currentOwnerRevision)
             || !string.Equals(currentOwnerRevision, step.OwnerRevision, StringComparison.Ordinal))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        JusticeBeginDayReceipt receipt = new JusticeBeginDayReceipt(
-            identity,
-            fingerprint,
-            beginDayStepRevision,
-            beginDayStepRevision + 1L);
-        Dictionary<string, JusticeBeginDayReceipt> nextReceipts =
-            new Dictionary<string, JusticeBeginDayReceipt>(beginDayStepReceipts, StringComparer.Ordinal)
-            {
-                [identity] = receipt
-            };
-        prepared = new JusticeBeginDayCommit(
-            this,
-            receipt,
-            snapshots,
-            false,
-            fingerprint,
-            step.OwnerRevision,
-            beginDayStepRevision,
-            beginDayStepReceipts,
-            nextReceipts);
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        prepared = new JusticeBeginDayCommit(this, receipt, mutation, snapshots, false, step.OwnerRevision);
         failure = TimelineFailure.None;
         return true;
     }
-
     /// <summary>Captures the exact roster and Justice target topology for sentence advancement.</summary>
     public bool TryCreateAdvanceSentencesStep(
         DailyBoundaryOperation operation,
@@ -478,135 +329,50 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     }
 
     /// <summary>Looks up an exact sentence-advance receipt without reading live Justice state.</summary>
-    public bool TryResolveAdvanceSentencesReceipt(
-        BoundaryContinuationManifest manifest,
-        BoundaryContinuationStep step,
-        out JusticeAdvanceSentencesReceipt receipt,
-        out TimelineFailure failure)
+    public bool TryResolveAdvanceSentencesReceipt(BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step, out JusticeAdvanceSentencesReceipt receipt, out TimelineFailure failure)
     {
         receipt = null;
         if (!TryGetAdvanceSentencesIdentity(manifest, step, out string identity, out string fingerprint))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        if (advanceSentencesStepReceipts == null)
-        {
-            advanceSentencesStepReceipts =
-                new Dictionary<string, JusticeAdvanceSentencesReceipt>(StringComparer.Ordinal);
-        }
-
-        if (!advanceSentencesStepReceipts.TryGetValue(identity, out JusticeAdvanceSentencesReceipt existing))
-        {
-            failure = TimelineFailure.None;
-            return false;
-        }
-
-        if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        receipt = existing;
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        if (!p18ReceiptOwner.TryResolve(DailyV1JusticeP18ReceiptKind.AdvanceSentences, identity, out P12AReceiptValue value))
+        { failure = TimelineFailure.None; return false; }
+        if (!string.Equals(value.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        receipt = ProjectAdvanceSentencesReceipt(value);
         failure = TimelineFailure.None;
         return true;
     }
-
     /// <summary>Stages legacy sentence advancement and its owner-local occurrence receipt.</summary>
-    public bool TryPrepareAdvanceSentencesStep(
-        BoundaryContinuationManifest manifest,
-        BoundaryContinuationStep step,
-        List<NpcRuntime> npcRuntimeList,
-        out IBoundaryContinuationStepCommit prepared,
-        out TimelineFailure failure)
+    public bool TryPrepareAdvanceSentencesStep(BoundaryContinuationManifest manifest, BoundaryContinuationStep step,
+        List<NpcRuntime> npcRuntimeList, out IBoundaryContinuationStepCommit prepared, out TimelineFailure failure)
     {
         prepared = null;
-        if (!TryGetAdvanceSentencesIdentity(manifest, step, out string identity, out string fingerprint))
+        if (!TryGetAdvanceSentencesIdentity(manifest, step, out string identity, out string fingerprint)
+            || !p18ReceiptOwner.TryPrepare(DailyV1JusticeP18ReceiptKind.AdvanceSentences,
+                identity, fingerprint, out var mutation))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        JusticeAdvanceSentencesReceipt receipt = ProjectAdvanceSentencesReceipt(mutation.Receipt);
+        if (mutation.IsReplay)
         {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        if (advanceSentencesStepReceipts == null)
-        {
-            advanceSentencesStepReceipts =
-                new Dictionary<string, JusticeAdvanceSentencesReceipt>(StringComparer.Ordinal);
-        }
-
-        if (advanceSentencesStepReceipts.TryGetValue(identity, out JusticeAdvanceSentencesReceipt existing))
-        {
-            if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.ContinuationFailed;
-                return false;
-            }
-
-            prepared = new JusticeAdvanceSentencesCommit(
-                this,
-                existing,
-                npcRuntimeList,
-                null,
-                null,
-                true,
-                fingerprint,
-                step.OwnerRevision,
-                advanceSentencesStepRevision,
-                advanceSentencesStepReceipts,
-                advanceSentencesStepReceipts);
+            prepared = new JusticeAdvanceSentencesCommit(this, receipt, mutation, npcRuntimeList,
+                null, null, true, step.OwnerRevision);
             failure = TimelineFailure.None;
             return true;
         }
-
-        if (!mutationGuardBinding.CanMutate || advanceSentencesStepRevision == long.MaxValue
-            || !string.IsNullOrEmpty(step.Payload) || !string.IsNullOrEmpty(step.PersonId)
+        if (!mutationGuardBinding.CanMutate || !string.IsNullOrEmpty(step.Payload) || !string.IsNullOrEmpty(step.PersonId)
             || !TryCaptureAdvanceSentencesSnapshot(npcRuntimeList,
-                out JusticeAdvanceSentencesSnapshot snapshot,
-                out string currentOwnerRevision)
+                out JusticeAdvanceSentencesSnapshot snapshot, out string currentOwnerRevision)
             || !string.Equals(currentOwnerRevision, step.OwnerRevision, StringComparison.Ordinal)
-            || !TryReserveAdvanceSentencesStatusCapacity(snapshot))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        JusticeAdvanceSentencesReceipt receipt = new JusticeAdvanceSentencesReceipt(
-            identity,
-            fingerprint,
-            advanceSentencesStepRevision,
-            advanceSentencesStepRevision + 1L);
-        Dictionary<string, JusticeAdvanceSentencesReceipt> nextReceipts =
-            new Dictionary<string, JusticeAdvanceSentencesReceipt>(
-                advanceSentencesStepReceipts, StringComparer.Ordinal)
-            {
-                [identity] = receipt
-            };
-        int diagnosticCapacity;
-        if (!TryGetAdvanceSentencesDiagnosticCapacity(snapshot, out diagnosticCapacity))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        List<JusticeAdvanceSentencesLogNotice> notices =
-            new List<JusticeAdvanceSentencesLogNotice>(diagnosticCapacity);
-        prepared = new JusticeAdvanceSentencesCommit(
-            this,
-            receipt,
-            npcRuntimeList,
-            snapshot,
-            notices,
-            false,
-            fingerprint,
-            step.OwnerRevision,
-            advanceSentencesStepRevision,
-            advanceSentencesStepReceipts,
-            nextReceipts);
+            || !TryReserveAdvanceSentencesStatusCapacity(snapshot)
+            || !TryGetAdvanceSentencesDiagnosticCapacity(snapshot, out int capacity))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        var notices = new List<JusticeAdvanceSentencesLogNotice>(capacity);
+        prepared = new JusticeAdvanceSentencesCommit(this, receipt, mutation, npcRuntimeList,
+            snapshot, notices, false, step.OwnerRevision);
         failure = TimelineFailure.None;
         return true;
     }
-
     /// <summary>Captures the topology for the distinct legacy wanted-status roster pass.</summary>
     public bool TryCreateSyncWantedStatusesStep(
         DailyBoundaryOperation operation,
@@ -637,323 +403,145 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     }
 
     /// <summary>Looks up an exact later wanted-status pass receipt.</summary>
-    public bool TryResolveSyncWantedStatusesReceipt(
-        BoundaryContinuationManifest manifest,
-        BoundaryContinuationStep step,
-        out JusticeSyncWantedStatusesReceipt receipt,
-        out TimelineFailure failure)
+    public bool TryResolveSyncWantedStatusesReceipt(BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step, out JusticeSyncWantedStatusesReceipt receipt, out TimelineFailure failure)
     {
         receipt = null;
         if (!TryGetSyncWantedStatusesIdentity(manifest, step, out string identity, out string fingerprint))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        if (syncWantedStatusesStepReceipts == null)
-        {
-            syncWantedStatusesStepReceipts = new Dictionary<string, JusticeSyncWantedStatusesReceipt>(StringComparer.Ordinal);
-        }
-
-        if (!syncWantedStatusesStepReceipts.TryGetValue(identity, out JusticeSyncWantedStatusesReceipt existing))
-        {
-            failure = TimelineFailure.None;
-            return false;
-        }
-
-        if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        receipt = existing;
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        if (!p18ReceiptOwner.TryResolve(DailyV1JusticeP18ReceiptKind.SyncWantedStatuses, identity, out P12AReceiptValue value))
+        { failure = TimelineFailure.None; return false; }
+        if (!string.Equals(value.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        receipt = ProjectSyncWantedStatusesReceipt(value);
         failure = TimelineFailure.None;
         return true;
     }
-
     /// <summary>Stages the separate wanted-status pass using live values after predecessor effects.</summary>
-    public bool TryPrepareSyncWantedStatusesStep(
-        BoundaryContinuationManifest manifest,
-        BoundaryContinuationStep step,
-        List<NpcRuntime> npcRuntimeList,
-        out IBoundaryContinuationStepCommit prepared,
-        out TimelineFailure failure)
+    public bool TryPrepareSyncWantedStatusesStep(BoundaryContinuationManifest manifest, BoundaryContinuationStep step,
+        List<NpcRuntime> npcRuntimeList, out IBoundaryContinuationStepCommit prepared, out TimelineFailure failure)
     {
         prepared = null;
-        if (!TryGetSyncWantedStatusesIdentity(manifest, step, out string identity, out string fingerprint))
+        if (!TryGetSyncWantedStatusesIdentity(manifest, step, out string identity, out string fingerprint)
+            || !p18ReceiptOwner.TryPrepare(DailyV1JusticeP18ReceiptKind.SyncWantedStatuses,
+                identity, fingerprint, out var mutation))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        JusticeSyncWantedStatusesReceipt receipt = ProjectSyncWantedStatusesReceipt(mutation.Receipt);
+        if (mutation.IsReplay)
         {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        if (syncWantedStatusesStepReceipts == null)
-        {
-            syncWantedStatusesStepReceipts = new Dictionary<string, JusticeSyncWantedStatusesReceipt>(StringComparer.Ordinal);
-        }
-
-        if (syncWantedStatusesStepReceipts.TryGetValue(identity, out JusticeSyncWantedStatusesReceipt existing))
-        {
-            if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.ContinuationFailed;
-                return false;
-            }
-
-            prepared = new JusticeSyncWantedStatusesCommit(
-                this, existing, npcRuntimeList, null, true, fingerprint, step.OwnerRevision,
-                syncWantedStatusesStepRevision, syncWantedStatusesStepReceipts, syncWantedStatusesStepReceipts);
+            prepared = new JusticeSyncWantedStatusesCommit(this, receipt, mutation, npcRuntimeList,
+                null, true, step.OwnerRevision);
             failure = TimelineFailure.None;
             return true;
         }
-
-        if (!mutationGuardBinding.CanMutate || syncWantedStatusesStepRevision == long.MaxValue
-            || !string.IsNullOrEmpty(step.Payload) || !string.IsNullOrEmpty(step.PersonId)
+        if (!mutationGuardBinding.CanMutate || !string.IsNullOrEmpty(step.Payload) || !string.IsNullOrEmpty(step.PersonId)
             || !TryCaptureSyncWantedStatusesSnapshot(npcRuntimeList,
-                out JusticeSyncWantedStatusesSnapshot snapshot,
-                out string currentOwnerRevision, includeMutableValues: true)
+                out JusticeSyncWantedStatusesSnapshot snapshot, out string currentOwnerRevision, includeMutableValues: true)
             || !string.Equals(currentOwnerRevision, step.OwnerRevision, StringComparison.Ordinal)
             || !TryReserveSyncWantedStatusCapacity(snapshot))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        JusticeSyncWantedStatusesReceipt receipt = new JusticeSyncWantedStatusesReceipt(
-            identity, fingerprint, syncWantedStatusesStepRevision, syncWantedStatusesStepRevision + 1L);
-        Dictionary<string, JusticeSyncWantedStatusesReceipt> nextReceipts =
-            new Dictionary<string, JusticeSyncWantedStatusesReceipt>(syncWantedStatusesStepReceipts, StringComparer.Ordinal)
-            {
-                [identity] = receipt
-            };
-        prepared = new JusticeSyncWantedStatusesCommit(
-            this, receipt, npcRuntimeList, snapshot, false, fingerprint, step.OwnerRevision,
-            syncWantedStatusesStepRevision, syncWantedStatusesStepReceipts, nextReceipts);
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        prepared = new JusticeSyncWantedStatusesCommit(this, receipt, mutation, npcRuntimeList,
+            snapshot, false, step.OwnerRevision);
         failure = TimelineFailure.None;
         return true;
     }
-
-    internal bool TryCommitSyncWantedStatusesStep(
-        JusticeSyncWantedStatusesReceipt receipt,
-        List<NpcRuntime> npcRuntimeList,
-        JusticeSyncWantedStatusesSnapshot expectedSnapshot,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedRevision,
-        Dictionary<string, JusticeSyncWantedStatusesReceipt> expectedReceipts,
-        Dictionary<string, JusticeSyncWantedStatusesReceipt> nextReceipts,
+    internal bool TryCommitSyncWantedStatusesStep(JusticeSyncWantedStatusesReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation, List<NpcRuntime> npcRuntimeList,
+        JusticeSyncWantedStatusesSnapshot expectedSnapshot, bool replay, string expectedOwnerRevision,
         out TimelineFailure failure)
     {
         failure = TimelineFailure.ContinuationFailed;
-        if (p12DailyProfileReceiptBoundaryBound)
-        {
-            failure = TimelineFailure.UnsupportedProfile;
-            return false;
-        }
-        if (receipt == null)
-        {
-            return false;
-        }
-
+        if (p12DailyProfileReceiptBoundaryBound) { failure = TimelineFailure.UnsupportedProfile; return false; }
+        if (!MatchesReceipt(receipt, mutation, DailyV1JusticeP18ReceiptKind.SyncWantedStatuses)) return false;
         if (replay)
-        {
-            if (syncWantedStatusesStepReceipts != null
-                && syncWantedStatusesStepReceipts.TryGetValue(receipt.ExecutionStepIdentity, out JusticeSyncWantedStatusesReceipt existing)
-                && ReferenceEquals(existing, receipt)
-                && string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.None;
-                return true;
-            }
-
-            return false;
-        }
-
-        if (npcRuntimeList == null || expectedSnapshot == null || !mutationGuardBinding.CanMutate
-            || syncWantedStatusesStepRevision != expectedRevision
-            || !ReferenceEquals(syncWantedStatusesStepReceipts, expectedReceipts)
-            || nextReceipts == null || !nextReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || syncWantedStatusesStepReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || syncWantedStatusesStepRevision == long.MaxValue
-            || receipt.OwnerRevisionBefore != syncWantedStatusesStepRevision
-            || receipt.OwnerRevisionAfter != syncWantedStatusesStepRevision + 1L
-            || !string.Equals(receipt.DescriptorFingerprint, fingerprint, StringComparison.Ordinal)
+        { if (!mutation.IsReplay) return false; failure = TimelineFailure.None; return true; }
+        if (mutation.IsReplay || npcRuntimeList == null || expectedSnapshot == null || !mutationGuardBinding.CanMutate
             || !TryCaptureSyncWantedStatusesSnapshot(npcRuntimeList,
-                out JusticeSyncWantedStatusesSnapshot currentSnapshot,
-                out string currentOwnerRevision, includeMutableValues: true)
+                out JusticeSyncWantedStatusesSnapshot currentSnapshot, out string currentOwnerRevision, includeMutableValues: true)
             || !string.Equals(currentOwnerRevision, expectedOwnerRevision, StringComparison.Ordinal)
             || !SameSyncWantedStatusesSnapshot(expectedSnapshot, currentSnapshot)
-            || !TryReserveSyncWantedStatusCapacity(currentSnapshot))
-        {
-            return false;
-        }
-
+            || !TryReserveSyncWantedStatusCapacity(currentSnapshot)) return false;
         foreach (JusticeSyncWantedRosterSnapshot entry in currentSnapshot.Roster)
         {
-            if (entry.Npc == null || wantedStatus == null)
-            {
-                continue;
-            }
-
-            if (entry.HasActiveWarrant)
-            {
-                entry.Npc.AddStatus(wantedStatus);
-            }
-            else
-            {
-                entry.Npc.RemoveStatus(wantedStatus);
-            }
+            if (entry.Npc == null || wantedStatus == null) continue;
+            if (entry.HasActiveWarrant) entry.Npc.AddStatus(wantedStatus); else entry.Npc.RemoveStatus(wantedStatus);
         }
-
-        syncWantedStatusesStepRevision = receipt.OwnerRevisionAfter;
-        syncWantedStatusesStepReceipts = nextReceipts;
+        p18ReceiptOwner.InstallPrepared(mutation);
         failure = TimelineFailure.None;
         return true;
     }
 
-    internal bool TryCommitBeginDayStep(
-        JusticeBeginDayReceipt receipt,
-        IReadOnlyList<JusticeBeginDaySentenceSnapshot> expectedSentences,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedBeginDayRevision,
-        Dictionary<string, JusticeBeginDayReceipt> expectedReceipts,
-        Dictionary<string, JusticeBeginDayReceipt> nextReceipts,
-        out TimelineFailure failure)
+    internal bool TryCommitBeginDayStep(JusticeBeginDayReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation, IReadOnlyList<JusticeBeginDaySentenceSnapshot> expectedSentences,
+        bool replay, string expectedOwnerRevision, out TimelineFailure failure)
     {
         failure = TimelineFailure.ContinuationFailed;
-        if (p12DailyProfileReceiptBoundaryBound)
-        {
-            failure = TimelineFailure.UnsupportedProfile;
-            return false;
-        }
-        if (receipt == null || expectedSentences == null)
-        {
-            return false;
-        }
-
+        if (p12DailyProfileReceiptBoundaryBound) { failure = TimelineFailure.UnsupportedProfile; return false; }
+        if (!MatchesReceipt(receipt, mutation, DailyV1JusticeP18ReceiptKind.BeginDay)) return false;
         if (replay)
-        {
-            if (beginDayStepReceipts != null
-                && beginDayStepReceipts.TryGetValue(receipt.ExecutionStepIdentity, out JusticeBeginDayReceipt existing)
-                && ReferenceEquals(existing, receipt)
-                && string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.None;
-                return true;
-            }
-
-            return false;
-        }
-
-        if (!mutationGuardBinding.CanMutate || beginDayStepRevision != expectedBeginDayRevision
-            || !ReferenceEquals(beginDayStepReceipts, expectedReceipts)
-            || nextReceipts == null || !nextReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || beginDayStepReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || beginDayStepRevision == long.MaxValue
-            || receipt.OwnerRevisionBefore != beginDayStepRevision
-            || receipt.OwnerRevisionAfter != beginDayStepRevision + 1L
-            || !string.Equals(receipt.DescriptorFingerprint, fingerprint, StringComparison.Ordinal)
+        { if (!mutation.IsReplay) return false; failure = TimelineFailure.None; return true; }
+        if (mutation.IsReplay || expectedSentences == null || !mutationGuardBinding.CanMutate
             || !TryCaptureBeginDaySnapshot(out List<JusticeBeginDaySentenceSnapshot> currentSentences,
                 out string currentOwnerRevision)
             || !string.Equals(currentOwnerRevision, expectedOwnerRevision, StringComparison.Ordinal)
-            || !SameSentenceReferences(expectedSentences, currentSentences))
-        {
-            return false;
-        }
-
+            || !SameSentenceReferences(expectedSentences, currentSentences)) return false;
         foreach (JusticeBeginDaySentenceSnapshot snapshot in expectedSentences)
-        {
-            if (snapshot?.Sentence != null && snapshot.WasArrestedToday)
-            {
-                snapshot.Sentence.ClearArrestedToday();
-            }
-        }
-
-        beginDayStepRevision = receipt.OwnerRevisionAfter;
-        beginDayStepReceipts = nextReceipts;
+            if (snapshot?.Sentence != null && snapshot.WasArrestedToday) snapshot.Sentence.ClearArrestedToday();
+        p18ReceiptOwner.InstallPrepared(mutation);
         failure = TimelineFailure.None;
         return true;
     }
 
-    internal bool TryCommitAdvanceSentencesStep(
-        JusticeAdvanceSentencesReceipt receipt,
-        List<NpcRuntime> npcRuntimeList,
-        JusticeAdvanceSentencesSnapshot expectedSnapshot,
-        List<JusticeAdvanceSentencesLogNotice> notices,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedRevision,
-        Dictionary<string, JusticeAdvanceSentencesReceipt> expectedReceipts,
-        Dictionary<string, JusticeAdvanceSentencesReceipt> nextReceipts,
-        out TimelineFailure failure)
+    internal bool TryCommitAdvanceSentencesStep(JusticeAdvanceSentencesReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation, List<NpcRuntime> npcRuntimeList,
+        JusticeAdvanceSentencesSnapshot expectedSnapshot, List<JusticeAdvanceSentencesLogNotice> notices,
+        bool replay, string expectedOwnerRevision, out TimelineFailure failure)
     {
         failure = TimelineFailure.ContinuationFailed;
-        if (p12DailyProfileReceiptBoundaryBound)
-        {
-            failure = TimelineFailure.UnsupportedProfile;
-            return false;
-        }
-        if (receipt == null)
-        {
-            return false;
-        }
-
+        if (p12DailyProfileReceiptBoundaryBound) { failure = TimelineFailure.UnsupportedProfile; return false; }
+        if (!MatchesReceipt(receipt, mutation, DailyV1JusticeP18ReceiptKind.AdvanceSentences)) return false;
         if (replay)
-        {
-            if (advanceSentencesStepReceipts != null
-                && advanceSentencesStepReceipts.TryGetValue(receipt.ExecutionStepIdentity,
-                    out JusticeAdvanceSentencesReceipt existing)
-                && ReferenceEquals(existing, receipt)
-                && string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.None;
-                return true;
-            }
-
-            return false;
-        }
-
-        if (npcRuntimeList == null || expectedSnapshot == null || notices == null
-            || !mutationGuardBinding.CanMutate || advanceSentencesStepRevision != expectedRevision
-            || !ReferenceEquals(advanceSentencesStepReceipts, expectedReceipts)
-            || nextReceipts == null || !nextReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || advanceSentencesStepReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || advanceSentencesStepRevision == long.MaxValue
-            || receipt.OwnerRevisionBefore != advanceSentencesStepRevision
-            || receipt.OwnerRevisionAfter != advanceSentencesStepRevision + 1L
-            || !string.Equals(receipt.DescriptorFingerprint, fingerprint, StringComparison.Ordinal)
+        { if (!mutation.IsReplay) return false; failure = TimelineFailure.None; return true; }
+        if (mutation.IsReplay || npcRuntimeList == null || expectedSnapshot == null || notices == null
+            || !mutationGuardBinding.CanMutate
             || !TryCaptureAdvanceSentencesSnapshot(npcRuntimeList,
-                out JusticeAdvanceSentencesSnapshot currentSnapshot,
-                out string currentOwnerRevision)
+                out JusticeAdvanceSentencesSnapshot currentSnapshot, out string currentOwnerRevision)
             || !string.Equals(currentOwnerRevision, expectedOwnerRevision, StringComparison.Ordinal)
             || !SameAdvanceSentencesSnapshot(expectedSnapshot, currentSnapshot)
-            || !TryReserveAdvanceSentencesStatusCapacity(currentSnapshot))
-        {
-            return false;
-        }
-
-        if (!TryCaptureAdvanceSentencesLogCandidates(
-            currentSnapshot,
+            || !TryReserveAdvanceSentencesStatusCapacity(currentSnapshot)) return false;
+        if (!TryCaptureAdvanceSentencesLogCandidates(currentSnapshot,
             out List<JusticeAdvanceSentencesSentenceLogCandidates> sentenceLogCandidates,
-            out List<JusticeAdvanceSentencesLogNotice> rosterLogCandidates))
-        {
-            return false;
-        }
-
+            out List<JusticeAdvanceSentencesLogNotice> rosterLogCandidates)) return false;
         ApplyAdvanceSentences(npcRuntimeList, notices, sentenceLogCandidates, rosterLogCandidates);
-        advanceSentencesStepRevision = receipt.OwnerRevisionAfter;
-        advanceSentencesStepReceipts = nextReceipts;
+        p18ReceiptOwner.InstallPrepared(mutation);
         failure = TimelineFailure.None;
-
-        // Diagnostics follow the durable owner receipt so an uncertain caller retry cannot replay effects.
         EmitAdvanceSentencesLogNotices(notices);
         return true;
     }
 
+    private bool MatchesReceipt<TReceipt>(TReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation, DailyV1JusticeP18ReceiptKind expectedKind)
+        where TReceipt : class
+    {
+        if (receipt == null || mutation == null || mutation.Kind != expectedKind) return false;
+        P12AReceiptValue projected = mutation.Receipt;
+        if (projected == null) return false;
+        string identity;
+        string fingerprint;
+        long before;
+        long after;
+        if (receipt is JusticeBeginDayReceipt begin)
+        { identity = begin.ExecutionStepIdentity; fingerprint = begin.DescriptorFingerprint; before = begin.OwnerRevisionBefore; after = begin.OwnerRevisionAfter; }
+        else if (receipt is JusticeAdvanceSentencesReceipt advance)
+        { identity = advance.ExecutionStepIdentity; fingerprint = advance.DescriptorFingerprint; before = advance.OwnerRevisionBefore; after = advance.OwnerRevisionAfter; }
+        else if (receipt is JusticeSyncWantedStatusesReceipt sync)
+        { identity = sync.ExecutionStepIdentity; fingerprint = sync.DescriptorFingerprint; before = sync.OwnerRevisionBefore; after = sync.OwnerRevisionAfter; }
+        else return false;
+        return string.Equals(projected.Identity, identity, StringComparison.Ordinal)
+            && string.Equals(projected.DescriptorFingerprint, fingerprint, StringComparison.Ordinal)
+            && projected.RevisionBefore == before && projected.RevisionAfter == after
+            && p18ReceiptOwner.CanCommit(mutation);
+    }
     private bool TryCaptureSyncWantedStatusesSnapshot(
         List<NpcRuntime> npcRuntimeList,
         out JusticeSyncWantedStatusesSnapshot snapshot,
@@ -962,7 +550,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     {
         snapshot = null;
         ownerRevision = null;
-        if (npcRuntimeList == null || !mutationGuardBinding.CanMutate || syncWantedStatusesStepRevision == long.MaxValue)
+        if (npcRuntimeList == null || !mutationGuardBinding.CanMutate || p18ReceiptOwner.SyncWantedStatusesRevision == long.MaxValue)
         {
             return false;
         }
@@ -973,7 +561,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         {
             SyncWantedStatusesSnapshotVersion,
             SyncWantedStatusesOperationVersion,
-            syncWantedStatusesStepRevision.ToString(CultureInfo.InvariantCulture),
+            p18ReceiptOwner.SyncWantedStatusesRevision.ToString(CultureInfo.InvariantCulture),
             WantedStatusIdentity,
             npcRuntimeList.Count.ToString(CultureInfo.InvariantCulture)
         };
@@ -1159,7 +747,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     {
         snapshots = null;
         ownerRevision = null;
-        if (!mutationGuardBinding.CanMutate || beginDayStepRevision == long.MaxValue)
+        if (!mutationGuardBinding.CanMutate || p18ReceiptOwner.BeginDayRevision == long.MaxValue)
         {
             return false;
         }
@@ -1190,7 +778,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         List<string> parts = new List<string>(3 + entries.Count)
         {
             BeginDaySnapshotVersion,
-            beginDayStepRevision.ToString(CultureInfo.InvariantCulture),
+            p18ReceiptOwner.BeginDayRevision.ToString(CultureInfo.InvariantCulture),
             entries.Count.ToString(CultureInfo.InvariantCulture)
         };
         parts.AddRange(entries);
@@ -1206,7 +794,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         snapshot = null;
         ownerRevision = null;
         if (npcRuntimeList == null || !mutationGuardBinding.CanMutate
-            || advanceSentencesStepRevision == long.MaxValue)
+            || p18ReceiptOwner.AdvanceSentencesRevision == long.MaxValue)
         {
             return false;
         }
@@ -1222,7 +810,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         {
             AdvanceSentencesSnapshotVersion,
             AdvanceSentencesOperationVersion,
-            advanceSentencesStepRevision.ToString(CultureInfo.InvariantCulture),
+            p18ReceiptOwner.AdvanceSentencesRevision.ToString(CultureInfo.InvariantCulture),
             FreeStatusIdentity,
             WantedStatusIdentity,
             ArrestedStatusIdentity,
@@ -2707,7 +2295,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         Action<JusticeSystem> committed)
     {
         if (admission == null || committed == null) return false;
-        if (!p12AReceiptStateInstalled && P12P18ReceiptCensusRevision != 0L) return false;
+        if (!p18ReceiptOwner.WasRestored && !p18ReceiptOwner.IsExactEmpty) return false;
         return justiceRecordsOwner.TryBindP12MutationBoundary(
             () => admission(this),
             () => committed(this));
@@ -2716,28 +2304,9 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     internal bool TryBindP12DailyProfileReceiptBoundary()
     {
         if (p12DailyProfileReceiptBoundaryBound) return true;
-        if (!p12AReceiptStateInstalled && P12P18ReceiptCensusRevision != 0L) return false;
+        if (!p18ReceiptOwner.WasRestored && !p18ReceiptOwner.IsExactEmpty) return false;
         p12DailyProfileReceiptBoundaryBound = true;
         return true;
-    }
-
-    private static IReadOnlyList<P12AReceiptValue> SnapshotReceipts<T>(
-        Dictionary<string, T> receipts, Func<T, P12AReceiptValue> convert)
-    {
-        if (receipts == null || convert == null) throw new ArgumentNullException();
-        List<string> identities = new List<string>(receipts.Keys);
-        identities.Sort(StringComparer.Ordinal);
-        List<P12AReceiptValue> result = new List<P12AReceiptValue>(identities.Count);
-        foreach (string identity in identities)
-        {
-            if (string.IsNullOrWhiteSpace(identity) || !receipts.TryGetValue(identity, out T receipt)
-                || ReferenceEquals(receipt, null)) throw new InvalidOperationException("Receipt owner map is invalid.");
-            P12AReceiptValue value = convert(receipt);
-            if (value == null || !string.Equals(identity, value.Identity, StringComparison.Ordinal))
-                throw new InvalidOperationException("Receipt key does not match its immutable value.");
-            result.Add(value);
-        }
-        return result.AsReadOnly();
     }
 
     private bool CanCommitP12CrimeJusticeMutation()
@@ -2930,63 +2499,27 @@ internal sealed class JusticeBeginDayCommit : IBoundaryContinuationStepCommit
 {
     private readonly JusticeSystem owner;
     private readonly JusticeBeginDayReceipt receipt;
+    private readonly DailyV1JusticeP18ReceiptMutation mutation;
     private readonly IReadOnlyList<JusticeBeginDaySentenceSnapshot> sentences;
     private readonly bool replay;
-    private readonly string fingerprint;
     private readonly string expectedOwnerRevision;
-    private readonly long expectedBeginDayRevision;
-    private readonly Dictionary<string, JusticeBeginDayReceipt> expectedReceipts;
-    private readonly Dictionary<string, JusticeBeginDayReceipt> nextReceipts;
     private bool completed;
-
     public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
     public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
     public JusticeBeginDayReceipt Receipt => receipt;
-
-    public JusticeBeginDayCommit(
-        JusticeSystem owner,
-        JusticeBeginDayReceipt receipt,
-        IReadOnlyList<JusticeBeginDaySentenceSnapshot> sentences,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedBeginDayRevision,
-        Dictionary<string, JusticeBeginDayReceipt> expectedReceipts,
-        Dictionary<string, JusticeBeginDayReceipt> nextReceipts)
-    {
-        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
-        this.receipt = receipt ?? throw new ArgumentNullException(nameof(receipt));
-        this.sentences = sentences ?? Array.Empty<JusticeBeginDaySentenceSnapshot>();
-        this.replay = replay;
-        this.fingerprint = fingerprint ?? string.Empty;
-        this.expectedOwnerRevision = expectedOwnerRevision ?? string.Empty;
-        this.expectedBeginDayRevision = expectedBeginDayRevision;
-        this.expectedReceipts = expectedReceipts;
-        this.nextReceipts = nextReceipts;
-    }
-
+    public JusticeBeginDayCommit(JusticeSystem owner, JusticeBeginDayReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation, IReadOnlyList<JusticeBeginDaySentenceSnapshot> sentences,
+        bool replay, string expectedOwnerRevision)
+    { this.owner=owner??throw new ArgumentNullException(nameof(owner)); this.receipt=receipt??throw new ArgumentNullException(nameof(receipt));
+      this.mutation=mutation??throw new ArgumentNullException(nameof(mutation)); this.sentences=sentences??Array.Empty<JusticeBeginDaySentenceSnapshot>();
+      this.replay=replay; this.expectedOwnerRevision=expectedOwnerRevision??string.Empty; }
     public bool TryCommit(out TimelineFailure failure)
     {
-        if (completed)
-        {
-            failure = TimelineFailure.None;
-            return true;
-        }
-
-        completed = owner.TryCommitBeginDayStep(
-            receipt,
-            sentences,
-            replay,
-            fingerprint,
-            expectedOwnerRevision,
-            expectedBeginDayRevision,
-            expectedReceipts,
-            nextReceipts,
-            out failure);
+        if(completed){failure=TimelineFailure.None;return true;}
+        completed=owner.TryCommitBeginDayStep(receipt,mutation,sentences,replay,expectedOwnerRevision,out failure);
         return completed;
     }
 }
-
 [Serializable]
 public sealed class JusticeSyncWantedStatusesReceipt
 {
@@ -3060,63 +2593,33 @@ internal sealed class JusticeSyncWantedRecordSnapshot
     }
 }
 
+
 internal sealed class JusticeSyncWantedStatusesCommit : IBoundaryContinuationStepCommit
 {
     private readonly JusticeSystem owner;
     private readonly JusticeSyncWantedStatusesReceipt receipt;
+    private readonly DailyV1JusticeP18ReceiptMutation mutation;
     private readonly List<NpcRuntime> npcRuntimeList;
     private readonly JusticeSyncWantedStatusesSnapshot snapshot;
     private readonly bool replay;
-    private readonly string fingerprint;
     private readonly string expectedOwnerRevision;
-    private readonly long expectedRevision;
-    private readonly Dictionary<string, JusticeSyncWantedStatusesReceipt> expectedReceipts;
-    private readonly Dictionary<string, JusticeSyncWantedStatusesReceipt> nextReceipts;
     private bool completed;
-
     public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
     public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
     public JusticeSyncWantedStatusesReceipt Receipt => receipt;
-
-    public JusticeSyncWantedStatusesCommit(
-        JusticeSystem owner,
-        JusticeSyncWantedStatusesReceipt receipt,
-        List<NpcRuntime> npcRuntimeList,
-        JusticeSyncWantedStatusesSnapshot snapshot,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedRevision,
-        Dictionary<string, JusticeSyncWantedStatusesReceipt> expectedReceipts,
-        Dictionary<string, JusticeSyncWantedStatusesReceipt> nextReceipts)
-    {
-        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
-        this.receipt = receipt ?? throw new ArgumentNullException(nameof(receipt));
-        this.npcRuntimeList = npcRuntimeList;
-        this.snapshot = snapshot;
-        this.replay = replay;
-        this.fingerprint = fingerprint ?? string.Empty;
-        this.expectedOwnerRevision = expectedOwnerRevision ?? string.Empty;
-        this.expectedRevision = expectedRevision;
-        this.expectedReceipts = expectedReceipts;
-        this.nextReceipts = nextReceipts;
-    }
-
+    public JusticeSyncWantedStatusesCommit(JusticeSystem owner, JusticeSyncWantedStatusesReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation,List<NpcRuntime> npcRuntimeList,
+        JusticeSyncWantedStatusesSnapshot snapshot,bool replay,string expectedOwnerRevision)
+    { this.owner=owner??throw new ArgumentNullException(nameof(owner));this.receipt=receipt??throw new ArgumentNullException(nameof(receipt));
+      this.mutation=mutation??throw new ArgumentNullException(nameof(mutation));this.npcRuntimeList=npcRuntimeList;
+      this.snapshot=snapshot;this.replay=replay;this.expectedOwnerRevision=expectedOwnerRevision??string.Empty; }
     public bool TryCommit(out TimelineFailure failure)
     {
-        if (completed)
-        {
-            failure = TimelineFailure.None;
-            return true;
-        }
-
-        completed = owner.TryCommitSyncWantedStatusesStep(
-            receipt, npcRuntimeList, snapshot, replay, fingerprint, expectedOwnerRevision,
-            expectedRevision, expectedReceipts, nextReceipts, out failure);
+        if(completed){failure=TimelineFailure.None;return true;}
+        completed=owner.TryCommitSyncWantedStatusesStep(receipt,mutation,npcRuntimeList,snapshot,replay,expectedOwnerRevision,out failure);
         return completed;
     }
 }
-
 [Serializable]
 public sealed class JusticeAdvanceSentencesReceipt
 {
@@ -3305,71 +2808,30 @@ internal sealed class JusticeAdvanceSentencesCommit : IBoundaryContinuationStepC
 {
     private readonly JusticeSystem owner;
     private readonly JusticeAdvanceSentencesReceipt receipt;
+    private readonly DailyV1JusticeP18ReceiptMutation mutation;
     private readonly List<NpcRuntime> npcRuntimeList;
     private readonly JusticeAdvanceSentencesSnapshot snapshot;
     private readonly List<JusticeAdvanceSentencesLogNotice> notices;
     private readonly bool replay;
-    private readonly string fingerprint;
     private readonly string expectedOwnerRevision;
-    private readonly long expectedRevision;
-    private readonly Dictionary<string, JusticeAdvanceSentencesReceipt> expectedReceipts;
-    private readonly Dictionary<string, JusticeAdvanceSentencesReceipt> nextReceipts;
     private bool completed;
-
     public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
     public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
     public JusticeAdvanceSentencesReceipt Receipt => receipt;
-
-    public JusticeAdvanceSentencesCommit(
-        JusticeSystem owner,
-        JusticeAdvanceSentencesReceipt receipt,
-        List<NpcRuntime> npcRuntimeList,
-        JusticeAdvanceSentencesSnapshot snapshot,
-        List<JusticeAdvanceSentencesLogNotice> notices,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedRevision,
-        Dictionary<string, JusticeAdvanceSentencesReceipt> expectedReceipts,
-        Dictionary<string, JusticeAdvanceSentencesReceipt> nextReceipts)
-    {
-        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
-        this.receipt = receipt ?? throw new ArgumentNullException(nameof(receipt));
-        this.npcRuntimeList = npcRuntimeList;
-        this.snapshot = snapshot;
-        this.notices = notices;
-        this.replay = replay;
-        this.fingerprint = fingerprint ?? string.Empty;
-        this.expectedOwnerRevision = expectedOwnerRevision ?? string.Empty;
-        this.expectedRevision = expectedRevision;
-        this.expectedReceipts = expectedReceipts;
-        this.nextReceipts = nextReceipts;
-    }
-
+    public JusticeAdvanceSentencesCommit(JusticeSystem owner,JusticeAdvanceSentencesReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation,List<NpcRuntime> npcRuntimeList,
+        JusticeAdvanceSentencesSnapshot snapshot,List<JusticeAdvanceSentencesLogNotice> notices,
+        bool replay,string expectedOwnerRevision)
+    { this.owner=owner??throw new ArgumentNullException(nameof(owner));this.receipt=receipt??throw new ArgumentNullException(nameof(receipt));
+      this.mutation=mutation??throw new ArgumentNullException(nameof(mutation));this.npcRuntimeList=npcRuntimeList;
+      this.snapshot=snapshot;this.notices=notices;this.replay=replay;this.expectedOwnerRevision=expectedOwnerRevision??string.Empty; }
     public bool TryCommit(out TimelineFailure failure)
     {
-        if (completed)
-        {
-            failure = TimelineFailure.None;
-            return true;
-        }
-
-        completed = owner.TryCommitAdvanceSentencesStep(
-            receipt,
-            npcRuntimeList,
-            snapshot,
-            notices,
-            replay,
-            fingerprint,
-            expectedOwnerRevision,
-            expectedRevision,
-            expectedReceipts,
-            nextReceipts,
-            out failure);
+        if(completed){failure=TimelineFailure.None;return true;}
+        completed=owner.TryCommitAdvanceSentencesStep(receipt,mutation,npcRuntimeList,snapshot,notices,replay,expectedOwnerRevision,out failure);
         return completed;
     }
 }
-
 [Serializable]
 public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
 {

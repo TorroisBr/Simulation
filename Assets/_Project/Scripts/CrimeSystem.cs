@@ -19,11 +19,8 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
     private readonly EconomyTransactionService transactionService;
     private readonly EffectiveCrimeConfiguration configuration;
     private readonly IAuthoritativeRandomSource randomSource;
-    private Dictionary<string, CrimeHiddenStatusReceipt> hiddenStatusStepReceipts =
-        new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
-    private long hiddenStatusStepRevision;
+    private readonly DailyV1CrimeP18ReceiptOwner p18ReceiptOwner = new DailyV1CrimeP18ReceiptOwner();
     private bool p12DailyProfileReceiptBoundaryBound;
-    private bool p12AReceiptStateInstalled;
     private SimulationTime simulationTime;
     private ITheftOutcomeSink theftOutcomeSink;
 
@@ -101,73 +98,21 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
     public ITheftOutcomeSink TheftOutcomeSink => theftOutcomeSink;
     public SimulationTime SimulationTime => simulationTime;
     internal JusticeSystem JusticeOwner => justiceSystem;
-    internal long P12P18ReceiptCensusRevision
-    {
-        get
-        {
-            if (hiddenStatusStepReceipts == null || hiddenStatusStepRevision < 0L)
-                throw new InvalidOperationException("Crime P18 receipt state is invalid.");
-            return checked(hiddenStatusStepRevision + hiddenStatusStepReceipts.Count);
-        }
-    }
+    internal long P12P18ReceiptCensusRevision => p18ReceiptOwner.CensusRevision;
 
     internal bool TryBindP12DailyProfileReceiptBoundary()
     {
         if (p12DailyProfileReceiptBoundaryBound) return true;
-        if (hiddenStatusStepReceipts == null
-            || (!p12AReceiptStateInstalled
-                && (hiddenStatusStepRevision != 0L || hiddenStatusStepReceipts.Count != 0)))
-            return false;
+        if (!p18ReceiptOwner.WasRestored && !p18ReceiptOwner.IsExactEmpty) return false;
         p12DailyProfileReceiptBoundaryBound = true;
         return true;
     }
 
-    internal bool TryCaptureP12AReceiptOwnerSnapshot(out P12ACrimeReceiptOwnerSnapshot snapshot)
-    {
-        snapshot = null;
-        if (hiddenStatusStepReceipts == null || hiddenStatusStepRevision < 0L) return false;
-        List<string> identities = new List<string>(hiddenStatusStepReceipts.Keys);
-        identities.Sort(StringComparer.Ordinal);
-        List<P12AReceiptValue> values = new List<P12AReceiptValue>(identities.Count);
-        foreach (string identity in identities)
-        {
-            if (string.IsNullOrWhiteSpace(identity)
-                || !hiddenStatusStepReceipts.TryGetValue(identity, out CrimeHiddenStatusReceipt receipt)
-                || receipt == null || !string.Equals(identity, receipt.ExecutionStepIdentity, StringComparison.Ordinal))
-                return false;
-            values.Add(new P12AReceiptValue(receipt.ExecutionStepIdentity,
-                receipt.DescriptorFingerprint, receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter));
-        }
-        try
-        {
-            P12ACrimeReceiptOwnerSnapshot candidate = new P12ACrimeReceiptOwnerSnapshot(
-                hiddenStatusStepRevision, values);
-            if (!candidate.IsValid || candidate.CensusRevision != P12P18ReceiptCensusRevision) return false;
-            snapshot = candidate;
-            return true;
-        }
-        catch (OverflowException) { return false; }
-    }
+    internal bool TryCaptureP12AReceiptOwnerSnapshot(out P12ACrimeReceiptOwnerSnapshot snapshot) =>
+        p18ReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(out snapshot);
 
-    internal bool TryInstallP12AReceiptOwnerSnapshot(P12ACrimeReceiptOwnerSnapshot snapshot)
-    {
-        if (snapshot == null || !snapshot.IsValid || p12AReceiptStateInstalled
-            || hiddenStatusStepReceipts == null || hiddenStatusStepRevision != 0L
-            || hiddenStatusStepReceipts.Count != 0) return false;
-        Dictionary<string, CrimeHiddenStatusReceipt> restored =
-            new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
-        foreach (P12AReceiptValue value in snapshot.Receipts)
-        {
-            if (restored.ContainsKey(value.Identity)) return false;
-            restored.Add(value.Identity, new CrimeHiddenStatusReceipt(value.Identity,
-                value.DescriptorFingerprint, value.RevisionBefore, value.RevisionAfter));
-        }
-        hiddenStatusStepReceipts = restored;
-        hiddenStatusStepRevision = snapshot.StepRevision;
-        p12AReceiptStateInstalled = true;
-        return P12P18ReceiptCensusRevision == snapshot.CensusRevision;
-    }
-
+    internal bool TryInstallP12AReceiptOwnerSnapshot(P12ACrimeReceiptOwnerSnapshot snapshot) =>
+        p18ReceiptOwner.TryInstallP12AReceiptOwnerSnapshot(snapshot);
     public bool TryBindSimulationTime(SimulationTime worldSimulationTime)
     {
         if (worldSimulationTime == null)
@@ -353,7 +298,7 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
         step = null;
         failure = TimelineFailure.ContinuationFailed;
         if (operation == null || npcRuntimeList == null || ordinal < 0
-            || !mutationGuardBinding.CanMutate || hiddenStatusStepRevision == long.MaxValue
+            || !mutationGuardBinding.CanMutate || p18ReceiptOwner.StepRevision == long.MaxValue
             || !TryCaptureHiddenStatusSnapshot(npcRuntimeList, out _, out string ownerRevision))
         {
             return false;
@@ -372,6 +317,10 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
     }
 
     /// <summary>Looks up an exact crime-owned occurrence receipt without reading the live roster.</summary>
+    private static CrimeHiddenStatusReceipt ProjectP18Receipt(P12AReceiptValue value) =>
+        value == null ? null : new CrimeHiddenStatusReceipt(value.Identity, value.DescriptorFingerprint,
+            value.RevisionBefore, value.RevisionAfter);
+
     public bool TryResolveAdvanceHiddenStatusesReceipt(
         BoundaryContinuationManifest manifest,
         BoundaryContinuationStep step,
@@ -385,29 +334,23 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
             return false;
         }
 
-        if (hiddenStatusStepReceipts == null)
-        {
-            hiddenStatusStepReceipts = new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
-        }
-
-        if (!hiddenStatusStepReceipts.TryGetValue(identity, out CrimeHiddenStatusReceipt existing))
+        if (!p18ReceiptOwner.TryResolve(identity, out P12AReceiptValue existing))
         {
             failure = TimelineFailure.None;
             return false;
         }
-
         if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
         {
             failure = TimelineFailure.ContinuationFailed;
             return false;
         }
 
-        receipt = existing;
+        receipt = ProjectP18Receipt(existing);
         failure = TimelineFailure.None;
         return true;
     }
 
-    /// <summary>Stages the legacy hidden-status traversal and its occurrence receipt as one owner commit.</summary>
+    /// <summary>Stages domain effects and a Core-owned occurrence receipt as one owner commit.</summary>
     public bool TryPrepareAdvanceHiddenStatusesStep(
         BoundaryContinuationManifest manifest,
         BoundaryContinuationStep step,
@@ -416,42 +359,23 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
         out TimelineFailure failure)
     {
         prepared = null;
-        if (!TryGetHiddenStatusIdentity(manifest, step, out string identity, out string fingerprint))
+        if (!TryGetHiddenStatusIdentity(manifest, step, out string identity, out string fingerprint)
+            || !p18ReceiptOwner.TryPrepare(identity, fingerprint, out DailyV1CrimeP18ReceiptMutation mutation))
         {
             failure = TimelineFailure.ContinuationFailed;
             return false;
         }
 
-        if (hiddenStatusStepReceipts == null)
+        CrimeHiddenStatusReceipt receipt = ProjectP18Receipt(mutation.Receipt);
+        if (mutation.IsReplay)
         {
-            hiddenStatusStepReceipts = new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
-        }
-
-        if (hiddenStatusStepReceipts.TryGetValue(identity, out CrimeHiddenStatusReceipt existing))
-        {
-            if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.ContinuationFailed;
-                return false;
-            }
-
-            prepared = new CrimeHiddenStatusCommit(
-                this,
-                existing,
-                null,
-                null,
-                true,
-                fingerprint,
-                step.OwnerRevision,
-                hiddenStatusStepRevision,
-                hiddenStatusStepReceipts,
-                hiddenStatusStepReceipts);
+            prepared = new CrimeHiddenStatusCommit(this, receipt, mutation, null, null,
+                true, step.OwnerRevision, null);
             failure = TimelineFailure.None;
             return true;
         }
 
         if (npcRuntimeList == null || !mutationGuardBinding.CanMutate
-            || hiddenStatusStepRevision == long.MaxValue
             || !TryCaptureHiddenStatusSnapshot(
                 npcRuntimeList,
                 out List<CrimeHiddenStatusSnapshotEntry> snapshots,
@@ -462,16 +386,6 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
             return false;
         }
 
-        CrimeHiddenStatusReceipt receipt = new CrimeHiddenStatusReceipt(
-            identity,
-            fingerprint,
-            hiddenStatusStepRevision,
-            hiddenStatusStepRevision + 1L);
-        Dictionary<string, CrimeHiddenStatusReceipt> nextReceipts =
-            new Dictionary<string, CrimeHiddenStatusReceipt>(hiddenStatusStepReceipts, StringComparer.Ordinal)
-            {
-                [identity] = receipt
-            };
         List<string> expiryNotices = CaptureHiddenStatusExpiryNotices(snapshots);
 
         // AddStatus must not allocate after the first timer mutation. Capacity changes do not alter domain truth.
@@ -494,33 +408,20 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
             }
         }
 
-        prepared = new CrimeHiddenStatusCommit(
-            this,
-            receipt,
-            npcRuntimeList,
-            snapshots,
-            false,
-            fingerprint,
-            step.OwnerRevision,
-            hiddenStatusStepRevision,
-            hiddenStatusStepReceipts,
-            nextReceipts,
-            expiryNotices);
+        prepared = new CrimeHiddenStatusCommit(this, receipt, mutation, npcRuntimeList,
+            snapshots, false, step.OwnerRevision, expiryNotices);
         failure = TimelineFailure.None;
         return true;
     }
 
     internal bool TryCommitAdvanceHiddenStatusesStep(
         CrimeHiddenStatusReceipt receipt,
+        DailyV1CrimeP18ReceiptMutation mutation,
         List<NpcRuntime> npcRuntimeList,
         IReadOnlyList<CrimeHiddenStatusSnapshotEntry> expectedSnapshots,
         IReadOnlyList<string> expiryNotices,
         bool replay,
-        string fingerprint,
         string expectedOwnerRevision,
-        long expectedRevision,
-        Dictionary<string, CrimeHiddenStatusReceipt> expectedReceipts,
-        Dictionary<string, CrimeHiddenStatusReceipt> nextReceipts,
         out TimelineFailure failure)
     {
         failure = TimelineFailure.ContinuationFailed;
@@ -529,34 +430,22 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
             failure = TimelineFailure.UnsupportedProfile;
             return false;
         }
-        if (receipt == null)
-        {
+        if (receipt == null || mutation == null || !p18ReceiptOwner.CanCommit(mutation)
+            || !DailyV1CrimeP18ReceiptOwner.SameReceipt(
+                mutation.Receipt,
+                new P12AReceiptValue(receipt.ExecutionStepIdentity, receipt.DescriptorFingerprint,
+                    receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter)))
             return false;
-        }
 
         if (replay)
         {
-            if (hiddenStatusStepReceipts != null
-                && hiddenStatusStepReceipts.TryGetValue(receipt.ExecutionStepIdentity, out CrimeHiddenStatusReceipt existing)
-                && ReferenceEquals(existing, receipt)
-                && string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.None;
-                return true;
-            }
-
-            return false;
+            if (!mutation.IsReplay) return false;
+            failure = TimelineFailure.None;
+            return true;
         }
 
-        if (npcRuntimeList == null || expectedSnapshots == null || expiryNotices == null
-            || !mutationGuardBinding.CanMutate || hiddenStatusStepRevision != expectedRevision
-            || !ReferenceEquals(hiddenStatusStepReceipts, expectedReceipts)
-            || nextReceipts == null || !nextReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || hiddenStatusStepReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || hiddenStatusStepRevision == long.MaxValue
-            || receipt.OwnerRevisionBefore != hiddenStatusStepRevision
-            || receipt.OwnerRevisionAfter != hiddenStatusStepRevision + 1L
-            || !string.Equals(receipt.DescriptorFingerprint, fingerprint, StringComparison.Ordinal)
+        if (mutation.IsReplay || npcRuntimeList == null || expectedSnapshots == null || expiryNotices == null
+            || !mutationGuardBinding.CanMutate
             || !TryCaptureHiddenStatusSnapshot(npcRuntimeList, out List<CrimeHiddenStatusSnapshotEntry> currentSnapshots,
                 out string currentOwnerRevision)
             || !string.Equals(currentOwnerRevision, expectedOwnerRevision, StringComparison.Ordinal)
@@ -568,42 +457,24 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
         foreach (CrimeHiddenStatusSnapshotEntry snapshot in expectedSnapshots)
         {
             NpcRuntime npcRuntime = snapshot.Npc;
-            if (npcRuntime == null)
-            {
-                continue;
-            }
-
+            if (npcRuntime == null) continue;
             if (npcRuntime.IsHidden == false)
             {
                 npcRuntime.RemoveStatus(hiddenStatus);
                 continue;
             }
-
             if (hiddenStatus != null && npcRuntime.CurrentStatus.Contains(hiddenStatus) == false)
-            {
                 npcRuntime.AddStatus(hiddenStatus);
-            }
-
             npcRuntime.AdvanceHiddenDay();
-            if (npcRuntime.IsHidden == false)
-            {
-                npcRuntime.RemoveStatus(hiddenStatus);
-            }
+            if (npcRuntime.IsHidden == false) npcRuntime.RemoveStatus(hiddenStatus);
         }
 
-        hiddenStatusStepRevision = receipt.OwnerRevisionAfter;
-        hiddenStatusStepReceipts = nextReceipts;
+        p18ReceiptOwner.InstallPrepared(mutation);
         failure = TimelineFailure.None;
-
-        // Logs are diagnostics, not source signals or world truth. Emit them only after the receipt is durable.
         foreach (string notice in expiryNotices)
-        {
             logger.Log(SimulationLogCategory.Crime, notice);
-        }
-
         return true;
     }
-
     private bool TryCaptureHiddenStatusSnapshot(
         List<NpcRuntime> npcRuntimeList,
         out List<CrimeHiddenStatusSnapshotEntry> snapshots,
@@ -611,7 +482,7 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
     {
         snapshots = null;
         ownerRevision = null;
-        if (npcRuntimeList == null || !mutationGuardBinding.CanMutate || hiddenStatusStepRevision == long.MaxValue)
+        if (npcRuntimeList == null || !mutationGuardBinding.CanMutate || p18ReceiptOwner.StepRevision == long.MaxValue)
         {
             return false;
         }
@@ -620,7 +491,7 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
         List<string> revisionParts = new List<string>(3 + npcRuntimeList.Count)
         {
             HiddenStatusSnapshotVersion,
-            hiddenStatusStepRevision.ToString(CultureInfo.InvariantCulture),
+            p18ReceiptOwner.StepRevision.ToString(CultureInfo.InvariantCulture),
             npcRuntimeList.Count.ToString(CultureInfo.InvariantCulture),
             hiddenStatus == null ? string.Empty : hiddenStatus.statusName
         };
@@ -1319,67 +1190,39 @@ internal sealed class CrimeHiddenStatusCommit : IBoundaryContinuationStepCommit
 {
     private readonly CrimeSystem owner;
     private readonly CrimeHiddenStatusReceipt receipt;
+    private readonly DailyV1CrimeP18ReceiptMutation mutation;
     private readonly List<NpcRuntime> npcRuntimeList;
     private readonly IReadOnlyList<CrimeHiddenStatusSnapshotEntry> snapshots;
     private readonly IReadOnlyList<string> expiryNotices;
     private readonly bool replay;
-    private readonly string fingerprint;
     private readonly string expectedOwnerRevision;
-    private readonly long expectedRevision;
-    private readonly Dictionary<string, CrimeHiddenStatusReceipt> expectedReceipts;
-    private readonly Dictionary<string, CrimeHiddenStatusReceipt> nextReceipts;
     private bool completed;
 
     public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
     public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
     public CrimeHiddenStatusReceipt Receipt => receipt;
 
-    public CrimeHiddenStatusCommit(
-        CrimeSystem owner,
-        CrimeHiddenStatusReceipt receipt,
-        List<NpcRuntime> npcRuntimeList,
-        IReadOnlyList<CrimeHiddenStatusSnapshotEntry> snapshots,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedRevision,
-        Dictionary<string, CrimeHiddenStatusReceipt> expectedReceipts,
-        Dictionary<string, CrimeHiddenStatusReceipt> nextReceipts,
-        IReadOnlyList<string> expiryNotices = null)
+    public CrimeHiddenStatusCommit(CrimeSystem owner, CrimeHiddenStatusReceipt receipt,
+        DailyV1CrimeP18ReceiptMutation mutation, List<NpcRuntime> npcRuntimeList,
+        IReadOnlyList<CrimeHiddenStatusSnapshotEntry> snapshots, bool replay,
+        string expectedOwnerRevision, IReadOnlyList<string> expiryNotices)
     {
         this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
         this.receipt = receipt ?? throw new ArgumentNullException(nameof(receipt));
+        this.mutation = mutation ?? throw new ArgumentNullException(nameof(mutation));
         this.npcRuntimeList = npcRuntimeList;
         this.snapshots = snapshots ?? Array.Empty<CrimeHiddenStatusSnapshotEntry>();
         this.replay = replay;
-        this.fingerprint = fingerprint ?? string.Empty;
         this.expectedOwnerRevision = expectedOwnerRevision ?? string.Empty;
-        this.expectedRevision = expectedRevision;
-        this.expectedReceipts = expectedReceipts;
-        this.nextReceipts = nextReceipts;
         this.expiryNotices = expiryNotices ?? Array.Empty<string>();
     }
 
     public bool TryCommit(out TimelineFailure failure)
     {
-        if (completed)
-        {
-            failure = TimelineFailure.None;
-            return true;
-        }
-
+        if (completed) { failure = TimelineFailure.None; return true; }
         completed = owner.TryCommitAdvanceHiddenStatusesStep(
-            receipt,
-            npcRuntimeList,
-            snapshots,
-            expiryNotices,
-            replay,
-            fingerprint,
-            expectedOwnerRevision,
-            expectedRevision,
-            expectedReceipts,
-            nextReceipts,
-            out failure);
+            receipt, mutation, npcRuntimeList, snapshots, expiryNotices, replay,
+            expectedOwnerRevision, out failure);
         return completed;
     }
 }
