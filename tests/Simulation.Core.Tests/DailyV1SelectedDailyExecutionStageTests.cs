@@ -611,6 +611,19 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
             "The installed slot is an exact admitted CrossCityBuy before the partial completion is injected.");
         Assert.That(coreBoundary.TryGetDispatchBoundary(
             actor, out IDailyV1SelectedActionDispatchBoundary dispatchBoundary), Is.True);
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> beforePartialCommitSections,
+            out long beforePartialCommitEpoch,
+            out DailyCaptureEligibilityFailure beforePartialCaptureFailure), Is.True,
+            beforePartialCaptureFailure.ToString());
+        Assert.That(state.TryCreateRestoredContinuationToken(
+            state.AdmissionContext, state.ConfigurationIdentity, state.CalendarIdentity,
+            state.CompositionProfile, state.WorldId, state.SimulationTime.AbsoluteDay,
+            1L, beforePartialCommitEpoch, beforePartialCommitSections,
+            out DailyCaptureEligibilityToken priorCaptureToken), Is.True,
+            "The partial commit starts with a valid capture token bound to the exact sealed census.");
+        Assert.That(state.CurrentCaptureToken, Is.SameAs(priorCaptureToken));
         DailyV1SelectedCrossCityBuyResult partialPurchase =
             new DailyV1SelectedCrossCityBuyResult(
                 false,
@@ -621,7 +634,8 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
         Assert.That(failure.Message, Does.Contain("partially committed"));
         Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.True,
             "A post-purchase owner conflict faults the admitted census protocol closed.");
-        Assert.That(state.CurrentCaptureToken, Is.Null);
+        Assert.That(state.CurrentCaptureToken, Is.Null,
+            "The prior completed-boundary token is revoked after the partial commit.");
         Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
             state, DailyV1CaptureScopeAllowance.None,
             out _, out _, out DailyCaptureEligibilityFailure captureFailure), Is.False,
