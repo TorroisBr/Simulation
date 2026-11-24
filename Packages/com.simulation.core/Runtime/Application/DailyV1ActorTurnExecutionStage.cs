@@ -865,11 +865,18 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
             bool rollMatches = resultPresent
                 && dispatch.ActionRollSucceeded
                     == dispatch.CrossCityBuy.ActionRollSucceeded;
+            if (!resultPresent || !rollMatches) return false;
+            if (dispatch.CrossCityBuy.Purchase?.PartialCommit == true)
+            {
+                executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+                executionState.InvalidateCurrentCaptureToken();
+                return false;
+            }
             bool successMatches = resultPresent
                 && dispatch.Succeeded == (dispatch.ActionRollSucceeded
                     && dispatch.CrossCityBuy.Purchase?.Succeeded == true);
             bool exactCrossCity = IsExactCoreCrossCityBuyPayload(actor, payload);
-            if (!resultPresent || !rollMatches || !successMatches || !exactCrossCity)
+            if (!successMatches || !exactCrossCity)
                 return false;
             return true;
         }
@@ -1525,6 +1532,13 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
             if (!IsCurrent(candidate))
                 throw new InvalidOperationException(
                     "The Core-only CrossCityBuy lost its exact selected action slot.");
+            if (result?.PartialCommit == true)
+            {
+                owner.executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+                owner.executionState.InvalidateCurrentCaptureToken();
+                throw new InvalidOperationException(
+                    "The Core-only CrossCityBuy partially committed owner state; the admitted Daily-v1 runtime is faulted closed.");
+            }
             // Core has no Unity projection to complete. The operation's owner
             // writes were already published through the active Core P12 scope.
         }

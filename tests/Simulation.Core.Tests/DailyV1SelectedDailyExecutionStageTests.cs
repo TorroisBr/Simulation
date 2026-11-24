@@ -526,6 +526,109 @@ public sealed class DailyV1SelectedDailyExecutionStageTests
     }
 
     [Test]
+    public void CoreActorTurnFaultsAndRefusesCaptureForPartialCrossCityBuyCommit()
+    {
+        DailyV1GenesisComposition composition = CreateSelectedGenesis();
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            composition, 0L, out DailyV1ActiveRuntimeSession session,
+            out string diagnostic), Is.True, diagnostic);
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        OwnerSectionCensusSnapshot[] completeVector =
+            DailyV1ApplicationSessionGateTests.CreateCoreBoundCompleteOwnerSectionVector(session);
+        List<DailyV1OwnerSectionContractIdentity> contracts =
+            new List<DailyV1OwnerSectionContractIdentity>(completeVector.Length);
+        List<DailyV1OwnerSectionCensusProviderRegistration> registrations =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(completeVector.Length);
+        Dictionary<string, MutableSelectedOwnerCensusProvider> providers =
+            new Dictionary<string, MutableSelectedOwnerCensusProvider>(StringComparer.Ordinal);
+        foreach (OwnerSectionCensusSnapshot snapshot in completeVector)
+        {
+            MutableSelectedOwnerCensusProvider provider =
+                new MutableSelectedOwnerCensusProvider(snapshot);
+            providers.Add(snapshot.SectionId, provider);
+            contracts.Add(new DailyV1OwnerSectionContractIdentity(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role));
+            registrations.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                snapshot.SectionId, snapshot.SchemaVersion, snapshot.Role, provider,
+                snapshot.OwnerInstanceIdentity, snapshot.Cardinality, snapshot.Revision,
+                hasBaseline: true));
+        }
+
+        Assert.That(state.TryReplaceSelectedOwnerSectionCensusRegistryBeforeSeal(
+            contracts, registrations), Is.True);
+        Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.True);
+        Assert.That(state.TrySealSelectedOwnerSectionCensusRegistry(registrations), Is.True);
+        Assert.That(state.TryMarkSelectedRuntimeCensusProtocolReady(), Is.True);
+        Assert.That(DailyV1CoreSelectedActorTurnExecutionBoundary.TryCreateCoreOnly(
+            state, graph, graph.PersonStore, state.SelectedActorChoiceStore,
+            state.SelectedRuntimeActorTurnCoreRoots,
+            out DailyV1CoreSelectedActorTurnExecutionBoundary coreBoundary), Is.True);
+        Assert.That(coreBoundary.UsesCoreOnlyActorTurnPath, Is.True,
+            "The tested action and P12 fault path are owned by Core without Unity host ports.");
+
+        DailyV1NpcRuntimeOwners actor = graph.Npcs.First(candidate =>
+            DailyV1NpcDefinitionRules.HasJobType(candidate.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+            && !DailyV1NpcDefinitionRules.HasMerchantBehavior(candidate.Definition,
+                graph.Definitions, DailyV1NpcDefinitionRules.LocalMerchantBehaviorValue)
+            && DailyV1NpcDefinitionRules.HasMerchantBehavior(candidate.Definition,
+                graph.Definitions, DailyV1NpcDefinitionRules.TravelingMerchantBehaviorValue));
+        DailyV1CityRuntimeOwners destination = graph.Cities.First(city =>
+            !string.Equals(city.RuntimeId, actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        DailyV1ActionDefinition buy = graph.Definitions.Actions.Values.Single(action =>
+            action.Values.actionType?.Value == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue);
+        DailyV1ItemDefinition item = graph.Definitions.Items.Values.First();
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            graph.Definitions, buy, null, destination.RuntimeId, item, 4, 1f, 1f,
+            NpcTravelReason.None, 0f, "decision/partial-cross-city-buy", null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+
+        string actionSectionId = DailyV1SelectedOwnerSectionCensusContract
+            .NpcCurrentActionPrefix + actor.RuntimeId;
+        MutableSelectedOwnerCensusProvider actionProvider = providers[actionSectionId];
+        OwnerSectionCensusWitness actionBefore = actionProvider.GetCurrentCensus();
+        Assert.That(state.TryBeginRuntimeProtocolOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(coreBoundary.CanCommitSelectedActionSlotP12Mutation(graph, actor), Is.True);
+            Assert.That(graph.TryCommitCurrentActionSlot(actor, buy, payload,
+                () => coreBoundary.CanCommitSelectedActionSlotP12Mutation(graph, actor)), Is.True);
+            actionProvider.Set(new OwnerSectionCensusSnapshot(
+                actionSectionId, actionBefore.SchemaVersion, OwnerSectionRole.Required,
+                actionBefore.OwnerInstanceIdentity, 1, actor.ActionSlot.Revision));
+            Assert.That(coreBoundary.NotifySelectedActionSlotP12MutationCommitted(
+                graph, actor, actionSectionId, actor.ActionSlot.Revision), Is.True);
+        }
+        finally
+        {
+            Assert.That(state.TryEndRuntimeProtocolOperation(), Is.True);
+        }
+
+        Assert.That(DailyV1SelectedCrossCityBuyExecution.IsValidSelectedBuy(
+            graph, actor, payload, out _, out _, out _), Is.True,
+            "The installed slot is an exact admitted CrossCityBuy before the partial completion is injected.");
+        Assert.That(coreBoundary.TryGetDispatchBoundary(
+            actor, out IDailyV1SelectedActionDispatchBoundary dispatchBoundary), Is.True);
+        DailyV1SelectedCrossCityBuyResult partialPurchase =
+            new DailyV1SelectedCrossCityBuyResult(
+                false,
+                DailyV1SelectedCrossCityBuyFailure.PostPurchaseOwnerCommit,
+                partialCommit: true);
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            dispatchBoundary.CompleteCrossCityBuy(actor, partialPurchase));
+        Assert.That(failure.Message, Does.Contain("partially committed"));
+        Assert.That(state.IsSelectedRuntimeCensusProtocolFaulted, Is.True,
+            "A post-purchase owner conflict faults the admitted census protocol closed.");
+        Assert.That(state.CurrentCaptureToken, Is.Null);
+        Assert.That(DailyV1CoreOwnerSectionCensusCapture.TryCapture(
+            state, DailyV1CaptureScopeAllowance.None,
+            out _, out _, out DailyCaptureEligibilityFailure captureFailure), Is.False,
+            "The faulted partial-commit runtime cannot publish a capturable completed day.");
+        Assert.That(captureFailure, Is.Not.EqualTo(DailyCaptureEligibilityFailure.None));
+    }
+    [Test]
     public void CoreDecisionAndSequenceAllocationsRefreshTheirExactP12RowsAndEpoch()
     {
         DailyV1GenesisComposition composition = CreateSelectedGenesis();
