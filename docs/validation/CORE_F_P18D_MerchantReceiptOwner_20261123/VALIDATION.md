@@ -2,7 +2,7 @@
 
 ## Source identity and scope
 
-This candidate was validated in `codex/core/CORE-F-restore-stage-transaction` with base commit `7c4338d1d7588df4ad3795a31a162d661afd9dd1` and base tree `92d668ed8643cb7db3fe23e29fce5559475b9de8`. The official Unity runner captured source-input digest `b3a2f912c015ee24b70c9cc9f051c8664bab14b403b3b33d2957a6f1b44d30b5`; all 1,988 snapshotted inputs matched the validated worktree.
+This candidate was validated in `codex/core/CORE-F-restore-stage-transaction` with base commit `7c4338d1d7588df4ad3795a31a162d661afd9dd1` and base tree `92d668ed8643cb7db3fe23e29fce5559475b9de8`. The implementation candidate is commit `9d914720923fd949b780d111a2d5f1f084eac735`, tree `fdd7788638638183f5bc211b8a793bba8d04b50d`, parent `7c4338d1d7588df4ad3795a31a162d661afd9dd1`. An independent exact-tip review passed before publication. The official Unity runner captured source-input digest `b3a2f912c015ee24b70c9cc9f051c8664bab14b403b3b33d2957a6f1b44d30b5`; all 1,988 snapshotted inputs matched the validated worktree.
 
 The slice moves the selected NPC Merchant trade-state receipt owner, its receipt-producing transaction behavior, and its selected census binding into the existing Core owner graph. The Unity bridge updates the compatibility projection from the already committed Core owner state. P12 continues to accept only the established exact-empty Merchant receipt row; this does not add populated receipt persistence.
 
