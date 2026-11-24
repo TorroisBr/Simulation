@@ -767,14 +767,26 @@ public sealed class DailyV1ApplicationHostTests
             Assert.That(expectedHostProjectedSectionIds.Add(
                     DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsSectionIdFor(npcOwner.RuntimeId)),
                 Is.True, "Each selected NPC contributes one distinct local-observation receipt row.");
-            Assert.That(expectedHostProjectedSectionIds.Add(
-                    DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsSectionIdFor(npcOwner.RuntimeId)),
-                Is.True, "Each selected NPC contributes one distinct merchant-trade receipt row.");
+            string merchantReceiptSectionId =
+                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsSectionIdFor(npcOwner.RuntimeId);
+            Assert.That(coreProviderSectionIds.Contains(merchantReceiptSectionId), Is.True,
+                "The selected merchant-trade receipt section is now composed from the Core owner.");
+            DailyV1OwnerSectionCensusProviderRegistration merchantReceiptRegistration =
+                coreComposition.Registrations.Single(registration =>
+                    string.Equals(registration.SectionId, merchantReceiptSectionId, StringComparison.Ordinal));
+            OwnerSectionCensusWitness merchantReceiptWitness =
+                merchantReceiptRegistration.Provider.GetCurrentCensus();
+            Assert.That(merchantReceiptWitness.OwnerInstanceIdentity,
+                Is.SameAs(npcOwner.MerchantTradeStateReceipts),
+                "Census must observe the exact live Core receipt authority instance.");
+            Assert.That(merchantReceiptWitness.Cardinality, Is.Zero,
+                "P18 receipt production remains excluded from the P12 Daily-v1 profile.");
+            Assert.That(merchantReceiptWitness.Revision, Is.Zero);
         }
-        Assert.That(expectedHostProjectedSectionIds.Count, Is.EqualTo(23),
-            "The exact host-projected receipt boundary is three fixed rows plus two rows for each of ten selected NPCs.");
+        Assert.That(expectedHostProjectedSectionIds.Count, Is.EqualTo(13),
+            "The exact host-projected receipt gap is three fixed rows plus one LocalObservation row for each of ten selected NPCs.");
         Assert.That(exactMissingSectionIds, Is.EquivalentTo(expectedHostProjectedSectionIds),
-            "The complete selected census has exactly these current Unity-host-projected receipt rows missing from Core composition.");
+            "The complete selected census has exactly these host-projected receipt rows missing from Core composition.");
         TestContext.Progress.WriteLine(
             "Current Core startup provider gaps: " + string.Join(", ", exactMissingSectionIds));
         Assert.That(preparation.CoreSession.ExecutionBoundaryState

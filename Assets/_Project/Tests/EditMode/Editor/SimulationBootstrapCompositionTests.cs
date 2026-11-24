@@ -974,9 +974,6 @@ public sealed class SimulationBootstrapCompositionTests
             {
                 if (string.Equals(prefix,
                         DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
-                        System.StringComparison.Ordinal)
-                    || string.Equals(prefix,
-                        DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
                         System.StringComparison.Ordinal))
                     continue;
 
@@ -994,7 +991,11 @@ public sealed class SimulationBootstrapCompositionTests
                 DailyV1SelectedRuntimeOwnerCensusSource.IsCoreOwnedSelectedNpcCensusSectionId),
             System.StringComparer.Ordinal);
         Assert.That(actualCoreNpcProviderIds.SetEquals(expectedCoreNpcProviderIds), Is.True,
-            "The selected Core census registry contains exactly the NPC families owned by the Core graph.");
+            "The selected Core census registry contains exactly the NPC families owned by the Core graph. "
+            + "Missing=[" + string.Join(",", expectedCoreNpcProviderIds.Except(actualCoreNpcProviderIds)
+                .OrderBy(value => value, System.StringComparer.Ordinal)) + "]; unexpected=["
+            + string.Join(",", actualCoreNpcProviderIds.Except(expectedCoreNpcProviderIds)
+                .OrderBy(value => value, System.StringComparer.Ordinal)) + "].");
         foreach (string sectionId in expectedCoreNpcProviderIds)
         {
             IOwnerSectionCensusProvider coreProvider = ReadCoreRegistryProvider(
@@ -1021,11 +1022,19 @@ public sealed class SimulationBootstrapCompositionTests
                 registeredSections,
                 DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix
                     + npc.RuntimeId);
-            AssertCoreRegistryUsesUnityProjectionProvider(
-                coreRegisteredProviders,
-                registeredSections,
+            string merchantReceiptSectionId =
                 DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix
-                    + npc.RuntimeId);
+                    + npc.RuntimeId;
+            IOwnerSectionCensusProvider merchantCoreProvider =
+                ReadCoreRegistryProvider(coreRegisteredProviders, merchantReceiptSectionId);
+            Assert.That(merchantCoreProvider, Is.Not.Null, merchantReceiptSectionId);
+            Assert.That(merchantCoreProvider.GetType().Name,
+                Is.EqualTo("MerchantTradeStateReceiptSectionProvider"), merchantReceiptSectionId);
+            OwnerSectionCensusWitness merchantCoreWitness = merchantCoreProvider.GetCurrentCensus();
+            Assert.That(merchantCoreWitness.OwnerInstanceIdentity,
+                Is.SameAs(npc.SelectedRuntimeOwners.MerchantTradeStateReceipts), merchantReceiptSectionId);
+            Assert.That(merchantCoreWitness.Cardinality, Is.Zero, merchantReceiptSectionId);
+            Assert.That(merchantCoreWitness.Revision, Is.Zero, merchantReceiptSectionId);
         }
         AssertSelectedDailyV1RegisteredOwnerIdentityMap(
             runtime, simulation.Bootstrap, expectedCensusSections, registeredSections);
@@ -3919,7 +3928,9 @@ public sealed class SimulationBootstrapCompositionTests
                 receiptProviders,
                 P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(npc.RuntimeId),
                 npc,
-                npc.ExistingMerchantTradeStateRuntime);
+                npc.SelectedRuntimeOwners != null
+                    ? (object)npc.SelectedRuntimeOwners.MerchantTradeStateReceipts
+                    : npc.ExistingMerchantTradeStateRuntime);
         }
 
         OwnerSectionCensusWitness[] accountWitnesses = runtime.MoneyAccountCensusProviders
@@ -4242,7 +4253,9 @@ public sealed class SimulationBootstrapCompositionTests
                 ReadNonPublicProperty(npc, "ExistingLocalKnowledgeObservationRuntime"));
             AddExpectedDailyV1OwnerIdentity(
                 expected, P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(runtimeId),
-                ReadNonPublicProperty(npc, "ExistingMerchantTradeStateRuntime"));
+                selectedOwners != null
+                    ? (object)selectedOwners.MerchantTradeStateReceipts
+                    : ReadNonPublicProperty(npc, "ExistingMerchantTradeStateRuntime"));
             AddExpectedDailyV1OwnerIdentity(
                 expected, P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(runtimeId), npc.SelectedCensusOwnerIdentity);
             AddExpectedDailyV1OwnerIdentity(

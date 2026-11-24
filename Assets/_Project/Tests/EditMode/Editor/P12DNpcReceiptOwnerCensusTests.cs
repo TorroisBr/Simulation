@@ -109,7 +109,9 @@ public sealed class P12DNpcReceiptOwnerCensusTests
             AssertTokenRow(token, P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(npc.RuntimeId),
                 npc.ExistingLocalKnowledgeObservationRuntime);
             AssertTokenRow(token, P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(npc.RuntimeId),
-                npc.ExistingMerchantTradeStateRuntime);
+                npc.SelectedRuntimeOwners != null
+                    ? (object)npc.SelectedRuntimeOwners.MerchantTradeStateReceipts
+                    : npc.ExistingMerchantTradeStateRuntime);
         }
 
         if (ownerKind == "local")
@@ -594,7 +596,9 @@ public sealed class P12DNpcReceiptOwnerCensusTests
     private static object GetReceiptOwner(NpcRuntime npc, string ownerKind) =>
         ownerKind == "local"
             ? (object)npc.ExistingLocalKnowledgeObservationRuntime
-            : npc.ExistingMerchantTradeStateRuntime;
+            : npc.SelectedRuntimeOwners != null
+                ? (object)npc.SelectedRuntimeOwners.MerchantTradeStateReceipts
+                : npc.ExistingMerchantTradeStateRuntime;
 
     private static bool TryReadOwner(
         object owner,
@@ -605,6 +609,8 @@ public sealed class P12DNpcReceiptOwnerCensusTests
         if (ownerKind == "local")
             return ((NpcLocalKnowledgeObservationRuntime)owner)
                 .TryReadP12ReceiptCensus(out cardinality, out revision);
+        if (owner is DailyV1NpcMerchantTradeStateReceiptOwner coreOwner)
+            return coreOwner.TryReadP12ReceiptCensus(out cardinality, out revision);
         return ((NpcMerchantTradeStateRuntime)owner)
             .TryReadP12ReceiptCensus(out cardinality, out revision);
     }

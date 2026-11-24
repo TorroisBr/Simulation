@@ -426,6 +426,35 @@ public class NpcTravelPlanRuntime
     internal NpcTravelPlanState CaptureOwnerState() => new NpcTravelPlanState(
         targetLocation, targetCity, reason, utility, expectedCost, originDecisionId);
 
+    internal bool TryCreateCoreReceiptState(DailyV1SelectedRuntimeOwnerGraph graph,
+        NpcTravelPlanState state, out DailyV1NpcTravelPlanReceiptState coreState)
+    {
+        coreState = null;
+        if (graph == null || selectedOwner == null || state == null
+            || !MatchesSelectedOwner() || !CanProjectOwnerState(state)) return false;
+
+        string locationId = state.TargetLocation?.RuntimeId;
+        string cityId = state.TargetCity?.RuntimeId;
+        if (state.TargetLocation != null
+            && (!graph.SpatialNetwork.TryGetLocation(locationId, out SpatialLocationRuntime location)
+                || !ReferenceEquals(location, state.TargetLocation))) return false;
+        if (state.TargetCity != null)
+        {
+            DailyV1CityRuntimeOwners city = state.TargetCity.SelectedRuntimeOwners;
+            if (city == null || !graph.ContainsExactCityOwner(city)
+                || !graph.TryGetCityLocationRuntimeId(cityId, out string cityLocationId)
+                || !string.Equals(cityLocationId, locationId, StringComparison.Ordinal)) return false;
+        }
+        else if (locationId != null
+            && (!graph.TryGetUniqueCityOwnerForLocation(locationId,
+                    out DailyV1CityRuntimeOwners cityAtLocation)
+                || cityAtLocation != null)) return false;
+
+        coreState = new DailyV1NpcTravelPlanReceiptState(locationId, cityId,
+            state.Reason, state.Utility, state.ExpectedCost, state.OriginDecisionId);
+        return true;
+    }
+
     internal bool MatchesOwnerState(NpcTravelPlanState state) => state != null
         && (selectedOwner == null || MatchesSelectedOwner())
         && ReferenceEquals(targetLocation, state.TargetLocation)
@@ -842,6 +871,20 @@ public class MerchantTradePlanRuntime
         ? new MerchantTradePlanState(item, originCity, targetCity, plannedAmount, remainingAmount,
             purchasePricePerItem, waitDaysAtDestination, pendingTravelDays, originDecisionId)
         : CaptureSelectedOwnerState();
+
+    internal bool TryCreateCoreReceiptState(MerchantTradePlanState state,
+        out DailyV1MerchantTradePlanReceiptState coreState)
+    {
+        coreState = null;
+        if (selectedOwner == null
+            || !TryConvertSelectedState(state, out DailyV1ItemDefinition selectedItem,
+                out string originId, out string targetId)) return false;
+        coreState = new DailyV1MerchantTradePlanReceiptState(selectedItem,
+            originId, targetId, state.PlannedAmount, state.RawRemainingAmount,
+            state.PurchasePricePerItem, state.WaitDaysAtDestination,
+            state.PendingTravelDays, state.OriginDecisionId);
+        return true;
+    }
 
     internal bool MatchesOwnerState(MerchantTradePlanState state) => selectedOwner == null
         ? state != null

@@ -114,6 +114,7 @@
       <Compile Include="DailyV1NpcStatusOwnerTests.cs" Link="Definitions/DailyV1NpcStatusOwnerTests.cs" />
       <Compile Include="DailyV1NpcActionSlotOwnerTests.cs" Link="Person/DailyV1NpcActionSlotOwnerTests.cs" />
       <Compile Include="DailyV1NpcMerchantTradePlanOwnerTests.cs" Link="Person/DailyV1NpcMerchantTradePlanOwnerTests.cs" />
+      <Compile Include="DailyV1NpcMerchantTradeStateReceiptOwnerTests.cs" Link="Person/DailyV1NpcMerchantTradeStateReceiptOwnerTests.cs" />
       <Compile Include="DailyV1CommercialKnowledgeOwnerTests.cs" Link="Knowledge/DailyV1CommercialKnowledgeOwnerTests.cs" />
       <Compile Include="DailyV1JusticeRecordsOwnerTests.cs" Link="Person/DailyV1JusticeRecordsOwnerTests.cs" />
     <Compile Include="DailyV1CrimeSocialAppraisalOwnerTests.cs" Link="Social/DailyV1CrimeSocialAppraisalOwnerTests.cs" />

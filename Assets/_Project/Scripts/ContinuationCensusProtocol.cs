@@ -874,8 +874,9 @@ public sealed class ContinuationCensusProtocol
     public IReadOnlyList<IOwnerSectionCensusProvider> NpcPlanFamilyProviders => npcPlanFamilyProviders;
 
     /// <summary>
-    /// Registers the selected Daily-v1 exact-zero witnesses for the two
-    /// excluded P18 receipt owners on each current NPC.
+    /// Registers exact-zero census witnesses for LocalObservation and Merchant
+    /// trade receipts on each current NPC. The selected Merchant witness binds
+    /// to its Core receipt owner; neither receipt family is part of P12 data.
     /// </summary>
     public bool RegisterNpcReceiptOwnerRosterFamily(
         IReadOnlyList<NpcRuntime> roster,
@@ -4229,7 +4230,9 @@ public sealed class ContinuationCensusProtocol
                 object expectedOwner = provider.Kind == P12DNpcReceiptOwnerCensusProvider.ReceiptOwnerKind.LocalObservation
                     ? (object)provider.NpcOwner.ExistingLocalKnowledgeObservationRuntime
                     : provider.Kind == P12DNpcReceiptOwnerCensusProvider.ReceiptOwnerKind.MerchantTradeState
-                        ? provider.NpcOwner.ExistingMerchantTradeStateRuntime
+                        ? provider.NpcOwner.SelectedRuntimeOwners != null
+                            ? (object)provider.NpcOwner.SelectedRuntimeOwners.MerchantTradeStateReceipts
+                            : provider.NpcOwner.ExistingMerchantTradeStateRuntime
                         : null;
                 if (string.IsNullOrWhiteSpace(sectionId)
                     || provider.NpcOwner == null

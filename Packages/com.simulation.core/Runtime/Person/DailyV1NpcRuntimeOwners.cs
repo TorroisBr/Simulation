@@ -35,6 +35,7 @@ internal sealed class DailyV1NpcRuntimeOwners
     internal DailyV1NpcActionSlotOwner ActionSlot { get; }
     internal DailyV1NpcTravelOwner Travel { get; }
     internal DailyV1NpcTravelPlanOwner TravelPlan { get; }
+    internal DailyV1NpcMerchantTradeStateReceiptOwner MerchantTradeStateReceipts { get; }
     internal DailyV1NpcHiddenStateOwner HiddenState { get; }
     internal DailyV1NpcResidenceOwner Residence { get; }
     internal long CrimeJusticeRevision { get; private set; }
@@ -132,6 +133,7 @@ internal sealed class DailyV1NpcRuntimeOwners
         ActionSlot = new DailyV1NpcActionSlotOwner(definitions);
         Travel = new DailyV1NpcTravelOwner(runtimeId);
         TravelPlan = new DailyV1NpcTravelPlanOwner();
+        MerchantTradeStateReceipts = new DailyV1NpcMerchantTradeStateReceiptOwner(this);
         HiddenState = new DailyV1NpcHiddenStateOwner();
         Residence = new DailyV1NpcResidenceOwner(runtimeId);
     }
@@ -394,6 +396,8 @@ internal sealed class DailyV1NpcRuntimeOwners
             || !ReferenceEquals(AdventureSiteIntelKnowledge, state.AdventureSiteIntelKnowledge)
             || LocalTopologyKnowledgeEmptyOwner == null
             || !LocalTopologyKnowledgeEmptyOwner.MatchesRuntimeId(RuntimeId)
+            || MerchantTradeStateReceipts == null
+            || !MerchantTradeStateReceipts.IsExactEmpty
             || Residence == null
             || !Residence.Matches(state.ResidenceSettlementRuntimeId, state.ResidenceRevision)
             || Status == null || state.Statuses == null

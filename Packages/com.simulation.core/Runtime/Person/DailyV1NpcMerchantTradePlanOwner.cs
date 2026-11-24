@@ -134,6 +134,29 @@ internal sealed class DailyV1NpcMerchantTradePlanOwner
         return true;
     }
 
+    /// <summary>
+    /// Installs an already validated state at an exact revision as part of a
+    /// multi-owner transaction. The transaction preflights all values before
+    /// applying any owner, so this method performs only field assignment.
+    /// </summary>
+    internal bool TryInstallPreparedState(
+        DailyV1MerchantTradePlanReceiptState state,
+        long exactRevision)
+    {
+        if (state == null || exactRevision < 0L
+            || !IsValidState(Definitions, state.Item, state.OriginCityRuntimeId,
+                state.TargetCityRuntimeId, state.PlannedAmount,
+                state.RawRemainingAmount, state.PurchasePricePerItem,
+                state.WaitDaysAtDestination, state.PendingTravelDays,
+                exactRevision)) return false;
+        InstallFields(state.Item, state.OriginCityRuntimeId,
+            state.TargetCityRuntimeId, state.PlannedAmount,
+            state.RawRemainingAmount, state.PurchasePricePerItem,
+            state.WaitDaysAtDestination, state.PendingTravelDays,
+            state.OriginDecisionId, exactRevision);
+        return true;
+    }
+
     /// <summary>Applies the established selected-plan sale transition.</summary>
     internal bool CanRegisterSale(int amountSold)
     {

@@ -1057,7 +1057,10 @@ public sealed class DailyV1ApplicationSessionGateTests
             Add(15, owner.MerchantTradePlan, 1, owner.MerchantTradePlan.Revision);
             Add(16, owner.TravelPlan, 1, owner.TravelPlan.Revision);
             Add(17, new object(), 0, 0L);
-            Add(18, new object(), 0, 0L);
+            Assert.That(owner.MerchantTradeStateReceipts.TryReadP12ReceiptCensus(
+                out int merchantReceiptCardinality, out long merchantReceiptRevision), Is.True);
+            Add(18, owner.MerchantTradeStateReceipts,
+                merchantReceiptCardinality, merchantReceiptRevision);
             Add(19, actorLifecycleAndResidenceIdentity, 1, owner.CrimeJusticeRevision);
             Add(20, actorLifecycleAndResidenceIdentity,
                 owner.ActionSlot.CurrentAction == null ? 0 : 1, owner.ActionSlot.Revision);
@@ -3988,9 +3991,6 @@ public sealed class DailyV1ApplicationSessionGateTests
             {
                 if (string.Equals(prefix,
                         DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
-                        StringComparison.Ordinal)
-                    || string.Equals(prefix,
-                        DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
                         StringComparison.Ordinal))
                     continue;
 
@@ -4057,12 +4057,19 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(witnesses.Keys.Any(sectionId =>
                 sectionId.StartsWith(
                     DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
-                    StringComparison.Ordinal)
-                || sectionId.StartsWith(
-                    DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
                     StringComparison.Ordinal)),
             Is.False,
-            "P18 receipt authorities remain host-projected until their owners are in the Core graph.");
+            "Local-observation receipts remain host-projected until their owner is in the Core graph.");
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            OwnerSectionCensusWitness merchantReceipt = witnesses[
+                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix
+                + npc.RuntimeId];
+            Assert.That(merchantReceipt.OwnerInstanceIdentity,
+                Is.SameAs(npc.MerchantTradeStateReceipts));
+            Assert.That(merchantReceipt.Cardinality, Is.Zero);
+            Assert.That(merchantReceipt.Revision, Is.Zero);
+        }
     }
 
     [Test]
@@ -4962,6 +4969,7 @@ public sealed class DailyV1ApplicationSessionGateTests
         providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateCommercialKnowledgeProviders(graph.Npcs));
         providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateSpatialKnowledgeProviders(graph.Npcs));
         providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph));
+        providers.AddRange(DailyV1NpcOwnerCensusProviders.CreateMerchantTradeStateReceiptProviders(graph.Npcs));
 
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
                 .TryGetExactCoreOwnedNpcCensusFragmentSectionIds(
@@ -5001,8 +5009,18 @@ public sealed class DailyV1ApplicationSessionGateTests
         Assert.That(coreNpcSectionIds.Any(sectionId =>
             sectionId.StartsWith(
                 DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
-                StringComparison.Ordinal)), Is.False,
-            "P12-D receipt owners remain in the Unity residual source.");
+                StringComparison.Ordinal)), Is.True,
+            "Selected merchant receipt owners are now composed from the Core graph.");
+        foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
+        {
+            OwnerSectionCensusSnapshot merchantReceipt = completeVector.Single(section =>
+                section.SectionId == DailyV1SelectedOwnerSectionCensusContract
+                    .NpcMerchantTradeStateReceiptsPrefix + npc.RuntimeId);
+            Assert.That(merchantReceipt.OwnerInstanceIdentity,
+                Is.SameAs(npc.MerchantTradeStateReceipts));
+            Assert.That(merchantReceipt.Cardinality, Is.Zero);
+            Assert.That(merchantReceipt.Revision, Is.Zero);
+        }
 
         HashSet<string> omittedIds = new HashSet<string>(
             coreNpcSectionIds, StringComparer.Ordinal);

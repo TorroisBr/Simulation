@@ -625,13 +625,13 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     public void SelectedNpcExcludedReceiptCensusRequiresExactZeroDistinctPairsAndPreservesMixedRosterRows()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateNpcGraph("npc-a", "npc-b");
-        OwnerSectionCensusSnapshot[] selectedRows = CreateExcludedReceiptRows("npc-a", "npc-b");
+        OwnerSectionCensusSnapshot[] selectedRows = CreateExcludedReceiptRows(graph, "npc-a", "npc-b");
 
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
             graph, selectedRows, out string diagnostic), Is.True, diagnostic);
 
         OwnerSectionCensusSnapshot[] mixedRows = CreateExcludedReceiptRows(
-            "npc-a", "npc-b", "npc-compatibility");
+            graph, "npc-a", "npc-b", "npc-compatibility");
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
             graph, mixedRows, out diagnostic), Is.True, diagnostic,
             "A full mixed-roster receipt vector retains both rows for every compatibility NPC.");
@@ -646,7 +646,7 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
     public void SelectedNpcExcludedReceiptCensusRejectsMissingMalformedPopulatedOrAliasedOwners()
     {
         DailyV1SelectedRuntimeOwnerGraph graph = CreateSingleNpcGraph(out _);
-        OwnerSectionCensusSnapshot[] rows = CreateExcludedReceiptRows("npc-runtime");
+        OwnerSectionCensusSnapshot[] rows = CreateExcludedReceiptRows(graph, "npc-runtime");
 
         Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryValidateExcludedNpcReceiptSections(
             graph, rows.Take(1).ToArray(), out _), Is.False,
@@ -685,9 +685,13 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
         AssertReceiptRowsRejected(graph, unpairedCompatibility);
     }
 
-    private static OwnerSectionCensusSnapshot[] CreateExcludedReceiptRows(params string[] runtimeIds)
+    private static OwnerSectionCensusSnapshot[] CreateExcludedReceiptRows(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        params string[] runtimeIds)
     {
         List<OwnerSectionCensusSnapshot> rows = new List<OwnerSectionCensusSnapshot>();
+        Dictionary<string, DailyV1NpcRuntimeOwners> selectedOwners = graph.Npcs
+            .ToDictionary(owner => owner.RuntimeId, StringComparer.Ordinal);
         foreach (string runtimeId in runtimeIds.OrderBy(id => id, System.StringComparer.Ordinal))
         {
             rows.Add(new OwnerSectionCensusSnapshot(
@@ -697,7 +701,11 @@ public sealed class DailyV1CityEconomicOwnerCoreTests
             rows.Add(new OwnerSectionCensusSnapshot(
                 DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsSectionIdFor(runtimeId),
                 DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
-                OwnerSectionRole.Required, new object(), 0, 0L));
+                OwnerSectionRole.Required,
+                selectedOwners.TryGetValue(runtimeId, out DailyV1NpcRuntimeOwners owner)
+                    ? owner.MerchantTradeStateReceipts
+                    : new object(),
+                0, 0L));
         }
         return rows.ToArray();
     }

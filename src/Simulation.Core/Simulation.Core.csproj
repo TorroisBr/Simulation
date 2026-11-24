@@ -178,6 +178,7 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocatorOwnerBridge.cs" Link="Identity/RuntimeIdAllocatorOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonRuntime.cs" Link="Person/PersonRuntime.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1NpcRuntimeOwners.cs" Link="Person/DailyV1NpcRuntimeOwners.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1NpcMerchantTradeStateReceiptOwner.cs" Link="Person/DailyV1NpcMerchantTradeStateReceiptOwner.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1NpcOwnerCensusProviders.cs" Link="Person/DailyV1NpcOwnerCensusProviders.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Military/ArmedForceContracts.cs" Link="Military/ArmedForceContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Military/ArmedForceStore.cs" Link="Military/ArmedForceStore.cs" />

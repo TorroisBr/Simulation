@@ -1338,8 +1338,12 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                 graph, composed,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> spatialKnowledgeSections,
                 out diagnostic)
-            || !TryComposeCoreOwnedCitySections(
+            || !TryRebindCoreOwnedNpcMerchantTradeStateReceiptSections(
                 graph, spatialKnowledgeSections,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> npcMerchantReceiptSections,
+                out diagnostic)
+            || !TryComposeCoreOwnedCitySections(
+                graph, npcMerchantReceiptSections,
                 out IReadOnlyList<OwnerSectionCensusSnapshot> completeCitySections,
                 out diagnostic)
             || !TryRebindCoreOwnedP12EOwnerSections(
@@ -2518,10 +2522,10 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     }
 
     /// <summary>
-    /// Enforces the two excluded P18 receipt-owner rows in the admitted P12-D
-    /// profile. The host census remains the source of their real owner
-    /// identities; Core requires a complete per-NPC pair and exact zero
-    /// cardinality/revision without exporting or replaying receipt data.
+    /// Enforces the P12-D receipt boundary: LocalObservation remains host-owned,
+    /// while selected Merchant receipt rows bind to their exact Core owner.
+    /// Both remain exact-zero in this profile, without exporting or replaying
+    /// receipt data.
     /// </summary>
     internal static bool TryValidateExcludedNpcReceiptSections(
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -2536,11 +2540,14 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         }
 
         HashSet<string> selectedRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, DailyV1NpcRuntimeOwners> selectedNpcOwners =
+            new Dictionary<string, DailyV1NpcRuntimeOwners>(StringComparer.Ordinal);
         foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
         {
             if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
                 || npc.RuntimeId.IndexOf('/') >= 0 || npc.RuntimeId.IndexOf('\0') >= 0
-                || !selectedRuntimeIds.Add(npc.RuntimeId))
+                || !selectedRuntimeIds.Add(npc.RuntimeId)
+                || !selectedNpcOwners.TryAdd(npc.RuntimeId, npc))
             {
                 diagnostic = "The selected Core NPC graph has an invalid or duplicate RuntimeId.";
                 return false;
@@ -2609,9 +2616,16 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
 
         foreach (string runtimeId in selectedRuntimeIds)
         {
-            if (!localRows.ContainsKey(runtimeId) || !merchantRows.ContainsKey(runtimeId))
+            if (!localRows.ContainsKey(runtimeId)
+                || !merchantRows.TryGetValue(runtimeId, out OwnerSectionCensusSnapshot merchantRow)
+                || !selectedNpcOwners.TryGetValue(runtimeId, out DailyV1NpcRuntimeOwners npcOwner)
+                || npcOwner.MerchantTradeStateReceipts == null
+                || !npcOwner.MerchantTradeStateReceipts.IsExactEmpty
+                || !ReferenceEquals(
+                    merchantRow.OwnerInstanceIdentity,
+                    npcOwner.MerchantTradeStateReceipts))
             {
-                diagnostic = "The P12-D receipt census is missing a selected Core NPC owner pair.";
+                diagnostic = "The P12-D receipt census is missing the selected NPC host/Core receipt owner pair or its exact-empty Core binding.";
                 return false;
             }
         }
@@ -2791,7 +2805,8 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     /// Reconstructs the selected NPC owner census fragment from Core owner
     /// instances. Exact omissions are recomposed; mixed rosters and stale
     /// captured rows retain their established host facts for P12 validation.
-    /// P12-D receipt sections remain host-owned and are never removed here.
+    /// Local-observation receipt sections remain host-owned; merchant receipt
+    /// sections are rebound to the exact Core owner when the selected roster is complete.
     /// </summary>
     internal static bool TryComposeCoreOwnedNpcOwnerCensusFragment(
         DailyV1SelectedRuntimeOwnerGraph graph,
@@ -2833,9 +2848,138 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
 
         if (!TryRebindCoreSpatialKnowledgeSections(
                 graph, knowledgeAndPlan,
-                out ownerSections, out diagnostic))
+                out IReadOnlyList<OwnerSectionCensusSnapshot> spatialKnowledge,
+                out diagnostic))
             return false;
+        return TryRebindCoreOwnedNpcMerchantTradeStateReceiptSections(
+            graph, spatialKnowledge, out ownerSections, out diagnostic);
+    }
 
+    internal static bool TryRebindCoreOwnedNpcMerchantTradeStateReceiptSections(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        IReadOnlyList<OwnerSectionCensusSnapshot> hostSections,
+        out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+        out string diagnostic)
+    {
+        ownerSections = null;
+        diagnostic = null;
+        if (graph?.Npcs == null || hostSections == null)
+        {
+            diagnostic = "The selected merchant receipt census requires its owner graph and source rows.";
+            return false;
+        }
+
+        if (graph.Npcs.Count == 0)
+        {
+            ownerSections = hostSections;
+            return true;
+        }
+
+        OwnerSectionCensusSnapshot[] copied = new OwnerSectionCensusSnapshot[hostSections.Count];
+        Dictionary<string, int> indexes = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (int index = 0; index < hostSections.Count; index++)
+        {
+            OwnerSectionCensusSnapshot section = hostSections[index];
+            if (section == null || string.IsNullOrWhiteSpace(section.SectionId)
+                || !indexes.TryAdd(section.SectionId, index))
+            {
+                diagnostic = "The selected merchant receipt census contains a missing or duplicate section.";
+                return false;
+            }
+            copied[index] = section;
+        }
+
+        int receiptRows = CountFamilyRows(copied,
+            DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix);
+        if (receiptRows > graph.Npcs.Count)
+        {
+            // Preserve the complete host facts for mixed NPC rosters. The
+            // existing P12 admission path remains responsible for the full vector.
+            ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+        if (receiptRows != 0 && receiptRows != graph.Npcs.Count)
+        {
+            diagnostic = "The selected merchant receipt census has partial NPC family coverage.";
+            return false;
+        }
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers;
+        try
+        {
+            providers = DailyV1NpcOwnerCensusProviders
+                .CreateMerchantTradeStateReceiptProviders(graph.Npcs);
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException)
+        {
+            diagnostic = "The selected Core merchant receipt owners could not bind to the exact NPC graph.";
+            return false;
+        }
+
+        List<OwnerSectionCensusSnapshot> added = null;
+        HashSet<string> observed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (IOwnerSectionCensusProvider provider in providers)
+        {
+            OwnerSectionCensusWitness witness;
+            try { witness = provider?.GetCurrentCensus(); }
+            catch (Exception exception) when (exception is ArgumentException
+                || exception is InvalidOperationException || exception is OverflowException)
+            {
+                diagnostic = "A selected Core merchant receipt owner did not satisfy Daily-v1's exact-empty contract.";
+                return false;
+            }
+
+            if (witness == null || string.IsNullOrWhiteSpace(witness.SectionId)
+                || witness.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+                || witness.OwnerInstanceIdentity == null || witness.Cardinality != 0
+                || witness.Revision != 0L || !observed.Add(witness.SectionId))
+            {
+                diagnostic = "A selected Core merchant receipt provider returned an invalid exact-empty witness.";
+                return false;
+            }
+
+            if (!indexes.TryGetValue(witness.SectionId, out int sourceIndex))
+            {
+                if (receiptRows != 0)
+                {
+                    diagnostic = "The selected merchant receipt source omitted " + witness.SectionId + ".";
+                    return false;
+                }
+                added ??= new List<OwnerSectionCensusSnapshot>(providers.Count);
+                added.Add(new OwnerSectionCensusSnapshot(witness.SectionId,
+                    witness.SchemaVersion, OwnerSectionRole.Required,
+                    witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision));
+                continue;
+            }
+
+            OwnerSectionCensusSnapshot source = copied[sourceIndex];
+            if (source.Role != OwnerSectionRole.Required
+                || source.SchemaVersion != witness.SchemaVersion
+                || !ReferenceEquals(source.OwnerInstanceIdentity, witness.OwnerInstanceIdentity)
+                || source.Cardinality != witness.Cardinality
+                || source.Revision != witness.Revision)
+            {
+                diagnostic = "The host merchant receipt row differs from the exact Core owner at "
+                    + witness.SectionId + ".";
+                return false;
+            }
+
+            copied[sourceIndex] = new OwnerSectionCensusSnapshot(witness.SectionId,
+                witness.SchemaVersion, OwnerSectionRole.Required,
+                witness.OwnerInstanceIdentity, witness.Cardinality, witness.Revision);
+        }
+
+        if (added == null)
+        {
+            ownerSections = Array.AsReadOnly(copied);
+            return true;
+        }
+
+        added.InsertRange(0, copied);
+        added.Sort((left, right) =>
+            StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
+        ownerSections = Array.AsReadOnly(added.ToArray());
         return true;
     }
 
@@ -3435,8 +3579,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
                     return false;
                 }
 
-                composed ??= new List<OwnerSectionCensusSnapshot>(
-                    copied.Length + witnesses.Count);
+                composed ??= new List<OwnerSectionCensusSnapshot>(copied.Length + witnesses.Count);
                 composed.Add(new OwnerSectionCensusSnapshot(
                     witness.SectionId,
                     witness.SchemaVersion,
@@ -3569,9 +3712,6 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         if (string.IsNullOrWhiteSpace(sectionId)
             || sectionId.StartsWith(
                 DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
-                StringComparison.Ordinal)
-            || sectionId.StartsWith(
-                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
                 StringComparison.Ordinal))
             return false;
 
@@ -3583,9 +3723,6 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
         foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
             if (!string.Equals(prefix,
                     DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
-                    StringComparison.Ordinal)
-                && !string.Equals(prefix,
-                    DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
                     StringComparison.Ordinal)
                 && sectionId.StartsWith(prefix, StringComparison.Ordinal))
                 return true;
@@ -3751,7 +3888,8 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
     /// from the admitted graph. Omission is allowed only when every selected
     /// family row is present and exactly matches its Core owner witness. A
     /// mixed roster, stale row, or substituted owner keeps the full host vector.
-    /// The P12-D receipt families intentionally remain in the host remainder.
+    /// Local-observation receipt rows remain in the host remainder; merchant
+    /// receipt rows are sourced from the exact Core owner and remain exact-empty.
     /// </summary>
     internal static bool TryGetExactCoreOwnedNpcCensusFragmentSectionIds(
         IReadOnlyList<OwnerSectionCensusSnapshot> completeHostSections,
@@ -3805,6 +3943,7 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             selected.AddRange(DailyV1NpcOwnerCensusProviders.CreateCommercialKnowledgeProviders(graph.Npcs));
             selected.AddRange(DailyV1NpcOwnerCensusProviders.CreateSpatialKnowledgeProviders(graph.Npcs));
             selected.AddRange(DailyV1NpcOwnerCensusProviders.CreateKnowledgeAndPlanProviders(graph));
+            selected.AddRange(DailyV1NpcOwnerCensusProviders.CreateMerchantTradeStateReceiptProviders(graph.Npcs));
             providers = selected.AsReadOnly();
         }
         catch (Exception exception) when (
@@ -3829,7 +3968,8 @@ internal static class DailyV1SelectedRuntimeOwnerCensusSource
             DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix,
             DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix,
             DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix,
-            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix
         };
         familyPrefixes.AddRange(CoreOwnedNpcKnowledgeAndPlanSectionPrefixValues);
 

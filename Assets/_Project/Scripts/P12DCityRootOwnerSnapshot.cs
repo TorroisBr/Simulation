@@ -1096,7 +1096,11 @@ internal sealed class P12DCityNpcProjectionCaptureEvidence
         {
             NpcRuntime npc = roster[i];
             object localOwner = npc?.ExistingLocalKnowledgeObservationRuntime;
-            object merchantOwner = npc?.ExistingMerchantTradeStateRuntime;
+            object merchantOwner = npc == null
+                ? null
+                : npc.SelectedRuntimeOwners != null
+                    ? (object)npc.SelectedRuntimeOwners.MerchantTradeStateReceipts
+                    : npc.ExistingMerchantTradeStateRuntime;
             if (npc == null
                 || string.IsNullOrWhiteSpace(npc.RuntimeId)
                 || !runtimeIds.Add(npc.RuntimeId)
@@ -1151,7 +1155,9 @@ internal sealed class P12DCityNpcProjectionCaptureEvidence
             }
 
             object localOwner = npc.ExistingLocalKnowledgeObservationRuntime;
-            object merchantOwner = npc.ExistingMerchantTradeStateRuntime;
+            object merchantOwner = npc.SelectedRuntimeOwners != null
+                ? (object)npc.SelectedRuntimeOwners.MerchantTradeStateReceipts
+                : npc.ExistingMerchantTradeStateRuntime;
             if (localOwner == null
                 || merchantOwner == null
                 || ReferenceEquals(localOwner, merchantOwner)
@@ -1161,8 +1167,8 @@ internal sealed class P12DCityNpcProjectionCaptureEvidence
                     .TryReadP12ReceiptCensus(out int localCount, out long localRevision)
                 || localCount != 0
                 || localRevision != 0L
-                || !((NpcMerchantTradeStateRuntime)merchantOwner)
-                    .TryReadP12ReceiptCensus(out int merchantCount, out long merchantRevision)
+                || !TryReadMerchantReceiptCensus(merchantOwner,
+                    out int merchantCount, out long merchantRevision)
                 || merchantCount != 0
                 || merchantRevision != 0L)
             {
@@ -1230,6 +1236,20 @@ internal sealed class P12DCityNpcProjectionCaptureEvidence
             && ReferenceEquals(match.OwnerInstanceIdentity, owner)
             && match.Cardinality == 0
             && match.Revision == 0L;
+    }
+
+    private static bool TryReadMerchantReceiptCensus(
+        object owner,
+        out int cardinality,
+        out long revision)
+    {
+        cardinality = 0;
+        revision = 0L;
+        if (owner is DailyV1NpcMerchantTradeStateReceiptOwner coreOwner)
+            return coreOwner.TryReadP12ReceiptCensus(out cardinality, out revision);
+        if (owner is NpcMerchantTradeStateRuntime unityOwner)
+            return unityOwner.TryReadP12ReceiptCensus(out cardinality, out revision);
+        return false;
     }
 
     private static bool ContainsReference(IReadOnlyList<object> values, object candidate)

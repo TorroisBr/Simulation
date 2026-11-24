@@ -119,6 +119,32 @@ internal static class DailyV1NpcOwnerCensusProviders
             MoneyAccountOwner.Revision);
     }
 
+    private sealed class MerchantTradeStateReceiptSectionProvider : IOwnerSectionCensusProvider
+    {
+        private readonly DailyV1NpcRuntimeOwners npcOwner;
+        private readonly string sectionId;
+
+        internal MerchantTradeStateReceiptSectionProvider(DailyV1NpcRuntimeOwners npcOwner)
+        {
+            this.npcOwner = npcOwner ?? throw new ArgumentNullException(nameof(npcOwner));
+            sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix
+                + npcOwner.RuntimeId;
+        }
+
+        public OwnerSectionCensusWitness GetCurrentCensus()
+        {
+            DailyV1NpcMerchantTradeStateReceiptOwner owner = npcOwner.MerchantTradeStateReceipts;
+            if (owner == null
+                || !owner.TryReadP12ReceiptCensus(out int cardinality, out long revision)
+                || cardinality != 0 || revision != 0L)
+                throw new InvalidOperationException(
+                    "The selected Daily-v1 merchant trade receipt owner must remain exact-empty.");
+            return new OwnerSectionCensusWitness(sectionId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion,
+                owner, cardinality, revision);
+        }
+    }
+
     private enum CommercialKnowledgeSection
     {
         Markets,
@@ -649,11 +675,31 @@ internal static class DailyV1NpcOwnerCensusProviders
         return Array.AsReadOnly(providers);
     }
 
+    internal static IReadOnlyList<IOwnerSectionCensusProvider> CreateMerchantTradeStateReceiptProviders(
+        IReadOnlyList<DailyV1NpcRuntimeOwners> roster)
+    {
+        ValidateRoster(roster);
+        List<DailyV1NpcRuntimeOwners> ordered = OrderByRuntimeId(roster);
+        HashSet<DailyV1NpcMerchantTradeStateReceiptOwner> owners =
+            new HashSet<DailyV1NpcMerchantTradeStateReceiptOwner>();
+        IOwnerSectionCensusProvider[] providers = new IOwnerSectionCensusProvider[ordered.Count];
+        for (int index = 0; index < ordered.Count; index++)
+        {
+            DailyV1NpcRuntimeOwners npc = ordered[index];
+            DailyV1NpcMerchantTradeStateReceiptOwner owner = npc.MerchantTradeStateReceipts;
+            if (owner == null || !owners.Add(owner) || !owner.IsExactEmpty)
+                throw new InvalidOperationException(
+                    "Selected merchant receipt census requires one distinct exact-empty Core owner per NPC.");
+            providers[index] = new MerchantTradeStateReceiptSectionProvider(npc);
+        }
+        return Array.AsReadOnly(providers);
+    }
+
     /// <summary>
     /// Composes the live provider set for every selected NPC owner family
-    /// currently owned by Core. The two P18 receipt families are excluded:
-    /// their exact-zero authorities remain host-projected until those owners
-    /// themselves are part of the Core graph.
+    /// currently owned by Core. Local-observation receipts remain host-projected;
+    /// merchant-trade receipts use the Core owner but must stay exact-empty in
+    /// the admitted P12 Daily-v1 profile.
     /// </summary>
     internal static IReadOnlyList<IOwnerSectionCensusProvider> CreateSelectedCoreOwnerProviders(
         DailyV1SelectedRuntimeOwnerGraph graph)
@@ -671,6 +717,7 @@ internal static class DailyV1NpcOwnerCensusProviders
         providers.AddRange(CreateMoneyAccountProviders(graph.Npcs));
         providers.AddRange(CreateCommercialKnowledgeProviders(graph.Npcs));
         providers.AddRange(CreateSpatialKnowledgeProviders(graph.Npcs));
+        providers.AddRange(CreateMerchantTradeStateReceiptProviders(graph.Npcs));
 
         HashSet<string> expectedSectionIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (DailyV1NpcRuntimeOwners npc in graph.Npcs)
@@ -679,9 +726,6 @@ internal static class DailyV1NpcOwnerCensusProviders
             {
                 if (string.Equals(prefix,
                         DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsPrefix,
-                        StringComparison.Ordinal)
-                    || string.Equals(prefix,
-                        DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsPrefix,
                         StringComparison.Ordinal))
                     continue;
 
