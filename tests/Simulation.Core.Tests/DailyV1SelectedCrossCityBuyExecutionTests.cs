@@ -86,6 +86,42 @@ public sealed class DailyV1SelectedCrossCityBuyExecutionTests
     }
 
     [Test]
+    public void CoreP12ScopeBeginsAfterPurchaseAndCoversCrossCityPlanWrites()
+    {
+        CreateFixture(out DailyV1SelectedRuntimeOwnerGraph graph,
+            out DailyV1NpcRuntimeOwners actor, out _, out _, out _,
+            out DailyV1NpcActionPayloadOwner payload, 1f);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, payload.Action, payload, null), Is.True);
+        List<string> order = new List<string>();
+        FixedActionRandom random = new FixedActionRandom(order, 0.25f);
+        PurchaseBoundary boundary = new PurchaseBoundary(order);
+        Func<Func<bool>, bool> executeWithinP12 = operation =>
+        {
+            order.Add("merchant-p12-enter");
+            bool completed = operation();
+            order.Add("merchant-p12-exit");
+            return completed;
+        };
+
+        Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedCrossCityBuyActionSlot(
+            graph, actor, payload.Action, random, 31L, boundary,
+            () => { order.Add("merchant-admit"); return true; },
+            () => order.Add("merchant-commit"),
+            () => { order.Add("travel-admit"); return true; },
+            () => order.Add("travel-commit"),
+            executeWithinP12,
+            out var result), Is.True);
+
+        Assert.That(result.Purchase.Succeeded, Is.True);
+        Assert.That(order, Is.EqualTo(new[]
+        {
+            "roll", "merchant-admit", "travel-admit", "purchase-begin",
+            "purchase-complete", "purchase-dispose", "merchant-p12-enter",
+            "merchant-commit", "travel-commit", "merchant-p12-exit"
+        }));
+    }
+
+    [Test]
     public void SelectedCrossCityBuyFailedRollStopsBeforePurchaseAdmissionOrWrites()
     {
         CreateFixture(out DailyV1SelectedRuntimeOwnerGraph graph,
@@ -104,13 +140,17 @@ public sealed class DailyV1SelectedCrossCityBuyExecutionTests
         long travelPlanRevision = actor.TravelPlan.Revision;
         int stock = origin.Market.GetAmount(item);
 
+        int p12ScopeCalls = 0;
         Assert.That(DailyV1SelectedActionExecutionStage.TryExecuteSelectedCrossCityBuyActionSlot(
             graph, actor, payload.Action, random, 32L, boundary,
             () => { order.Add("merchant-admit"); return true; },
             () => order.Add("merchant-commit"),
             () => { order.Add("travel-admit"); return true; },
-            () => order.Add("travel-commit"), out var result), Is.True);
+            () => order.Add("travel-commit"),
+            operation => { p12ScopeCalls++; return operation(); },
+            out var result), Is.True);
 
+        Assert.That(p12ScopeCalls, Is.Zero);
         Assert.That(result.ActionRollSucceeded, Is.False);
         Assert.That(result.Purchase, Is.Null);
         Assert.That(order, Is.EqualTo(new[] { "roll" }));

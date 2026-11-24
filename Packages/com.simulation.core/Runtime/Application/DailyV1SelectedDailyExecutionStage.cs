@@ -885,28 +885,35 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 || actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue
                 || actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue
                 || actionType == DailyV1NpcDefinitionRules.StealActionTypeValue
-                || actionType == DailyV1NpcDefinitionRules.TravelActionTypeValue;
+                || actionType == DailyV1NpcDefinitionRules.TravelActionTypeValue
+                || actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue;
             bool admittedCoreActorChoiceAction = actionType
                 == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
                 && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
                     graph.Definitions, action);
+            bool admittedCoreAutonomousMarketPurchase = actionType
+                == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+                && DailyV1SelectedNpcActionDecisionStage.IsEnabledForRuntime(
+                    graph.Definitions, action)
+                && DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+                    graph.Definitions, action);
+            bool actionStatusEffectsSupported = action != null
+                && DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
+                    graph.Definitions, action, out _, out _,
+                    out IReadOnlyList<DailyV1StatusDefinition> actionStatusToRemove,
+                    out IReadOnlyList<DailyV1StatusDefinition> actionStatusToAdd)
+                && actionStatusToRemove.Count == 0
+                && actionStatusToAdd.Count == 0;
             if (action == null
                 || !graph.Definitions.Actions.TryGetValue(
                     action.DefinitionId, out DailyV1ActionDefinition admittedAction)
                 || !ReferenceEquals(admittedAction, action)
-                || (!admittedAutonomousAction && !admittedCoreActorChoiceAction)
+                || (!admittedAutonomousAction && !admittedCoreActorChoiceAction && !admittedCoreAutonomousMarketPurchase)
                 || (admittedAutonomousAction
                     && !DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
-                        graph.Definitions, action))
-                || !DailyV1NpcDefinitionRules.TryGetActionStatusChanges(
-                    graph.Definitions, action,
-                    out _, out _,
-                    out IReadOnlyList<DailyV1StatusDefinition> targetStatusToRemove,
-                    out IReadOnlyList<DailyV1StatusDefinition> targetStatusToAdd)
-                || targetStatusToRemove.Count != 0
-                || targetStatusToAdd.Count != 0)
+                        graph.Definitions, action)) || !actionStatusEffectsSupported)
             {
-                diagnostic = "a configured action is outside the autonomous or bounded Core actor-choice execution set";
+                diagnostic = "a configured action is outside the autonomous or bounded Core actor-choice execution set: " + (action?.DefinitionId ?? "<null>") + " / type=" + actionType + " / autonomous=" + admittedAutonomousAction + " / choice=" + admittedCoreActorChoiceAction + " / purchase=" + admittedCoreAutonomousMarketPurchase + " / actionStatusEffects=" + actionStatusEffectsSupported;
                 return false;
             }
         }
@@ -939,6 +946,8 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                         graph, actor, installed, actor.ActionSlot.CurrentPayload,
                         requireInstalledSlot: true)
                 || IsProjectionIndependentCoreLocalSellGoodsActionSlot(
+                    executionState, graph, actor, installed)
+                || IsProjectionIndependentCoreLocalBuyGoodsActionSlot(
                     executionState, graph, actor, installed))
                 continue;
             diagnostic = "an installed actor action is not supported by the host-neutral execution boundary: "
@@ -1026,6 +1035,27 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
         return false;
     }
 
+    private static bool IsProjectionIndependentCoreLocalBuyGoodsActionSlot(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action)
+    {
+        if (executionState?.SelectedDecisionStore == null || actor == null || action == null
+            || !DailyV1CoreSelectedActorTurnExecutionBoundary.IsExactCoreLocalBuyGoodsActionSlot(
+                graph, actor, action))
+            return false;
+
+        string decisionId = actor.ActionSlot.CurrentPayload?.OriginDecisionId;
+        if (string.IsNullOrWhiteSpace(decisionId)) return false;
+        foreach (NpcDecisionRecord decision in executionState.SelectedDecisionStore.Decisions)
+            if (decision != null
+                && string.Equals(decision.DecisionId, decisionId, StringComparison.Ordinal)
+                && string.Equals(decision.ActorRuntimeId, actor.RuntimeId, StringComparison.Ordinal)
+                && string.Equals(decision.ActionDefinitionId, action.DefinitionId, StringComparison.Ordinal))
+                return decision.Origin == NpcDecisionOrigin.Autonomous;
+        return false;
+    }
     private static bool IsProjectionIndependentCoreHideAction(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,

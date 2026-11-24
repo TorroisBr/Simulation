@@ -862,7 +862,14 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
 
         if (executionState.HasSealedSelectedOwnerSectionCensusRegistry)
         {
+            if (!DailyV1CoreRuntimeProtocolOperationInventoryComposition
+                    .TryInstallForApplicationStart(session, out diagnostic))
+                return false;
+
             if (executionState.IsSelectedRuntimeCensusProtocolReadyForPublication)
+                return true;
+            if (executionState.TryMarkSelectedRuntimeCensusProtocolReady()
+                && executionState.IsSelectedRuntimeCensusProtocolReadyForPublication)
                 return true;
             diagnostic = "The detached Core start found a sealed but unpublished selected-owner census protocol.";
             return false;
@@ -966,6 +973,10 @@ internal sealed class DailyV1CoreSelectedOwnerCensusProviderComposition
                 + "selected Daily-v1 census shape, cardinality, or alias-identity contract.";
             return false;
         }
+
+        if (!DailyV1CoreRuntimeProtocolOperationInventoryComposition
+                .TryInstallForApplicationStart(session, out diagnostic))
+            return false;
 
         if (!executionState.TryReplaceSelectedOwnerSectionCensusRegistryBeforeSeal(
                 contracts, composition.Registrations)

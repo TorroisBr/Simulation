@@ -107,6 +107,89 @@ internal static class DailyV1RuntimeProtocolOperationContracts
 }
 
 /// <summary>
+/// Installs the existing Core operation catalogue for an exact selected
+/// application session. The catalogue is derived from live Core capabilities;
+/// it does not synthesize host operations or a competing registry.
+/// </summary>
+internal static class DailyV1CoreRuntimeProtocolOperationInventoryComposition
+{
+    internal static bool TryInstallForApplicationStart(
+        DailyV1ActiveRuntimeSession session,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        DailyV1ExecutionBoundaryState state = session?.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = session?.OwnerGraph;
+        if (session == null || state == null || graph == null
+            || !ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph)
+            || !ReferenceEquals(graph.Definitions, session.Definitions)
+            || !graph.MatchesExactOwnerInstances(graph.Cities, graph.Npcs)
+            || !state.HasAdmittedSelectedDailyExecution
+            || !state.SelectedRuntimeExecutionRootsBound
+            || state.AdmissionContext?.Profile
+                != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !state.AdmissionContext.IsOwnedByCurrentThread())
+        {
+            diagnostic = "The Core runtime-operation inventory requires the exact admitted selected session on its owner thread.";
+            return false;
+        }
+
+        IReadOnlyList<string> expected =
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                hasRuntimeAdmission: true,
+                hasTravelPartySystem: graph.TravelParties != null,
+                hasTravelSystem: graph.SpatialRoutePlanningSystem != null);
+
+        if (state.HasRuntimeProtocolOperationInventory)
+        {
+            if (HasExactInventory(state.GetRuntimeProtocolOperationContractIds(), expected))
+                return true;
+            diagnostic = "The sealed Core runtime-operation inventory differs from the exact selected session capabilities.";
+            return false;
+        }
+
+        if (state.HasRegisteredRuntimeProtocolOperationContracts)
+        {
+            if (!HasExactInventory(state.GetRuntimeProtocolOperationContractIds(), expected)
+                || !state.TrySealRuntimeProtocolOperationInventory())
+            {
+                diagnostic = "The existing Core runtime-operation registrations are partial or differ from the selected session capabilities.";
+                return false;
+            }
+            return true;
+        }
+
+        if (!state.TryInstallRuntimeProtocolOperationInventory(expected)
+            || !state.HasRuntimeProtocolOperationInventory
+            || !HasExactInventory(state.GetRuntimeProtocolOperationContractIds(), expected))
+        {
+            diagnostic = "Core could not atomically install the complete supported runtime-operation inventory for this selected session.";
+            return false;
+        }
+        return true;
+    }
+
+    private static bool HasExactInventory(
+        IReadOnlyList<string> actual,
+        IReadOnlyList<string> expected)
+    {
+        if (actual == null || expected == null || actual.Count != expected.Count)
+            return false;
+
+        HashSet<string> supplied = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string operationContractId in actual)
+            if (string.IsNullOrWhiteSpace(operationContractId)
+                || !supplied.Add(operationContractId))
+                return false;
+
+        foreach (string operationContractId in expected)
+            if (!supplied.Contains(operationContractId))
+                return false;
+        return true;
+    }
+}
+
+/// <summary>
 /// Common P12 scope, projection, census and fault ports used by Core-owned
 /// selected execution and legacy runtime advancement.
 /// </summary>

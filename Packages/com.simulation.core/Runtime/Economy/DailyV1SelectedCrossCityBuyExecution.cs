@@ -59,7 +59,20 @@ internal static class DailyV1SelectedCrossCityBuyExecution
         Func<bool> merchantPlanAdmission,
         Action merchantPlanCommitted,
         Func<bool> travelPlanAdmission,
-        Action travelPlanCommitted)
+        Action travelPlanCommitted) =>
+        TryExecute(graph, actor, payload, purchaseBoundary, merchantPlanAdmission,
+            merchantPlanCommitted, travelPlanAdmission, travelPlanCommitted, null);
+
+    internal static DailyV1SelectedCrossCityBuyResult TryExecute(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload,
+        IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary,
+        Func<bool> merchantPlanAdmission,
+        Action merchantPlanCommitted,
+        Func<bool> travelPlanAdmission,
+        Action travelPlanCommitted,
+        Func<Func<bool>, bool> executePlanMutationsWithinP12Operation)
     {
         if (!IsValidSelectedBuy(graph, actor, payload, out DailyV1CityRuntimeOwners origin,
                 out DailyV1CityRuntimeOwners destination,
@@ -121,24 +134,32 @@ internal static class DailyV1SelectedCrossCityBuyExecution
                 DailyV1SelectedCrossCityBuyFailure.PurchaseCommit, purchasePlan,
                 purchaseCommit, originDecisionId, travelCost, purchaseCommit?.PartialCommit == true);
 
-        bool merchantInstalled = merchantPlan.TryInstallState(payload.TargetItem,
-            origin.RuntimeId, destination.RuntimeId, purchasePlan.Quantity,
-            purchasePlan.Quantity, purchasePlan.UnitPrice, 0, 0, originDecisionId);
-        if (!merchantInstalled)
-            return new DailyV1SelectedCrossCityBuyResult(false,
-                DailyV1SelectedCrossCityBuyFailure.PostPurchaseOwnerCommit,
-                purchasePlan, purchaseCommit, originDecisionId, travelCost, partialCommit: true);
-        if (merchantPlanChanges) merchantPlanCommitted?.Invoke();
+        bool CommitPlans()
+        {
+            bool merchantInstalled = merchantPlan.TryInstallState(payload.TargetItem,
+                origin.RuntimeId, destination.RuntimeId, purchasePlan.Quantity,
+                purchasePlan.Quantity, purchasePlan.UnitPrice, 0, 0, originDecisionId);
+            if (!merchantInstalled) return false;
+            if (merchantPlanChanges) merchantPlanCommitted?.Invoke();
 
-        bool travelInstalled = graph.TryCommitMerchantTradeTravelPlan(actor,
-            destination.RuntimeId, TradeTravelUtility, originDecisionId, () => true,
-            out float committedCost)
-            && committedCost.Equals(travelCost);
-        if (!travelInstalled)
+            bool travelInstalled = graph.TryCommitMerchantTradeTravelPlan(actor,
+                destination.RuntimeId, TradeTravelUtility, originDecisionId, () => true,
+                out float committedCost)
+                && committedCost.Equals(travelCost);
+            if (!travelInstalled) return false;
+            if (travelPlanChanges) travelPlanCommitted?.Invoke();
+            return true;
+        }
+
+        bool planMutationsCommitted =
+            executePlanMutationsWithinP12Operation == null
+                || (!merchantPlanChanges && !travelPlanChanges)
+            ? CommitPlans()
+            : executePlanMutationsWithinP12Operation(CommitPlans);
+        if (!planMutationsCommitted)
             return new DailyV1SelectedCrossCityBuyResult(false,
                 DailyV1SelectedCrossCityBuyFailure.PostPurchaseOwnerCommit,
                 purchasePlan, purchaseCommit, originDecisionId, travelCost, partialCommit: true);
-        if (travelPlanChanges) travelPlanCommitted?.Invoke();
 
         return new DailyV1SelectedCrossCityBuyResult(true,
             DailyV1SelectedCrossCityBuyFailure.None, purchasePlan, purchaseCommit,

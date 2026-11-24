@@ -2098,6 +2098,24 @@ internal static class DailyV1SelectedActionExecutionStage
         Action merchantPlanCommitted,
         Func<bool> travelPlanAdmission,
         Action travelPlanCommitted,
+        out SelectedCrossCityBuyActionResult result) =>
+        TryExecuteSelectedCrossCityBuyActionSlot(
+            graph, actor, expectedAction, randomSource, currentAbsoluteDay,
+            purchaseBoundary, merchantPlanAdmission, merchantPlanCommitted,
+            travelPlanAdmission, travelPlanCommitted, null, out result);
+
+    internal static bool TryExecuteSelectedCrossCityBuyActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary,
+        Func<bool> merchantPlanAdmission,
+        Action merchantPlanCommitted,
+        Func<bool> travelPlanAdmission,
+        Action travelPlanCommitted,
+        Func<Func<bool>, bool> executeWithinP12Operation,
         out SelectedCrossCityBuyActionResult result)
     {
         result = null;
@@ -2132,9 +2150,13 @@ internal static class DailyV1SelectedActionExecutionStage
             return true;
         }
 
-        DailyV1SelectedCrossCityBuyResult purchase = DailyV1SelectedCrossCityBuyExecution.TryExecute(
-            graph, actor, payload, purchaseBoundary, merchantPlanAdmission,
-            merchantPlanCommitted, travelPlanAdmission, travelPlanCommitted);
+        DailyV1SelectedCrossCityBuyResult purchase =
+            DailyV1SelectedCrossCityBuyExecution.TryExecute(
+                graph, actor, payload, purchaseBoundary, merchantPlanAdmission,
+                merchantPlanCommitted, travelPlanAdmission, travelPlanCommitted,
+                executeWithinP12Operation);
+        if (purchase == null) return false;
+
         result = new SelectedCrossCityBuyActionResult(true, purchase);
         return true;
     }
@@ -2279,6 +2301,13 @@ internal interface IDailyV1SelectedActionDispatchBoundary
     void CompleteCrossCityBuy(
         DailyV1NpcRuntimeOwners actor,
         DailyV1SelectedCrossCityBuyResult result);
+}
+
+internal interface IDailyV1SelectedCrossCityBuyP12OperationBoundary
+{
+    bool ExecutePlanMutationsWithinCrossCityBuyP12Operation(
+        DailyV1NpcRuntimeOwners actor,
+        Func<bool> operation);
 }
 
 internal enum DailyV1SelectedActionDispatchKind
@@ -2698,6 +2727,11 @@ internal static class DailyV1SelectedActionDispatchStage
             return true;
         }
 
+        Func<Func<bool>, bool> executeWithinP12Operation = null;
+        if (boundary is IDailyV1SelectedCrossCityBuyP12OperationBoundary coreOperationBoundary)
+            executeWithinP12Operation = operation =>
+                coreOperationBoundary.ExecutePlanMutationsWithinCrossCityBuyP12Operation(actor, operation);
+
         if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedCrossCityBuyActionSlot(
                 graph, actor, action, randomSource, currentAbsoluteDay,
                 purchaseBoundary,
@@ -2705,6 +2739,7 @@ internal static class DailyV1SelectedActionDispatchStage
                 () => boundary.PublishMerchantPlanMutation(actor),
                 () => boundary.CanAdmitTradeTravelPlanMutation(actor),
                 () => boundary.PublishTradeTravelPlanMutation(actor),
+                executeWithinP12Operation,
                 out DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult crossCityBuy))
         {
             result = RejectedSelectedMerchantAction(actor, actionType, payload);

@@ -293,12 +293,14 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     private bool selectedCoreActorChoiceMutationBoundaryBound;
     private bool selectedCoreActorChoiceCardinalityTransitionActive;
     private Func<IReadOnlyCollection<string>, bool> selectedActorChoiceCompatibilityBaselineSynchronizer;
-    private object selectedCoreMarketSaleInventoryCardinalityTransitionToken;
-    private string selectedCoreMarketSaleInventoryCardinalityTransitionSectionId;
-    private object selectedCoreMarketSaleInventoryCardinalityTransitionOwnerIdentity;
-    private object selectedCoreMarketSaleMarketCardinalityTransitionToken;
-    private string selectedCoreMarketSaleMarketCardinalityTransitionSectionId;
-    private object selectedCoreMarketSaleMarketCardinalityTransitionOwnerIdentity;
+    private object selectedCoreMarketOperationInventoryCardinalityTransitionToken;
+    private string selectedCoreMarketOperationInventoryCardinalityTransitionSectionId;
+    private object selectedCoreMarketOperationInventoryCardinalityTransitionOwnerIdentity;
+    private string selectedCoreMarketOperationInventoryCardinalityTransitionOperationContractId;
+    private object selectedCoreMarketOperationMarketCardinalityTransitionToken;
+    private string selectedCoreMarketOperationMarketCardinalityTransitionSectionId;
+    private object selectedCoreMarketOperationMarketCardinalityTransitionOwnerIdentity;
+    private string selectedCoreMarketOperationMarketCardinalityTransitionOperationContractId;
     private NpcDecisionStore selectedDecisionStore;
     private ActorChoiceStore selectedActorChoiceStore;
     private DomainEventRecorder selectedTravelPartyEventRecorder;
@@ -2456,8 +2458,8 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 && string.Equals(sectionId,
                     ActorChoiceP11CensusProvider.SectionId,
                     StringComparison.Ordinal))
-            || AllowsCurrentCoreMarketSaleInventoryCardinalityTransition(sectionId)
-            || AllowsCurrentCoreMarketSaleMarketCardinalityTransition(sectionId)
+            || AllowsCurrentCoreMarketOperationInventoryCardinalityTransition(sectionId)
+            || AllowsCurrentCoreMarketOperationMarketCardinalityTransition(sectionId)
             || string.Equals(sectionId,
                 DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId,
                 StringComparison.Ordinal)
@@ -2472,100 +2474,86 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                 StringComparison.Ordinal);
     }
 
-    private bool AllowsCurrentCoreMarketSaleInventoryCardinalityTransition(string sectionId)
+    private static bool IsCoreSelectedMarketOperationContractId(string operationContractId) =>
+        string.Equals(operationContractId,
+            DailyV1RuntimeProtocolOperationContracts.MarketSale, StringComparison.Ordinal)
+        || string.Equals(operationContractId,
+            DailyV1RuntimeProtocolOperationContracts.MarketPurchase, StringComparison.Ordinal);
+
+    private bool HasCurrentCoreSelectedMarketOperationScope(string operationContractId) =>
+        IsCoreSelectedMarketOperationContractId(operationContractId)
+        && AdmissionContext?.IsOwnedByCurrentThread() == true
+        && activeOperationScopes.Count == 3
+        && activeOperationScopes[0] == DailyV1OperationScopeKind.DailyAdvance
+        && activeOperationScopes[1] == DailyV1OperationScopeKind.RuntimeProtocol
+        && activeOperationScopes[2] == DailyV1OperationScopeKind.RuntimeProtocol
+        && activeRuntimeProtocolOperationContracts.Count == 2
+        && string.Equals(activeRuntimeProtocolOperationContracts[0],
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance, StringComparison.Ordinal)
+        && string.Equals(activeRuntimeProtocolOperationContracts[1],
+            operationContractId, StringComparison.Ordinal);
+
+    private bool AllowsCurrentCoreMarketOperationInventoryCardinalityTransition(string sectionId)
     {
-        if (selectedCoreMarketSaleInventoryCardinalityTransitionToken == null
-            || !string.Equals(
-                selectedCoreMarketSaleInventoryCardinalityTransitionSectionId,
-                sectionId,
-                StringComparison.Ordinal)
-            || AdmissionContext?.IsOwnedByCurrentThread() != true
-            || activeOperationScopes.Count != 3
-            || activeOperationScopes[0] != DailyV1OperationScopeKind.DailyAdvance
-            || activeOperationScopes[1] != DailyV1OperationScopeKind.RuntimeProtocol
-            || activeOperationScopes[2] != DailyV1OperationScopeKind.RuntimeProtocol
-            || activeRuntimeProtocolOperationContracts.Count != 2
-            || !string.Equals(activeRuntimeProtocolOperationContracts[0],
-                DailyV1RuntimeProtocolOperationContracts.DailyAdvance, StringComparison.Ordinal)
-            || !string.Equals(activeRuntimeProtocolOperationContracts[1],
-                DailyV1RuntimeProtocolOperationContracts.MarketSale, StringComparison.Ordinal)
+        string operationContractId = selectedCoreMarketOperationInventoryCardinalityTransitionOperationContractId;
+        if (selectedCoreMarketOperationInventoryCardinalityTransitionToken == null
+            || !string.Equals(selectedCoreMarketOperationInventoryCardinalityTransitionSectionId,
+                sectionId, StringComparison.Ordinal)
+            || !HasCurrentCoreSelectedMarketOperationScope(operationContractId)
             || !selectedOwnerSectionCensusProviders.TryGetValue(
                 sectionId ?? string.Empty,
                 out DailyV1OwnerSectionCensusProviderRegistration registration))
             return false;
 
         return registration != null
-            && ReferenceEquals(
-                registration.BaselineOwnerInstanceIdentity,
-                selectedCoreMarketSaleInventoryCardinalityTransitionOwnerIdentity);
+            && ReferenceEquals(registration.BaselineOwnerInstanceIdentity,
+                selectedCoreMarketOperationInventoryCardinalityTransitionOwnerIdentity);
     }
 
-    private bool AllowsCurrentCoreMarketSaleMarketCardinalityTransition(string sectionId)
+    private bool AllowsCurrentCoreMarketOperationMarketCardinalityTransition(string sectionId)
     {
-        if (selectedCoreMarketSaleMarketCardinalityTransitionToken == null
-            || !string.Equals(
-                selectedCoreMarketSaleMarketCardinalityTransitionSectionId,
-                sectionId,
-                StringComparison.Ordinal)
-            || AdmissionContext?.IsOwnedByCurrentThread() != true
-            || activeOperationScopes.Count != 3
-            || activeOperationScopes[0] != DailyV1OperationScopeKind.DailyAdvance
-            || activeOperationScopes[1] != DailyV1OperationScopeKind.RuntimeProtocol
-            || activeOperationScopes[2] != DailyV1OperationScopeKind.RuntimeProtocol
-            || activeRuntimeProtocolOperationContracts.Count != 2
-            || !string.Equals(activeRuntimeProtocolOperationContracts[0],
-                DailyV1RuntimeProtocolOperationContracts.DailyAdvance, StringComparison.Ordinal)
-            || !string.Equals(activeRuntimeProtocolOperationContracts[1],
-                DailyV1RuntimeProtocolOperationContracts.MarketSale, StringComparison.Ordinal)
+        string operationContractId = selectedCoreMarketOperationMarketCardinalityTransitionOperationContractId;
+        if (selectedCoreMarketOperationMarketCardinalityTransitionToken == null
+            || !string.Equals(selectedCoreMarketOperationMarketCardinalityTransitionSectionId,
+                sectionId, StringComparison.Ordinal)
+            || !HasCurrentCoreSelectedMarketOperationScope(operationContractId)
             || !selectedOwnerSectionCensusProviders.TryGetValue(
                 sectionId ?? string.Empty,
                 out DailyV1OwnerSectionCensusProviderRegistration registration))
             return false;
 
         return registration != null
-            && ReferenceEquals(
-                registration.BaselineOwnerInstanceIdentity,
-                selectedCoreMarketSaleMarketCardinalityTransitionOwnerIdentity);
+            && ReferenceEquals(registration.BaselineOwnerInstanceIdentity,
+                selectedCoreMarketOperationMarketCardinalityTransitionOwnerIdentity);
     }
 
     /// <summary>
-    /// Opens a one-section cardinality transition only for a committed local
-    /// MarketSale on the exact actor Inventory owner inside this session's
-    /// serialized DailyAdvance. A null token means the sale kept its row count.
+    /// Opens an exact one-row Inventory transition for a committed local
+    /// MarketSale or MarketPurchase inside this session's serialized daily
+    /// operation. The operation determines the only permitted cardinality
+    /// direction; a null token means the row count did not change.
     /// </summary>
-    internal bool TryBeginCoreSelectedMarketSaleInventoryCardinalityTransition(
+    internal bool TryBeginCoreSelectedMarketOperationInventoryCardinalityTransition(
+        string operationContractId,
         string inventorySectionId,
         object expectedInventoryOwner,
         out object transitionToken)
     {
         transitionToken = null;
-        if (string.IsNullOrWhiteSpace(inventorySectionId) || expectedInventoryOwner == null)
+        if (!IsCoreSelectedMarketOperationContractId(operationContractId)
+            || string.IsNullOrWhiteSpace(inventorySectionId) || expectedInventoryOwner == null)
             return false;
 
         lock (operationSyncRoot)
         {
-            bool exactMarketSaleScope = activeOperationScopes.Count == 3
-                && activeOperationScopes[0] == DailyV1OperationScopeKind.DailyAdvance
-                && activeOperationScopes[1] == DailyV1OperationScopeKind.RuntimeProtocol
-                && activeOperationScopes[2] == DailyV1OperationScopeKind.RuntimeProtocol
-                && activeRuntimeProtocolOperationContracts.Count == 2
-                && string.Equals(
-                    activeRuntimeProtocolOperationContracts[0],
-                    DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
-                    StringComparison.Ordinal)
-                && string.Equals(
-                    activeRuntimeProtocolOperationContracts[1],
-                    DailyV1RuntimeProtocolOperationContracts.MarketSale,
-                    StringComparison.Ordinal);
             if (AdmissionContext?.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
-                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !HasCurrentCoreSelectedMarketOperationScope(operationContractId)
                 || selectedRuntimeCensusProtocolFaulted
                 || !selectedRuntimeCensusProtocolReady
                 || !selectedOwnerSectionCensusRegistrySealed
                 || selectedP12CrimeJusticeMutationOperationScopeToken != null
                 || mutationEpochState.HasActiveReservation
-                || !exactMarketSaleScope
-                || selectedCoreMarketSaleInventoryCardinalityTransitionToken != null
+                || selectedCoreMarketOperationInventoryCardinalityTransitionToken != null
                 || !inventorySectionId.StartsWith(
                     DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix,
                     StringComparison.Ordinal)
@@ -2591,62 +2579,61 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
             if (witness.Cardinality == registration.BaselineCardinality)
                 return true;
-            if (witness.Revision <= registration.BaselineRevision)
+            long expectedDelta = string.Equals(operationContractId,
+                DailyV1RuntimeProtocolOperationContracts.MarketSale, StringComparison.Ordinal)
+                ? -1L : 1L;
+            if ((long)witness.Cardinality
+                    != (long)registration.BaselineCardinality + expectedDelta
+                || witness.Revision <= registration.BaselineRevision)
                 return false;
 
             object token = new object();
-            selectedCoreMarketSaleInventoryCardinalityTransitionToken = token;
-            selectedCoreMarketSaleInventoryCardinalityTransitionSectionId = inventorySectionId;
-            selectedCoreMarketSaleInventoryCardinalityTransitionOwnerIdentity = expectedInventoryOwner;
+            selectedCoreMarketOperationInventoryCardinalityTransitionToken = token;
+            selectedCoreMarketOperationInventoryCardinalityTransitionSectionId = inventorySectionId;
+            selectedCoreMarketOperationInventoryCardinalityTransitionOwnerIdentity = expectedInventoryOwner;
+            selectedCoreMarketOperationInventoryCardinalityTransitionOperationContractId = operationContractId;
             transitionToken = token;
             return true;
         }
     }
 
-    internal bool TryEndCoreSelectedMarketSaleInventoryCardinalityTransition(object transitionToken)
+    internal bool TryEndCoreSelectedMarketOperationInventoryCardinalityTransition(object transitionToken)
     {
         if (transitionToken == null) return true;
         lock (operationSyncRoot)
         {
-            if (!ReferenceEquals(
-                    selectedCoreMarketSaleInventoryCardinalityTransitionToken,
+            if (!ReferenceEquals(selectedCoreMarketOperationInventoryCardinalityTransitionToken,
                     transitionToken)
                 || AdmissionContext?.IsOwnedByCurrentThread() != true)
                 return false;
 
-            selectedCoreMarketSaleInventoryCardinalityTransitionToken = null;
-            selectedCoreMarketSaleInventoryCardinalityTransitionSectionId = null;
-            selectedCoreMarketSaleInventoryCardinalityTransitionOwnerIdentity = null;
+            selectedCoreMarketOperationInventoryCardinalityTransitionToken = null;
+            selectedCoreMarketOperationInventoryCardinalityTransitionSectionId = null;
+            selectedCoreMarketOperationInventoryCardinalityTransitionOwnerIdentity = null;
+            selectedCoreMarketOperationInventoryCardinalityTransitionOperationContractId = null;
             return true;
         }
     }
 
     /// <summary>
-    /// Opens a cardinality transition for the exact City Market row only
-    /// during this session's serialized MarketSale operation. It permits the
-    /// first stock row for an admitted item when a successful sale creates it;
-    /// it cannot authorize another City, owner, section, or operation.
+    /// Opens an exact one-row City Market transition only for the current
+    /// MarketSale or MarketPurchase operation, bound to the session's exact
+    /// City and Market owner. Sale may add the first row; purchase may remove
+    /// the last row.
     /// </summary>
-    internal bool TryBeginCoreSelectedMarketSaleMarketCardinalityTransition(
+    internal bool TryBeginCoreSelectedMarketOperationMarketCardinalityTransition(
+        string operationContractId,
         string marketSectionId,
         DailyV1MarketOwner expectedMarketOwner,
         out object transitionToken)
     {
         transitionToken = null;
-        if (string.IsNullOrWhiteSpace(marketSectionId) || expectedMarketOwner == null)
+        if (!IsCoreSelectedMarketOperationContractId(operationContractId)
+            || string.IsNullOrWhiteSpace(marketSectionId) || expectedMarketOwner == null)
             return false;
 
         lock (operationSyncRoot)
         {
-            bool exactMarketSaleScope = activeOperationScopes.Count == 3
-                && activeOperationScopes[0] == DailyV1OperationScopeKind.DailyAdvance
-                && activeOperationScopes[1] == DailyV1OperationScopeKind.RuntimeProtocol
-                && activeOperationScopes[2] == DailyV1OperationScopeKind.RuntimeProtocol
-                && activeRuntimeProtocolOperationContracts.Count == 2
-                && string.Equals(activeRuntimeProtocolOperationContracts[0],
-                    DailyV1RuntimeProtocolOperationContracts.DailyAdvance, StringComparison.Ordinal)
-                && string.Equals(activeRuntimeProtocolOperationContracts[1],
-                    DailyV1RuntimeProtocolOperationContracts.MarketSale, StringComparison.Ordinal);
             DailyV1SelectedRuntimeOwnerGraph graph = selectedRuntimeOwnerGraph;
             bool exactCityMarket = false;
             if (graph != null && ReferenceEquals(graph.Definitions, expectedMarketOwner.Definitions))
@@ -2663,26 +2650,22 @@ internal sealed partial class DailyV1ExecutionBoundaryState
                             .CityMarketStockRowsSectionPrefix
                             + P12DCityOwnerImageSectionCodec.EncodeCityKeyForSection(city.RuntimeId);
                     }
-                    catch (ArgumentException)
-                    {
-                        return false;
-                    }
-                    exactCityMarket = string.Equals(
-                        expectedSectionId, marketSectionId, StringComparison.Ordinal);
+                    catch (ArgumentException) { return false; }
+                    exactCityMarket = string.Equals(expectedSectionId, marketSectionId,
+                        StringComparison.Ordinal);
                     break;
                 }
             }
 
             if (AdmissionContext?.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
-                || !AdmissionContext.IsOwnedByCurrentThread()
+                || !HasCurrentCoreSelectedMarketOperationScope(operationContractId)
                 || selectedRuntimeCensusProtocolFaulted
                 || !selectedRuntimeCensusProtocolReady
                 || !selectedOwnerSectionCensusRegistrySealed
                 || selectedP12CrimeJusticeMutationOperationScopeToken != null
                 || mutationEpochState.HasActiveReservation
-                || !exactMarketSaleScope
                 || !exactCityMarket
-                || selectedCoreMarketSaleMarketCardinalityTransitionToken != null
+                || selectedCoreMarketOperationMarketCardinalityTransitionToken != null
                 || !marketSectionId.StartsWith(
                     DailyV1SelectedOwnerSectionCensusContract.CityMarketStockRowsSectionPrefix,
                     StringComparison.Ordinal)
@@ -2708,37 +2691,41 @@ internal sealed partial class DailyV1ExecutionBoundaryState
 
             if (witness.Cardinality == registration.BaselineCardinality)
                 return true;
-            if ((long)witness.Cardinality != (long)registration.BaselineCardinality + 1L
+            long expectedDelta = string.Equals(operationContractId,
+                DailyV1RuntimeProtocolOperationContracts.MarketSale, StringComparison.Ordinal)
+                ? 1L : -1L;
+            if ((long)witness.Cardinality
+                    != (long)registration.BaselineCardinality + expectedDelta
                 || witness.Revision <= registration.BaselineRevision)
                 return false;
 
             object token = new object();
-            selectedCoreMarketSaleMarketCardinalityTransitionToken = token;
-            selectedCoreMarketSaleMarketCardinalityTransitionSectionId = marketSectionId;
-            selectedCoreMarketSaleMarketCardinalityTransitionOwnerIdentity = expectedMarketOwner;
+            selectedCoreMarketOperationMarketCardinalityTransitionToken = token;
+            selectedCoreMarketOperationMarketCardinalityTransitionSectionId = marketSectionId;
+            selectedCoreMarketOperationMarketCardinalityTransitionOwnerIdentity = expectedMarketOwner;
+            selectedCoreMarketOperationMarketCardinalityTransitionOperationContractId = operationContractId;
             transitionToken = token;
             return true;
         }
     }
 
-    internal bool TryEndCoreSelectedMarketSaleMarketCardinalityTransition(object transitionToken)
+    internal bool TryEndCoreSelectedMarketOperationMarketCardinalityTransition(object transitionToken)
     {
         if (transitionToken == null) return true;
         lock (operationSyncRoot)
         {
-            if (!ReferenceEquals(
-                    selectedCoreMarketSaleMarketCardinalityTransitionToken,
+            if (!ReferenceEquals(selectedCoreMarketOperationMarketCardinalityTransitionToken,
                     transitionToken)
                 || AdmissionContext?.IsOwnedByCurrentThread() != true)
                 return false;
 
-            selectedCoreMarketSaleMarketCardinalityTransitionToken = null;
-            selectedCoreMarketSaleMarketCardinalityTransitionSectionId = null;
-            selectedCoreMarketSaleMarketCardinalityTransitionOwnerIdentity = null;
+            selectedCoreMarketOperationMarketCardinalityTransitionToken = null;
+            selectedCoreMarketOperationMarketCardinalityTransitionSectionId = null;
+            selectedCoreMarketOperationMarketCardinalityTransitionOwnerIdentity = null;
+            selectedCoreMarketOperationMarketCardinalityTransitionOperationContractId = null;
             return true;
         }
     }
-
     private bool AllowsCurrentCoreTravelCityCardinalityTransition(
         string sectionId,
         OwnerSectionCensusWitness current,
@@ -3340,6 +3327,52 @@ internal sealed partial class DailyV1ExecutionBoundaryState
     /// Records one runtime operation during selected-profile bootstrap. The
     /// complete supported inventory is sealed before Core will admit any ID.
     /// </summary>
+    internal bool TryInstallRuntimeProtocolOperationInventory(
+        IReadOnlyList<string> operationContractIds)
+    {
+        if (operationContractIds == null || operationContractIds.Count == 0) return false;
+
+        List<string> staged = new List<string>(operationContractIds.Count);
+        HashSet<string> unique = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < operationContractIds.Count; i++)
+        {
+            string operationContractId = operationContractIds[i];
+            if (string.IsNullOrWhiteSpace(operationContractId)
+                || !unique.Add(operationContractId))
+                return false;
+            staged.Add(operationContractId);
+        }
+
+        if (!DailyV1RuntimeProtocolOperationContracts.IsSupportedSelectedOperationInventory(staged))
+            return false;
+
+        lock (operationSyncRoot)
+        {
+            if (runtimeProtocolOperationInventorySealed
+                || expectedRuntimeProtocolOperationContracts.Count != 0
+                || activeOperationScopes.Count != 0
+                || exclusiveSessionReplacementInProgress
+                || AdmissionContext == null
+                || AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || !runtimeIdentityBound
+                || !runtimeConfigurationBound
+                || !AdmissionContext.IsOwnedByCurrentThread())
+                return false;
+
+            foreach (string operationContractId in staged)
+            {
+                if (expectedRuntimeProtocolOperationContracts.Add(operationContractId))
+                    continue;
+
+                expectedRuntimeProtocolOperationContracts.Clear();
+                runtimeProtocolOperationInventorySealed = false;
+                return false;
+            }
+
+            runtimeProtocolOperationInventorySealed = true;
+            return expectedRuntimeProtocolOperationContracts.Count == staged.Count;
+        }
+    }
     internal bool TryRegisterRuntimeProtocolOperationContract(string operationContractId)
     {
         if (string.IsNullOrWhiteSpace(operationContractId)) return false;

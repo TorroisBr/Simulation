@@ -636,9 +636,11 @@ public sealed class DailyV1ApplicationHostTests
             definitions, host,
             out DailyV1ApplicationStartPreparation preparation,
             out P12AResult persistenceResult,
-            out string startDiagnostic), Is.False);
+            out string startDiagnostic), Is.True, startDiagnostic);
         Assert.That(preparation?.CoreSession, Is.Not.Null);
         DailyV1ActiveRuntimeSession session = preparation.CoreSession;
+        Assert.That(application.ActiveSession, Is.SameAs(session),
+            "The complete Core runtime inventory now allows production startup to publish this exact session.");
         Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreateForApplicationStart(
             session,
             out DailyV1CoreSelectedOwnerCensusProviderComposition emptyComposition,
@@ -704,9 +706,11 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(application.TryStartDotNetOnExistingApplication(
             definitions, host,
             out DailyV1ApplicationStartPreparation preparation,
-            out _, out _), Is.False);
+            out _, out string startDiagnostic), Is.True, startDiagnostic);
         DailyV1ActiveRuntimeSession session = preparation?.CoreSession;
         Assert.That(session, Is.Not.Null);
+        Assert.That(application.ActiveSession, Is.SameAs(session),
+            "The receipt census providers must be read from the exact published Core session.");
         DailyV1CrimeP18ReceiptOwner crime = session.OwnerGraph.CrimeP18ReceiptOwner;
         DailyV1JusticeP18ReceiptOwner justice = session.OwnerGraph.JusticeP18ReceiptOwner;
 
@@ -831,7 +835,7 @@ public sealed class DailyV1ApplicationHostTests
     }
 
     [Test]
-    public void DetachedCoreStartSealsCompleteReceiptCensusThenFailsClosedOnMissingOperationInventory()
+    public void DetachedCoreStartPublishesSealedCoreInventoryAndAdvancesOneCompleteDay()
     {
         DailyV1EffectiveDefinitions definitions =
             DailyV1CapturedSelectedContentFixture.CreateDefinitions();
@@ -840,19 +844,20 @@ public sealed class DailyV1ApplicationHostTests
             "detached-core-unsealed-census-root", new MissingSlotOperations(),
             stageCompleted: null, logOutput: null, dotNetIdentity: DotNetIdentity());
 
-        Assert.That(application.TryStartDotNetOnExistingApplication(
-                definitions, host,
-                out DailyV1ApplicationStartPreparation preparation,
-                out P12AResult persistenceResult,
-                out string diagnostic), Is.False);
+        bool started = application.TryStartDotNetOnExistingApplication(
+            definitions, host,
+            out DailyV1ApplicationStartPreparation preparation,
+            out P12AResult persistenceResult,
+            out string diagnostic);
+        Assert.That(started, Is.True, diagnostic);
         Assert.That(preparation, Is.Not.Null);
         Assert.That(preparation.Kind,
             Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
         Assert.That(persistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
-        Assert.That(application.ActiveSession, Is.Null,
-            "The production .NET start path must not publish a session without the complete sealed census.");
-        Assert.That(diagnostic, Does.Contain("stable complete census baseline"),
-            "The complete receipt inventory now advances to the subsequent runtime-operation readiness gate.");
+        Assert.That(application.ActiveSession, Is.SameAs(preparation.CoreSession),
+            "Core startup must publish the exact prepared session through the normal application transaction.");
+        Assert.That(preparation.CoreSession.ExecutionBoundaryState.IsFactualReadWorldPublished, Is.True,
+            "Projection-free Core Genesis must publish the factual World boundary required by its first completed P12 capture.");
         Assert.That(DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreateForApplicationStart(
             preparation.CoreSession,
             out DailyV1CoreSelectedOwnerCensusProviderComposition coreComposition,
@@ -1047,39 +1052,117 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(exactMissingSectionIds, Is.Empty,
             "Core registration now covers every row in the complete selected Daily-v1 89-family vector.");
         Assert.That(coreProviderSectionIds, Is.EquivalentTo(testProfileSectionIds));
-        Assert.That(preparation.CoreSession.ExecutionBoundaryState
-            .HasSealedSelectedOwnerSectionCensusRegistry, Is.True,
-            "The full 89-family Core census is sealed even though this host deliberately lacks its runtime operation inventory.");
+        DailyV1ExecutionBoundaryState executionState = preparation.CoreSession.ExecutionBoundaryState;
+        Assert.That(coreComposition.Registrations, Has.Count.EqualTo(299),
+            "The N=10, C=2 proving profile composes the complete 299-row selected census.");
+        Assert.That(coreProviderSectionIds, Has.Count.EqualTo(299));
+        Assert.That(executionState.HasSealedSelectedOwnerSectionCensusRegistry, Is.True);
+        Assert.That(executionState.HasRuntimeProtocolOperationInventory, Is.True,
+            "The same Core execution boundary owns the sealed operation allowlist.");
+        Assert.That(executionState.IsSelectedRuntimeCensusProtocolReadyForPublication, Is.True);
+        IReadOnlyList<string> expectedOperationIds =
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                hasRuntimeAdmission: true,
+                hasTravelPartySystem: preparation.CoreSession.OwnerGraph.TravelParties != null,
+                hasTravelSystem: preparation.CoreSession.OwnerGraph.SpatialRoutePlanningSystem != null);
+        CollectionAssert.AreEquivalent(
+            expectedOperationIds, executionState.GetRuntimeProtocolOperationContractIds());
+        Assert.That(application.ActiveSession, Is.SameAs(preparation.CoreSession));
 
-        Assert.That(application.TryStartDotNetOnExistingApplication(
-                definitions, host,
-                out DailyV1ApplicationStartPreparation retryPreparation,
-                out P12AResult retryPersistenceResult,
-                out string retryDiagnostic), Is.False);
-        Assert.That(retryPreparation, Is.Null);
-        Assert.That(retryPersistenceResult.Code, Is.EqualTo(P12AResultCode.InvalidOwnerValue));
-        Assert.That(retryDiagnostic, Does.Contain("terminal after its initial genesis failed"),
-            "The failed private Genesis candidate may have consumed allocator identities and cannot be silently recomposed or retried on the same application.");
-        Assert.That(application.ActiveSession, Is.Null,
-            "A failed detached Genesis start remains unpublished after the terminal failure is recorded.");
+        long startingDay = preparation.CoreSession.SimulationTime.AbsoluteDay;
+        long startingSequence = executionState.CompletedCoreSequence;
+        Assert.That(preparation.CoreSession.RuntimeAdvanceBoundary
+            .TryCaptureDailyBoundaryAdmissionEvidence(
+                sessionReplacement: false,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionsBefore,
+                out long mutationEpochBefore,
+                out DailyCaptureEligibilityFailure captureBeforeFailure),
+            Is.True, captureBeforeFailure.ToString());
+        Assert.That(startingSequence, Is.Zero,
+            "Genesis begins before a completed Core daily boundary.");
+        bool advanced = application.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure);
+        Assert.That(advanced, Is.True,
+            "The Core-owned daily execution must complete through the published session. Failure: "
+                + advanceFailure
+                + "; census=" + executionState.LastSelectedOwnerSectionCensusRefreshRejection
+                + "; merchant=" + executionState.LastSelectedMerchantDailyTradeRejection
+                + "; censusFaulted=" + executionState.IsSelectedRuntimeCensusProtocolFaulted
+                + "; activeOperations=" + executionState.ActiveRuntimeOperationCount
+                + "; day=" + preparation.CoreSession.SimulationTime.AbsoluteDay
+                + "; completedSequence=" + executionState.CompletedCoreSequence);
+        Assert.That(preparation.CoreSession.SimulationTime.AbsoluteDay, Is.EqualTo(startingDay + 1L));
+        Assert.That(executionState.CompletedCoreSequence, Is.EqualTo(startingSequence + 1L));
+        Assert.That(executionState.ActiveRuntimeOperationCount, Is.Zero,
+            "All Core runtime operations must leave the inventory quiescent after the complete day.");
+        Assert.That(executionState.HasSealedSelectedOwnerSectionCensusRegistry, Is.True);
+        Assert.That(executionState.HasRuntimeProtocolOperationInventory, Is.True);
+        Assert.That(executionState.IsSelectedRuntimeCensusProtocolReadyForPublication, Is.True);
+        Assert.That(executionState.TryAssessCaptureScope(DailyV1CaptureScopeAllowance.None), Is.True,
+            "The completed Core day must return the exact census and operation boundary to a capturable idle state.");
+        Assert.That(preparation.CoreSession.RuntimeAdvanceBoundary
+            .TryCaptureDailyBoundaryAdmissionEvidence(
+                sessionReplacement: false,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionsAfter,
+                out long mutationEpochAfter,
+                out DailyCaptureEligibilityFailure captureAfterFailure),
+            Is.True, captureAfterFailure.ToString());
+        Assert.That(ownerSectionsAfter, Has.Count.EqualTo(ownerSectionsBefore.Count));
+        List<string> changedOwnerSections = new List<string>();
+        for (int index = 0; index < ownerSectionsBefore.Count; index++)
+        {
+            OwnerSectionCensusSnapshot before = ownerSectionsBefore[index];
+            OwnerSectionCensusSnapshot after = ownerSectionsAfter[index];
+            Assert.That(after.SectionId, Is.EqualTo(before.SectionId));
+            Assert.That(ReferenceEquals(after.OwnerInstanceIdentity, before.OwnerInstanceIdentity), Is.True,
+                "A full Core day must retain each selected census owner identity.");
+            if (after.Cardinality != before.Cardinality || after.Revision != before.Revision)
+                changedOwnerSections.Add(after.SectionId);
+        }
+        Assert.That(changedOwnerSections, Is.Not.Empty,
+            "The full daily path must commit at least one real authoritative owner mutation.");
+        Assert.That(mutationEpochAfter, Is.GreaterThan(mutationEpochBefore),
+            "Committed Core owner mutations must advance the shared P12 epoch.");
 
-        IDailyV1SelectedRuntimeAdvanceHostPorts rejectedCandidatePorts =
-            new MinimalSelectedRuntimeAdvanceHostPorts(
-                preparation.CoreSession.ExecutionBoundaryState);
-        Assert.That(application.TryCommitInitialGenesisWithoutHostProjection(
-                preparation, rejectedCandidatePorts, out string noProjectionCommitDiagnostic), Is.False);
-        Assert.That(noProjectionCommitDiagnostic, Does.Contain("terminal after its initial genesis failed"));
-        Assert.That(application.TryCommitInitialStartWithHostProjection(
-                preparation,
-                preparation.CoreSession,
-                new TestHostProjection(preparation.CoreSession),
-                rejectedCandidatePorts,
-                out string projectionCommitDiagnostic), Is.False);
-        Assert.That(projectionCommitDiagnostic, Does.Contain("terminal after its initial genesis failed"));
-        Assert.That(preparation.CoreSession.RuntimeAdvanceBoundary, Is.Null,
-            "Neither commit entry point may bind a failed private candidate after terminalization.");
-        Assert.That(application.ActiveSession, Is.Null,
-            "A previously returned preparation cannot bypass failed-start terminalization.");
+        DailyV1EffectiveDefinitions equivalentDefinitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1Application equivalentApplication = new DailyV1Application();
+        DailyV1ApplicationHost equivalentHost = new DailyV1ApplicationHost(
+            "detached-core-deterministic-equivalent-root", new MissingSlotOperations(),
+            stageCompleted: null, logOutput: null, dotNetIdentity: DotNetIdentity());
+        Assert.That(equivalentApplication.TryStartDotNetOnExistingApplication(
+                equivalentDefinitions, equivalentHost,
+                out DailyV1ApplicationStartPreparation equivalentPreparation,
+                out P12AResult equivalentPersistenceResult,
+                out string equivalentDiagnostic), Is.True, equivalentDiagnostic);
+        Assert.That(equivalentPersistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(equivalentPreparation.CoreSession.ExecutionBoundaryState.IsFactualReadWorldPublished, Is.True);
+        Assert.That(equivalentApplication.TryAdvanceDay(
+                out SimulationRuntimeAdvanceFailure equivalentAdvanceFailure), Is.True,
+            equivalentAdvanceFailure.ToString());
+        Assert.That(equivalentPreparation.CoreSession.SimulationTime.AbsoluteDay,
+            Is.EqualTo(preparation.CoreSession.SimulationTime.AbsoluteDay));
+        Assert.That(equivalentPreparation.CoreSession.ExecutionBoundaryState.CompletedCoreSequence,
+            Is.EqualTo(executionState.CompletedCoreSequence));
+        Assert.That(equivalentPreparation.CoreSession.ExecutionBoundaryState.MutationEpochState.CurrentEpoch,
+            Is.EqualTo(mutationEpochAfter));
+        Assert.That(equivalentPreparation.CoreSession.RuntimeAdvanceBoundary
+            .TryCaptureDailyBoundaryAdmissionEvidence(
+                sessionReplacement: false,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> equivalentOwnerSections,
+                out _, out DailyCaptureEligibilityFailure equivalentCaptureFailure),
+            Is.True, equivalentCaptureFailure.ToString());
+        string[] expectedOwnerFacts = ownerSectionsAfter
+            .Select(row => row.SectionId + "|" + row.SchemaVersion + "|" + row.Role
+                + "|" + row.Cardinality + "|" + row.Revision)
+            .ToArray();
+        string[] equivalentOwnerFacts = equivalentOwnerSections
+            .Select(row => row.SectionId + "|" + row.SchemaVersion + "|" + row.Role
+                + "|" + row.Cardinality + "|" + row.Revision)
+            .ToArray();
+        CollectionAssert.AreEqual(expectedOwnerFacts, equivalentOwnerFacts,
+            "Equivalent host-neutral Core Genesis and daily execution must produce the same ordered owner facts.");
+        Assert.That(application.ActiveSession, Is.SameAs(preparation.CoreSession),
+            "A successful daily advance must retain the same authoritative Core session.");
     }
 
     [Test]
@@ -1336,10 +1419,11 @@ public sealed class DailyV1ApplicationHostTests
         Assert.That(DailyV1CoreSelectedRuntimeAdvanceHostPorts.TryCreateForApplicationStart(
                 preparation, preparation.CoreSession,
                 out IDailyV1SelectedRuntimeAdvanceHostPorts prepublicationPorts,
-                out string portsDiagnostic), Is.False);
-        Assert.That(prepublicationPorts, Is.Null);
-        Assert.That(portsDiagnostic, Does.Contain("outside the detached Core-only actor-turn envelope"),
-            "The hostless application must reject a profile that its current actor boundary cannot advance before publication.");
+                out string portsDiagnostic), Is.True, portsDiagnostic);
+        Assert.That(prepublicationPorts, Is.Not.Null,
+            "After the exact selected census is sealed, the supported Core-only actor-turn envelope binds to the prepared session.");
+        Assert.That(prepublicationPorts.ExecutionState,
+            Is.SameAs(preparation.CoreSession.ExecutionBoundaryState));
 
         Assert.That(DailyV1CoreSelectedRuntimeAdvanceHostPorts.TryCreate(
                 preparation.CoreSession, preparation.Logger,

@@ -994,7 +994,9 @@ internal sealed class DailyV1Application
             || preparation.PersistenceResult.Code != P12AResultCode.NoSave
             || candidate == null || candidateHostPorts == null
             || !ReferenceEquals(candidate.ExecutionBoundaryState,
-                candidateHostPorts.ExecutionState))
+                candidateHostPorts.ExecutionState)
+            || candidate.ExecutionBoundaryState.WorldId == null
+            || candidate.ExecutionBoundaryState.IsFactualReadWorldPublished)
         {
             diagnostic = "Projection-free publication requires this application's exact prepared session and runtime boundary.";
             return false;
@@ -1026,6 +1028,16 @@ internal sealed class DailyV1Application
                 || !TryPublishInitial(candidate))
             {
                 diagnostic = "Core rejected projection-free genesis runtime binding or session publication.";
+                return false;
+            }
+
+            // A detached Core Genesis has no Unity projection that can mark
+            // the factual world after publication. Publish that fact in the
+            // same serialized transaction as the exact ActiveSession so its
+            // first completed DailyAdvance can capture P12 evidence.
+            if (!candidate.ExecutionBoundaryState.TryMarkFactualReadWorldPublished())
+            {
+                diagnostic = "Core published the exact Genesis session but could not mark its factual World boundary.";
                 return false;
             }
         }

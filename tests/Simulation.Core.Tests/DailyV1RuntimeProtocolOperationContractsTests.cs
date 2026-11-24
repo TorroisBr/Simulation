@@ -114,6 +114,48 @@ public sealed class DailyV1RuntimeProtocolOperationContractsTests
     }
 
     [Test]
+    public void CoreCompositionInstallsOnlyTheCompleteSupportedInventoryAtomically()
+    {
+        IReadOnlyList<string> expected =
+            DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                hasRuntimeAdmission: true,
+                hasTravelPartySystem: true,
+                hasTravelSystem: true);
+        DailyV1ExecutionBoundaryState installed = CreateAdmittedExecutionState();
+
+        Assert.That(installed.TryInstallRuntimeProtocolOperationInventory(expected), Is.True);
+        Assert.That(installed.HasRuntimeProtocolOperationInventory, Is.True);
+        Assert.That(installed.HasRegisteredRuntimeProtocolOperationContracts, Is.True);
+        CollectionAssert.AreEquivalent(expected, installed.GetRuntimeProtocolOperationContractIds());
+        Assert.That(installed.TryInstallRuntimeProtocolOperationInventory(expected), Is.False,
+            "A sealed inventory cannot be replaced by a second startup composition.");
+
+        List<string> duplicate = new List<string>(expected);
+        duplicate.Add(expected[0]);
+        DailyV1ExecutionBoundaryState duplicateState = CreateAdmittedExecutionState();
+        Assert.That(duplicateState.TryInstallRuntimeProtocolOperationInventory(duplicate), Is.False);
+        Assert.That(duplicateState.HasRegisteredRuntimeProtocolOperationContracts, Is.False);
+        Assert.That(duplicateState.HasRuntimeProtocolOperationInventory, Is.False);
+        Assert.That(duplicateState.GetRuntimeProtocolOperationContractIds(), Is.Empty);
+
+        List<string> incomplete = new List<string>(expected);
+        incomplete.Remove(DailyV1RuntimeProtocolOperationContracts.TravelPartyAdvance);
+        DailyV1ExecutionBoundaryState incompleteState = CreateAdmittedExecutionState();
+        Assert.That(incompleteState.TryInstallRuntimeProtocolOperationInventory(incomplete), Is.False);
+        Assert.That(incompleteState.HasRegisteredRuntimeProtocolOperationContracts, Is.False);
+        Assert.That(incompleteState.HasRuntimeProtocolOperationInventory, Is.False);
+        Assert.That(incompleteState.GetRuntimeProtocolOperationContractIds(), Is.Empty);
+
+        List<string> invented = new List<string>(expected);
+        invented.RemoveAt(invented.Count - 1);
+        invented.Add("host.invented-operation");
+        DailyV1ExecutionBoundaryState inventedState = CreateAdmittedExecutionState();
+        Assert.That(inventedState.TryInstallRuntimeProtocolOperationInventory(invented), Is.False);
+        Assert.That(inventedState.HasRegisteredRuntimeProtocolOperationContracts, Is.False);
+        Assert.That(inventedState.GetRuntimeProtocolOperationContractIds(), Is.Empty);
+    }
+
+    [Test]
     public void CoreOperationInventoryRejectsDuplicatesAndIncompleteOrMixedSets()
     {
         DailyV1ExecutionBoundaryState duplicateState = CreateAdmittedExecutionState();

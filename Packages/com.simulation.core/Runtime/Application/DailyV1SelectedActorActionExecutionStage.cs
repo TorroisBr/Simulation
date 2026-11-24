@@ -724,7 +724,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
             if (!boundary.TryGetDispatchBoundary(actor, out dispatchBoundary)
                 || dispatchBoundary == null)
                 throw new InvalidOperationException(
-                    "The exact selected Daily-v1 action could not execute through its Core owner operation.");
+                    "No Core owner operation boundary was available for selected action: " + actor.RuntimeId + " / " + action.DefinitionId + " / type=" + (action.Values.actionType?.Value ?? int.MinValue) + ".");
         }
 
         if (!DailyV1SelectedActionDispatchStage.TryDispatch(
@@ -732,7 +732,7 @@ internal static class DailyV1SelectedActorActionExecutionStage
                 out DailyV1SelectedActionDispatchResult dispatch)
             || dispatch == null)
             throw new InvalidOperationException(
-                "The exact selected Daily-v1 action could not execute through its Core owner operation.");
+                "The Core action dispatcher rejected selected action: " + actor.RuntimeId + " / " + action.DefinitionId + " / type=" + (action.Values.actionType?.Value ?? int.MinValue) + ".");
 
         if (!TryResolveDispatchOutcome(
                 dispatch, out actionSucceeded, out NpcActionResultType coreResultType))
