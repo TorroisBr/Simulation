@@ -100,6 +100,8 @@ function Get-AtlasAPublicArgumentVector {
 function Assert-AtlasACaptureRecordBinding {
     param([pscustomobject]$Private)
     $runner=$Private.Runner
+    $captureInfo=Get-Item -LiteralPath $Private.CaptureRecordPath
+    if($captureInfo.Length -ne 244836L){throw 'ATLAS-A controlled capture record exceeds its fixed size identity.'}
     $bytes=[IO.File]::ReadAllBytes([string]$Private.CaptureRecordPath)
     if($bytes.LongLength -ne 244836L -or (Get-TrxBytesSha256 $bytes) -cne '719f990db8fd03e6a6a2215ee51f150b5606940928dc94f347388dabf6331520'){throw 'ATLAS-A controlled capture record is not the accepted immutable record.'}
     $capture=([Text.UTF8Encoding]::new($false,$true).GetString($bytes)|ConvertFrom-Json -AsHashtable -DateKind String)
@@ -238,8 +240,8 @@ function Read-AtlasASourceContext {
     param([string]$SourceContextPath)
     $contextPath=[IO.Path]::GetFullPath($SourceContextPath);$contextRoot=Split-Path -Parent $contextPath
     $null=Test-ProtectedEvidenceDirectory $contextRoot;$null=Assert-ProtectedEvidenceFile -Path $contextPath -ProtectedRoot $contextRoot
+    if((Get-Item -LiteralPath $contextPath).Length -gt $script:TrxMaxManifestBytes){throw 'ATLAS-A private source context exceeds the size limit.'}
     $contextBytes=[IO.File]::ReadAllBytes($contextPath)
-    if($contextBytes.Length -gt $script:TrxMaxManifestBytes){throw 'ATLAS-A private source context exceeds the size limit.'}
     $context=([Text.UTF8Encoding]::new($false,$true).GetString($contextBytes)|ConvertFrom-Json -AsHashtable -DateKind String)
     Assert-TrxKeys $context @('schema','runnerManifestPath','runnerManifestIdentity','retentionHandle','buildHelperEvidencePath','rawReportEvidencePath','diagnosticsEvidencePath','consoleEvidencePath','captureRecordEvidencePath','retainedOutputEvidenceRoot','toolchainEvidenceRoot','testOutputRoot') 'ATLAS-A source context'
     if($context.schema -cne 'dotnet-trx-atlas-a-source-context-v1' -or [string]$context.retentionHandle -notmatch '^evidence-[a-f0-9]{32}$'){throw 'Unsupported ATLAS-A source-context schema or retention handle.'}
@@ -247,6 +249,7 @@ function Read-AtlasASourceContext {
     Assert-TrxJsonInteger $context.runnerManifestIdentity.bytes 'ATLAS-A runner manifest bytes' 1
     if([string]$context.runnerManifestIdentity.sha256 -notmatch '^[a-f0-9]{64}$'){throw 'ATLAS-A runner manifest hash is malformed.'}
     $runnerPath=[IO.Path]::GetFullPath([string]$context.runnerManifestPath);$null=Assert-ProtectedEvidenceFile -Path $runnerPath -ProtectedRoot $contextRoot
+    if((Get-Item -LiteralPath $runnerPath).Length -gt $script:TrxMaxManifestBytes){throw 'ATLAS-A private runner manifest exceeds the size limit.'}
     $runnerBytes=[IO.File]::ReadAllBytes($runnerPath)
     if($runnerBytes.LongLength -ne [long]$context.runnerManifestIdentity.bytes -or (Get-TrxBytesSha256 $runnerBytes) -cne [string]$context.runnerManifestIdentity.sha256){throw 'ATLAS-A runner manifest identity changed.'}
     $runner=([Text.UTF8Encoding]::new($false,$true).GetString($runnerBytes)|ConvertFrom-Json -AsHashtable -DateKind String)
