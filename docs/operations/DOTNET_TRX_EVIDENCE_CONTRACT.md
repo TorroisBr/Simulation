@@ -684,3 +684,14 @@ own dependencies remain recoverable and independently refreshable.
 
 No P12 scope change, P13 readiness, Phase reopening, runtime implementation,
 external publication bypass or protected-store service is introduced.
+
+
+## 11. ATLAS-A single-invocation profile
+
+The separately authorized ATLAS-A evidence extension is limited to implementation commit 3e4ed67aecec74e857f6be080dea0e4f7cad5646 and tree b0b572257a580570e8d1a36f7c0480ad937d2436. It adds the closed run profile atlas-a-29-tests-v1 and private context schema dotnet-trx-atlas-a-source-context-v1 in Tools/UnityValidation/TrxAtlasAProfile.ps1. Existing Unity/NUnit and CORE-A 17.14.1 profiles remain unchanged.
+
+The profile requires the flat VSTest grammar, counter profile vstest-18.12.0-flat, one invocation with 29 passing results, exact captured source/generated-input inventories, test assembly/PDB identity, producer/logger identity, protected originals, and owner-only ACL verification. It pins SDK 10.0.404, runtime 10.0.15, console/logger 18.7.1-hotfix-26529-119, TestPlatform engine/testhost 18.12.0, AdapterUtilities 18.10.1, and NUnit adapter 6.3.1 by captured versions, lengths, and hashes. TRX storage/codeBase map only to the captured test-output root; privacy projection checks both source and test-output roots.
+
+The archive contains one normalized TRX; its manifest preserves all case identities, names, outcomes, counters, timing and result details. Raw TRX, manifests, capture record, diagnostics, console, build helper and retained test outputs remain protected. Controlled recapture is a distinct execution on unchanged accepted source; the historical original remains preserved. Archive-only verification reports originalComparisonNotPerformed. Full comparison requires the protected context and checks original immutability.
+
+This extension closes only ATLAS-A evidence. It does not generalize VSTest 18.12.0 to other products, alter CORE-A claims, or require Unity/Simulation Core reruns.

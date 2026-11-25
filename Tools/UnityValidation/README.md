@@ -173,3 +173,14 @@ Synthetic profile tests use no real CORE-A reports:
 ```powershell
 pwsh -NoProfile -File .\Tools\UnityValidation\tests\TrxValidationEvidenceTests.ps1
 ```
+
+
+### ATLAS-A one-run TRX profile
+
+ATLAS-A uses the explicitly versioned single-invocation profile atlas-a-29-tests-v1 and counter profile vstest-18.12.0-flat. It reuses the strict flat TRX parser and privacy projection without broadening the CORE-A 17.14.1 profile.
+
+The profile binds accepted source commit 3e4ed67aecec74e857f6be080dea0e4f7cad5646 and tree b0b572257a580570e8d1a36f7c0480ad937d2436; 29 case results; captured assembly/PDB; 50 WorldAtlas source files; 288 generated dependencies; and 249 retained output files. It pins SDK 10.0.404, runtime 10.0.15, console/logger product 18.7.1-hotfix-26529-119, TestPlatform engine/testhost 18.12.0, AdapterUtilities 18.10.1, and NUnit adapter 6.3.1. Exact binary versions, byte lengths, and SHA-256 values are in TrxAtlasAProfile.ps1.
+
+The private context schema is dotnet-trx-atlas-a-source-context-v1. Original TRX, runner/capture manifests, diagnostics, and console output remain protected locally. The public package contains one normalized TRX and a privacy-safe manifest. Original comparison requires the private context. The extension does not rerun or claim Simulation Core or Unity suites.
+
+Synthetic profile checks: pwsh -NoProfile -File .\Tools\UnityValidation\tests\TrxAtlasAProfileTests.ps1

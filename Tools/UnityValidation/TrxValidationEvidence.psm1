@@ -9,6 +9,7 @@ $script:TrxMaxXmlBytes = 268435456L
 $script:TrxMaxExpandedBytes = 536870912L
 $script:TrxMaxManifestBytes = 67108864L
 Import-Module (Join-Path $PSScriptRoot 'UnityValidationEvidence.psm1') -Force
+. (Join-Path $PSScriptRoot 'TrxAtlasAProfile.ps1')
 
 function Assert-TrxKeys {
     param([System.Collections.IDictionary]$Object, [string[]]$Allowed, [string]$Where)
@@ -372,6 +373,7 @@ function Assert-TrxColdWarmAttemptLabels {
 
 function Assert-TrxPublicManifest {
     param([System.Collections.IDictionary]$Manifest)
+    if($null -ne $Manifest.format -and $Manifest.format -is [System.Collections.IDictionary] -and $Manifest.format.Contains('runProfile') -and [string]$Manifest.format.runProfile -ceq 'atlas-a-29-tests-v1'){Assert-AtlasATrxPublicManifest $Manifest;return}
     Assert-TrxKeys $Manifest @('schema','bundleId','format','tool','archive','runs') 'manifest'
     if($Manifest.schema -cne 'validation-evidence-trx-package-v1'){throw 'Unsupported TRX evidence manifest schema.'}
     if($Manifest.bundleId -isnot [string] -or [string]$Manifest.bundleId -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$'){throw 'TRX bundle identifier is invalid.'}
@@ -1019,14 +1021,14 @@ function Assert-TrxDiscoveryMatchesReport {
 
 function Get-TrxToolIdentity {
     $projectRoot=[IO.Directory]::GetParent([IO.Directory]::GetParent($PSScriptRoot).FullName).FullName
-    $paths=@('Tools/UnityValidation/Package-UnityValidationEvidence.ps1','Tools/UnityValidation/UnityValidationEvidence.psm1','Tools/UnityValidation/TrxValidationEvidence.psm1')
+    $paths=@('Tools/UnityValidation/Package-UnityValidationEvidence.ps1','Tools/UnityValidation/UnityValidationEvidence.psm1','Tools/UnityValidation/TrxValidationEvidence.psm1','Tools/UnityValidation/TrxAtlasAProfile.ps1')
     $dirty=@(Invoke-TrxGit $projectRoot (@('status','--porcelain=v1','--')+$paths))
     if($dirty.Count -gt 0){throw 'TRX package tool files must be committed and clean before packaging.'}
     $commit=(@(Invoke-TrxGit $projectRoot @('rev-parse','HEAD')) -join "`n").Trim();$tree=(@(Invoke-TrxGit $projectRoot @('rev-parse','HEAD^{tree}')) -join "`n").Trim()
     $files=[System.Collections.Generic.List[object]]::new()
     foreach($relative in $paths){$full=Join-Path $projectRoot ($relative.Replace('/',[IO.Path]::DirectorySeparatorChar));$item=Get-Item -LiteralPath $full -ErrorAction Stop;$files.Add([ordered]@{path=$relative;bytes=[long]$item.Length;sha256=(Get-EvidenceSha256 $full)})}
     $runtime=Assert-EvidenceRuntime
-    return [ordered]@{commit=$commit;tree=$tree;version='1.2.1';files=@($files.ToArray());runtime=[ordered]@{powershellEdition=$runtime.powershellEdition;powershellVersion=$runtime.powershellVersion;dotnetVersion=$runtime.dotnetVersion;compressionAssemblyVersion=$runtime.compressionAssemblyVersion}}
+    return [ordered]@{commit=$commit;tree=$tree;version='1.3.0';files=@($files.ToArray());runtime=[ordered]@{powershellEdition=$runtime.powershellEdition;powershellVersion=$runtime.powershellVersion;dotnetVersion=$runtime.dotnetVersion;compressionAssemblyVersion=$runtime.compressionAssemblyVersion}}
 }
 
 function Assert-TrxToolManifestBinding {
@@ -1039,7 +1041,7 @@ function Assert-TrxToolManifestBinding {
     $currentHead=(@(Invoke-TrxGit $projectRoot @('rev-parse','HEAD')) -join "`n").Trim()
     $null=Invoke-TrxGit $projectRoot @('merge-base','--is-ancestor',[string]$Tool.commit,$currentHead)
     if([string]$Tool.version -cne [string]$actual.version -or -not (Test-TrxClaimValueEqual $Tool.files $actual.files) -or -not (Test-TrxClaimValueEqual $Tool.runtime $actual.runtime)){throw 'Public TRX tool file/runtime identity differs from the committed tool used to verify this package.'}
-    $changed=@(Invoke-TrxGit $projectRoot @('diff','--name-only',[string]$Tool.commit,$currentHead,'--','Tools/UnityValidation/Package-UnityValidationEvidence.ps1','Tools/UnityValidation/UnityValidationEvidence.psm1','Tools/UnityValidation/TrxValidationEvidence.psm1'))
+    $changed=@(Invoke-TrxGit $projectRoot @('diff','--name-only',[string]$Tool.commit,$currentHead,'--','Tools/UnityValidation/Package-UnityValidationEvidence.ps1','Tools/UnityValidation/UnityValidationEvidence.psm1','Tools/UnityValidation/TrxValidationEvidence.psm1','Tools/UnityValidation/TrxAtlasAProfile.ps1'))
     if($changed.Count -gt 0){throw 'TRX evidence tool source changed after the package-bound implementation commit.'}
 }
 
@@ -1104,6 +1106,7 @@ function Get-TrxOptionalMappedRelativePath {
 
 function Assert-DotNetTrxContextBinding {
     param([pscustomobject]$Private,[System.Collections.IDictionary]$PublicRun,[System.Collections.IDictionary]$PublicManifest,[System.Collections.Generic.Dictionary[string,byte[]]]$ArchivedEntries)
+    if([string]$PublicManifest.format.runProfile -ceq 'atlas-a-29-tests-v1'){return Assert-AtlasATrxContextBinding $Private $PublicRun $PublicManifest $ArchivedEntries}
     $runner=$Private.Runner;$context=$Private.Context
     Assert-TrxRuntimeSelectionEvidence $context $runner $PublicRun $Private.Root
     if([string]$PublicRun.runnerRunId -cne [string]$runner.runId -or [string]$PublicRun.originalManifest.sha256 -cne $Private.RunnerSha256 -or [long]$PublicRun.originalManifest.bytes -ne $Private.RunnerBytes.LongLength){throw 'Public package is not bound to the original private runner manifest.'}
@@ -1171,6 +1174,10 @@ function Assert-DotNetTrxContextBinding {
 function New-DotNetTrxEvidencePackage {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string[]]$SourceContextPath,[Parameter(Mandatory)][string]$OutputDirectory,[string]$BundleId)
+    if($SourceContextPath.Count -ne 1){throw 'TRX packaging requires one private source context.'}
+    $headerPath=[IO.Path]::GetFullPath($SourceContextPath[0]);$headerRoot=Split-Path -Parent $headerPath;$null=Test-ProtectedEvidenceDirectory $headerRoot;$null=Assert-ProtectedEvidenceFile -Path $headerPath -ProtectedRoot $headerRoot
+    $headerText=[Text.UTF8Encoding]::new($false,$true).GetString([IO.File]::ReadAllBytes($headerPath));$header=$headerText|ConvertFrom-Json -AsHashtable -DateKind String
+    if([string]$header.schema -ceq 'dotnet-trx-atlas-a-source-context-v1'){return New-AtlasATrxEvidencePackage -SourceContextPath $headerPath -OutputDirectory $OutputDirectory -BundleId $BundleId}
     if($SourceContextPath.Count -ne 1){throw 'TRX packaging requires one combined dotnet-trx-source-context-v1 context.'}
     $null=Assert-EvidenceRuntime
     $contextPath=[IO.Path]::GetFullPath($SourceContextPath[0])
@@ -1221,7 +1228,7 @@ function Test-DotNetTrxEvidencePackage {
             foreach($entry in $archive.Entries){$name=[string]$entry.FullName;if($name.Contains('\') -or [IO.Path]::IsPathRooted($name) -or $name -match '(^|/)\.\.(/|$)' -or $entry.Name.Length -eq 0){throw 'TRX archive contains an unsafe path.'};if((($entry.ExternalAttributes -shr 16) -band 0xF000) -eq 0xA000){throw 'TRX archive contains a symbolic link.'};if(-not $seen.Add($name) -or -not $expected.ContainsKey($name)){throw 'TRX archive has duplicate or unexpected entry.'};if($entry.Length -gt $script:TrxMaxXmlBytes){throw 'TRX entry exceeds size limit.'};$ms=[IO.MemoryStream]::new();$es=$entry.Open();try{$es.CopyTo($ms);$bytes=$ms.ToArray()}finally{$es.Dispose();$ms.Dispose()};$expanded+=$bytes.LongLength;if($expanded -gt $script:TrxMaxExpandedBytes){throw 'TRX archive expanded size exceeds limit.'};$claim=$expected[$name];if($bytes.LongLength -ne [long]$claim.normalizedReport.bytes -or (Get-TrxBytesSha256 $bytes) -cne $claim.normalizedReport.sha256){throw 'TRX normalized entry hash/length mismatch.'};$tmp=[IO.Path]::GetTempFileName();try{[IO.File]::WriteAllBytes($tmp,$bytes);$facts=Get-TrxFacts $tmp;Assert-TrxDiscoveryMatchesReport @($manifest.runs[0].discovery.cases) $facts ([string]$claim.label);$canonical=ConvertTo-TrxCanonicalXml $facts.Document;if((Get-TrxBytesSha256 $canonical) -cne (Get-TrxBytesSha256 $bytes) -or (Get-TrxSemanticSha256 $facts.Document) -cne $claim.normalizedReport.semanticSha256){throw 'TRX entry is not in deterministic canonical form.'};if($facts.RunId -cne $claim.nativeRunId -or $facts.SummaryOutcome -cne $claim.summaryOutcome -or $facts.ResultCount -ne [int]$claim.resultCount -or (ConvertTo-Json $facts.Counters -Compress) -cne (ConvertTo-Json $claim.nativeCounters -Compress) -or (ConvertTo-Json $facts.OutcomeCounts -Compress) -cne (ConvertTo-Json $claim.caseOutcomeCounts -Compress)){throw 'TRX manifest result claim does not match archived report.'};$expectedGate=[bool]($facts.GatePassed -and [int]$claim.exitCode -eq 0);if($expectedGate -ne [bool]$claim.gatePassed){throw 'TRX gate status claim does not match native outcome and successful command exit.'};Test-PublicEvidenceText ([Text.UTF8Encoding]::new($false,$true).GetString($bytes));$actual.Add([ordered]@{name=$name;bytes=$bytes});$actualEntryBytes.Add($name,$bytes)}finally{Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue}}
             $repro=[IO.Path]::GetTempFileName();Remove-Item -LiteralPath $repro -Force;try{Write-DeterministicEvidenceArchive -Path $repro -Entries @($actual.ToArray());if((Get-EvidenceSha256 $repro) -cne $manifest.archive.sha256){throw 'TRX ZIP bytes are not deterministic.'}}finally{Remove-Item -LiteralPath $repro -Force -ErrorAction SilentlyContinue}
         }finally{$archive.Dispose()}}finally{$stream.Dispose()}
-        if($SourceContextPath){$private=Read-DotNetTrxSourceContext $SourceContextPath[0];if(@($manifest.runs).Count -ne 1){throw 'Private CORE source context binds exactly one package run.'};Assert-DotNetTrxContextBinding $private $manifest.runs[0] $manifest $actualEntryBytes|Out-Null;$comparison='originalComparisonVerified'}else{$comparison='originalComparisonNotPerformed'}
+        if($SourceContextPath){$contextHeader=Get-Content -LiteralPath $SourceContextPath[0] -Raw|ConvertFrom-Json -AsHashtable -DateKind String;if([string]$contextHeader.schema -ceq 'dotnet-trx-atlas-a-source-context-v1'){$private=Read-AtlasASourceContext $SourceContextPath[0]}else{$private=Read-DotNetTrxSourceContext $SourceContextPath[0]};if(@($manifest.runs).Count -ne 1){throw 'Private TRX source context binds exactly one package run.'};Assert-DotNetTrxContextBinding $private $manifest.runs[0] $manifest $actualEntryBytes|Out-Null;$comparison='originalComparisonVerified'}else{$comparison='originalComparisonNotPerformed'}
         return [pscustomobject]@{IsValid=$true;Error=$null;RunCount=@($manifest.runs).Count;EntryCount=$expected.Count;ArchiveSha256=$manifest.archive.sha256;OriginalComparison=$comparison;PackageIntegrityVerified=$true;GatePassed=(@($manifest.runs|ForEach-Object {$_.attempts}|Where-Object {-not $_.gatePassed}).Count -eq 0)}
     }catch{return [pscustomobject]@{IsValid=$false;Error=$_.Exception.Message;RunCount=0;EntryCount=0;ArchiveSha256=$null;OriginalComparison=$null}}
 }
