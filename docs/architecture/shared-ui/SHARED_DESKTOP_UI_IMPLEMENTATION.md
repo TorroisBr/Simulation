@@ -4,8 +4,8 @@
 
 - Implementation branch: `codex/shared-ui/viewport-library`
 - Architecture baseline: `codex/architecture/world-identity-projection` at `1ad2835524fe135c87eeca13f15cd16d4d9cb303`
-- Implementation source commit: `a0f593e59829c6f570ad4c30952dfb6a978b18c7`
-- `SharedDesktopUi` source tree: `2fa0a46729a0278f1fd86f3b61967f69a3856061`
+- Implementation source commit: `ef9bcdcd8c41cf341fa08160738465da62d2aa20`
+- `SharedDesktopUi` source tree: `8f7b204878c1235b1e0c049762daff537407c92b`
 - Required SDK: .NET `10.0.404`
 - Shipping project: `Simulation.Ui.Viewport`, package ID `Simulation.Ui.Viewport`; `IsPackable=false`, with no NuGet package published.
 - Test project: `Simulation.Ui.Viewport.Tests`; NUnit `4.6.1`, `Microsoft.NET.Test.Sdk` `18.12.0`, NUnit adapter `6.3.1`.
@@ -25,8 +25,8 @@ Each operation validates the complete transform and its inputs, checks finite in
 | Locked restore | Passed for `net10.0` and the `win-x64` graph from the committed lock files. |
 | Release solution build | Passed with 0 warnings and 0 errors. |
 | Release `win-x64` build | Passed with 0 warnings and 0 errors. |
-| Complete NUnit suite | 18 of 18 passed. |
-| Clean-checkout reproducibility | Passed in `.worktrees/shared-ui-viewport-clean` at the implementation source commit, using a separate NuGet cache and no local feed. Locked restore, both builds, and all 18 tests passed. |
+| Complete NUnit suite | 22 of 22 passed. This includes all four directed endpoint transitions: Atlas `1e-9 ↔ 5` in Y-down and Dungeon `0.002 ↔ 0.8` in Y-up. Each case checks the exact reanchored pan components and anchor preservation within `1e-7` DIPs. |
+| Clean-checkout reproducibility | Passed in `.worktrees/shared-ui-viewport-clean` at implementation source commit `ef9bcdcd8c41cf341fa08160738465da62d2aa20`, after clearing project build outputs, with a separate NuGet cache and no local feed. Locked restore, both builds, and all 22 tests passed. |
 | Allocation check | Passed; project, unproject, and reanchor loops allocated 0 managed bytes. |
 | Dependency inspection | Shipping project has no package dependencies. Its compiled assembly references only `System.Collections` and `System.Runtime`; no Avalonia, Dungeon, Atlas, Unity, or Simulation Core dependency was found. |
 | `git diff --check` | Passed. |
@@ -37,18 +37,18 @@ The mandatory regression uses X origin `0`, viewport center `500`, initial pan `
 
 | Evidence | SHA-256 / Git tree |
 | --- | --- |
-| `SharedDesktopUi` source tree | `2fa0a46729a0278f1fd86f3b61967f69a3856061` |
+| `SharedDesktopUi` source tree | `8f7b204878c1235b1e0c049762daff537407c92b` |
 | `ViewportTransform.cs` | `705BCCC87A5079C5EF086DA7CCFEC9F20B82745F40D3E69A9AC8ED276D9B0841` |
-| `ViewportTransformTests.cs` | `FFB685AE28579C52C3EA42C854C9B0563E990B83CFA22C11576983743C929C18` |
+| `ViewportTransformTests.cs` | `C5B733A4C9F864690EFFB69549FAC3F1A2193AD989FBA1E13127962E772956C9` |
 | Library `packages.lock.json` | `1E39B4149E1289978E01A366893A0697356E855BC7156B7C70747288030042F9` |
 | Test `packages.lock.json` | `2949AE64C05DD30EE1897A4FA89AA75F953F738408088FC08596207AC51FDCB2` |
-| Clean-checkout NUnit TRX | `0FE60D813A39BE3CCE43DCAF1F8AAD05174A16AAB263B1AF01CD2DD593CDD090` |
+| Clean-checkout NUnit TRX | `31900143FE5BD58258057C580EFF369504720A07CC7172C751D820C3BBC67E87` |
 
 The TRX is retained at `.worktrees/shared-ui-viewport-clean/SharedDesktopUi/.codex-work/evidence/viewport-tests.trx`. Build outputs, SDK files, and NuGet caches remain in ignored `.codex-work` directories inside the two E: worktrees.
 
 ## Independent review
 
-Exact-tip implementation review is pending. The candidate must not be treated as promoted or consumer-ready until that review passes.
+The first exact-tip review identified missing directed zoom-endpoint preservation cases. The four Atlas and Dungeon endpoint transitions listed above were added in source commit `ef9bcdcd8c41cf341fa08160738465da62d2aa20`, and the local and clean-checkout suites both pass 22/22. The reviewer confirmed that this resolves the coverage finding and is checking this refreshed validation record for exact-tip confirmation.
 
 ## Consumer integration handoff
 
