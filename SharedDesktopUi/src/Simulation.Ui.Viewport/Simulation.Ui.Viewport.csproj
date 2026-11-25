@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Simulation.Ui.Viewport</PackageId>
+    <Description>Pure double-precision viewport coordinate transforms for Simulation desktop applications.</Description>
+    <IsPackable>false</IsPackable>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+  </PropertyGroup>
+</Project>

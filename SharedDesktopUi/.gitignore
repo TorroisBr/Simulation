@@ -1,0 +1,6 @@
+.codex-work/
+**/bin/
+**/obj/
+!SharedDesktopUi.sln
+!src/Simulation.Ui.Viewport/Simulation.Ui.Viewport.csproj
+!tests/Simulation.Ui.Viewport.Tests/Simulation.Ui.Viewport.Tests.csproj
