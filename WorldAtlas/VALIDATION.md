@@ -172,3 +172,22 @@ Self-contained single-file `win-x64` publish is under ignored local `WorldAtlas/
 - Native UI smoke remains **PENDING by user choice**. The user-confirmed A/B results are preserved; the C/D UX changes have headless coverage but have not been accepted through a new native interaction run. ATLAS-A is not marked fully accepted.
 - ATLAS-B / real-world discovery remains `WAIT_DEPENDENCY`. Real catalog/discovery and shared UI extraction were not implemented. The bounded discovery recommendation is in `WorldAtlas/docs/REAL_WORLD_DISCOVERY_RECOMMENDATION.md`.
 - The cross-application review prompt is prepared but was not transmitted: the Codex approval reviewer rejected sending repository metadata to the General Architect thread because the trusted transcript did not explicitly authorize that transfer. No alternate route was used. No promotion or remote publication occurred.
+
+## ATLAS-A native acceptance and promotion preflight — 2026-11-25
+
+### User acceptance
+
+The user reports native Windows functional acceptance **PASS** for implementation commit `3e4ed67aecec74e857f6be080dea0e4f7cad5646`, with validation successor `69dc8f1e04fbe647ec0e0907699f5cc603569d78`. This is user-reported acceptance, not an independently captured desktop recording. Accepted workflows are automatic Demo World loading, Hex map navigation, City selection and Inspector, human-readable observation selection, Day 1 → Day 2 comparison (Wheat 20 → 25, observed delta +5), improved typography and UI scaling, and About dialog behavior. The user reported no remaining blocking UX issue. No application source or automated validation input changed after the reviewed implementation tip.
+
+This acceptance supersedes the earlier **PENDING by user choice** native-interaction status in the 69dc validation record. The earlier status accurately described the evidence available at that time; the 29/29 automated result and its input identity are unchanged.
+
+### Reconciliation of review dispositions
+
+- The recorded `NEEDS_CHANGES` verdict applies to intermediate UX implementation `f3b907880b0bc0802bc421340dcb2b6b9d985e2b` and identified two P2 scaling issues. Commits `d082319b119aa5e8387de06ab5a345ec1843c682` and `3e4ed67aecec74e857f6be080dea0e4f7cad5646` fixed them; the independent exact-tip review of `3e4ed67aecec74e857f6be080dea0e4f7cad5646` returned `VALIDATED_CANDIDATE` with no blocking findings.
+- The 69dc validation-only successor received an independent applicability check against the unchanged source tree; that check passed. Its pending-native status is now superseded by the user's acceptance above. The historical intermediate `NEEDS_CHANGES` result remains visible and is not treated as the final code verdict.
+
+### Promotion evidence gate
+
+The exact final TRX remains preserved in the protected local evidence directory with the previously recorded 29 passed / 0 failed / 0 skipped counters and SHA-256. A read-only content scan confirmed that the original TRX contains run-user, machine-name, and absolute profile-path metadata. The local original remains access-controlled and was not added to Git. The inspected evidence tooling does not support TRX, and the approved privacy-safe .NET contract does not permit replacing it with a hand-edited or summary-only report. The current evidence policy requires complete retrievable result evidence in canonical Git or a qualifying durable store for promotion; the retained local TRX and its hashes alone do not meet that requirement.
+
+Therefore ATLAS-A's **native functional acceptance is PASS**, while canonical promotion remains **BLOCKED** on an approved durable TRX evidence path. The named `codex/atlas/standalone` branch is clean locally at `dba4a8c6ac85c4a7913a9a27b6e9d6ae0b69f9e0`, but no matching branch exists on `origin`; no remote branch was created or updated. No Atlas source changes, new test runs, evidence cleanup, worktree cleanup, or downstream ATLAS-B/LAB-OBS-A implementation occurred in this closure attempt.
