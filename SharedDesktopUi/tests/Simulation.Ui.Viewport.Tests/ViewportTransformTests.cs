@@ -125,6 +125,48 @@ public sealed class ViewportTransformTests
         Assert.That(projectedAnchor.Y, Is.EqualTo(anchor.Y).Within(1e-7));
     }
 
+    [TestCase(1e-9, 5, ViewportYDirection.Down)]
+    [TestCase(5, 1e-9, ViewportYDirection.Down)]
+    [TestCase(0.002, 0.8, ViewportYDirection.Up)]
+    [TestCase(0.8, 0.002, ViewportYDirection.Up)]
+    public void TryReanchor_PreservesAnchorAcrossConsumerZoomEndpoints(
+        double oldScale,
+        double newScale,
+        ViewportYDirection direction)
+    {
+        var original = new ViewportTransform(
+            new ViewportPoint(17.25, -38.5),
+            new ViewportPoint(640.25, 360.5),
+            new ViewportPoint(-34.75, 12.125),
+            oldScale,
+            direction);
+        var anchor = new ViewportPoint(
+            original.ViewportCenter.X + original.Pan.X + 0.0005,
+            original.ViewportCenter.Y + original.Pan.Y - 0.00025);
+
+        Assert.That(original.TryUnproject(anchor, out var anchoredWorld), Is.True);
+        Assert.That(original.TryReanchor(newScale, anchor, out var reanchored), Is.True);
+
+        var xOffset = (anchoredWorld.X - original.LocalOrigin.X) * newScale;
+        var yOffset = (anchoredWorld.Y - original.LocalOrigin.Y) * newScale;
+        if (direction == ViewportYDirection.Up)
+        {
+            yOffset = -yOffset;
+        }
+
+        var expectedPan = new ViewportPoint(
+            (anchor.X - original.ViewportCenter.X) - xOffset,
+            (anchor.Y - original.ViewportCenter.Y) - yOffset);
+        Assert.That(reanchored.Pan, Is.EqualTo(expectedPan));
+        Assert.That(reanchored.Scale, Is.EqualTo(newScale));
+        Assert.That(reanchored.LocalOrigin, Is.EqualTo(original.LocalOrigin));
+        Assert.That(reanchored.ViewportCenter, Is.EqualTo(original.ViewportCenter));
+        Assert.That(reanchored.YDirection, Is.EqualTo(direction));
+        Assert.That(reanchored.TryProject(anchoredWorld, out var projectedAnchor), Is.True);
+        Assert.That(projectedAnchor.X, Is.EqualTo(anchor.X).Within(1e-7));
+        Assert.That(projectedAnchor.Y, Is.EqualTo(anchor.Y).Within(1e-7));
+    }
+
     [Test]
     public void TryReanchor_RecalculatesPanAtEqualScaleAndPreservesHalfCentimetreSnap()
     {
