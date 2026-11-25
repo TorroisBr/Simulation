@@ -15,6 +15,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <ProjectReference Include="../../src/Simulation.Core/Simulation.Core.csproj" />
     <ProjectReference Include="../../src/Simulation.DailyV1.DotNetHostIdentity/Simulation.DailyV1.DotNetHostIdentity.csproj" />
+    <ProjectReference Include="../../Tools/Simulation.Core.DailyV1ProcessHost/Simulation.Core.DailyV1ProcessHost.csproj" ReferenceOutputAssembly="false" />
     <None Include="../../docs/validation/CORE_F_SharedRuntimeSource/NUMERIC_ORACLE_VECTORS.csv" Link="Fixtures/CORE_F_NUMERIC_ORACLE_VECTORS.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../docs/validation/CORE_F_SharedRuntimeSource/JSON_PAYLOAD_ORACLE.csv" Link="Fixtures/CORE_F_JSON_PAYLOAD_ORACLE.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../docs/validation/CORE_F_SharedRuntimeSource/UNITY_ORACLE_CAPTURE_RESULTS_d8b4c40e.csv" Link="Fixtures/CORE_F_UNITY_ORACLE_CAPTURE_RESULTS.csv" CopyToOutputDirectory="PreserveNewest" />
@@ -123,6 +124,7 @@
     <Compile Include="DailyV1NpcKnowledgeOwnerTests.cs" Link="Knowledge/DailyV1NpcKnowledgeOwnerTests.cs" />
     <Compile Include="ActionExecutionTests.cs" Link="Application/ActionExecutionTests.cs" />
       <Compile Include="DailyV1ApplicationHostTests.cs" Link="Application/DailyV1ApplicationHostTests.cs" />
+      <Compile Include="DailyV1ProcessSeparatedP12ContinuationTests.cs" />
       <Compile Include="DailyV1CompatibilityDescriptorFactoryTests.cs" Link="Persistence/DailyV1CompatibilityDescriptorFactoryTests.cs" />
     <Compile Include="DailyV1ApplicationSessionGateTests.cs" Link="Application/DailyV1ApplicationSessionGateTests.cs" />
     <Compile Include="DailyV1RuntimeProtocolOperationContractsTests.cs" Link="Application/DailyV1RuntimeProtocolOperationContractsTests.cs" />
@@ -148,4 +150,12 @@
       <Compile Include="P12AFPoliticalKnowledgeOwnerCodecTests.cs" Link="Persistence/P12AFPoliticalKnowledgeOwnerCodecTests.cs" />
     <Compile Include="Persistence/P12AGenealogyOwnerCodecTests.cs" Link="Persistence/P12AGenealogyOwnerCodecTests.cs" />
   </ItemGroup>
+  <Target Name="CopyDailyV1ProcessHostForTests" AfterTargets="Build">
+    <ItemGroup>
+      <DailyV1ProcessHostOutput Include="$(MSBuildThisFileDirectory)..\..\Tools\Simulation.Core.DailyV1ProcessHost\bin\$(Configuration)\net8.0\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DailyV1ProcessHostOutput)"
+          DestinationFiles="@(DailyV1ProcessHostOutput->'$(OutDir)DailyV1ProcessHost\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>

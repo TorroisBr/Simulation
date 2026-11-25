@@ -5,6 +5,7 @@ using System.Threading;
 [assembly: InternalsVisibleTo("Assembly-CSharp")]
 [assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
 [assembly: InternalsVisibleTo("Simulation.Core.Tests")]
+[assembly: InternalsVisibleTo("Simulation.Core.DailyV1ProcessHost")]
 
 /// <summary>The selected Daily-v1 runtime admission profile.</summary>
 public enum SimulationRuntimeAdmissionProfile
