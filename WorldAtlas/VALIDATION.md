@@ -12,6 +12,12 @@ Run date: 2026-11-25 (America/Sao_Paulo)
 
 This validation record is added in an evidence-only successor commit. Source and test inputs are the implementation commit and tree above.
 
+## Architecture gate refresh
+
+Read-only `git ls-remote` on 2026-11-25 found `codex/architecture/world-identity-projection` at `7973a0dea4462811666519e251f7c4c447b9ae2f`. The confirmed promoted SHA `e3403ebe4d208a9e364b634893879488f424973a` is an ancestor of that remote tip. All five original World Atlas architecture documents are present at the promoted SHA. At the refreshed tip, the handoff still marks ATLAS-A `READY_FOR_IMPLEMENTATION` and ATLAS-B `WAIT_DEPENDENCY`.
+
+The only World Atlas directory changes between the promoted SHA and refreshed tip are four LAB-OBS-A documents (`LAB_OBS_A_OBSERVATION_V1.md`, `LAB_OBS_A_REVIEW.md`, `LAB_OBS_A_SOURCE_AND_HANDOFF.md`, and `LAB_OBS_A_TECHNICAL_DESIGN.md`). The five original World Atlas documents, including the ATLAS-A handoff, are unchanged. These later LAB-OBS-A additions do not invalidate the ATLAS-A Demo-only scope. No architecture re-promotion or `main` change was made.
+
 ## Commands and results
 
 The locked restore, Release build, win-x64 restore, and single-file publish all succeeded. The Release build reported 0 warnings and 0 errors. The publish was self-contained for `win-x64`, with `PublishSingleFile=true` and `IncludeNativeLibrariesForSelfExtract=true`.
