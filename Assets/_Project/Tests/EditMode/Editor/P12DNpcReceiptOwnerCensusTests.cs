@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 
@@ -58,9 +59,13 @@ public sealed class P12DNpcReceiptOwnerCensusTests
     {
         NpcRuntime first = CreateNpc("p12d-vector-a-" + ownerKind);
         NpcRuntime second = CreateNpc("p12d-vector-b-" + ownerKind);
-        SimulationRuntime runtime = CreateDailyRuntime(new[] { second, first });
+        DailyV1SelectedProfileFixture selectedProfile = DailyV1SelectedProfileFixture.Create(
+            "p12d-vector-" + ownerKind,
+            npcs: new[] { second, first });
+        SimulationRuntime runtime = selectedProfile.Runtime;
 
-        Assert.That(runtime.NpcReceiptOwnerCensusProviders.Count, Is.EqualTo(4));
+        Assert.That(runtime.NpcReceiptOwnerCensusProviders.Count, Is.EqualTo(20),
+            "The selected Daily-v1 roster contains ten NPCs with two receipt owners each.");
         Assert.That(runtime.HasSameP12DNpcReceiptOwnerCensusProviders(
             runtime.NpcReceiptOwnerCensusProviders), Is.True);
         long initialEpoch = ReadEpoch(runtime);
@@ -84,7 +89,7 @@ public sealed class P12DNpcReceiptOwnerCensusTests
             if (snapshot.SectionId.StartsWith("p12d.npc-", StringComparison.Ordinal))
                 receiptRows.Add(snapshot);
         }
-        Assert.That(receiptRows.Count, Is.EqualTo(4));
+        Assert.That(receiptRows.Count, Is.EqualTo(20));
         foreach (OwnerSectionCensusSnapshot row in receiptRows)
         {
             Assert.That(row.SchemaVersion, Is.EqualTo(1));
@@ -104,7 +109,9 @@ public sealed class P12DNpcReceiptOwnerCensusTests
             AssertTokenRow(token, P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(npc.RuntimeId),
                 npc.ExistingLocalKnowledgeObservationRuntime);
             AssertTokenRow(token, P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(npc.RuntimeId),
-                npc.ExistingMerchantTradeStateRuntime);
+                npc.SelectedRuntimeOwners != null
+                    ? (object)npc.SelectedRuntimeOwners.MerchantTradeStateReceipts
+                    : npc.ExistingMerchantTradeStateRuntime);
         }
 
         if (ownerKind == "local")
@@ -272,7 +279,7 @@ public sealed class P12DNpcReceiptOwnerCensusTests
 
         ContinuationCensusProtocol protocol = ReadPrivateField<ContinuationCensusProtocol>(
             runtime, "npcRosterCensusProtocol");
-        long startingEpoch = ReadPrivateField<long>(protocol, "mutationEpoch");
+        long startingEpoch = SimulationTestFactory.ReadContinuationMutationEpoch(protocol);
         Assert.That(runtime.NpcReceiptOwnerCensusProviders.Count, Is.EqualTo(20));
 
         Assert.That(runtime.TryRegisterNpc(added, out WorldNpcRegistryFailure addFailure),
@@ -287,7 +294,7 @@ public sealed class P12DNpcReceiptOwnerCensusTests
             P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(added.RuntimeId));
         AssertNoProvider(runtime,
             P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(added.RuntimeId));
-        Assert.That(ReadPrivateField<long>(protocol, "mutationEpoch"), Is.EqualTo(startingEpoch),
+        Assert.That(SimulationTestFactory.ReadContinuationMutationEpoch(protocol), Is.EqualTo(startingEpoch),
             "failed family reconciliation must not advance the shared epoch");
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
         Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
@@ -329,14 +336,14 @@ public sealed class P12DNpcReceiptOwnerCensusTests
 
             // Exhaust capacity after membership has committed but before the outer
             // boundary performs its atomic owner-family reconciliation.
-            SetPrivateField(protocol, "mutationEpoch", long.MaxValue);
+            SimulationTestFactory.SetContinuationMutationEpoch(protocol, long.MaxValue);
         }
         finally
         {
             scope.Dispose();
         }
 
-        Assert.That(ReadPrivateField<long>(protocol, "mutationEpoch"), Is.EqualTo(long.MaxValue));
+        Assert.That(SimulationTestFactory.ReadContinuationMutationEpoch(protocol), Is.EqualTo(long.MaxValue));
         Assert.That(runtime.NpcReceiptOwnerCensusProviders, Is.SameAs(providersBefore));
         Assert.That(runtime.NpcReceiptOwnerCensusProviders.Count, Is.EqualTo(20));
         Assert.That(GetPrivateField(protocol, "npcReceiptOwnerSectionIds"), Is.SameAs(sectionIdsBefore));
@@ -459,9 +466,12 @@ public sealed class P12DNpcReceiptOwnerCensusTests
 
     private static SimulationRuntime CreateDailyRuntime(IEnumerable<NpcRuntime> npcs)
     {
+        SimulationTime time = new SimulationTime();
+        NpcRuntime[] roster = npcs?.ToArray() ?? Array.Empty<NpcRuntime>();
         return new SimulationRuntime(
-            new SimulationTime(), null, npcs,
+            time, null, roster,
             economyEnabled: false,
+            scheduledDirectiveSystem: SimulationTestFactory.CreateEmptyScheduledDirectiveSystem(time, roster),
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
             worldId: new WorldId(Guid.NewGuid()));
     }
@@ -498,9 +508,13 @@ public sealed class P12DNpcReceiptOwnerCensusTests
         Assert.That(network.RegisterRoute(new SpatialRouteRuntime(
             "p12d-roster-route-b", locations[1], locations[0], 1)), Is.True);
 
+        SimulationTime time = new SimulationTime();
+        ScheduledDirectiveSystem directives = new ScheduledDirectiveSystem(
+            new ScheduledDirectiveStore(time), identities);
         SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(), cities, npcs,
+            time, cities, npcs,
             economyEnabled: false,
+            scheduledDirectiveSystem: directives,
             explorableSiteStore: new ExplorableSiteStore(),
             spatialAuthorityStore: CreateSpatialAuthority(),
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
@@ -582,7 +596,9 @@ public sealed class P12DNpcReceiptOwnerCensusTests
     private static object GetReceiptOwner(NpcRuntime npc, string ownerKind) =>
         ownerKind == "local"
             ? (object)npc.ExistingLocalKnowledgeObservationRuntime
-            : npc.ExistingMerchantTradeStateRuntime;
+            : npc.SelectedRuntimeOwners != null
+                ? (object)npc.SelectedRuntimeOwners.MerchantTradeStateReceipts
+                : npc.ExistingMerchantTradeStateRuntime;
 
     private static bool TryReadOwner(
         object owner,
@@ -593,6 +609,8 @@ public sealed class P12DNpcReceiptOwnerCensusTests
         if (ownerKind == "local")
             return ((NpcLocalKnowledgeObservationRuntime)owner)
                 .TryReadP12ReceiptCensus(out cardinality, out revision);
+        if (owner is DailyV1NpcMerchantTradeStateReceiptOwner coreOwner)
+            return coreOwner.TryReadP12ReceiptCensus(out cardinality, out revision);
         return ((NpcMerchantTradeStateRuntime)owner)
             .TryReadP12ReceiptCensus(out cardinality, out revision);
     }

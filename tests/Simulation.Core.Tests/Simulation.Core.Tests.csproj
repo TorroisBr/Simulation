@@ -14,6 +14,8 @@
     <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <ProjectReference Include="../../src/Simulation.Core/Simulation.Core.csproj" />
+    <ProjectReference Include="../../src/Simulation.DailyV1.DotNetHostIdentity/Simulation.DailyV1.DotNetHostIdentity.csproj" />
+    <ProjectReference Include="../../Tools/Simulation.Core.DailyV1ProcessHost/Simulation.Core.DailyV1ProcessHost.csproj" ReferenceOutputAssembly="false" />
     <None Include="../../docs/validation/CORE_F_SharedRuntimeSource/NUMERIC_ORACLE_VECTORS.csv" Link="Fixtures/CORE_F_NUMERIC_ORACLE_VECTORS.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../docs/validation/CORE_F_SharedRuntimeSource/JSON_PAYLOAD_ORACLE.csv" Link="Fixtures/CORE_F_JSON_PAYLOAD_ORACLE.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../docs/validation/CORE_F_SharedRuntimeSource/UNITY_ORACLE_CAPTURE_RESULTS_d8b4c40e.csv" Link="Fixtures/CORE_F_UNITY_ORACLE_CAPTURE_RESULTS.csv" CopyToOutputDirectory="PreserveNewest" />
@@ -23,22 +25,120 @@
   <ItemGroup>
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs" Link="Calendar/CalendarCoreTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarParityTests.cs" Link="Calendar/CalendarParityTests.cs" />
+    <Compile Include="SimulationTimeCoreTests.cs" />
+    <Compile Include="SimulationRuntimeAdmissionContextTests.cs" />
+    <Compile Include="DailyV1ExecutionBoundaryStateTests.cs" />
+    <Compile Include="DailyV1SelectedSoloTravelStartOperationTests.cs" Link="Application/DailyV1SelectedSoloTravelStartOperationTests.cs" />
+    <Compile Include="DailyV1MutationEpochStateTests.cs" />
+    <Compile Include="DailyV1RuntimeIdentityIndexTests.cs" />
+    <Compile Include="P12ARuntimeIdentityOwnerCodecTests.cs" Link="Persistence/P12ARuntimeIdentityOwnerCodecTests.cs" />
+    <Compile Include="DailyV1P18ReceiptOwnerTests.cs" Link="Application/DailyV1P18ReceiptOwnerTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12ANpcOwnerDecoderTests.cs" Link="Persistence/P12ANpcOwnerDecoderTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12EPropertyEstateOwnerCodecTests.cs" Link="Persistence/P12EPropertyEstateOwnerCodecTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12EFactionOwnerCodecTests.cs" Link="Persistence/P12EFactionOwnerCodecTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12EPoliticalClaimOwnerCodecTests.cs" Link="Persistence/P12EPoliticalClaimOwnerCodecTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12EPoliticalSupportOwnerCodecTests.cs" Link="Persistence/P12EPoliticalSupportOwnerCodecTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12EPersistentConflictWarBattleOwnerCodecTests.cs" Link="Persistence/P12EPersistentConflictWarBattleOwnerCodecTests.cs" />
+    <Compile Include="P12ECoreOwnerRestoreStagerTests.cs" Link="Persistence/P12ECoreOwnerRestoreStagerTests.cs" />
+    <Compile Include="P12EFactionCensusProviderCoreTests.cs" Link="Persistence/P12EFactionCensusProviderCoreTests.cs" />
+    <Compile Include="P12EInstitutionOfficeOwnerSnapshotCoreTests.cs" Link="Persistence/P12EInstitutionOfficeOwnerSnapshotCoreTests.cs" />
+    <Compile Include="SpatialNetworkOwnerCodecTests.cs" Link="Persistence/SpatialNetworkOwnerCodecTests.cs" />
+    <Compile Include="SpatialNetworkOwnerHydratorTests.cs" Link="Persistence/SpatialNetworkOwnerHydratorTests.cs" />
+    <Compile Include="MoneyAccountRuntimeCoreTests.cs" />
+    <Compile Include="DailyV1MoneyTransferOperationTests.cs" Link="Economy/DailyV1MoneyTransferOperationTests.cs" />
+    <Compile Include="DailyV1CityEconomicOwnerCoreTests.cs" />
+    <Compile Include="DailyV1P12DRelationshipValidatorTests.cs" />
+    <Compile Include="DailyV1P12DSelectedOwnerGraphStagerTests.cs" />
+    <Compile Include="DailyV1P12DSelectedCoreOwnerStagerTests.cs" />
+    <Compile Include="DailyV1P12DNpcCoreOwnerHydratorTests.cs" />
+    <Compile Include="DailyV1P12DCityCoreOwnerHydratorTests.cs" />
+    <Compile Include="P12DCityOwnerImageDecoderTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P12FActorChoiceSnapshotTests.cs" Link="Persistence/P12FActorChoiceSnapshotTests.cs" />
+    <Compile Include="P12FTravelPartyOwnerSnapshotCoreTests.cs" Link="Persistence/P12FTravelPartyOwnerSnapshotCoreTests.cs" />
+    <Compile Include="DailyV1P12FTravelPartyOwnerStagerTests.cs" />
+    <Compile Include="DailyV1P12FExpeditionOwnerSnapshotStagerTests.cs" />
+    <Compile Include="P12FCommitmentOwnerCodecCoreTests.cs" Link="Persistence/P12FCommitmentOwnerCodecCoreTests.cs" />
+    <Compile Include="P12FActorChoiceCodecCoreTests.cs" Link="Persistence/P12FActorChoiceCodecCoreTests.cs" />
+    <Compile Include="P12FScheduledDirectiveOwnerSnapshotCoreTests.cs" Link="Persistence/P12FScheduledDirectiveOwnerSnapshotCoreTests.cs" />
+    <Compile Include="DailyV1PopulationConsumptionOperationTests.cs" />
+    <Compile Include="DailyV1SelectedTravelTransitionPlanTests.cs" />
+    <Compile Include="DailyV1SelectedTravelPartyChargeExecutionTests.cs" />
+    <Compile Include="DailyV1SelectedOpenMarketSaleTests.cs" />
+    <Compile Include="DailyV1SelectedOpenMarketActionExecutionTests.cs" />
+    <Compile Include="DailyV1SelectedNpcTradeExecutionTests.cs" />
+    <Compile Include="DailyV1SelectedOpenMarketPurchaseTests.cs" />
+    <Compile Include="DailyV1SelectedCrossCityBuyExecutionTests.cs" />
+    <Compile Include="SpatialNetworkOwnerTests.cs" Link="Geography/SpatialNetworkOwnerTests.cs" />
+    <Compile Include="LegacySpatialAnchorBindingStoreCoreTests.cs" Link="Geography/LegacySpatialAnchorBindingStoreCoreTests.cs" />
+    <Compile Include="DailyV1SelectedRuntimeOwnerGraphTests.cs" />
+    <Compile Include="DomainEventAuthorityCoreTests.cs" />
+    <Compile Include="DailyV1DecisionRecordsTests.cs" />
+    <Compile Include="DailyV1ActorChoiceStoreTests.cs" />
+    <Compile Include="ScheduledDirectiveStoreTests.cs" />
+    <Compile Include="DailyV1ActorTurnExecutionStageTests.cs" />
+    <Compile Include="DailyV1SelectedDailyExecutionStageTests.cs" />
+    <Compile Include="DailyV1SelectedCrimeJusticeDailyStageTests.cs" />
+    <Compile Include="DailyV1P12CrimeJusticeMutationCoordinatorTests.cs" />
+    <Compile Include="DailyV1SelectedDemographyStageTests.cs" />
+    <Compile Include="DailyV1CoreSelectedPersonDeathBoundaryTests.cs" />
+    <Compile Include="DailyV1SelectedMerchantTradeStateOperationTests.cs" />
+    <Compile Include="DailyV1CommercialKnowledgeSharingStageTests.cs" />
+    <Compile Include="DailyV1SelectedLocalKnowledgeOwnerBindingTests.cs" />
+    <Compile Include="ExpeditionStoreCoreTests.cs" />
+    <Compile Include="ExplorableSiteStoreCoreTests.cs" />
+    <Compile Include="DailyV1RuntimeAdvanceStageTests.cs" />
+    <Compile Include="DailyV1InventoryMarketOwnerTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DeterministicRandomCoreTests.cs" Link="Determinism/DeterministicRandomCoreTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DeterministicDemographyPolicyTests.cs" Link="Population/DeterministicDemographyPolicyTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/DeterministicRandomRootSnapshotTests.cs" Link="Determinism/DeterministicRandomRootSnapshotTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/LogicalTimelineTests.cs" Link="Temporal/LogicalTimelineTests.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/P18DDailyBoundaryOwnerTests.cs" Link="Temporal/P18DDailyBoundaryOwnerTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/StableKeyEncodingTests.cs" Link="Identity/StableKeyEncodingTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceParityVectors.cs" Link="Economy/MarketPriceParityVectors.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceCalculatorParityTests.cs" Link="Economy/MarketPriceCalculatorParityTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceProductionKernelTests.cs" Link="Economy/FiniteSourceProductionKernelTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioParityVectors.cs" Link="Economy/FiniteSourceScenarioParityVectors.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioRuntimeTests.cs" Link="Economy/FiniteSourceScenarioRuntimeTests.cs" />
+    <Compile Include="DailyV1MixedSourceProfileAdmissionTests.cs" Link="Economy/DailyV1MixedSourceProfileAdmissionTests.cs" />
       <Compile Include="DailyV1DefinitionIdentityTests.cs" Link="Definitions/DailyV1DefinitionIdentityTests.cs" />
       <Compile Include="DailyV1ContentProjectionTests.cs" Link="Definitions/DailyV1ContentProjectionTests.cs" />
       <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DailyV1CapturedSelectedContentFixture.cs" Link="Definitions/DailyV1CapturedSelectedContentFixture.cs" />
+      <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/CoreFHostNeutralBehaviorFingerprint.cs" Link="Definitions/CoreFHostNeutralBehaviorFingerprint.cs" />
       <Compile Include="DailyV1DefinitionProviderVectors.cs" Link="Definitions/DailyV1DefinitionProviderVectors.cs" />
       <Compile Include="SimulationConfigurationResolverPrecedenceTests.cs" Link="Configuration/SimulationConfigurationResolverPrecedenceTests.cs" />
       <Compile Include="DailyV1TypedDefinitionGraphTests.cs" Link="Definitions/DailyV1TypedDefinitionGraphTests.cs" />
+      <Compile Include="DailyV1NpcDefinitionRulesTests.cs" Link="Definitions/DailyV1NpcDefinitionRulesTests.cs" />
+      <Compile Include="DailyV1GuardActionPlanningTests.cs" Link="Definitions/DailyV1GuardActionPlanningTests.cs" />
+      <Compile Include="DailyV1CrimeActionPlanningTests.cs" Link="Definitions/DailyV1CrimeActionPlanningTests.cs" />
+      <Compile Include="DailyV1SelectedStealActionExecutionTests.cs" Link="Application/DailyV1SelectedStealActionExecutionTests.cs" />
+      <Compile Include="DailyV1SelectedCrimeActionExecutionTests.cs" Link="Application/DailyV1SelectedCrimeActionExecutionTests.cs" />
+      <Compile Include="DailyV1TravelActionPlanningTests.cs" Link="Definitions/DailyV1TravelActionPlanningTests.cs" />
+      <Compile Include="DailyV1MerchantActionPlanningTests.cs" Link="Definitions/DailyV1MerchantActionPlanningTests.cs" />
+      <Compile Include="DailyV1NpcStatusOwnerTests.cs" Link="Definitions/DailyV1NpcStatusOwnerTests.cs" />
+      <Compile Include="DailyV1NpcActionSlotOwnerTests.cs" Link="Person/DailyV1NpcActionSlotOwnerTests.cs" />
+      <Compile Include="DailyV1NpcMerchantTradePlanOwnerTests.cs" Link="Person/DailyV1NpcMerchantTradePlanOwnerTests.cs" />
+      <Compile Include="DailyV1NpcMerchantTradeStateReceiptOwnerTests.cs" Link="Person/DailyV1NpcMerchantTradeStateReceiptOwnerTests.cs" />
+      <Compile Include="DailyV1CommercialKnowledgeOwnerTests.cs" Link="Knowledge/DailyV1CommercialKnowledgeOwnerTests.cs" />
+      <Compile Include="DailyV1JusticeRecordsOwnerTests.cs" Link="Person/DailyV1JusticeRecordsOwnerTests.cs" />
+    <Compile Include="DailyV1CrimeSocialAppraisalOwnerTests.cs" Link="Social/DailyV1CrimeSocialAppraisalOwnerTests.cs" />
+    <Compile Include="SpatialKnowledgeRuntimeCoreTests.cs" Link="Knowledge/SpatialKnowledgeRuntimeCoreTests.cs" />
+    <Compile Include="DailyV1NpcKnowledgeOwnerTests.cs" Link="Knowledge/DailyV1NpcKnowledgeOwnerTests.cs" />
+    <Compile Include="ActionExecutionTests.cs" Link="Application/ActionExecutionTests.cs" />
+      <Compile Include="DailyV1ApplicationHostTests.cs" Link="Application/DailyV1ApplicationHostTests.cs" />
+      <Compile Include="DailyV1ProcessSeparatedP12ContinuationTests.cs" />
+      <Compile Include="DailyV1CompatibilityDescriptorFactoryTests.cs" Link="Persistence/DailyV1CompatibilityDescriptorFactoryTests.cs" />
+    <Compile Include="DailyV1ApplicationSessionGateTests.cs" Link="Application/DailyV1ApplicationSessionGateTests.cs" />
+    <Compile Include="DailyV1RuntimeProtocolOperationContractsTests.cs" Link="Application/DailyV1RuntimeProtocolOperationContractsTests.cs" />
+    <Compile Include="DailyV1GenesisComposerTests.cs" Link="Application/DailyV1GenesisComposerTests.cs" />
+      <Compile Include="DailyV1DotNetHostEnvironmentIdentityFactoryTests.cs" Link="Application/DailyV1DotNetHostEnvironmentIdentityFactoryTests.cs" />
+      <Compile Include="SimulationRecordSequenceCoreTests.cs" Link="Persistence/SimulationRecordSequenceCoreTests.cs" />
+      <Compile Include="RuntimeIdAllocatorCoreTests.cs" Link="Identity/RuntimeIdAllocatorCoreTests.cs" />
+      <Compile Include="PersonRuntimeCoreTests.cs" Link="Person/PersonRuntimeCoreTests.cs" />
+      <Compile Include="PersonCensusProviderTests.cs" Link="Person/PersonCensusProviderTests.cs" />
+      <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Person/PersonOwnerSnapshotTests.cs" Link="Person/PersonOwnerSnapshotTests.cs" />
+      <Compile Include="PersonChronologyCoreTests.cs" Link="Person/PersonChronologyCoreTests.cs" />
+      <Compile Include="PersonNaturalMortalityCoreTests.cs" Link="Person/PersonNaturalMortalityCoreTests.cs" />
+    <Compile Include="SimulationLoggerHostPortTests.cs" Link="Application/SimulationLoggerHostPortTests.cs" />
       <Compile Include="DailyV1SelectedMemberCoverageTests.cs" Link="Definitions/DailyV1SelectedMemberCoverageTests.cs" />
       <None Include="../../docs/architecture/CORE_F_SELECTED_VALUE_MEMBERS.csv" Link="Fixtures/CORE_F_SELECTED_VALUE_MEMBERS.csv" CopyToOutputDirectory="PreserveNewest" />
       <None Include="../../Assets/_Project/Scripts/CoreAdapters/DailyV1DefinitionAdapter.cs" Link="Fixtures/DailyV1DefinitionAdapter.source.cs" CopyToOutputDirectory="PreserveNewest" />
@@ -48,5 +148,15 @@
       <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/CORE_F_CompatibilityParityTests.cs" Link="Compatibility/CORE_F_CompatibilityParityTests.cs" />
       <Compile Include="PopulationOwnerContractTests.cs" Link="Population/PopulationOwnerContractTests.cs" />
       <Compile Include="Genealogy/GenealogyOwnerTests.cs" Link="Genealogy/GenealogyOwnerTests.cs" />
+      <Compile Include="P12AFPoliticalKnowledgeOwnerCodecTests.cs" Link="Persistence/P12AFPoliticalKnowledgeOwnerCodecTests.cs" />
+    <Compile Include="Persistence/P12AGenealogyOwnerCodecTests.cs" Link="Persistence/P12AGenealogyOwnerCodecTests.cs" />
   </ItemGroup>
+  <Target Name="CopyDailyV1ProcessHostForTests" AfterTargets="Build">
+    <ItemGroup>
+      <DailyV1ProcessHostOutput Include="$(MSBuildThisFileDirectory)..\..\Tools\Simulation.Core.DailyV1ProcessHost\bin\$(Configuration)\net8.0\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DailyV1ProcessHostOutput)"
+          DestinationFiles="@(DailyV1ProcessHostOutput->'$(OutDir)DailyV1ProcessHost\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>

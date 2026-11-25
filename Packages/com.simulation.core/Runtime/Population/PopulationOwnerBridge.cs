@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 /// <summary>
@@ -50,6 +51,9 @@ public static class PopulationOwnerBridge
     {
         return owner.CanAdvanceP12AggregateRevision;
     }
+
+    internal static bool CanCommitP12AggregateMutation(SettlementPopulationRuntime owner) =>
+        owner != null && owner.CanCommitP12AggregateMutation();
 
     public static void BindP12PopulationMutationBoundary(
         SettlementPopulationRuntime owner,
@@ -136,6 +140,41 @@ public static class PopulationOwnerBridge
             out failure);
     }
 
+    internal static bool TryApplyPairedMigrationWithResidenceCommit(
+        SettlementPopulationRuntime origin,
+        SettlementPopulationRuntime destination,
+        long originExpectedRevision,
+        long destinationExpectedRevision,
+        int originPopulationBefore,
+        int destinationPopulationBefore,
+        Func<bool> commitResidenceOwner,
+        out PopulationTransitionFailure failure)
+    {
+        return SettlementPopulationRuntime.TryApplyPairedMigrationWithResidenceCommit(
+            origin,
+            destination,
+            originExpectedRevision,
+            destinationExpectedRevision,
+            originPopulationBefore,
+            destinationPopulationBefore,
+            commitResidenceOwner,
+            out failure);
+    }
+
+    internal static bool TryApplyWithResidenceCommit(
+        SettlementPopulationRuntime owner,
+        SettlementPopulationTransition transition,
+        Func<bool> commitResidenceOwner,
+        out PopulationTransitionFailure failure)
+    {
+        if (owner == null)
+        {
+            failure = PopulationTransitionFailure.InvalidSettlement;
+            return false;
+        }
+        return owner.TryApplyTransitionWithResidenceCommit(
+            transition, commitResidenceOwner, out failure);
+    }
     public static bool TryApplyAggregateWithReceipt(
         SettlementPopulationRuntime owner,
         int representedResidentFloor,

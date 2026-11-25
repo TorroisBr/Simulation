@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -22,22 +23,17 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     private const string SyncWantedStatusesOperationVersion = "1";
     private const string SyncWantedStatusesSnapshotVersion = "justice-sync-wanted-statuses-owner-v1";
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
-    private Func<JusticeSystem, bool> p12CrimeJusticeMutationAdmission;
-    private Action<JusticeSystem> p12CrimeJusticeMutationCommitted;
-    private long p12CrimeJusticeRevision;
+    private DailyV1JusticeP18ReceiptOwner p18ReceiptOwner = new DailyV1JusticeP18ReceiptOwner();
     private bool p12DailyProfileReceiptBoundaryBound;
-    private bool p12AReceiptStateInstalled;
-    private readonly List<WantedRecordRuntime> wantedRecords = new List<WantedRecordRuntime>();
-    private readonly List<PrisonSentenceRuntime> prisonSentences = new List<PrisonSentenceRuntime>();
-    private Dictionary<string, JusticeBeginDayReceipt> beginDayStepReceipts =
-        new Dictionary<string, JusticeBeginDayReceipt>(StringComparer.Ordinal);
-    private long beginDayStepRevision;
-    private Dictionary<string, JusticeAdvanceSentencesReceipt> advanceSentencesStepReceipts =
-        new Dictionary<string, JusticeAdvanceSentencesReceipt>(StringComparer.Ordinal);
-    private long advanceSentencesStepRevision;
-    private Dictionary<string, JusticeSyncWantedStatusesReceipt> syncWantedStatusesStepReceipts =
-        new Dictionary<string, JusticeSyncWantedStatusesReceipt>(StringComparer.Ordinal);
-    private long syncWantedStatusesStepRevision;
+    private readonly DailyV1JusticeRecordsOwner justiceRecordsOwner;
+    private readonly Dictionary<DailyV1JusticeWantedRecordOwner, WantedRecordRuntime> wantedRecordViews =
+        new Dictionary<DailyV1JusticeWantedRecordOwner, WantedRecordRuntime>();
+    private readonly Dictionary<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime> sentenceViews =
+        new Dictionary<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime>();
+    private readonly Dictionary<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime> preparedSelectedSentenceViews =
+        new Dictionary<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime>();
+    private readonly IList<WantedRecordRuntime> wantedRecords;
+    private readonly IList<PrisonSentenceRuntime> prisonSentences;
     private readonly NpcStatusData freeStatus;
     private readonly NpcStatusData wantedStatus;
     private readonly NpcStatusData arrestedStatus;
@@ -45,90 +41,48 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     private readonly DomainEventRecorder domainEventRecorder;
     private readonly SimulationLogger logger;
 
-    internal long P12CrimeJusticeRevision => p12CrimeJusticeRevision;
+    internal long P12CrimeJusticeRevision => justiceRecordsOwner.Revision;
+    internal DailyV1JusticeRecordsOwner CoreOwner => justiceRecordsOwner;
     internal int P12WantedRecordCount => wantedRecords?.Count ?? -1;
     internal int P12PrisonSentenceCount => prisonSentences?.Count ?? -1;
-    internal long P12P18ReceiptCensusRevision
+    internal long P12P18ReceiptCensusRevision => p18ReceiptOwner.CensusRevision;
+    internal DailyV1JusticeP18ReceiptOwner CoreP18ReceiptOwner => p18ReceiptOwner;
+    internal bool TryBindCoreP18ReceiptOwner(DailyV1JusticeP18ReceiptOwner owner)
     {
-        get
+        if (owner == null) return false;
+        if (ReferenceEquals(p18ReceiptOwner, owner)) return true;
+        if (owner.WasRestored)
         {
-            if (beginDayStepReceipts == null || advanceSentencesStepReceipts == null
-                || syncWantedStatusesStepReceipts == null
-                || beginDayStepRevision < 0L || advanceSentencesStepRevision < 0L
-                || syncWantedStatusesStepRevision < 0L)
-                throw new InvalidOperationException("Justice P18 receipt state is invalid.");
-            return checked(checked(beginDayStepRevision + beginDayStepReceipts.Count)
-                + checked(advanceSentencesStepRevision + advanceSentencesStepReceipts.Count)
-                + checked(syncWantedStatusesStepRevision + syncWantedStatusesStepReceipts.Count));
-        }
-    }
-
-    internal bool TryCaptureP12AReceiptOwnerSnapshot(out P12AJusticeReceiptOwnerSnapshot snapshot)
-    {
-        snapshot = null;
-        if (beginDayStepReceipts == null || advanceSentencesStepReceipts == null
-            || syncWantedStatusesStepReceipts == null || beginDayStepRevision < 0L
-            || advanceSentencesStepRevision < 0L || syncWantedStatusesStepRevision < 0L) return false;
-        try
-        {
-            P12AJusticeReceiptOwnerSnapshot candidate = new P12AJusticeReceiptOwnerSnapshot(
-                beginDayStepRevision, SnapshotReceipts(beginDayStepReceipts,
-                    receipt => new P12AReceiptValue(receipt.ExecutionStepIdentity, receipt.DescriptorFingerprint,
-                        receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter)),
-                advanceSentencesStepRevision, SnapshotReceipts(advanceSentencesStepReceipts,
-                    receipt => new P12AReceiptValue(receipt.ExecutionStepIdentity, receipt.DescriptorFingerprint,
-                        receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter)),
-                syncWantedStatusesStepRevision, SnapshotReceipts(syncWantedStatusesStepReceipts,
-                    receipt => new P12AReceiptValue(receipt.ExecutionStepIdentity, receipt.DescriptorFingerprint,
-                        receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter)));
-            if (!candidate.IsValid || candidate.CensusRevision != P12P18ReceiptCensusRevision) return false;
-            snapshot = candidate;
+            // Bind the host adapter to the exact receipt owner staged by a
+            // detached P12 restore. Preserve one authoritative owner instance.
+            if (p18ReceiptOwner.WasRestored || !p18ReceiptOwner.IsExactEmpty) return false;
+            p18ReceiptOwner = owner;
             return true;
         }
-        catch (OverflowException) { return false; }
+        if (!owner.IsExactEmpty) return false;
+        if (p18ReceiptOwner.WasRestored)
+        {
+            if (!p18ReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(
+                    out P12AJusticeReceiptOwnerSnapshot snapshot)
+                || !owner.TryInstallP12AReceiptOwnerSnapshot(snapshot)) return false;
+        }
+        else if (!p18ReceiptOwner.IsExactEmpty) return false;
+        p18ReceiptOwner = owner;
+        return true;
     }
-
-    internal bool TryInstallP12AReceiptOwnerSnapshot(P12AJusticeReceiptOwnerSnapshot snapshot)
-    {
-        if (snapshot == null || !snapshot.IsValid || p12AReceiptStateInstalled
-            || beginDayStepReceipts == null || advanceSentencesStepReceipts == null
-            || syncWantedStatusesStepReceipts == null || beginDayStepRevision != 0L
-            || advanceSentencesStepRevision != 0L || syncWantedStatusesStepRevision != 0L
-            || beginDayStepReceipts.Count != 0 || advanceSentencesStepReceipts.Count != 0
-            || syncWantedStatusesStepReceipts.Count != 0) return false;
-        Dictionary<string, JusticeBeginDayReceipt> begin = new Dictionary<string, JusticeBeginDayReceipt>(StringComparer.Ordinal);
-        foreach (P12AReceiptValue value in snapshot.BeginDayReceipts)
-        {
-            if (begin.ContainsKey(value.Identity)) return false;
-            begin.Add(value.Identity, new JusticeBeginDayReceipt(value.Identity, value.DescriptorFingerprint,
-                value.RevisionBefore, value.RevisionAfter));
-        }
-        Dictionary<string, JusticeAdvanceSentencesReceipt> advance =
-            new Dictionary<string, JusticeAdvanceSentencesReceipt>(StringComparer.Ordinal);
-        foreach (P12AReceiptValue value in snapshot.AdvanceSentencesReceipts)
-        {
-            if (advance.ContainsKey(value.Identity)) return false;
-            advance.Add(value.Identity, new JusticeAdvanceSentencesReceipt(value.Identity, value.DescriptorFingerprint,
-                value.RevisionBefore, value.RevisionAfter));
-        }
-        Dictionary<string, JusticeSyncWantedStatusesReceipt> sync =
-            new Dictionary<string, JusticeSyncWantedStatusesReceipt>(StringComparer.Ordinal);
-        foreach (P12AReceiptValue value in snapshot.SyncWantedStatusesReceipts)
-        {
-            if (sync.ContainsKey(value.Identity)) return false;
-            sync.Add(value.Identity, new JusticeSyncWantedStatusesReceipt(value.Identity, value.DescriptorFingerprint,
-                value.RevisionBefore, value.RevisionAfter));
-        }
-        beginDayStepReceipts = begin;
-        advanceSentencesStepReceipts = advance;
-        syncWantedStatusesStepReceipts = sync;
-        beginDayStepRevision = snapshot.BeginDayRevision;
-        advanceSentencesStepRevision = snapshot.AdvanceSentencesRevision;
-        syncWantedStatusesStepRevision = snapshot.SyncWantedStatusesRevision;
-        p12AReceiptStateInstalled = true;
-        return P12P18ReceiptCensusRevision == snapshot.CensusRevision;
-    }
-
+    internal bool TryCaptureP12AReceiptOwnerSnapshot(out P12AJusticeReceiptOwnerSnapshot snapshot) =>
+        p18ReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(out snapshot);
+    internal bool TryInstallP12AReceiptOwnerSnapshot(P12AJusticeReceiptOwnerSnapshot snapshot) =>
+        p18ReceiptOwner.TryInstallP12AReceiptOwnerSnapshot(snapshot);
+    private static JusticeBeginDayReceipt ProjectBeginDayReceipt(P12AReceiptValue value) =>
+        value == null ? null : new JusticeBeginDayReceipt(value.Identity, value.DescriptorFingerprint,
+            value.RevisionBefore, value.RevisionAfter);
+    private static JusticeAdvanceSentencesReceipt ProjectAdvanceSentencesReceipt(P12AReceiptValue value) =>
+        value == null ? null : new JusticeAdvanceSentencesReceipt(value.Identity, value.DescriptorFingerprint,
+            value.RevisionBefore, value.RevisionAfter);
+    private static JusticeSyncWantedStatusesReceipt ProjectSyncWantedStatusesReceipt(P12AReceiptValue value) =>
+        value == null ? null : new JusticeSyncWantedStatusesReceipt(value.Identity, value.DescriptorFingerprint,
+            value.RevisionBefore, value.RevisionAfter);
     public JusticeSystem(
         NpcStatusData freeStatus,
         NpcStatusData wantedStatus,
@@ -146,13 +100,148 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         NpcStatusData hiddenStatus,
         DomainEventRecorder domainEventRecorder,
         SimulationLogger logger)
+        : this(freeStatus, wantedStatus, arrestedStatus, hiddenStatus,
+            domainEventRecorder, logger, null)
+    {
+    }
+
+    internal JusticeSystem(
+        NpcStatusData freeStatus,
+        NpcStatusData wantedStatus,
+        NpcStatusData arrestedStatus,
+        NpcStatusData hiddenStatus,
+        DomainEventRecorder domainEventRecorder,
+        SimulationLogger logger,
+        DailyV1JusticeRecordsOwner selectedOwner)
     {
         this.freeStatus = freeStatus;
         this.wantedStatus = wantedStatus;
         this.arrestedStatus = arrestedStatus;
         this.hiddenStatus = hiddenStatus;
         this.domainEventRecorder = domainEventRecorder;
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
+        justiceRecordsOwner = selectedOwner ?? new DailyV1JusticeRecordsOwner();
+        wantedRecords = new JusticeOwnerProjectionList<DailyV1JusticeWantedRecordOwner, WantedRecordRuntime>(
+            () => justiceRecordsOwner.WantedRecords,
+            ProjectWantedRecord,
+            view => view?.CoreOwner,
+            AddWantedRecordView,
+            null);
+        prisonSentences = new JusticeOwnerProjectionList<DailyV1JusticeSentenceOwner, PrisonSentenceRuntime>(
+            () => justiceRecordsOwner.Sentences,
+            ProjectSentence,
+            view => view?.CoreOwner,
+            AddSentenceView,
+            index =>
+            {
+                DailyV1JusticeSentenceOwner row = justiceRecordsOwner.Sentences[index];
+                if (!justiceRecordsOwner.TryRemoveSentenceAt(index))
+                    throw new InvalidOperationException("The selected Justice sentence row could not be removed.");
+                sentenceViews.Remove(row);
+            });
+    }
+
+    private WantedRecordRuntime ProjectWantedRecord(DailyV1JusticeWantedRecordOwner row)
+    {
+        if (row == null || !wantedRecordViews.TryGetValue(row, out WantedRecordRuntime view))
+            throw new InvalidOperationException("A Core Justice wanted row has no exact Unity reference projection.");
+        return view;
+    }
+
+    private PrisonSentenceRuntime ProjectSentence(DailyV1JusticeSentenceOwner row)
+    {
+        if (row == null || !sentenceViews.TryGetValue(row, out PrisonSentenceRuntime view))
+            throw new InvalidOperationException("A Core Justice sentence row has no exact Unity reference projection.");
+        return view;
+    }
+
+    private void AddWantedRecordView(WantedRecordRuntime view)
+    {
+        DailyV1JusticeWantedRecordOwner row = view?.CoreOwner;
+        if (row == null || (wantedRecordViews.TryGetValue(row, out WantedRecordRuntime existing)
+                && !ReferenceEquals(existing, view))
+            || !justiceRecordsOwner.TryAddWantedRecord(row))
+            throw new InvalidOperationException("The Core Justice wanted-record owner rejected its exact row projection.");
+        wantedRecordViews[row] = view;
+    }
+
+    /// <summary>
+    /// Binds the Unity compatibility view for a wanted row already committed
+    /// by Simulation.Core. This method never inserts or mutates Core owner
+    /// state; the exact row must already belong to this Justice authority.
+    /// </summary>
+    internal bool TryProjectSelectedCoreWantedRecord(
+        DailyV1JusticeWantedRecordOwner row,
+        NpcRuntime target,
+        CityRuntime city)
+    {
+        if (row == null || target == null || city == null
+            || !ReferenceEquals(justiceRecordsOwner,
+                target.SelectedRuntimeOwnerGraph?.JusticeRecordsOwner)
+            || !justiceRecordsOwner.ContainsWantedRecord(row)
+            || !string.Equals(row.TargetRuntimeId, target.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(row.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+            return false;
+
+        if (wantedRecordViews.TryGetValue(row, out WantedRecordRuntime existing))
+            return existing != null
+                && ReferenceEquals(existing.CoreOwner, row)
+                && ReferenceEquals(existing.Target, target)
+                && ReferenceEquals(existing.City, city);
+
+        if (!WantedRecordRuntime.TryCreateFromCoreOwner(target, city, row,
+                out WantedRecordRuntime view))
+            return false;
+        wantedRecordViews.Add(row, view);
+        return true;
+    }
+
+    /// <summary>
+    /// Prepares the Unity reference view for a new Core-owned wanted row before
+    /// its revision is published to P12. This keeps the census coherent at the
+    /// Core commit callback while the Core owner remains authoritative.
+    /// </summary>
+    internal bool TryPrepareSelectedCoreWantedRecordProjection(
+        DailyV1JusticeWantedRecordOwner row,
+        NpcRuntime target,
+        CityRuntime city)
+    {
+        if (row == null || target == null || city == null
+            || !ReferenceEquals(justiceRecordsOwner,
+                target.SelectedRuntimeOwnerGraph?.JusticeRecordsOwner)
+            || justiceRecordsOwner.ContainsWantedRecord(row)
+            || !string.Equals(row.TargetRuntimeId, target.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(row.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+            return false;
+
+        if (wantedRecordViews.TryGetValue(row, out WantedRecordRuntime existing))
+            return existing != null
+                && ReferenceEquals(existing.CoreOwner, row)
+                && ReferenceEquals(existing.Target, target)
+                && ReferenceEquals(existing.City, city);
+
+        if (!WantedRecordRuntime.TryCreateFromCoreOwner(target, city, row,
+                out WantedRecordRuntime view))
+            return false;
+        wantedRecordViews.Add(row, view);
+        return true;
+    }
+
+    internal void DiscardPreparedSelectedCoreWantedRecordProjection(
+        DailyV1JusticeWantedRecordOwner row)
+    {
+        if (row != null && !justiceRecordsOwner.ContainsWantedRecord(row))
+            wantedRecordViews.Remove(row);
+    }
+
+    private void AddSentenceView(PrisonSentenceRuntime view)
+    {
+        DailyV1JusticeSentenceOwner row = view?.CoreOwner;
+        if (row == null || (sentenceViews.TryGetValue(row, out PrisonSentenceRuntime existing)
+                && !ReferenceEquals(existing, view))
+            || !justiceRecordsOwner.TryAddSentence(row))
+            throw new InvalidOperationException("The Core Justice sentence owner rejected its exact row projection.");
+        sentenceViews[row] = view;
     }
 
     public void BeginDay()
@@ -178,7 +267,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         step = null;
         failure = TimelineFailure.ContinuationFailed;
         if (operation == null || ordinal < 0 || !mutationGuardBinding.CanMutate
-            || beginDayStepRevision == long.MaxValue
+            || p18ReceiptOwner.BeginDayRevision == long.MaxValue
             || !TryCaptureBeginDaySnapshot(out _, out string ownerRevision))
         {
             return false;
@@ -197,116 +286,43 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     }
 
     /// <summary>Looks up an exact P18 boundary-step receipt without reading mutable sentence state.</summary>
-    public bool TryResolveBeginDayReceipt(
-        BoundaryContinuationManifest manifest,
-        BoundaryContinuationStep step,
-        out JusticeBeginDayReceipt receipt,
-        out TimelineFailure failure)
+    public bool TryResolveBeginDayReceipt(BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step, out JusticeBeginDayReceipt receipt, out TimelineFailure failure)
     {
         receipt = null;
         if (!TryGetBeginDayIdentity(manifest, step, out string identity, out string fingerprint))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        if (beginDayStepReceipts == null)
-        {
-            beginDayStepReceipts = new Dictionary<string, JusticeBeginDayReceipt>(StringComparer.Ordinal);
-        }
-
-        if (!beginDayStepReceipts.TryGetValue(identity, out JusticeBeginDayReceipt existing))
-        {
-            failure = TimelineFailure.None;
-            return false;
-        }
-
-        if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        receipt = existing;
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        if (!p18ReceiptOwner.TryResolve(DailyV1JusticeP18ReceiptKind.BeginDay, identity, out P12AReceiptValue value))
+        { failure = TimelineFailure.None; return false; }
+        if (!string.Equals(value.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        receipt = ProjectBeginDayReceipt(value);
         failure = TimelineFailure.None;
         return true;
     }
-
-    /// <summary>Stages the justice-owned reset and occurrence receipt as one boundary-step commit.</summary>
-    public bool TryPrepareBeginDayStep(
-        BoundaryContinuationManifest manifest,
-        BoundaryContinuationStep step,
-        out IBoundaryContinuationStepCommit prepared,
-        out TimelineFailure failure)
+    public bool TryPrepareBeginDayStep(BoundaryContinuationManifest manifest, BoundaryContinuationStep step,
+        out IBoundaryContinuationStepCommit prepared, out TimelineFailure failure)
     {
         prepared = null;
-        if (!TryGetBeginDayIdentity(manifest, step, out string identity, out string fingerprint))
+        if (!TryGetBeginDayIdentity(manifest, step, out string identity, out string fingerprint)
+            || !p18ReceiptOwner.TryPrepare(DailyV1JusticeP18ReceiptKind.BeginDay, identity, fingerprint, out var mutation))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        JusticeBeginDayReceipt receipt = ProjectBeginDayReceipt(mutation.Receipt);
+        if (mutation.IsReplay)
         {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        if (beginDayStepReceipts == null)
-        {
-            beginDayStepReceipts = new Dictionary<string, JusticeBeginDayReceipt>(StringComparer.Ordinal);
-        }
-
-        if (beginDayStepReceipts.TryGetValue(identity, out JusticeBeginDayReceipt existing))
-        {
-            if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.ContinuationFailed;
-                return false;
-            }
-
-            prepared = new JusticeBeginDayCommit(
-                this,
-                existing,
-                Array.Empty<JusticeBeginDaySentenceSnapshot>(),
-                true,
-                fingerprint,
-                step.OwnerRevision,
-                beginDayStepRevision,
-                beginDayStepReceipts,
-                beginDayStepReceipts);
+            prepared = new JusticeBeginDayCommit(this, receipt, mutation,
+                Array.Empty<JusticeBeginDaySentenceSnapshot>(), true, step.OwnerRevision);
             failure = TimelineFailure.None;
             return true;
         }
-
-        if (!mutationGuardBinding.CanMutate || beginDayStepRevision == long.MaxValue
-            || !TryCaptureBeginDaySnapshot(
-                out List<JusticeBeginDaySentenceSnapshot> snapshots,
-                out string currentOwnerRevision)
+        if (!mutationGuardBinding.CanMutate
+            || !TryCaptureBeginDaySnapshot(out List<JusticeBeginDaySentenceSnapshot> snapshots, out string currentOwnerRevision)
             || !string.Equals(currentOwnerRevision, step.OwnerRevision, StringComparison.Ordinal))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        JusticeBeginDayReceipt receipt = new JusticeBeginDayReceipt(
-            identity,
-            fingerprint,
-            beginDayStepRevision,
-            beginDayStepRevision + 1L);
-        Dictionary<string, JusticeBeginDayReceipt> nextReceipts =
-            new Dictionary<string, JusticeBeginDayReceipt>(beginDayStepReceipts, StringComparer.Ordinal)
-            {
-                [identity] = receipt
-            };
-        prepared = new JusticeBeginDayCommit(
-            this,
-            receipt,
-            snapshots,
-            false,
-            fingerprint,
-            step.OwnerRevision,
-            beginDayStepRevision,
-            beginDayStepReceipts,
-            nextReceipts);
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        prepared = new JusticeBeginDayCommit(this, receipt, mutation, snapshots, false, step.OwnerRevision);
         failure = TimelineFailure.None;
         return true;
     }
-
     /// <summary>Captures the exact roster and Justice target topology for sentence advancement.</summary>
     public bool TryCreateAdvanceSentencesStep(
         DailyBoundaryOperation operation,
@@ -337,135 +353,50 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     }
 
     /// <summary>Looks up an exact sentence-advance receipt without reading live Justice state.</summary>
-    public bool TryResolveAdvanceSentencesReceipt(
-        BoundaryContinuationManifest manifest,
-        BoundaryContinuationStep step,
-        out JusticeAdvanceSentencesReceipt receipt,
-        out TimelineFailure failure)
+    public bool TryResolveAdvanceSentencesReceipt(BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step, out JusticeAdvanceSentencesReceipt receipt, out TimelineFailure failure)
     {
         receipt = null;
         if (!TryGetAdvanceSentencesIdentity(manifest, step, out string identity, out string fingerprint))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        if (advanceSentencesStepReceipts == null)
-        {
-            advanceSentencesStepReceipts =
-                new Dictionary<string, JusticeAdvanceSentencesReceipt>(StringComparer.Ordinal);
-        }
-
-        if (!advanceSentencesStepReceipts.TryGetValue(identity, out JusticeAdvanceSentencesReceipt existing))
-        {
-            failure = TimelineFailure.None;
-            return false;
-        }
-
-        if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        receipt = existing;
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        if (!p18ReceiptOwner.TryResolve(DailyV1JusticeP18ReceiptKind.AdvanceSentences, identity, out P12AReceiptValue value))
+        { failure = TimelineFailure.None; return false; }
+        if (!string.Equals(value.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        receipt = ProjectAdvanceSentencesReceipt(value);
         failure = TimelineFailure.None;
         return true;
     }
-
     /// <summary>Stages legacy sentence advancement and its owner-local occurrence receipt.</summary>
-    public bool TryPrepareAdvanceSentencesStep(
-        BoundaryContinuationManifest manifest,
-        BoundaryContinuationStep step,
-        List<NpcRuntime> npcRuntimeList,
-        out IBoundaryContinuationStepCommit prepared,
-        out TimelineFailure failure)
+    public bool TryPrepareAdvanceSentencesStep(BoundaryContinuationManifest manifest, BoundaryContinuationStep step,
+        List<NpcRuntime> npcRuntimeList, out IBoundaryContinuationStepCommit prepared, out TimelineFailure failure)
     {
         prepared = null;
-        if (!TryGetAdvanceSentencesIdentity(manifest, step, out string identity, out string fingerprint))
+        if (!TryGetAdvanceSentencesIdentity(manifest, step, out string identity, out string fingerprint)
+            || !p18ReceiptOwner.TryPrepare(DailyV1JusticeP18ReceiptKind.AdvanceSentences,
+                identity, fingerprint, out var mutation))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        JusticeAdvanceSentencesReceipt receipt = ProjectAdvanceSentencesReceipt(mutation.Receipt);
+        if (mutation.IsReplay)
         {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        if (advanceSentencesStepReceipts == null)
-        {
-            advanceSentencesStepReceipts =
-                new Dictionary<string, JusticeAdvanceSentencesReceipt>(StringComparer.Ordinal);
-        }
-
-        if (advanceSentencesStepReceipts.TryGetValue(identity, out JusticeAdvanceSentencesReceipt existing))
-        {
-            if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.ContinuationFailed;
-                return false;
-            }
-
-            prepared = new JusticeAdvanceSentencesCommit(
-                this,
-                existing,
-                npcRuntimeList,
-                null,
-                null,
-                true,
-                fingerprint,
-                step.OwnerRevision,
-                advanceSentencesStepRevision,
-                advanceSentencesStepReceipts,
-                advanceSentencesStepReceipts);
+            prepared = new JusticeAdvanceSentencesCommit(this, receipt, mutation, npcRuntimeList,
+                null, null, true, step.OwnerRevision);
             failure = TimelineFailure.None;
             return true;
         }
-
-        if (!mutationGuardBinding.CanMutate || advanceSentencesStepRevision == long.MaxValue
-            || !string.IsNullOrEmpty(step.Payload) || !string.IsNullOrEmpty(step.PersonId)
+        if (!mutationGuardBinding.CanMutate || !string.IsNullOrEmpty(step.Payload) || !string.IsNullOrEmpty(step.PersonId)
             || !TryCaptureAdvanceSentencesSnapshot(npcRuntimeList,
-                out JusticeAdvanceSentencesSnapshot snapshot,
-                out string currentOwnerRevision)
+                out JusticeAdvanceSentencesSnapshot snapshot, out string currentOwnerRevision)
             || !string.Equals(currentOwnerRevision, step.OwnerRevision, StringComparison.Ordinal)
-            || !TryReserveAdvanceSentencesStatusCapacity(snapshot))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        JusticeAdvanceSentencesReceipt receipt = new JusticeAdvanceSentencesReceipt(
-            identity,
-            fingerprint,
-            advanceSentencesStepRevision,
-            advanceSentencesStepRevision + 1L);
-        Dictionary<string, JusticeAdvanceSentencesReceipt> nextReceipts =
-            new Dictionary<string, JusticeAdvanceSentencesReceipt>(
-                advanceSentencesStepReceipts, StringComparer.Ordinal)
-            {
-                [identity] = receipt
-            };
-        int diagnosticCapacity;
-        if (!TryGetAdvanceSentencesDiagnosticCapacity(snapshot, out diagnosticCapacity))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        List<JusticeAdvanceSentencesLogNotice> notices =
-            new List<JusticeAdvanceSentencesLogNotice>(diagnosticCapacity);
-        prepared = new JusticeAdvanceSentencesCommit(
-            this,
-            receipt,
-            npcRuntimeList,
-            snapshot,
-            notices,
-            false,
-            fingerprint,
-            step.OwnerRevision,
-            advanceSentencesStepRevision,
-            advanceSentencesStepReceipts,
-            nextReceipts);
+            || !TryReserveAdvanceSentencesStatusCapacity(snapshot)
+            || !TryGetAdvanceSentencesDiagnosticCapacity(snapshot, out int capacity))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        var notices = new List<JusticeAdvanceSentencesLogNotice>(capacity);
+        prepared = new JusticeAdvanceSentencesCommit(this, receipt, mutation, npcRuntimeList,
+            snapshot, notices, false, step.OwnerRevision);
         failure = TimelineFailure.None;
         return true;
     }
-
     /// <summary>Captures the topology for the distinct legacy wanted-status roster pass.</summary>
     public bool TryCreateSyncWantedStatusesStep(
         DailyBoundaryOperation operation,
@@ -496,323 +427,145 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     }
 
     /// <summary>Looks up an exact later wanted-status pass receipt.</summary>
-    public bool TryResolveSyncWantedStatusesReceipt(
-        BoundaryContinuationManifest manifest,
-        BoundaryContinuationStep step,
-        out JusticeSyncWantedStatusesReceipt receipt,
-        out TimelineFailure failure)
+    public bool TryResolveSyncWantedStatusesReceipt(BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step, out JusticeSyncWantedStatusesReceipt receipt, out TimelineFailure failure)
     {
         receipt = null;
         if (!TryGetSyncWantedStatusesIdentity(manifest, step, out string identity, out string fingerprint))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        if (syncWantedStatusesStepReceipts == null)
-        {
-            syncWantedStatusesStepReceipts = new Dictionary<string, JusticeSyncWantedStatusesReceipt>(StringComparer.Ordinal);
-        }
-
-        if (!syncWantedStatusesStepReceipts.TryGetValue(identity, out JusticeSyncWantedStatusesReceipt existing))
-        {
-            failure = TimelineFailure.None;
-            return false;
-        }
-
-        if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        receipt = existing;
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        if (!p18ReceiptOwner.TryResolve(DailyV1JusticeP18ReceiptKind.SyncWantedStatuses, identity, out P12AReceiptValue value))
+        { failure = TimelineFailure.None; return false; }
+        if (!string.Equals(value.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        receipt = ProjectSyncWantedStatusesReceipt(value);
         failure = TimelineFailure.None;
         return true;
     }
-
     /// <summary>Stages the separate wanted-status pass using live values after predecessor effects.</summary>
-    public bool TryPrepareSyncWantedStatusesStep(
-        BoundaryContinuationManifest manifest,
-        BoundaryContinuationStep step,
-        List<NpcRuntime> npcRuntimeList,
-        out IBoundaryContinuationStepCommit prepared,
-        out TimelineFailure failure)
+    public bool TryPrepareSyncWantedStatusesStep(BoundaryContinuationManifest manifest, BoundaryContinuationStep step,
+        List<NpcRuntime> npcRuntimeList, out IBoundaryContinuationStepCommit prepared, out TimelineFailure failure)
     {
         prepared = null;
-        if (!TryGetSyncWantedStatusesIdentity(manifest, step, out string identity, out string fingerprint))
+        if (!TryGetSyncWantedStatusesIdentity(manifest, step, out string identity, out string fingerprint)
+            || !p18ReceiptOwner.TryPrepare(DailyV1JusticeP18ReceiptKind.SyncWantedStatuses,
+                identity, fingerprint, out var mutation))
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        JusticeSyncWantedStatusesReceipt receipt = ProjectSyncWantedStatusesReceipt(mutation.Receipt);
+        if (mutation.IsReplay)
         {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        if (syncWantedStatusesStepReceipts == null)
-        {
-            syncWantedStatusesStepReceipts = new Dictionary<string, JusticeSyncWantedStatusesReceipt>(StringComparer.Ordinal);
-        }
-
-        if (syncWantedStatusesStepReceipts.TryGetValue(identity, out JusticeSyncWantedStatusesReceipt existing))
-        {
-            if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.ContinuationFailed;
-                return false;
-            }
-
-            prepared = new JusticeSyncWantedStatusesCommit(
-                this, existing, npcRuntimeList, null, true, fingerprint, step.OwnerRevision,
-                syncWantedStatusesStepRevision, syncWantedStatusesStepReceipts, syncWantedStatusesStepReceipts);
+            prepared = new JusticeSyncWantedStatusesCommit(this, receipt, mutation, npcRuntimeList,
+                null, true, step.OwnerRevision);
             failure = TimelineFailure.None;
             return true;
         }
-
-        if (!mutationGuardBinding.CanMutate || syncWantedStatusesStepRevision == long.MaxValue
-            || !string.IsNullOrEmpty(step.Payload) || !string.IsNullOrEmpty(step.PersonId)
+        if (!mutationGuardBinding.CanMutate || !string.IsNullOrEmpty(step.Payload) || !string.IsNullOrEmpty(step.PersonId)
             || !TryCaptureSyncWantedStatusesSnapshot(npcRuntimeList,
-                out JusticeSyncWantedStatusesSnapshot snapshot,
-                out string currentOwnerRevision, includeMutableValues: true)
+                out JusticeSyncWantedStatusesSnapshot snapshot, out string currentOwnerRevision, includeMutableValues: true)
             || !string.Equals(currentOwnerRevision, step.OwnerRevision, StringComparison.Ordinal)
             || !TryReserveSyncWantedStatusCapacity(snapshot))
-        {
-            failure = TimelineFailure.ContinuationFailed;
-            return false;
-        }
-
-        JusticeSyncWantedStatusesReceipt receipt = new JusticeSyncWantedStatusesReceipt(
-            identity, fingerprint, syncWantedStatusesStepRevision, syncWantedStatusesStepRevision + 1L);
-        Dictionary<string, JusticeSyncWantedStatusesReceipt> nextReceipts =
-            new Dictionary<string, JusticeSyncWantedStatusesReceipt>(syncWantedStatusesStepReceipts, StringComparer.Ordinal)
-            {
-                [identity] = receipt
-            };
-        prepared = new JusticeSyncWantedStatusesCommit(
-            this, receipt, npcRuntimeList, snapshot, false, fingerprint, step.OwnerRevision,
-            syncWantedStatusesStepRevision, syncWantedStatusesStepReceipts, nextReceipts);
+        { failure = TimelineFailure.ContinuationFailed; return false; }
+        prepared = new JusticeSyncWantedStatusesCommit(this, receipt, mutation, npcRuntimeList,
+            snapshot, false, step.OwnerRevision);
         failure = TimelineFailure.None;
         return true;
     }
-
-    internal bool TryCommitSyncWantedStatusesStep(
-        JusticeSyncWantedStatusesReceipt receipt,
-        List<NpcRuntime> npcRuntimeList,
-        JusticeSyncWantedStatusesSnapshot expectedSnapshot,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedRevision,
-        Dictionary<string, JusticeSyncWantedStatusesReceipt> expectedReceipts,
-        Dictionary<string, JusticeSyncWantedStatusesReceipt> nextReceipts,
+    internal bool TryCommitSyncWantedStatusesStep(JusticeSyncWantedStatusesReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation, List<NpcRuntime> npcRuntimeList,
+        JusticeSyncWantedStatusesSnapshot expectedSnapshot, bool replay, string expectedOwnerRevision,
         out TimelineFailure failure)
     {
         failure = TimelineFailure.ContinuationFailed;
-        if (p12DailyProfileReceiptBoundaryBound)
-        {
-            failure = TimelineFailure.UnsupportedProfile;
-            return false;
-        }
-        if (receipt == null)
-        {
-            return false;
-        }
-
+        if (p12DailyProfileReceiptBoundaryBound) { failure = TimelineFailure.UnsupportedProfile; return false; }
+        if (!MatchesReceipt(receipt, mutation, DailyV1JusticeP18ReceiptKind.SyncWantedStatuses)) return false;
         if (replay)
-        {
-            if (syncWantedStatusesStepReceipts != null
-                && syncWantedStatusesStepReceipts.TryGetValue(receipt.ExecutionStepIdentity, out JusticeSyncWantedStatusesReceipt existing)
-                && ReferenceEquals(existing, receipt)
-                && string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.None;
-                return true;
-            }
-
-            return false;
-        }
-
-        if (npcRuntimeList == null || expectedSnapshot == null || !mutationGuardBinding.CanMutate
-            || syncWantedStatusesStepRevision != expectedRevision
-            || !ReferenceEquals(syncWantedStatusesStepReceipts, expectedReceipts)
-            || nextReceipts == null || !nextReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || syncWantedStatusesStepReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || syncWantedStatusesStepRevision == long.MaxValue
-            || receipt.OwnerRevisionBefore != syncWantedStatusesStepRevision
-            || receipt.OwnerRevisionAfter != syncWantedStatusesStepRevision + 1L
-            || !string.Equals(receipt.DescriptorFingerprint, fingerprint, StringComparison.Ordinal)
+        { if (!mutation.IsReplay) return false; failure = TimelineFailure.None; return true; }
+        if (mutation.IsReplay || npcRuntimeList == null || expectedSnapshot == null || !mutationGuardBinding.CanMutate
             || !TryCaptureSyncWantedStatusesSnapshot(npcRuntimeList,
-                out JusticeSyncWantedStatusesSnapshot currentSnapshot,
-                out string currentOwnerRevision, includeMutableValues: true)
+                out JusticeSyncWantedStatusesSnapshot currentSnapshot, out string currentOwnerRevision, includeMutableValues: true)
             || !string.Equals(currentOwnerRevision, expectedOwnerRevision, StringComparison.Ordinal)
             || !SameSyncWantedStatusesSnapshot(expectedSnapshot, currentSnapshot)
-            || !TryReserveSyncWantedStatusCapacity(currentSnapshot))
-        {
-            return false;
-        }
-
+            || !TryReserveSyncWantedStatusCapacity(currentSnapshot)) return false;
         foreach (JusticeSyncWantedRosterSnapshot entry in currentSnapshot.Roster)
         {
-            if (entry.Npc == null || wantedStatus == null)
-            {
-                continue;
-            }
-
-            if (entry.HasActiveWarrant)
-            {
-                entry.Npc.AddStatus(wantedStatus);
-            }
-            else
-            {
-                entry.Npc.RemoveStatus(wantedStatus);
-            }
+            if (entry.Npc == null || wantedStatus == null) continue;
+            if (entry.HasActiveWarrant) entry.Npc.AddStatus(wantedStatus); else entry.Npc.RemoveStatus(wantedStatus);
         }
-
-        syncWantedStatusesStepRevision = receipt.OwnerRevisionAfter;
-        syncWantedStatusesStepReceipts = nextReceipts;
+        p18ReceiptOwner.InstallPrepared(mutation);
         failure = TimelineFailure.None;
         return true;
     }
 
-    internal bool TryCommitBeginDayStep(
-        JusticeBeginDayReceipt receipt,
-        IReadOnlyList<JusticeBeginDaySentenceSnapshot> expectedSentences,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedBeginDayRevision,
-        Dictionary<string, JusticeBeginDayReceipt> expectedReceipts,
-        Dictionary<string, JusticeBeginDayReceipt> nextReceipts,
-        out TimelineFailure failure)
+    internal bool TryCommitBeginDayStep(JusticeBeginDayReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation, IReadOnlyList<JusticeBeginDaySentenceSnapshot> expectedSentences,
+        bool replay, string expectedOwnerRevision, out TimelineFailure failure)
     {
         failure = TimelineFailure.ContinuationFailed;
-        if (p12DailyProfileReceiptBoundaryBound)
-        {
-            failure = TimelineFailure.UnsupportedProfile;
-            return false;
-        }
-        if (receipt == null || expectedSentences == null)
-        {
-            return false;
-        }
-
+        if (p12DailyProfileReceiptBoundaryBound) { failure = TimelineFailure.UnsupportedProfile; return false; }
+        if (!MatchesReceipt(receipt, mutation, DailyV1JusticeP18ReceiptKind.BeginDay)) return false;
         if (replay)
-        {
-            if (beginDayStepReceipts != null
-                && beginDayStepReceipts.TryGetValue(receipt.ExecutionStepIdentity, out JusticeBeginDayReceipt existing)
-                && ReferenceEquals(existing, receipt)
-                && string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.None;
-                return true;
-            }
-
-            return false;
-        }
-
-        if (!mutationGuardBinding.CanMutate || beginDayStepRevision != expectedBeginDayRevision
-            || !ReferenceEquals(beginDayStepReceipts, expectedReceipts)
-            || nextReceipts == null || !nextReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || beginDayStepReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || beginDayStepRevision == long.MaxValue
-            || receipt.OwnerRevisionBefore != beginDayStepRevision
-            || receipt.OwnerRevisionAfter != beginDayStepRevision + 1L
-            || !string.Equals(receipt.DescriptorFingerprint, fingerprint, StringComparison.Ordinal)
+        { if (!mutation.IsReplay) return false; failure = TimelineFailure.None; return true; }
+        if (mutation.IsReplay || expectedSentences == null || !mutationGuardBinding.CanMutate
             || !TryCaptureBeginDaySnapshot(out List<JusticeBeginDaySentenceSnapshot> currentSentences,
                 out string currentOwnerRevision)
             || !string.Equals(currentOwnerRevision, expectedOwnerRevision, StringComparison.Ordinal)
-            || !SameSentenceReferences(expectedSentences, currentSentences))
-        {
-            return false;
-        }
-
+            || !SameSentenceReferences(expectedSentences, currentSentences)) return false;
         foreach (JusticeBeginDaySentenceSnapshot snapshot in expectedSentences)
-        {
-            if (snapshot?.Sentence != null && snapshot.WasArrestedToday)
-            {
-                snapshot.Sentence.ClearArrestedToday();
-            }
-        }
-
-        beginDayStepRevision = receipt.OwnerRevisionAfter;
-        beginDayStepReceipts = nextReceipts;
+            if (snapshot?.Sentence != null && snapshot.WasArrestedToday) snapshot.Sentence.ClearArrestedToday();
+        p18ReceiptOwner.InstallPrepared(mutation);
         failure = TimelineFailure.None;
         return true;
     }
 
-    internal bool TryCommitAdvanceSentencesStep(
-        JusticeAdvanceSentencesReceipt receipt,
-        List<NpcRuntime> npcRuntimeList,
-        JusticeAdvanceSentencesSnapshot expectedSnapshot,
-        List<JusticeAdvanceSentencesLogNotice> notices,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedRevision,
-        Dictionary<string, JusticeAdvanceSentencesReceipt> expectedReceipts,
-        Dictionary<string, JusticeAdvanceSentencesReceipt> nextReceipts,
-        out TimelineFailure failure)
+    internal bool TryCommitAdvanceSentencesStep(JusticeAdvanceSentencesReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation, List<NpcRuntime> npcRuntimeList,
+        JusticeAdvanceSentencesSnapshot expectedSnapshot, List<JusticeAdvanceSentencesLogNotice> notices,
+        bool replay, string expectedOwnerRevision, out TimelineFailure failure)
     {
         failure = TimelineFailure.ContinuationFailed;
-        if (p12DailyProfileReceiptBoundaryBound)
-        {
-            failure = TimelineFailure.UnsupportedProfile;
-            return false;
-        }
-        if (receipt == null)
-        {
-            return false;
-        }
-
+        if (p12DailyProfileReceiptBoundaryBound) { failure = TimelineFailure.UnsupportedProfile; return false; }
+        if (!MatchesReceipt(receipt, mutation, DailyV1JusticeP18ReceiptKind.AdvanceSentences)) return false;
         if (replay)
-        {
-            if (advanceSentencesStepReceipts != null
-                && advanceSentencesStepReceipts.TryGetValue(receipt.ExecutionStepIdentity,
-                    out JusticeAdvanceSentencesReceipt existing)
-                && ReferenceEquals(existing, receipt)
-                && string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.None;
-                return true;
-            }
-
-            return false;
-        }
-
-        if (npcRuntimeList == null || expectedSnapshot == null || notices == null
-            || !mutationGuardBinding.CanMutate || advanceSentencesStepRevision != expectedRevision
-            || !ReferenceEquals(advanceSentencesStepReceipts, expectedReceipts)
-            || nextReceipts == null || !nextReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || advanceSentencesStepReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || advanceSentencesStepRevision == long.MaxValue
-            || receipt.OwnerRevisionBefore != advanceSentencesStepRevision
-            || receipt.OwnerRevisionAfter != advanceSentencesStepRevision + 1L
-            || !string.Equals(receipt.DescriptorFingerprint, fingerprint, StringComparison.Ordinal)
+        { if (!mutation.IsReplay) return false; failure = TimelineFailure.None; return true; }
+        if (mutation.IsReplay || npcRuntimeList == null || expectedSnapshot == null || notices == null
+            || !mutationGuardBinding.CanMutate
             || !TryCaptureAdvanceSentencesSnapshot(npcRuntimeList,
-                out JusticeAdvanceSentencesSnapshot currentSnapshot,
-                out string currentOwnerRevision)
+                out JusticeAdvanceSentencesSnapshot currentSnapshot, out string currentOwnerRevision)
             || !string.Equals(currentOwnerRevision, expectedOwnerRevision, StringComparison.Ordinal)
             || !SameAdvanceSentencesSnapshot(expectedSnapshot, currentSnapshot)
-            || !TryReserveAdvanceSentencesStatusCapacity(currentSnapshot))
-        {
-            return false;
-        }
-
-        if (!TryCaptureAdvanceSentencesLogCandidates(
-            currentSnapshot,
+            || !TryReserveAdvanceSentencesStatusCapacity(currentSnapshot)) return false;
+        if (!TryCaptureAdvanceSentencesLogCandidates(currentSnapshot,
             out List<JusticeAdvanceSentencesSentenceLogCandidates> sentenceLogCandidates,
-            out List<JusticeAdvanceSentencesLogNotice> rosterLogCandidates))
-        {
-            return false;
-        }
-
+            out List<JusticeAdvanceSentencesLogNotice> rosterLogCandidates)) return false;
         ApplyAdvanceSentences(npcRuntimeList, notices, sentenceLogCandidates, rosterLogCandidates);
-        advanceSentencesStepRevision = receipt.OwnerRevisionAfter;
-        advanceSentencesStepReceipts = nextReceipts;
+        p18ReceiptOwner.InstallPrepared(mutation);
         failure = TimelineFailure.None;
-
-        // Diagnostics follow the durable owner receipt so an uncertain caller retry cannot replay effects.
         EmitAdvanceSentencesLogNotices(notices);
         return true;
     }
 
+    private bool MatchesReceipt<TReceipt>(TReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation, DailyV1JusticeP18ReceiptKind expectedKind)
+        where TReceipt : class
+    {
+        if (receipt == null || mutation == null || mutation.Kind != expectedKind) return false;
+        P12AReceiptValue projected = mutation.Receipt;
+        if (projected == null) return false;
+        string identity;
+        string fingerprint;
+        long before;
+        long after;
+        if (receipt is JusticeBeginDayReceipt begin)
+        { identity = begin.ExecutionStepIdentity; fingerprint = begin.DescriptorFingerprint; before = begin.OwnerRevisionBefore; after = begin.OwnerRevisionAfter; }
+        else if (receipt is JusticeAdvanceSentencesReceipt advance)
+        { identity = advance.ExecutionStepIdentity; fingerprint = advance.DescriptorFingerprint; before = advance.OwnerRevisionBefore; after = advance.OwnerRevisionAfter; }
+        else if (receipt is JusticeSyncWantedStatusesReceipt sync)
+        { identity = sync.ExecutionStepIdentity; fingerprint = sync.DescriptorFingerprint; before = sync.OwnerRevisionBefore; after = sync.OwnerRevisionAfter; }
+        else return false;
+        return string.Equals(projected.Identity, identity, StringComparison.Ordinal)
+            && string.Equals(projected.DescriptorFingerprint, fingerprint, StringComparison.Ordinal)
+            && projected.RevisionBefore == before && projected.RevisionAfter == after
+            && p18ReceiptOwner.CanCommit(mutation);
+    }
     private bool TryCaptureSyncWantedStatusesSnapshot(
         List<NpcRuntime> npcRuntimeList,
         out JusticeSyncWantedStatusesSnapshot snapshot,
@@ -821,7 +574,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     {
         snapshot = null;
         ownerRevision = null;
-        if (npcRuntimeList == null || !mutationGuardBinding.CanMutate || syncWantedStatusesStepRevision == long.MaxValue)
+        if (npcRuntimeList == null || !mutationGuardBinding.CanMutate || p18ReceiptOwner.SyncWantedStatusesRevision == long.MaxValue)
         {
             return false;
         }
@@ -832,7 +585,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         {
             SyncWantedStatusesSnapshotVersion,
             SyncWantedStatusesOperationVersion,
-            syncWantedStatusesStepRevision.ToString(CultureInfo.InvariantCulture),
+            p18ReceiptOwner.SyncWantedStatusesRevision.ToString(CultureInfo.InvariantCulture),
             WantedStatusIdentity,
             npcRuntimeList.Count.ToString(CultureInfo.InvariantCulture)
         };
@@ -1018,7 +771,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     {
         snapshots = null;
         ownerRevision = null;
-        if (!mutationGuardBinding.CanMutate || beginDayStepRevision == long.MaxValue)
+        if (!mutationGuardBinding.CanMutate || p18ReceiptOwner.BeginDayRevision == long.MaxValue)
         {
             return false;
         }
@@ -1049,7 +802,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         List<string> parts = new List<string>(3 + entries.Count)
         {
             BeginDaySnapshotVersion,
-            beginDayStepRevision.ToString(CultureInfo.InvariantCulture),
+            p18ReceiptOwner.BeginDayRevision.ToString(CultureInfo.InvariantCulture),
             entries.Count.ToString(CultureInfo.InvariantCulture)
         };
         parts.AddRange(entries);
@@ -1065,7 +818,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         snapshot = null;
         ownerRevision = null;
         if (npcRuntimeList == null || !mutationGuardBinding.CanMutate
-            || advanceSentencesStepRevision == long.MaxValue)
+            || p18ReceiptOwner.AdvanceSentencesRevision == long.MaxValue)
         {
             return false;
         }
@@ -1081,7 +834,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         {
             AdvanceSentencesSnapshotVersion,
             AdvanceSentencesOperationVersion,
-            advanceSentencesStepRevision.ToString(CultureInfo.InvariantCulture),
+            p18ReceiptOwner.AdvanceSentencesRevision.ToString(CultureInfo.InvariantCulture),
             FreeStatusIdentity,
             WantedStatusIdentity,
             ArrestedStatusIdentity,
@@ -1684,8 +1437,6 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             {
                 return null;
             }
-            if (p12CrimeJusticeMutationAdmission != null && !BindP12WantedRecord(record))
-                return null;
             EnsureP12CrimeJusticeMutationAllowed();
             wantedRecords.Add(record);
             NotifyP12CrimeJusticeMutationCommitted();
@@ -1732,8 +1483,6 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         {
             return false;
         }
-        if (p12CrimeJusticeMutationAdmission != null && !BindP12PrisonSentence(sentence))
-            return false;
         EnsureP12CrimeJusticeMutationAllowed();
         prisonSentences.Add(sentence);
         NotifyP12CrimeJusticeMutationCommitted();
@@ -1752,6 +1501,142 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             originDecisionId));
         logger.Log(SimulationLogCategory.Justice, $"{guardRuntime.NpcName} prendeu {targetRuntime.NpcName} em {city.CityName}. Pena restante: {sentence.RemainingDays} dias.");
         return true;
+    }
+
+    /// <summary>Prepares, but does not publish, the Unity view for a Core-owned selected Arrest row.</summary>
+    internal bool TryPrepareSelectedArrestSentenceProjection(
+        NpcRuntime targetRuntime,
+        CityRuntime city,
+        WantedRecordRuntime warrant,
+        DailyV1JusticeSentenceOwner sentenceOwner)
+    {
+        if (targetRuntime == null || city == null || warrant == null || sentenceOwner == null
+            || justiceRecordsOwner.ContainsSentence(sentenceOwner)
+            || sentenceViews.ContainsKey(sentenceOwner)
+            || preparedSelectedSentenceViews.ContainsKey(sentenceOwner)
+            || !ReferenceEquals(sentenceOwner.Warrant, warrant.CoreOwner)
+            || !string.Equals(sentenceOwner.TargetRuntimeId, targetRuntime.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(sentenceOwner.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+            || !wantedRecordViews.TryGetValue(warrant.CoreOwner, out WantedRecordRuntime exactWarrant)
+            || !ReferenceEquals(exactWarrant, warrant)
+            || !ReferenceEquals(warrant.Target, targetRuntime)
+            || !ReferenceEquals(warrant.City, city)
+            || !PrisonSentenceRuntime.TryCreateSelectedProjection(
+                targetRuntime, city, warrant, sentenceOwner,
+                out PrisonSentenceRuntime projectedSentence))
+            return false;
+
+        preparedSelectedSentenceViews.Add(sentenceOwner, projectedSentence);
+        return true;
+    }
+
+    internal void DiscardPreparedSelectedArrestSentenceProjection(
+        DailyV1JusticeSentenceOwner sentenceOwner)
+    {
+        if (sentenceOwner != null && !sentenceViews.ContainsKey(sentenceOwner))
+            preparedSelectedSentenceViews.Remove(sentenceOwner);
+    }
+
+    /// <summary>Publishes the prepared Unity sentence view after Core owns the row.</summary>
+    internal bool CommitPreparedSelectedArrestSentenceProjection(
+        DailyV1JusticeSentenceOwner sentenceOwner)
+    {
+        if (sentenceOwner == null
+            || !justiceRecordsOwner.ContainsSentence(sentenceOwner)
+            || sentenceViews.ContainsKey(sentenceOwner)
+            || !preparedSelectedSentenceViews.TryGetValue(
+                sentenceOwner, out PrisonSentenceRuntime prepared)
+            || prepared == null || !ReferenceEquals(prepared.CoreOwner, sentenceOwner))
+            return false;
+
+        sentenceViews.Add(sentenceOwner, prepared);
+        preparedSelectedSentenceViews.Remove(sentenceOwner);
+        return true;
+    }
+
+    internal bool CanRemoveSelectedSentenceProjection(
+        DailyV1JusticeSentenceOwner sentenceOwner) =>
+        sentenceOwner != null
+        && justiceRecordsOwner.ContainsSentence(sentenceOwner)
+        && sentenceViews.TryGetValue(sentenceOwner, out PrisonSentenceRuntime view)
+        && view != null && ReferenceEquals(view.CoreOwner, sentenceOwner)
+        && CanCommitP12CrimeJusticeMutation();
+
+    /// <summary>Removes only the Unity view after the Core sentence owner committed removal.</summary>
+    internal void CommitSelectedSentenceProjectionRemoval(
+        DailyV1JusticeSentenceOwner sentenceOwner)
+    {
+        if (sentenceOwner == null || justiceRecordsOwner.ContainsSentence(sentenceOwner)
+            || !sentenceViews.TryGetValue(sentenceOwner, out PrisonSentenceRuntime view)
+            || view == null || !ReferenceEquals(view.CoreOwner, sentenceOwner)
+            || !sentenceViews.Remove(sentenceOwner))
+            throw new InvalidOperationException(
+                "The selected Core Justice sentence was removed without its exact Unity view.");
+    }
+
+    /// <summary>Removes an exact Core sentence owner and retires its Unity view as one selected-owner commit.</summary>
+    internal bool TryRemoveSelectedSentence(DailyV1JusticeSentenceOwner sentenceOwner)
+    {
+        if (sentenceOwner == null
+            || !justiceRecordsOwner.ContainsSentence(sentenceOwner)
+            || !sentenceViews.TryGetValue(sentenceOwner, out PrisonSentenceRuntime view)
+            || view == null || !ReferenceEquals(view.CoreOwner, sentenceOwner)
+            || !CanCommitP12CrimeJusticeMutation())
+            return false;
+
+        if (!justiceRecordsOwner.TryRemoveSentence(sentenceOwner))
+            return false;
+        sentenceViews.Remove(sentenceOwner);
+        return !justiceRecordsOwner.ContainsSentence(sentenceOwner)
+            && !sentenceViews.ContainsKey(sentenceOwner);
+    }
+
+    /// <summary>Publishes the compatibility event and log after the selected
+    /// Core arrest transition has committed its owner writes.</summary>
+    internal void PublishSelectedArrest(
+        NpcRuntime guardRuntime,
+        NpcRuntime targetRuntime,
+        CityRuntime city,
+        string originDecisionId)
+    {
+        if (guardRuntime == null || targetRuntime == null || city == null)
+            throw new InvalidOperationException("A selected arrest lost its exact Unity projections before publication.");
+        PrisonSentenceRuntime sentence = GetActiveSentence(targetRuntime);
+        if (sentence == null || sentence.Warrant == null
+            || !ReferenceEquals(sentence.Target, targetRuntime)
+            || !ReferenceEquals(sentence.City, city))
+            throw new InvalidOperationException("A selected arrest has no exact Justice sentence projection.");
+
+        domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcArrestedEvent(
+            eventId,
+            absoluteDay,
+            recordSequence,
+            guardRuntime.RuntimeId,
+            targetRuntime.RuntimeId,
+            city.Location?.RuntimeId,
+            originDecisionId));
+        logger.Log(SimulationLogCategory.Justice,
+            $"{guardRuntime.NpcName} prendeu {targetRuntime.NpcName} em {city.CityName}. Pena restante: {sentence.RemainingDays} dias.");
+    }
+
+    /// <summary>Publishes the event and legacy log after a Core-owned selected Escape transition.</summary>
+    internal void PublishSelectedEscape(
+        NpcRuntime targetRuntime,
+        CityRuntime eventCity,
+        bool hadActiveSentence,
+        float bountyAfterPenalty,
+        string originDecisionId)
+    {
+        if (targetRuntime == null
+            || (eventCity != null
+                && !ReferenceEquals(eventCity.SelectedRuntimeOwners?.Definitions,
+                    targetRuntime.SelectedDailyV1DefinitionGraph)))
+            throw new InvalidOperationException("Selected EscapePrison lost its exact output projections.");
+
+        RecordNpcEscaped(targetRuntime, eventCity, originDecisionId);
+        if (hadActiveSentence)
+            logger.Log(SimulationLogCategory.Justice,
+                $"{targetRuntime.NpcName} fugiu da prisao em {eventCity.CityName}. Recompensa atual: {bountyAfterPenalty:0.##}.");
     }
 
     public void AdvanceSentences(List<NpcRuntime> npcRuntimeList)
@@ -1942,14 +1827,21 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
     public bool HasAnyActiveWarrant(NpcRuntime targetRuntime)
     {
-        foreach (WantedRecordRuntime record in wantedRecords)
+        if (targetRuntime == null) return false;
+        if (string.IsNullOrWhiteSpace(targetRuntime.RuntimeId))
         {
-            if (record != null && record.IsActive == true && record.Target == targetRuntime)
+            foreach (WantedRecordRuntime record in wantedRecords)
             {
-                return true;
+                if (record != null && record.IsActive == true && record.Target == targetRuntime)
+                    return true;
             }
+            return false;
         }
 
+        foreach (DailyV1JusticeWantedRecordOwner row in justiceRecordsOwner.FindActiveWantedRecords(targetRuntime.RuntimeId))
+            if (wantedRecordViews.TryGetValue(row, out WantedRecordRuntime record)
+                && record.IsActive && ReferenceEquals(record.Target, targetRuntime))
+                return true;
         return false;
     }
 
@@ -1997,7 +1889,16 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
     public bool IsArrested(NpcRuntime targetRuntime)
     {
-        return targetRuntime != null && arrestedStatus != null && targetRuntime.CurrentStatus.Contains(arrestedStatus) == true;
+        if (targetRuntime == null)
+            return false;
+
+        if (targetRuntime.UsesSelectedDailyV1Definitions)
+        {
+            return targetRuntime.HasSelectedDailyV1Status(
+                targetRuntime.SelectedDailyV1DefinitionGraph?.Configuration?.arrestedStatus);
+        }
+
+        return arrestedStatus != null && targetRuntime.CurrentStatus.Contains(arrestedStatus);
     }
 
     public WantedRecordRuntime GetActiveWarrant(NpcRuntime targetRuntime, CityRuntime cityRuntime)
@@ -2007,14 +1908,23 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             return null;
         }
 
-        foreach (WantedRecordRuntime record in wantedRecords)
+        if (string.IsNullOrWhiteSpace(targetRuntime.RuntimeId)
+            || string.IsNullOrWhiteSpace(cityRuntime.RuntimeId))
         {
-            if (record != null && record.IsActive == true && record.Target == targetRuntime && record.City == cityRuntime)
-            {
-                return record;
-            }
+            foreach (WantedRecordRuntime record in wantedRecords)
+                if (record != null && record.IsActive
+                    && ReferenceEquals(record.Target, targetRuntime)
+                    && ReferenceEquals(record.City, cityRuntime))
+                    return record;
+            return null;
         }
 
+        foreach (DailyV1JusticeWantedRecordOwner row in
+            justiceRecordsOwner.FindActiveWantedRecords(targetRuntime.RuntimeId, cityRuntime.RuntimeId))
+            if (wantedRecordViews.TryGetValue(row, out WantedRecordRuntime projectedRecord)
+                && projectedRecord.IsActive && ReferenceEquals(projectedRecord.Target, targetRuntime)
+                && ReferenceEquals(projectedRecord.City, cityRuntime))
+                return projectedRecord;
         return null;
     }
 
@@ -2027,13 +1937,18 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             return records;
         }
 
-        foreach (WantedRecordRuntime record in wantedRecords)
+        if (string.IsNullOrWhiteSpace(targetRuntime.RuntimeId))
         {
-            if (record != null && record.IsActive == true && record.Target == targetRuntime)
-            {
-                records.Add(record);
-            }
+            foreach (WantedRecordRuntime record in wantedRecords)
+                if (record != null && record.IsActive && ReferenceEquals(record.Target, targetRuntime))
+                    records.Add(record);
+            return records;
         }
+
+        foreach (DailyV1JusticeWantedRecordOwner row in justiceRecordsOwner.FindActiveWantedRecords(targetRuntime.RuntimeId))
+            if (wantedRecordViews.TryGetValue(row, out WantedRecordRuntime projectedRecord)
+                && projectedRecord.IsActive && ReferenceEquals(projectedRecord.Target, targetRuntime))
+                records.Add(projectedRecord);
 
         return records;
     }
@@ -2047,7 +1962,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     {
         wantedCount = 0;
         sentenceCount = 0;
-        revision = p12CrimeJusticeRevision;
+        revision = justiceRecordsOwner.Revision;
         if (isNpcInstalled == null || isCityInstalled == null
             || wantedRecords == null || prisonSentences == null
             || revision < 0L)
@@ -2078,13 +1993,60 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    internal bool TryReadP12CrimeJusticeCoreCensus(
+        Func<string, bool> isNpcRuntimeIdInstalled,
+        Func<string, bool> isCityRuntimeIdInstalled,
+        out int wantedCount,
+        out int sentenceCount,
+        out long revision)
+    {
+        wantedCount = 0;
+        sentenceCount = 0;
+        revision = justiceRecordsOwner.Revision;
+        if (isNpcRuntimeIdInstalled == null || isCityRuntimeIdInstalled == null
+            || revision < 0L || justiceRecordsOwner.WantedRecords == null
+            || justiceRecordsOwner.Sentences == null)
+            return false;
+
+        HashSet<DailyV1JusticeWantedRecordOwner> wantedRows =
+            new HashSet<DailyV1JusticeWantedRecordOwner>();
+        foreach (DailyV1JusticeWantedRecordOwner record in justiceRecordsOwner.WantedRecords)
+        {
+            if (record == null || string.IsNullOrWhiteSpace(record.TargetRuntimeId)
+                || string.IsNullOrWhiteSpace(record.CityRuntimeId)
+                || !isNpcRuntimeIdInstalled(record.TargetRuntimeId)
+                || !isCityRuntimeIdInstalled(record.CityRuntimeId)
+                || !wantedRows.Add(record))
+                return false;
+        }
+
+        HashSet<DailyV1JusticeSentenceOwner> sentenceRows =
+            new HashSet<DailyV1JusticeSentenceOwner>();
+        foreach (DailyV1JusticeSentenceOwner sentence in justiceRecordsOwner.Sentences)
+        {
+            if (sentence == null || string.IsNullOrWhiteSpace(sentence.TargetRuntimeId)
+                || string.IsNullOrWhiteSpace(sentence.CityRuntimeId)
+                || sentence.Warrant == null || !wantedRows.Contains(sentence.Warrant)
+                || !string.Equals(sentence.TargetRuntimeId, sentence.Warrant.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(sentence.CityRuntimeId, sentence.Warrant.CityRuntimeId, StringComparison.Ordinal)
+                || !isNpcRuntimeIdInstalled(sentence.TargetRuntimeId)
+                || !isCityRuntimeIdInstalled(sentence.CityRuntimeId)
+                || !sentenceRows.Add(sentence))
+                return false;
+        }
+
+        wantedCount = justiceRecordsOwner.WantedRecords.Count;
+        sentenceCount = justiceRecordsOwner.Sentences.Count;
+        return true;
+    }
+
     internal bool TryCaptureP12EOwnerSnapshotRows(
         out IReadOnlyList<P12EJusticeWantedSnapshotRow> wantedRows,
         out IReadOnlyList<P12EJusticeSentenceSnapshotRow> sentenceRows)
     {
         wantedRows = null;
         sentenceRows = null;
-        if (wantedRecords == null || prisonSentences == null || p12CrimeJusticeRevision < 0L)
+        if (wantedRecords == null || prisonSentences == null || justiceRecordsOwner.Revision < 0L)
             return false;
 
         List<P12EJusticeWantedSnapshotRow> wanted = new List<P12EJusticeWantedSnapshotRow>(wantedRecords.Count);
@@ -2133,6 +2095,80 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         return true;
     }
 
+    /// <summary>
+    /// Checks that the existing Unity Justice wrappers still project the exact
+    /// Core-owned P12-E value snapshot without allocating a second snapshot.
+    /// </summary>
+    internal bool MatchesP12EOwnerSnapshot(P12EJusticeRecordsOwnerSnapshot expected)
+    {
+        if (expected == null || !expected.TryValidate(out _)
+            || wantedRecords == null || prisonSentences == null)
+            return false;
+
+        P12EJusticeRecordsSnapshotSection records = expected.Records;
+        DailyV1JusticeRecordsOwner owner = justiceRecordsOwner;
+        if (records == null || owner == null || owner.WantedRecords == null || owner.Sentences == null
+            || owner.Revision != records.Revision
+            || records.WantedRows.Count != wantedRecords.Count
+            || records.SentenceRows.Count != prisonSentences.Count
+            || records.WantedRows.Count != owner.WantedRecords.Count
+            || records.SentenceRows.Count != owner.Sentences.Count)
+            return false;
+
+        Dictionary<WantedRecordRuntime, int> warrantOrdinals =
+            new Dictionary<WantedRecordRuntime, int>();
+        for (int index = 0; index < records.WantedRows.Count; index++)
+        {
+            P12EJusticeWantedSnapshotRow snapshot = records.WantedRows[index];
+            WantedRecordRuntime projection = wantedRecords[index];
+            DailyV1JusticeWantedRecordOwner coreRow = owner.WantedRecords[index];
+            if (snapshot == null || projection == null || coreRow == null
+                || warrantOrdinals.ContainsKey(projection)
+                || !ReferenceEquals(projection.CoreOwner, coreRow)
+                || projection.Target == null || projection.City == null
+                || !string.Equals(snapshot.TargetRuntimeId, coreRow.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(snapshot.CityRuntimeId, coreRow.CityRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(snapshot.TargetRuntimeId, projection.Target.RuntimeId, StringComparison.Ordinal)
+                || !string.Equals(snapshot.TargetPersonIdValue, projection.Target.PersonId?.Value, StringComparison.Ordinal)
+                || !string.Equals(snapshot.CityRuntimeId, projection.City.RuntimeId, StringComparison.Ordinal)
+                || snapshot.Bounty != coreRow.Bounty || snapshot.Bounty != projection.Bounty
+                || snapshot.SentenceDays != coreRow.SentenceDays || snapshot.SentenceDays != projection.SentenceDays
+                || snapshot.IsResolved != coreRow.IsResolved || snapshot.IsResolved != projection.P12Resolved)
+                return false;
+            warrantOrdinals.Add(projection, index);
+        }
+
+        for (int index = 0; index < records.SentenceRows.Count; index++)
+        {
+            P12EJusticeSentenceSnapshotRow snapshot = records.SentenceRows[index];
+            PrisonSentenceRuntime projection = prisonSentences[index];
+            DailyV1JusticeSentenceOwner coreRow = owner.Sentences[index];
+            if (snapshot == null || projection == null || coreRow == null
+                || projection.Target == null || projection.City == null || projection.Warrant == null
+                || !warrantOrdinals.TryGetValue(projection.Warrant, out int warrantOrdinal)
+                || !ReferenceEquals(projection.CoreOwner, coreRow)
+                || warrantOrdinal != snapshot.WarrantOrdinal
+                || warrantOrdinal < 0 || warrantOrdinal >= owner.WantedRecords.Count
+                || !ReferenceEquals(coreRow.Warrant, owner.WantedRecords[warrantOrdinal])
+                || !ReferenceEquals(projection.Target, projection.Warrant.Target)
+                || !ReferenceEquals(projection.City, projection.Warrant.City)
+                || !string.Equals(snapshot.TargetRuntimeId, coreRow.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(snapshot.CityRuntimeId, coreRow.CityRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(snapshot.TargetRuntimeId, projection.Target.RuntimeId, StringComparison.Ordinal)
+                || !string.Equals(snapshot.TargetPersonIdValue, projection.Target.PersonId?.Value, StringComparison.Ordinal)
+                || !string.Equals(snapshot.CityRuntimeId, projection.City.RuntimeId, StringComparison.Ordinal)
+                || snapshot.RemainingDays != coreRow.RemainingDays
+                || snapshot.RemainingDays != projection.RemainingDays
+                || snapshot.FailedEscapeAttempts != coreRow.FailedEscapeAttempts
+                || snapshot.FailedEscapeAttempts != projection.FailedEscapeAttempts
+                || snapshot.WasArrestedToday != coreRow.WasArrestedToday
+                || snapshot.WasArrestedToday != projection.WasArrestedToday)
+                return false;
+        }
+
+        return owner.Revision == records.Revision;
+    }
+
     internal static bool TryCreateFromP12EOwnerSnapshot(
         NpcStatusData freeStatus,
         NpcStatusData wantedStatus,
@@ -2171,9 +2207,9 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         {
             JusticeSystem candidate = new JusticeSystem(
                 freeStatus, wantedStatus, arrestedStatus, hiddenStatus, domainEventRecorder, logger);
-            candidate.wantedRecords.AddRange(wantedRows);
-            candidate.prisonSentences.AddRange(sentenceRows);
-            candidate.p12CrimeJusticeRevision = revision;
+            foreach (WantedRecordRuntime row in wantedRows) candidate.wantedRecords.Add(row);
+            foreach (PrisonSentenceRuntime row in sentenceRows) candidate.prisonSentences.Add(row);
+            if (!candidate.justiceRecordsOwner.TryInstallExactRevision(revision)) return false;
             if (receiptSnapshot != null)
             {
                 if (!candidate.TryInstallP12AReceiptOwnerSnapshot(receiptSnapshot)) return false;
@@ -2190,61 +2226,115 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
         }
     }
 
+    /// <summary>
+    /// Creates Unity reference projections for an already-hydrated Core Justice
+    /// owner. This adapter never adds or reconstructs authoritative owner rows.
+    /// </summary>
+    internal static bool TryCreateFromP12ECoreOwner(
+        NpcStatusData freeStatus,
+        NpcStatusData wantedStatus,
+        NpcStatusData arrestedStatus,
+        NpcStatusData hiddenStatus,
+        DomainEventRecorder domainEventRecorder,
+        SimulationLogger logger,
+        DailyV1JusticeRecordsOwner selectedOwner,
+        IReadOnlyList<WantedRecordRuntime> wantedRows,
+        IReadOnlyList<PrisonSentenceRuntime> sentenceRows,
+        out JusticeSystem staged,
+        P12AJusticeReceiptOwnerSnapshot receiptSnapshot = null)
+    {
+        staged = null;
+        if (freeStatus == null || wantedStatus == null || arrestedStatus == null || hiddenStatus == null
+            || selectedOwner == null || wantedRows == null || sentenceRows == null
+            || selectedOwner.HasP12MutationBoundary
+            || selectedOwner.WantedRecords == null || selectedOwner.Sentences == null
+            || wantedRows.Count != selectedOwner.WantedRecords.Count
+            || sentenceRows.Count != selectedOwner.Sentences.Count)
+            return false;
+
+        HashSet<WantedRecordRuntime> seenWanted = new HashSet<WantedRecordRuntime>();
+        HashSet<DailyV1JusticeWantedRecordOwner> seenWantedOwners =
+            new HashSet<DailyV1JusticeWantedRecordOwner>();
+        for (int i = 0; i < wantedRows.Count; i++)
+        {
+            WantedRecordRuntime row = wantedRows[i];
+            DailyV1JusticeWantedRecordOwner coreRow = selectedOwner.WantedRecords[i];
+            if (row == null || row.Target == null || row.City == null
+                || !seenWanted.Add(row) || !seenWantedOwners.Add(coreRow)
+                || !ReferenceEquals(row.CoreOwner, coreRow)
+                || !string.Equals(row.Target.RuntimeId, coreRow.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(row.City.RuntimeId, coreRow.CityRuntimeId, StringComparison.Ordinal))
+                return false;
+        }
+
+        HashSet<PrisonSentenceRuntime> seenSentences = new HashSet<PrisonSentenceRuntime>();
+        HashSet<DailyV1JusticeSentenceOwner> seenSentenceOwners =
+            new HashSet<DailyV1JusticeSentenceOwner>();
+        for (int i = 0; i < sentenceRows.Count; i++)
+        {
+            PrisonSentenceRuntime row = sentenceRows[i];
+            DailyV1JusticeSentenceOwner coreRow = selectedOwner.Sentences[i];
+            if (row == null || row.Target == null || row.City == null || row.Warrant == null
+                || !seenSentences.Add(row) || !seenSentenceOwners.Add(coreRow)
+                || !ReferenceEquals(row.CoreOwner, coreRow)
+                || !ReferenceEquals(row.Target, row.Warrant.Target)
+                || !ReferenceEquals(row.City, row.Warrant.City)
+                || !ReferenceEquals(coreRow.Warrant, row.Warrant.CoreOwner)
+                || !seenWanted.Contains(row.Warrant)
+                || !string.Equals(row.Target.RuntimeId, coreRow.TargetRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(row.City.RuntimeId, coreRow.CityRuntimeId, StringComparison.Ordinal))
+                return false;
+        }
+
+        try
+        {
+            JusticeSystem candidate = new JusticeSystem(
+                freeStatus, wantedStatus, arrestedStatus, hiddenStatus,
+                domainEventRecorder, logger, selectedOwner);
+            foreach (WantedRecordRuntime row in wantedRows)
+                candidate.wantedRecordViews.Add(row.CoreOwner, row);
+            foreach (PrisonSentenceRuntime row in sentenceRows)
+                candidate.sentenceViews.Add(row.CoreOwner, row);
+
+            if (receiptSnapshot != null)
+            {
+                if (!candidate.TryInstallP12AReceiptOwnerSnapshot(receiptSnapshot)) return false;
+            }
+            else if (candidate.P12P18ReceiptCensusRevision != 0L)
+                return false;
+
+            staged = candidate;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException)
+        {
+            staged = null;
+            return false;
+        }
+    }
+
     internal bool TryBindP12CrimeJusticeMutationBoundary(
         Func<JusticeSystem, bool> admission,
         Action<JusticeSystem> committed)
     {
         if (admission == null || committed == null) return false;
-        if (p12CrimeJusticeMutationAdmission != null || p12CrimeJusticeMutationCommitted != null)
-            return false;
-        if (!p12AReceiptStateInstalled && P12P18ReceiptCensusRevision != 0L) return false;
-
-        p12CrimeJusticeMutationAdmission = admission;
-        p12CrimeJusticeMutationCommitted = committed;
-        foreach (WantedRecordRuntime record in wantedRecords)
-            if (record == null || !BindP12WantedRecord(record)) return false;
-        foreach (PrisonSentenceRuntime sentence in prisonSentences)
-            if (sentence == null || !BindP12PrisonSentence(sentence)) return false;
-        return true;
+        if (!p18ReceiptOwner.WasRestored && !p18ReceiptOwner.IsExactEmpty) return false;
+        return justiceRecordsOwner.TryBindP12MutationBoundary(
+            () => admission(this),
+            () => committed(this));
     }
 
     internal bool TryBindP12DailyProfileReceiptBoundary()
     {
         if (p12DailyProfileReceiptBoundaryBound) return true;
-        if (!p12AReceiptStateInstalled && P12P18ReceiptCensusRevision != 0L) return false;
+        if (!p18ReceiptOwner.WasRestored && !p18ReceiptOwner.IsExactEmpty) return false;
         p12DailyProfileReceiptBoundaryBound = true;
         return true;
     }
 
-    private static IReadOnlyList<P12AReceiptValue> SnapshotReceipts<T>(
-        Dictionary<string, T> receipts, Func<T, P12AReceiptValue> convert)
-    {
-        if (receipts == null || convert == null) throw new ArgumentNullException();
-        List<string> identities = new List<string>(receipts.Keys);
-        identities.Sort(StringComparer.Ordinal);
-        List<P12AReceiptValue> result = new List<P12AReceiptValue>(identities.Count);
-        foreach (string identity in identities)
-        {
-            if (string.IsNullOrWhiteSpace(identity) || !receipts.TryGetValue(identity, out T receipt)
-                || ReferenceEquals(receipt, null)) throw new InvalidOperationException("Receipt owner map is invalid.");
-            P12AReceiptValue value = convert(receipt);
-            if (value == null || !string.Equals(identity, value.Identity, StringComparison.Ordinal))
-                throw new InvalidOperationException("Receipt key does not match its immutable value.");
-            result.Add(value);
-        }
-        return result.AsReadOnly();
-    }
-
     private bool CanCommitP12CrimeJusticeMutation()
-    {
-        if (p12CrimeJusticeMutationAdmission == null
-            && p12CrimeJusticeMutationCommitted == null) return true;
-        if (p12CrimeJusticeMutationAdmission == null
-            || p12CrimeJusticeMutationCommitted == null
-            || p12CrimeJusticeRevision == long.MaxValue) return false;
-        try { return p12CrimeJusticeMutationAdmission(this); }
-        catch { return false; }
-    }
+        => justiceRecordsOwner.CanCommitMutation();
 
     private void EnsureP12CrimeJusticeMutationAllowed()
     {
@@ -2253,28 +2343,7 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     }
 
     private void NotifyP12CrimeJusticeMutationCommitted()
-    {
-        if (p12CrimeJusticeMutationAdmission == null) return;
-        p12CrimeJusticeRevision++;
-        try { p12CrimeJusticeMutationCommitted?.Invoke(this); }
-        catch { }
-    }
-
-    private bool BindP12WantedRecord(WantedRecordRuntime record)
-    {
-        return record != null
-            && record.TryBindP12MutationBoundary(
-                () => wantedRecords.Contains(record) && CanCommitP12CrimeJusticeMutation(),
-                () => NotifyP12CrimeJusticeMutationCommitted());
-    }
-
-    private bool BindP12PrisonSentence(PrisonSentenceRuntime sentence)
-    {
-        return sentence != null
-            && sentence.TryBindP12MutationBoundary(
-                () => prisonSentences.Contains(sentence) && CanCommitP12CrimeJusticeMutation(),
-                () => NotifyP12CrimeJusticeMutationCommitted());
-    }
+        => justiceRecordsOwner.NotifyMutationCommitted();
 
     private bool RemoveP12PrisonSentenceAt(int index)
     {
@@ -2293,54 +2362,19 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
     {
-        if (mutationGuardBinding.CanBindTo(guard) == false)
-        {
-            return false;
-        }
-
-        foreach (WantedRecordRuntime record in wantedRecords)
-        {
-            if (record != null && record.CanBindMutationGuard(guard) == false)
-            {
-                return false;
-            }
-        }
-
-        foreach (PrisonSentenceRuntime sentence in prisonSentences)
-        {
-            if (sentence != null && sentence.CanBindMutationGuard(guard) == false)
-            {
-                return false;
-            }
-        }
-
-        return true;
+        // The Core owner contains the authoritative rows and validates every
+        // row's guard binding. Enumerating the Unity projection here can force
+        // a reference projection before constructor-time owner rows have had
+        // their runtime views materialized.
+        return mutationGuardBinding.CanBindTo(guard)
+            && justiceRecordsOwner.CanBindMutationGuard(guard);
     }
 
     internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard)
     {
-        if (CanBindMutationGuard(guard) == false || mutationGuardBinding.TryBindTo(guard) == false)
-        {
-            return false;
-        }
-
-        foreach (WantedRecordRuntime record in wantedRecords)
-        {
-            if (record != null && record.TryBindMutationGuard(guard) == false)
-            {
-                return false;
-            }
-        }
-
-        foreach (PrisonSentenceRuntime sentence in prisonSentences)
-        {
-            if (sentence != null && sentence.TryBindMutationGuard(guard) == false)
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return CanBindMutationGuard(guard)
+            && mutationGuardBinding.TryBindTo(guard)
+            && justiceRecordsOwner.TryBindMutationGuard(guard);
     }
 
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard)
@@ -2368,14 +2402,18 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
             return null;
         }
 
-        foreach (PrisonSentenceRuntime sentence in prisonSentences)
+        if (string.IsNullOrWhiteSpace(targetRuntime.RuntimeId))
         {
-            if (sentence != null && sentence.IsActive == true && sentence.Target == targetRuntime)
-            {
-                return sentence;
-            }
+            foreach (PrisonSentenceRuntime sentence in prisonSentences)
+                if (sentence != null && sentence.IsActive && ReferenceEquals(sentence.Target, targetRuntime))
+                    return sentence;
+            return null;
         }
 
+        foreach (DailyV1JusticeSentenceOwner row in justiceRecordsOwner.FindActiveSentences(targetRuntime.RuntimeId))
+            if (sentenceViews.TryGetValue(row, out PrisonSentenceRuntime projectedSentence)
+                && projectedSentence.IsActive && ReferenceEquals(projectedSentence.Target, targetRuntime))
+                return projectedSentence;
         return null;
     }
 
@@ -2485,63 +2523,27 @@ internal sealed class JusticeBeginDayCommit : IBoundaryContinuationStepCommit
 {
     private readonly JusticeSystem owner;
     private readonly JusticeBeginDayReceipt receipt;
+    private readonly DailyV1JusticeP18ReceiptMutation mutation;
     private readonly IReadOnlyList<JusticeBeginDaySentenceSnapshot> sentences;
     private readonly bool replay;
-    private readonly string fingerprint;
     private readonly string expectedOwnerRevision;
-    private readonly long expectedBeginDayRevision;
-    private readonly Dictionary<string, JusticeBeginDayReceipt> expectedReceipts;
-    private readonly Dictionary<string, JusticeBeginDayReceipt> nextReceipts;
     private bool completed;
-
     public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
     public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
     public JusticeBeginDayReceipt Receipt => receipt;
-
-    public JusticeBeginDayCommit(
-        JusticeSystem owner,
-        JusticeBeginDayReceipt receipt,
-        IReadOnlyList<JusticeBeginDaySentenceSnapshot> sentences,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedBeginDayRevision,
-        Dictionary<string, JusticeBeginDayReceipt> expectedReceipts,
-        Dictionary<string, JusticeBeginDayReceipt> nextReceipts)
-    {
-        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
-        this.receipt = receipt ?? throw new ArgumentNullException(nameof(receipt));
-        this.sentences = sentences ?? Array.Empty<JusticeBeginDaySentenceSnapshot>();
-        this.replay = replay;
-        this.fingerprint = fingerprint ?? string.Empty;
-        this.expectedOwnerRevision = expectedOwnerRevision ?? string.Empty;
-        this.expectedBeginDayRevision = expectedBeginDayRevision;
-        this.expectedReceipts = expectedReceipts;
-        this.nextReceipts = nextReceipts;
-    }
-
+    public JusticeBeginDayCommit(JusticeSystem owner, JusticeBeginDayReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation, IReadOnlyList<JusticeBeginDaySentenceSnapshot> sentences,
+        bool replay, string expectedOwnerRevision)
+    { this.owner=owner??throw new ArgumentNullException(nameof(owner)); this.receipt=receipt??throw new ArgumentNullException(nameof(receipt));
+      this.mutation=mutation??throw new ArgumentNullException(nameof(mutation)); this.sentences=sentences??Array.Empty<JusticeBeginDaySentenceSnapshot>();
+      this.replay=replay; this.expectedOwnerRevision=expectedOwnerRevision??string.Empty; }
     public bool TryCommit(out TimelineFailure failure)
     {
-        if (completed)
-        {
-            failure = TimelineFailure.None;
-            return true;
-        }
-
-        completed = owner.TryCommitBeginDayStep(
-            receipt,
-            sentences,
-            replay,
-            fingerprint,
-            expectedOwnerRevision,
-            expectedBeginDayRevision,
-            expectedReceipts,
-            nextReceipts,
-            out failure);
+        if(completed){failure=TimelineFailure.None;return true;}
+        completed=owner.TryCommitBeginDayStep(receipt,mutation,sentences,replay,expectedOwnerRevision,out failure);
         return completed;
     }
 }
-
 [Serializable]
 public sealed class JusticeSyncWantedStatusesReceipt
 {
@@ -2615,63 +2617,33 @@ internal sealed class JusticeSyncWantedRecordSnapshot
     }
 }
 
+
 internal sealed class JusticeSyncWantedStatusesCommit : IBoundaryContinuationStepCommit
 {
     private readonly JusticeSystem owner;
     private readonly JusticeSyncWantedStatusesReceipt receipt;
+    private readonly DailyV1JusticeP18ReceiptMutation mutation;
     private readonly List<NpcRuntime> npcRuntimeList;
     private readonly JusticeSyncWantedStatusesSnapshot snapshot;
     private readonly bool replay;
-    private readonly string fingerprint;
     private readonly string expectedOwnerRevision;
-    private readonly long expectedRevision;
-    private readonly Dictionary<string, JusticeSyncWantedStatusesReceipt> expectedReceipts;
-    private readonly Dictionary<string, JusticeSyncWantedStatusesReceipt> nextReceipts;
     private bool completed;
-
     public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
     public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
     public JusticeSyncWantedStatusesReceipt Receipt => receipt;
-
-    public JusticeSyncWantedStatusesCommit(
-        JusticeSystem owner,
-        JusticeSyncWantedStatusesReceipt receipt,
-        List<NpcRuntime> npcRuntimeList,
-        JusticeSyncWantedStatusesSnapshot snapshot,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedRevision,
-        Dictionary<string, JusticeSyncWantedStatusesReceipt> expectedReceipts,
-        Dictionary<string, JusticeSyncWantedStatusesReceipt> nextReceipts)
-    {
-        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
-        this.receipt = receipt ?? throw new ArgumentNullException(nameof(receipt));
-        this.npcRuntimeList = npcRuntimeList;
-        this.snapshot = snapshot;
-        this.replay = replay;
-        this.fingerprint = fingerprint ?? string.Empty;
-        this.expectedOwnerRevision = expectedOwnerRevision ?? string.Empty;
-        this.expectedRevision = expectedRevision;
-        this.expectedReceipts = expectedReceipts;
-        this.nextReceipts = nextReceipts;
-    }
-
+    public JusticeSyncWantedStatusesCommit(JusticeSystem owner, JusticeSyncWantedStatusesReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation,List<NpcRuntime> npcRuntimeList,
+        JusticeSyncWantedStatusesSnapshot snapshot,bool replay,string expectedOwnerRevision)
+    { this.owner=owner??throw new ArgumentNullException(nameof(owner));this.receipt=receipt??throw new ArgumentNullException(nameof(receipt));
+      this.mutation=mutation??throw new ArgumentNullException(nameof(mutation));this.npcRuntimeList=npcRuntimeList;
+      this.snapshot=snapshot;this.replay=replay;this.expectedOwnerRevision=expectedOwnerRevision??string.Empty; }
     public bool TryCommit(out TimelineFailure failure)
     {
-        if (completed)
-        {
-            failure = TimelineFailure.None;
-            return true;
-        }
-
-        completed = owner.TryCommitSyncWantedStatusesStep(
-            receipt, npcRuntimeList, snapshot, replay, fingerprint, expectedOwnerRevision,
-            expectedRevision, expectedReceipts, nextReceipts, out failure);
+        if(completed){failure=TimelineFailure.None;return true;}
+        completed=owner.TryCommitSyncWantedStatusesStep(receipt,mutation,npcRuntimeList,snapshot,replay,expectedOwnerRevision,out failure);
         return completed;
     }
 }
-
 [Serializable]
 public sealed class JusticeAdvanceSentencesReceipt
 {
@@ -2860,96 +2832,61 @@ internal sealed class JusticeAdvanceSentencesCommit : IBoundaryContinuationStepC
 {
     private readonly JusticeSystem owner;
     private readonly JusticeAdvanceSentencesReceipt receipt;
+    private readonly DailyV1JusticeP18ReceiptMutation mutation;
     private readonly List<NpcRuntime> npcRuntimeList;
     private readonly JusticeAdvanceSentencesSnapshot snapshot;
     private readonly List<JusticeAdvanceSentencesLogNotice> notices;
     private readonly bool replay;
-    private readonly string fingerprint;
     private readonly string expectedOwnerRevision;
-    private readonly long expectedRevision;
-    private readonly Dictionary<string, JusticeAdvanceSentencesReceipt> expectedReceipts;
-    private readonly Dictionary<string, JusticeAdvanceSentencesReceipt> nextReceipts;
     private bool completed;
-
     public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
     public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
     public JusticeAdvanceSentencesReceipt Receipt => receipt;
-
-    public JusticeAdvanceSentencesCommit(
-        JusticeSystem owner,
-        JusticeAdvanceSentencesReceipt receipt,
-        List<NpcRuntime> npcRuntimeList,
-        JusticeAdvanceSentencesSnapshot snapshot,
-        List<JusticeAdvanceSentencesLogNotice> notices,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedRevision,
-        Dictionary<string, JusticeAdvanceSentencesReceipt> expectedReceipts,
-        Dictionary<string, JusticeAdvanceSentencesReceipt> nextReceipts)
-    {
-        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
-        this.receipt = receipt ?? throw new ArgumentNullException(nameof(receipt));
-        this.npcRuntimeList = npcRuntimeList;
-        this.snapshot = snapshot;
-        this.notices = notices;
-        this.replay = replay;
-        this.fingerprint = fingerprint ?? string.Empty;
-        this.expectedOwnerRevision = expectedOwnerRevision ?? string.Empty;
-        this.expectedRevision = expectedRevision;
-        this.expectedReceipts = expectedReceipts;
-        this.nextReceipts = nextReceipts;
-    }
-
+    public JusticeAdvanceSentencesCommit(JusticeSystem owner,JusticeAdvanceSentencesReceipt receipt,
+        DailyV1JusticeP18ReceiptMutation mutation,List<NpcRuntime> npcRuntimeList,
+        JusticeAdvanceSentencesSnapshot snapshot,List<JusticeAdvanceSentencesLogNotice> notices,
+        bool replay,string expectedOwnerRevision)
+    { this.owner=owner??throw new ArgumentNullException(nameof(owner));this.receipt=receipt??throw new ArgumentNullException(nameof(receipt));
+      this.mutation=mutation??throw new ArgumentNullException(nameof(mutation));this.npcRuntimeList=npcRuntimeList;
+      this.snapshot=snapshot;this.notices=notices;this.replay=replay;this.expectedOwnerRevision=expectedOwnerRevision??string.Empty; }
     public bool TryCommit(out TimelineFailure failure)
     {
-        if (completed)
-        {
-            failure = TimelineFailure.None;
-            return true;
-        }
-
-        completed = owner.TryCommitAdvanceSentencesStep(
-            receipt,
-            npcRuntimeList,
-            snapshot,
-            notices,
-            replay,
-            fingerprint,
-            expectedOwnerRevision,
-            expectedRevision,
-            expectedReceipts,
-            nextReceipts,
-            out failure);
+        if(completed){failure=TimelineFailure.None;return true;}
+        completed=owner.TryCommitAdvanceSentencesStep(receipt,mutation,npcRuntimeList,snapshot,notices,replay,expectedOwnerRevision,out failure);
         return completed;
     }
 }
-
 [Serializable]
 public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
 {
-    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
-    [NonSerialized] private Func<bool> p12MutationAdmission;
-    [NonSerialized] private Action p12MutationCommitted;
     [NonSerialized] private NpcRuntime target;
     [NonSerialized] private CityRuntime city;
-    [SerializeField] private float bounty;
-    [SerializeField] private int sentenceDays;
-    [SerializeField] private bool resolved;
+    [NonSerialized] private DailyV1JusticeWantedRecordOwner coreOwner;
 
     public NpcRuntime Target => target;
     public CityRuntime City => city;
-    public float Bounty => bounty;
-    public int SentenceDays => sentenceDays;
-    public bool IsActive => resolved == false && target != null && city != null;
-    internal bool P12Resolved => resolved;
+    public float Bounty => coreOwner?.Bounty ?? 0f;
+    public int SentenceDays => coreOwner?.SentenceDays ?? 0;
+    public bool IsActive => coreOwner != null && !coreOwner.IsResolved && target != null && city != null;
+    internal bool P12Resolved => coreOwner?.IsResolved ?? false;
+    internal DailyV1JusticeWantedRecordOwner CoreOwner => coreOwner;
 
     public WantedRecordRuntime(NpcRuntime target, CityRuntime city, float bounty, int sentenceDays)
     {
         this.target = target;
         this.city = city;
-        this.bounty = Mathf.Max(0f, bounty);
-        this.sentenceDays = Mathf.Max(1, sentenceDays);
+        coreOwner = new DailyV1JusticeWantedRecordOwner(
+            target?.RuntimeId, city?.RuntimeId, bounty, sentenceDays);
+    }
+
+    private WantedRecordRuntime(
+        NpcRuntime target,
+        CityRuntime city,
+        DailyV1JusticeWantedRecordOwner coreOwner)
+    {
+        this.target = target;
+        this.city = city;
+        this.coreOwner = coreOwner ?? throw new ArgumentNullException(nameof(coreOwner));
     }
 
     internal static bool TryCreateFromP12EOwnerSnapshot(
@@ -2964,104 +2901,87 @@ public class WantedRecordRuntime : IAuthoritativeMutationGuardBindable
         if (target == null || city == null || float.IsNaN(bounty) || float.IsInfinity(bounty)
             || bounty < 0f || sentenceDays < 1)
             return false;
-        WantedRecordRuntime candidate = new WantedRecordRuntime(target, city, bounty, sentenceDays);
-        candidate.bounty = bounty;
-        candidate.sentenceDays = sentenceDays;
-        candidate.resolved = resolved;
+        WantedRecordRuntime candidate = new WantedRecordRuntime(target, city,
+            new DailyV1JusticeWantedRecordOwner(target.RuntimeId, city.RuntimeId,
+                bounty, sentenceDays, resolved));
         staged = candidate;
+        return true;
+    }
+
+    internal static bool TryCreateFromCoreOwner(
+        NpcRuntime target,
+        CityRuntime city,
+        DailyV1JusticeWantedRecordOwner coreOwner,
+        out WantedRecordRuntime view)
+    {
+        view = null;
+        if (target == null || city == null || coreOwner == null
+            || !string.Equals(target.RuntimeId, coreOwner.TargetRuntimeId, StringComparison.Ordinal)
+            || !string.Equals(city.RuntimeId, coreOwner.CityRuntimeId, StringComparison.Ordinal))
+            return false;
+        view = new WantedRecordRuntime(target, city, coreOwner);
         return true;
     }
 
     public void AddPenalty(float additionalBounty, int additionalSentenceDays)
     {
-        ThrowIfFaulted();
-        float nextBounty = bounty + Mathf.Max(0f, additionalBounty);
-        int nextSentenceDays = Mathf.Max(1, sentenceDays + Mathf.Max(0, additionalSentenceDays));
-        if (nextBounty == bounty && nextSentenceDays == sentenceDays) return;
-        EnsureP12MutationAllowed();
-        bounty = nextBounty;
-        sentenceDays = nextSentenceDays;
-        NotifyP12MutationCommitted();
+        if (coreOwner == null || !coreOwner.TryAddPenalty(additionalBounty, additionalSentenceDays))
+            throw new InvalidOperationException("Wanted record is outside an admitted P12 Justice boundary.");
     }
 
     public void Resolve()
     {
-        ThrowIfFaulted();
-
-        if (resolved) return;
-        EnsureP12MutationAllowed();
-        resolved = true;
-        NotifyP12MutationCommitted();
+        if (coreOwner == null || !coreOwner.TryResolve())
+            throw new InvalidOperationException("Wanted record is outside an admitted P12 Justice boundary.");
     }
 
     internal bool TryBindP12MutationBoundary(Func<bool> admission, Action committed)
-    {
-        if (admission == null || committed == null
-            || p12MutationAdmission != null || p12MutationCommitted != null)
-            return false;
-        p12MutationAdmission = admission;
-        p12MutationCommitted = committed;
-        return true;
-    }
+        => coreOwner != null && coreOwner.TryBindP12MutationBoundary(admission, committed);
 
-    private void EnsureP12MutationAllowed()
-    {
-        if (p12MutationAdmission == null && p12MutationCommitted == null) return;
-        bool allowed = false;
-        try { allowed = p12MutationAdmission != null && p12MutationCommitted != null && p12MutationAdmission(); }
-        catch { }
-        if (!allowed) throw new InvalidOperationException("Wanted record is outside an admitted P12 Justice boundary.");
-    }
-
-    private void NotifyP12MutationCommitted()
-    {
-        try { p12MutationCommitted?.Invoke(); }
-        catch { }
-    }
-
-    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
-    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => coreOwner != null && coreOwner.CanBindMutationGuard(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => coreOwner != null && coreOwner.TryBindMutationGuard(guard);
 
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
     bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
-
-    private void ThrowIfFaulted()
-    {
-        if (mutationGuardBinding.CanMutate == false)
-        {
-            throw new InvalidOperationException("Runtime mutation is faulted.");
-        }
-    }
 }
 
 [Serializable]
 public class PrisonSentenceRuntime : IAuthoritativeMutationGuardBindable
 {
-    private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
-    [NonSerialized] private Func<bool> p12MutationAdmission;
-    [NonSerialized] private Action p12MutationCommitted;
     [NonSerialized] private NpcRuntime target;
     [NonSerialized] private CityRuntime city;
     [NonSerialized] private WantedRecordRuntime warrant;
-    [SerializeField] private int remainingDays;
-    [SerializeField] private int failedEscapeAttempts;
-    [SerializeField] private bool wasArrestedToday;
+    [NonSerialized] private DailyV1JusticeSentenceOwner coreOwner;
 
     public NpcRuntime Target => target;
     public CityRuntime City => city;
     public WantedRecordRuntime Warrant => warrant;
-    public int RemainingDays => remainingDays;
-    public int FailedEscapeAttempts => failedEscapeAttempts;
-    public bool WasArrestedToday => wasArrestedToday;
-    public bool IsActive => target != null && city != null && remainingDays > 0;
+    public int RemainingDays => coreOwner?.RemainingDays ?? 0;
+    public int FailedEscapeAttempts => coreOwner?.FailedEscapeAttempts ?? 0;
+    public bool WasArrestedToday => coreOwner?.WasArrestedToday ?? false;
+    public bool IsActive => target != null && city != null && coreOwner?.IsActive == true;
+    internal DailyV1JusticeSentenceOwner CoreOwner => coreOwner;
 
     public PrisonSentenceRuntime(NpcRuntime target, CityRuntime city, WantedRecordRuntime warrant, int sentenceDays)
     {
         this.target = target;
         this.city = city;
         this.warrant = warrant;
-        remainingDays = Mathf.Max(1, sentenceDays);
-        wasArrestedToday = true;
+        coreOwner = new DailyV1JusticeSentenceOwner(
+            target?.RuntimeId, city?.RuntimeId, warrant?.CoreOwner,
+            UnityMathfCompatibility.Max(1, sentenceDays));
+    }
+
+    private PrisonSentenceRuntime(
+        NpcRuntime target,
+        CityRuntime city,
+        WantedRecordRuntime warrant,
+        DailyV1JusticeSentenceOwner coreOwner)
+    {
+        this.target = target;
+        this.city = city;
+        this.warrant = warrant;
+        this.coreOwner = coreOwner ?? throw new ArgumentNullException(nameof(coreOwner));
     }
 
     internal static bool TryCreateFromP12EOwnerSnapshot(
@@ -3078,81 +2998,139 @@ public class PrisonSentenceRuntime : IAuthoritativeMutationGuardBindable
             || failedEscapeAttempts < 0 || !ReferenceEquals(target, warrant.Target)
             || !ReferenceEquals(city, warrant.City))
             return false;
-        PrisonSentenceRuntime candidate = new PrisonSentenceRuntime(
-            target, city, warrant, Math.Max(1, remainingDays));
-        candidate.remainingDays = remainingDays;
-        candidate.failedEscapeAttempts = failedEscapeAttempts;
-        candidate.wasArrestedToday = wasArrestedToday;
+        PrisonSentenceRuntime candidate = new PrisonSentenceRuntime(target, city, warrant,
+            new DailyV1JusticeSentenceOwner(target.RuntimeId, city.RuntimeId,
+                warrant.CoreOwner, remainingDays, failedEscapeAttempts, wasArrestedToday));
         staged = candidate;
+        return true;
+    }
+
+    internal static bool TryCreateSelectedProjection(
+        NpcRuntime target,
+        CityRuntime city,
+        WantedRecordRuntime warrant,
+        DailyV1JusticeSentenceOwner coreOwner,
+        out PrisonSentenceRuntime projected)
+    {
+        projected = null;
+        if (target == null || city == null || warrant == null || coreOwner == null
+            || !ReferenceEquals(warrant.Target, target) || !ReferenceEquals(warrant.City, city)
+            || !ReferenceEquals(coreOwner.Warrant, warrant.CoreOwner)
+            || !string.Equals(coreOwner.TargetRuntimeId, target.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(coreOwner.CityRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+            return false;
+        projected = new PrisonSentenceRuntime(target, city, warrant, coreOwner);
         return true;
     }
 
     public void AdvanceDay()
     {
-        ThrowIfFaulted();
-        int next = Mathf.Max(0, remainingDays - 1);
-        if (next == remainingDays) return;
-        EnsureP12MutationAllowed();
-        remainingDays = next;
-        NotifyP12MutationCommitted();
+        if (coreOwner == null || !coreOwner.TryAdvanceDay())
+            throw new InvalidOperationException("Prison sentence is outside an admitted P12 Justice boundary.");
     }
 
     public void RegisterFailedEscape(int additionalSentenceDays)
     {
-        ThrowIfFaulted();
-
-        EnsureP12MutationAllowed();
-        failedEscapeAttempts++;
-        remainingDays += Mathf.Max(0, additionalSentenceDays);
-        NotifyP12MutationCommitted();
+        if (coreOwner == null || !coreOwner.TryRegisterFailedEscape(additionalSentenceDays))
+            throw new InvalidOperationException("Prison sentence is outside an admitted P12 Justice boundary.");
     }
 
     public void ClearArrestedToday()
     {
-        ThrowIfFaulted();
-
-        if (!wasArrestedToday) return;
-        EnsureP12MutationAllowed();
-        wasArrestedToday = false;
-        NotifyP12MutationCommitted();
+        if (coreOwner == null || !coreOwner.TryClearArrestedToday())
+            throw new InvalidOperationException("Prison sentence is outside an admitted P12 Justice boundary.");
     }
 
     internal bool TryBindP12MutationBoundary(Func<bool> admission, Action committed)
-    {
-        if (admission == null || committed == null
-            || p12MutationAdmission != null || p12MutationCommitted != null)
-            return false;
-        p12MutationAdmission = admission;
-        p12MutationCommitted = committed;
-        return true;
-    }
+        => coreOwner != null && coreOwner.TryBindP12MutationBoundary(admission, committed);
 
-    private void EnsureP12MutationAllowed()
-    {
-        if (p12MutationAdmission == null && p12MutationCommitted == null) return;
-        bool allowed = false;
-        try { allowed = p12MutationAdmission != null && p12MutationCommitted != null && p12MutationAdmission(); }
-        catch { }
-        if (!allowed) throw new InvalidOperationException("Prison sentence is outside an admitted P12 Justice boundary.");
-    }
-
-    private void NotifyP12MutationCommitted()
-    {
-        try { p12MutationCommitted?.Invoke(); }
-        catch { }
-    }
-
-    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.CanBindTo(guard);
-    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => mutationGuardBinding.TryBindTo(guard);
+    internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard) => coreOwner != null && coreOwner.CanBindMutationGuard(guard);
+    internal bool TryBindMutationGuard(AuthoritativeMutationGuard guard) => coreOwner != null && coreOwner.TryBindMutationGuard(guard);
 
     bool IAuthoritativeMutationGuardBindable.CanBindMutationGuard(AuthoritativeMutationGuard guard) => CanBindMutationGuard(guard);
     bool IAuthoritativeMutationGuardBindable.TryBindMutationGuard(AuthoritativeMutationGuard guard) => TryBindMutationGuard(guard);
+}
 
-    private void ThrowIfFaulted()
+/// <summary>
+/// Compatibility projection over the Core-owned ordered Justice rows. The
+/// adapter retains Unity references and object-facing APIs, while list order
+/// and row values remain in the shared owner.
+/// </summary>
+internal sealed class JusticeOwnerProjectionList<TCore, TView> : IList<TView>
+    where TCore : class
+    where TView : class
+{
+    private readonly Func<IReadOnlyList<TCore>> getRows;
+    private readonly Func<TCore, TView> project;
+    private readonly Func<TView, TCore> getOwner;
+    private readonly Action<TView> add;
+    private readonly Action<int> removeAt;
+
+    internal JusticeOwnerProjectionList(
+        Func<IReadOnlyList<TCore>> getRows,
+        Func<TCore, TView> project,
+        Func<TView, TCore> getOwner,
+        Action<TView> add,
+        Action<int> removeAt)
     {
-        if (mutationGuardBinding.CanMutate == false)
-        {
-            throw new InvalidOperationException("Runtime mutation is faulted.");
-        }
+        this.getRows = getRows ?? throw new ArgumentNullException(nameof(getRows));
+        this.project = project ?? throw new ArgumentNullException(nameof(project));
+        this.getOwner = getOwner ?? throw new ArgumentNullException(nameof(getOwner));
+        this.add = add ?? throw new ArgumentNullException(nameof(add));
+        this.removeAt = removeAt;
     }
+
+    public TView this[int index]
+    {
+        get => project(getRows()[index]);
+        set => throw new NotSupportedException("Justice row replacement must use an owner operation.");
+    }
+
+    public int Count => getRows().Count;
+    public bool IsReadOnly => false;
+    public void Add(TView item) => add(item);
+    public void Clear() => throw new NotSupportedException("Justice owner rows cannot be cleared through a projection.");
+    public bool Contains(TView item) => IndexOf(item) >= 0;
+
+    public void CopyTo(TView[] array, int arrayIndex)
+    {
+        if (array == null) throw new ArgumentNullException(nameof(array));
+        if (arrayIndex < 0 || arrayIndex > array.Length) throw new ArgumentOutOfRangeException(nameof(arrayIndex));
+        if (array.Length - arrayIndex < Count) throw new ArgumentException("The destination array is too small.");
+        for (int i = 0; i < Count; i++) array[arrayIndex + i] = this[i];
+    }
+
+    public IEnumerator<TView> GetEnumerator()
+    {
+        for (int i = 0; i < Count; i++) yield return this[i];
+    }
+
+    public int IndexOf(TView item)
+    {
+        TCore owner = item == null ? null : getOwner(item);
+        if (owner == null) return -1;
+        IReadOnlyList<TCore> rows = getRows();
+        for (int i = 0; i < rows.Count; i++)
+            if (ReferenceEquals(rows[i], owner)) return i;
+        return -1;
+    }
+
+    public void Insert(int index, TView item) =>
+        throw new NotSupportedException("Justice row order is owned by Core operations.");
+
+    public bool Remove(TView item)
+    {
+        int index = IndexOf(item);
+        if (index < 0) return false;
+        RemoveAt(index);
+        return true;
+    }
+
+    public void RemoveAt(int index)
+    {
+        if (removeAt == null) throw new NotSupportedException("Justice row removal is not supported through this projection.");
+        removeAt(index);
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 }

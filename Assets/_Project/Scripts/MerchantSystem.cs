@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using UnityEngine;
 
-public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutationGuardBindable
+public partial class MerchantSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvider, IAuthoritativeMutationGuardBindable
 {
     private const int LocalMarketSellGoodsActionVersion = 1;
     private const string PlanUrgencyStepId = "merchant-plan-urgency";
@@ -38,7 +39,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         this.simulationTime = simulationTime ?? throw new System.ArgumentNullException(nameof(simulationTime));
         knowledgePolicy = new CommercialKnowledgePolicy(knowledgeConfiguration);
         this.decisionRecorder = decisionRecorder;
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         this.transactionService = transactionService ?? new EconomyTransactionService();
     }
 
@@ -119,6 +120,13 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         }
 
         plan.IncrementWaitDayAtDestination();
+    }
+
+    /// <summary>Publishes the existing selected Core merchant-stage log through
+    /// the same Unity logger used by the compatibility implementation.</summary>
+    internal void LogSelectedTradeState(string message)
+    {
+        logger.Log(SimulationLogCategory.Trade, message);
     }
 
     /// <summary>Creates the frozen roster descriptor for the legacy plan-urgency pass.</summary>
@@ -352,7 +360,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
             if (reposition != null)
             {
-                utility = Mathf.Max(0f, reposition.TradeOpportunity.Score);
+                utility = UnityMathfCompatibility.Max(0f, reposition.TradeOpportunity.Score);
                 NpcActionRuntime repositionAction = new NpcActionRuntime(
                     action,
                     reposition.OriginCity,
@@ -373,7 +381,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return null;
         }
 
-        utility = Mathf.Max(utility, 20f + scouting.Score);
+        utility = UnityMathfCompatibility.Max(utility, 20f + scouting.Score);
         NpcActionRuntime scoutingAction = new NpcActionRuntime(
             action,
             scouting.TargetCity,
@@ -423,20 +431,61 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             || action.actionType == NpcActionType.SellGoods;
     }
 
+    bool ISelectedDefinitionNpcActionProvider.HandlesAction(NpcRuntime npcRuntime, NpcActionData action)
+    {
+        if (npcRuntime == null || action == null) return false;
+        NpcActionType actionType = npcRuntime.GetConfiguredActionType(action);
+        return actionType == NpcActionType.BuyGoods || actionType == NpcActionType.SellGoods;
+    }
+
+    /// <summary>Projects an already-resolved exact Core City owner to the
+    /// Unity CityRuntime compatibility object. This performs no route or target
+    /// selection.</summary>
+    internal bool TryProjectSelectedCityRuntime(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string cityRuntimeId,
+        out CityRuntime cityProjection)
+    {
+        cityProjection = null;
+        if (graph == null || travelSystem == null || string.IsNullOrWhiteSpace(cityRuntimeId))
+            return false;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            if (city == null || !graph.ContainsExactCityOwner(city)
+                || !string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(city.LocationRuntimeId)
+                || !graph.SpatialNetwork.TryGetLocation(
+                    city.LocationRuntimeId, out SpatialLocationRuntime location))
+                continue;
+
+            CityRuntime candidate = travelSystem.GetCityRuntime(location);
+            if (candidate == null
+                || !string.Equals(candidate.RuntimeId, city.RuntimeId, StringComparison.Ordinal)
+                || candidate.Location == null
+                || !string.Equals(candidate.Location.RuntimeId,
+                    city.LocationRuntimeId, StringComparison.Ordinal))
+                return false;
+            cityProjection = candidate;
+            return true;
+        }
+        return false;
+    }
+
     public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
-        if (action == null)
+        if (npcRuntime == null || action == null)
         {
             utility = 0f;
             return null;
         }
 
-        if (action.actionType == NpcActionType.BuyGoods)
+        NpcActionType actionType = npcRuntime.GetConfiguredActionType(action);
+        if (actionType == NpcActionType.BuyGoods)
         {
             return CreateBuyGoodsAction(npcRuntime, action, ref utility);
         }
 
-        if (action.actionType == NpcActionType.SellGoods)
+        if (actionType == NpcActionType.SellGoods)
         {
             return CreateSellGoodsAction(npcRuntime, action, ref utility);
         }
@@ -457,12 +506,13 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return NpcActionResult.Failed();
         }
 
-        if (actionRuntime.Action.actionType == NpcActionType.BuyGoods)
+        NpcActionType actionType = npcRuntime.GetConfiguredActionType(actionRuntime.Action);
+        if (actionType == NpcActionType.BuyGoods)
         {
             return TryExecuteBuyGoods(npcRuntime, actionRuntime) == true ? NpcActionResult.Succeeded() : NpcActionResult.Failed();
         }
 
-        if (actionRuntime.Action.actionType == NpcActionType.SellGoods)
+        if (actionType == NpcActionType.SellGoods)
         {
             return TryExecuteSellGoods(npcRuntime, actionRuntime) == true ? NpcActionResult.Succeeded() : NpcActionResult.Failed();
         }
@@ -492,7 +542,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             || actorPersonId == null
             || actionRuntime == null
             || actionRuntime.Action == null
-            || actionRuntime.Action.actionType != NpcActionType.SellGoods
+            || seller.GetConfiguredActionType(actionRuntime.Action) != NpcActionType.SellGoods
             || actionRuntime.TargetNpc != null
             || actionRuntime.TargetItem == null
             || actionRuntime.Amount <= 0
@@ -546,28 +596,51 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return false;
         }
 
-        receipt = transactionService.TryExecuteKeyedMarketSale(
-            proposalId,
-            fingerprint,
-            actorChoiceInputId,
-            requestId,
-            actorPersonId.Value,
-            actionSemanticId,
-            LocalMarketSellGoodsActionVersion,
-            profileId,
-            logicalTickValue,
-            marketSiteId,
-            seller,
-            market,
-            actionRuntime.TargetItem,
-            actionRuntime.Amount);
+        if (seller.SelectedDailyV1DefinitionGraph != null)
+        {
+            seller.TryGetSelectedDailyV1Item(actionRuntime.TargetItem, out DailyV1ItemDefinition selectedItem);
+            receipt = transactionService.TryExecuteKeyedMarketSale(
+                proposalId,
+                fingerprint,
+                actorChoiceInputId,
+                requestId,
+                actorPersonId.Value,
+                actionSemanticId,
+                LocalMarketSellGoodsActionVersion,
+                profileId,
+                logicalTickValue,
+                marketSiteId,
+                seller,
+                market,
+                selectedItem,
+                actionRuntime.TargetItem,
+                actionRuntime.Amount);
+        }
+        else
+        {
+            receipt = transactionService.TryExecuteKeyedMarketSale(
+                proposalId,
+                fingerprint,
+                actorChoiceInputId,
+                requestId,
+                actorPersonId.Value,
+                actionSemanticId,
+                LocalMarketSellGoodsActionVersion,
+                profileId,
+                logicalTickValue,
+                marketSiteId,
+                seller,
+                market,
+                actionRuntime.TargetItem,
+                actionRuntime.Amount);
+        }
         return receipt != null;
     }
 
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
     {
         return mutationGuardBinding.CanBindTo(guard)
-            && simulationTime.CanBindMutationGuard(guard)
+            && SimulationTimeOwnerBridge.CanBindMutationStatus(simulationTime, guard)
             && (travelSystem == null || travelSystem.CanBindMutationGuard(guard));
     }
 
@@ -578,7 +651,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return false;
         }
 
-        return simulationTime.TryBindMutationGuard(guard)
+        return SimulationTimeOwnerBridge.TryBindMutationStatus(simulationTime, guard)
             && (travelSystem == null || travelSystem.TryBindMutationGuard(guard));
     }
 
@@ -600,6 +673,11 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         }
     }
 
+    internal void EnsureCanAdvanceSelectedTradeState()
+    {
+        ThrowIfFaulted();
+    }
+
     private bool TryExecuteBuyGoods(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
         if (npcRuntime == null || npcRuntime.CurrentCity == null || actionRuntime == null || actionRuntime.TargetItem == null || actionRuntime.TargetCity == null)
@@ -607,11 +685,51 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return false;
         }
 
-        EconomyTransactionResult transaction = transactionService.TryExecuteMarketPurchase(
-            npcRuntime,
-            npcRuntime.CurrentCity.Market,
-            actionRuntime.TargetItem,
-            actionRuntime.Amount);
+        if (npcRuntime.SelectedRuntimeOwners != null
+            && actionRuntime.SelectedOwner != null
+            && actionRuntime.TargetCity == npcRuntime.CurrentCity)
+        {
+            EconomyTransactionResult selectedTransaction = transactionService
+                .TryExecuteSelectedOpenMarketAction(npcRuntime, actionRuntime.SelectedOwner);
+            if (!selectedTransaction.Success || selectedTransaction.Quantity <= 0) return false;
+            logger.Log(SimulationLogCategory.Trade,
+                $"{npcRuntime.NpcName} comprou {selectedTransaction.Quantity} {actionRuntime.TargetItem.itemName} em {npcRuntime.CurrentCity.CityName} por {selectedTransaction.UnitPrice:0.##} cada para estoque local");
+            return true;
+        }
+
+        if (npcRuntime.SelectedRuntimeOwners != null
+            && actionRuntime.SelectedOwner != null
+            && actionRuntime.TargetCity != npcRuntime.CurrentCity
+            && npcRuntime.HasJobType(NpcJobType.Merchant)
+            && npcRuntime.HasMerchantBehavior(MerchantBehavior.Traveling))
+        {
+            EconomyTransactionResult selectedTransaction = transactionService
+                .TryExecuteSelectedCrossCityBuy(npcRuntime, actionRuntime.SelectedOwner,
+                    actionRuntime.TargetCity);
+            if (!selectedTransaction.Success || selectedTransaction.Quantity <= 0) return false;
+            logger.Log(SimulationLogCategory.Trade,
+                $"{npcRuntime.NpcName} comprou {selectedTransaction.Quantity} {actionRuntime.TargetItem.itemName} em {npcRuntime.CurrentCity.CityName} por {selectedTransaction.UnitPrice:0.##} cada para vender em {actionRuntime.TargetCity.CityName}");
+            return true;
+        }
+
+        EconomyTransactionResult transaction;
+        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            npcRuntime.TryGetSelectedDailyV1Item(actionRuntime.TargetItem, out DailyV1ItemDefinition selectedItem);
+            transaction = transactionService.TryExecuteMarketPurchase(
+                npcRuntime,
+                npcRuntime.CurrentCity.Market,
+                selectedItem,
+                actionRuntime.Amount);
+        }
+        else
+        {
+            transaction = transactionService.TryExecuteMarketPurchase(
+                npcRuntime,
+                npcRuntime.CurrentCity.Market,
+                actionRuntime.TargetItem,
+                actionRuntime.Amount);
+        }
 
         if (transaction.Success == false || transaction.Quantity <= 0)
         {
@@ -621,15 +739,24 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         int amountBought = transaction.Quantity;
         float unitPrice = transaction.UnitPrice;
 
-        if (IsTravelingMerchant(npcRuntime) == true && actionRuntime.TargetCity != npcRuntime.CurrentCity)
+        bool travelingMerchant = npcRuntime.SelectedRuntimeOwners != null
+            ? npcRuntime.HasJobType(NpcJobType.Merchant)
+                && npcRuntime.HasMerchantBehavior(MerchantBehavior.Traveling)
+            : IsTravelingMerchant(npcRuntime);
+        if (travelingMerchant && actionRuntime.TargetCity != npcRuntime.CurrentCity)
         {
-            npcRuntime.SetMerchantTradePlan(
-                actionRuntime.TargetItem,
-                npcRuntime.CurrentCity,
-                actionRuntime.TargetCity,
-                amountBought,
-                unitPrice,
-                actionRuntime.OriginDecisionId);
+            if (npcRuntime.SelectedRuntimeOwners != null)
+            {
+                if (!npcRuntime.TrySetSelectedMerchantTradePlan(actionRuntime.TargetItem,
+                        npcRuntime.CurrentCity, actionRuntime.TargetCity, amountBought,
+                        unitPrice, actionRuntime.OriginDecisionId)) return false;
+            }
+            else
+            {
+                npcRuntime.SetMerchantTradePlan(actionRuntime.TargetItem,
+                    npcRuntime.CurrentCity, actionRuntime.TargetCity, amountBought,
+                    unitPrice, actionRuntime.OriginDecisionId);
+            }
             SetTradeTravelPlan(npcRuntime, actionRuntime.TargetCity);
             logger.Log(SimulationLogCategory.Trade, $"{npcRuntime.NpcName} comprou {amountBought} {actionRuntime.TargetItem.itemName} em {npcRuntime.CurrentCity.CityName} por {unitPrice:0.##} cada para vender em {actionRuntime.TargetCity.CityName}");
             return true;
@@ -649,7 +776,9 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         MerchantTradePlanRuntime plan = npcRuntime.MerchantTradePlan;
         bool saleBelongsToPlan = plan.IsActive == true && plan.Item == actionRuntime.TargetItem;
         float planPurchasePrice = saleBelongsToPlan == true ? plan.PurchasePricePerItem : 0f;
-        float referencePrice = saleBelongsToPlan == true ? planPurchasePrice : npcRuntime.Inventory.GetAverageUnitCost(actionRuntime.TargetItem);
+        float referencePrice = saleBelongsToPlan == true
+            ? planPurchasePrice
+            : GetInventoryAverageUnitCost(npcRuntime, actionRuntime.TargetItem);
 
         if (actionRuntime.TargetNpc != null && TryExecuteSellGoodsToNpc(npcRuntime, actionRuntime, referencePrice, out int amountSoldToNpc) == true)
         {
@@ -691,21 +820,38 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         }
 
         float reserveAmount = buyerRuntime.Money * tradeConfiguration.LocalReserveRatio;
-        float spendableMoney = Mathf.Max(0f, buyerRuntime.Money - reserveAmount);
-        int affordableAmount = Mathf.FloorToInt(spendableMoney / unitPrice);
-        amountSold = Mathf.Min(actionRuntime.Amount, sellerRuntime.Inventory.GetAmount(actionRuntime.TargetItem), affordableAmount);
+        float spendableMoney = UnityMathfCompatibility.Max(0f, buyerRuntime.Money - reserveAmount);
+        int affordableAmount = UnityMathfCompatibility.FloorToInt(spendableMoney / unitPrice);
+        amountSold = UnityMathfCompatibility.Min(
+            actionRuntime.Amount,
+            GetInventoryAmount(sellerRuntime, actionRuntime.TargetItem),
+            affordableAmount);
 
         if (amountSold <= 0)
         {
             return false;
         }
 
-        EconomyTransactionResult transaction = transactionService.TryExecuteNpcTrade(
-            buyerRuntime,
-            sellerRuntime,
-            actionRuntime.TargetItem,
-            amountSold,
-            unitPrice);
+        EconomyTransactionResult transaction;
+        if (sellerRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            sellerRuntime.TryGetSelectedDailyV1Item(actionRuntime.TargetItem, out DailyV1ItemDefinition selectedItem);
+            transaction = transactionService.TryExecuteNpcTrade(
+                buyerRuntime,
+                sellerRuntime,
+                selectedItem,
+                amountSold,
+                unitPrice);
+        }
+        else
+        {
+            transaction = transactionService.TryExecuteNpcTrade(
+                buyerRuntime,
+                sellerRuntime,
+                actionRuntime.TargetItem,
+                amountSold,
+                unitPrice);
+        }
 
         if (transaction.Success == false)
         {
@@ -721,12 +867,34 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
     private bool TryExecuteSellGoodsToMarket(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime, bool saleBelongsToPlan, MerchantTradePlanRuntime plan, float planPurchasePrice)
     {
-        float averageUnitCost = npcRuntime.Inventory.GetAverageUnitCost(actionRuntime.TargetItem);
-        EconomyTransactionResult transaction = transactionService.TryExecuteMarketSale(
-            npcRuntime,
-            npcRuntime.CurrentCity.Market,
-            actionRuntime.TargetItem,
-            actionRuntime.Amount);
+        float averageUnitCost = GetInventoryAverageUnitCost(npcRuntime, actionRuntime.TargetItem);
+        EconomyTransactionResult transaction;
+        if (npcRuntime.SelectedRuntimeOwners != null
+            && actionRuntime.SelectedOwner != null
+            && !saleBelongsToPlan
+            && actionRuntime.TargetNpc == null
+            && actionRuntime.TargetCity == npcRuntime.CurrentCity)
+        {
+            transaction = transactionService.TryExecuteSelectedOpenMarketAction(
+                npcRuntime, actionRuntime.SelectedOwner);
+        }
+        else if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            npcRuntime.TryGetSelectedDailyV1Item(actionRuntime.TargetItem, out DailyV1ItemDefinition selectedItem);
+            transaction = transactionService.TryExecuteMarketSale(
+                npcRuntime,
+                npcRuntime.CurrentCity.Market,
+                selectedItem,
+                actionRuntime.Amount);
+        }
+        else
+        {
+            transaction = transactionService.TryExecuteMarketSale(
+                npcRuntime,
+                npcRuntime.CurrentCity.Market,
+                actionRuntime.TargetItem,
+                actionRuntime.Amount);
+        }
 
         if (transaction.Success == false || transaction.Quantity <= 0)
         {
@@ -773,7 +941,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return null;
         }
 
-        MerchantTradeOpportunity opportunity = FindBestTradeOpportunity(npcRuntime);
+        MerchantTradeOpportunity opportunity = FindBestTradeOpportunity(npcRuntime, action);
 
         if (opportunity == null)
         {
@@ -782,9 +950,17 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         }
 
         float baseUtility = 30f;
-        utility = Mathf.Max(utility, baseUtility + opportunity.Score);
+        utility = UnityMathfCompatibility.Max(utility, baseUtility + opportunity.Score);
         NpcActionRuntime buyAction = new NpcActionRuntime(action, opportunity.TargetCity, opportunity.Item, opportunity.Amount, opportunity.BuyPrice);
-        buyAction.SetCommercialDecisionEvidence(opportunity.Evidence);
+        if (opportunity.SelectedPayload != null
+            && !buyAction.TryUseSelectedPayload(
+                opportunity.SelectedPayload, npcRuntime.SelectedDailyV1DefinitionGraph))
+        {
+            utility = 0f;
+            return null;
+        }
+        if (opportunity.SelectedPayload == null)
+            buyAction.SetCommercialDecisionEvidence(opportunity.Evidence);
         return buyAction;
     }
 
@@ -809,6 +985,33 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return null;
         }
 
+        if (npcRuntime.UsesSelectedDailyV1Definitions)
+        {
+            MerchantTradeOpportunity selectedLocalSale = FindBestSelectedLocalSale(
+                npcRuntime, action, utility, out float selectedUtility);
+            if (selectedLocalSale == null)
+            {
+                utility = 0f;
+                return null;
+            }
+
+            utility = selectedUtility;
+            NpcActionRuntime selectedSellAction = new NpcActionRuntime(
+                action, npcRuntime.CurrentCity, selectedLocalSale.Item,
+                selectedLocalSale.Amount, selectedLocalSale.SellPrice);
+            if (selectedLocalSale.SelectedPayload != null
+                && !selectedSellAction.TryUseSelectedPayload(
+                    selectedLocalSale.SelectedPayload,
+                    npcRuntime.SelectedDailyV1DefinitionGraph))
+            {
+                utility = 0f;
+                return null;
+            }
+            if (selectedLocalSale.SelectedPayload == null)
+                selectedSellAction.SetCommercialDecisionEvidence(selectedLocalSale.Evidence);
+            return selectedSellAction;
+        }
+
         MerchantTradeOpportunity localSale = FindBestLocalSale(npcRuntime);
 
         if (localSale == null)
@@ -817,7 +1020,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return null;
         }
 
-        utility = Mathf.Max(utility, 25f + localSale.Score);
+        utility = UnityMathfCompatibility.Max(utility, 25f + localSale.Score);
         NpcActionRuntime sellAction = new NpcActionRuntime(action, npcRuntime.CurrentCity, localSale.Item, localSale.Amount, localSale.SellPrice);
         sellAction.SetCommercialDecisionEvidence(localSale.Evidence);
         return sellAction;
@@ -842,11 +1045,74 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
         float localPrice = localObservation.ObservedPrice;
         float profitPerItem = localPrice - plan.PurchasePricePerItem;
-        MerchantTradeOpportunity localBuyer = FindBestLocalMerchantBuyer(npcRuntime, plan.Item, amount, plan.PurchasePricePerItem);
+        MerchantTradeOpportunity localBuyer = null;
+        if (npcRuntime.SelectedRuntimeOwners != null)
+        {
+            DailyV1SelectedRuntimeOwnerGraph selectedGraph = npcRuntime.SelectedRuntimeOwnerGraph;
+            if (!npcRuntime.TryGetSelectedDailyV1ActionNode(action,
+                    out DailyV1ActionDefinition selectedAction)
+                || !DailyV1MerchantActionPlanning.TryPlanSelectedPlannedLocalBuyer(
+                    selectedGraph, npcRuntime.SelectedRuntimeOwners, selectedAction,
+                    simulationTime.AbsoluteDay, utility,
+                    out DailyV1MerchantLocalSalePlan selectedBuyerPlan))
+            {
+                utility = 0f;
+                return null;
+            }
+            if (selectedBuyerPlan?.SelectedPayload != null)
+            {
+                NpcRuntime selectedBuyer = npcRuntime.CurrentCity.ImportantNpcs?.FirstOrDefault(candidate =>
+                    candidate != null && string.Equals(candidate.RuntimeId,
+                        selectedBuyerPlan.TargetNpcRuntimeId, StringComparison.Ordinal));
+                if (selectedBuyer == null)
+                {
+                    utility = 0f;
+                    return null;
+                }
+                utility = selectedBuyerPlan.Utility;
+                NpcActionRuntime selectedSale = new NpcActionRuntime(
+                    action, selectedBuyer, plan.Item, selectedBuyerPlan.Amount,
+                    selectedBuyerPlan.LocalPrice);
+                if (!selectedSale.TryUseSelectedPayload(
+                        selectedBuyerPlan.SelectedPayload, selectedGraph.Definitions))
+                {
+                    utility = 0f;
+                    return null;
+                }
+                return selectedSale;
+            }
+
+            if (!DailyV1MerchantActionPlanning.TryPlanSelectedPlannedMarketSale(
+                    selectedGraph, npcRuntime.SelectedRuntimeOwners, selectedAction,
+                    simulationTime.AbsoluteDay, utility,
+                    out DailyV1MerchantLocalSalePlan selectedMarketPlan)
+                || selectedMarketPlan?.SelectedPayload == null
+                || !npcRuntime.TryGetSelectedDailyV1ItemAsset(selectedMarketPlan.Item, out ItemData selectedItemAsset))
+            {
+                utility = 0f;
+                return null;
+            }
+            utility = selectedMarketPlan.Utility;
+            NpcActionRuntime selectedMarketSale = new NpcActionRuntime(
+                action, npcRuntime.CurrentCity, selectedItemAsset,
+                selectedMarketPlan.Amount, selectedMarketPlan.LocalPrice);
+            if (!selectedMarketSale.TryUseSelectedPayload(
+                    selectedMarketPlan.SelectedPayload, selectedGraph.Definitions))
+            {
+                utility = 0f;
+                return null;
+            }
+            return selectedMarketSale;
+        }
+        else
+        {
+            localBuyer = FindBestLocalMerchantBuyer(
+                npcRuntime, plan.Item, amount, plan.PurchasePricePerItem);
+        }
 
         if (localBuyer != null)
         {
-            utility = Mathf.Max(utility, 85f + localBuyer.Score);
+            utility = UnityMathfCompatibility.Max(utility, 85f + localBuyer.Score);
             NpcActionRuntime buyerSaleAction = new NpcActionRuntime(action, localBuyer.TargetNpc, plan.Item, localBuyer.Amount, localBuyer.SellPrice);
             buyerSaleAction.SetCommercialDecisionEvidence(localBuyer.Evidence);
             return buyerSaleAction;
@@ -881,7 +1147,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
         if (profitPerItem >= GetMinimumProfitPerItem(npcRuntime))
         {
-            utility = Mathf.Max(utility, 80f + profitPerItem * 5f);
+            utility = UnityMathfCompatibility.Max(utility, 80f + profitPerItem * 5f);
             NpcActionRuntime plannedSaleAction = new NpcActionRuntime(action, npcRuntime.CurrentCity, plan.Item, amount, localPrice);
             plannedSaleAction.SetCommercialDecisionEvidence(saleEvidence);
             return plannedSaleAction;
@@ -889,7 +1155,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
         if (plan.WaitDaysAtDestination >= tradeConfiguration.MaxUnprofitablePlanWaitDays)
         {
-            utility = Mathf.Max(utility, 35f);
+            utility = UnityMathfCompatibility.Max(utility, 35f);
             NpcActionRuntime liquidationAction = new NpcActionRuntime(action, npcRuntime.CurrentCity, plan.Item, amount, localPrice);
             liquidationAction.SetCommercialDecisionEvidence(saleEvidence);
             return liquidationAction;
@@ -915,7 +1181,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return;
         }
 
-        if (plan.IsActive == true && npcRuntime.Inventory.HasItem(plan.Item, 1) == false)
+        if (plan.IsActive == true && GetInventoryAmount(npcRuntime, plan.Item) < 1)
         {
             npcRuntime.ClearMerchantTradePlan();
         }
@@ -923,10 +1189,22 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
     private void SetTradeTravelPlan(NpcRuntime npcRuntime, CityRuntime targetCity)
     {
-        if (npcRuntime == null || IsTravelingMerchant(npcRuntime) == false || targetCity == null || npcRuntime.CurrentCity == null || targetCity == npcRuntime.CurrentCity || travelSystem == null)
+        if (npcRuntime == null || targetCity == null || npcRuntime.CurrentCity == null
+            || targetCity == npcRuntime.CurrentCity)
         {
             return;
         }
+
+        if (npcRuntime.SelectedRuntimeOwners != null)
+        {
+            if (npcRuntime.HasJobType(NpcJobType.Merchant)
+                && npcRuntime.HasMerchantBehavior(MerchantBehavior.Traveling))
+                npcRuntime.TrySetSelectedTradeTravelPlan(targetCity, 70f,
+                    npcRuntime.MerchantTradePlan.OriginDecisionId);
+            return;
+        }
+
+        if (!IsTravelingMerchant(npcRuntime) || travelSystem == null) return;
 
         float travelCost = travelSystem.GetTravelCost(npcRuntime.CurrentCity, targetCity);
 
@@ -952,12 +1230,12 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             && travelSystem.CanPlanKnownTravel(npcRuntime, targetCity, out _, out _);
     }
 
-    private MerchantTradeOpportunity FindBestTradeOpportunity(NpcRuntime npcRuntime)
+    private MerchantTradeOpportunity FindBestTradeOpportunity(NpcRuntime npcRuntime, NpcActionData action)
     {
-        return FindBestTradeOpportunityFrom(npcRuntime, npcRuntime.CurrentCity, 0f, 0);
+        return FindBestTradeOpportunityFrom(npcRuntime, npcRuntime.CurrentCity, 0f, 0, action);
     }
 
-    private MerchantTradeOpportunity FindBestTradeOpportunityFrom(NpcRuntime npcRuntime, CityRuntime originCity, float additionalCost, int additionalTravelDays)
+    private MerchantTradeOpportunity FindBestTradeOpportunityFrom(NpcRuntime npcRuntime, CityRuntime originCity, float additionalCost, int additionalTravelDays, NpcActionData selectedAction = null)
     {
         if (npcRuntime == null || travelSystem == null || originCity == null || originCity.Location == null)
         {
@@ -966,6 +1244,12 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
         MerchantTradeOpportunity bestOpportunity = null;
         List<CityRuntime> destinationCities = travelSystem.GetKnownDirectDestinationCities(npcRuntime, originCity);
+
+        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            return FindBestSelectedTradeOpportunityFrom(
+                npcRuntime, originCity, destinationCities, additionalCost, additionalTravelDays, selectedAction);
+        }
 
         foreach (CommercialMarketObservation originObservation in npcRuntime.CommercialKnowledge.Observations)
         {
@@ -1008,7 +1292,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
                     continue;
                 }
 
-                int availableAmount = Mathf.Min(tradeConfiguration.MaxTradeAmount, originObservation.ObservedStock, Mathf.FloorToInt(moneyAvailableForGoods / buyPrice));
+                int availableAmount = UnityMathfCompatibility.Min(tradeConfiguration.MaxTradeAmount, originObservation.ObservedStock, UnityMathfCompatibility.FloorToInt(moneyAvailableForGoods / buyPrice));
 
                 if (availableAmount <= 0)
                 {
@@ -1037,7 +1321,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
                 }
 
                 int totalTravelDays = additionalTravelDays + travelDays;
-                float freshness = Mathf.Min(originFreshness, targetFreshness);
+                float freshness = UnityMathfCompatibility.Min(originFreshness, targetFreshness);
                 float score = CalculateTradeScore(netProfit, totalTravelDays)
                     * freshness
                     * GetTradePreferenceMultiplier(npcRuntime, originObservation.ItemDefinition);
@@ -1074,6 +1358,45 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         return bestOpportunity;
     }
 
+    private MerchantTradeOpportunity FindBestSelectedTradeOpportunityFrom(
+        NpcRuntime npcRuntime,
+        CityRuntime originCity,
+        List<CityRuntime> destinationCities,
+        float additionalCost,
+        int additionalTravelDays,
+        NpcActionData selectedAction)
+    {
+        DailyV1SelectedRuntimeOwnerGraph graph = npcRuntime?.SelectedRuntimeOwnerGraph;
+        DailyV1NpcRuntimeOwners merchant = npcRuntime?.SelectedRuntimeOwners;
+        if (graph == null || merchant == null || originCity?.Location == null)
+            return null;
+        DailyV1ActionDefinition buyAction = null;
+        if (selectedAction != null
+            && !npcRuntime.TryGetSelectedDailyV1ActionNode(selectedAction, out buyAction))
+            return null;
+        if (!DailyV1MerchantActionPlanning.TryPlanSelectedTradeOpportunity(
+                graph, merchant, buyAction, originCity.RuntimeId, simulationTime.AbsoluteDay,
+                additionalCost, additionalTravelDays,
+                out DailyV1MerchantTradePlan plan)
+            || plan == null
+            || !npcRuntime.TryGetSelectedDailyV1ItemAsset(plan.Item, out ItemData selectedItem))
+            return null;
+
+        CityRuntime selectedTarget = null;
+        foreach (CityRuntime candidate in destinationCities)
+            if (candidate != null && string.Equals(
+                    candidate.RuntimeId, plan.TargetRuntimeId, StringComparison.Ordinal))
+            {
+                selectedTarget = candidate;
+                break;
+            }
+        if (selectedTarget == null) return null;
+
+        return new MerchantTradeOpportunity(
+            selectedItem, selectedTarget, plan.Amount, plan.BuyPrice, plan.SellPrice,
+            plan.ProfitPerItem, plan.NetProfit, plan.Score, plan.Evidence,
+            selectedPayload: plan.SelectedPayload);
+    }
     private MerchantTradeRepositionOpportunity FindBestTradeRepositionOpportunity(NpcRuntime npcRuntime)
     {
         CityRuntime currentCity = npcRuntime != null ? npcRuntime.CurrentCity : null;
@@ -1222,8 +1545,8 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return null;
         }
 
-        int sellerAmount = sellerRuntime.Inventory.GetAmount(item);
-        int maxAmount = Mathf.Min(requestedAmount, sellerAmount);
+        int sellerAmount = GetInventoryAmount(sellerRuntime, item);
+        int maxAmount = UnityMathfCompatibility.Min(requestedAmount, sellerAmount);
 
         if (maxAmount <= 0)
         {
@@ -1256,9 +1579,9 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             }
 
             float reserveAmount = candidate.Money * tradeConfiguration.LocalReserveRatio;
-            float spendableMoney = Mathf.Max(0f, candidate.Money - reserveAmount);
-            int affordableAmount = Mathf.FloorToInt(spendableMoney / unitPrice);
-            int amount = Mathf.Min(maxAmount, affordableAmount);
+            float spendableMoney = UnityMathfCompatibility.Max(0f, candidate.Money - reserveAmount);
+            int affordableAmount = UnityMathfCompatibility.FloorToInt(spendableMoney / unitPrice);
+            int amount = UnityMathfCompatibility.Min(maxAmount, affordableAmount);
 
             if (amount <= 0)
             {
@@ -1305,6 +1628,28 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return null;
         }
 
+        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            List<NpcActionData> selectedActions = new List<NpcActionData>();
+            if (!npcRuntime.TryGetSelectedDailyV1Actions(selectedActions))
+                return null;
+
+            MerchantTradeOpportunity bestSelectedSale = null;
+            foreach (NpcActionData selectedAction in selectedActions)
+            {
+                if (npcRuntime.GetConfiguredActionType(selectedAction) != NpcActionType.SellGoods)
+                    continue;
+
+                MerchantTradeOpportunity selectedSale = FindBestSelectedLocalSale(
+                    npcRuntime, selectedAction, 0f, out _);
+                if (selectedSale != null
+                    && (bestSelectedSale == null || selectedSale.Score > bestSelectedSale.Score))
+                    bestSelectedSale = selectedSale;
+            }
+
+            return bestSelectedSale;
+        }
+
         MerchantTradeOpportunity bestSale = null;
 
         foreach (InventoryItemRuntime inventoryItem in npcRuntime.Inventory.Items)
@@ -1328,7 +1673,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
                 continue;
             }
 
-            int amount = Mathf.Min(tradeConfiguration.MaxTradeAmount, inventoryItem.Amount);
+            int amount = UnityMathfCompatibility.Min(tradeConfiguration.MaxTradeAmount, inventoryItem.Amount);
             amount = LimitMarketSaleAmountFromKnowledge(npcRuntime, npcRuntime.CurrentCity, localPrice, amount);
 
             if (amount <= 0)
@@ -1371,6 +1716,39 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         return bestSale;
     }
 
+    private MerchantTradeOpportunity FindBestSelectedLocalSale(
+        NpcRuntime npcRuntime,
+        NpcActionData action,
+        float currentUtility,
+        out float selectedUtility)
+    {
+        selectedUtility = currentUtility;
+        DailyV1EffectiveDefinitions definitions = npcRuntime?.SelectedDailyV1DefinitionGraph;
+        DailyV1SelectedRuntimeOwnerGraph graph = npcRuntime?.SelectedRuntimeOwnerGraph;
+        if (definitions == null || graph == null
+            || !npcRuntime.TryGetSelectedDailyV1ActionNode(action, out DailyV1ActionDefinition actionNode)
+            || !DailyV1MerchantActionPlanning.TryPlanSelectedLocalSale(
+                graph, npcRuntime.SelectedRuntimeOwners, actionNode,
+                simulationTime.AbsoluteDay, currentUtility,
+                out DailyV1MerchantLocalSalePlan plan)
+            || plan == null
+            || !npcRuntime.TryGetSelectedDailyV1ItemAsset(plan.Item, out ItemData itemAsset))
+            return null;
+
+        selectedUtility = plan.Utility;
+        return new MerchantTradeOpportunity(
+            itemAsset,
+            npcRuntime.CurrentCity,
+            plan.Amount,
+            plan.ReferencePrice,
+            plan.LocalPrice,
+            plan.ProfitPerItem,
+            plan.ProfitPerItem * plan.Amount,
+            plan.Score,
+            plan.Evidence,
+            selectedPayload: plan.SelectedPayload);
+    }
+
     private MerchantCommercialScoutingOpportunity FindBestCommercialScoutingOpportunity(NpcRuntime npcRuntime)
     {
         if (npcRuntime == null || npcRuntime.CurrentCity == null || travelSystem == null)
@@ -1410,26 +1788,46 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             {
                 foreach (string itemDefinitionId in relevantItemDefinitionIds)
                 {
-                    if (npcRuntime.CommercialKnowledge.TryGetObservation(
-                        targetCity.Location.RuntimeId,
-                        itemDefinitionId,
-                        out CommercialMarketObservation observation) == false)
+                    bool usesSelectedDefinitions = npcRuntime.SelectedDailyV1DefinitionGraph != null;
+                    DailyV1CommercialKnowledgeOwner selectedKnowledge = npcRuntime.CommercialKnowledge.SelectedOwner;
+                    DailyV1CommercialMarketObservation selectedObservation = null;
+                    CommercialMarketObservation legacyObservation = null;
+                    bool hasObservation;
+                    if (usesSelectedDefinitions)
+                    {
+                        hasObservation = selectedKnowledge != null
+                            && ReferenceEquals(selectedKnowledge.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph)
+                            && selectedKnowledge.TryGetObservation(
+                                targetCity.Location.RuntimeId, itemDefinitionId, out selectedObservation);
+                    }
+                    else
+                    {
+                        hasObservation = npcRuntime.CommercialKnowledge.TryGetObservation(
+                            targetCity.Location.RuntimeId, itemDefinitionId, out legacyObservation);
+                    }
+                    if (!hasObservation)
                     {
                         unknownObservationCount++;
                         continue;
                     }
 
-                    if (knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay) > 0f)
+                    float freshness = selectedObservation != null
+                        ? knowledgePolicy.GetFreshness(selectedObservation, simulationTime.AbsoluteDay)
+                        : knowledgePolicy.GetFreshness(legacyObservation, simulationTime.AbsoluteDay);
+                    if (freshness > 0f)
                     {
                         continue;
                     }
 
                     staleObservationCount++;
+                    long observedDay = selectedObservation != null
+                        ? selectedObservation.ObservedDay
+                        : legacyObservation.ObservedDay;
 
-                    if (hasOldestObservation == false || observation.ObservedDay < oldestObservationDay)
+                    if (hasOldestObservation == false || observedDay < oldestObservationDay)
                     {
                         hasOldestObservation = true;
-                        oldestObservationDay = observation.ObservedDay;
+                        oldestObservationDay = observedDay;
                     }
                 }
             }
@@ -1444,8 +1842,8 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
                 : 0L;
             float informationNeed = unknownObservationCount * 20f
                 + staleObservationCount * 12f
-                + Mathf.Min(30f, (float)oldestAgeDays) * 0.5f;
-            float score = informationNeed / Mathf.Max(1f, route.TravelDays + travelCost / 10f);
+                + UnityMathfCompatibility.Min(30f, (float)oldestAgeDays) * 0.5f;
+            float score = informationNeed / UnityMathfCompatibility.Max(1f, route.TravelDays + travelCost / 10f);
 
             if (score <= 0f)
             {
@@ -1470,7 +1868,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
 
             if (bestOpportunity == null
                 || opportunity.Score > bestOpportunity.Score
-                || (Mathf.Approximately(opportunity.Score, bestOpportunity.Score) == true
+                || (UnityMathfCompatibility.Approximately(opportunity.Score, bestOpportunity.Score) == true
                     && string.CompareOrdinal(opportunity.Evidence.KnownRouteRuntimeId, bestOpportunity.Evidence.KnownRouteRuntimeId) < 0))
             {
                 bestOpportunity = opportunity;
@@ -1485,17 +1883,28 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         List<string> definitionIds = new List<string>();
         HashSet<string> uniqueDefinitionIds = new HashSet<string>(StringComparer.Ordinal);
 
-        if (npcRuntime?.NpcData?.job != null)
+        if (npcRuntime != null)
         {
-            foreach (TradeItemPreference preference in npcRuntime.NpcData.job.PreferredTradeItems)
-            {
-                AddRelevantItemDefinitionId(definitionIds, uniqueDefinitionIds, preference?.item?.DefinitionId);
-            }
+            List<string> preferredItemDefinitionIds = new List<string>();
+            npcRuntime.AppendPreferredTradeItemDefinitionIds(preferredItemDefinitionIds);
+            foreach (string definitionId in preferredItemDefinitionIds)
+                AddRelevantItemDefinitionId(definitionIds, uniqueDefinitionIds, definitionId);
         }
 
-        foreach (CommercialMarketObservation observation in npcRuntime.CommercialKnowledge.Observations)
+        DailyV1CommercialKnowledgeOwner selectedKnowledge = npcRuntime?.CommercialKnowledge.SelectedOwner;
+        if (npcRuntime?.SelectedDailyV1DefinitionGraph != null)
         {
-            AddRelevantItemDefinitionId(definitionIds, uniqueDefinitionIds, observation?.ItemDefinitionId);
+            if (selectedKnowledge != null
+                && ReferenceEquals(selectedKnowledge.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph))
+            {
+                foreach (DailyV1CommercialMarketObservation observation in selectedKnowledge.Observations)
+                    AddRelevantItemDefinitionId(definitionIds, uniqueDefinitionIds, observation?.ItemDefinitionId);
+            }
+        }
+        else if (npcRuntime != null)
+        {
+            foreach (CommercialMarketObservation observation in npcRuntime.CommercialKnowledge.Observations)
+                AddRelevantItemDefinitionId(definitionIds, uniqueDefinitionIds, observation?.ItemDefinitionId);
         }
 
         definitionIds.Sort(StringComparer.Ordinal);
@@ -1527,9 +1936,67 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             || cityRuntime == null
             || cityRuntime.Location == null
             || item == null
-            || string.IsNullOrWhiteSpace(item.DefinitionId) == true
-            || npcRuntime.CommercialKnowledge.TryGetObservation(cityRuntime.Location.RuntimeId, item.DefinitionId, out observation) == false)
+            || string.IsNullOrWhiteSpace(item.DefinitionId) == true)
         {
+            return false;
+        }
+
+        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            if (!npcRuntime.TryGetSelectedDailyV1Item(item, out DailyV1ItemDefinition itemNode)
+                || !TryGetUsefulSelectedObservation(
+                    npcRuntime, cityRuntime, itemNode,
+                    out DailyV1CommercialMarketObservation selectedObservation, out freshness)
+                || !npcRuntime.CommercialKnowledge.TryGetObservation(
+                    cityRuntime.Location.RuntimeId, itemNode.DefinitionId, out observation))
+            {
+                observation = null;
+                freshness = 0f;
+                return false;
+            }
+
+            if (!ReferenceEquals(selectedObservation.ItemDefinition,
+                    npcRuntime.SelectedDailyV1DefinitionGraph.Items[itemNode.DefinitionId])
+                || observation == null
+                || !string.Equals(observation.LocationRuntimeId, selectedObservation.LocationRuntimeId, StringComparison.Ordinal)
+                || !string.Equals(observation.ItemDefinitionId, selectedObservation.ItemDefinitionId, StringComparison.Ordinal)
+                || observation.ObservedPrice != selectedObservation.ObservedPrice
+                || observation.ObservedStock != selectedObservation.ObservedStock
+                || observation.ObservedDay != selectedObservation.ObservedDay
+                || observation.ReceivedDay != selectedObservation.ReceivedDay)
+            {
+                observation = null;
+                freshness = 0f;
+                return false;
+            }
+
+            return true;
+        }
+
+        if (!npcRuntime.CommercialKnowledge.TryGetObservation(cityRuntime.Location.RuntimeId, item.DefinitionId, out observation))
+            return false;
+        freshness = knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay);
+        return freshness > 0f;
+    }
+
+    private bool TryGetUsefulSelectedObservation(
+        NpcRuntime npcRuntime,
+        CityRuntime cityRuntime,
+        DailyV1ItemDefinition item,
+        out DailyV1CommercialMarketObservation observation,
+        out float freshness)
+    {
+        observation = null;
+        freshness = 0f;
+        DailyV1EffectiveDefinitions definitions = npcRuntime?.SelectedDailyV1DefinitionGraph;
+        DailyV1CommercialKnowledgeOwner owner = npcRuntime?.CommercialKnowledge.SelectedOwner;
+        if (definitions == null || owner == null || !ReferenceEquals(owner.Definitions, definitions)
+            || item == null || !definitions.Items.TryGetValue(item.DefinitionId, out DailyV1ItemDefinition admitted)
+            || !ReferenceEquals(admitted, item) || cityRuntime?.Location == null
+            || !owner.TryGetObservation(cityRuntime.Location.RuntimeId, item.DefinitionId, out observation)
+            || !ReferenceEquals(observation.ItemDefinition, item))
+        {
+            observation = null;
             return false;
         }
 
@@ -1546,23 +2013,37 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         if (requestedAmount <= 0
             || expectedUnitPrice <= 0f
             || npcRuntime == null
-            || targetCity?.Location == null
-            || npcRuntime.CommercialKnowledge.TryGetLiquidityObservation(
-                targetCity.Location.RuntimeId,
-                out CommercialLiquidityObservation observation) == false)
+            || targetCity?.Location == null)
         {
             return Math.Max(0, requestedAmount);
         }
 
-        if (knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay) <= 0f
+        DailyV1CommercialKnowledgeOwner selectedKnowledge = npcRuntime.CommercialKnowledge.SelectedOwner;
+        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            if (selectedKnowledge == null
+                || !ReferenceEquals(selectedKnowledge.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph)
+                || !selectedKnowledge.TryGetLiquidityObservation(targetCity.Location.RuntimeId,
+                    out DailyV1CommercialLiquidityObservation selectedObservation)
+                || knowledgePolicy.GetFreshness(selectedObservation, simulationTime.AbsoluteDay) <= 0f
+                || selectedObservation.LiquidityMode == MarketLiquidityMode.Open)
+                return requestedAmount;
+            return UnityMathfCompatibility.Min(
+                requestedAmount,
+                UnityMathfCompatibility.FloorToInt(selectedObservation.ObservedPurchasingPower / expectedUnitPrice));
+        }
+
+        if (!npcRuntime.CommercialKnowledge.TryGetLiquidityObservation(
+                targetCity.Location.RuntimeId, out CommercialLiquidityObservation observation)
+            || knowledgePolicy.GetFreshness(observation, simulationTime.AbsoluteDay) <= 0f
             || observation.LiquidityMode == MarketLiquidityMode.Open)
         {
             return requestedAmount;
         }
 
-        return Mathf.Min(
+        return UnityMathfCompatibility.Min(
             requestedAmount,
-            Mathf.FloorToInt(observation.ObservedPurchasingPower / expectedUnitPrice));
+            UnityMathfCompatibility.FloorToInt(observation.ObservedPurchasingPower / expectedUnitPrice));
     }
 
     private CommercialDecisionEvidence CreateCommercialEvidence(
@@ -1592,10 +2073,30 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return null;
         }
 
-        npcRuntime.CommercialKnowledge.TryGetLiquidityObservation(
-            tradeDestination.Location.RuntimeId,
-            out CommercialLiquidityObservation liquidityObservation);
-        float liquidityFreshness = knowledgePolicy.GetFreshness(liquidityObservation, simulationTime.AbsoluteDay);
+        CommercialLiquidityObservation liquidityObservation = null;
+        float liquidityFreshness = 0f;
+        DailyV1CommercialKnowledgeOwner selectedKnowledge = npcRuntime.CommercialKnowledge.SelectedOwner;
+        if (npcRuntime.SelectedDailyV1DefinitionGraph != null)
+        {
+            if (selectedKnowledge != null
+                && ReferenceEquals(selectedKnowledge.Definitions, npcRuntime.SelectedDailyV1DefinitionGraph)
+                && selectedKnowledge.TryGetLiquidityObservation(
+                    tradeDestination.Location.RuntimeId,
+                    out DailyV1CommercialLiquidityObservation selectedLiquidity))
+            {
+                if (npcRuntime.CommercialKnowledge.TryGetLiquidityObservation(
+                    tradeDestination.Location.RuntimeId, out liquidityObservation))
+                {
+                    liquidityFreshness = knowledgePolicy.GetFreshness(selectedLiquidity, simulationTime.AbsoluteDay);
+                }
+            }
+        }
+        else
+        {
+            npcRuntime.CommercialKnowledge.TryGetLiquidityObservation(
+                tradeDestination.Location.RuntimeId, out liquidityObservation);
+            liquidityFreshness = knowledgePolicy.GetFreshness(liquidityObservation, simulationTime.AbsoluteDay);
+        }
 
         return new CommercialDecisionEvidence(
             item.DefinitionId,
@@ -1603,8 +2104,16 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             tradeOrigin.Location.RuntimeId,
             tradeDestination.Location.RuntimeId,
             previousDestination?.Location?.RuntimeId,
-            CommercialObservationEvidence.Capture(originObservation, originFreshness),
-            CommercialObservationEvidence.Capture(destinationObservation, destinationFreshness),
+            originObservation == null ? null : CommercialObservationEvidence.Capture(
+                originObservation.LocationRuntimeId, originObservation.ObservedPrice,
+                originObservation.ObservedStock, originObservation.ObservedDay,
+                originObservation.ReceivedDay, originFreshness, originObservation.Source,
+                originObservation.SourceRuntimeId),
+            destinationObservation == null ? null : CommercialObservationEvidence.Capture(
+                destinationObservation.LocationRuntimeId, destinationObservation.ObservedPrice,
+                destinationObservation.ObservedStock, destinationObservation.ObservedDay,
+                destinationObservation.ReceivedDay, destinationFreshness, destinationObservation.Source,
+                destinationObservation.SourceRuntimeId),
             expectedQuantity,
             expectedPurchaseUnitPrice,
             expectedSaleUnitPrice,
@@ -1612,15 +2121,19 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             expectedGrossProfit,
             expectedNetProfit,
             expectedScore,
-            CommercialLiquidityEvidence.Capture(liquidityObservation, liquidityFreshness));
+            liquidityObservation == null ? null : CommercialLiquidityEvidence.Capture(
+                liquidityObservation.LocationRuntimeId, liquidityObservation.LiquidityMode,
+                liquidityObservation.ObservedPurchasingPower, liquidityObservation.ObservedDay,
+                liquidityObservation.ReceivedDay, liquidityFreshness, liquidityObservation.Source,
+                liquidityObservation.SourceRuntimeId));
     }
 
     private float CalculateLocalMerchantUnitPrice(NpcRuntime buyerRuntime, ItemData item, float retailPrice)
     {
         float preferenceMultiplier = GetTradePreferenceMultiplier(buyerRuntime, item);
-        float preferredPriceBonus = Mathf.Min(0.15f, Mathf.Max(0f, preferenceMultiplier - 1f) * 0.1f);
-        return Mathf.Max(0.01f, retailPrice)
-            * Mathf.Clamp(tradeConfiguration.LocalWholesalePriceMultiplier + preferredPriceBonus, 0.5f, 0.85f);
+        float preferredPriceBonus = UnityMathfCompatibility.Min(0.15f, UnityMathfCompatibility.Max(0f, preferenceMultiplier - 1f) * 0.1f);
+        return UnityMathfCompatibility.Max(0.01f, retailPrice)
+            * UnityMathfCompatibility.Clamp(tradeConfiguration.LocalWholesalePriceMultiplier + preferredPriceBonus, 0.5f, 0.85f);
     }
 
     private static bool ShouldPreferOpportunity(
@@ -1635,7 +2148,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return true;
         }
 
-        if (!Mathf.Approximately(score, current.Score))
+        if (!UnityMathfCompatibility.Approximately(score, current.Score))
         {
             return false;
         }
@@ -1668,59 +2181,87 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             return 0;
         }
 
-        return Mathf.Min(tradeConfiguration.MaxTradeAmount, plan.RemainingAmount, npcRuntime.Inventory.GetAmount(plan.Item));
+        return UnityMathfCompatibility.Min(
+            tradeConfiguration.MaxTradeAmount,
+            plan.RemainingAmount,
+            GetInventoryAmount(npcRuntime, plan.Item));
+    }
+
+    private static int GetInventoryAmount(NpcRuntime npcRuntime, ItemData item)
+    {
+        if (npcRuntime == null || item == null) return 0;
+        if (npcRuntime.SelectedDailyV1DefinitionGraph == null)
+            return npcRuntime.Inventory != null ? npcRuntime.Inventory.GetAmount(item) : 0;
+        return TryGetSelectedInventoryOwnerItem(npcRuntime, item,
+            out DailyV1InventoryOwner owner, out DailyV1ItemDefinition node)
+            ? owner.GetAmount(node) : 0;
+    }
+
+    private static float GetInventoryAverageUnitCost(NpcRuntime npcRuntime, ItemData item)
+    {
+        if (npcRuntime == null || item == null) return 0f;
+        if (npcRuntime.SelectedDailyV1DefinitionGraph == null)
+            return npcRuntime.Inventory != null ? npcRuntime.Inventory.GetAverageUnitCost(item) : 0f;
+        return TryGetSelectedInventoryOwnerItem(npcRuntime, item,
+            out DailyV1InventoryOwner owner, out DailyV1ItemDefinition node)
+            ? owner.GetAverageUnitCost(node) : 0f;
+    }
+
+    private static bool TryGetSelectedInventoryOwnerItem(
+        NpcRuntime npcRuntime,
+        ItemData item,
+        out DailyV1InventoryOwner owner,
+        out DailyV1ItemDefinition node)
+    {
+        owner = null;
+        node = null;
+        DailyV1EffectiveDefinitions definitions = npcRuntime?.SelectedDailyV1DefinitionGraph;
+        if (definitions == null || npcRuntime.Inventory?.SelectedDailyV1Owner == null
+            || !ReferenceEquals(npcRuntime.Inventory.SelectedDailyV1Owner.Definitions, definitions)
+            || !npcRuntime.TryGetSelectedDailyV1Item(item, out node))
+        {
+            node = null;
+            return false;
+        }
+        owner = npcRuntime.Inventory.SelectedDailyV1Owner;
+        return true;
     }
 
     private float CalculateTradeScore(float netProfit, int travelDays)
     {
-        return netProfit / Mathf.Max(1, travelDays);
+        return netProfit / UnityMathfCompatibility.Max(1, travelDays);
     }
 
     private float GetTradePreferenceMultiplier(NpcRuntime npcRuntime, ItemData item)
     {
-        if (npcRuntime == null || npcRuntime.NpcData == null || npcRuntime.NpcData.job == null || item == null)
-        {
-            return 1f;
-        }
-
-        foreach (TradeItemPreference preference in npcRuntime.NpcData.job.PreferredTradeItems)
-        {
-            if (preference != null && preference.item == item)
-            {
-                return Mathf.Max(0.01f, preference.utilityMultiplier);
-            }
-        }
-
-        return 1f;
+        return npcRuntime != null && npcRuntime.TryGetPreferredTradeItemMultiplier(item, out float multiplier)
+            ? UnityMathfCompatibility.Max(0.01f, multiplier)
+            : 1f;
     }
 
     private bool IsMerchant(NpcRuntime npcRuntime)
     {
         return npcRuntime != null
             && npcRuntime.IsAlive == true
-            && npcRuntime.NpcData != null
-            && npcRuntime.NpcData.job != null
-            && npcRuntime.NpcData.job.jobType == NpcJobType.Merchant;
+            && npcRuntime.HasJobType(NpcJobType.Merchant);
     }
 
     private float GetMinimumProfitPerItem(NpcRuntime npcRuntime)
     {
-        float configuredValue = npcRuntime?.NpcData?.job != null
-            ? npcRuntime.NpcData.job.minimumProfitPerItem
-            : 1f;
-        return Mathf.Max(0f, configuredValue);
+        float configuredValue = npcRuntime != null ? npcRuntime.MinimumProfitPerItem : 1f;
+        return UnityMathfCompatibility.Max(0f, configuredValue);
     }
 
     private bool IsTravelingMerchant(NpcRuntime npcRuntime)
     {
         return IsMerchant(npcRuntime) == true
-            && npcRuntime.NpcData.job.merchantBehavior == MerchantBehavior.Traveling;
+            && npcRuntime.HasMerchantBehavior(MerchantBehavior.Traveling);
     }
 
     private bool IsLocalMerchant(NpcRuntime npcRuntime)
     {
         return IsMerchant(npcRuntime) == true
-            && npcRuntime.NpcData.job.merchantBehavior == MerchantBehavior.Local;
+            && npcRuntime.HasMerchantBehavior(MerchantBehavior.Local);
     }
 
     private string CreatePlanUrgencyOwnerRevision() => SpatialStableKey.Encode(
@@ -1961,8 +2502,9 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
         public float NetProfit { get; }
         public float Score { get; }
         public CommercialDecisionEvidence Evidence { get; }
+        internal DailyV1NpcActionPayloadOwner SelectedPayload { get; }
 
-        public MerchantTradeOpportunity(ItemData item, CityRuntime targetCity, int amount, float buyPrice, float sellPrice, float profitPerItem, float netProfit, float score, CommercialDecisionEvidence evidence, NpcRuntime targetNpc = null)
+        public MerchantTradeOpportunity(ItemData item, CityRuntime targetCity, int amount, float buyPrice, float sellPrice, float profitPerItem, float netProfit, float score, CommercialDecisionEvidence evidence, NpcRuntime targetNpc = null, DailyV1NpcActionPayloadOwner selectedPayload = null)
         {
             Item = item;
             TargetNpc = targetNpc;
@@ -1974,6 +2516,7 @@ public partial class MerchantSystem : INpcActionProvider, IAuthoritativeMutation
             NetProfit = netProfit;
             Score = score;
             Evidence = evidence;
+            SelectedPayload = selectedPayload;
         }
     }
 

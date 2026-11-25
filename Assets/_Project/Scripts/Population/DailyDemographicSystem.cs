@@ -8,10 +8,15 @@ using System.Collections.Generic;
 public sealed class RepresentedResidentFloorSnapshot
 {
     private readonly Dictionary<string, int> floors;
+    private readonly Dictionary<string, int> hostSupplements;
 
-    internal RepresentedResidentFloorSnapshot(Dictionary<string, int> floors)
+    internal RepresentedResidentFloorSnapshot(
+        Dictionary<string, int> floors,
+        Dictionary<string, int> hostSupplements)
     {
         this.floors = floors ?? new Dictionary<string, int>(StringComparer.Ordinal);
+        this.hostSupplements = hostSupplements
+            ?? new Dictionary<string, int>(StringComparer.Ordinal);
     }
 
     public bool TryGetFloor(string settlementRuntimeId, out int floor)
@@ -19,6 +24,13 @@ public sealed class RepresentedResidentFloorSnapshot
         floor = 0;
         return string.IsNullOrWhiteSpace(settlementRuntimeId) == false
             && floors.TryGetValue(settlementRuntimeId, out floor);
+    }
+
+    internal bool TryGetHostSupplement(string settlementRuntimeId, out int floor)
+    {
+        floor = 0;
+        return string.IsNullOrWhiteSpace(settlementRuntimeId) == false
+            && hostSupplements.TryGetValue(settlementRuntimeId, out floor);
     }
 }
 
@@ -116,12 +128,85 @@ public sealed class DailyDemographyReport
 }
 
 /// <summary>
-/// The one daily demographic phase owned by SimulationRuntime. It evaluates named
-/// mortality from a stable Person snapshot, recalculates floors at the world boundary,
-/// and then runs aggregate-only transitions in stable settlement order.
+/// Unity's demographic adapter supplies P12 admission/projection and represented
+/// resident floors. Core owns the selected death and aggregate owner writes; the
+/// legacy non-selected path remains here for other runtime configurations.
 /// </summary>
 public static class DailyDemographicSystem
 {
+    /// <summary>
+    /// Runs selected Daily-v1 demography through the exact Core owner graph.
+    /// SimulationRuntime admits the existing P12 census scope and publishes
+    /// compatibility fields; Core applies the selected Person-death owners.
+    /// </summary>
+    internal static DailyDemographyReport AdvanceSelected(
+        SimulationRuntime world,
+        IPersonNaturalMortalitySampleProvider mortalitySamples,
+        IAggregateDemographyProvider aggregateProvider)
+    {
+        if (world == null) throw new ArgumentNullException(nameof(world));
+        DailyV1SelectedRuntimeOwnerGraph graph = world.SelectedRuntimeOwnerGraph;
+        if (graph == null || !HasExactCityPopulationBindings(world, graph))
+            throw new InvalidOperationException(
+                "The admitted Daily-v1 demographic stage could not bind its exact Core population owners.");
+        EffectiveSimulationConfiguration selectedConfiguration =
+            graph.Definitions?.EffectiveConfiguration;
+        if (selectedConfiguration == null)
+            throw new InvalidOperationException(
+                "The admitted Daily-v1 demographic stage has no effective configuration in its Core definition graph.");
+
+        DailyV1SelectedDemographyResult selected = DailyV1SelectedDemographyStage.Advance(
+            graph,
+            world.PersonStore,
+            world.CurrentDay,
+            world.Calendar,
+            selectedConfiguration.NaturalMortality,
+            selectedConfiguration.AggregateDemography,
+            mortalitySamples,
+            aggregateProvider,
+            CreateSelectedDemographyBoundary(world, graph));
+
+        return CreateSelectedDemographyReport(selected);
+    }
+
+    internal static IDailyV1SelectedDemographyBoundary CreateSelectedDemographyBoundary(
+        SimulationRuntime world,
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        return world != null
+            && graph != null
+            && ReferenceEquals(world.SelectedRuntimeOwnerGraph, graph)
+            && HasExactCityPopulationBindings(world, graph)
+                ? new RuntimeDemographyBoundary(world, graph)
+                : null;
+    }
+
+    internal static DailyDemographyReport CreateSelectedDemographyReport(
+        DailyV1SelectedDemographyResult selected)
+    {
+        if (selected == null) throw new ArgumentNullException(nameof(selected));
+        DailyDemographyReport report = new DailyDemographyReport(selected.AbsoluteDay)
+        {
+            NamedPersonsEvaluated = selected.NamedPersonsEvaluated,
+            NamedDeathsApplied = selected.NamedDeathsApplied,
+            AggregateSettlementsProcessed = selected.AggregateSettlementsProcessed,
+            AggregateBirthsApplied = selected.AggregateBirthsApplied,
+            AggregateDeathsApplied = selected.AggregateDeathsApplied
+        };
+        foreach (DailyV1SelectedDemographyDiagnostic diagnostic in selected.Diagnostics)
+        {
+            report.Add(
+                diagnostic.IsError
+                    ? DailyDemographyDiagnosticSeverity.Error
+                    : DailyDemographyDiagnosticSeverity.Warning,
+                diagnostic.Code,
+                diagnostic.Identity,
+                diagnostic.Message);
+        }
+
+        return report;
+    }
+
     public static DailyDemographyReport Advance(
         SimulationRuntime world,
         IPersonNaturalMortalitySampleProvider mortalitySamples,
@@ -155,6 +240,106 @@ public static class DailyDemographicSystem
         }
 
         return report;
+    }
+
+    private static bool HasExactCityPopulationBindings(
+        SimulationRuntime world,
+        DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph.Cities.Count != world.Cities.Count) return false;
+        foreach (DailyV1CityRuntimeOwners owner in graph.Cities)
+        {
+            if (owner == null || owner.Population == null) return false;
+            CityRuntime match = null;
+            foreach (CityRuntime city in world.Cities)
+            {
+                if (city != null && string.Equals(city.RuntimeId, owner.RuntimeId, StringComparison.Ordinal))
+                {
+                    if (match != null) return false;
+                    match = city;
+                }
+            }
+
+            if (match == null || !ReferenceEquals(match.Population, owner.Population)) return false;
+        }
+
+        return true;
+    }
+
+    private sealed class RuntimeDemographyBoundary : IDailyV1SelectedDemographyBoundary
+    {
+        private readonly SimulationRuntime world;
+        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+        private readonly IDailyV1SelectedPersonDeathBoundary personDeathBoundary;
+
+        internal RuntimeDemographyBoundary(
+            SimulationRuntime world,
+            DailyV1SelectedRuntimeOwnerGraph graph)
+        {
+            this.world = world;
+            this.graph = graph;
+            personDeathBoundary = world.CreateSelectedPersonDeathBoundary();
+        }
+
+        public bool TryBeginPersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds) =>
+            personDeathBoundary.TryBeginPersonDeathProjectionMutation(
+                plan, operationId, currentActionChanged, sectionIds);
+
+        public bool TryCompletePersonDeathProjectionMutation(
+            DailyV1SelectedPersonDeathPlan plan,
+            string operationId,
+            bool currentActionChanged,
+            IReadOnlyList<string> sectionIds,
+            bool operationSucceeded) =>
+            personDeathBoundary.TryCompletePersonDeathProjectionMutation(
+                plan, operationId, currentActionChanged, sectionIds, operationSucceeded);
+
+        public bool TryValidatePersonDeathProjection(
+            DailyV1SelectedPersonDeathPlan plan,
+            out bool currentActionChanged,
+            out string failure) =>
+            personDeathBoundary.TryValidatePersonDeathProjection(
+                plan, out currentActionChanged, out failure);
+
+        public bool TryBeginPersonDeathOperation(
+            DailyV1SelectedPersonDeathPlan plan,
+            bool currentActionChanged,
+            string operationId,
+            IReadOnlyList<string> sectionIds,
+            Func<bool> localRevisionCapacity,
+            out IDailyV1SelectedPersonDeathP12Scope scope) =>
+            personDeathBoundary.TryBeginPersonDeathOperation(
+                plan, currentActionChanged, operationId, sectionIds, localRevisionCapacity, out scope);
+
+        public bool TryPublishPersonDeathProjection(
+            DailyV1SelectedPersonDeathPlan plan,
+            bool currentActionChanged) =>
+            personDeathBoundary.TryPublishPersonDeathProjection(plan, currentActionChanged);
+
+        public void FaultPersonDeathRuntime() =>
+            personDeathBoundary.FaultPersonDeathRuntime();
+
+        public void AdvancePersonDeathWorldRevision() =>
+            personDeathBoundary.AdvancePersonDeathWorldRevision();
+        public IReadOnlyDictionary<string, int> BuildCompatibilityResidentFloorSupplement(
+            IReadOnlyCollection<string> selectedNpcRuntimeIds)
+        {
+            RepresentedResidentFloorSnapshot snapshot =
+                world.BuildRepresentedResidentFloorSnapshot(selectedNpcRuntimeIds);
+            Dictionary<string, int> floors = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            {
+                if (city != null && snapshot != null
+                    && snapshot.TryGetHostSupplement(city.RuntimeId, out int floor))
+                    floors[city.RuntimeId] = floor;
+            }
+
+            return floors;
+        }
     }
 
     private static void ApplyNaturalMortality(

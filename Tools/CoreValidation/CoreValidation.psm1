@@ -1,8 +1,133 @@
 Set-StrictMode -Version Latest
 
+function Get-CoreRepositoryRelativeIdentity {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$RepositoryRoot, [Parameter(Mandatory)][string]$FullPath)
+    return Test-CoreRepositoryPathContainment -RepositoryRoot $RepositoryRoot -FullPath $FullPath
+}
+
+function Test-CoreRepositoryPathContainment {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepositoryRoot,
+        [Parameter(Mandatory)][string]$FullPath,
+        [switch]$AllowMissingPath
+    )
+
+    $root = [IO.Path]::GetFullPath($RepositoryRoot).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $rootPrefix = $root + [IO.Path]::DirectorySeparatorChar
+    $full = [IO.Path]::GetFullPath($FullPath)
+    if (-not $full.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'A compile input resolved outside the repository root.'
+    }
+
+    $rootItem = Get-Item -LiteralPath $root -Force -ErrorAction Stop
+    if ($rootItem.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw 'The repository root is a reparse point and cannot establish source containment.'
+    }
+
+    $relative = $full.Substring($rootPrefix.Length)
+    $current = $root
+    foreach ($segment in ($relative -split '[\\/]')) {
+        if ([string]::IsNullOrWhiteSpace($segment)) { continue }
+        $current = Join-Path $current $segment
+        try {
+            $component = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+        } catch {
+            if ($AllowMissingPath -and $_.CategoryInfo.Category -eq [Management.Automation.ErrorCategory]::ObjectNotFound) {
+                break
+            }
+            throw
+        }
+        if ($component.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw 'A compile input traverses a reparse point below the repository root.'
+        }
+    }
+    return $relative.Replace('\', '/')
+}
+
+function Get-CoreProjectCompileInputs {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ProjectRoot,
+        [Parameter(Mandatory)][string[]]$ProjectPaths
+    )
+
+    $root = (Resolve-Path -LiteralPath $ProjectRoot).Path
+    $pending = [System.Collections.Generic.Queue[string]]::new()
+    foreach ($projectPath in $ProjectPaths) { $pending.Enqueue($projectPath) }
+    $seenProjects = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $inputPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+
+    while ($pending.Count -gt 0) {
+        $projectIdentity = $pending.Dequeue().Replace('\', '/')
+        $projectPath = Join-Path $root ($projectIdentity -replace '/', [IO.Path]::DirectorySeparatorChar)
+        if (-not (Test-Path -LiteralPath $projectPath -PathType Leaf)) { throw "Validation project is missing: $projectIdentity" }
+        $projectFullPath = [IO.Path]::GetFullPath($projectPath)
+        $projectRelative = Get-CoreRepositoryRelativeIdentity -RepositoryRoot $root -FullPath $projectFullPath
+        if (-not $seenProjects.Add($projectRelative)) { continue }
+        [void]$inputPaths.Add($projectRelative)
+
+        # Ask MSBuild for its evaluated Compile and ProjectReference items.
+        # This resolves explicit links, imports, conditions, and SDK globs
+        # without duplicating MSBuild's evaluation rules in this runner.
+        $evaluationOutput = @(& dotnet msbuild $projectFullPath -nologo -getItem:Compile -getItem:ProjectReference 2>$null | ForEach-Object { $_.ToString() })
+        $evaluationExitCode = $LASTEXITCODE
+        if ($evaluationExitCode -ne 0) { throw "MSBuild input evaluation failed for project $projectRelative." }
+        try {
+            $evaluation = [string]::Join([Environment]::NewLine, [string[]]$evaluationOutput) | ConvertFrom-Json -ErrorAction Stop
+        } catch {
+            throw "MSBuild returned an unreadable input evaluation for project $projectRelative."
+        }
+
+        foreach ($item in @($evaluation.Items.Compile)) {
+            if ($null -eq $item) { continue }
+            $itemPath = [string]$item.FullPath
+            if ([string]::IsNullOrWhiteSpace($itemPath)) {
+                $itemPath = [string]$item.Identity
+                if (-not [IO.Path]::IsPathRooted($itemPath)) { $itemPath = Join-Path (Split-Path -Parent $projectFullPath) $itemPath }
+            }
+            if ([string]::IsNullOrWhiteSpace($itemPath)) { throw "MSBuild returned a Compile item without a path for $projectRelative." }
+            $itemFullPath = [IO.Path]::GetFullPath($itemPath)
+            # Validate root containment and every existing path component before
+            # excluding SDK-generated outputs. Their final leaves may not exist
+            # yet, but an existing junction anywhere in the path must be rejected.
+            $isGeneratedOutput = $itemFullPath -match '(?i)[\\/](?:obj|bin)[\\/]'
+            $itemRelative = Test-CoreRepositoryPathContainment -RepositoryRoot $root -FullPath $itemFullPath -AllowMissingPath:$isGeneratedOutput
+            # SDK-generated compilation inputs are derived from tracked source,
+            # project, SDK and package inputs; they are not source identities.
+            if ($isGeneratedOutput) { continue }
+            if (-not (Test-Path -LiteralPath $itemFullPath -PathType Leaf)) { throw "Declared compile input is missing: $itemRelative" }
+            [void]$inputPaths.Add($itemRelative)
+        }
+
+        foreach ($reference in @($evaluation.Items.ProjectReference)) {
+            if ($null -eq $reference) { continue }
+            $referencePath = [string]$reference.FullPath
+            if ([string]::IsNullOrWhiteSpace($referencePath)) {
+                $referencePath = [string]$reference.Identity
+                if (-not [IO.Path]::IsPathRooted($referencePath)) { $referencePath = Join-Path (Split-Path -Parent $projectFullPath) $referencePath }
+            }
+            if ([string]::IsNullOrWhiteSpace($referencePath)) { throw "MSBuild returned a ProjectReference without a path for $projectRelative." }
+            $referenceFullPath = [IO.Path]::GetFullPath($referencePath)
+            $referenceRelative = Get-CoreRepositoryRelativeIdentity -RepositoryRoot $root -FullPath $referenceFullPath
+            $pending.Enqueue($referenceRelative)
+        }
+    }
+
+    return @($inputPaths | Sort-Object)
+}
+
 function Get-CoreInputSnapshot {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$ProjectRoot)
+    param(
+        [Parameter(Mandatory)][string]$ProjectRoot,
+        [string[]]$ProjectPaths = @(
+            'tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj',
+            'tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj',
+            'tools/Simulation.Lab/Simulation.Lab.csproj'
+        )
+    )
 
     $root = (Resolve-Path -LiteralPath $ProjectRoot).Path
     $fixedInputs = @(
@@ -16,7 +141,16 @@ function Get-CoreInputSnapshot {
         'Assets/_Project/Scripts/CoreAdapters/DailyV1DefinitionAdapter.cs.meta',
         'Assets/_Project/Scripts/CoreAdapters/P12ADailyV1ContentAdapter.cs',
         'Assets/_Project/Scripts/CoreAdapters/P12ADailyV1ContentAdapter.cs.meta',
-        'Assets/_Project/Scripts/SpatialRouteKnowledge.cs',
+        'Packages/com.simulation.core/Runtime/Geography/P12P8DCensusProviders.cs',
+        'Packages/com.simulation.core/Runtime/Geography/P12P8DCensusProviders.cs.meta',
+        'Packages/com.simulation.core/Runtime/Geography/P8ETravelTransactionCoordinator.cs',
+        'Packages/com.simulation.core/Runtime/Geography/P8ETravelTransactionCoordinator.cs.meta',
+        'Packages/com.simulation.core/Runtime/Geography/PersonRoutePlanStore.cs',
+        'Packages/com.simulation.core/Runtime/Geography/PersonRoutePlanStore.cs.meta',
+        'Packages/com.simulation.core/Runtime/Geography/SpatialRouteKnowledge.cs',
+        'Packages/com.simulation.core/Runtime/Geography/SpatialRouteKnowledge.cs.meta',
+        'Packages/com.simulation.core/Runtime/Geography/SpatialRoutePlanningSystem.cs',
+        'Packages/com.simulation.core/Runtime/Geography/SpatialRoutePlanningSystem.cs.meta',
         'Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs',
         'Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs.meta',
         'Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarParityTests.cs',
@@ -45,6 +179,12 @@ function Get-CoreInputSnapshot {
         'Assets/_Project/Tests/EditMode/Editor/DeterministicRandomTests.cs',
         'Assets/_Project/Tests/EditMode/Editor/LogicalTimelineTests.cs',
         'Packages/com.simulation.core/Runtime.meta',
+        'Packages/com.simulation.core/Runtime/ExplorableSiteRuntime.cs',
+        'Packages/com.simulation.core/Runtime/ExplorableSiteRuntime.cs.meta',
+        'Packages/com.simulation.core/Runtime/ExplorableSiteStore.cs',
+        'Packages/com.simulation.core/Runtime/ExplorableSiteStore.cs.meta',
+         'Packages/com.simulation.core/Runtime/Application/DailyV1SelectedCrimeJusticeDailyStage.cs',
+         'Packages/com.simulation.core/Runtime/Application/DailyV1SelectedCrimeJusticeDailyStage.cs.meta',
         'Packages/com.simulation.core/Runtime/Calendar.meta',
         'Packages/com.simulation.core/Runtime/Calendar/CalendarDefinition.cs',
         'Packages/com.simulation.core/Runtime/Calendar/CalendarDefinition.cs.meta',
@@ -93,6 +233,10 @@ function Get-CoreInputSnapshot {
         'Packages/com.simulation.core/Runtime/Numerics/UnityMathfCompatibility.cs',
         'Packages/com.simulation.core/Runtime/Numerics/UnityMathfCompatibility.cs.meta',
         'Packages/com.simulation.core/Runtime/Persistence.meta',
+        'Packages/com.simulation.core/Runtime/Persistence/ExplorableSiteOwnerSnapshot.cs',
+        'Packages/com.simulation.core/Runtime/Persistence/ExplorableSiteOwnerSnapshot.cs.meta',
+        'Packages/com.simulation.core/Runtime/Persistence/P12FExpeditionOwnerSnapshotStager.cs',
+        'Packages/com.simulation.core/Runtime/Persistence/P12FExpeditionOwnerSnapshotStager.cs.meta',
         'Packages/com.simulation.core/Runtime/Persistence/AtomicFileSlot.cs',
         'Packages/com.simulation.core/Runtime/Persistence/AtomicFileSlot.cs.meta',
         'Packages/com.simulation.core/Runtime/Persistence/ContinuationDescriptorV2.cs',
@@ -136,6 +280,7 @@ function Get-CoreInputSnapshot {
         'tests/Simulation.Core.Tests/DailyV1DefinitionIdentityTests.cs',
         'tests/Simulation.Core.Tests/DailyV1DefinitionProviderVectors.cs',
         'tests/Simulation.Core.Tests/DailyV1SelectedMemberCoverageTests.cs',
+        'tests/Simulation.Core.Tests/DailyV1SelectedCrimeJusticeDailyStageTests.cs',
         'tests/Simulation.Core.Tests/DailyV1TypedDefinitionGraphTests.cs',
         'tests/Simulation.Core.Tests/Fixtures/CORE_F_WP1_VALUES_BASELINE.md',
         'tests/Simulation.Core.Tests/Fixtures/CORE_F_WP1_VALUES_BASELINE.txt',
@@ -163,7 +308,8 @@ function Get-CoreInputSnapshot {
         $_ -match '(^|/)(Directory\.Build\.(props|targets)|Directory\.Packages\.props|NuGet\.Config|nuget\.config|[^/]+\.runsettings)$'
     })
     if ($LASTEXITCODE -ne 0) { throw 'Could not enumerate tracked build configuration inputs.' }
-    $relativeInputs = @($fixedInputs + $trackedConfig | Sort-Object -Unique)
+    $projectInputs = Get-CoreProjectCompileInputs -ProjectRoot $root -ProjectPaths $ProjectPaths
+    $relativeInputs = @($fixedInputs + $trackedConfig + $projectInputs | Sort-Object -Unique)
     $entries = foreach ($relative in $relativeInputs) {
         $path = Join-Path $root ($relative -replace '/', [IO.Path]::DirectorySeparatorChar)
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required validation input is missing: $relative" }
@@ -207,6 +353,45 @@ function Compare-CoreInputSnapshots {
     }
 }
 
+function New-CoreHostTraceRunSettings {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$TraceFilePath,
+        [Parameter(Mandatory)][string]$SdkVersion
+    )
+
+    if ($SdkVersion -notmatch '^(?<major>\d+)\.') { throw 'Pinned SDK version is not a valid semantic version.' }
+    $tracePrefix = if ([int]$Matches.major -ge 10) { 'DOTNET_HOST' } else { 'COREHOST' }
+    $settingsPath = [IO.Path]::GetFullPath($Path)
+    $tracePath = [IO.Path]::GetFullPath($TraceFilePath)
+    $document = [Xml.XmlDocument]::new()
+    $runSettings = $document.CreateElement('RunSettings')
+    $null = $document.AppendChild($runSettings)
+    $runConfiguration = $document.CreateElement('RunConfiguration')
+    $null = $runSettings.AppendChild($runConfiguration)
+    $environmentVariables = $document.CreateElement('EnvironmentVariables')
+    $null = $runConfiguration.AppendChild($environmentVariables)
+    foreach ($entry in @(
+        @{ Name = $tracePrefix + '_TRACE'; Value = '1' },
+        @{ Name = $tracePrefix + '_TRACEFILE'; Value = $tracePath },
+        @{ Name = $tracePrefix + '_TRACE_VERBOSITY'; Value = '4' }
+    )) {
+        $element = $document.CreateElement($entry.Name)
+        $element.InnerText = $entry.Value
+        $null = $environmentVariables.AppendChild($element)
+    }
+    [IO.File]::WriteAllText($settingsPath, $document.OuterXml, [Text.UTF8Encoding]::new($false))
+    $bytes = [IO.File]::ReadAllBytes($settingsPath)
+    return [pscustomobject]@{
+        path = $settingsPath
+        bytes = [long]$bytes.LongLength
+        sha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+        tracePrefix = $tracePrefix
+        traceFilePath = $tracePath
+    }
+}
+
 function Get-CoreRuntimeSelectionTrace {
     [CmdletBinding()]
     param(
@@ -215,32 +400,57 @@ function Get-CoreRuntimeSelectionTrace {
     )
 
     if (-not (Test-Path -LiteralPath $TraceDirectory -PathType Container)) { throw 'Runtime trace directory is missing.' }
-    $traceFiles = @(Get-ChildItem -LiteralPath $TraceDirectory -Filter 'testhost.*.log' -File)
-    if ($traceFiles.Count -ne 1) { throw 'Runtime trace directory must contain exactly one testhost process trace.' }
-
     $testAssembly = [IO.Path]::GetFullPath($TestAssemblyPath)
     if ($testAssembly -notmatch '(?i)\.dll$') { throw 'Runtime trace binding requires a test assembly DLL path.' }
     $expectedConfig = [regex]::Replace($testAssembly, '(?i)\.dll$', '.runtimeconfig.json')
     $expectedDevConfig = [regex]::Replace($testAssembly, '(?i)\.dll$', '.runtimeconfig.dev.json')
-    $traceFile = $traceFiles[0]
-    $bytes = [IO.File]::ReadAllBytes($traceFile.FullName)
-    $text = [Text.UTF8Encoding]::new($false, $true).GetString($bytes)
-    $lines = @([regex]::Split($text, '\r?\n'))
-    $configHits = [System.Collections.Generic.List[object]]::new()
-    for ($lineIndex = 0; $lineIndex -lt $lines.Count; $lineIndex++) {
-        if ($lines[$lineIndex] -match '(?i)^\s*Runtime config is cfg=(?<cfg>.+\.runtimeconfig\.json)\s+dev=(?<dev>.+\.runtimeconfig\.dev\.json)\s*$') {
-            $configHits.Add([pscustomobject]@{ Line = $lineIndex; ConfigPath = $Matches.cfg.Trim(); DevPath = $Matches.dev.Trim() })
+    $traceFiles = @(Get-ChildItem -LiteralPath $TraceDirectory -Filter '*.log' -File)
+    if ($traceFiles.Count -eq 0) { throw 'Runtime trace directory contains no process traces.' }
+
+    # Host trace filenames depend on how the SDK launches a process (for
+    # example, testhost.exe versus dotnet.exe hosting testhost.dll). Bind by
+    # the test assembly's exact runtime-config paths instead of the process
+    # filename, and require exactly one matching process trace.
+    $boundTraces = [System.Collections.Generic.List[object]]::new()
+    foreach ($candidateTrace in $traceFiles) {
+        $candidateBytes = [IO.File]::ReadAllBytes($candidateTrace.FullName)
+        $candidateText = [Text.UTF8Encoding]::new($false, $true).GetString($candidateBytes)
+        $candidateLines = @([regex]::Split($candidateText, '\r?\n'))
+        $candidateConfigHits = [System.Collections.Generic.List[object]]::new()
+        for ($lineIndex = 0; $lineIndex -lt $candidateLines.Count; $lineIndex++) {
+            if ($candidateLines[$lineIndex] -match '(?i)^\s*Runtime config is cfg=(?<cfg>.+\.runtimeconfig\.json)\s+dev=(?<dev>.+\.runtimeconfig\.dev\.json)\s*$') {
+                $candidateConfigHits.Add([pscustomobject]@{ Line = $lineIndex; ConfigPath = $Matches.cfg.Trim(); DevPath = $Matches.dev.Trim() })
+            }
         }
+        $candidateTestConfigHits = @($candidateConfigHits | Where-Object {
+            [IO.Path]::IsPathRooted($_.ConfigPath) -and [IO.Path]::IsPathRooted($_.DevPath) -and
+            [string]::Equals([IO.Path]::GetFullPath($_.ConfigPath), $expectedConfig, [StringComparison]::OrdinalIgnoreCase)
+        })
+        if ($candidateTestConfigHits.Count -gt 1) {
+            throw 'A process trace contains multiple runtimeconfig selection blocks for the test assembly.'
+        }
+        if ($candidateTestConfigHits.Count -eq 0) { continue }
+
+        $selectedConfig = $candidateTestConfigHits[0]
+        if (-not [string]::Equals([IO.Path]::GetFullPath($selectedConfig.DevPath), $expectedDevConfig, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'The test assembly runtimeconfig.dev.json does not match its runtimeconfig.json.'
+        }
+        $boundTraces.Add([pscustomobject]@{
+            File = $candidateTrace
+            Bytes = $candidateBytes
+            Lines = $candidateLines
+            ConfigHits = $candidateConfigHits
+            SelectedConfig = $selectedConfig
+        })
     }
-    $testConfigHits = @($configHits | Where-Object {
-        [IO.Path]::IsPathRooted($_.ConfigPath) -and [IO.Path]::IsPathRooted($_.DevPath) -and
-        [string]::Equals([IO.Path]::GetFullPath($_.ConfigPath), $expectedConfig, [StringComparison]::OrdinalIgnoreCase)
-    })
-    if ($testConfigHits.Count -ne 1) { throw 'Testhost trace must contain exactly one runtimeconfig selection block for the test assembly.' }
-    $selectedConfig = $testConfigHits[0]
-    if (-not [string]::Equals([IO.Path]::GetFullPath($selectedConfig.DevPath), $expectedDevConfig, [StringComparison]::OrdinalIgnoreCase)) {
-        throw 'Testhost runtimeconfig.dev.json does not match the test assembly.'
+    if ($boundTraces.Count -ne 1) {
+        throw 'Exactly one process trace must bind to the test assembly runtimeconfig.'
     }
+    $boundTrace = $boundTraces[0]
+    $traceFile = $boundTrace.File
+    $bytes = [byte[]]$boundTrace.Bytes
+    $lines = [string[]]$boundTrace.Lines
+    $selectedConfig = $boundTrace.SelectedConfig
 
     $nextConfig = $lines.Count
     for ($lineIndex = [int]$selectedConfig.Line + 1; $lineIndex -lt $lines.Count; $lineIndex++) {
@@ -252,7 +462,7 @@ function Get-CoreRuntimeSelectionTrace {
     }
     $runtimeMatch = if ($chosen.Count -eq 1) { [regex]::Match($chosen[0], '(?i)(?:^|[\\/])shared[\\/]Microsoft\.NETCore\.App[\\/](?<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$') } else { [regex]::Match('', 'a^') }
     if ($chosen.Count -ne 1 -or -not $runtimeMatch.Success) {
-        throw 'Testhost trace does not prove exactly one selected Microsoft.NETCore.App CLR for the bound test assembly.'
+        throw 'The process trace does not prove exactly one selected Microsoft.NETCore.App CLR for the bound test assembly.'
     }
 
     return [pscustomobject]@{
@@ -406,4 +616,4 @@ function Get-CoreTrxAssessment {
     }
 }
 
-Export-ModuleMember -Function Get-CoreInputSnapshot, Get-CoreInputDigest, Compare-CoreInputSnapshots, Get-CoreRuntimeSelectionTrace, Get-CoreTrxAssessment
+Export-ModuleMember -Function Get-CoreProjectCompileInputs, Get-CoreInputSnapshot, Get-CoreInputDigest, Compare-CoreInputSnapshots, New-CoreHostTraceRunSettings, Get-CoreRuntimeSelectionTrace, Get-CoreTrxAssessment

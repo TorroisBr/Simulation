@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
+using System.Linq;
 
 public class TravelSystem : IAuthoritativeMutationGuardBindable
 {
@@ -12,6 +12,9 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
     private readonly EconomyTransactionService transactionService;
     private TravelPartyStore travelPartyStore;
     private readonly MutationGuardBinding mutationGuardBinding = new MutationGuardBinding();
+
+    internal TravelPartyStore SelectedTravelPartyStore => travelPartyStore;
+    internal DomainEventRecorder SelectedDomainEventRecorder => domainEventRecorder;
 
     public TravelSystem(
         SpatialNetworkRuntime spatialNetwork,
@@ -41,7 +44,7 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
         this.getCityRuntimeByLocation = getCityRuntimeByLocation;
         this.travelConfiguration = travelConfiguration ?? new EffectiveTravelConfiguration(0f);
         this.domainEventRecorder = domainEventRecorder;
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         this.transactionService = transactionService ?? new EconomyTransactionService();
     }
 
@@ -117,42 +120,78 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
 
         CityRuntime resolvedTargetCity = targetCityProjection ?? GetCityRuntime(targetLocation);
 
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = npcRuntime?.SelectedRuntimeOwnerGraph;
+        bool selectedOwners = npcRuntime?.SelectedRuntimeOwners != null
+            && selectedGraph != null
+            && selectedGraph.ContainsExactNpcOwner(npcRuntime.SelectedRuntimeOwners);
+        SpatialRouteRuntime route = null;
+        float travelCost = -1f;
+        if (!selectedOwners && npcRuntime != null
+            && TryGetDirectRoute(npcRuntime.CurrentLocation, targetLocation, out route))
+        {
+            travelCost = GetTravelCost(route.TravelDays);
+        }
+        else if (!selectedOwners)
+        {
+            return false;
+        }
+
         if (npcRuntime == null
             || npcRuntime.IsAlive == false
             || targetLocation == null
             || (targetCityProjection != null && targetCityProjection.Location != targetLocation)
             || !npcRuntime.CanStartTravelPresenceTransition(1L)
-            || IsManagedByTravelParty(npcRuntime)
-            || TryGetDirectRoute(npcRuntime.CurrentLocation, targetLocation, out SpatialRouteRuntime route) == false)
+            || (!selectedOwners && IsManagedByTravelParty(npcRuntime)))
         {
             return false;
         }
 
-        int travelDays = route.TravelDays;
-        float travelCost = GetTravelCost(travelDays);
+        if (selectedOwners
+            && (selectedGraph.TravelParties == null
+                || !ReferenceEquals(selectedGraph.TravelParties, travelPartyStore)))
+        {
+            return false;
+        }
 
-        if (travelCost < 0f || transactionService.CanChargeTravel(npcRuntime, travelCost) == false)
+        if (!selectedOwners
+            && (travelCost < 0f || transactionService.CanChargeTravel(npcRuntime, travelCost) == false))
         {
             return false;
         }
 
         SpatialLocationRuntime originLocation = npcRuntime.CurrentLocation;
+        string travelOriginDecisionId = originDecisionId;
 
-        EconomyTransactionResult charge = transactionService.TryChargeTravel(npcRuntime, travelCost);
-
-        if (charge.Success == false)
+        bool travelStarted;
+        if (selectedOwners)
         {
-            return false;
+            if (targetCityProjection?.SelectedRuntimeOwners == null
+                || !ReferenceEquals(targetCityProjection.Location, targetLocation)
+                || !DailyV1SelectedActionExecutionStage.TryExecuteSoloTravelSlot(
+                    selectedGraph, npcRuntime.SelectedRuntimeOwners,
+                    targetCityProjection.SelectedRuntimeOwners.RuntimeId,
+                    travelPartyStore,
+                    plan => npcRuntime.TryCommitPreparedSelectedTravelTransition(
+                        plan, targetLocation, resolvedTargetCity),
+                    out DailyV1SelectedActionExecutionStage.SoloTravelResult selectedTravel)
+                || !selectedTravel.Succeeded)
+                return false;
+            route = selectedTravel.Route;
+            travelCost = selectedTravel.TravelCost;
+            travelOriginDecisionId = selectedTravel.Transition.OriginDecisionId;
+            travelStarted = true;
+        }
+        else
+        {
+            EconomyTransactionResult charge = transactionService.TryChargeTravel(npcRuntime, travelCost);
+            if (charge.Success == false) return false;
+            travelStarted = npcRuntime.StartTravel(
+                targetLocation, resolvedTargetCity, route.TravelDays, originDecisionId, route.RuntimeId);
+            if (!travelStarted) transactionService.TryRestoreTravelCharge(npcRuntime, travelCost);
         }
 
-        if (npcRuntime.StartTravel(
-            targetLocation,
-            resolvedTargetCity,
-            travelDays,
-            originDecisionId,
-            route.RuntimeId) == false)
+        if (!travelStarted)
         {
-            transactionService.TryRestoreTravelCharge(npcRuntime, travelCost);
             return false;
         }
 
@@ -167,7 +206,7 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
             originLocation.RuntimeId,
             targetLocation.RuntimeId,
             route.RuntimeId,
-            originDecisionId));
+            travelOriginDecisionId));
         string originName = GetCityRuntime(originLocation)?.CityName ?? originLocation.RuntimeId;
         string destinationName = resolvedTargetCity != null ? resolvedTargetCity.CityName : targetLocation.RuntimeId;
         logger.Log(SimulationLogCategory.Travel, $"{npcRuntime.NpcName} iniciou viagem de {originName} para {destinationName}");
@@ -178,6 +217,75 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Preflights only the Unity presence projection capacity needed by the
+    /// selected Core transition. Core owns eligibility, exact route/cost and
+    /// authoritative owner revision checks.
+    /// </summary>
+    internal bool CanPreflightSelectedSoloTravelProjection(
+        NpcRuntime npcRuntime,
+        DailyV1SelectedTravelTransitionPlan plan)
+    {
+        return npcRuntime != null
+            && plan != null
+            && ReferenceEquals(npcRuntime.SelectedRuntimeOwners, plan.Npc)
+            && npcRuntime.CanStartTravelPresenceTransition(1L);
+    }
+
+    internal bool CanCommitSelectedSoloTravelTransition(
+        NpcRuntime npcRuntime,
+        DailyV1SelectedTravelTransitionPlan plan,
+        SpatialRouteRuntime route,
+        float travelCost,
+        CityRuntime destinationCityProjection)
+    {
+        return mutationGuardBinding.CanMutate
+            && npcRuntime != null
+            && npcRuntime.IsAlive
+            && npcRuntime.CanStartTravelPresenceTransition(1L)
+            && plan != null
+            && route != null
+            && travelCost >= 0f
+            && !float.IsNaN(travelCost)
+            && !float.IsInfinity(travelCost)
+            && destinationCityProjection?.SelectedRuntimeOwners != null
+            && destinationCityProjection.Location != null
+            && string.Equals(plan.DestinationCityRuntimeId,
+                destinationCityProjection.SelectedRuntimeOwners.RuntimeId, StringComparison.Ordinal)
+            && string.Equals(plan.DestinationLocationRuntimeId,
+                destinationCityProjection.Location.RuntimeId, StringComparison.Ordinal)
+            && string.Equals(plan.RouteRuntimeId, route.RuntimeId, StringComparison.Ordinal)
+            && string.Equals(route.Destination.RuntimeId,
+                destinationCityProjection.Location.RuntimeId, StringComparison.Ordinal);
+    }
+
+    internal void PublishSelectedSoloTravelStarted(
+        NpcRuntime npcRuntime,
+        CityRuntime destinationCityProjection,
+        DailyV1SelectedActionExecutionStage.SoloTravelResult travel)
+    {
+        if (npcRuntime == null || travel?.Route == null || travel.Transition == null) return;
+        SpatialLocationRuntime originLocation = travel.Route.Origin;
+        SpatialLocationRuntime targetLocation = travel.Route.Destination;
+        domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcTravelStartedEvent(
+            eventId,
+            absoluteDay,
+            recordSequence,
+            npcRuntime.RuntimeId,
+            originLocation.RuntimeId,
+            targetLocation.RuntimeId,
+            travel.Route.RuntimeId,
+            travel.Transition.OriginDecisionId));
+        string originName = GetCityRuntime(originLocation)?.CityName ?? originLocation.RuntimeId;
+        string destinationName = destinationCityProjection != null
+            ? destinationCityProjection.CityName
+            : targetLocation.RuntimeId;
+        logger.Log(SimulationLogCategory.Travel,
+            $"{npcRuntime.NpcName} iniciou viagem de {originName} para {destinationName}");
+        if (travel.TravelCost > 0f)
+            logger.Log(SimulationLogCategory.Travel, $"Custo de viagem: {travel.TravelCost:0.##}");
     }
 
     public bool TryStartTravel(
@@ -238,6 +346,182 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
 
         travelCost = GetTravelCost(travelDays);
         return transactionService.CanChargeTravel(npcRuntime, travelCost);
+    }
+
+    /// <summary>
+    /// Advances solo travel through the exact selected Core owner graph while
+    /// retaining this system's established P12 adapter, party-store, event,
+    /// and logging responsibilities. Core commits selected arrival knowledge
+    /// on the exact owner before this adapter publishes the result. Returns false only when the
+    /// exact runtime-to-owner join cannot be established before any writes.
+    /// </summary>
+    internal bool TryAdvanceSelectedSoloTravels(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        List<NpcRuntime> npcRuntimeList,
+        out IReadOnlyList<NpcRuntime> arrivedNpcs)
+    {
+        arrivedNpcs = null;
+        ThrowIfFaulted();
+        if (graph == null || npcRuntimeList == null) return false;
+
+        Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime> adapters =
+            new Dictionary<DailyV1NpcRuntimeOwners, NpcRuntime>();
+        foreach (NpcRuntime runtime in npcRuntimeList)
+        {
+            DailyV1NpcRuntimeOwners owner = runtime?.SelectedRuntimeOwners;
+            if (owner == null
+                || !ReferenceEquals(owner.Definitions, graph.Definitions)
+                || !adapters.TryAdd(owner, runtime))
+                return false;
+        }
+        if (adapters.Count != graph.Npcs.Count) return false;
+        foreach (DailyV1NpcRuntimeOwners owner in graph.Npcs)
+            if (!adapters.ContainsKey(owner)) return false;
+
+        Dictionary<DailyV1NpcRuntimeOwners, CityRuntime[]> changedCitiesByOwner =
+            new Dictionary<DailyV1NpcRuntimeOwners, CityRuntime[]>();
+        IReadOnlyCollection<string> managedTravelPartyNpcRuntimeIds = GetManagedTravelPartyNpcRuntimeIds();
+        List<NpcRuntime> arrivals = new List<NpcRuntime>();
+        bool advanced = graph.TryAdvanceSoloTravelDay(
+            graph.Npcs,
+            managedTravelPartyNpcRuntimeIds,
+            (owner, plan, _) =>
+            {
+                if (!TryGetSelectedTravelProjectionCandidates(graph, plan, out CityRuntime[] candidates)) return false;
+                if (!adapters[owner].CanAdmitPreparedSelectedTravelDay(
+                        plan, candidates, out CityRuntime[] changedCities))
+                    return false;
+                changedCitiesByOwner[owner] = changedCities;
+                return true;
+            },
+            (owner, plan, arriving) =>
+            {
+                NpcRuntime runtime = adapters[owner];
+                if (!changedCitiesByOwner.TryGetValue(owner, out CityRuntime[] changedCities)
+                    || !runtime.TryProjectCommittedSelectedTravelDay(
+                        plan, arriving, changedCities, out _))
+                    throw new InvalidOperationException("A committed selected solo-travel transition could not publish its Unity projection.");
+
+                // The selected P12 census verifies the reciprocal Core/Unity
+                // presence join, so publish projection before invalidating the
+                // owner's captured section and before Core advances to the next
+                // NPC in RuntimeId order.
+                runtime.RecordSelectedTravelOwnerMutationCommitted(plan, changedCities);
+            },
+            result =>
+            {
+                NpcRuntime runtime = adapters[result.Npc];
+                if (PublishSelectedSoloTravelResult(runtime, result)) arrivals.Add(runtime);
+            },
+            out _);
+        if (!advanced) return false;
+
+        arrivedNpcs = arrivals.AsReadOnly();
+        return true;
+    }
+
+    internal IReadOnlyCollection<string> GetManagedTravelPartyNpcRuntimeIds()
+    {
+        HashSet<string> memberRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
+        TravelPartyStore store = travelPartyStore;
+        if (store == null) return memberRuntimeIds;
+
+        IDisposable readWindow = store.EnterReadWindow();
+        try
+        {
+            foreach (TravelPartyRuntime party in store.ActiveParties)
+            {
+                if (party == null || !party.IsActive || party.MemberRuntimeIds == null) continue;
+                foreach (string memberRuntimeId in party.MemberRuntimeIds)
+                    if (!string.IsNullOrWhiteSpace(memberRuntimeId))
+                        memberRuntimeIds.Add(memberRuntimeId);
+            }
+        }
+        finally
+        {
+            readWindow.Dispose();
+        }
+
+        return memberRuntimeIds;
+    }
+
+    internal void EnsureSelectedDailyTravelAdvanceAvailable() => ThrowIfFaulted();
+
+    internal bool PublishSelectedSoloTravelResult(
+        NpcRuntime runtime,
+        DailyV1SelectedSoloTravelDayResult result,
+        bool arrivalEventHandledByCore = false)
+    {
+        if (runtime == null || result == null || !result.ShouldReport) return false;
+        if (result.Arrived)
+        {
+            if (!arrivalEventHandledByCore)
+            {
+                domainEventRecorder?.Record((eventId, absoluteDay, recordSequence) => new NpcArrivedEvent(
+                    eventId,
+                    absoluteDay,
+                    recordSequence,
+                    runtime.RuntimeId,
+                    runtime.CurrentLocation?.RuntimeId,
+                    result.OriginDecisionId));
+            }
+            string destinationName = runtime.CurrentCity != null
+                ? runtime.CurrentCity.CityName
+                : runtime.CurrentLocation?.RuntimeId ?? "destino desconhecido";
+            logger.Log(SimulationLogCategory.Travel, $"{runtime.NpcName} chegou em {destinationName}");
+            return true;
+        }
+
+        string verb = runtime.TravelDaysRemaining == 1 ? "Resta" : "Restam";
+        string dayText = runtime.TravelDaysRemaining == 1 ? "dia" : "dias";
+        logger.Log(SimulationLogCategory.Travel,
+            $"{runtime.NpcName} esta viajando. {verb} {runtime.TravelDaysRemaining} {dayText}.");
+        return false;
+    }
+
+    internal bool TryGetSelectedTravelProjectionCandidates(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1SelectedTravelTransitionPlan plan,
+        out CityRuntime[] projections)
+    {
+        projections = null;
+        if (graph == null || plan == null) return false;
+
+        List<CityRuntime> candidates = new List<CityRuntime>();
+        foreach (DailyV1CityRuntimeOwners changedOwner in plan.ChangedCityOwners)
+        {
+            if (changedOwner == null
+                || !spatialNetwork.TryGetLocation(changedOwner.LocationRuntimeId, out SpatialLocationRuntime location))
+                return false;
+            CityRuntime projection = getCityRuntimeByLocation(location);
+            if (projection == null
+                || !ReferenceEquals(projection.SelectedRuntimeOwners, changedOwner))
+                return false;
+            candidates.Add(projection);
+        }
+
+        // Destination is validation-only until the arrival plan changes its
+        // presence owner. Still validate its current Core/Unity reciprocal
+        // projection on every travel day, without admitting it as a changed
+        // City for projection or P12 revision accounting.
+        string destinationCityId = plan.Npc.Travel.DestinationCityRuntimeId;
+        if (!string.IsNullOrWhiteSpace(destinationCityId))
+        {
+            DailyV1CityRuntimeOwners destinationOwner = graph.Cities.FirstOrDefault(city =>
+                string.Equals(city.RuntimeId, destinationCityId, StringComparison.Ordinal));
+            if (destinationOwner == null
+                || !spatialNetwork.TryGetLocation(destinationOwner.LocationRuntimeId,
+                    out SpatialLocationRuntime destinationLocation))
+                return false;
+            CityRuntime destinationProjection = getCityRuntimeByLocation(destinationLocation);
+            if (destinationProjection == null
+                || !ReferenceEquals(destinationProjection.SelectedRuntimeOwners, destinationOwner))
+                return false;
+            if (!candidates.Contains(destinationProjection)) candidates.Add(destinationProjection);
+        }
+
+        projections = candidates.ToArray();
+        return true;
     }
 
     public IReadOnlyList<NpcRuntime> AdvanceTravels(List<NpcRuntime> npcRuntimeList)
@@ -503,7 +787,7 @@ public class TravelSystem : IAuthoritativeMutationGuardBindable
 
     public float GetTravelCost(int travelDays)
     {
-        return Mathf.Max(1, travelDays) * travelConfiguration.TravelCostPerDay;
+        return UnityMathfCompatibility.Max(1, travelDays) * travelConfiguration.TravelCostPerDay;
     }
 
     public bool TryGetDirectRoute(

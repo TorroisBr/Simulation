@@ -13,47 +13,129 @@ internal static class P12ADailyV1OwnerSectionEncoder
         out IReadOnlyList<P12AOwnerSection> sections,
         out P12AResult result)
     {
+        return TryEncode(census, runtimeIdentity, d, e, f,
+            false, null, false, null, null, capturedDay, out sections, out result);
+    }
+
+    internal static bool TryEncodeWithCoreP12FSections(
+        IReadOnlyList<OwnerSectionCensusSnapshot> census,
+        P12CRuntimeIdentityOwnerSnapshot runtimeIdentity,
+        P12DDailyV1OwnerPackage d,
+        P12EDailyV1OwnerPackage e,
+        IReadOnlyList<P12AOwnerSection> coreP12FSections,
+        long capturedDay,
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
+        return TryEncode(census, runtimeIdentity, d, e, null,
+            false, null, false, null, coreP12FSections, capturedDay, out sections, out result);
+    }
+
+    internal static bool TryEncodeWithCoreP12DOwnerSections(
+        IReadOnlyList<OwnerSectionCensusSnapshot> census,
+        P12CRuntimeIdentityOwnerSnapshot runtimeIdentity,
+        P12DDailyV1OwnerPackage d,
+        P12EDailyV1OwnerPackage e,
+        IReadOnlyList<P12AOwnerSection> coreP12DSections,
+        bool coreP12DIncludesNpcRows,
+        IReadOnlyList<P12AOwnerSection> coreP12FSections,
+        long capturedDay,
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
+        return TryEncode(census, runtimeIdentity, d, e, null,
+            false, coreP12DSections, coreP12DIncludesNpcRows, null, coreP12FSections,
+            capturedDay, out sections, out result);
+    }
+
+    internal static bool TryEncodeWithCoreP12DAndEOwnerSections(
+        IReadOnlyList<OwnerSectionCensusSnapshot> census,
+        P12DDailyV1OwnerPackage d,
+        P12EDailyV1OwnerPackage e,
+        IReadOnlyList<P12AOwnerSection> coreP12DSections,
+        bool coreP12DIncludesNpcRows,
+        IReadOnlyList<P12AOwnerSection> coreP12ESections,
+        IReadOnlyList<P12AOwnerSection> coreP12FSections,
+        long capturedDay,
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
+        return TryEncode(census, null, d, e, null,
+            true, coreP12DSections, coreP12DIncludesNpcRows, coreP12ESections,
+            coreP12FSections, capturedDay, out sections, out result);
+    }
+
+    private static bool TryEncode(
+        IReadOnlyList<OwnerSectionCensusSnapshot> census,
+        P12CRuntimeIdentityOwnerSnapshot runtimeIdentity,
+        P12DDailyV1OwnerPackage d,
+        P12EDailyV1OwnerPackage e,
+        P12FDailyV1OwnerCapture f,
+        bool coreApplicationOwnsRuntimeIdentity,
+        IReadOnlyList<P12AOwnerSection> coreP12DSections,
+        bool coreP12DIncludesNpcRows,
+        IReadOnlyList<P12AOwnerSection> coreP12ESections,
+        IReadOnlyList<P12AOwnerSection> coreP12FSections,
+        long capturedDay,
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
         sections = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue);
-        if (census == null || runtimeIdentity == null || d == null || e == null || f == null
+        if (census == null
+            || (runtimeIdentity == null) != coreApplicationOwnsRuntimeIdentity
+            || d == null || e == null
+            || ((f == null) == (coreP12FSections == null))
+            || (coreP12DIncludesNpcRows && coreP12DSections == null)
             || capturedDay < 0L || d.CitySnapshots == null || d.NpcDRows == null
             || d.NpcFRows == null || d.NpcDRows.Count != d.NpcFRows.Count
             || d.PersonSnapshot == null || d.GenealogySnapshot == null
             || d.SpatialNetworkSnapshot == null) return false;
 
         List<P12AOwnerSection> encoded = new List<P12AOwnerSection>();
-        if (!P12ARuntimeIdentityOwnerCodec.TryEncode(runtimeIdentity,
-                out IReadOnlyList<P12AOwnerSection> identitySections, out result)
-            || !P12ASpatialNetworkOwnerCodec.TryEncode(d.SpatialNetworkSnapshot,
-                out P12AOwnerSection locations, out P12AOwnerSection routes, out result)
-            || !P12APersonStoreOwnerCodec.TryEncode(d.PersonSnapshot,
-                out P12AOwnerSection membership, out P12AOwnerSection bindings, out result)
-            || !P12AGenealogyOwnerCodec.TryEncode(d.GenealogySnapshot,
-                out P12AOwnerSection genealogy, out result)) return false;
-        encoded.AddRange(identitySections);
-        encoded.Add(locations);
-        encoded.Add(routes);
-        encoded.Add(membership);
-        encoded.Add(bindings);
-        encoded.Add(genealogy);
-
-        foreach (PersonStoreOwnerSnapshotRow person in d.PersonSnapshot.Rows)
+        if (!coreApplicationOwnsRuntimeIdentity)
         {
-            if (!P12APersonLifeResidenceOwnerCodec.TryEncode(person,
-                    out P12AOwnerSection lifeResidence, out result)) return false;
-            encoded.Add(lifeResidence);
+            if (!P12ARuntimeIdentityOwnerCodec.TryEncode(runtimeIdentity,
+                    out IReadOnlyList<P12AOwnerSection> identitySections, out result)) return false;
+            encoded.AddRange(identitySections);
+        }
+        if (coreP12DSections != null)
+        {
+            encoded.AddRange(coreP12DSections);
+        }
+        else
+        {
+            if (!P12ASpatialNetworkOwnerCodec.TryEncode(d.SpatialNetworkSnapshot,
+                    out P12AOwnerSection locations, out P12AOwnerSection routes, out result)
+                || !P12APersonStoreOwnerCodec.TryEncode(d.PersonSnapshot,
+                    out P12AOwnerSection membership, out P12AOwnerSection bindings, out result)
+                || !P12AGenealogyOwnerCodec.TryEncode(d.GenealogySnapshot,
+                    out P12AOwnerSection genealogy, out result)) return false;
+            encoded.Add(locations);
+            encoded.Add(routes);
+            encoded.Add(membership);
+            encoded.Add(bindings);
+            encoded.Add(genealogy);
+
+            foreach (PersonStoreOwnerSnapshotRow person in d.PersonSnapshot.Rows)
+            {
+                if (!P12APersonLifeResidenceOwnerCodec.TryEncode(person,
+                        out P12AOwnerSection lifeResidence, out result)) return false;
+                encoded.Add(lifeResidence);
+            }
+
+            if (!P12ACityOwnerSetCodec.TryEncode(d.CitySnapshots, census,
+                    out IReadOnlyList<P12AOwnerSection> cities, out result)) return false;
+            encoded.AddRange(cities);
         }
 
-        if (!P12ACityOwnerSetCodec.TryEncode(d.CitySnapshots, census,
-                out IReadOnlyList<P12AOwnerSection> cities, out result)) return false;
-        encoded.AddRange(cities);
-
-        for (int i = 0; i < d.NpcDRows.Count; i++)
-        {
-            if (!P12ANpcOwnerCodec.TryEncode(d.NpcDRows[i], d.NpcFRows[i], census,
-                    out IReadOnlyList<P12AOwnerSection> npcSections, out result)) return false;
-            encoded.AddRange(npcSections);
-        }
+        if (coreP12DSections == null || !coreP12DIncludesNpcRows)
+            for (int i = 0; i < d.NpcDRows.Count; i++)
+            {
+                if (!P12ANpcOwnerCodec.TryEncode(d.NpcDRows[i], d.NpcFRows[i], census,
+                        out IReadOnlyList<P12AOwnerSection> npcSections, out result)) return false;
+                encoded.AddRange(npcSections);
+            }
 
         if (!P12EInstitutionOfficeOwnerCodec.TryEncode(e.InstitutionOfficeSnapshot,
                 out P12AOwnerSection institutions, out P12AOwnerSection offices,
@@ -93,18 +175,29 @@ internal static class P12ADailyV1OwnerSectionEncoder
         encoded.Add(outcomes); encoded.Add(crimeKnowledge); encoded.Add(reactions);
         encoded.AddRange(receipts);
 
-        if (!P12AFPoliticalKnowledgeCodec.TryEncode(f.PoliticalKnowledgeSnapshot,
-                out P12AOwnerSection politicalKnowledge, out result)
-            || !P12AFScheduledDirectiveCodec.TryEncode(f.DirectiveSnapshot,
-                out P12AOwnerSection directives, out result)
-            || !P12AActorChoiceCodec.TryEncode(f.ActorChoiceSnapshot,
-                out P12AOwnerSection actorChoices, out result)
-            || !P12AFCommitmentOwnerCodec.TryEncodeTravelParties(f.TravelPartySnapshot,
-                out P12AOwnerSection travelParties, out result)
-            || !P12AFCommitmentOwnerCodec.TryEncodeExpeditions(f.ExpeditionSnapshot,
-                out P12AOwnerSection expeditions, out result)) return false;
-        encoded.Add(politicalKnowledge); encoded.Add(directives); encoded.Add(actorChoices);
-        encoded.Add(travelParties); encoded.Add(expeditions);
+        if (coreP12ESections != null
+            && !ReplaceEquivalentOwnerSections(encoded, coreP12ESections, out result))
+            return false;
+
+        if (coreP12FSections != null)
+        {
+            encoded.AddRange(coreP12FSections);
+        }
+        else
+        {
+            if (!P12AFPoliticalKnowledgeCodec.TryEncode(f.PoliticalKnowledgeSnapshot,
+                    out P12AOwnerSection politicalKnowledge, out result)
+                || !P12AFScheduledDirectiveCodec.TryEncode(f.DirectiveSnapshot,
+                    out P12AOwnerSection directives, out result)
+                || !P12AActorChoiceCodec.TryEncode(f.ActorChoiceSnapshot,
+                    out P12AOwnerSection actorChoices, out result)
+                || !P12AFCommitmentOwnerCodec.TryEncodeTravelParties(f.TravelPartySnapshot,
+                    out P12AOwnerSection travelParties, out result)
+                || !P12AFCommitmentOwnerCodec.TryEncodeExpeditions(f.ExpeditionSnapshot,
+                    out P12AOwnerSection expeditions, out result)) return false;
+            encoded.Add(politicalKnowledge); encoded.Add(directives); encoded.Add(actorChoices);
+            encoded.Add(travelParties); encoded.Add(expeditions);
+        }
 
         encoded.Sort((left, right) => StringComparer.Ordinal.Compare(left?.Id, right?.Id));
         for (int i = 0; i < encoded.Count; i++)
@@ -118,6 +211,75 @@ internal static class P12ADailyV1OwnerSectionEncoder
         }
         sections = encoded.AsReadOnly();
         result = null;
+        return true;
+    }
+
+    private static bool ReplaceEquivalentOwnerSections(
+        List<P12AOwnerSection> encoded,
+        IReadOnlyList<P12AOwnerSection> coreSections,
+        out P12AResult result)
+    {
+        result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        if (encoded == null || coreSections == null) return false;
+        foreach (P12AOwnerSection coreSection in coreSections)
+        {
+            if (coreSection == null) return false;
+            int matchIndex = -1;
+            for (int index = 0; index < encoded.Count; index++)
+            {
+                if (!string.Equals(encoded[index]?.Id, coreSection.Id, StringComparison.Ordinal)) continue;
+                if (matchIndex >= 0)
+                {
+                    result = new P12AResult(P12AResultCode.MissingOrDuplicateSection,
+                        coreSection.Id);
+                    return false;
+                }
+                matchIndex = index;
+            }
+
+            if (matchIndex < 0 || !OwnerSectionsEqual(encoded[matchIndex], coreSection))
+            {
+                result = new P12AResult(P12AResultCode.InvalidOwnerValue, coreSection.Id);
+                return false;
+            }
+            encoded[matchIndex] = coreSection;
+        }
+
+        result = null;
+        return true;
+    }
+
+    private static bool OwnerSectionsEqual(P12AOwnerSection left, P12AOwnerSection right)
+    {
+        if (left == null || right == null
+            || !string.Equals(left.Id, right.Id, StringComparison.Ordinal)
+            || left.Major != right.Major || left.Minor != right.Minor
+            || left.Role != right.Role
+            || !string.Equals(left.AliasGroup, right.AliasGroup, StringComparison.Ordinal)
+            || left.Revision != right.Revision
+            || left.Rows == null || right.Rows == null
+            || left.Rows.Count != right.Rows.Count)
+            return false;
+
+        for (int index = 0; index < left.Rows.Count; index++)
+        {
+            P12AOwnerRow leftRow = left.Rows[index];
+            P12AOwnerRow rightRow = right.Rows[index];
+            if (leftRow == null || rightRow == null
+                || !string.Equals(leftRow.OwnerKey, rightRow.OwnerKey, StringComparison.Ordinal)
+                || leftRow.Revision != rightRow.Revision
+                || !ByteArraysEqual(leftRow.Payload, rightRow.Payload))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool ByteArraysEqual(byte[] left, byte[] right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left == null || right == null || left.Length != right.Length) return false;
+        for (int index = 0; index < left.Length; index++)
+            if (left[index] != right[index]) return false;
         return true;
     }
 }

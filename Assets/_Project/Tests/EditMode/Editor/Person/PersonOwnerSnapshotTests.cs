@@ -40,9 +40,9 @@ public sealed class PersonOwnerSnapshotTests
     {
         PersonStore source = new PersonStore();
         PersonRuntime deceased = new PersonRuntime(new PersonId("person-z"), 2L);
-        Assert.That(deceased.TrySetResidenceSettlementRuntimeId(" settlement-z "), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(deceased, " settlement-z "), Is.True);
         Register(source, deceased);
-        Assert.That(deceased.TryRecordDeath(9L), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.TryRecordDeath(deceased, 9L), Is.True);
 
         PersonRuntime unknownBirth = new PersonRuntime(new PersonId("Person-A"));
         Register(source, unknownBirth);
@@ -102,7 +102,7 @@ public sealed class PersonOwnerSnapshotTests
 
         // Later writes to the source cannot affect either the detached value
         // or the already staged owner.
-        Assert.That(living.TrySetResidenceSettlementRuntimeId("settlement-later"), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(living, "settlement-later"), Is.True);
         Assert.That(source.TryBindMaterializedNpc(
             living.PersonId,
             "npc-runtime-later",
@@ -118,8 +118,10 @@ public sealed class PersonOwnerSnapshotTests
     {
         PersonStore source = new PersonStore();
         PersonRuntime initialResidence = new PersonRuntime(new PersonId("person-initial-residence"));
-        Assert.That(initialResidence.TrySetResidenceSettlementRuntimeId("settlement-before-registration"), Is.True);
-        Assert.That(initialResidence.LifeResidenceRevision, Is.EqualTo(1L));
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            initialResidence,
+            "settlement-before-registration"), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(initialResidence), Is.EqualTo(1L));
         Register(source, initialResidence);
         AssertRow(source.CaptureOwnerSnapshot().Rows[0],
             "person-initial-residence", null, null, "settlement-before-registration", null, 1L);
@@ -143,10 +145,12 @@ public sealed class PersonOwnerSnapshotTests
 
         PersonRuntime residentDeceased = new PersonRuntime(new PersonId("person-resident-deceased"), 1L);
         Register(source, residentDeceased);
-        Assert.That(residentDeceased.TrySetResidenceSettlementRuntimeId("settlement-resident"), Is.True);
-        Assert.That(residentDeceased.LifeResidenceRevision, Is.EqualTo(1L));
-        Assert.That(residentDeceased.TryRecordDeath(5L), Is.True);
-        Assert.That(residentDeceased.LifeResidenceRevision, Is.EqualTo(2L));
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            residentDeceased,
+            "settlement-resident"), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(residentDeceased), Is.EqualTo(1L));
+        Assert.That(PersonRuntimeOwnerBridge.TryRecordDeath(residentDeceased, 5L), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(residentDeceased), Is.EqualTo(2L));
 
         PersonStoreOwnerSnapshot snapshot = source.CaptureOwnerSnapshot();
         Assert.That(snapshot.MembershipCount, Is.EqualTo(2));
@@ -175,8 +179,8 @@ public sealed class PersonOwnerSnapshotTests
             out PersonStoreOwnerSnapshotFailureCode failure), Is.True);
         Assert.That(failure, Is.EqualTo(PersonStoreOwnerSnapshotFailureCode.None));
         Assert.That(staged.Revision, Is.EqualTo(17L));
-        Assert.That(staged.Persons[0].LifeResidenceRevision, Is.EqualTo(11L));
-        Assert.That(staged.Persons[1].LifeResidenceRevision, Is.EqualTo(4L));
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(staged.Persons[0]), Is.EqualTo(11L));
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(staged.Persons[1]), Is.EqualTo(4L));
         Assert.That(staged.TryRegister(
             new PersonRuntime(new PersonId("person-after-stage")),
             out PersonStoreFailure registerFailure), Is.True, registerFailure.ToString());
@@ -211,10 +215,10 @@ public sealed class PersonOwnerSnapshotTests
             out PersonStore saturatedPersonStore,
             out failure), Is.True);
         PersonRuntime saturatedPerson = saturatedPersonStore.Persons[0];
-        saturatedPerson.BindP12LifecycleMutationBoundary(_ => true, _ => { });
-        Assert.That(saturatedPerson.TryRecordDeath(10L), Is.False);
+        PersonRuntimeOwnerBridge.BindP12LifecycleMutationBoundary(saturatedPerson, _ => true, _ => { });
+        Assert.That(PersonRuntimeOwnerBridge.TryRecordDeath(saturatedPerson, 10L), Is.False);
         Assert.That(saturatedPerson.DeathAbsoluteDay, Is.Null);
-        Assert.That(saturatedPerson.LifeResidenceRevision, Is.EqualTo(long.MaxValue));
+        Assert.That(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(saturatedPerson), Is.EqualTo(long.MaxValue));
     }
 
     [Test]

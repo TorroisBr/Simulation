@@ -23,7 +23,7 @@ public sealed class RuntimeIdentityCensusTests
     {
         RuntimeIdentityRegistry registry = new RuntimeIdentityRegistry();
         IReadOnlyList<IOwnerSectionCensusProvider> providers = RuntimeIdentityRegistryCensusProvider.CreateProviders(registry);
-        object ownerIdentity = registry;
+        object ownerIdentity = GetCoreIdentityOwner(registry);
         AssertCensus(Capture(providers), new int[8], 0L, ownerIdentity);
 
         Func<bool>[] registrations =
@@ -34,7 +34,7 @@ public sealed class RuntimeIdentityCensusTests
             () => registry.RegisterRoute(new SpatialRouteRuntime(
                 "route-one", new SpatialLocationRuntime("route-origin"), new SpatialLocationRuntime("route-destination"), 2)),
             () => registry.RegisterExplorableSite(new ExplorableSiteRuntime(
-                "site-one", SimulationTestFactory.CreateExplorableSite("site-definition-one"), new SpatialLocationRuntime("site-location-one"))),
+                "site-one", SimulationTestFactory.CreateExplorableSiteDefinition("site-definition-one"), new SpatialLocationRuntime("site-location-one"))),
             () => registry.RegisterLocalPlace(new LocalPlaceRuntime("local-place-one")),
             () => registry.RegisterLocalConnection(new LocalTopologyConnectionRuntime(
                 "local-connection-one", new LocalPlaceRuntime("connection-origin"), new LocalPlaceRuntime("connection-destination"), 1f)),
@@ -105,7 +105,8 @@ public sealed class RuntimeIdentityCensusTests
             "Duplicate RuntimeId 'same-id' while registering City; it is already registered as NPC.");
         Assert.That(registry.RegisterCity(SimulationTestFactory.CreateCity("same-id", "city-location")), Is.False);
 
-        AssertCensus(Capture(providers), new[] { 1, 0, 0, 0, 0, 0, 0, 0 }, 1L, registry);
+        AssertCensus(Capture(providers), new[] { 1, 0, 0, 0, 0, 0, 0, 0 }, 1L,
+            GetCoreIdentityOwner(registry));
     }
 
     [Test]
@@ -118,7 +119,7 @@ public sealed class RuntimeIdentityCensusTests
         Assert.Throws<ArgumentException>(() => new SpatialRouteRuntime(
             "", new SpatialLocationRuntime("blank-route-origin"), new SpatialLocationRuntime("blank-route-destination"), 1));
         Assert.Throws<ArgumentException>(() => new ExplorableSiteRuntime(
-            "", SimulationTestFactory.CreateExplorableSite("blank-site-definition"), new SpatialLocationRuntime("blank-site-location")));
+            "", SimulationTestFactory.CreateExplorableSiteDefinition("blank-site-definition"), new SpatialLocationRuntime("blank-site-location")));
         Assert.Throws<ArgumentException>(() => new LocalPlaceRuntime(" "));
         Assert.Throws<ArgumentException>(() => new LocalTopologyConnectionRuntime(
             "", new LocalPlaceRuntime("blank-connection-origin"), new LocalPlaceRuntime("blank-connection-destination"), 1f));
@@ -146,7 +147,7 @@ public sealed class RuntimeIdentityCensusTests
             Capture(RuntimeIdentityRegistryCensusProvider.CreateProviders(registry)),
             new[] { 0, 1, 0, 0, 0, 2, 1, 0 },
             2L,
-            registry);
+            GetCoreIdentityOwner(registry));
 
         CityRuntime emptyOwner = SimulationTestFactory.CreateCity("empty-topology-owner", "empty-topology-location");
         Assert.That(registry.RegisterCity(emptyOwner), Is.True);
@@ -157,7 +158,7 @@ public sealed class RuntimeIdentityCensusTests
             Capture(RuntimeIdentityRegistryCensusProvider.CreateProviders(registry)),
             new[] { 0, 2, 0, 0, 0, 2, 1, 0 },
             3L,
-            registry);
+            GetCoreIdentityOwner(registry));
     }
 
     [Test]
@@ -177,7 +178,7 @@ public sealed class RuntimeIdentityCensusTests
             Capture(RuntimeIdentityRegistryCensusProvider.CreateProviders(registry)),
             new[] { 0, 1, 1, 0, 0, 0, 0, 0 },
             2L,
-            registry);
+            GetCoreIdentityOwner(registry));
     }
 
     [Test]
@@ -189,9 +190,10 @@ public sealed class RuntimeIdentityCensusTests
         LocalTopologyRuntime topology = new LocalTopologyRuntime(LocalTopologyOwnerReference.ForCity(owner), registry);
         Assert.That(topology.AddPlace(new LocalPlaceRuntime("exhaustion-place")), Is.True);
 
-        typeof(RuntimeIdentityRegistry)
+        object coreIdentityOwner = GetCoreIdentityOwner(registry);
+        coreIdentityOwner.GetType()
             .GetField("censusRevision", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(registry, long.MaxValue);
+            .SetValue(coreIdentityOwner, long.MaxValue);
         LogAssert.Expect(
             UnityEngine.LogType.Error,
             "Cannot register NPC runtime identity: census revision is exhausted.");
@@ -207,7 +209,7 @@ public sealed class RuntimeIdentityCensusTests
             Capture(RuntimeIdentityRegistryCensusProvider.CreateProviders(registry)),
             new[] { 0, 1, 0, 0, 0, 0, 0, 0 },
             long.MaxValue,
-            registry);
+            GetCoreIdentityOwner(registry));
     }
 
     private static readonly string[] ExpectedSectionIds =
@@ -248,5 +250,12 @@ public sealed class RuntimeIdentityCensusTests
             Assert.That(witnesses[i].Cardinality, Is.EqualTo(expectedCardinalities[i]));
             Assert.That(witnesses[i].Revision, Is.EqualTo(expectedRevision));
         }
+    }
+
+    private static object GetCoreIdentityOwner(RuntimeIdentityRegistry registry)
+    {
+        return typeof(RuntimeIdentityRegistry)
+            .GetField("identityIndex", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(registry);
     }
 }

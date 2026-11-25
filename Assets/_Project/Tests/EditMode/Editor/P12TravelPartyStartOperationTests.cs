@@ -1,9 +1,11 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.TestTools;
 
@@ -26,11 +28,19 @@ public sealed class P12TravelPartyStartOperationTests
             returnStale() ? baseline : liveProvider.GetCurrentCensus();
     }
 
+    private readonly List<GameObject> simulationObjects = new List<GameObject>();
+
     [SetUp]
     public void SetUp() => SimulationTestFactory.CleanupDefinitions();
 
     [TearDown]
-    public void TearDown() => SimulationTestFactory.CleanupDefinitions();
+    public void TearDown()
+    {
+        foreach (GameObject simulationObject in simulationObjects)
+            if (simulationObject != null) UnityEngine.Object.DestroyImmediate(simulationObject);
+        simulationObjects.Clear();
+        SimulationTestFactory.CleanupDefinitions();
+    }
 
     [Test]
     public void RuntimeStartRegistersExactAllocatorWitnessAndPublishesOneSharedEpoch()
@@ -51,9 +61,11 @@ public sealed class P12TravelPartyStartOperationTests
 
         Assert.That(before.SectionId, Is.EqualTo(RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId));
         Assert.That(before.SchemaVersion, Is.EqualTo(RuntimeIdAllocatorCensusProvider.SchemaVersion));
-        object allocatorIdentity = typeof(RuntimeIdAllocator)
-            .GetProperty("CensusOwnerIdentity", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(fixture.Records.Allocator);
+        RuntimeIdAllocatorOwnerBridge.CaptureCensusIdentity(
+            fixture.Records.Allocator,
+            RuntimeIdAllocatorCensusCounter.TravelParties,
+            out object allocatorIdentity,
+            out _);
         Assert.That(before.OwnerInstanceIdentity, Is.SameAs(allocatorIdentity));
         Assert.That(before.Cardinality, Is.EqualTo(1));
         Assert.That(before.Revision, Is.EqualTo(0));
@@ -262,9 +274,8 @@ public sealed class P12TravelPartyStartOperationTests
         Assert.That(typeof(SimulationRuntime)
             .GetField("activeP12TravelPartyStartOperationContext", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(runtime), Is.Null);
-        Assert.That((int)typeof(ContinuationCensusProtocol)
-            .GetField("activeOperationCount", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(protocol), Is.Zero, "the finally path must dispose the operation scope after notification failure");
+        Assert.That(protocol.ActiveOperationCount, Is.Zero,
+            "the finally path must dispose the operation scope after notification failure");
     }
 
     [TestCase("party-allocator")]
@@ -392,6 +403,205 @@ public sealed class P12TravelPartyStartOperationTests
         Assert.That(fixture.Members, Has.All.Property(nameof(NpcRuntime.IsTraveling)).False);
     }
 
+    [Test]
+    public void FullySelectedRosterUsesCoreChargeAndKeepsOneP12Epoch()
+    {
+        SelectedBootstrapTravelFixture fixture = CreateSelectedBootstrapTravelFixture(3);
+        SimulationRuntime runtime = fixture.Simulation.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+        NpcRuntime[] members = fixture.SelectedMembers;
+        foreach (NpcRuntime member in members)
+        {
+            Assert.That(member.SelectedRuntimeOwners, Is.Not.Null, member.RuntimeId);
+            Assert.That(graph.ContainsExactNpcOwner(member.SelectedRuntimeOwners), Is.True, member.RuntimeId);
+        }
+
+        ActionExecutionContext context = CreateSelectedTravelPartyContext(
+            "p12-travel-party-selected-core-charge", members, fixture.Route);
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochBefore,
+            out ContinuationCensusFailure beforeFailure), Is.True, beforeFailure.ToString());
+        long storeRevisionBefore = fixture.Simulation.TravelParties.Revision;
+        float[] balancesBefore = members.Select(member => member.MoneyAccount.Balance).ToArray();
+        long[] accountRevisionsBefore = members.Select(member => member.MoneyAccount.Revision).ToArray();
+
+        Assert.That(DailyV1SelectedTravelPartyStartPlan.TryCreate(
+            graph, context, out DailyV1SelectedTravelPartyStartPlan corePlan), Is.True,
+            "The Core plan must accept the same exact selected participants and route admitted by the Unity fixture.");
+        Assert.That(corePlan.Members.Select(owner => owner.RuntimeId),
+            Is.EqualTo(members.Select(member => member.RuntimeId)));
+
+        Assert.That(runtime.ExecutionBoundaryState.TryGetApplicationAdvanceAuthority(
+            out DailyV1Application application, out DailyV1ActiveRuntimeSession session), Is.True);
+        Assert.That(application.TryGetPublishedHostProjection(session,
+            out IDailyV1ApplicationHostProjection _), Is.True);
+
+        bool started = runtime.TryStartTravelParty(context);
+        bool censusHealthy = runtime.TryAssessNpcRosterCensus(
+            out ContinuationCensusFailure startFailure);
+        Assert.That(started, Is.True,
+            $"P12 census healthy={censusHealthy}, failure={startFailure}.");
+        Assert.That(fixture.Simulation.TravelParties.ActiveParties, Has.Count.EqualTo(1));
+        TravelPartyRuntime party = fixture.Simulation.TravelParties.ActiveParties[0];
+        Assert.That(party.MemberRuntimeIds, Is.EqualTo(members.Select(member => member.RuntimeId)));
+
+        for (int index = 0; index < members.Length; index++)
+        {
+            TravelPartyMemberCost cost = party.GetCostForMember(members[index].RuntimeId);
+            Assert.That(cost, Is.Not.Null);
+            Assert.That(members[index].MoneyAccount.Balance, Is.EqualTo(balancesBefore[index] - cost.Amount));
+            Assert.That(members[index].MoneyAccount.Revision, Is.EqualTo(accountRevisionsBefore[index] + 1),
+                members[index].RuntimeId);
+            Assert.That(members[index].SelectedRuntimeOwners.MoneyAccount.Revision,
+                Is.EqualTo(accountRevisionsBefore[index] + 1), members[index].RuntimeId);
+        }
+
+        Assert.That(fixture.Simulation.TravelParties.Revision, Is.EqualTo(storeRevisionBefore + 1));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochAfter,
+            out ContinuationCensusFailure afterFailure), Is.True, afterFailure.ToString());
+        Assert.That(epochAfter, Is.EqualTo(epochBefore + 1),
+            "Core account writes, travel owners, and party publication remain within the one admitted P12 start operation.");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalFailure), Is.True,
+            finalFailure.ToString());
+    }
+
+    [Test]
+    public void MixedRosterKeepsUnityTransactionFallbackAndP12StartAdmission()
+    {
+        SelectedBootstrapTravelFixture fixture = CreateSelectedBootstrapTravelFixture(2);
+        SimulationRuntime runtime = fixture.Simulation.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        NpcRuntime[] selectedMembers = fixture.SelectedMembers;
+        Assert.That(graph, Is.Not.Null);
+        foreach (NpcRuntime member in selectedMembers)
+        {
+            Assert.That(member.SelectedRuntimeOwners, Is.Not.Null, member.RuntimeId);
+            Assert.That(graph.ContainsExactNpcOwner(member.SelectedRuntimeOwners), Is.True, member.RuntimeId);
+        }
+
+        NpcRuntime compatibilityMember = new NpcRuntime(
+            "p12-travel-party-unselected-support", null);
+        Assert.That(compatibilityMember.MoneyAccount.TryCredit(100f), Is.True);
+        Assert.That(runtime.TryRegisterNpc(compatibilityMember, out WorldNpcRegistryFailure registrationFailure),
+            Is.True, registrationFailure.ToString());
+        Assert.That(compatibilityMember.SelectedRuntimeOwners, Is.Null);
+        Assert.That(runtime.TryGetNpcRuntime(compatibilityMember.RuntimeId, out NpcRuntime registeredCompatibilityMember), Is.True);
+        Assert.That(registeredCompatibilityMember, Is.SameAs(compatibilityMember));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out _, out ContinuationCensusFailure registrationEpochFailure),
+            Is.True, "After compatibility registration: " + registrationEpochFailure);
+        Assert.That(compatibilityMember.SetCurrentPresence(fixture.Origin.Location, fixture.Origin), Is.True,
+            "The registered unselected member joins the admitted City presence owner through the normal runtime projection.");
+
+        NpcRuntime[] members = { selectedMembers[0], selectedMembers[1], compatibilityMember };
+        ActionExecutionContext context = CreateSelectedTravelPartyContext(
+            "p12-travel-party-mixed-core-charge", members, fixture.Route);
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochBefore,
+            out ContinuationCensusFailure beforeFailure), Is.True, beforeFailure.ToString());
+        long storeRevisionBefore = fixture.Simulation.TravelParties.Revision;
+        float[] balancesBefore = members.Select(member => member.MoneyAccount.Balance).ToArray();
+        long[] accountRevisionsBefore = members.Select(member => member.MoneyAccount.Revision).ToArray();
+
+        Assert.That(runtime.TryStartTravelParty(context), Is.True,
+            "A mixed selected/unselected roster uses the retained Unity transaction fallback inside P12 start admission.");
+        Assert.That(fixture.Simulation.TravelParties.ActiveParties, Has.Count.EqualTo(1));
+        TravelPartyRuntime party = fixture.Simulation.TravelParties.ActiveParties[0];
+        Assert.That(party.MemberRuntimeIds, Is.EqualTo(members.Select(member => member.RuntimeId)));
+        for (int index = 0; index < members.Length; index++)
+        {
+            TravelPartyMemberCost cost = party.GetCostForMember(members[index].RuntimeId);
+            Assert.That(cost, Is.Not.Null);
+            Assert.That(members[index].MoneyAccount.Balance, Is.EqualTo(balancesBefore[index] - cost.Amount));
+            Assert.That(members[index].MoneyAccount.Revision, Is.EqualTo(accountRevisionsBefore[index] + 1),
+                members[index].RuntimeId);
+        }
+
+        Assert.That(fixture.Simulation.TravelParties.Revision, Is.EqualTo(storeRevisionBefore + 1));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long epochAfter,
+            out ContinuationCensusFailure afterFailure), Is.True, afterFailure.ToString());
+        Assert.That(epochAfter, Is.EqualTo(epochBefore + 1));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalFailure), Is.True,
+            finalFailure.ToString());
+    }
+
+    private sealed class SelectedBootstrapTravelFixture
+    {
+        public TesteSimulacao Simulation { get; }
+        public CityRuntime Origin { get; }
+        public SpatialRouteRuntime Route { get; }
+        public NpcRuntime[] SelectedMembers { get; }
+
+        public SelectedBootstrapTravelFixture(
+            TesteSimulacao simulation,
+            CityRuntime origin,
+            SpatialRouteRuntime route,
+            NpcRuntime[] selectedMembers)
+        {
+            Simulation = simulation;
+            Origin = origin;
+            Route = route;
+            SelectedMembers = selectedMembers;
+        }
+    }
+
+    private SelectedBootstrapTravelFixture CreateSelectedBootstrapTravelFixture(int selectedMemberCount)
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject simulationObject = new GameObject("selected-travel-party-operation-integration-test");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+
+        simulation.Start();
+        Assert.That(simulation.Bootstrap, Is.Not.Null);
+        Assert.That(simulation.Bootstrap.SelectedDefinitions, Is.Not.Null);
+        Assert.That(simulation.Runtime.SelectedRuntimeOwnerGraph, Is.Not.Null);
+
+        foreach (CityRuntime city in simulation.Runtime.Cities.OrderBy(candidate => candidate.RuntimeId, StringComparer.Ordinal))
+        {
+            NpcRuntime[] selectedMembers = simulation.Runtime.NpcRuntimes
+                .Where(npc => npc.SelectedRuntimeOwners != null && ReferenceEquals(npc.CurrentCity, city))
+                .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal)
+                .Take(selectedMemberCount)
+                .ToArray();
+            if (selectedMembers.Length != selectedMemberCount) continue;
+            SpatialRouteRuntime route = simulation.SpatialNetwork.Routes
+                .Where(candidate => ReferenceEquals(candidate.Origin, city.Location))
+                .OrderBy(candidate => candidate.RuntimeId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            if (route != null)
+                return new SelectedBootstrapTravelFixture(simulation, city, route, selectedMembers);
+        }
+
+        Assert.Fail("The admitted Daily-v1 bootstrap must provide a routed City with the requested selected NPC members.");
+        return null;
+    }
+
+    private static ActionExecutionContext CreateSelectedTravelPartyContext(
+        string operationId,
+        IReadOnlyList<NpcRuntime> members,
+        SpatialRouteRuntime route)
+    {
+        Assert.That(members, Is.Not.Null.And.Not.Empty);
+        Assert.That(route, Is.Not.Null);
+        ActionExecutionParticipant[] participants = new ActionExecutionParticipant[members.Count];
+        for (int index = 0; index < members.Count; index++)
+            participants[index] = new ActionExecutionParticipant(
+                members[index].RuntimeId,
+                index == members.Count - 1
+                    ? ActionExecutionParticipantRole.Support
+                    : ActionExecutionParticipantRole.Performer);
+        return new ActionExecutionContext(
+            operationId,
+            participants,
+            route.Destination.RuntimeId,
+            route.RuntimeId);
+    }
+
     private static SimulationRuntime CreateDailyRuntime(TravelPartyFixture fixture)
     {
         return new SimulationRuntime(
@@ -477,9 +687,7 @@ public sealed class P12TravelPartyStartOperationTests
 
     private static long ReadProtocolEpoch(ContinuationCensusProtocol protocol)
     {
-        return (long)typeof(ContinuationCensusProtocol)
-            .GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(protocol);
+        return SimulationTestFactory.ReadContinuationMutationEpoch(protocol);
     }
 
     private static float[] CaptureBalances(TravelPartyFixture fixture)

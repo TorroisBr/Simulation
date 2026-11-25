@@ -306,11 +306,11 @@ public sealed class PersonMaturityFoundationTests
     {
         string file = Path.Combine(
             Directory.GetCurrentDirectory(),
-            "Assets",
-            "_Project",
-            "Scripts",
+            "Packages",
+            "com.simulation.core",
+            "Runtime",
             "Person",
-            "PersonMaturityQuery.cs");
+            "PersonMaturityCalculator.cs");
         string source = File.ReadAllText(file);
 
         Assert.That(source, Does.Not.Contain("UnityEngine"));

@@ -63,6 +63,9 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             Is.True, controlAdvance.ToString());
         DailyCaptureEligibilityToken sourceToken = GetCompletedToken(source.Session.Runtime);
         DailyCaptureEligibilityToken controlToken = GetCompletedToken(control.Session.Runtime);
+        Assert.That(source.Session.Runtime.NpcRuntimes.Any(npc =>
+                npc?.SelectedDailyV1StatusOwner?.Statuses.Count > 0), Is.True,
+            "The accepted selected-profile fixture must exercise populated typed NPC status state.");
         AssertIndependentOwners(source.Session, sourceToken, control.Session, controlToken);
         Assert.That(sourceToken.BoundaryProvenance, Is.EqualTo(DailyCaptureBoundaryProvenance.CompletedAdvance));
         Assert.That(sourceToken.CompletedCoreSequence, Is.GreaterThan(0L));
@@ -71,6 +74,30 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             "independent fixture source/control before restore");
         AssertOwnerVectorFactsEqual(sourceToken.OwnerSections, controlToken.OwnerSections);
         AssertPoliticalOwnersAreAuthenticAndPopulated(source.Session, sourceToken);
+
+        DailyV1ExecutionBoundaryState sourceExecutionState = source.Session.Runtime.ExecutionBoundaryState;
+        Assert.That(sourceExecutionState.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        try
+        {
+            Assert.That(source.Session.Runtime.TryGetCompletedDailyCaptureToken(out _,
+                out DailyCaptureEligibilityFailure publicQueryFailure), Is.False,
+                "Public completed-token queries remain strict while a save operation is active.");
+            Assert.That(publicQueryFailure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
+            Assert.That(source.Session.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken,
+                out DailyCaptureEligibilityFailure publicValidationFailure), Is.False,
+                "Public token validation cannot borrow the save-only capture allowance.");
+            Assert.That(publicValidationFailure, Is.EqualTo(DailyCaptureEligibilityFailure.OperationInProgress));
+            Assert.That(source.Session.Runtime.TryGetCompletedDailyCaptureTokenForContinuationSave(
+                out DailyCaptureEligibilityToken saveToken, out DailyCaptureEligibilityFailure saveFailure), Is.True,
+                saveFailure.ToString());
+            Assert.That(saveToken, Is.SameAs(sourceToken));
+            Assert.That(source.Session.Runtime.TryValidateCompletedDailyCaptureTokenForContinuationSave(
+                sourceToken, out saveFailure), Is.True, saveFailure.ToString());
+        }
+        finally
+        {
+            Assert.That(sourceExecutionState.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        }
 
         List<P12GDailyV1RestoreStage> stages = new List<P12GDailyV1RestoreStage>();
         using (SimulationRuntime.DailyGameplayExecutionProbeForTest gameplayProbe =
@@ -115,14 +142,27 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             AssertIndependentOwners(source.Session, sourceToken, restored, restoredToken);
             AssertIndependentOwners(restored, restoredToken, control.Session, controlToken);
 
-            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+            Assert.That(sourceExecutionState.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+            bool captureSucceeded;
+            P12AContinuationImage capturedImage;
+            SimulationActiveSession capturedImageCandidate;
+            P12GDailyV1RestoreFailure captureFailure;
+            string captureDiagnostic;
+            try
+            {
+                captureSucceeded = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
                     source.Session,
                     source.NormalBootstrapContext,
-                    out P12AContinuationImage capturedImage,
-                    out SimulationActiveSession capturedImageCandidate,
-                    out P12GDailyV1RestoreFailure captureFailure,
-                    out string captureDiagnostic),
-                Is.True, captureFailure + ": " + captureDiagnostic);
+                    out capturedImage,
+                    out capturedImageCandidate,
+                    out captureFailure,
+                    out captureDiagnostic);
+            }
+            finally
+            {
+                Assert.That(sourceExecutionState.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+            }
+            Assert.That(captureSucceeded, Is.True, captureFailure + ": " + captureDiagnostic);
             Assert.That(capturedImageCandidate, Is.Not.Null);
             Assert.That(capturedImage, Is.Not.Null);
             Assert.That(capturedImage.Header.Day, Is.EqualTo(sourceToken.AbsoluteDay));
@@ -146,6 +186,51 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     out P12AResult decodeResult),
                 Is.True, decodeResult?.Code.ToString());
 
+            DailyV1HostEnvironmentIdentity hostIdentity = new DailyV1HostEnvironmentIdentity(1,
+                ".NET 8.0", "8.0.1.0", "Windows", "win-x64", "x64", "net8.0",
+                new[] { new P12AAssemblyIdentityV2("Simulation.Core", "1.0.0.0",
+                    "4b37a0ac-246b-47c5-9bbc-fd79704e0666") }, "numeric", 1);
+            Assert.That(sourceExecutionState.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+            bool dotNetCaptureSucceeded;
+            P12AContinuationImage dotNetImage;
+            SimulationActiveSession dotNetCaptureCandidate;
+            P12GDailyV1RestoreFailure dotNetCaptureFailure;
+            string dotNetCaptureDiagnostic;
+            try
+            {
+                dotNetCaptureSucceeded = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureDotNetV2Image(
+                    source.Session, source.NormalBootstrapContext, hostIdentity,
+                    out dotNetImage,
+                    out dotNetCaptureCandidate,
+                    out dotNetCaptureFailure,
+                    out dotNetCaptureDiagnostic);
+            }
+            finally
+            {
+                Assert.That(sourceExecutionState.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+            }
+            Assert.That(dotNetCaptureSucceeded, Is.True,
+                dotNetCaptureFailure + ": " + dotNetCaptureDiagnostic);
+            Assert.That(dotNetCaptureCandidate, Is.Not.Null);
+            Assert.That(dotNetImage.Header.CompatibilityV2, Is.Not.Null);
+            Assert.That(P12AContinuationCodec.TryEncode(dotNetImage, imageCensus.Manifest,
+                out byte[] dotNetBytes, out P12AResult dotNetEncodeResult), Is.True,
+                dotNetEncodeResult?.Code.ToString());
+            Assert.That(P12AContinuationCodec.TryDecodeDotNetV2(dotNetBytes, imageCensus.Manifest,
+                dotNetImage.Header.CompatibilityV2, out P12AContinuationImage dotNetDecoded,
+                out P12AResult dotNetDecodeResult), Is.True, dotNetDecodeResult?.Code.ToString());
+            List<P12GDailyV1RestoreStage> dotNetRestoreStages = new List<P12GDailyV1RestoreStage>();
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromDotNetV2Image(
+                    dotNetDecoded, dotNetImage.Header.CompatibilityV2, anchor.Configuration, anchor.Runtime.Configuration,
+                    anchor.Composition.Calendar, anchor.Composition.SelectedDefinitions,
+                    source.NormalBootstrapContext, out SimulationActiveSession dotNetRestored,
+                    out P12GDailyV1RestoreFailure dotNetRestoreFailure,
+                    out string dotNetRestoreDiagnostic, dotNetRestoreStages.Add),
+                Is.True, dotNetRestoreFailure + ": " + dotNetRestoreDiagnostic);
+            Assert.That(dotNetRestored, Is.Not.Null);
+            Assert.That(dotNetRestoreStages, Does.Contain(P12GDailyV1RestoreStage.BoundaryAdmitted));
+            Assert.That(EncodeCompletedImage(dotNetRestored, source.NormalBootstrapContext), Is.Not.Empty);
+
             List<P12GDailyV1RestoreStage> imageRestoreStages = new List<P12GDailyV1RestoreStage>();
             Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
                     decodedImage,
@@ -153,6 +238,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     anchor.Configuration,
                     anchor.Runtime.Configuration,
                     anchor.Composition.Calendar,
+                    anchor.Composition.SelectedDefinitions,
                     source.NormalBootstrapContext,
                     out SimulationActiveSession imageRestored,
                     out P12GDailyV1RestoreFailure imageRestoreFailure,
@@ -160,6 +246,16 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     imageRestoreStages.Add),
                 Is.True, imageRestoreFailure + ": " + imageRestoreDiagnostic);
             Assert.That(imageRestored, Is.Not.Null);
+            DailyV1DomainEventAuthority restoredEventAuthority =
+                imageRestored.CoreRuntimeSession.EventAuthority;
+            Assert.That(restoredEventAuthority, Is.Not.Null);
+            Assert.That(restoredEventAuthority.EventStore,
+                Is.SameAs(imageRestored.Composition.DomainEventStore));
+            Assert.That(restoredEventAuthority.History, Is.SameAs(imageRestored.Composition.History));
+            Assert.That(restoredEventAuthority.EventStore.Events, Is.Empty,
+                "P12 restores a fresh event read model; event rows are not part of the persistence profile.");
+            Assert.That(restoredEventAuthority.History.HistoricalEvents, Is.Empty,
+                "P12 restores a fresh history read model; history rows are not part of the persistence profile.");
             Assert.That(imageRestoreStages, Does.Contain(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured));
             Assert.That(imageRestoreStages, Does.Contain(P12GDailyV1RestoreStage.BoundaryAdmitted));
             DailyCaptureEligibilityToken imageRestoredToken = GetCompletedToken(imageRestored.Runtime);
@@ -404,6 +500,14 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         SimulationBootstrapComposition composition = bootstrap.Bootstrap;
         SimulationRuntime runtime = bootstrap.Runtime;
         Assert.That(composition, Is.Not.Null);
+        Assert.That(composition.SelectedDefinitions, Is.Not.Null,
+            "Daily-v1 composition must retain its immutable selected-definition graph.");
+        Assert.That(composition.SelectedDefinitions.ExplorableSites, Is.Empty,
+            "The accepted Daily-v1 proving profile remains exact-empty for P10 sites.");
+        Assert.That(composition.SelectedDefinitions.Traits, Is.Empty,
+            "The accepted Daily-v1 proving profile does not admit TraitData.");
+        Assert.That(composition.SelectedDefinitions.CapabilityAttributes, Is.Empty,
+            "The accepted Daily-v1 proving profile does not admit CapabilityAttributeData.");
         Assert.That(runtime, Is.SameAs(composition.Runtime));
         SimulationRuntimeAdmissionContext normalContext =
             ((IFactualReadRuntimeState)runtime).AdmissionContext;
@@ -416,9 +520,14 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             Is.True, anchorAdvance.ToString());
         DailyCaptureEligibilityToken anchorToken = GetCompletedToken(runtime);
 
-        RuntimeIdentityRegistry identityRegistry = GetOwner<RuntimeIdentityRegistry>(
+        DailyV1RuntimeIdentityIndex identityIndex = GetOwner<DailyV1RuntimeIdentityIndex>(
             anchorToken.OwnerSections, RuntimeIdentityRegistryCensusProvider.NpcsSectionId);
+        RuntimeIdentityRegistry identityRegistry = ReadPrivateField<RuntimeIdentityRegistry>(
+            runtime, "p12RuntimeIdentityRegistry");
+        Assert.That(identityIndex, Is.Not.Null);
         Assert.That(identityRegistry, Is.Not.Null);
+        Assert.That(identityIndex, Is.SameAs(identityRegistry.CoreIdentityIndex),
+            "The P12 C identity census must bind to the Core authority projected by the Unity registry.");
         return new AnchorFixture(bootstrap, config, composition, runtime, normalContext, anchorToken, identityRegistry);
     }
 
@@ -488,10 +597,27 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             npcDefinitions,
             config.Actions,
             config.Statuses,
-            Array.Empty<ExplorableSiteData>(),
+            Array.Empty<DailyV1ExplorableSiteDefinition>(),
             capturedF.TravelPartyIds,
             out P12DDailyV1OwnerPackage stagedD,
-            out P12DDailyV1OwnerPackageFailure dFailure), Is.True, dFailure.ToString());
+            out P12DDailyV1OwnerPackageFailure dFailure,
+            selectedDefinitions: anchorComposition.SelectedDefinitions), Is.True, dFailure.ToString());
+
+        bool stagedSelectedStatusIsPopulated = false;
+        foreach (NpcRuntime stagedNpc in stagedD.Npcs)
+        {
+            P12DNpcDRow stagedRow = stagedD.NpcDRows.Single(row =>
+                string.Equals(row.RuntimeId, stagedNpc.RuntimeId, StringComparison.Ordinal));
+            Assert.That(stagedNpc.SelectedDailyV1StatusOwner, Is.Not.Null,
+                "Selected P12-D staging must install the canonical status owner before Unity binding.");
+            List<string> stagedStatusIds = new List<string>();
+            Assert.That(stagedNpc.TryCopySelectedCurrentStatusDefinitionIds(stagedStatusIds), Is.True);
+            Assert.That(stagedStatusIds, Is.EqualTo(stagedRow.CurrentStatusDefinitionIds),
+                "The staged owner must contain the exact ordered/multiplicity-preserving P12-D status identities.");
+            if (stagedStatusIds.Count > 0) stagedSelectedStatusIsPopulated = true;
+        }
+        Assert.That(stagedSelectedStatusIsPopulated, Is.True,
+            "The selected P12-D fixture must prove canonical status-owner staging with populated rows.");
 
         if (seedPoliticalOwners)
         {
@@ -510,14 +636,15 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         SimulationTime stagedTime = new SimulationTime(anchorToken.AbsoluteDay);
         // PoliticalWorldRevision is a constructor seed for this unpublished
         // runtime root; no registered-owner write is needed after census.
-        SimulationLogger logger = new SimulationLogger(config.LogSettings);
-        HistoryStore history = new HistoryStore();
-        DomainEventStore eventStore = new DomainEventStore(history, new HistoryPolicy(), logger);
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(config.LogSettings);
         NpcDecisionStore decisions = new NpcDecisionStore();
-        DomainEventRecorder eventRecorder = new DomainEventRecorder(
-            stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, eventStore, logger);
-        NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(
+        DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
             stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, decisions, logger);
+        HistoryStore history = eventAuthority.History;
+        DomainEventStore eventStore = eventAuthority.EventStore;
+        DomainEventRecorder eventRecorder = eventAuthority.Recorder;
+        NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(
+            eventAuthority.DecisionOccurrenceReceipts, logger);
         EconomyTransactionService economyTransactions = new EconomyTransactionService();
         P12EDailyV1OwnerStagingContext eContext = new P12EDailyV1OwnerStagingContext(
             stagingAttempt,
@@ -543,7 +670,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             anchorToken.OwnerSections,
             eContext,
             stagedE,
-            config.Actions,
+            anchorComposition.SelectedDefinitions,
             out P12FDailyV1OwnerPackage stagedF,
             out P12FDailyV1OwnerPackageFailure fStageFailure), Is.True, fStageFailure.ToString());
 
@@ -613,11 +740,9 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             stagedE,
             stagedF,
             stagedTime,
-            eventStore,
-            history,
+            eventAuthority,
             decisions,
             decisionRecorder,
-            eventRecorder,
             economyTransactions,
             logger,
             sessionContext,
@@ -646,11 +771,9 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         P12EDailyV1OwnerPackage stagedE,
         P12FDailyV1OwnerPackage stagedF,
         SimulationTime stagedTime,
-        DomainEventStore eventStore,
-        HistoryStore history,
+        DailyV1DomainEventAuthority eventAuthority,
         NpcDecisionStore decisions,
         NpcDecisionRecorder decisionRecorder,
-        DomainEventRecorder eventRecorder,
         EconomyTransactionService economyTransactions,
         SimulationLogger logger,
         SimulationRuntimeAdmissionContext admissionContext,
@@ -658,6 +781,9 @@ public sealed partial class P12GPoliticalBindingRestoreTests
     {
         SimulationConfigData config = anchor.Configuration;
         EffectiveSimulationConfiguration effective = anchor.Runtime.Configuration;
+        HistoryStore history = eventAuthority.History;
+        DomainEventStore eventStore = eventAuthority.EventStore;
+        DomainEventRecorder eventRecorder = eventAuthority.Recorder;
         Dictionary<SpatialLocationRuntime, CityRuntime> cityByLocation =
             new Dictionary<SpatialLocationRuntime, CityRuntime>();
         foreach (CityRuntime city in stagedD.Cities)
@@ -735,6 +861,32 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             actionProviders.Add(new GuardSystem(stagedE.Justice, config.hiddenStatus, effective.GuardCrime));
         NpcDecisionSystem decisionSystem = new NpcDecisionSystem(actionProviders, stagedC.DeterministicRandom);
 
+        NpcChronicleService chronicles = new NpcChronicleService(decisions, eventStore);
+        Assert.That(DailyV1DefinitionAdapter.TryCreateBindings(
+                config,
+                anchor.Composition.SelectedDefinitions,
+                out DailyV1DefinitionAdapter.SelectedBindings selectedBindings,
+                out string bindingDiagnostic), Is.True, bindingDiagnostic);
+        foreach (CityRuntime city in stagedD.Cities)
+        {
+            Assert.That(city.CityData, Is.Null,
+                "Selected P12 City staging retains its typed definition before the Unity projection is attached.");
+            Assert.That(anchor.Composition.SelectedDefinitions.Cities.TryGetValue(
+                    city.DefinitionId, out DailyV1CityDefinition cityNode), Is.True);
+            Assert.That(cityNode.DefinitionId, Is.EqualTo(city.DefinitionId));
+            Assert.That(city.TryBindSelectedDailyV1Definition(
+                cityNode, anchor.Composition.SelectedDefinitions, selectedBindings), Is.True);
+        }
+        foreach (NpcRuntime npc in stagedD.Npcs)
+        {
+            Assert.That(selectedBindings.TryGet(
+                    npc.NpcData, anchor.Composition.SelectedDefinitions,
+                    out DailyV1NpcDefinition npcNode), Is.True);
+            Assert.That(npc.TryBindSelectedDailyV1Definition(
+                npcNode, anchor.Composition.SelectedDefinitions, selectedBindings,
+                cityRuntimeId => stagedD.Cities.FirstOrDefault(city => city != null
+                    && string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal))), Is.True);
+        }
         SimulationRuntime runtime = new SimulationRuntime(
             simulationTime: stagedTime,
             cities: stagedD.Cities,
@@ -787,14 +939,49 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             requireP12RuntimeIdentitySpatialCensusOwners: true,
             p12CrimeSocialAppraisalWorldState: stagedE.CrimeSocialAppraisal);
 
-        NpcChronicleService chronicles = new NpcChronicleService(decisions, eventStore);
-        NpcChronicleFormatter formatter = TesteSimulacao.CreateNpcChronicleFormatter(
+        NpcChronicleFormatter unityProjectionFormatter = TesteSimulacao.CreateNpcChronicleFormatter(
             stagedD.RuntimeIdentities,
             stagedD.SpatialNetwork,
             cityByLocation,
             stagedD.EmptyExplorableSites,
             stagedD.Cities,
-            config);
+            config,
+            anchor.Composition.SelectedDefinitions);
+        DailyV1SelectedRuntimeOwnerGraph formatterGraph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(formatterGraph, Is.Not.Null, "The restored runtime must retain its exact selected owner graph.");
+        DailyV1NpcRuntimeOwners formatterNpc = formatterGraph.Npcs.FirstOrDefault();
+        DailyV1CityRuntimeOwners formatterCity = formatterGraph.Cities.FirstOrDefault();
+        DailyV1ItemDefinition formatterItem = formatterGraph.Definitions.Items.Values.FirstOrDefault();
+        DailyV1ActionDefinition formatterAction = formatterGraph.Definitions.Actions.Values.FirstOrDefault();
+        Assert.That(formatterNpc, Is.Not.Null);
+        Assert.That(formatterCity, Is.Not.Null);
+        Assert.That(formatterItem, Is.Not.Null);
+        Assert.That(formatterAction, Is.Not.Null);
+
+        NpcChronicleFormatter formatter = DailyV1SelectedNpcChronicleFormatter.Create(formatterGraph);
+        NpcDecisionRecord formatterActionDecision = new NpcDecisionRecord(
+            "p12g-formatter-action-parity", 1L, 1L, formatterNpc.RuntimeId,
+            NpcDecisionType.Action, NpcDecisionOrigin.Autonomous,
+            formatterAction.DefinitionId, null, null, null);
+        NpcChronicleEntry formatterActionEntry = NpcChronicleEntry.FromDecision(
+            formatterActionDecision, NpcChronicleRelation.SelfDecision);
+        Assert.That(formatter.Format(formatterActionEntry, formatterNpc.RuntimeId),
+            Is.EqualTo(unityProjectionFormatter.Format(formatterActionEntry, formatterNpc.RuntimeId)),
+            "Core formatting must preserve actor and action names from the exact selected graph.");
+
+        CommercialDecisionEvidence formatterTradeEvidence = new CommercialDecisionEvidence(
+            formatterItem.DefinitionId, formatterCity.LocationRuntimeId,
+            formatterCity.LocationRuntimeId, formatterCity.LocationRuntimeId,
+            null, null, null, 1, 1f, 1f, 0f, 0f, 0f, 0f);
+        NpcDecisionRecord formatterTradeDecision = new NpcDecisionRecord(
+            "p12g-formatter-trade-parity", 1L, 2L, formatterNpc.RuntimeId,
+            NpcDecisionType.TradePurchase, NpcDecisionOrigin.Autonomous,
+            null, null, null, formatterTradeEvidence);
+        NpcChronicleEntry formatterTradeEntry = NpcChronicleEntry.FromDecision(
+            formatterTradeDecision, NpcChronicleRelation.SelfDecision);
+        Assert.That(formatter.Format(formatterTradeEntry, formatterNpc.RuntimeId),
+            Is.EqualTo(unityProjectionFormatter.Format(formatterTradeEntry, formatterNpc.RuntimeId)),
+            "Core formatting must preserve item and City names from the exact selected graph.");
         TravelPartySystem exactGroupTravel = travelParties;
         SimulationBootstrapComposition composition = new SimulationBootstrapComposition(
             stagedC.WorldIdentity,
@@ -818,7 +1005,15 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             stagedC.RuntimeIdAllocator,
             stagedD.EmptyExplorableSites,
             stagedF.Expeditions,
-            expeditions);
+            expeditions,
+            anchor.Composition.SelectedDefinitions);
+        Assert.That(DailyV1ActiveRuntimeSession.TryCreate(
+            runtime.ExecutionBoundaryState,
+            composition.SelectedDefinitions,
+            anchor.Token.AbsoluteDay,
+            eventAuthority,
+            out DailyV1ActiveRuntimeSession coreRuntimeSession,
+            out string activeSessionDiagnostic), Is.True, activeSessionDiagnostic);
         return new SimulationActiveSession(
             composition,
             logger,
@@ -829,7 +1024,8 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             config,
             admissionContext,
             stagedC.DeterministicRandom,
-            new SimulationSessionReportState(anchor.Token.AbsoluteDay));
+            anchor.Token.AbsoluteDay,
+            coreRuntimeSession);
     }
 
     private static void BuildDefinitions(
@@ -888,7 +1084,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         Assert.That(knowledgeRow.OwnerInstanceIdentity, Is.SameAs(knowledge));
         Assert.That(runtime.PoliticalDecisionRecords.Single().KnowledgeReferences,
             Is.EqualTo(new[] { KnowledgeReferenceA, KnowledgeReferenceB }));
-        Assert.That(P12EPoliticalDecisionOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalDecisionCaptureAdapter.TryCapture(
                 runtime,
                 token,
                 token.OwnerSections,
@@ -958,7 +1154,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             OwnerSectionRole.Required, 2, claims.Revision, claims);
         AssertSection(token.OwnerSections, PoliticalClaimStoreCensusProvider.RecognitionsSectionId,
             OwnerSectionRole.Required, 2, claims.Revision, claims);
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(
             runtime,
             token,
             token.OwnerSections,
@@ -969,7 +1165,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         Assert.That(institutionSnapshot.Tenures.Records, Has.Count.EqualTo(1));
         Assert.That(institutionSnapshot.Tenures.Records[0].StartAbsoluteDay, Is.EqualTo(ownerMutationDay));
         Assert.That(institutionSnapshot.Tenures.Records[0].EndAbsoluteDay, Is.EqualTo(ownerMutationDay));
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(
             runtime,
             token,
             token.OwnerSections,
@@ -1115,7 +1311,12 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             Assert.That(match.SchemaVersion, Is.EqualTo(row.SchemaVersion), row.SectionId);
             Assert.That(match.Role, Is.EqualTo(row.Role), row.SectionId);
             Assert.That(match.Cardinality, Is.EqualTo(row.Cardinality), row.SectionId);
-            Assert.That(match.Revision, Is.EqualTo(row.Revision), row.SectionId);
+            string revisionDiagnostic = row.SectionId;
+            if (row.SectionId.StartsWith(NpcPlanCensusProvider.MerchantTradePlanSectionPrefix,
+                    StringComparison.Ordinal))
+                revisionDiagnostic += "; expected " + DescribeMerchantPlanOwner(row.OwnerInstanceIdentity)
+                    + "; actual " + DescribeMerchantPlanOwner(match.OwnerInstanceIdentity);
+            Assert.That(match.Revision, Is.EqualTo(row.Revision), revisionDiagnostic);
             Assert.That(match.OwnerInstanceIdentity, Is.Not.SameAs(row.OwnerInstanceIdentity),
                 row.SectionId + " must be a private mutable owner instance");
         }
@@ -1139,6 +1340,24 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         }
     }
 
+    private static string DescribeMerchantPlanOwner(object owner)
+    {
+        if (owner is DailyV1NpcMerchantTradePlanOwner selected)
+            return $"CorePlan(rev={selected.Revision},item={selected.ItemDefinition?.DefinitionId ?? "<null>"},"
+                + $"origin={selected.OriginCityRuntimeId ?? "<null>"},target={selected.TargetCityRuntimeId ?? "<null>"},"
+                + $"planned={selected.PlannedAmount},remaining={selected.RawRemainingAmount},"
+                + $"wait={selected.WaitDaysAtDestination},travel={selected.PendingTravelDays})";
+        if (owner is MerchantTradePlanRuntime legacy)
+        {
+            MerchantTradePlanState state = legacy.CaptureOwnerState();
+            return $"UnityPlan(rev={legacy.Revision},item={state.Item?.DefinitionId ?? "<null>"},"
+                + $"origin={state.OriginCity?.RuntimeId ?? "<null>"},target={state.TargetCity?.RuntimeId ?? "<null>"},"
+                + $"planned={state.PlannedAmount},remaining={state.RawRemainingAmount},"
+                + $"wait={state.WaitDaysAtDestination},travel={state.PendingTravelDays})";
+        }
+        return owner?.GetType().Name ?? "<null>";
+    }
+
     internal static void AssertDailyV1Parity(
         SimulationActiveSession expected,
         DailyCaptureEligibilityToken expectedToken,
@@ -1147,6 +1366,8 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         string context)
     {
         AssertOwnerVectorFactsEqual(expectedToken.OwnerSections, actualToken.OwnerSections);
+        AssertSelectedInventoryAndMarketIdentity(expected);
+        AssertSelectedInventoryAndMarketIdentity(actual);
         Assert.That(actual.Composition.Calendar, Is.SameAs(expected.Composition.Calendar),
             "Continuation must preserve the exact CalendarDefinition object supplied to the source composition.");
         Assert.That(actual.Composition.Manifest.EffectiveConfiguration,
@@ -1157,6 +1378,36 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             context + ". Explicit C-F coverage: " + string.Join(" | ", DailyV1TypedParityCoverage));
         AssertPoliticalOwnersAreAuthenticAndPopulated(expected, expectedToken);
         AssertPoliticalOwnersAreAuthenticAndPopulated(actual, actualToken);
+    }
+
+    private static void AssertSelectedInventoryAndMarketIdentity(SimulationActiveSession session)
+    {
+        DailyV1EffectiveDefinitions definitions = session?.Composition?.SelectedDefinitions;
+        Assert.That(definitions, Is.Not.Null, "Daily-v1 owner state must retain the admitted typed definition graph.");
+        foreach (CityRuntime city in session.Runtime.Cities)
+        {
+            DailyV1MarketOwner owner = city?.Market?.SelectedDailyV1Owner;
+            Assert.That(owner, Is.Not.Null, "Selected Daily-v1 City stock must be owned by shared Core state.");
+            Assert.That(owner.Definitions, Is.SameAs(definitions));
+            foreach (DailyV1MarketItemState row in owner.Items)
+            {
+                Assert.That(row?.Item, Is.Not.Null);
+                Assert.That(definitions.Items[row.Item.DefinitionId], Is.SameAs(row.Item),
+                    "Market rows must retain the exact admitted graph node after capture/restore.");
+            }
+        }
+        foreach (NpcRuntime npc in session.Runtime.NpcRuntimes)
+        {
+            DailyV1InventoryOwner owner = npc?.ExistingInventory?.SelectedDailyV1Owner;
+            Assert.That(owner, Is.Not.Null, "Selected Daily-v1 NPC inventory must be owned by shared Core state.");
+            Assert.That(owner.Definitions, Is.SameAs(definitions));
+            foreach (DailyV1InventoryItemState row in owner.Items)
+            {
+                Assert.That(row?.Item, Is.Not.Null);
+                Assert.That(definitions.Items[row.Item.DefinitionId], Is.SameAs(row.Item),
+                    "Inventory rows must retain the exact admitted graph node after capture/restore.");
+            }
+        }
     }
 
     /// <summary>
@@ -1266,10 +1517,14 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         AppendValue(signature, "C/spatial-scale-unit", spatial.ScaleContext.Unit);
 
         SimulationRecordSequenceSnapshot sequence = session.Composition.RecordSequence.CaptureSnapshot();
+        SimulationRecordSequenceOwnerBridge.CaptureCensusIdentity(
+            session.Composition.RecordSequence,
+            out object sequenceOwnerIdentity,
+            out _);
         OwnerSectionCensusSnapshot sequenceOwner = token.OwnerSections.Single(row =>
             row.SectionId == SimulationRecordSequenceCensusProvider.SectionId);
         Assert.That(sequenceOwner.OwnerInstanceIdentity,
-            Is.SameAs(session.Composition.RecordSequence.CensusOwnerIdentity),
+            Is.SameAs(sequenceOwnerIdentity),
             "The runtime token must census the exact composition record-sequence root.");
         AppendValue(signature, "C/sequence-schema", sequence.SchemaId);
         AppendValue(signature, "C/sequence-version", sequence.SchemaVersion);
@@ -1283,11 +1538,16 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             "Runtime and bootstrap must retain the exact event-counter allocator root.");
         Assert.That(session.Runtime.HasSameRuntimeIdAllocatorDecisionCounterOwner(decisionCounterProvider), Is.True,
             "Runtime and bootstrap must retain the exact decision-counter allocator root.");
+        RuntimeIdAllocatorOwnerBridge.CaptureCensusIdentity(
+            session.Composition.RuntimeIdAllocator,
+            RuntimeIdAllocatorCensusCounter.Events,
+            out object allocatorOwnerIdentity,
+            out _);
         foreach (OwnerSectionCensusSnapshot allocatorOwner in token.OwnerSections.Where(row =>
                      row.SectionId.StartsWith("p12c.runtime-id-allocator.", StringComparison.Ordinal)))
         {
             Assert.That(allocatorOwner.OwnerInstanceIdentity,
-                Is.SameAs(session.Composition.RuntimeIdAllocator.CensusOwnerIdentity),
+                Is.SameAs(allocatorOwnerIdentity),
                 allocatorOwner.SectionId + " must identify the exact composition allocator root.");
         }
         AppendValue(signature, "C/allocator-schema", allocator.SchemaId);
@@ -1307,11 +1567,11 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         AppendValue(signature, "C/random-algorithm-version", random.AlgorithmVersion);
         AppendValue(signature, "C/random-seed", random.Seed);
 
-        RuntimeIdentityRegistry identities = GetOwner<RuntimeIdentityRegistry>(
+        DailyV1RuntimeIdentityIndex identities = GetOwner<DailyV1RuntimeIdentityIndex>(
             token.OwnerSections, RuntimeIdentityRegistryCensusProvider.NpcsSectionId);
-        Assert.That(identities, Is.SameAs(session.IdentityRegistry),
-            "The C census and admitted session must retain the same RuntimeIdentityRegistry owner.");
-        foreach (KeyValuePair<string, string> identity in identities.CaptureRegisteredRuntimeIdentityValues()
+        Assert.That(identities, Is.SameAs(session.IdentityRegistry.CoreIdentityIndex),
+            "The C census must retain the exact Core identity authority projected by the admitted Unity registry.");
+        foreach (KeyValuePair<string, string> identity in session.IdentityRegistry.CaptureRegisteredRuntimeIdentityValues()
                      .OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
             AppendValue(signature, "C/runtime-identity-family", identity.Key);
@@ -1329,7 +1589,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
 
         PoliticalDecisionStore decisionOwner = GetOwner<PoliticalDecisionStore>(
             token.OwnerSections, PoliticalDecisionStoreCensusProvider.SectionId);
-        Assert.That(P12EPoliticalDecisionOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalDecisionCaptureAdapter.TryCapture(
             session.Runtime,
             token,
             token.OwnerSections,
@@ -1413,6 +1673,54 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             npc => npc.RuntimeId, StringComparer.Ordinal);
         Assert.That(npcD.Evidence.CoversStagedNpcRuntimeIds(runtimeRoster), Is.True,
             "D/F capture provenance must cover every runtime NPC identity exactly once.");
+        foreach (P12DNpcDRow row in npcD.Rows)
+        {
+            Assert.That(runtimeRoster.TryGetValue(row.RuntimeId, out NpcRuntime npc), Is.True);
+            List<string> selectedStatusIds = new List<string>();
+            Assert.That(npc.TryCopySelectedCurrentStatusDefinitionIds(selectedStatusIds), Is.True,
+                "Selected P12-D status capture must come from the typed Core owner.");
+            Assert.That(row.CurrentStatusDefinitionIds, Is.EqualTo(selectedStatusIds),
+                "The unchanged P12-D row must preserve typed status identity, order, and multiplicity.");
+            Assert.That(npc.CurrentStatus.Select(status => status?.DefinitionId), Is.EqualTo(selectedStatusIds),
+                "The selected Unity compatibility projection must match the exact Core status owner.");
+
+            if (npc.UsesSelectedDailyV1Definitions)
+            {
+                DailyV1NpcActionSlotOwner actionSlot = npc.SelectedRuntimeOwners?.ActionSlot;
+                Assert.That(actionSlot, Is.Not.Null);
+                Assert.That(actionSlot.TryCapturePayload(
+                    out DailyV1NpcActionPayloadSnapshot payload), Is.True,
+                    "Selected P12 action facts must be capturable from the exact Core action slot.");
+                P12DNpcFRow fRow = npcF.Rows.Single(value => value.RuntimeId == row.RuntimeId);
+                if (payload == null)
+                {
+                    Assert.That(npc.CurrentActionRuntime, Is.Null,
+                        "An empty Core action slot cannot retain an independent Unity action projection.");
+                    Assert.That(fRow.Action, Is.Null);
+                }
+                else
+                {
+                    Assert.That(payload.Owner, Is.SameAs(actionSlot.CurrentPayload));
+                    Assert.That(npc.CurrentActionRuntime.SelectedOwner, Is.SameAs(payload.Owner));
+                    Assert.That(npc.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+                    Assert.That(fRow.Action.ActionDefinitionId, Is.EqualTo(payload.ActionDefinitionId));
+                    Assert.That(fRow.Action.TargetNpcRuntimeId, Is.EqualTo(payload.TargetNpcRuntimeId));
+                    Assert.That(fRow.Action.TargetCityRuntimeId, Is.EqualTo(payload.TargetCityRuntimeId));
+                    Assert.That(fRow.Action.TargetItemDefinitionId, Is.EqualTo(payload.TargetItemDefinitionId));
+                    Assert.That(fRow.Action.Amount, Is.EqualTo(payload.Amount));
+                    Assert.That(fRow.Action.ExpectedUnitPrice, Is.EqualTo(payload.ExpectedUnitPrice));
+                    Assert.That(fRow.Action.SuccessChanceMultiplier, Is.EqualTo(payload.SuccessChanceMultiplier));
+                    Assert.That(fRow.Action.TravelReason, Is.EqualTo(payload.TravelReason));
+                    Assert.That(fRow.Action.ExpectedNetValue, Is.EqualTo(payload.ExpectedNetValue));
+                    Assert.That(fRow.Action.OriginDecisionId, Is.EqualTo(payload.OriginDecisionId));
+                    Assert.That(fRow.Action.StableOccurrenceKey, Is.EqualTo(payload.StableOccurrenceKey));
+                    Assert.That(fRow.Action.CommercialDecisionEvidence,
+                        Is.SameAs(payload.CommercialDecisionEvidence));
+                    Assert.That(fRow.Action.CommercialScoutingEvidence,
+                        Is.SameAs(payload.CommercialScoutingEvidence));
+                }
+            }
+        }
 
         for (int index = 0; index < runtime.Cities.Count; index++)
         {
@@ -1499,7 +1807,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         StringBuilder signature)
     {
         IReadOnlyList<OwnerSectionCensusSnapshot> vector = token.OwnerSections;
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EInstitutionOfficeOwnerSnapshot institutionOffice,
             out P12EInstitutionOfficeSnapshotFailure institutionFailure), Is.True, institutionFailure?.Message);
@@ -1512,19 +1820,19 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         AppendPropertyEstateSnapshot(signature, propertyEstate);
 
         FactionStore factionOwner = GetOwner<FactionStore>(vector, FactionStoreCensusProvider.FactionsSectionId);
-        Assert.That(P12EFactionOwnerSnapshot.TryCapture(
+        Assert.That(P12EFactionCaptureAdapter.TryCapture(
             runtime, factionOwner, token, vector,
             out P12EFactionOwnerSnapshot factions,
             out P12EFactionSnapshotFailure factionFailure), Is.True, factionFailure?.Message);
         AppendFactionSnapshot(signature, factions);
 
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalClaimOwnerSnapshot claims,
             out P12EPoliticalClaimSnapshotFailure claimFailure), Is.True, claimFailure?.Message);
         AppendClaimSnapshot(signature, claims);
 
-        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalSupportCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalSupportOwnerSnapshot support,
             out P12EPoliticalSupportSnapshotFailure supportFailure), Is.True, supportFailure?.Message);
@@ -1555,13 +1863,13 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             out PersistentBattleOwnerSnapshotFailure battleFailure), Is.True, battleFailure?.Message);
         AppendBattleSnapshot(signature, battles);
 
-        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(
             runtime, token, vector,
             out P12EJusticeRecordsOwnerSnapshot justice,
             out P12EJusticeSnapshotFailure justiceFailure), Is.True, justiceFailure?.Message);
         AppendJusticeSnapshot(signature, justice);
 
-        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(
+        Assert.That(P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocial,
             out P12ECrimeSocialAppraisalSnapshotFailure crimeSocialFailure), Is.True, crimeSocialFailure?.Message);
@@ -1874,7 +2182,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             AppendValue(signature, entry + "/source-runtime", observation.SourceRuntimeId);
         }
         index = 0;
-        foreach (CommercialKnowledgeShareReceipt receipt in row.CommercialShareReceipts)
+        foreach (P12DNpcCommercialShareReceiptValue receipt in row.CommercialShareReceipts)
         {
             string entry = key + "/commercial-share-receipt/" + index++;
             AppendValue(signature, entry + "/operation", receipt.OperationIdentity);
@@ -2523,7 +2831,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             AppendValue(signature, key + "/mode", row.Mode);
             AppendValue(signature, key + "/operation", row.Operation);
             AppendValue(signature, key + "/actor-runtime", row.ActorRuntimeId);
-            AppendValue(signature, key + "/action-id", row.Action?.DefinitionId);
+            AppendValue(signature, key + "/action-id", row.ActionDefinitionId);
             AppendValue(signature, key + "/state", row.State);
             AppendValue(signature, key + "/processed-day", row.ProcessedDay);
             AppendValue(signature, key + "/result-reason", row.ResultReason);

@@ -13,6 +13,192 @@ public sealed class P12DNpcRootOwnerSnapshotTests
     public void TearDown() => SimulationTestFactory.CleanupDefinitions();
 
     [Test]
+    public void DetachedP12HydrationBindsTheStagedSpatialCoreOwnerIntoSelectedComposition()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition selectedDefinition = definitions.Npcs.Values.First();
+        List<DailyV1StatusDefinition> selectedStatuses = selectedDefinition.Values.statusPadrao
+            .Select(statusId => definitions.Statuses[statusId]).ToList();
+        NpcData npcData = SimulationTestFactory.CreateNpc(selectedDefinition.DefinitionId);
+        npcData.statusPadrao.Clear();
+        List<NpcStatusData> statusAssets = new List<NpcStatusData>();
+        foreach (DailyV1StatusDefinition selectedStatus in selectedStatuses)
+        {
+            NpcStatusData statusAsset = SimulationTestFactory.CreateStatus(selectedStatus.DefinitionId);
+            npcData.statusPadrao.Add(statusAsset);
+            statusAssets.Add(statusAsset);
+        }
+
+        Assert.That(SpatialKnowledgeRuntime.TryCreateFromOwnerSnapshot(
+            "npc-detached-spatial", new[] { "location/second", "location/first" },
+            new[] { "route/second", "route/first" }, 4L,
+            out SpatialKnowledgeRuntime stagedSpatialOwner), Is.True);
+        DailyV1InventoryOwner selectedInventoryOwner = new DailyV1InventoryOwner(definitions);
+        DailyV1CommercialKnowledgeOwner selectedCommercialOwner =
+            new DailyV1CommercialKnowledgeOwner(definitions);
+        Assert.That(DailyV1NpcMerchantTradePlanOwner.TryCreateInitial(
+            definitions, out DailyV1NpcMerchantTradePlanOwner selectedTradePlanOwner), Is.True);
+
+        P12DNpcStagedOwnerState stagedState = new P12DNpcStagedOwnerState
+        {
+            NpcDefinitionId = selectedDefinition.DefinitionId,
+            SelectedDefinitions = definitions,
+            SelectedNpcDefinition = selectedDefinition,
+            SelectedCurrentStatusDefinitions = selectedStatuses,
+            NpcData = npcData,
+            LifeState = NpcLifeState.Alive,
+            InjurySeverity = NpcInjurySeverity.None,
+            CurrentStatus = statusAssets,
+            Inventory = new InventoryRuntime(selectedInventoryOwner),
+            MoneyAccount = new MoneyAccountRuntime(),
+            MerchantTradePlan = new MerchantTradePlanRuntime(),
+            SelectedMerchantTradePlanOwner = selectedTradePlanOwner,
+            TravelPlan = new NpcTravelPlanRuntime(),
+            CommercialKnowledge = new CommercialKnowledgeRuntime(selectedCommercialOwner, null),
+            SpatialKnowledge = stagedSpatialOwner,
+            ExplorableSiteKnowledge = new ExplorableSiteKnowledgeRuntime("npc-detached-spatial"),
+            LocalTopologyKnowledge = new LocalTopologyKnowledgeRuntime("npc-detached-spatial"),
+            AdventureSiteIntelKnowledge = new AdventureSiteIntelKnowledgeRuntime("npc-detached-spatial")
+        };
+        NpcRuntime restored = new NpcRuntime("npc-detached-spatial", npcData);
+
+        Assert.That(restored.TryInstallP12OwnerSnapshot(stagedState), Is.True);
+        Assert.That(restored.SelectedRuntimeOwners, Is.Not.Null);
+        Assert.That(restored.SelectedRuntimeOwners.SpatialKnowledge, Is.SameAs(stagedSpatialOwner));
+        Assert.That(restored.SpatialKnowledge, Is.SameAs(stagedSpatialOwner));
+        Assert.That(restored.ExistingSpatialKnowledge, Is.SameAs(stagedSpatialOwner));
+        Assert.That(restored.SpatialKnowledge.KnownLocationRuntimeIds,
+            Is.EqualTo(new[] { "location/second", "location/first" }));
+        Assert.That(restored.SpatialKnowledge.KnownRouteRuntimeIds,
+            Is.EqualTo(new[] { "route/second", "route/first" }));
+        Assert.That(restored.SpatialKnowledge.Revision, Is.EqualTo(4L));
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers =
+            SpatialKnowledgeCensusProvider.CreateProviders(new[] { restored });
+        Assert.That(providers[0].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(stagedSpatialOwner));
+        Assert.That(providers[1].GetCurrentCensus().OwnerInstanceIdentity, Is.SameAs(stagedSpatialOwner));
+        Assert.That(providers[0].GetCurrentCensus().Revision, Is.EqualTo(4L));
+        Assert.That(providers[1].GetCurrentCensus().Revision, Is.EqualTo(4L));
+    }
+
+    [Test]
+    public void SelectedImageStageHydratesCoreNpcOwnerBeforeBindingUnityProjection()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition npcNode = definitions.Npcs.Values.First();
+        DailyV1ActionDefinition actionNode = definitions.Actions.Values.First();
+        DailyV1ItemDefinition itemNode = definitions.Items.Values.First();
+        string runtimeId = "p12d-core-first-npc";
+
+        NpcData npcAsset = SimulationTestFactory.CreateNpc(npcNode.DefinitionId);
+        NpcActionData actionAsset = SimulationTestFactory.CreateAction(
+            actionNode.DefinitionId, NpcActionType.Normal);
+        ItemData itemAsset = SimulationTestFactory.CreateItem(itemNode.DefinitionId, 1f);
+        List<string> statusIds = (npcNode.Values.statusPadrao ?? Array.Empty<string>()).ToList();
+        List<NpcStatusData> statusAssets = statusIds
+            .Select(SimulationTestFactory.CreateStatus).ToList();
+
+        P12DNpcDRow d = new P12DNpcDRow(runtimeId, npcNode.DefinitionId,
+            null, null, NpcLifeState.Alive, NpcInjurySeverity.None, statusIds,
+            0, actionNode.DefinitionId, null, null, null, null,
+            new[] { new P12DNpcInventoryRowValue(itemNode.DefinitionId, 3, 2.5f) },
+            4L, 17.5f, 6L, 2L, 0L, 3L, 5L);
+        P12DNpcFRow f = new P12DNpcFRow(runtimeId,
+            new P12DNpcActionValue(actionNode.DefinitionId, null, null, itemNode.DefinitionId,
+                2, 1.25f, 0.75f, NpcTravelReason.None, 0f,
+                "p12d-core-first-decision", "p12d-core-first-occurrence", null, null),
+            0, 0, null, false, null, null, 7L,
+            new P12DNpcMerchantPlanValue(itemNode.DefinitionId, null, null, 0, 0, 0f, 0, 0, null, 0L),
+            new P12DNpcTravelPlanValue(null, null, NpcTravelReason.None, 0f, 0f, null, 8L),
+            Array.Empty<ExplorableSiteKnowledgeObservation>(), 0L,
+            Array.Empty<string>(), Array.Empty<string>(), 0L,
+            Array.Empty<AdventureOppositionObservation>(),
+            Array.Empty<AdventureNotableItemObservation>(),
+            Array.Empty<AdventureCommonResourceObservation>(),
+            Array.Empty<AdventureAccessObservation>(), 0L,
+            Array.Empty<P12DNpcCommercialMarketValue>(),
+            Array.Empty<P12DNpcCommercialLiquidityValue>(),
+            Array.Empty<P12DNpcCommercialShareReceiptValue>(), 0L);
+        P12AOwnerSection[] receiptSections =
+        {
+            new P12AOwnerSection(
+                P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(runtimeId),
+                P12DNpcReceiptOwnerCensusProvider.SchemaVersion, 0,
+                OwnerSectionRole.Required, null, 0L, Array.Empty<P12AOwnerRow>()),
+            new P12AOwnerSection(
+                P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(runtimeId),
+                P12DNpcReceiptOwnerCensusProvider.SchemaVersion, 0,
+                OwnerSectionRole.Required, null, 0L, Array.Empty<P12AOwnerRow>())
+        };
+
+        Assert.That(P12DNpcRootOwnerSnapshot.TryStageForImage(
+            new[] { d }, new[] { f }, Array.Empty<P12DCityMembershipLinker>(),
+            new PersonStore(), new[] { npcAsset }, new[] { actionAsset }, statusAssets,
+            new[] { itemAsset }, Array.Empty<SpatialLocationRuntime>(),
+            Array.Empty<string>(), Array.Empty<string>(), receiptSections,
+            out IReadOnlyList<NpcRuntime> staged, out P12DNpcRootOwnerSnapshotFailure failure,
+            definitions), Is.True, failure.ToString());
+
+        NpcRuntime restored = staged.Single();
+        DailyV1NpcRuntimeOwners owners = restored.SelectedRuntimeOwners;
+        Assert.That(owners, Is.Not.Null);
+        Assert.That(restored.NpcData, Is.SameAs(npcAsset));
+        Assert.That(owners.Definitions, Is.SameAs(definitions));
+        Assert.That(owners.Definition, Is.SameAs(npcNode));
+        Assert.That(owners.Inventory.Revision, Is.EqualTo(4L));
+        Assert.That(restored.Inventory.SelectedDailyV1Owner, Is.SameAs(owners.Inventory));
+        Assert.That(restored.MoneyAccount, Is.SameAs(owners.MoneyAccount));
+        Assert.That(restored.CommercialKnowledge.SelectedOwner, Is.SameAs(owners.CommercialKnowledge));
+        Assert.That(restored.MerchantTradePlan.SelectedOwner, Is.SameAs(owners.MerchantTradePlan));
+        Assert.That(restored.MerchantTradePlan.Item, Is.SameAs(itemAsset));
+        Assert.That(restored.SpatialKnowledge, Is.SameAs(owners.SpatialKnowledge));
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.OwnerRuntimeId, Is.EqualTo(runtimeId));
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.PlaceObservationCount, Is.Zero);
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.ConnectionObservationCount, Is.Zero);
+        Assert.That(owners.LocalTopologyKnowledgeEmptyOwner.Revision, Is.Zero);
+        Assert.That(restored.LocalTopologyKnowledge.OwnerRuntimeId, Is.EqualTo(runtimeId));
+        Assert.That(restored.LocalTopologyKnowledge.PlaceObservations, Is.Empty);
+        Assert.That(restored.LocalTopologyKnowledge.ConnectionObservations, Is.Empty);
+        Assert.That(owners.ActionSlot.Revision, Is.EqualTo(5L));
+        Assert.That(restored.CurrentActionRuntime.SelectedOwner,
+            Is.SameAs(owners.ActionSlot.CurrentPayload));
+        Assert.That(owners.ActionSlot.CurrentPayload.Amount, Is.EqualTo(2));
+        Assert.That(owners.ActionSlot.CurrentPayload.TargetItem, Is.SameAs(itemNode));
+        Assert.That(owners.Travel.Revision, Is.EqualTo(7L));
+        Assert.That(owners.TravelPlan.Revision, Is.EqualTo(8L));
+
+        UnityEngine.ScriptableObject[] selectedAssets = new UnityEngine.ScriptableObject[] { npcAsset, actionAsset, itemAsset }
+            .Concat(statusAssets).ToArray();
+        Assert.That(DailyV1DefinitionAdapter.SelectedBindings.TryCreate(
+            selectedAssets, definitions,
+            out DailyV1DefinitionAdapter.SelectedBindings fullBindings, out string diagnostic),
+            Is.True, diagnostic);
+        Assert.That(restored.TryBindSelectedDailyV1Definition(
+            npcNode, definitions, fullBindings), Is.True);
+        Assert.That(restored.NpcData, Is.SameAs(npcAsset));
+        Assert.That(restored.MerchantTradePlan.SelectedOwner, Is.SameAs(owners.MerchantTradePlan));
+    }
+
+    [TestCase("")]
+    [TestCase("npc-spatial-owner-other")]
+    public void CaptureRejectsBlankOrMismatchedSerializedSpatialOwnerIdentity(string serializedOwnerRuntimeId)
+    {
+        NpcRuntime npc = new NpcRuntime("npc-spatial-owner-capture",
+            SimulationTestFactory.CreateNpc("p12d-spatial-owner-capture-definition"));
+        DailyFixture fixture = CreateDailyFixture(null, npc);
+        DailyCaptureEligibilityToken token = CompleteDailyBoundary(fixture.Runtime);
+        SetSerializedSpatialOwnerIdentityAndDeserialize(npc, serializedOwnerRuntimeId);
+
+        Assert.That(P12DNpcRootOwnerSnapshot.TryCapture(
+            fixture.Runtime, token, new object(), token.OwnerSections,
+            out P12DNpcDProjection d, out P12DNpcFProjection f,
+            out P12DNpcRootOwnerSnapshotFailure failure), Is.False);
+        Assert.That(d, Is.Null);
+        Assert.That(f, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12DNpcRootOwnerSnapshotFailure.StaleCapture));
+    }
+
+    [Test]
     public void DailyV1Package_StagesPersonFirstAndPreservesOneOrderedCityNpcGraph()
     {
         CityRuntime city = SimulationTestFactory.CreateCity(
@@ -139,8 +325,8 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             new PersonId("p12d-owner-package-dormant-parent"), 0L);
         PersonRuntime materializedChild = new PersonRuntime(
             new PersonId("p12d-owner-package-materialized-child"), 10L);
-        Assert.That(dormantParent.TrySetResidenceSettlementRuntimeId(city.RuntimeId), Is.True);
-        Assert.That(materializedChild.TrySetResidenceSettlementRuntimeId(city.RuntimeId), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(dormantParent, city.RuntimeId), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(materializedChild, city.RuntimeId), Is.True);
 
         PersonStore sourcePersons = new PersonStore();
         Assert.That(sourcePersons.TryRegister(dormantParent, out _), Is.True);
@@ -215,7 +401,9 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             SimulationTestFactory.CreateNpc("p12d-owner-package-late-failure-npc-definition"), city, 0f);
         PersonRuntime danglingResident = new PersonRuntime(
             new PersonId("p12d-owner-package-dangling-resident"), 0L);
-        Assert.That(danglingResident.TrySetResidenceSettlementRuntimeId("p12d-owner-package-absent-city"), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(
+            danglingResident,
+            "p12d-owner-package-absent-city"), Is.True);
         PersonStore sourcePersons = new PersonStore();
         Assert.That(sourcePersons.TryRegister(danglingResident, out _), Is.True);
         GenealogyStore sourceGenealogy = new GenealogyStore();
@@ -277,6 +465,8 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(npc.Inventory.TryAddItem(item, 3, 4.5f), Is.True);
         Assert.That(npc.MoneyAccount.TryCredit(2.5f), Is.True);
         npc.HideForDays(2);
+        Assert.That(npc.HiddenDaysRemaining, Is.EqualTo(3),
+            "Two hidden days include the current day in the existing runtime countdown.");
         Assert.That(npc.SetResidenceSettlementRuntimeId(city.RuntimeId), Is.True);
         NpcActionRuntime actionRuntime = new NpcActionRuntime(action, destinationCity, item, 2, 3.25f);
         actionRuntime.SetSuccessChanceMultiplier(0.4f);
@@ -348,7 +538,8 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(capturedD.CurrentCityRuntimeId, Is.EqualTo(city.RuntimeId));
         Assert.That(capturedD.CurrentLocationRuntimeId, Is.EqualTo(city.Location.RuntimeId));
         Assert.That(capturedD.ResidenceSettlementRuntimeId, Is.EqualTo(city.RuntimeId));
-        Assert.That(capturedD.HiddenDaysRemaining, Is.EqualTo(3));
+        Assert.That(capturedD.HiddenDaysRemaining, Is.EqualTo(2),
+            "A complete Daily-v1 boundary advances the existing hidden-day countdown once.");
         Assert.That(capturedF.Action.ActionDefinitionId, Is.EqualTo(action.DefinitionId));
         Assert.That(capturedF.Action.Amount, Is.EqualTo(2));
         Assert.That(capturedF.Action.TargetCityRuntimeId, Is.EqualTo(destinationCity.RuntimeId));
@@ -412,9 +603,9 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(restored.Inventory.Revision, Is.EqualTo(npc.Inventory.Revision));
         Assert.That(restored.MoneyAccount.Balance, Is.EqualTo(27.5f));
         Assert.That(restored.MoneyAccount.Revision, Is.EqualTo(1L));
-        Assert.That(restored.HiddenDaysRemaining, Is.EqualTo(3));
+        Assert.That(restored.HiddenDaysRemaining, Is.EqualTo(2));
         Assert.That(restored.AdvanceHiddenDay(), Is.False);
-        Assert.That(restored.HiddenDaysRemaining, Is.EqualTo(2),
+        Assert.That(restored.HiddenDaysRemaining, Is.EqualTo(1),
             "staging must not consume the hidden-day clock; the next explicit day input advances it once");
         Assert.That(restored.TravelPlan.TargetCity, Is.SameAs(stagedCities[1]));
         Assert.That(restored.TravelPlan.Utility, Is.EqualTo(2.75f));
@@ -529,7 +720,7 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             SimulationTestFactory.CreateNpc("p12d-npc-person-definition"), city, 0f);
         PersonId personId = new PersonId("p12d-person-id");
         PersonRuntime person = new PersonRuntime(personId, 17L);
-        Assert.That(person.TrySetResidenceSettlementRuntimeId(city.RuntimeId), Is.True);
+        Assert.That(PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(person, city.RuntimeId), Is.True);
         PersonStore sourcePeople = new PersonStore();
         Assert.That(sourcePeople.TryRegister(person, out _), Is.True);
         Assert.That(sourcePeople.TryBindMaterializedNpc(personId, npc.RuntimeId, out _), Is.True);
@@ -563,8 +754,13 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         }
 
         PersonStore stagedPeople = new PersonStore();
-        PersonRuntime stagedPerson = PersonRuntime.CreateForOwnerSnapshot(
-            personId, 17L, null, city.RuntimeId, null, person.LifeResidenceRevision);
+        PersonRuntime stagedPerson = PersonRuntimeOwnerBridge.CreateForOwnerSnapshot(
+            personId,
+            17L,
+            null,
+            city.RuntimeId,
+            null,
+            PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person));
         Assert.That(stagedPeople.TryRegister(stagedPerson, out _), Is.True);
         Assert.That(stagedPeople.TryBindMaterializedNpc(personId, npc.RuntimeId, out _), Is.True);
         long[] membershipRevisions = stagedCities.Select(value => value.ImportantNpcRevision).ToArray();
@@ -597,7 +793,9 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(stagedPeople.TryGetByMaterializedNpcRuntimeId(npc.RuntimeId, out PersonRuntime indexed), Is.True);
         Assert.That(indexed, Is.SameAs(stagedPerson));
         Assert.That(indexed.BirthAbsoluteDay, Is.EqualTo(17L));
-        Assert.That(indexed.LifeResidenceRevision, Is.EqualTo(person.LifeResidenceRevision));
+        Assert.That(
+            PersonRuntimeOwnerBridge.GetLifeResidenceRevision(indexed),
+            Is.EqualTo(PersonRuntimeOwnerBridge.GetLifeResidenceRevision(person)));
         Assert.That(restored.CurrentCity, Is.SameAs(stagedCities[0]));
         Assert.That(stagedCities[0].ImportantNpcs, Is.EqualTo(new[] { restored }));
     }
@@ -773,7 +971,7 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         ExplorableSiteStore sites = new ExplorableSiteStore();
         SpatialLocationRuntime siteLocation = new SpatialLocationRuntime("p12d-populated-site-location");
         Assert.That(sites.Add(new ExplorableSiteRuntime("p12d-populated-site",
-            SimulationTestFactory.CreateExplorableSite("p12d-populated-site-definition"), siteLocation)), Is.True);
+            SimulationTestFactory.CreateExplorableSiteDefinition("p12d-populated-site-definition"), siteLocation)), Is.True);
         NpcRuntime npc = new NpcRuntime("p12d-npc-site-exclusion",
             SimulationTestFactory.CreateNpc("p12d-npc-site-exclusion-definition"));
         Assert.Throws<InvalidOperationException>(() => CreateDailyFixture(null, npc, siteStore: sites));
@@ -959,6 +1157,86 @@ public sealed class P12DNpcRootOwnerSnapshotTests
         Assert.That(stagedCities.Select(value => value.ImportantNpcs.Count), Is.All.EqualTo(0));
         Assert.That(stagedCities.Select(value => value.ImportantNpcRevision), Is.EqualTo(revisions));
     }
+
+    [Test]
+    public void SelectedOwnerCollection_AllowsNonemptyNpcRosterWithoutCityOwners()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition npcDefinition = definitions.Npcs.Values.First();
+        NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+            "p12d-selected-npc-without-city", npcDefinition, definitions, (CityRuntime)null, 0f);
+        MethodInfo collect = typeof(P12DDailyV1OwnerPackage).GetMethod(
+            "TryCollectSelectedOwners", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(collect, Is.Not.Null);
+
+        object[] arguments =
+        {
+            definitions,
+            System.Array.Empty<CityRuntime>(),
+            new[] { npc },
+            null,
+            null
+        };
+        Assert.That((bool)collect.Invoke(null, arguments), Is.True);
+        IReadOnlyList<DailyV1CityRuntimeOwners> cityOwners =
+            (IReadOnlyList<DailyV1CityRuntimeOwners>)arguments[3];
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcOwners =
+            (IReadOnlyList<DailyV1NpcRuntimeOwners>)arguments[4];
+        Assert.That(cityOwners, Is.Empty);
+        Assert.That(npcOwners.Count, Is.EqualTo(1));
+        Assert.That(npcOwners[0], Is.SameAs(npc.SelectedRuntimeOwners));
+
+        object[] emptyArguments =
+        {
+            definitions,
+            System.Array.Empty<CityRuntime>(),
+            System.Array.Empty<NpcRuntime>(),
+            null,
+            null
+        };
+        Assert.That((bool)collect.Invoke(null, emptyArguments), Is.False,
+            "A completely empty selected owner vector cannot establish its definition identity.");
+    }
+
+    [Test]
+    public void SelectedDailyV1CaptureUsesSharedCoreLocalTopologyEmptyOwnerForAliasedSections()
+    {
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        NpcData npcAsset = SimulationTestFactory.CreateNpc("p12d-selected-empty-topology-definition");
+        config.Npcs.Add(new NpcSimulationConfig { npc = npcAsset, initialMoney = 0f });
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: config.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(config.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            config, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        DailyV1NpcDefinition definition = definitions.Npcs[npcAsset.DefinitionId];
+        NpcRuntime selectedNpc = NpcRuntime.CreateSelectedDailyV1(
+            "p12d-selected-empty-topology", npcAsset, definition, definitions,
+            bindings, (CityRuntime)null, 0f);
+        DailyFixture fixture = CreateDailyFixture(null, selectedNpc);
+        DailyCaptureEligibilityToken token = CompleteDailyBoundary(fixture.Runtime);
+
+        Assert.That(P12DNpcRootOwnerSnapshot.TryCapture(
+            fixture.Runtime, token, new object(), token.OwnerSections,
+            out P12DNpcDProjection d, out P12DNpcFProjection f,
+            out P12DNpcRootOwnerSnapshotFailure failure), Is.True, failure.ToString());
+        Assert.That(d.Rows, Has.Count.EqualTo(fixture.Npcs.Length));
+        Assert.That(f.Rows, Has.Count.EqualTo(fixture.Npcs.Length));
+
+        DailyV1NpcLocalTopologyKnowledgeEmptyOwner emptyOwner =
+            selectedNpc.SelectedRuntimeOwners.LocalTopologyKnowledgeEmptyOwner;
+        OwnerSectionCensusSnapshot places = token.OwnerSections.Single(row =>
+            row.SectionId == NpcKnowledgeCensusProvider.SectionIdFor(1, selectedNpc.RuntimeId));
+        OwnerSectionCensusSnapshot connections = token.OwnerSections.Single(row =>
+            row.SectionId == NpcKnowledgeCensusProvider.SectionIdFor(2, selectedNpc.RuntimeId));
+        Assert.That(places.OwnerInstanceIdentity, Is.SameAs(emptyOwner));
+        Assert.That(connections.OwnerInstanceIdentity, Is.SameAs(emptyOwner));
+        Assert.That(places.Cardinality, Is.Zero);
+        Assert.That(connections.Cardinality, Is.Zero);
+        Assert.That(places.Revision, Is.Zero);
+        Assert.That(connections.Revision, Is.Zero);
+    }
+
     [Test]
     public void Capture_ProducesDetachedValuesWhenSourceOwnersChangeAfterCapture()
     {
@@ -1116,14 +1394,66 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             routeIds[1], networkLocations[1], networkLocations[0], 1)), Is.True);
 
         if (siteStore == null) siteStore = new ExplorableSiteStore();
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        EconomyTransactionService transactionService = new EconomyTransactionService();
+        TravelSystem travelSystem = new TravelSystem(
+            network,
+            location => cities.FirstOrDefault(city => ReferenceEquals(city.Location, location)),
+            1f,
+            records.EventRecorder,
+            null,
+            transactionService);
+        ScheduledDirectiveStore directiveStore = new ScheduledDirectiveStore(records.Time);
+        ScheduledDirectiveSystem directiveSystem = new ScheduledDirectiveSystem(directiveStore, identities);
+        JusticeSystem justiceSystem = new JusticeSystem(null, null, null, null,
+            records.EventRecorder, null);
+        CrimeSystem crimeSystem = new CrimeSystem(justiceSystem, travelSystem, null,
+            transactionService: transactionService,
+            configuration: new EffectiveCrimeConfiguration(false, false),
+            simulationTime: records.Time);
+        TravelPartyStore travelPartyStore = new TravelPartyStore();
+        TravelPartySystem travelPartySystem = new TravelPartySystem(
+            travelPartyStore,
+            records.Allocator,
+            identities,
+            travelSystem,
+            records.Time,
+            records.Sequence,
+            records.EventRecorder,
+            transactionService: transactionService);
+        ExpeditionStore expeditionStore = new ExpeditionStore();
+        ExplorableSiteKnowledgeSystem siteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
+        ExpeditionSystem expeditionSystem = new ExpeditionSystem(
+            expeditionStore,
+            records.Allocator,
+            identities,
+            siteStore,
+            travelPartySystem,
+            travelPartyStore,
+            siteKnowledgeSystem,
+            records.Time,
+            records.EventRecorder);
+
         SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(), cities, npcs,
+            records.Time, cities, npcs,
             economyEnabled: false,
+            scheduledDirectiveSystem: directiveSystem,
+            justiceSystem: justiceSystem,
+            crimeSystem: crimeSystem,
+            travelSystem: travelSystem,
+            travelPartySystem: travelPartySystem,
+            decisionRecorder: records.DecisionRecorder,
             explorableSiteStore: siteStore,
+            explorableSiteKnowledgeSystem: siteKnowledgeSystem,
+            expeditionSystem: expeditionSystem,
             spatialAuthorityStore: CreateSpatialAuthority(),
             personStore: personStore,
             genealogyStore: genealogyStore,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            recordSequence: records.Sequence,
+            runtimeIdAllocator: records.Allocator,
+            economyTransactionService: transactionService,
+            requireP12ReceiptCensusOwners: true,
             runtimeIdentityRegistry: identities,
             spatialNetworkRuntime: network,
             requireP12RuntimeIdentitySpatialCensusOwners: true,
@@ -1171,7 +1501,7 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             fixture.Npcs.Select(value => value.NpcData).ToArray(),
             Array.Empty<NpcActionData>(),
             Array.Empty<NpcStatusData>(),
-            Array.Empty<ExplorableSiteData>(),
+            Array.Empty<DailyV1ExplorableSiteDefinition>(),
             Array.Empty<string>(),
             out package,
             out failure);
@@ -1202,5 +1532,16 @@ public sealed class P12DNpcRootOwnerSnapshotTests
             out DailyCaptureEligibilityToken token,
             out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
         return token;
+    }
+
+    private static void SetSerializedSpatialOwnerIdentityAndDeserialize(
+        NpcRuntime npc, string serializedOwnerRuntimeId)
+    {
+        object adapter = typeof(NpcRuntime).GetField("spatialKnowledge",
+            BindingFlags.Instance | BindingFlags.NonPublic).GetValue(npc);
+        Assert.That(adapter, Is.Not.Null);
+        adapter.GetType().GetField("ownerRuntimeId", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(adapter, serializedOwnerRuntimeId);
+        adapter.GetType().GetMethod("OnAfterDeserialize").Invoke(adapter, null);
     }
 }

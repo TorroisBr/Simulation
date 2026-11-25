@@ -761,7 +761,7 @@ public sealed class AdventureExpeditionAutonomyTests
                 Network.RegisterRoute(ReturnRoute);
             }
 
-            Site = new ExplorableSiteRuntime("site-runtime", SimulationTestFactory.CreateExplorableSite("site-def"), SiteLocation);
+            Site = new ExplorableSiteRuntime("site-runtime", SimulationTestFactory.CreateExplorableSiteDefinition("site-def"), SiteLocation);
             Registry.RegisterExplorableSite(Site);
             Sites.Add(Site);
             Actor = new NpcRuntime("npc-actor", SimulationTestFactory.CreateNpc("actor"));

@@ -53,6 +53,74 @@ public sealed class DailyV1DefinitionAdapterTypedParityTests
         }
     }
 
+    [Test]
+    public void AdapterBindsAdmittedTraitAttributeAndSiteAssetsToCopiedTypedNodes()
+    {
+        SimulationConfigData authoring = LoadOfficialProfile();
+        NpcData npc = authoring.Npcs[0].npc;
+        ItemData item = authoring.Cities[0].marketItems[0].item;
+        TraitData trait = ScriptableObject.CreateInstance<TraitData>();
+        CapabilityAttributeData attribute = ScriptableObject.CreateInstance<CapabilityAttributeData>();
+        ExplorableSiteData site = ScriptableObject.CreateInstance<ExplorableSiteData>();
+        trait.id = "trait/adapter-binding";
+        trait.traitName = " ";
+        attribute.id = "attribute/adapter-binding";
+        attribute.displayName = null;
+        site.id = "site/adapter-binding";
+        site.siteName = null;
+        site.kind = ExplorableSiteKind.Ruin;
+
+        List<TraitData> originalTraits = npc.traits;
+        List<CapabilityAttributeValue> originalCapabilityValues = npc.capabilityValues;
+        List<CapabilityAttributeModifier> originalItemModifiers = item.capabilityModifiers;
+        List<ExplorableSiteConfig> originalSites = authoring.explorableSites;
+        try
+        {
+            npc.traits = new List<TraitData> { trait };
+            npc.capabilityValues = new List<CapabilityAttributeValue>
+            {
+                new CapabilityAttributeValue(attribute, 0.25f)
+            };
+            item.capabilityModifiers = new List<CapabilityAttributeModifier>
+            {
+                new CapabilityAttributeModifier(attribute, 0.5f)
+            };
+            authoring.explorableSites = new List<ExplorableSiteConfig>
+            {
+                new ExplorableSiteConfig { site = site, anchorCity = authoring.Cities[0], travelDaysFromAnchor = 2 }
+            };
+
+            DailyV1EffectiveDefinitions actual = CreateUnityDefinitions(authoring);
+
+            Assert.That(actual.Traits.Count, Is.EqualTo(1));
+            Assert.That(actual.Traits[trait.id].TypeToken, Is.EqualTo("TraitData"));
+            Assert.That(actual.Traits[trait.id].DisplayName, Is.EqualTo(trait.id));
+            Assert.That(actual.CapabilityAttributes.Count, Is.EqualTo(1));
+            Assert.That(actual.CapabilityAttributes[attribute.id].TypeToken, Is.EqualTo("CapabilityAttributeData"));
+            Assert.That(actual.CapabilityAttributes[attribute.id].DisplayName, Is.EqualTo(attribute.id));
+            Assert.That(actual.ExplorableSites.Count, Is.EqualTo(1));
+            DailyV1ExplorableSiteDefinition siteNode = actual.ExplorableSites[site.id];
+            Assert.That(siteNode.TypeToken, Is.EqualTo("ExplorableSiteData"));
+            Assert.That(siteNode.DisplayName, Is.Null);
+            Assert.That(siteNode.Kind.Value, Is.EqualTo((int)ExplorableSiteKind.Ruin));
+            Assert.That(siteNode.Kind.Spelling, Is.EqualTo(nameof(ExplorableSiteKind.Ruin)));
+            Assert.That(actual.Npcs[npc.DefinitionId].Values.traits, Does.Contain(trait.id));
+            Assert.That(actual.Npcs[npc.DefinitionId].Values.capabilityValues[0].attribute, Is.EqualTo(attribute.id));
+            Assert.That(actual.Items[item.DefinitionId].Values.capabilityModifiers[0].attribute, Is.EqualTo(attribute.id));
+            Assert.That(actual.Configuration.explorableSites[0].site, Is.EqualTo(site.id));
+        }
+        finally
+        {
+            npc.traits = originalTraits;
+            npc.capabilityValues = originalCapabilityValues;
+            item.capabilityModifiers = originalItemModifiers;
+            authoring.explorableSites = originalSites;
+            UnityEngine.Object.DestroyImmediate(trait);
+            UnityEngine.Object.DestroyImmediate(attribute);
+            UnityEngine.Object.DestroyImmediate(site);
+        }
+    }
+
     private static SimulationConfigData LoadOfficialProfile()
     {
         SimulationConfigData authoring = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(ProfilePath);
@@ -88,6 +156,9 @@ public sealed class DailyV1DefinitionAdapterTypedParityTests
         AssertEquivalent(expected.Jobs, actual.Jobs, "Jobs");
         AssertEquivalent(expected.Actions, actual.Actions, "Actions");
         AssertEquivalent(expected.Statuses, actual.Statuses, "Statuses");
+        AssertEquivalent(expected.Traits, actual.Traits, "Traits");
+        AssertEquivalent(expected.CapabilityAttributes, actual.CapabilityAttributes, "CapabilityAttributes");
+        AssertEquivalent(expected.ExplorableSites, actual.ExplorableSites, "ExplorableSites");
         AssertEquivalent(expected.StageOrder, actual.StageOrder, "StageOrder");
         AssertEquivalent(expected.ProfileContractIdentity, actual.ProfileContractIdentity, "ProfileContractIdentity");
         AssertEquivalent(expected.GeographyProfileContractIdentity, actual.GeographyProfileContractIdentity,

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 
@@ -11,6 +12,35 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
 
     [TearDown]
     public void TearDown() => SimulationTestFactory.CleanupDefinitions();
+
+    private static DailyV1JusticeP18ReceiptOwner GetReceiptOwner(JusticeSystem system)
+    {
+        FieldInfo ownerField = typeof(JusticeSystem).GetField("p18ReceiptOwner",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(ownerField, Is.Not.Null);
+        return (DailyV1JusticeP18ReceiptOwner)ownerField.GetValue(system);
+    }
+    [Test]
+    public void P12BoundJusticeAcceptsNewWantedAndSentenceRowsThroughOwnerInsertion()
+    {
+        JusticeSystem justice = CreateJusticeConfiguration("p12e-justice-bound-insert").CreateOwner();
+        int committedCalls = 0;
+        Assert.That(justice.TryBindP12CrimeJusticeMutationBoundary(_ => true, _ => committedCalls++), Is.True);
+        CityRuntime city = CreateCity("p12e-justice-bound-insert-city");
+        NpcRuntime target = CreateNpc("p12e-justice-bound-insert-target");
+        NpcRuntime guard = CreateNpc("p12e-justice-bound-insert-guard");
+
+        WantedRecordRuntime warrant = justice.CreateOrIncreaseWarrant(target, city, 12f, 4);
+
+        Assert.That(warrant, Is.Not.Null);
+        Assert.That(justice.P12WantedRecordCount, Is.EqualTo(1));
+        Assert.That(justice.P12CrimeJusticeRevision, Is.EqualTo(1));
+        Assert.That(committedCalls, Is.EqualTo(1));
+        Assert.That(justice.Arrest(guard, target, city), Is.True);
+        Assert.That(justice.P12PrisonSentenceCount, Is.EqualTo(1));
+        Assert.That(justice.P12CrimeJusticeRevision, Is.EqualTo(2));
+        Assert.That(committedCalls, Is.EqualTo(2));
+    }
 
     [Test]
     public void CaptureAndStagePreserveOrderedHistorySentenceLinksAndBothTargetIdentityForms()
@@ -50,7 +80,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         CompleteDay(runtime);
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken token,
             out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
-        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12EJusticeRecordsOwnerSnapshot snapshot,
             out P12EJusticeSnapshotFailure captureFailure), Is.True, captureFailure?.Message);
 
@@ -85,18 +115,21 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         StagedRoots roots = CreateStagedRoots(
             new[] { firstCity, secondCity },
             new[] { personTarget, legacyTarget, personGuard, legacyGuard });
+        DailyV1JusticeRecordsOwner selectedCoreOwner = CreateCoreJusticeOwnerForProjection(snapshot);
         RecordFixture records = SimulationTestFactory.CreateRecordFixture();
         int statusCountBefore = roots.Npcs[0].CurrentStatus.Count;
-        Assert.That(snapshot.TryStage(
-            roots.Cities, roots.Npcs, roots.People,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryStage(snapshot,
+            roots.Cities, roots.Npcs, roots.People, selectedCoreOwner,
             justiceConfiguration.FreeStatus, justiceConfiguration.WantedStatus,
             justiceConfiguration.ArrestedStatus, justiceConfiguration.HiddenStatus,
-            records.EventRecorder, new SimulationLogger(null),
+            records.EventRecorder, UnitySimulationLoggerAdapter.Create(null),
             out JusticeSystem staged, out P12EJusticeSnapshotFailure stageFailure),
             Is.True, stageFailure?.Message);
+        Assert.That(staged.CoreOwner, Is.SameAs(selectedCoreOwner),
+            "Unity staging must project the exact Justice owner hydrated by Core.");
 
-        List<WantedRecordRuntime> stagedWanted = ReadOwnerRows<WantedRecordRuntime>(staged, "wantedRecords");
-        List<PrisonSentenceRuntime> stagedSentences = ReadOwnerRows<PrisonSentenceRuntime>(staged, "prisonSentences");
+        IList<WantedRecordRuntime> stagedWanted = ReadOwnerRows<WantedRecordRuntime>(staged, "wantedRecords");
+        IList<PrisonSentenceRuntime> stagedSentences = ReadOwnerRows<PrisonSentenceRuntime>(staged, "prisonSentences");
         Assert.That(staged.P12WantedRecordCount, Is.EqualTo(3));
         Assert.That(staged.P12PrisonSentenceCount, Is.EqualTo(2));
         Assert.That(staged.P12CrimeJusticeRevision, Is.EqualTo(snapshot.Records.Revision));
@@ -116,7 +149,11 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(records.Events.Events, Is.Empty, "Staging must not emit domain events.");
         Assert.That(RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(records.Allocator)
             .GetCurrentCensus().Revision, Is.Zero, "Staging must not allocate EventIds.");
-        Assert.That(records.Sequence.CensusRevision, Is.Zero, "Staging must not allocate record sequences.");
+        SimulationRecordSequenceOwnerBridge.CaptureCensusIdentity(
+            records.Sequence,
+            out _,
+            out long sequenceRevision);
+        Assert.That(sequenceRevision, Is.Zero, "Staging must not allocate record sequences.");
         int admissionCalls = 0;
         int committedCalls = 0;
         Assert.That(staged.TryBindP12CrimeJusticeMutationBoundary(
@@ -128,7 +165,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         long capturedRevision = justice.P12CrimeJusticeRevision;
         CompleteDay(runtime);
         Assert.That(justice.P12CrimeJusticeRevision, Is.GreaterThan(capturedRevision));
-        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12EJusticeRecordsOwnerSnapshot stale, out _), Is.False);
         Assert.That(stale, Is.Null);
     }
@@ -146,7 +183,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
             out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
 
         List<OwnerSectionCensusSnapshot> copiedVector = new List<OwnerSectionCensusSnapshot>(token.OwnerSections);
-        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(runtime, token, copiedVector,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(runtime, token, copiedVector,
             out P12EJusticeRecordsOwnerSnapshot rejected, out _), Is.False);
         Assert.That(rejected, Is.Null);
 
@@ -179,12 +216,12 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
 
         foreach (IReadOnlyList<OwnerSectionCensusSnapshot> alteredVector in alteredVectors)
         {
-            Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(runtime, token, alteredVector,
+            Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(runtime, token, alteredVector,
                 out rejected, out _), Is.False);
             Assert.That(rejected, Is.Null);
         }
 
-        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12EJusticeRecordsOwnerSnapshot empty, out P12EJusticeSnapshotFailure failure),
             Is.True, failure?.Message);
         Assert.That(empty.Records.RecordCount, Is.Zero);
@@ -193,11 +230,12 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(empty.Records.Revision, Is.Zero);
 
         StagedRoots roots = CreateStagedRoots(new[] { city }, new[] { npc });
-        Assert.That(empty.TryStage(
-            roots.Cities, roots.Npcs, roots.People,
+        DailyV1JusticeRecordsOwner selectedCoreOwner = CreateCoreJusticeOwnerForProjection(empty);
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryStage(empty,
+            roots.Cities, roots.Npcs, roots.People, selectedCoreOwner,
             configuration.FreeStatus, configuration.WantedStatus,
             configuration.ArrestedStatus, configuration.HiddenStatus,
-            null, new SimulationLogger(null),
+            null, UnitySimulationLoggerAdapter.Create(null),
             out JusticeSystem staged, out failure), Is.True, failure?.Message);
         Assert.That(staged.P12WantedRecordCount, Is.Zero);
         Assert.That(staged.P12PrisonSentenceCount, Is.Zero);
@@ -205,18 +243,18 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(staged.P12P18ReceiptCensusRevision, Is.Zero);
 
         CompleteDay(runtime);
-        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12EJusticeRecordsOwnerSnapshot staleBoundary, out _), Is.False);
         Assert.That(staleBoundary, Is.Null);
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken currentToken,
             out tokenFailure), Is.True, tokenFailure.ToString());
 
-        FieldInfo receiptRevision = typeof(JusticeSystem).GetField(
-            "beginDayStepRevision", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(receiptRevision, Is.Not.Null);
-        receiptRevision.SetValue(justice, 1L);
-        Assert.That(justice.P12P18ReceiptCensusRevision, Is.EqualTo(1L));
-        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(runtime, currentToken, currentToken.OwnerSections,
+        DailyV1JusticeP18ReceiptOwner justiceReceipts = GetReceiptOwner(justice);
+        Assert.That(justiceReceipts.TryPrepare(DailyV1JusticeP18ReceiptKind.BeginDay,
+            "p12e-capture-nonzero", "p12e-capture-fingerprint", out var receiptMutation), Is.True);
+        justiceReceipts.InstallPrepared(receiptMutation);
+        Assert.That(justice.P12P18ReceiptCensusRevision, Is.EqualTo(2L));
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(runtime, currentToken, currentToken.OwnerSections,
             out P12EJusticeRecordsOwnerSnapshot nonzeroReceipt, out _), Is.False);
         Assert.That(nonzeroReceipt, Is.Null);
 
@@ -227,7 +265,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
     {
         JusticeConfiguration configuration = CreateJusticeConfiguration("p12e-justice-receipt-witness");
         JusticeSystem owner = configuration.CreateOwner();
-        MethodInfo validate = typeof(P12EJusticeRecordsOwnerSnapshot).GetMethod(
+        MethodInfo validate = typeof(P12EJusticeRecordsSnapshotAdapter).GetMethod(
             "TryMatchesReceiptWitness", BindingFlags.Static | BindingFlags.NonPublic);
         Assert.That(validate, Is.Not.Null);
 
@@ -252,6 +290,16 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
             configuration.CreateOwner(), 1, 0L);
         Assert.That((bool)validate.Invoke(null, new object[] { wrongOwner, owner }), Is.False);
         Assert.That((bool)validate.Invoke(null, new object[] { null, owner }), Is.False);
+
+        DailyV1JusticeP18ReceiptOwner justiceReceipts = GetReceiptOwner(owner);
+        Assert.That(justiceReceipts.TryPrepare(DailyV1JusticeP18ReceiptKind.BeginDay,
+            "p12e-witness-nonzero", "p12e-witness-fingerprint", out var receiptMutation), Is.True);
+        justiceReceipts.InstallPrepared(receiptMutation);
+        Assert.That(owner.P12P18ReceiptCensusRevision, Is.EqualTo(2L));
+        OwnerSectionCensusSnapshot matchingNonzeroRevision = new OwnerSectionCensusSnapshot(
+            exactZero.SectionId, exactZero.SchemaVersion, exactZero.Role,
+            owner, 1, owner.P12P18ReceiptCensusRevision);
+        Assert.That((bool)validate.Invoke(null, new object[] { matchingNonzeroRevision, owner }), Is.False);
     }
 
     [Test]
@@ -272,12 +320,13 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         P12EJusticeRecordsOwnerSnapshot mismatch = Snapshot(
             new[] { Wanted(0, npc.RuntimeId, "p12e-justice-expected-person", city.RuntimeId, 5f, 2, false) },
             Array.Empty<P12EJusticeSentenceSnapshotRow>(), 0L);
-        Assert.That(mismatch.TryStage(new[] { city }, new[] { mismatchNpc }, wrongPeople,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryStage(mismatch, new[] { city }, new[] { mismatchNpc }, wrongPeople,
+            CreateCoreJusticeOwnerForProjection(mismatch),
             mismatchConfiguration.FreeStatus,
             mismatchConfiguration.WantedStatus,
             mismatchConfiguration.ArrestedStatus,
             mismatchConfiguration.HiddenStatus,
-            null, new SimulationLogger(null), out JusticeSystem rejected,
+            null, UnitySimulationLoggerAdapter.Create(null), out JusticeSystem rejected,
             out P12EJusticeSnapshotFailure failure), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidReference));
@@ -290,7 +339,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
                 Wanted(1, "another-target", null, "another-city", 3f, 1, false)
             },
             new[] { Sentence(0, npc.RuntimeId, null, city.RuntimeId, 1, 1, 0, true) }, 0L);
-        Assert.That(invalidLink.TryStage(null, null, null, null, null, null, null, null, null,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryStage(invalidLink, null, null, null, null, null, null, null, null, null, null,
             out rejected, out failure), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidRelation));
@@ -298,7 +347,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         P12EJusticeRecordsOwnerSnapshot invalidOrdinal = Snapshot(
             new[] { Wanted(1, npc.RuntimeId, null, city.RuntimeId, 5f, 2, false) },
             Array.Empty<P12EJusticeSentenceSnapshotRow>(), 0L);
-        Assert.That(invalidOrdinal.TryStage(null, null, null, null, null, null, null, null, null,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryStage(invalidOrdinal, null, null, null, null, null, null, null, null, null, null,
             out rejected, out failure), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidIdentity));
@@ -316,10 +365,11 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         P12EJusticeRecordsOwnerSnapshot dangling = Snapshot(
             new[] { Wanted(0, danglingNpc.RuntimeId, danglingId.Value, city.RuntimeId, 1f, 1, false) },
             Array.Empty<P12EJusticeSentenceSnapshotRow>(), 0L);
-        Assert.That(dangling.TryStage(new[] { city }, new[] { danglingNpc }, new PersonStore(),
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryStage(dangling, new[] { city }, new[] { danglingNpc }, new PersonStore(),
+            CreateCoreJusticeOwnerForProjection(dangling),
             configuration.FreeStatus, configuration.WantedStatus,
             configuration.ArrestedStatus, configuration.HiddenStatus,
-            null, new SimulationLogger(null), out JusticeSystem rejected,
+            null, UnitySimulationLoggerAdapter.Create(null), out JusticeSystem rejected,
             out P12EJusticeSnapshotFailure failure), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidReference));
@@ -335,10 +385,11 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         P12EJusticeRecordsOwnerSnapshot storeOnlyBinding = Snapshot(
             new[] { Wanted(0, storeBoundNpc.RuntimeId, storeBoundId.Value, city.RuntimeId, 1f, 1, false) },
             Array.Empty<P12EJusticeSentenceSnapshotRow>(), 0L);
-        Assert.That(storeOnlyBinding.TryStage(new[] { city }, new[] { storeBoundNpc }, storeBoundPeople,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryStage(storeOnlyBinding, new[] { city }, new[] { storeBoundNpc }, storeBoundPeople,
+            CreateCoreJusticeOwnerForProjection(storeOnlyBinding),
             configuration.FreeStatus, configuration.WantedStatus,
             configuration.ArrestedStatus, configuration.HiddenStatus,
-            null, new SimulationLogger(null), out rejected, out failure), Is.False);
+            null, UnitySimulationLoggerAdapter.Create(null), out rejected, out failure), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidReference));
 
@@ -352,10 +403,11 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         P12EJusticeRecordsOwnerSnapshot npcOnlyBinding = Snapshot(
             new[] { Wanted(0, npcBoundNpc.RuntimeId, npcBoundId.Value, city.RuntimeId, 1f, 1, false) },
             Array.Empty<P12EJusticeSentenceSnapshotRow>(), 0L);
-        Assert.That(npcOnlyBinding.TryStage(new[] { city }, new[] { npcBoundNpc }, npcBoundPeople,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryStage(npcOnlyBinding, new[] { city }, new[] { npcBoundNpc }, npcBoundPeople,
+            CreateCoreJusticeOwnerForProjection(npcOnlyBinding),
             configuration.FreeStatus, configuration.WantedStatus,
             configuration.ArrestedStatus, configuration.HiddenStatus,
-            null, new SimulationLogger(null), out rejected, out failure), Is.False);
+            null, UnitySimulationLoggerAdapter.Create(null), out rejected, out failure), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidReference));
     }
@@ -442,19 +494,19 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
     }
 
     [Test]
-    public void CaptureAndStageRejectDuplicateOwnerObjectsAndMissingOrAmbiguousRoots()
+    public void OwnerProjectionRejectsDuplicateRowsAndStageRejectsMissingOrAmbiguousRoots()
     {
         CityRuntime city = CreateCity("p12e-justice-duplicate-city");
         NpcRuntime target = CreateNpc("p12e-justice-duplicate-target");
         JusticeConfiguration configuration = CreateJusticeConfiguration("p12e-justice-duplicate");
         JusticeSystem justice = configuration.CreateOwner();
         WantedRecordRuntime warrant = justice.CreateOrIncreaseWarrant(target, city, 2f, 2);
-        List<WantedRecordRuntime> wantedRows = ReadOwnerRows<WantedRecordRuntime>(justice, "wantedRecords");
-        wantedRows.Add(warrant);
+        IList<WantedRecordRuntime> wantedRows = ReadOwnerRows<WantedRecordRuntime>(justice, "wantedRecords");
+        Assert.Throws<InvalidOperationException>(() => wantedRows.Add(warrant));
         Assert.That(justice.TryCaptureP12EOwnerSnapshotRows(out IReadOnlyList<P12EJusticeWantedSnapshotRow> copiedWanted,
-            out IReadOnlyList<P12EJusticeSentenceSnapshotRow> copiedSentences), Is.False);
-        Assert.That(copiedWanted, Is.Null);
-        Assert.That(copiedSentences, Is.Null);
+            out IReadOnlyList<P12EJusticeSentenceSnapshotRow> copiedSentences), Is.True);
+        Assert.That(copiedWanted, Has.Count.EqualTo(1));
+        Assert.That(copiedSentences, Is.Empty);
 
         CityRuntime sentenceCity = CreateCity("p12e-justice-duplicate-sentence-city");
         NpcRuntime sentenceTarget = CreateNpc("p12e-justice-duplicate-sentence-target");
@@ -463,14 +515,14 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(duplicateSentenceJustice.CreateOrIncreaseWarrant(
             sentenceTarget, sentenceCity, 1f, 1), Is.Not.Null);
         Assert.That(duplicateSentenceJustice.Arrest(sentenceGuard, sentenceTarget, sentenceCity), Is.True);
-        List<PrisonSentenceRuntime> sentenceRows =
+        IList<PrisonSentenceRuntime> sentenceRows =
             ReadOwnerRows<PrisonSentenceRuntime>(duplicateSentenceJustice, "prisonSentences");
         Assert.That(sentenceRows, Has.Count.EqualTo(1));
-        sentenceRows.Add(sentenceRows[0]);
+        Assert.Throws<InvalidOperationException>(() => sentenceRows.Add(sentenceRows[0]));
         Assert.That(duplicateSentenceJustice.TryCaptureP12EOwnerSnapshotRows(
-            out copiedWanted, out copiedSentences), Is.False);
-        Assert.That(copiedWanted, Is.Null);
-        Assert.That(copiedSentences, Is.Null);
+            out copiedWanted, out copiedSentences), Is.True);
+        Assert.That(copiedWanted, Has.Count.EqualTo(1));
+        Assert.That(copiedSentences, Has.Count.EqualTo(1));
 
         P12EJusticeRecordsOwnerSnapshot missingNpc = Snapshot(
             new[] { Wanted(0, target.RuntimeId, null, city.RuntimeId, 2f, 2, false) },
@@ -510,17 +562,19 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
             new[] { Sentence(0, target.RuntimeId, null, city.RuntimeId, 0, 0, 3, true) },
             long.MaxValue);
         StagedRoots roots = CreateStagedRoots(new[] { city }, new[] { target });
+        DailyV1JusticeRecordsOwner selectedCoreOwner = CreateCoreJusticeOwnerForProjection(snapshot);
 
-        Assert.That(snapshot.TryStage(
-            roots.Cities, roots.Npcs, roots.People,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryStage(snapshot,
+            roots.Cities, roots.Npcs, roots.People, selectedCoreOwner,
             configuration.FreeStatus, configuration.WantedStatus,
             configuration.ArrestedStatus, configuration.HiddenStatus,
-            null, new SimulationLogger(null), out JusticeSystem staged,
+            null, UnitySimulationLoggerAdapter.Create(null), out JusticeSystem staged,
             out P12EJusticeSnapshotFailure failure), Is.True, failure?.Message);
 
-        List<WantedRecordRuntime> wanted = ReadOwnerRows<WantedRecordRuntime>(staged, "wantedRecords");
-        List<PrisonSentenceRuntime> sentences = ReadOwnerRows<PrisonSentenceRuntime>(staged, "prisonSentences");
+        IList<WantedRecordRuntime> wanted = ReadOwnerRows<WantedRecordRuntime>(staged, "wantedRecords");
+        IList<PrisonSentenceRuntime> sentences = ReadOwnerRows<PrisonSentenceRuntime>(staged, "prisonSentences");
         Assert.That(staged.P12CrimeJusticeRevision, Is.EqualTo(long.MaxValue));
+        Assert.That(staged.CoreOwner, Is.SameAs(selectedCoreOwner));
         Assert.That(staged.P12WantedRecordCount + staged.P12PrisonSentenceCount, Is.EqualTo(2));
         Assert.That(wanted[0].IsActive, Is.False);
         Assert.That(wanted[0].Bounty, Is.EqualTo(7.25f));
@@ -531,21 +585,172 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(sentences[0].Warrant, Is.SameAs(wanted[0]));
     }
 
+    [Test]
+    public void ExpiredSentenceRemovalReleasesItsUnityProjection()
+    {
+        CityRuntime city = CreateCity("p12e-justice-projection-release-city");
+        NpcRuntime target = CreateNpc("p12e-justice-projection-release-target");
+        NpcRuntime guard = CreateNpc("p12e-justice-projection-release-guard");
+        JusticeSystem justice = CreateJusticeConfiguration("p12e-justice-projection-release").CreateOwner();
+        Assert.That(justice.CreateOrIncreaseWarrant(target, city, 2f, 1), Is.Not.Null);
+        Assert.That(justice.Arrest(guard, target, city), Is.True);
+
+        FieldInfo viewsField = typeof(JusticeSystem).GetField(
+            "sentenceViews", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(viewsField, Is.Not.Null);
+        IDictionary sentenceViews = (IDictionary)viewsField.GetValue(justice);
+        Assert.That(sentenceViews.Count, Is.EqualTo(1));
+
+        justice.AdvanceSentences(new List<NpcRuntime> { target });
+
+        Assert.That(justice.P12PrisonSentenceCount, Is.Zero);
+        Assert.That(sentenceViews.Count, Is.Zero);
+    }
+
     private static SimulationRuntime CreateRuntime(
         IReadOnlyList<CityRuntime> cities,
         IReadOnlyList<NpcRuntime> npcs,
         JusticeSystem justice,
         PersonStore people)
     {
+        List<CityRuntime> cityOwners = cities == null
+            ? new List<CityRuntime>()
+            : new List<CityRuntime>(cities);
+        if (cityOwners.Count == 0)
+            cityOwners.Add(CreateCity("p12e-justice-default-city"));
+        int cityIndex = 0;
+        while (cityOwners.Count < 2)
+        {
+            string suffix = cityIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            cityOwners.Add(CreateCity("p12e-justice-profile-city-" + suffix));
+            cityIndex++;
+        }
+
+        List<NpcRuntime> npcOwners = npcs == null
+            ? new List<NpcRuntime>()
+            : new List<NpcRuntime>(npcs);
+        if (npcOwners.Count == 0)
+            npcOwners.Add(CreateNpc("p12e-justice-default-npc"));
+        int npcIndex = 0;
+        while (npcOwners.Count < 10)
+        {
+            string suffix = npcIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            npcOwners.Add(CreateNpc("p12e-justice-profile-npc-" + suffix));
+            npcIndex++;
+        }
+        Assert.That(cityOwners, Has.Count.EqualTo(2),
+            "P12 selected-profile fixtures use two runtime City identities.");
+        Assert.That(npcOwners, Has.Count.EqualTo(10),
+            "P12 selected-profile fixtures use ten runtime NPC identities.");
+
+        RuntimeIdentityRegistry identities = new RuntimeIdentityRegistry();
+        foreach (CityRuntime city in cityOwners)
+            Assert.That(identities.RegisterCity(city), Is.True);
+        foreach (NpcRuntime npc in npcOwners)
+            Assert.That(identities.RegisterNpc(npc), Is.True);
+
+        SpatialNetworkRuntime network = new SpatialNetworkRuntime(identities);
+        foreach (CityRuntime city in cityOwners)
+            Assert.That(network.RegisterLocation(city.Location), Is.True);
+        for (int i = 0; i + 1 < cityOwners.Count; i++)
+        {
+            Assert.That(network.RegisterRoute(new SpatialRouteRuntime(
+                "p12e-justice-route-forward-" + i,
+                cityOwners[i].Location, cityOwners[i + 1].Location, 1)), Is.True);
+            Assert.That(network.RegisterRoute(new SpatialRouteRuntime(
+                "p12e-justice-route-reverse-" + i,
+                cityOwners[i + 1].Location, cityOwners[i].Location, 1)), Is.True);
+        }
+
+        SimulationTime time = new SimulationTime();
+        RecordFixture records = SimulationTestFactory.CreateRecordFixtureWithTime(time);
+        EconomyTransactionService economyTransactions = new EconomyTransactionService();
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(null);
+        SpatialAuthorityStore spatialAuthority = CreateSpatialAuthority(cityOwners);
+        ExplorableSiteStore sites = new ExplorableSiteStore();
+        ExplorableSiteKnowledgeSystem siteKnowledge = new ExplorableSiteKnowledgeSystem();
+        TravelSystem travel = new TravelSystem(
+            network,
+            location => cityOwners.FirstOrDefault(city => ReferenceEquals(city.Location, location)),
+            1f,
+            records.EventRecorder,
+            null,
+            economyTransactions);
+        CrimeSystem crime = new CrimeSystem(
+            justice,
+            travel,
+            null,
+            logger,
+            economyTransactions,
+            new EffectiveCrimeConfiguration(false, false),
+            simulationTime: time);
+        TravelPartyStore travelParties = new TravelPartyStore();
+        TravelPartySystem travelPartySystem = new TravelPartySystem(
+            travelParties,
+            records.Allocator,
+            identities,
+            travel,
+            time,
+            records.Sequence,
+            records.EventRecorder,
+            transactionService: economyTransactions);
+        ExpeditionStore expeditions = new ExpeditionStore();
+        ExpeditionSystem expeditionSystem = new ExpeditionSystem(
+            expeditions,
+            records.Allocator,
+            identities,
+            sites,
+            travelPartySystem,
+            travelParties,
+            siteKnowledge,
+            time,
+            records.EventRecorder);
+        ScheduledDirectiveSystem directives = new ScheduledDirectiveSystem(
+            new ScheduledDirectiveStore(time), identities);
         SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(), cities, npcs,
+            time, cityOwners, npcOwners,
+            scheduledDirectiveSystem: directives,
             justiceSystem: justice,
-            personStore: people,
+            personStore: people ?? new PersonStore(),
+            decisionRecorder: records.DecisionRecorder,
+            runtimeIdAllocator: records.Allocator,
+            recordSequence: records.Sequence,
+            logger: logger,
+            crimeSystem: crime,
+            economyTransactionService: economyTransactions,
+            explorableSiteStore: sites,
+            explorableSiteKnowledgeSystem: siteKnowledge,
+            travelSystem: travel,
+            travelPartySystem: travelPartySystem,
+            expeditionSystem: expeditionSystem,
+            spatialAuthorityStore: spatialAuthority,
             configuration: SimulationConfigurationDefaults.Create(),
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            runtimeIdentityRegistry: identities,
+            spatialNetworkRuntime: network,
+            requireP12ReceiptCensusOwners: true,
+            requireP12RuntimeIdentitySpatialCensusOwners: true,
             worldId: new WorldId(Guid.NewGuid()));
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
         return runtime;
+    }
+
+    private static SpatialAuthorityStore CreateSpatialAuthority(IReadOnlyList<CityRuntime> cities)
+    {
+        HexId hexId = new HexId("p12e-justice-hex");
+        SpatialGeographyDefinition geography = new SpatialGeographyDefinition(
+            new SpatialWorldScaleContext("p12e-justice-scale", "fixture", "v1", 1m, "step"),
+            new[]
+            {
+                new HexRecord(hexId, new HexCoordinate(0, 0),
+                    new TerrainReference(new TerrainDefinitionId("terrain.p12e-justice"), "v1"))
+            },
+            cities.Take(1).Select(city => new LocationRecord(
+                new LocationId(city.Location.RuntimeId), hexId)).ToArray());
+        SpatialAuthorityStore authority = new SpatialAuthorityStore();
+        if (!authority.TryComposeGeography(geography, out SpatialAuthorityFailure failure))
+            throw new InvalidOperationException("Could not create the P12-E Justice P8 fixture: " + failure);
+        return authority;
     }
 
     private static void AssertCaptureRejectsPersonBinding(
@@ -580,7 +785,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         Assert.That(npc.TryAssignPersonId(personId), Is.True);
         if (binding == PersonBinding.NpcOnly)
             Assert.That(npc.TryBindPersonRuntime(person), Is.True);
-        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12EJusticeRecordsOwnerSnapshot rejected, out P12EJusticeSnapshotFailure failure), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidReference));
@@ -590,7 +795,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         P12EJusticeRecordsOwnerSnapshot snapshot,
         P12EJusticeSnapshotFailureCode expectedCode)
     {
-        Assert.That(snapshot.TryStage(null, null, null, null, null, null, null, null, null,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryStage(snapshot, null, null, null, null, null, null, null, null, null, null,
             out JusticeSystem staged, out P12EJusticeSnapshotFailure failure), Is.False);
         Assert.That(staged, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(expectedCode));
@@ -605,10 +810,11 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         int peopleCountBefore = roots.People.Persons.Count;
         int npcStatusCountBefore = 0;
         foreach (NpcRuntime npc in roots.Npcs) npcStatusCountBefore += npc.CurrentStatus.Count;
-        Assert.That(snapshot.TryStage(roots.Cities, roots.Npcs, roots.People,
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryStage(snapshot, roots.Cities, roots.Npcs, roots.People,
+            CreateCoreJusticeOwnerForProjection(snapshot),
             configuration.FreeStatus, configuration.WantedStatus,
             configuration.ArrestedStatus, configuration.HiddenStatus,
-            null, new SimulationLogger(null), out JusticeSystem staged,
+            null, UnitySimulationLoggerAdapter.Create(null), out JusticeSystem staged,
             out P12EJusticeSnapshotFailure failure), Is.False);
         Assert.That(staged, Is.Null);
         Assert.That(failure.Code, Is.EqualTo(expectedCode));
@@ -713,6 +919,32 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
                 revision, wantedRows, sentenceRows));
     }
 
+    private static DailyV1JusticeRecordsOwner CreateCoreJusticeOwnerForProjection(
+        P12EJusticeRecordsOwnerSnapshot snapshot)
+    {
+        Assert.That(snapshot, Is.Not.Null);
+        Assert.That(snapshot.TryValidate(out P12EJusticeSnapshotFailure failure), Is.True, failure?.Message);
+        DailyV1JusticeRecordsOwner owner = new DailyV1JusticeRecordsOwner();
+        List<DailyV1JusticeWantedRecordOwner> wanted =
+            new List<DailyV1JusticeWantedRecordOwner>(snapshot.Records.WantedRows.Count);
+        foreach (P12EJusticeWantedSnapshotRow row in snapshot.Records.WantedRows)
+        {
+            DailyV1JusticeWantedRecordOwner coreRow = new DailyV1JusticeWantedRecordOwner(
+                row.TargetRuntimeId, row.CityRuntimeId, row.Bounty, row.SentenceDays, row.IsResolved);
+            owner.AddWantedRecordForStaging(coreRow);
+            wanted.Add(coreRow);
+        }
+        foreach (P12EJusticeSentenceSnapshotRow row in snapshot.Records.SentenceRows)
+        {
+            DailyV1JusticeWantedRecordOwner warrant = wanted[row.WarrantOrdinal];
+            owner.AddSentenceForStaging(new DailyV1JusticeSentenceOwner(
+                row.TargetRuntimeId, row.CityRuntimeId, warrant,
+                row.RemainingDays, row.FailedEscapeAttempts, row.WasArrestedToday));
+        }
+        Assert.That(owner.TryInstallExactRevision(snapshot.Records.Revision), Is.True);
+        return owner;
+    }
+
     private enum PersonBinding
     {
         Dangling,
@@ -729,11 +961,11 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
-    private static List<T> ReadOwnerRows<T>(JusticeSystem owner, string fieldName)
+    private static IList<T> ReadOwnerRows<T>(JusticeSystem owner, string fieldName)
     {
         FieldInfo field = typeof(JusticeSystem).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(field, Is.Not.Null, fieldName);
-        return (List<T>)field.GetValue(owner);
+        return (IList<T>)field.GetValue(owner);
     }
 
     private static OwnerSectionCensusSnapshot FindWitness(
@@ -767,7 +999,7 @@ public sealed class P12EJusticeRecordsOwnerSnapshotTests
 
         internal JusticeSystem CreateOwner() => new JusticeSystem(
             FreeStatus, WantedStatus, ArrestedStatus, HiddenStatus,
-            null, new SimulationLogger(null));
+            null, UnitySimulationLoggerAdapter.Create(null));
     }
 
     private sealed class StagedRoots

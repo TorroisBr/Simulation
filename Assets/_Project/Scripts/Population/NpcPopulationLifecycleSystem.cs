@@ -132,22 +132,14 @@ public static class NpcPopulationLifecycleSystem
         out NpcPopulationLifecycleTransition transition,
         out NpcPopulationLifecycleFailure failure)
     {
-        transition = null;
-        if (TryProposePersonDeath(
+        if (!TryProposeResidentPersonDeath(
                 world,
-                npc,
-                out PersonDeathTransition personDeathTransition,
-                out failure) == false)
-        {
-            return false;
-        }
-
-        if (TryProposeResidentDeath(
                 npc,
                 settlement,
                 authoritativeRoster,
+                out PersonDeathTransition personDeathTransition,
                 out transition,
-                out failure) == false)
+                out failure))
         {
             return false;
         }
@@ -159,6 +151,32 @@ public static class NpcPopulationLifecycleSystem
             authoritativeRoster,
             personDeathTransition,
             transition,
+            out failure);
+    }
+
+    internal static bool TryProposeResidentPersonDeath(
+        SimulationRuntime world,
+        NpcRuntime npc,
+        CityRuntime settlement,
+        AuthoritativeNpcRoster authoritativeRoster,
+        out PersonDeathTransition personDeathTransition,
+        out NpcPopulationLifecycleTransition transition,
+        out NpcPopulationLifecycleFailure failure)
+    {
+        personDeathTransition = null;
+        transition = null;
+        if (!TryProposePersonDeath(
+                world,
+                npc,
+                out personDeathTransition,
+                out failure))
+            return false;
+
+        return TryProposeResidentDeath(
+            npc,
+            settlement,
+            authoritativeRoster,
+            out transition,
             out failure);
     }
 

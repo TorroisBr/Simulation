@@ -1120,7 +1120,7 @@ public sealed class CoreWorldCommandHandlerTests
         public WorldCommandTestFixture(bool includeExpedition = false, bool includeOpposition = false)
         {
             City = SimulationTestFactory.CreateCity("city-command", "location-city");
-            Site = new ExplorableSiteRuntime("site-command", SimulationTestFactory.CreateExplorableSite("site-command-definition"), new SpatialLocationRuntime("location-site"));
+            Site = new ExplorableSiteRuntime("site-command", SimulationTestFactory.CreateExplorableSiteDefinition("site-command-definition"), new SpatialLocationRuntime("location-site"));
             Item = SimulationTestFactory.CreateItem("item-command", 12f);
             PlaceType = SimulationTestFactory.CreateLocalPlaceType("place-command-type");
             ConnectionType = SimulationTestFactory.CreateLocalConnectionType("connection-command-type");

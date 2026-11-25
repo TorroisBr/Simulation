@@ -4,9 +4,8 @@ using System.Globalization;
 using System.Linq;
 using UnityEngine;
 
-public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutonomousNpcActionPolicy, IAuthoritativeMutationGuardBindable
+public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvider, INpcActionFailureHandler, IAutonomousNpcActionPolicy, IAuthoritativeMutationGuardBindable
 {
-    private const float EscapeSuccessMultiplierPerFailure = 0.8f;
     private const string HiddenStatusStepId = "crime-hidden-statuses";
     private const string HiddenStatusOwnerId = "crime";
     private const string HiddenStatusOperationKind = "crime.advance-hidden-statuses";
@@ -20,11 +19,8 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     private readonly EconomyTransactionService transactionService;
     private readonly EffectiveCrimeConfiguration configuration;
     private readonly IAuthoritativeRandomSource randomSource;
-    private Dictionary<string, CrimeHiddenStatusReceipt> hiddenStatusStepReceipts =
-        new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
-    private long hiddenStatusStepRevision;
+    private DailyV1CrimeP18ReceiptOwner p18ReceiptOwner = new DailyV1CrimeP18ReceiptOwner();
     private bool p12DailyProfileReceiptBoundaryBound;
-    private bool p12AReceiptStateInstalled;
     private SimulationTime simulationTime;
     private ITheftOutcomeSink theftOutcomeSink;
 
@@ -42,7 +38,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         this.justiceSystem = justiceSystem;
         this.travelSystem = travelSystem;
         this.hiddenStatus = hiddenStatus;
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         this.transactionService = transactionService ?? new EconomyTransactionService();
         this.configuration = configuration ?? new EffectiveCrimeConfiguration(true, true);
         this.randomSource = randomSource ?? new DeterministicRandomSource();
@@ -53,6 +49,39 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     public bool AllowAutonomousAction(NpcActionData action)
     {
         return configuration.Enabled && configuration.AutonomousEnabled;
+    }
+
+    /// <summary>Projects an already-selected Core City owner for the existing Unity action wrapper.</summary>
+    internal bool TryProjectSelectedCityRuntime(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string cityRuntimeId,
+        out CityRuntime cityProjection)
+    {
+        cityProjection = null;
+        if (graph == null || graph.SpatialNetwork == null || travelSystem == null
+            || string.IsNullOrWhiteSpace(cityRuntimeId))
+            return false;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            if (city == null || !graph.ContainsExactCityOwner(city)
+                || !string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(city.LocationRuntimeId)
+                || !graph.SpatialNetwork.TryGetLocation(
+                    city.LocationRuntimeId, out SpatialLocationRuntime location))
+                continue;
+
+            CityRuntime candidate = travelSystem.GetCityRuntime(location);
+            if (candidate == null
+                || !ReferenceEquals(candidate.SelectedRuntimeOwners, city)
+                || !string.Equals(candidate.RuntimeId, city.RuntimeId, StringComparison.Ordinal)
+                || candidate.Location == null
+                || !string.Equals(candidate.Location.RuntimeId,
+                    city.LocationRuntimeId, StringComparison.Ordinal))
+                return false;
+            cityProjection = candidate;
+            return true;
+        }
+        return false;
     }
 
     public bool TryBindTheftOutcomeSink(ITheftOutcomeSink sink)
@@ -69,73 +98,48 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     public ITheftOutcomeSink TheftOutcomeSink => theftOutcomeSink;
     public SimulationTime SimulationTime => simulationTime;
     internal JusticeSystem JusticeOwner => justiceSystem;
-    internal long P12P18ReceiptCensusRevision
+    internal DailyV1CrimeP18ReceiptOwner CoreP18ReceiptOwner => p18ReceiptOwner;
+    internal long P12P18ReceiptCensusRevision => p18ReceiptOwner.CensusRevision;
+
+    internal bool TryBindCoreP18ReceiptOwner(DailyV1CrimeP18ReceiptOwner owner)
     {
-        get
+        if (owner == null) return false;
+        if (ReferenceEquals(p18ReceiptOwner, owner)) return true;
+        if (owner.WasRestored)
         {
-            if (hiddenStatusStepReceipts == null || hiddenStatusStepRevision < 0L)
-                throw new InvalidOperationException("Crime P18 receipt state is invalid.");
-            return checked(hiddenStatusStepRevision + hiddenStatusStepReceipts.Count);
+            // A detached P12 candidate already owns the restored authoritative
+            // receipt state. A fresh Unity adapter can bind that exact owner;
+            // copying or replacing it with the adapter's empty instance would
+            // split the P12 owner identity.
+            if (p18ReceiptOwner.WasRestored || !p18ReceiptOwner.IsExactEmpty) return false;
+            p18ReceiptOwner = owner;
+            return true;
         }
+        if (!owner.IsExactEmpty) return false;
+        if (p18ReceiptOwner.WasRestored)
+        {
+            if (!p18ReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(
+                    out P12ACrimeReceiptOwnerSnapshot snapshot)
+                || !owner.TryInstallP12AReceiptOwnerSnapshot(snapshot)) return false;
+        }
+        else if (!p18ReceiptOwner.IsExactEmpty) return false;
+        p18ReceiptOwner = owner;
+        return true;
     }
 
     internal bool TryBindP12DailyProfileReceiptBoundary()
     {
         if (p12DailyProfileReceiptBoundaryBound) return true;
-        if (hiddenStatusStepReceipts == null
-            || (!p12AReceiptStateInstalled
-                && (hiddenStatusStepRevision != 0L || hiddenStatusStepReceipts.Count != 0)))
-            return false;
+        if (!p18ReceiptOwner.WasRestored && !p18ReceiptOwner.IsExactEmpty) return false;
         p12DailyProfileReceiptBoundaryBound = true;
         return true;
     }
 
-    internal bool TryCaptureP12AReceiptOwnerSnapshot(out P12ACrimeReceiptOwnerSnapshot snapshot)
-    {
-        snapshot = null;
-        if (hiddenStatusStepReceipts == null || hiddenStatusStepRevision < 0L) return false;
-        List<string> identities = new List<string>(hiddenStatusStepReceipts.Keys);
-        identities.Sort(StringComparer.Ordinal);
-        List<P12AReceiptValue> values = new List<P12AReceiptValue>(identities.Count);
-        foreach (string identity in identities)
-        {
-            if (string.IsNullOrWhiteSpace(identity)
-                || !hiddenStatusStepReceipts.TryGetValue(identity, out CrimeHiddenStatusReceipt receipt)
-                || receipt == null || !string.Equals(identity, receipt.ExecutionStepIdentity, StringComparison.Ordinal))
-                return false;
-            values.Add(new P12AReceiptValue(receipt.ExecutionStepIdentity,
-                receipt.DescriptorFingerprint, receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter));
-        }
-        try
-        {
-            P12ACrimeReceiptOwnerSnapshot candidate = new P12ACrimeReceiptOwnerSnapshot(
-                hiddenStatusStepRevision, values);
-            if (!candidate.IsValid || candidate.CensusRevision != P12P18ReceiptCensusRevision) return false;
-            snapshot = candidate;
-            return true;
-        }
-        catch (OverflowException) { return false; }
-    }
+    internal bool TryCaptureP12AReceiptOwnerSnapshot(out P12ACrimeReceiptOwnerSnapshot snapshot) =>
+        p18ReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(out snapshot);
 
-    internal bool TryInstallP12AReceiptOwnerSnapshot(P12ACrimeReceiptOwnerSnapshot snapshot)
-    {
-        if (snapshot == null || !snapshot.IsValid || p12AReceiptStateInstalled
-            || hiddenStatusStepReceipts == null || hiddenStatusStepRevision != 0L
-            || hiddenStatusStepReceipts.Count != 0) return false;
-        Dictionary<string, CrimeHiddenStatusReceipt> restored =
-            new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
-        foreach (P12AReceiptValue value in snapshot.Receipts)
-        {
-            if (restored.ContainsKey(value.Identity)) return false;
-            restored.Add(value.Identity, new CrimeHiddenStatusReceipt(value.Identity,
-                value.DescriptorFingerprint, value.RevisionBefore, value.RevisionAfter));
-        }
-        hiddenStatusStepReceipts = restored;
-        hiddenStatusStepRevision = snapshot.StepRevision;
-        p12AReceiptStateInstalled = true;
-        return P12P18ReceiptCensusRevision == snapshot.CensusRevision;
-    }
-
+    internal bool TryInstallP12AReceiptOwnerSnapshot(P12ACrimeReceiptOwnerSnapshot snapshot) =>
+        p18ReceiptOwner.TryInstallP12AReceiptOwnerSnapshot(snapshot);
     public bool TryBindSimulationTime(SimulationTime worldSimulationTime)
     {
         if (worldSimulationTime == null)
@@ -165,6 +169,16 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             || action.actionType == NpcActionType.EscapePrison;
     }
 
+    bool ISelectedDefinitionNpcActionProvider.HandlesAction(NpcRuntime npcRuntime, NpcActionData action)
+    {
+        if (npcRuntime == null || action == null) return false;
+        NpcActionType actionType = npcRuntime.GetConfiguredActionType(action);
+        return actionType == NpcActionType.Steal
+            || actionType == NpcActionType.Hide
+            || actionType == NpcActionType.FleeCity
+            || actionType == NpcActionType.EscapePrison;
+    }
+
     public NpcActionRuntime CreateAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
         if (mutationGuardBinding.CanMutate == false)
@@ -173,28 +187,29 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return null;
         }
 
-        if (action == null || configuration.Enabled == false)
+        if (npcRuntime == null || action == null || configuration.Enabled == false)
         {
             utility = 0f;
             return null;
         }
 
-        if (action.actionType == NpcActionType.Steal)
+        NpcActionType actionType = npcRuntime.GetConfiguredActionType(action);
+        if (actionType == NpcActionType.Steal)
         {
             return CreateStealAction(npcRuntime, action, ref utility);
         }
 
-        if (action.actionType == NpcActionType.Hide)
+        if (actionType == NpcActionType.Hide)
         {
             return CreateHideAction(npcRuntime, action, ref utility);
         }
 
-        if (action.actionType == NpcActionType.FleeCity)
+        if (actionType == NpcActionType.FleeCity)
         {
             return CreateFleeCityAction(npcRuntime, action, ref utility);
         }
 
-        if (action.actionType == NpcActionType.EscapePrison)
+        if (actionType == NpcActionType.EscapePrison)
         {
             return CreateEscapePrisonAction(npcRuntime, action, ref utility);
         }
@@ -210,27 +225,28 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return NpcActionResult.Failed("Runtime mutation is faulted.");
         }
 
-        if (configuration.Enabled == false || actionRuntime == null || actionRuntime.Action == null)
+        if (configuration.Enabled == false || npcRuntime == null || actionRuntime == null || actionRuntime.Action == null)
         {
             return NpcActionResult.Failed();
         }
 
-        if (actionRuntime.Action.actionType == NpcActionType.Steal)
+        NpcActionType actionType = npcRuntime.GetConfiguredActionType(actionRuntime.Action);
+        if (actionType == NpcActionType.Steal)
         {
             return TryExecuteSteal(npcRuntime, actionRuntime);
         }
 
-        if (actionRuntime.Action.actionType == NpcActionType.Hide)
+        if (actionType == NpcActionType.Hide)
         {
             return TryExecuteHide(npcRuntime, actionRuntime);
         }
 
-        if (actionRuntime.Action.actionType == NpcActionType.FleeCity)
+        if (actionType == NpcActionType.FleeCity)
         {
             return TryExecuteFleeCity(npcRuntime, actionRuntime);
         }
 
-        if (actionRuntime.Action.actionType == NpcActionType.EscapePrison)
+        if (actionType == NpcActionType.EscapePrison)
         {
             return TryExecuteEscapePrison(npcRuntime, actionRuntime);
         }
@@ -245,13 +261,14 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return null;
         }
 
-        if (actionRuntime == null || actionRuntime.Action == null || actionRuntime.Action.actionType != NpcActionType.EscapePrison)
+        if (npcRuntime == null || actionRuntime == null || actionRuntime.Action == null
+            || npcRuntime.GetConfiguredActionType(actionRuntime.Action) != NpcActionType.EscapePrison)
         {
             return null;
         }
 
-        CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
-        int sentencePenalty = Mathf.Max(0, settings.failedEscapeSentencePenalty);
+        CrimeActionSettings settings = npcRuntime.GetConfiguredCrimeActionSettings(actionRuntime.Action);
+        int sentencePenalty = UnityMathfCompatibility.Max(0, settings.failedEscapeSentencePenalty);
 
         if (justiceSystem == null || justiceSystem.RegisterFailedEscape(npcRuntime, sentencePenalty) == false)
         {
@@ -308,7 +325,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         step = null;
         failure = TimelineFailure.ContinuationFailed;
         if (operation == null || npcRuntimeList == null || ordinal < 0
-            || !mutationGuardBinding.CanMutate || hiddenStatusStepRevision == long.MaxValue
+            || !mutationGuardBinding.CanMutate || p18ReceiptOwner.StepRevision == long.MaxValue
             || !TryCaptureHiddenStatusSnapshot(npcRuntimeList, out _, out string ownerRevision))
         {
             return false;
@@ -327,6 +344,10 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     }
 
     /// <summary>Looks up an exact crime-owned occurrence receipt without reading the live roster.</summary>
+    private static CrimeHiddenStatusReceipt ProjectP18Receipt(P12AReceiptValue value) =>
+        value == null ? null : new CrimeHiddenStatusReceipt(value.Identity, value.DescriptorFingerprint,
+            value.RevisionBefore, value.RevisionAfter);
+
     public bool TryResolveAdvanceHiddenStatusesReceipt(
         BoundaryContinuationManifest manifest,
         BoundaryContinuationStep step,
@@ -340,29 +361,23 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return false;
         }
 
-        if (hiddenStatusStepReceipts == null)
-        {
-            hiddenStatusStepReceipts = new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
-        }
-
-        if (!hiddenStatusStepReceipts.TryGetValue(identity, out CrimeHiddenStatusReceipt existing))
+        if (!p18ReceiptOwner.TryResolve(identity, out P12AReceiptValue existing))
         {
             failure = TimelineFailure.None;
             return false;
         }
-
         if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
         {
             failure = TimelineFailure.ContinuationFailed;
             return false;
         }
 
-        receipt = existing;
+        receipt = ProjectP18Receipt(existing);
         failure = TimelineFailure.None;
         return true;
     }
 
-    /// <summary>Stages the legacy hidden-status traversal and its occurrence receipt as one owner commit.</summary>
+    /// <summary>Stages domain effects and a Core-owned occurrence receipt as one owner commit.</summary>
     public bool TryPrepareAdvanceHiddenStatusesStep(
         BoundaryContinuationManifest manifest,
         BoundaryContinuationStep step,
@@ -371,42 +386,23 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         out TimelineFailure failure)
     {
         prepared = null;
-        if (!TryGetHiddenStatusIdentity(manifest, step, out string identity, out string fingerprint))
+        if (!TryGetHiddenStatusIdentity(manifest, step, out string identity, out string fingerprint)
+            || !p18ReceiptOwner.TryPrepare(identity, fingerprint, out DailyV1CrimeP18ReceiptMutation mutation))
         {
             failure = TimelineFailure.ContinuationFailed;
             return false;
         }
 
-        if (hiddenStatusStepReceipts == null)
+        CrimeHiddenStatusReceipt receipt = ProjectP18Receipt(mutation.Receipt);
+        if (mutation.IsReplay)
         {
-            hiddenStatusStepReceipts = new Dictionary<string, CrimeHiddenStatusReceipt>(StringComparer.Ordinal);
-        }
-
-        if (hiddenStatusStepReceipts.TryGetValue(identity, out CrimeHiddenStatusReceipt existing))
-        {
-            if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.ContinuationFailed;
-                return false;
-            }
-
-            prepared = new CrimeHiddenStatusCommit(
-                this,
-                existing,
-                null,
-                null,
-                true,
-                fingerprint,
-                step.OwnerRevision,
-                hiddenStatusStepRevision,
-                hiddenStatusStepReceipts,
-                hiddenStatusStepReceipts);
+            prepared = new CrimeHiddenStatusCommit(this, receipt, mutation, null, null,
+                true, step.OwnerRevision, null);
             failure = TimelineFailure.None;
             return true;
         }
 
         if (npcRuntimeList == null || !mutationGuardBinding.CanMutate
-            || hiddenStatusStepRevision == long.MaxValue
             || !TryCaptureHiddenStatusSnapshot(
                 npcRuntimeList,
                 out List<CrimeHiddenStatusSnapshotEntry> snapshots,
@@ -417,16 +413,6 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return false;
         }
 
-        CrimeHiddenStatusReceipt receipt = new CrimeHiddenStatusReceipt(
-            identity,
-            fingerprint,
-            hiddenStatusStepRevision,
-            hiddenStatusStepRevision + 1L);
-        Dictionary<string, CrimeHiddenStatusReceipt> nextReceipts =
-            new Dictionary<string, CrimeHiddenStatusReceipt>(hiddenStatusStepReceipts, StringComparer.Ordinal)
-            {
-                [identity] = receipt
-            };
         List<string> expiryNotices = CaptureHiddenStatusExpiryNotices(snapshots);
 
         // AddStatus must not allocate after the first timer mutation. Capacity changes do not alter domain truth.
@@ -449,33 +435,20 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             }
         }
 
-        prepared = new CrimeHiddenStatusCommit(
-            this,
-            receipt,
-            npcRuntimeList,
-            snapshots,
-            false,
-            fingerprint,
-            step.OwnerRevision,
-            hiddenStatusStepRevision,
-            hiddenStatusStepReceipts,
-            nextReceipts,
-            expiryNotices);
+        prepared = new CrimeHiddenStatusCommit(this, receipt, mutation, npcRuntimeList,
+            snapshots, false, step.OwnerRevision, expiryNotices);
         failure = TimelineFailure.None;
         return true;
     }
 
     internal bool TryCommitAdvanceHiddenStatusesStep(
         CrimeHiddenStatusReceipt receipt,
+        DailyV1CrimeP18ReceiptMutation mutation,
         List<NpcRuntime> npcRuntimeList,
         IReadOnlyList<CrimeHiddenStatusSnapshotEntry> expectedSnapshots,
         IReadOnlyList<string> expiryNotices,
         bool replay,
-        string fingerprint,
         string expectedOwnerRevision,
-        long expectedRevision,
-        Dictionary<string, CrimeHiddenStatusReceipt> expectedReceipts,
-        Dictionary<string, CrimeHiddenStatusReceipt> nextReceipts,
         out TimelineFailure failure)
     {
         failure = TimelineFailure.ContinuationFailed;
@@ -484,34 +457,22 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             failure = TimelineFailure.UnsupportedProfile;
             return false;
         }
-        if (receipt == null)
-        {
+        if (receipt == null || mutation == null || !p18ReceiptOwner.CanCommit(mutation)
+            || !DailyV1CrimeP18ReceiptOwner.SameReceipt(
+                mutation.Receipt,
+                new P12AReceiptValue(receipt.ExecutionStepIdentity, receipt.DescriptorFingerprint,
+                    receipt.OwnerRevisionBefore, receipt.OwnerRevisionAfter)))
             return false;
-        }
 
         if (replay)
         {
-            if (hiddenStatusStepReceipts != null
-                && hiddenStatusStepReceipts.TryGetValue(receipt.ExecutionStepIdentity, out CrimeHiddenStatusReceipt existing)
-                && ReferenceEquals(existing, receipt)
-                && string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
-            {
-                failure = TimelineFailure.None;
-                return true;
-            }
-
-            return false;
+            if (!mutation.IsReplay) return false;
+            failure = TimelineFailure.None;
+            return true;
         }
 
-        if (npcRuntimeList == null || expectedSnapshots == null || expiryNotices == null
-            || !mutationGuardBinding.CanMutate || hiddenStatusStepRevision != expectedRevision
-            || !ReferenceEquals(hiddenStatusStepReceipts, expectedReceipts)
-            || nextReceipts == null || !nextReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || hiddenStatusStepReceipts.ContainsKey(receipt.ExecutionStepIdentity)
-            || hiddenStatusStepRevision == long.MaxValue
-            || receipt.OwnerRevisionBefore != hiddenStatusStepRevision
-            || receipt.OwnerRevisionAfter != hiddenStatusStepRevision + 1L
-            || !string.Equals(receipt.DescriptorFingerprint, fingerprint, StringComparison.Ordinal)
+        if (mutation.IsReplay || npcRuntimeList == null || expectedSnapshots == null || expiryNotices == null
+            || !mutationGuardBinding.CanMutate
             || !TryCaptureHiddenStatusSnapshot(npcRuntimeList, out List<CrimeHiddenStatusSnapshotEntry> currentSnapshots,
                 out string currentOwnerRevision)
             || !string.Equals(currentOwnerRevision, expectedOwnerRevision, StringComparison.Ordinal)
@@ -523,42 +484,24 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         foreach (CrimeHiddenStatusSnapshotEntry snapshot in expectedSnapshots)
         {
             NpcRuntime npcRuntime = snapshot.Npc;
-            if (npcRuntime == null)
-            {
-                continue;
-            }
-
+            if (npcRuntime == null) continue;
             if (npcRuntime.IsHidden == false)
             {
                 npcRuntime.RemoveStatus(hiddenStatus);
                 continue;
             }
-
             if (hiddenStatus != null && npcRuntime.CurrentStatus.Contains(hiddenStatus) == false)
-            {
                 npcRuntime.AddStatus(hiddenStatus);
-            }
-
             npcRuntime.AdvanceHiddenDay();
-            if (npcRuntime.IsHidden == false)
-            {
-                npcRuntime.RemoveStatus(hiddenStatus);
-            }
+            if (npcRuntime.IsHidden == false) npcRuntime.RemoveStatus(hiddenStatus);
         }
 
-        hiddenStatusStepRevision = receipt.OwnerRevisionAfter;
-        hiddenStatusStepReceipts = nextReceipts;
+        p18ReceiptOwner.InstallPrepared(mutation);
         failure = TimelineFailure.None;
-
-        // Logs are diagnostics, not source signals or world truth. Emit them only after the receipt is durable.
         foreach (string notice in expiryNotices)
-        {
             logger.Log(SimulationLogCategory.Crime, notice);
-        }
-
         return true;
     }
-
     private bool TryCaptureHiddenStatusSnapshot(
         List<NpcRuntime> npcRuntimeList,
         out List<CrimeHiddenStatusSnapshotEntry> snapshots,
@@ -566,7 +509,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
     {
         snapshots = null;
         ownerRevision = null;
-        if (npcRuntimeList == null || !mutationGuardBinding.CanMutate || hiddenStatusStepRevision == long.MaxValue)
+        if (npcRuntimeList == null || !mutationGuardBinding.CanMutate || p18ReceiptOwner.StepRevision == long.MaxValue)
         {
             return false;
         }
@@ -575,7 +518,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         List<string> revisionParts = new List<string>(3 + npcRuntimeList.Count)
         {
             HiddenStatusSnapshotVersion,
-            hiddenStatusStepRevision.ToString(CultureInfo.InvariantCulture),
+            p18ReceiptOwner.StepRevision.ToString(CultureInfo.InvariantCulture),
             npcRuntimeList.Count.ToString(CultureInfo.InvariantCulture),
             hiddenStatus == null ? string.Empty : hiddenStatus.statusName
         };
@@ -655,7 +598,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
                 continue;
             }
 
-            remaining = Mathf.Max(0, remaining - 1);
+            remaining = UnityMathfCompatibility.Max(0, remaining - 1);
             remainingByNpc[npcRuntime] = remaining;
             if (remaining <= 0)
             {
@@ -791,7 +734,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return null;
         }
 
-        int amount = GetConfiguredAmount(action, target);
+        int amount = GetConfiguredAmount(action, npcRuntime, target);
 
         if (amount <= 0)
         {
@@ -799,7 +742,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return null;
         }
 
-        utility = Mathf.Max(0f, utility) + GetMoneyPressureBonus(npcRuntime) + Mathf.Min(8f, amount * 0.2f);
+        utility = UnityMathfCompatibility.Max(0f, utility) + GetMoneyPressureBonus(npcRuntime) + UnityMathfCompatibility.Min(8f, amount * 0.2f);
         NpcActionRuntime runtime = new NpcActionRuntime(action, target, amount);
         if (npcRuntime.PersonId != null && target.PersonId != null)
         {
@@ -822,7 +765,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
         }
 
         float bounty = justiceSystem.GetBounty(npcRuntime, npcRuntime.CurrentCity);
-        utility = Mathf.Max(utility, 20f + bounty * 0.15f);
+        utility = UnityMathfCompatibility.Max(utility, 20f + bounty * 0.15f);
         return new NpcActionRuntime(action);
     }
 
@@ -842,12 +785,54 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return null;
         }
 
-        utility = Mathf.Max(utility, option.Utility);
+        utility = UnityMathfCompatibility.Max(utility, option.Utility);
         return new NpcActionRuntime(action, option.TargetCity, null, 0, option.TravelCost);
     }
 
     private NpcActionRuntime CreateEscapePrisonAction(NpcRuntime npcRuntime, NpcActionData action, ref float utility)
     {
+        if (npcRuntime != null && npcRuntime.UsesSelectedDailyV1Definitions)
+        {
+            bool isArrested = justiceSystem.IsArrested(npcRuntime);
+            if (!isArrested)
+            {
+                utility = 0f;
+                return null;
+            }
+
+            bool wasArrestedToday = justiceSystem.WasArrestedToday(npcRuntime);
+            if (wasArrestedToday)
+            {
+                utility = 0f;
+                return null;
+            }
+
+            int remainingSentenceDays = justiceSystem.GetRemainingSentenceDays(npcRuntime);
+
+            if (!npcRuntime.TryGetSelectedDailyV1ActionNode(action, out DailyV1ActionDefinition actionNode)
+                || !DailyV1CrimeActionPlanning.TryPlanEscapePrison(
+                    npcRuntime.SelectedDailyV1DefinitionGraph,
+                    npcRuntime.SelectedDailyV1Definition,
+                    actionNode,
+                    isArrested,
+                    wasArrestedToday,
+                    remainingSentenceDays,
+                    out bool canAttemptEscape,
+                    out float selectedUtility)
+                || !canAttemptEscape)
+            {
+                utility = 0f;
+                return null;
+            }
+
+            utility = selectedUtility;
+            NpcActionRuntime selectedActionRuntime = new NpcActionRuntime(action);
+            int selectedFailedEscapeAttempts = justiceSystem.GetFailedEscapeAttempts(npcRuntime);
+            selectedActionRuntime.SetSuccessChanceMultiplier(
+                DailyV1CrimeActionPlanning.GetEscapeSuccessChanceMultiplier(selectedFailedEscapeAttempts));
+            return selectedActionRuntime;
+        }
+
         if (npcRuntime == null || justiceSystem.IsArrested(npcRuntime) == false || justiceSystem.WasArrestedToday(npcRuntime) == true)
         {
             utility = 0f;
@@ -862,12 +847,14 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return null;
         }
 
-        float remainingSentenceUrgency = Mathf.Clamp01((remainingDays - 1f) / 7f);
-        utility = Mathf.Clamp(10f + remainingSentenceUrgency * 20f, 10f, 30f);
+        float remainingSentenceUrgency = UnityMathfCompatibility.Clamp01((remainingDays - 1f) / 7f);
+        utility = UnityMathfCompatibility.Clamp(10f + remainingSentenceUrgency * 20f, 10f, 30f);
 
         NpcActionRuntime actionRuntime = new NpcActionRuntime(action);
         int failedAttempts = justiceSystem.GetFailedEscapeAttempts(npcRuntime);
-        actionRuntime.SetSuccessChanceMultiplier(Mathf.Pow(EscapeSuccessMultiplierPerFailure, failedAttempts));
+        actionRuntime.SetSuccessChanceMultiplier(UnityMathfCompatibility.Pow(
+            DailyV1CrimeActionPlanning.EscapeSuccessMultiplierPerFailure,
+            failedAttempts));
         return actionRuntime;
     }
 
@@ -878,7 +865,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return NpcActionResult.Failed();
         }
 
-        int amount = Mathf.Min(actionRuntime.Amount, Mathf.FloorToInt(actionRuntime.TargetNpc.Money));
+        int amount = UnityMathfCompatibility.Min(actionRuntime.Amount, UnityMathfCompatibility.FloorToInt(actionRuntime.TargetNpc.Money));
         if (theftOutcomeSink != null
             && (npcRuntime.PersonId == null
                 || actionRuntime.TargetNpc.PersonId == null
@@ -900,7 +887,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return NpcActionResult.Failed();
         }
 
-        CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
+        CrimeActionSettings settings = npcRuntime.GetConfiguredCrimeActionSettings(actionRuntime.Action);
         logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} roubou {actionRuntime.TargetNpc.NpcName} e levou {amount} moedas.");
         if (theftOutcome != null
             && theftOutcomeSink.TryAcceptTheftOutcome(theftOutcome) == false)
@@ -985,7 +972,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return NpcActionResult.Failed();
         }
 
-        int hiddenDays = Mathf.Max(1, GetCrimeSettings(actionRuntime.Action).hiddenDays);
+        int hiddenDays = UnityMathfCompatibility.Max(1, npcRuntime.GetConfiguredCrimeActionSettings(actionRuntime.Action).hiddenDays);
         npcRuntime.HideForDays(hiddenDays);
         npcRuntime.AddStatus(hiddenStatus);
         logger.Log(SimulationLogCategory.Crime, $"{npcRuntime.NpcName} esta escondido.");
@@ -1011,7 +998,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
     private NpcActionResult TryExecuteEscapePrison(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
     {
-        CrimeActionSettings settings = GetCrimeSettings(actionRuntime.Action);
+        CrimeActionSettings settings = npcRuntime.GetConfiguredCrimeActionSettings(actionRuntime.Action);
 
         if (justiceSystem.EscapePrison(npcRuntime, settings.escapeBountyPenalty, actionRuntime.OriginDecisionId) == false)
         {
@@ -1109,7 +1096,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
                 continue;
             }
 
-            float score = (safetyGain - travelCost) / Mathf.Max(1, travelDays);
+            float score = (safetyGain - travelCost) / UnityMathfCompatibility.Max(1, travelDays);
 
             if (score <= 0f)
             {
@@ -1120,7 +1107,7 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
             if (bestOption == null
                 || utility > bestOption.Utility
-                || (Mathf.Approximately(utility, bestOption.Utility)
+                || (UnityMathfCompatibility.Approximately(utility, bestOption.Utility)
                     && string.CompareOrdinal(
                         targetCity.RuntimeId,
                         bestOption.TargetCity?.RuntimeId ?? string.Empty) < 0))
@@ -1144,18 +1131,13 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
 
     private bool HasNpcDefaultAction(NpcRuntime npcRuntime, NpcActionData action)
     {
-        if (npcRuntime == null || npcRuntime.NpcData == null || npcRuntime.NpcData.acoesPadrao == null)
-        {
-            return false;
-        }
-
-        return npcRuntime.NpcData.acoesPadrao.Exists(x => x != null && x.action == action);
+        return npcRuntime != null && npcRuntime.HasConfiguredDefaultAction(action);
     }
 
-    private int GetConfiguredAmount(NpcActionData action, NpcRuntime targetRuntime)
+    private int GetConfiguredAmount(NpcActionData action, NpcRuntime actionOwner, NpcRuntime targetRuntime)
     {
-        int configuredAmount = Mathf.Max(0, GetCrimeSettings(action).amount);
-        return Mathf.Min(configuredAmount, Mathf.FloorToInt(targetRuntime.Money));
+        int configuredAmount = UnityMathfCompatibility.Max(0, actionOwner.GetConfiguredCrimeActionSettings(action).amount);
+        return UnityMathfCompatibility.Min(configuredAmount, UnityMathfCompatibility.FloorToInt(targetRuntime.Money));
     }
 
     private float GetMoneyPressureBonus(NpcRuntime npcRuntime)
@@ -1165,17 +1147,12 @@ public class CrimeSystem : INpcActionProvider, INpcActionFailureHandler, IAutono
             return 0f;
         }
 
-        return Mathf.Clamp((50f - npcRuntime.Money) * 0.35f, 0f, 18f);
+        return UnityMathfCompatibility.Clamp((50f - npcRuntime.Money) * 0.35f, 0f, 18f);
     }
 
     private float GetStealTargetWeight(NpcRuntime candidate)
     {
-        return candidate != null ? Mathf.Max(1f, candidate.Money) : 0f;
-    }
-
-    private CrimeActionSettings GetCrimeSettings(NpcActionData action)
-    {
-        return action != null && action.crimeSettings != null ? action.crimeSettings : new CrimeActionSettings();
+        return candidate != null ? UnityMathfCompatibility.Max(1f, candidate.Money) : 0f;
     }
 
     private class FleeDestinationOption
@@ -1240,67 +1217,39 @@ internal sealed class CrimeHiddenStatusCommit : IBoundaryContinuationStepCommit
 {
     private readonly CrimeSystem owner;
     private readonly CrimeHiddenStatusReceipt receipt;
+    private readonly DailyV1CrimeP18ReceiptMutation mutation;
     private readonly List<NpcRuntime> npcRuntimeList;
     private readonly IReadOnlyList<CrimeHiddenStatusSnapshotEntry> snapshots;
     private readonly IReadOnlyList<string> expiryNotices;
     private readonly bool replay;
-    private readonly string fingerprint;
     private readonly string expectedOwnerRevision;
-    private readonly long expectedRevision;
-    private readonly Dictionary<string, CrimeHiddenStatusReceipt> expectedReceipts;
-    private readonly Dictionary<string, CrimeHiddenStatusReceipt> nextReceipts;
     private bool completed;
 
     public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
     public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
     public CrimeHiddenStatusReceipt Receipt => receipt;
 
-    public CrimeHiddenStatusCommit(
-        CrimeSystem owner,
-        CrimeHiddenStatusReceipt receipt,
-        List<NpcRuntime> npcRuntimeList,
-        IReadOnlyList<CrimeHiddenStatusSnapshotEntry> snapshots,
-        bool replay,
-        string fingerprint,
-        string expectedOwnerRevision,
-        long expectedRevision,
-        Dictionary<string, CrimeHiddenStatusReceipt> expectedReceipts,
-        Dictionary<string, CrimeHiddenStatusReceipt> nextReceipts,
-        IReadOnlyList<string> expiryNotices = null)
+    public CrimeHiddenStatusCommit(CrimeSystem owner, CrimeHiddenStatusReceipt receipt,
+        DailyV1CrimeP18ReceiptMutation mutation, List<NpcRuntime> npcRuntimeList,
+        IReadOnlyList<CrimeHiddenStatusSnapshotEntry> snapshots, bool replay,
+        string expectedOwnerRevision, IReadOnlyList<string> expiryNotices)
     {
         this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
         this.receipt = receipt ?? throw new ArgumentNullException(nameof(receipt));
+        this.mutation = mutation ?? throw new ArgumentNullException(nameof(mutation));
         this.npcRuntimeList = npcRuntimeList;
         this.snapshots = snapshots ?? Array.Empty<CrimeHiddenStatusSnapshotEntry>();
         this.replay = replay;
-        this.fingerprint = fingerprint ?? string.Empty;
         this.expectedOwnerRevision = expectedOwnerRevision ?? string.Empty;
-        this.expectedRevision = expectedRevision;
-        this.expectedReceipts = expectedReceipts;
-        this.nextReceipts = nextReceipts;
         this.expiryNotices = expiryNotices ?? Array.Empty<string>();
     }
 
     public bool TryCommit(out TimelineFailure failure)
     {
-        if (completed)
-        {
-            failure = TimelineFailure.None;
-            return true;
-        }
-
+        if (completed) { failure = TimelineFailure.None; return true; }
         completed = owner.TryCommitAdvanceHiddenStatusesStep(
-            receipt,
-            npcRuntimeList,
-            snapshots,
-            expiryNotices,
-            replay,
-            fingerprint,
-            expectedOwnerRevision,
-            expectedRevision,
-            expectedReceipts,
-            nextReceipts,
-            out failure);
+            receipt, mutation, npcRuntimeList, snapshots, expiryNotices, replay,
+            expectedOwnerRevision, out failure);
         return completed;
     }
 }

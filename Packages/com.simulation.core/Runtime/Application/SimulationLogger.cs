@@ -1,0 +1,648 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+
+public class SimulationLogger
+{
+    private const string BeginDayStepId = "logger-begin-day";
+    private const string BeginDayOwnerId = "logger";
+    private const string BeginDayOperationKind = "logger.begin-day";
+    private const string BeginDayOperationVersion = "1";
+    private readonly SimulationLogSettings settings;
+    private readonly string persistentDataRoot;
+    private readonly Action<DailyV1LogSeverity, string> logOutput;
+    private List<string> reportLines = new List<string>();
+    private Dictionary<string, LoggerBeginDayReceipt> beginDayStepReceipts =
+        new Dictionary<string, LoggerBeginDayReceipt>(StringComparer.Ordinal);
+    private long beginDayStepRevision;
+    private Dictionary<string, LoggerKeyedOccurrenceReceipt> keyedOccurrenceReceipts =
+        new Dictionary<string, LoggerKeyedOccurrenceReceipt>(StringComparer.Ordinal);
+
+    public string FullLog => string.Join(Environment.NewLine, reportLines);
+
+    public SimulationLogger(SimulationLogSettings settings, string persistentDataRoot,
+        Action<DailyV1LogSeverity, string> logOutput)
+    {
+        if (string.IsNullOrWhiteSpace(persistentDataRoot))
+            throw new ArgumentException("An explicit persistent data root is required.", nameof(persistentDataRoot));
+        this.persistentDataRoot = persistentDataRoot;
+        this.logOutput = logOutput ?? throw new ArgumentNullException(nameof(logOutput));
+        this.settings = settings ?? new SimulationLogSettings();
+    }
+
+    public void BeginSimulation<TModule>(string simulationName, IEnumerable<TModule> modules, int cityCount, int npcCount)
+    {
+        reportLines.Clear();
+        AddReportLine("SIMULATION: " + (string.IsNullOrEmpty(simulationName) == true ? "Unnamed" : simulationName));
+        AddReportLine(string.Empty);
+        AddReportLine("Modules:");
+
+        if (modules != null)
+        {
+            foreach (TModule module in modules)
+            {
+                AddReportLine("- " + module);
+            }
+        }
+
+        AddReportLine("Cities: " + UnityMathfCompatibility.Max(0, cityCount));
+        AddReportLine("NPCs: " + UnityMathfCompatibility.Max(0, npcCount));
+        AddReportLine(string.Empty);
+    }
+
+    public void BeginDay(long absoluteDay)
+    {
+        if (IsEnabled(SimulationLogCategory.Day) == false)
+        {
+            return;
+        }
+
+        AddReportLine("====================");
+        AddReportLine("DIA " + absoluteDay);
+        AddReportLine("====================");
+        AddReportLine(string.Empty);
+    }
+
+    public void AddReportLine(string message)
+    {
+        reportLines.Add(message ?? string.Empty);
+        beginDayStepRevision++;
+    }
+
+    /// <summary>Prepares one replay-safe diagnostic delivery owned by this logger.</summary>
+    public bool TryPrepareKeyedOccurrence(string operationIdentity, string operationFingerprint,
+        SimulationLogCategory category, string message,
+        out LoggerKeyedOccurrenceCommit prepared)
+    {
+        prepared = null;
+        if (string.IsNullOrWhiteSpace(operationIdentity)
+            || string.IsNullOrWhiteSpace(operationFingerprint)
+            || string.IsNullOrEmpty(message)) return false;
+
+        keyedOccurrenceReceipts ??= new Dictionary<string, LoggerKeyedOccurrenceReceipt>(StringComparer.Ordinal);
+        string descriptorFingerprint = StableKeyEncoding.Encode(operationFingerprint,
+            category.ToString(), message);
+        if (keyedOccurrenceReceipts.TryGetValue(operationIdentity,
+                out LoggerKeyedOccurrenceReceipt existing))
+        {
+            if (existing.DescriptorFingerprint != descriptorFingerprint) return false;
+            prepared = new LoggerKeyedOccurrenceCommit(this, existing, true,
+                descriptorFingerprint, beginDayStepRevision, reportLines,
+                keyedOccurrenceReceipts, keyedOccurrenceReceipts, null, false);
+            return true;
+        }
+
+        if (beginDayStepRevision == long.MaxValue) return false;
+        bool enabled = IsEnabled(category);
+        string output = enabled ? message : null;
+        LoggerKeyedOccurrenceReceipt receipt = new LoggerKeyedOccurrenceReceipt(
+            operationIdentity, descriptorFingerprint,
+            beginDayStepRevision, beginDayStepRevision + 1L, message, enabled);
+        Dictionary<string, LoggerKeyedOccurrenceReceipt> nextReceipts =
+            new Dictionary<string, LoggerKeyedOccurrenceReceipt>(keyedOccurrenceReceipts,
+                StringComparer.Ordinal)
+            {
+                [operationIdentity] = receipt
+            };
+        List<string> nextLines = new List<string>(reportLines.Count + (output != null ? 1 : 0));
+        nextLines.AddRange(reportLines);
+        if (output != null) nextLines.Add(output);
+        prepared = new LoggerKeyedOccurrenceCommit(this, receipt, false,
+            descriptorFingerprint, beginDayStepRevision, reportLines,
+            keyedOccurrenceReceipts, nextReceipts, nextLines, enabled);
+        return true;
+    }
+
+    internal bool TryCommitKeyedOccurrence(LoggerKeyedOccurrenceCommit commit,
+        out TimelineFailure failure)
+    {
+        failure = TimelineFailure.ContinuationFailed;
+        if (commit == null || commit.Owner != this) return false;
+        if (keyedOccurrenceReceipts.TryGetValue(commit.Receipt.OperationIdentity,
+                out LoggerKeyedOccurrenceReceipt retained))
+        {
+            if (retained.DescriptorFingerprint != commit.Receipt.DescriptorFingerprint) return false;
+            failure = TimelineFailure.None;
+            return true;
+        }
+        if (commit.IsReplay || beginDayStepRevision != commit.ExpectedRevision
+            || !ReferenceEquals(reportLines, commit.ExpectedLines)
+            || !ReferenceEquals(keyedOccurrenceReceipts, commit.ExpectedReceipts)
+            || commit.NextReceipts == null || commit.NextLines == null
+            || !commit.NextReceipts.TryGetValue(commit.Receipt.OperationIdentity,
+                out LoggerKeyedOccurrenceReceipt next)
+            || !ReferenceEquals(next, commit.Receipt)
+            || commit.Receipt.OwnerRevisionBefore != beginDayStepRevision
+            || commit.Receipt.OwnerRevisionAfter != beginDayStepRevision + 1L)
+            return false;
+
+        reportLines = commit.NextLines;
+        keyedOccurrenceReceipts = commit.NextReceipts;
+        beginDayStepRevision = commit.Receipt.OwnerRevisionAfter;
+        if (commit.EmitOutput) EmitOutput(DailyV1LogSeverity.Log, commit.Receipt.Message);
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    /// <summary>Captures the logger-owned daily heading, including a frozen no-output disposition.</summary>
+    public bool TryCreateBeginDayStep(
+        DailyBoundaryOperation operation,
+        int ordinal,
+        out BoundaryContinuationStep step,
+        out TimelineFailure failure)
+    {
+        step = null;
+        failure = TimelineFailure.ContinuationFailed;
+        if (operation == null || ordinal < 0 || beginDayStepRevision == long.MaxValue)
+        {
+            return false;
+        }
+
+        bool outputEnabled = settings.showDay;
+        step = new BoundaryContinuationStep(
+            ordinal,
+            BeginDayStepId,
+            BeginDayOwnerId,
+            BeginDayOperationKind,
+            BeginDayOperationVersion,
+            beginDayStepRevision.ToString(CultureInfo.InvariantCulture),
+            string.Empty,
+            disposition: outputEnabled ? "included" : "no-output");
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    /// <summary>Returns the committed occurrence receipt without consulting current logger settings.</summary>
+    public bool TryResolveBeginDayReceipt(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        out LoggerBeginDayReceipt receipt,
+        out TimelineFailure failure)
+    {
+        receipt = null;
+        if (!TryGetBeginDayIdentity(manifest, step, out string identity, out string fingerprint))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        if (!beginDayStepReceipts.TryGetValue(identity, out LoggerBeginDayReceipt existing))
+        {
+            failure = TimelineFailure.None;
+            return false;
+        }
+
+        if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        receipt = existing;
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    /// <summary>Prepares the exact daily heading and its occurrence receipt as one logger-owned commit.</summary>
+    public bool TryPrepareBeginDayStep(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        out IBoundaryContinuationStepCommit prepared,
+        out TimelineFailure failure)
+    {
+        prepared = null;
+        if (!TryGetBeginDayIdentity(manifest, step, out string identity, out string fingerprint))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        if (beginDayStepReceipts.TryGetValue(identity, out LoggerBeginDayReceipt existing))
+        {
+            if (!string.Equals(existing.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+            {
+                failure = TimelineFailure.ContinuationFailed;
+                return false;
+            }
+
+            prepared = new LoggerBeginDayCommit(this, existing, true, fingerprint,
+                beginDayStepRevision, reportLines, beginDayStepReceipts, beginDayStepReceipts);
+            failure = TimelineFailure.None;
+            return true;
+        }
+
+        if (beginDayStepRevision == long.MaxValue
+            || !long.TryParse(step.OwnerRevision, NumberStyles.None, CultureInfo.InvariantCulture, out long expectedRevision)
+            || expectedRevision != beginDayStepRevision)
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        List<string> output = step.Disposition == "included"
+            ? new List<string> { "====================", "DIA " + manifest.AbsoluteDay, "====================", string.Empty }
+            : new List<string>();
+        LoggerBeginDayReceipt receipt = new LoggerBeginDayReceipt(
+            identity,
+            fingerprint,
+            beginDayStepRevision,
+            beginDayStepRevision + 1L,
+            step.Disposition);
+        Dictionary<string, LoggerBeginDayReceipt> nextReceipts =
+            new Dictionary<string, LoggerBeginDayReceipt>(beginDayStepReceipts, StringComparer.Ordinal)
+            {
+                [identity] = receipt
+            };
+        prepared = new LoggerBeginDayCommit(this, receipt, false, fingerprint,
+            beginDayStepRevision, reportLines, beginDayStepReceipts, nextReceipts, output);
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    private bool TryGetBeginDayIdentity(
+        BoundaryContinuationManifest manifest,
+        BoundaryContinuationStep step,
+        out string identity,
+        out string fingerprint)
+    {
+        identity = null;
+        fingerprint = null;
+        if (manifest == null || step == null || step.Ordinal >= manifest.Steps.Count
+            || !ReferenceEquals(manifest.Steps[step.Ordinal], step)
+            || step.StepId != BeginDayStepId || step.OwnerId != BeginDayOwnerId
+            || step.OperationKind != BeginDayOperationKind || step.OperationVersion != BeginDayOperationVersion
+            || (step.Disposition != "included" && step.Disposition != "no-output"))
+        {
+            return false;
+        }
+
+        string expectedOccurrence = StableKeyEncoding.Encode(
+            manifest.WorldId, manifest.ProfileId, manifest.AbsoluteDay.ToString(CultureInfo.InvariantCulture));
+        if (!string.Equals(expectedOccurrence, manifest.BoundaryOccurrenceId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        identity = StableKeyEncoding.Encode(manifest.BoundaryOccurrenceId, step.StepId);
+        fingerprint = StableKeyEncoding.Encode(
+            manifest.BoundaryOccurrenceId,
+            manifest.ContinuationId,
+            manifest.SubphaseKind,
+            manifest.SubphaseVersion,
+            manifest.ConfigurationIdentity,
+            manifest.ContentIdentity,
+            step.Ordinal.ToString(CultureInfo.InvariantCulture),
+            step.StepId,
+            step.OwnerId,
+            step.OperationKind,
+            step.OperationVersion,
+            step.OwnerRevision,
+            step.Payload,
+            step.PersonId,
+            step.Disposition);
+        return true;
+    }
+
+    internal bool TryCommitBeginDayStep(
+        LoggerBeginDayReceipt receipt,
+        bool replay,
+        string fingerprint,
+        long expectedRevision,
+        List<string> expectedLines,
+        Dictionary<string, LoggerBeginDayReceipt> expectedReceipts,
+        Dictionary<string, LoggerBeginDayReceipt> nextReceipts,
+        IReadOnlyList<string> output,
+        out TimelineFailure failure)
+    {
+        if (replay)
+        {
+            if (beginDayStepReceipts.TryGetValue(receipt.ExecutionStepIdentity, out LoggerBeginDayReceipt current)
+                && ReferenceEquals(current, receipt)
+                && string.Equals(current.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+            {
+                failure = TimelineFailure.None;
+                return true;
+            }
+
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        if (receipt == null || beginDayStepRevision != expectedRevision
+            || !ReferenceEquals(reportLines, expectedLines)
+            || !ReferenceEquals(beginDayStepReceipts, expectedReceipts)
+            || nextReceipts == null || !nextReceipts.ContainsKey(receipt.ExecutionStepIdentity)
+            || beginDayStepReceipts.ContainsKey(receipt.ExecutionStepIdentity)
+            || receipt.OwnerRevisionBefore != beginDayStepRevision
+            || receipt.OwnerRevisionAfter != beginDayStepRevision + 1L
+            || !string.Equals(receipt.DescriptorFingerprint, fingerprint, StringComparison.Ordinal))
+        {
+            failure = TimelineFailure.ContinuationFailed;
+            return false;
+        }
+
+        List<string> nextLines = new List<string>(reportLines.Count + (output?.Count ?? 0));
+        nextLines.AddRange(reportLines);
+        if (output != null)
+        {
+            nextLines.AddRange(output);
+        }
+
+        // All allocating work is complete; publish the output, receipt, and revision together
+        // within the logger's serialized owner boundary.
+        reportLines = nextLines;
+        beginDayStepReceipts = nextReceipts;
+        beginDayStepRevision = receipt.OwnerRevisionAfter;
+        failure = TimelineFailure.None;
+        return true;
+    }
+
+    public void Log(SimulationLogCategory category, string message)
+    {
+        if (string.IsNullOrEmpty(message) == true || IsEnabled(category) == false)
+        {
+            return;
+        }
+
+        AddReportLine(message);
+        EmitOutput(DailyV1LogSeverity.Log, message);
+    }
+
+    public void LogWarning(string message)
+    {
+        if (string.IsNullOrEmpty(message) == false)
+        {
+            AddReportLine("[WARNING] " + message);
+            EmitOutput(DailyV1LogSeverity.Warning, message);
+        }
+    }
+
+    public void LogError(string message)
+    {
+        if (string.IsNullOrEmpty(message) == false)
+        {
+            AddReportLine("[ERROR] " + message);
+            EmitOutput(DailyV1LogSeverity.Error, message);
+        }
+    }
+
+    public string SaveToFile(string fileName)
+    {
+        string safeFileName = SanitizeFileName(fileName);
+
+        if (string.IsNullOrEmpty(safeFileName) == true)
+        {
+            safeFileName = "Simulation-Run.txt";
+        }
+
+        if (safeFileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase) == false)
+        {
+            safeFileName += ".txt";
+        }
+
+        string directoryPath = Path.Combine(persistentDataRoot, "SimulationLogs");
+        string filePath = Path.Combine(directoryPath, safeFileName);
+
+        try
+        {
+            Directory.CreateDirectory(directoryPath);
+            File.WriteAllText(filePath, FullLog);
+            EmitOutput(DailyV1LogSeverity.Log, "Diario salvo em: " + filePath);
+            return filePath;
+        }
+        catch (Exception exception)
+        {
+            LogError("Nao foi possivel salvar o diario em " + filePath + ": " + exception.Message);
+            return string.Empty;
+        }
+    }
+
+    private string SanitizeFileName(string fileName)
+    {
+        string value = string.IsNullOrEmpty(fileName) == true ? "Simulation-Run.txt" : fileName;
+        char[] invalidCharacters = Path.GetInvalidFileNameChars();
+
+        foreach (char invalidCharacter in invalidCharacters)
+        {
+            value = value.Replace(invalidCharacter, '-');
+        }
+
+        return value.Trim();
+    }
+
+    private void EmitOutput(DailyV1LogSeverity severity, string message)
+    {
+        // Host output is observational. A failing sink must not undo or escape
+        // after the logger has committed its report, receipt, and revision.
+        try
+        {
+            logOutput(severity, message);
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    public bool IsEnabled(SimulationLogCategory category)
+    {
+        switch (category)
+        {
+            case SimulationLogCategory.Day:
+                return settings.showDay;
+            case SimulationLogCategory.NpcAction:
+                return settings.npcActions;
+            case SimulationLogCategory.EconomyProduction:
+                return settings.economyProduction;
+            case SimulationLogCategory.EconomyConsumption:
+                return settings.economyConsumption;
+            case SimulationLogCategory.Market:
+                return settings.market;
+            case SimulationLogCategory.Trade:
+                return settings.trade;
+            case SimulationLogCategory.Travel:
+                return settings.travel;
+            case SimulationLogCategory.Crime:
+                return settings.crime;
+            case SimulationLogCategory.Justice:
+                return settings.justice;
+            default:
+                return true;
+        }
+    }
+}
+
+public sealed class LoggerBeginDayReceipt
+{
+    public string ExecutionStepIdentity { get; }
+    public string DescriptorFingerprint { get; }
+    public long OwnerRevisionBefore { get; }
+    public long OwnerRevisionAfter { get; }
+    public string Disposition { get; }
+
+    internal LoggerBeginDayReceipt(
+        string executionStepIdentity,
+        string descriptorFingerprint,
+        long ownerRevisionBefore,
+        long ownerRevisionAfter,
+        string disposition)
+    {
+        ExecutionStepIdentity = executionStepIdentity ?? throw new ArgumentNullException(nameof(executionStepIdentity));
+        DescriptorFingerprint = descriptorFingerprint ?? throw new ArgumentNullException(nameof(descriptorFingerprint));
+        OwnerRevisionBefore = ownerRevisionBefore;
+        OwnerRevisionAfter = ownerRevisionAfter;
+        Disposition = disposition ?? throw new ArgumentNullException(nameof(disposition));
+    }
+}
+
+[Serializable]
+internal sealed class LoggerKeyedOccurrenceReceipt
+{
+    private string operationIdentity;
+    private string descriptorFingerprint;
+    private string message;
+    private long ownerRevisionBefore;
+    private long ownerRevisionAfter;
+    private bool outputEnabled;
+
+    internal string OperationIdentity => operationIdentity;
+    internal string DescriptorFingerprint => descriptorFingerprint;
+    internal string Message => message;
+    internal long OwnerRevisionBefore => ownerRevisionBefore;
+    internal long OwnerRevisionAfter => ownerRevisionAfter;
+    internal bool OutputEnabled => outputEnabled;
+
+    internal LoggerKeyedOccurrenceReceipt(string operationIdentity,
+        string descriptorFingerprint, long ownerRevisionBefore,
+        long ownerRevisionAfter, string message, bool outputEnabled)
+    {
+        this.operationIdentity = operationIdentity;
+        this.descriptorFingerprint = descriptorFingerprint;
+        this.ownerRevisionBefore = ownerRevisionBefore;
+        this.ownerRevisionAfter = ownerRevisionAfter;
+        this.message = message;
+        this.outputEnabled = outputEnabled;
+    }
+}
+
+public sealed class LoggerKeyedOccurrenceCommit
+{
+    internal SimulationLogger Owner { get; }
+    internal LoggerKeyedOccurrenceReceipt Receipt { get; }
+    internal bool IsReplay { get; }
+    internal long ExpectedRevision { get; }
+    internal List<string> ExpectedLines { get; }
+    internal Dictionary<string, LoggerKeyedOccurrenceReceipt> ExpectedReceipts { get; }
+    internal Dictionary<string, LoggerKeyedOccurrenceReceipt> NextReceipts { get; }
+    internal List<string> NextLines { get; }
+    internal bool EmitOutput { get; }
+
+        internal LoggerKeyedOccurrenceCommit(SimulationLogger owner,
+        LoggerKeyedOccurrenceReceipt receipt, bool isReplay,
+        string descriptorFingerprint, long expectedRevision,
+        List<string> expectedLines,
+        Dictionary<string, LoggerKeyedOccurrenceReceipt> expectedReceipts,
+        Dictionary<string, LoggerKeyedOccurrenceReceipt> nextReceipts,
+        List<string> nextLines, bool emitUnityLog)
+    {
+        Owner = owner;
+        Receipt = receipt;
+        IsReplay = isReplay;
+        ExpectedRevision = expectedRevision;
+        ExpectedLines = expectedLines;
+        ExpectedReceipts = expectedReceipts;
+        NextReceipts = nextReceipts;
+        NextLines = nextLines;
+        EmitOutput = emitUnityLog;
+    }
+
+    public bool TryCommit(out TimelineFailure failure) =>
+        Owner.TryCommitKeyedOccurrence(this, out failure);
+}
+
+internal sealed class LoggerBeginDayCommit : IBoundaryContinuationStepCommit
+{
+    private readonly SimulationLogger owner;
+    private readonly LoggerBeginDayReceipt receipt;
+    private readonly bool replay;
+    private readonly string fingerprint;
+    private readonly long expectedRevision;
+    private readonly List<string> expectedLines;
+    private readonly Dictionary<string, LoggerBeginDayReceipt> expectedReceipts;
+    private readonly Dictionary<string, LoggerBeginDayReceipt> nextReceipts;
+    private readonly IReadOnlyList<string> output;
+    private bool completed;
+
+    public IReadOnlyList<DueWorkReference> RetainedTimelineFacts => Array.Empty<DueWorkReference>();
+    public IReadOnlyList<string> RetainedSourceSignals => Array.Empty<string>();
+
+    public LoggerBeginDayCommit(
+        SimulationLogger owner,
+        LoggerBeginDayReceipt receipt,
+        bool replay,
+        string fingerprint,
+        long expectedRevision,
+        List<string> expectedLines,
+        Dictionary<string, LoggerBeginDayReceipt> expectedReceipts,
+        Dictionary<string, LoggerBeginDayReceipt> nextReceipts,
+        IReadOnlyList<string> output = null)
+    {
+        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        this.receipt = receipt ?? throw new ArgumentNullException(nameof(receipt));
+        this.replay = replay;
+        this.fingerprint = fingerprint ?? string.Empty;
+        this.expectedRevision = expectedRevision;
+        this.expectedLines = expectedLines;
+        this.expectedReceipts = expectedReceipts;
+        this.nextReceipts = nextReceipts;
+        this.output = output ?? Array.Empty<string>();
+    }
+
+    public bool TryCommit(out TimelineFailure failure)
+    {
+        if (completed)
+        {
+            failure = TimelineFailure.None;
+            return true;
+        }
+
+        completed = owner.TryCommitBeginDayStep(
+            receipt,
+            replay,
+            fingerprint,
+            expectedRevision,
+            expectedLines,
+            expectedReceipts,
+            nextReceipts,
+            output,
+            out failure);
+        return completed;
+    }
+}
+
+[Serializable]
+public class SimulationLogSettings
+{
+    public bool showDay = true;
+    public bool npcActions = true;
+    public bool trade = true;
+    public bool travel = true;
+    public bool crime = true;
+    public bool justice = true;
+    public bool economyProduction = true;
+    public bool economyConsumption = true;
+    public bool market = true;
+}
+
+public enum SimulationLogCategory
+{
+    Day,
+    NpcAction,
+    EconomyProduction,
+    EconomyConsumption,
+    Market,
+    Trade,
+    Travel,
+    Crime,
+    Justice
+}

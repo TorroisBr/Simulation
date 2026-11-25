@@ -14,6 +14,134 @@ using UnityEngine;
 public sealed class SimulationRuntimeAdmissionTests
 {
     private readonly List<GameObject> simulationObjects = new List<GameObject>();
+
+    private static void WithSelectedDailyAdvanceAdmissionForTest(
+        SimulationRuntime runtime,
+        Action mutation)
+    {
+        Assert.That(runtime, Is.Not.Null);
+        Assert.That(mutation, Is.Not.Null);
+        DailyV1ExecutionBoundaryState executionState = runtime.ExecutionBoundaryState;
+        Assert.That(executionState.TryBeginSelectedRuntimeDailyAdvanceOperation(), Is.True,
+            "Selected fixture mutations must use the existing Core DailyAdvance contract.");
+        try
+        {
+            MethodInfo enterOperation = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(enterOperation, Is.Not.Null);
+            object[] operationArguments =
+            {
+                DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+                null
+            };
+            Assert.That((bool)enterOperation.Invoke(runtime, operationArguments), Is.True,
+                "The fixture must register the census operation for its selected owner write.");
+            IDisposable operationScope = operationArguments[1] as IDisposable;
+            Assert.That(operationScope, Is.Not.Null);
+            try
+            {
+                mutation();
+            }
+            finally
+            {
+                operationScope.Dispose();
+            }
+        }
+        finally
+        {
+            Assert.That(executionState.TryEndRuntimeProtocolOperation(), Is.True,
+                "The fixture must close the exact Core DailyAdvance contract scope.");
+        }
+    }
+
+    private static void SetSelectedCurrentActionForAdmissionTest(
+        SimulationRuntime runtime,
+        NpcRuntime actor,
+        NpcActionRuntime actionProjection)
+    {
+        Assert.That(actor, Is.Not.Null);
+        Assert.That(actionProjection, Is.Not.Null);
+        WithSelectedDailyAdvanceAdmissionForTest(
+            runtime, () => actor.SetCurrentActionRuntime(actionProjection));
+    }
+
+    private static bool AddSelectedInventoryItemForAdmissionTest(
+        SimulationRuntime runtime,
+        NpcRuntime actor,
+        DailyV1ItemDefinition item,
+        int amount,
+        float unitCost)
+    {
+        bool added = false;
+        WithSelectedDailyAdvanceAdmissionForTest(
+            runtime, () => added = actor.Inventory.TryAddSelectedItem(item, amount, unitCost));
+        return added;
+    }
+
+    private static bool SetSelectedMerchantPlanForAdmissionTest(
+        SimulationRuntime runtime,
+        NpcRuntime actor,
+        ItemData item,
+        CityRuntime origin,
+        CityRuntime target,
+        int amount,
+        float unitPrice,
+        string decisionId)
+    {
+        bool installed = false;
+        WithSelectedDailyAdvanceAdmissionForTest(
+            runtime, () => installed = actor.TrySetSelectedMerchantTradePlan(
+                item, origin, target, amount, unitPrice, decisionId));
+        return installed;
+    }
+
+    private static bool StartSelectedTravelForAdmissionTest(
+        SimulationRuntime runtime,
+        NpcRuntime actor,
+        CityRuntime destination,
+        int travelDays,
+        string originDecisionId)
+    {
+        bool started = false;
+        WithSelectedDailyAdvanceAdmissionForTest(
+            runtime, () => started = actor.StartTravel(destination, travelDays, originDecisionId));
+        return started;
+    }
+
+    private static bool AdvanceSelectedSoloTravelsForAdmissionTest(
+        SimulationRuntime runtime,
+        TravelSystem travelSystem,
+        MethodInfo advanceSelectedSoloTravels,
+        object[] arguments)
+    {
+        Assert.That(travelSystem, Is.Not.Null);
+        Assert.That(advanceSelectedSoloTravels, Is.Not.Null);
+        Assert.That(arguments, Is.Not.Null);
+        bool advanced = false;
+        WithSelectedDailyAdvanceAdmissionForTest(
+            runtime, () => advanced = (bool)advanceSelectedSoloTravels.Invoke(travelSystem, arguments));
+        return advanced;
+    }
+
+    private static string P12Diagnostic(SimulationRuntime runtime)
+    {
+        ContinuationCensusProtocol protocol = runtime == null
+            ? null
+            : ReadPrivateField<ContinuationCensusProtocol>(runtime, "npcRosterCensusProtocol");
+        return protocol?.FirstFaultDetail ?? "no census fault detail recorded";
+    }
+
+    private sealed class MissingInitialSlotOperations : IAtomicFileSlotOperations
+    {
+        public void CreateDirectory(string path) => throw new NotSupportedException();
+        public bool Exists(string path) => false;
+        public Stream CreateNewTemporary(string path) => throw new NotSupportedException();
+        public Stream OpenRead(string path) => throw new FileNotFoundException();
+        public void FlushToDisk(Stream stream) => throw new NotSupportedException();
+        public void Replace(string source, string destination) => throw new NotSupportedException();
+        public void Move(string source, string destination) => throw new NotSupportedException();
+        public void Delete(string path) => throw new NotSupportedException();
+    }
     [SetUp]
     public void SetUp() => SimulationTestFactory.CleanupDefinitions();
 
@@ -30,45 +158,627 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void SelectedMerchantProjectionMismatchFaultsBeforeProviderExecution()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        NpcActionData sellAction = config.Actions.Single(value =>
+            value != null && value.actionType == NpcActionType.SellGoods);
+
+        GameObject hostObject = new GameObject("P12 selected merchant projection mismatch");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationTime simulationTime = ReadPrivateField<SimulationTime>(session.Runtime, "simulationTime");
+        MerchantSystem merchant = new MerchantSystem(
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            new EffectiveCommercialKnowledgeConfiguration(), null, simulationTime, null);
+        FieldInfo merchantField = typeof(SimulationRuntime).GetField(
+            "merchantSystem", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(merchantField, Is.Not.Null);
+        merchantField.SetValue(session.Runtime, merchant);
+        NpcRuntime seller = null;
+        NpcActionRuntime selectedAction = null;
+        foreach (NpcRuntime candidate in session.Runtime.NpcRuntimes)
+        {
+            if (candidate == null || !candidate.HasJobType(NpcJobType.Merchant)
+                || candidate.CurrentCity == null) continue;
+            ItemData item = candidate.CurrentCity.Market?.Items
+                .Select(row => row?.Item).FirstOrDefault(value => value != null);
+            if (item == null
+                || !candidate.TryGetSelectedDailyV1ActionNode(
+                    sellAction, out DailyV1ActionDefinition actionNode)
+                || !candidate.TryGetSelectedDailyV1Item(
+                    item, out DailyV1ItemDefinition itemNode)
+                || !DailyV1NpcActionPayloadOwner.TryCreate(
+                    candidate.SelectedDailyV1DefinitionGraph,
+                    actionNode,
+                    null,
+                    candidate.CurrentCity.RuntimeId,
+                    itemNode,
+                    1,
+                    1f,
+                    1f,
+                    NpcTravelReason.None,
+                    0f,
+                    "projection-mismatch-test",
+                    null,
+                    null,
+                    null,
+                    out DailyV1NpcActionPayloadOwner payload)
+                || !NpcActionRuntime.TryCreateFromOwnerSnapshot(
+                    sellAction,
+                    null,
+                    candidate.CurrentCity,
+                    item,
+                    1,
+                    1f,
+                    1f,
+                    NpcTravelReason.None,
+                    0f,
+                    "projection-mismatch-test",
+                    null,
+                    null,
+                    null,
+                    out NpcActionRuntime proposal)
+                || !proposal.TryUseSelectedPayload(
+                    payload, candidate.SelectedDailyV1DefinitionGraph)) continue;
+            seller = candidate;
+            selectedAction = proposal;
+            break;
+        }
+
+        Assert.That(seller, Is.Not.Null,
+            "The accepted Daily-v1 fixture must expose a supported Merchant SellGoods proposal.");
+        Assert.That(selectedAction, Is.Not.Null);
+        Assert.That(selectedAction.SelectedOwner, Is.Not.Null,
+            "The supported proposal must carry its exact Core action owner before dispatch.");
+        Assert.That(session.Runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure before),
+            Is.True, before.ToString());
+
+        float balanceBefore = seller.Money;
+        long accountRevisionBefore = seller.MoneyAccount.Revision;
+        long inventoryRevisionBefore = seller.Inventory.Revision;
+        long marketRevisionBefore = seller.CurrentCity.Market.SelectedDailyV1Owner.Revision;
+        int inventoryAmountBefore = seller.Inventory.GetAmount(selectedAction.TargetItem);
+        int marketAmountBefore = seller.CurrentCity.Market.GetAmount(selectedAction.TargetItem);
+
+        FieldInfo selectedOwnerField = typeof(NpcActionRuntime).GetField(
+            "selectedOwner", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(selectedOwnerField, Is.Not.Null);
+        selectedOwnerField.SetValue(selectedAction, null);
+
+        MethodInfo execute = typeof(SimulationRuntime).GetMethod("TryExecuteAction",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(execute, Is.Not.Null);
+        TargetInvocationException failure = Assert.Throws<TargetInvocationException>(() => execute.Invoke(
+            session.Runtime, new object[] { seller, selectedAction, sellAction }));
+        Assert.That(failure.InnerException, Is.TypeOf<InvalidOperationException>());
+        Assert.That(failure.InnerException.Message,
+            Does.Contain("exact Core action projection"));
+
+        Assert.That(seller.Money, Is.EqualTo(balanceBefore));
+        Assert.That(seller.MoneyAccount.Revision, Is.EqualTo(accountRevisionBefore));
+        Assert.That(seller.Inventory.Revision, Is.EqualTo(inventoryRevisionBefore));
+        Assert.That(seller.Inventory.GetAmount(selectedAction.TargetItem), Is.EqualTo(inventoryAmountBefore));
+        Assert.That(seller.CurrentCity.Market.SelectedDailyV1Owner.Revision, Is.EqualTo(marketRevisionBefore));
+        Assert.That(seller.CurrentCity.Market.GetAmount(selectedAction.TargetItem), Is.EqualTo(marketAmountBefore));
+        Assert.That(session.Runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure after), Is.False);
+        Assert.That(after, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    [Test]
+    public void ProjectionIndependentNormalActionDoesNotLogStaleUnityTarget()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+
+        GameObject hostObject = new GameObject("P12 projection-independent Normal action logging");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        NpcRuntime actor = null;
+        NpcRuntime target = null;
+        DailyV1ActionDefinition normalAction = null;
+        DailyV1NpcActionPayloadOwner payload = null;
+
+        foreach (NpcRuntime candidate in runtime.NpcRuntimes)
+        {
+            if (candidate?.SelectedRuntimeOwners == null
+                || candidate.SelectedRuntimeOwnerGraph == null)
+                continue;
+
+            foreach (NpcActionData actionAsset in config.Actions.Where(value =>
+                         value != null && value.actionType == NpcActionType.Normal))
+            {
+                if (!candidate.TryGetSelectedDailyV1ActionNode(
+                        actionAsset, out DailyV1ActionDefinition actionNode)
+                    || !DailyV1NpcActionPayloadOwner.TryCreate(
+                        candidate.SelectedDailyV1DefinitionGraph,
+                        actionNode,
+                        null,
+                        null,
+                        null,
+                        0,
+                        0f,
+                        1f,
+                        NpcTravelReason.None,
+                        0f,
+                        "stale-projection-normal-action",
+                        null,
+                        null,
+                        null,
+                        out DailyV1NpcActionPayloadOwner candidatePayload))
+                    continue;
+
+                actor = candidate;
+                normalAction = actionNode;
+                payload = candidatePayload;
+                break;
+            }
+
+            if (actor != null) break;
+        }
+
+        Assert.That(actor, Is.Not.Null,
+            "The admitted Daily-v1 fixture must provide a selected actor for the Normal action regression.");
+        Assert.That(normalAction, Is.Not.Null);
+        Assert.That(payload, Is.Not.Null);
+        target = runtime.NpcRuntimes.FirstOrDefault(candidate =>
+            candidate != null && !ReferenceEquals(candidate, actor));
+        Assert.That(target, Is.Not.Null,
+            "The stale Unity projection must reference a distinct target runtime.");
+
+        Assert.That(actor.SelectedRuntimeOwnerGraph.TryCommitCurrentActionSlot(
+            actor.SelectedRuntimeOwners, normalAction, payload, () => true), Is.True);
+        Assert.That(actor.SelectedRuntimeOwners.ActionSlot.CurrentAction,
+            Is.SameAs(normalAction));
+        Assert.That(DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
+            actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners, normalAction), Is.True);
+
+        NpcActionData staleActionAsset = config.Actions.First(value =>
+            value != null && value.actionType != NpcActionType.Normal);
+        NpcActionRuntime staleProjection = new NpcActionRuntime(staleActionAsset, target);
+        WritePrivateField(actor, "currentActionRuntime", staleProjection);
+        WritePrivateField(actor, "currentAction", staleActionAsset);
+
+        List<string> output = new List<string>();
+        SimulationLogger logger = new SimulationLogger(
+            new SimulationLogSettings(), Path.GetTempPath(), (_, message) => output.Add(message));
+        WritePrivateField(runtime, "logger", logger);
+
+        MethodInfo execute = typeof(SimulationRuntime).GetMethod(
+            "TryExecuteSelectedCurrentAction", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(execute, Is.Not.Null);
+        NpcActionResult result = (NpcActionResult)execute.Invoke(runtime, new object[] { actor });
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success, Is.True,
+            "The action must execute from the exact Core slot despite the stale Unity projection.");
+        Assert.That(actor.SelectedRuntimeOwners.ActionSlot.CurrentAction,
+            Is.SameAs(normalAction));
+        Assert.That(output.Any(message => message.Contains("escolheu")
+            && message.Contains(target.NpcName)), Is.False,
+            "A stale Unity action projection must not contribute target text to the Core action log.");
+    }
+
+    [Test]
+    public void ProjectionIndependentNormalActionCommitsActorStatusFromCoreSlot()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcActionData sourceNormal = sourceConfig.Actions.First(value =>
+            value != null && value.actionType == NpcActionType.Normal);
+        NpcActionData normalWithActorEffect = UnityEngine.Object.Instantiate(sourceNormal);
+        normalWithActorEffect.id = "core-normal-actor-status-projection-independent";
+        normalWithActorEffect.actionName = "Core status action";
+        normalWithActorEffect.normalActionLogText = "completed a Core status action.";
+        normalWithActorEffect.statusToAdd.Clear();
+        normalWithActorEffect.statusToRemove.Clear();
+        normalWithActorEffect.targetStatusToAdd.Clear();
+        normalWithActorEffect.targetStatusToRemove.Clear();
+        NpcStatusData effectStatus = SimulationTestFactory.CreateStatus(
+            "core-normal-actor-status-projection-independent-effect");
+        normalWithActorEffect.statusToAdd.Add(effectStatus);
+        config.actions = new List<NpcActionData>(sourceConfig.Actions)
+        { normalWithActorEffect };
+        config.statuses = new List<NpcStatusData>(sourceConfig.Statuses)
+        { effectStatus };
+
+        GameObject hostObject = new GameObject("Core-slot Normal status action without Unity projection");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        try
+        {
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            NpcRuntime actor = runtime.NpcRuntimes.FirstOrDefault(value =>
+                value?.SelectedRuntimeOwners?.Status != null
+                && value.TryGetSelectedDailyV1ActionNode(
+                    normalWithActorEffect, out DailyV1ActionDefinition actionNode)
+                && actionNode != null);
+            Assert.That(actor, Is.Not.Null,
+                "The selected graph must bind the added Normal action and its actor status effect.");
+            Assert.That(actor.TryGetSelectedDailyV1ActionNode(
+                normalWithActorEffect, out DailyV1ActionDefinition selectedAction), Is.True);
+            Assert.That(actor.SelectedDailyV1DefinitionGraph.Statuses.TryGetValue(
+                effectStatus.DefinitionId, out DailyV1StatusDefinition selectedEffect), Is.True);
+            Assert.That(actor.SelectedDailyV1StatusOwner.Statuses.Any(status =>
+                ReferenceEquals(status, selectedEffect)), Is.False);
+            var selectedActionProjection = new NpcActionRuntime(normalWithActorEffect);
+            DailyV1ExecutionBoundaryState executionState = runtime.ExecutionBoundaryState;
+            Assert.That(executionState.TryBeginSelectedRuntimeDailyAdvanceOperation(), Is.True,
+                "The fixture must enter the existing Core DailyAdvance contract before installing its Core action slot.");
+            try
+            {
+                MethodInfo enterOperation = typeof(SimulationRuntime).GetMethod(
+                    "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(enterOperation, Is.Not.Null);
+                object[] operationArguments =
+                {
+                    DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+                    null
+                };
+                Assert.That((bool)enterOperation.Invoke(runtime, operationArguments), Is.True,
+                    "The fixture must register the matching census operation under the existing DailyAdvance contract.");
+                IDisposable operationScope = operationArguments[1] as IDisposable;
+                Assert.That(operationScope, Is.Not.Null);
+                try
+                {
+                    actor.SetCurrentActionRuntime(selectedActionProjection);
+                    Assert.That(actor.SelectedRuntimeOwners.ActionSlot.CurrentAction,
+                        Is.SameAs(selectedAction));
+                }
+                finally
+                {
+                    operationScope.Dispose();
+                }
+            }
+            finally
+            {
+                Assert.That(executionState.TryEndRuntimeProtocolOperation(), Is.True,
+                    "The fixture must close the exact Core DailyAdvance contract scope.");
+            }
+            Assert.That(actor.SelectedRuntimeOwners.ActionSlot.CurrentAction,
+                Is.SameAs(selectedAction));
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure setupCensusFailure), Is.True,
+                setupCensusFailure.ToString(),
+                "The test's action-slot setup must leave all 89 census rows current before testing the action status commit.");
+            Assert.That(DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalAction(
+                actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners, selectedAction), Is.True);
+
+            long mutationEpochBefore = runtime.ExecutionBoundaryState
+                .MutationEpochState.CurrentEpoch;
+            long crimeJusticeRevisionBefore = actor.SelectedRuntimeOwners.CrimeJusticeRevision;
+            WritePrivateField<NpcActionRuntime>(actor, "currentActionRuntime", null);
+            WritePrivateField<NpcActionData>(actor, "currentAction", null);
+            Assert.That(actor.CurrentActionRuntime, Is.Null,
+                "This path must execute without a Unity NpcActionRuntime projection.");
+            OwnerSectionCensusWitness coreActionWitness =
+                new NpcCurrentActionCensusProvider(actor).GetCurrentCensus();
+            Assert.That(coreActionWitness.Cardinality, Is.EqualTo(1),
+                "The P12 current-action row must read the admitted Core slot even when its Unity projection is absent.");
+            Assert.That(coreActionWitness.Revision,
+                Is.EqualTo(actor.SelectedRuntimeOwners.ActionSlot.Revision));
+            Assert.That(coreActionWitness.OwnerInstanceIdentity,
+                Is.SameAs(actor.SelectedCensusOwnerIdentity));
+
+            MethodInfo execute = typeof(SimulationRuntime).GetMethod(
+                "TryExecuteSelectedCurrentAction", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(execute, Is.Not.Null);
+            NpcActionResult result = (NpcActionResult)execute.Invoke(runtime, new object[] { actor });
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Success, Is.True);
+            Assert.That(actor.SelectedDailyV1StatusOwner.Statuses.Any(status =>
+                ReferenceEquals(status, selectedEffect)), Is.True,
+                "The effect must be committed to the exact Core status owner from the selected Core action slot.");
+            Assert.That(actor.SelectedDailyV1DefinitionGraph.Statuses.TryGetValue(
+                effectStatus.DefinitionId, out DailyV1StatusDefinition admittedEffect), Is.True);
+            Assert.That(actor.SelectedDailyV1StatusOwner.Statuses.Single(value =>
+                value.DefinitionId == effectStatus.DefinitionId), Is.SameAs(admittedEffect));
+            long mutationEpochAfter = runtime.ExecutionBoundaryState.MutationEpochState.CurrentEpoch;
+            long crimeJusticeRevisionAfter = actor.SelectedRuntimeOwners.CrimeJusticeRevision;
+            Assert.That(crimeJusticeRevisionAfter,
+                Is.EqualTo(crimeJusticeRevisionBefore + 1L),
+                "The selected status owner revision must advance once for the committed action effect.");
+            Assert.That(mutationEpochAfter,
+                Is.EqualTo(mutationEpochBefore + 1L),
+                "The successful Core status-owner write must invalidate the runtime capture epoch.");
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                    out ContinuationCensusFailure censusFailureAfterAction),
+                Is.True,
+                censusFailureAfterAction.ToString(),
+                "The full selected-owner census must remain valid after the Core status commit.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(config);
+            UnityEngine.Object.DestroyImmediate(normalWithActorEffect);
+            UnityEngine.Object.DestroyImmediate(effectStatus);
+        }
+    }
+
+    [Test]
+    public void ProjectionIndependentTargetedNormalActionCommitsExactTargetAndRejectsAliasedProjectionTarget()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcActionData sourceNormal = sourceConfig.Actions.First(value =>
+            value != null && value.actionType == NpcActionType.Normal);
+        NpcActionData normalWithTargetEffect = UnityEngine.Object.Instantiate(sourceNormal);
+        normalWithTargetEffect.id = "core-normal-target-status-projection-independent";
+        normalWithTargetEffect.actionName = "Core targeted status action";
+        normalWithTargetEffect.normalActionLogText = "completed a Core targeted status action.";
+        normalWithTargetEffect.statusToAdd.Clear();
+        normalWithTargetEffect.statusToRemove.Clear();
+        normalWithTargetEffect.targetStatusToAdd.Clear();
+        normalWithTargetEffect.targetStatusToRemove.Clear();
+        NpcStatusData effectStatus = SimulationTestFactory.CreateStatus(
+            "core-normal-target-status-projection-independent-effect");
+        normalWithTargetEffect.targetStatusToAdd.Add(effectStatus);
+        config.actions = new List<NpcActionData>(sourceConfig.Actions)
+        { normalWithTargetEffect };
+        config.statuses = new List<NpcStatusData>(sourceConfig.Statuses)
+        { effectStatus };
+
+        GameObject hostObject = new GameObject("Core-slot targeted Normal status action without Unity projection");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        try
+        {
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            NpcRuntime[] selectedActors = runtime.NpcRuntimes.Where(value =>
+                value?.SelectedRuntimeOwners?.Status != null
+                && value.SelectedRuntimeOwnerGraph != null).ToArray();
+            Assert.That(selectedActors.Length, Is.GreaterThanOrEqualTo(2),
+                "The Daily-v1 proving profile must provide an exact actor and target owner.");
+            NpcRuntime actor = selectedActors[0];
+            NpcRuntime target = selectedActors.First(value => !ReferenceEquals(value, actor));
+            Assert.That(actor.TryGetSelectedDailyV1ActionNode(
+                normalWithTargetEffect, out DailyV1ActionDefinition selectedAction), Is.True);
+            Assert.That(actor.SelectedDailyV1DefinitionGraph.Statuses.TryGetValue(
+                effectStatus.DefinitionId, out DailyV1StatusDefinition selectedEffect), Is.True);
+            Assert.That(target.SelectedDailyV1StatusOwner.Statuses.Any(status =>
+                ReferenceEquals(status, selectedEffect)), Is.False);
+
+            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+                actor.SelectedDailyV1DefinitionGraph,
+                selectedAction,
+                target.RuntimeId, null, null, 0, 0f, 1f, NpcTravelReason.None, 0f,
+                "normal-target-status-without-projection",
+                null, null, null,
+                out DailyV1NpcActionPayloadOwner payload), Is.True);
+            CommitSelectedCurrentActionSlotForTest(runtime, actor, selectedAction, payload);
+            Assert.That(DailyV1SelectedActorActionExecutionStage.IsProjectionIndependentNormalActionForExactTarget(
+                actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners, selectedAction,
+                target.SelectedRuntimeOwners), Is.True);
+
+            long mutationEpochBefore = runtime.ExecutionBoundaryState
+                .MutationEpochState.CurrentEpoch;
+            long actorStatusRevisionBefore = actor.SelectedRuntimeOwners.CrimeJusticeRevision;
+            long targetStatusRevisionBefore = target.SelectedRuntimeOwners.CrimeJusticeRevision;
+
+            // A projection can still match the payload's serialized RuntimeId
+            // while pointing at a different runtime object. The log and any
+            // compatibility projection must use the graph's exact runtime.
+            NpcRuntime staleTargetAlias = new NpcRuntime(
+                target.RuntimeId, SimulationTestFactory.CreateNpc(
+                    "core-normal-target-status-stale-projection-alias"));
+            NpcActionRuntime staleProjection = new NpcActionRuntime(
+                normalWithTargetEffect, target);
+            Assert.That(staleProjection.TryUseSelectedPayload(
+                payload, actor.SelectedDailyV1DefinitionGraph), Is.True);
+            WritePrivateField(staleProjection, "targetNpc", staleTargetAlias);
+            WritePrivateField(actor, "currentActionRuntime", staleProjection);
+            WritePrivateField(actor, "currentAction", normalWithTargetEffect);
+
+            List<string> output = new List<string>();
+            SimulationLogger selectedLogger = new SimulationLogger(
+                new SimulationLogSettings(), Path.GetTempPath(),
+                (_, message) => output.Add(message));
+            WritePrivateField(runtime, "logger", selectedLogger);
+
+            MethodInfo execute = typeof(SimulationRuntime).GetMethod(
+                "TryExecuteSelectedCurrentAction", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(execute, Is.Not.Null);
+            NpcActionResult result = (NpcActionResult)execute.Invoke(runtime, new object[] { actor });
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Success, Is.True);
+            Assert.That(target.SelectedDailyV1StatusOwner.Statuses.Any(status =>
+                ReferenceEquals(status, selectedEffect)), Is.True,
+                "The target effect must be committed to the exact Core owner named by the slot payload.");
+            Assert.That(actor.SelectedDailyV1StatusOwner.Statuses.Any(status =>
+                ReferenceEquals(status, selectedEffect)), Is.False,
+                "The target effect must not be redirected to the actor owner.");
+            Assert.That(actor.SelectedRuntimeOwners.CrimeJusticeRevision,
+                Is.EqualTo(actorStatusRevisionBefore),
+                "A targeted status write must not revise the actor's unrelated status owner.");
+            Assert.That(target.SelectedRuntimeOwners.CrimeJusticeRevision,
+                Is.EqualTo(targetStatusRevisionBefore + 1L),
+                "A targeted status write must revise its exact Core owner once.");
+            Assert.That(target.SelectedDailyV1StatusOwner.Statuses.Single(value =>
+                value.DefinitionId == effectStatus.DefinitionId), Is.SameAs(selectedEffect));
+            Assert.That(actor.CurrentActionRuntime, Is.Null,
+                "The stale Unity projection must be detached while its committed Core action slot remains authoritative.");
+            Assert.That(actor.SelectedRuntimeOwners.ActionSlot.CurrentAction, Is.SameAs(selectedAction));
+            Assert.That(actor.SelectedRuntimeOwners.ActionSlot.CurrentPayload, Is.SameAs(payload));
+            Assert.That(runtime.ExecutionBoundaryState.MutationEpochState.CurrentEpoch,
+                Is.EqualTo(mutationEpochBefore + 1L),
+                "The successful Core target-status write must invalidate the runtime capture epoch once.");
+            Assert.That(output.Any(message => message.Contains("escolheu")
+                && message.Contains(staleTargetAlias.NpcName)), Is.False,
+                "The target log must not name a runtime object that only aliases the Core target RuntimeId.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(config);
+            UnityEngine.Object.DestroyImmediate(normalWithTargetEffect);
+            UnityEngine.Object.DestroyImmediate(effectStatus);
+        }
+    }
+
+    [Test]
+    public void PartialPlannedNpcTradeDispatchFaultsP12Admission()
+    {
+        EconomyTransactionService transactionService = new EconomyTransactionService();
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            null,
+            economyTransactionService: transactionService,
+            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            worldId: new WorldId(Guid.NewGuid()));
+        transactionService.BindP12CensusRuntime(runtime);
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
+
+        DailyV1SelectedNpcTradeCommitResult partialTrade =
+            new DailyV1SelectedNpcTradeCommitResult(false,
+                DailyV1SelectedNpcTradeFailure.PartialCommit, partialCommit: true,
+                buyerAccountMutationCount: 1, sellerAccountMutationCount: 1,
+                sellerInventoryMutationCount: 1);
+        DailyV1SelectedActionExecutionStage.PlannedNpcSaleResult sale =
+            new DailyV1SelectedActionExecutionStage.PlannedNpcSaleResult(
+                false, false, 0, 0f, false, false, partialTrade, null);
+        DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult plannedSale =
+            new DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult(
+                false, true, sale);
+        DailyV1SelectedActionDispatchResult dispatch = new DailyV1SelectedActionDispatchResult(
+            DailyV1SelectedActionDispatchKind.PlannedNpcSale,
+            actionRollSucceeded: true,
+            succeeded: false,
+            plannedNpcSale: plannedSale);
+
+        MethodInfo complete = typeof(SimulationRuntime).GetMethod(
+            "CompleteSelectedActionDispatch", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(complete, Is.Not.Null);
+        NpcActionResult result = (NpcActionResult)complete.Invoke(runtime,
+            new object[] { null, null, null, dispatch });
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    [TestCase(NpcActionType.Hide, false)]
+    [TestCase(NpcActionType.EscapePrison, true)]
+    public void SelectedCrimeDispatchCompletesAndPreservesEscapeSummaryLog(
+        NpcActionType actionType,
+        bool expectsEscapeSummary)
+    {
+        List<string> output = new List<string>();
+        SimulationLogger selectedLogger = new SimulationLogger(
+            new SimulationLogSettings(),
+            Path.GetTempPath(),
+            (_, message) => output.Add(message));
+        SimulationRuntime runtime = new SimulationRuntime(
+            new SimulationTime(),
+            null,
+            null,
+            logger: selectedLogger);
+        NpcRuntime npc = new NpcRuntime(
+            "selected-crime-dispatch",
+            SimulationTestFactory.CreateNpc("selected-crime-dispatch"));
+        NpcActionData action = SimulationTestFactory.CreateAction(
+            "selected-crime-dispatch-action", actionType, NpcActionCategory.Crime);
+        DailyV1SelectedActionDispatchResult dispatch = new DailyV1SelectedActionDispatchResult(
+            DailyV1SelectedActionDispatchKind.Crime,
+            actionRollSucceeded: true,
+            succeeded: true,
+            crime: new DailyV1SelectedCrimeActionExecutionStage.Result(
+                actionRollSucceeded: true, succeeded: true));
+
+        MethodInfo complete = typeof(SimulationRuntime).GetMethod(
+            "CompleteSelectedActionDispatch", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(complete, Is.Not.Null);
+        NpcActionResult result = (NpcActionResult)complete.Invoke(runtime,
+            new object[] { npc, null, action, dispatch });
+
+        Assert.That(result.Success, Is.True);
+        if (expectsEscapeSummary)
+        {
+            Assert.That(output, Is.EqualTo(new[]
+            {
+                "selected-crime-dispatch display esta livre e nao possui mandado ativo."
+            }));
+        }
+        else
+        {
+            Assert.That(output, Is.Empty,
+                "Hide publishes its own transition output and must not receive the Escape summary.");
+        }
+    }
+
+    [Test]
     public void DailyProfileScopesAdvancesAndRoutesOwnedClockThroughRuntime()
     {
-        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
-        NpcRuntime npc = new NpcRuntime("npc-admission", SimulationTestFactory.CreateNpc("admission"));
-        NpcActionData action = SimulationTestFactory.CreateAction("admission-travel", NpcActionType.Travel);
-        action.baseUtility = 1f;
-        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
-
+        SimulationTime time = new SimulationTime();
+        CityRuntime city = SimulationTestFactory.CreateCity("daily-profile-clock-city", "daily-profile-clock-location");
+        NpcRuntime npc = new NpcRuntime("npc-admission", SimulationTestFactory.CreateNpc("admission"), city, 0f);
+        NpcActionData[] actions = CreatePositiveNormalProbeActions("admission-probe", npc);
         SimulationRuntime runtime = null;
+        RecordFixture records = null;
         int operationObservations = 0;
         bool reentrantClockWasRejected = false;
         SimulationTimeAdvanceFailure reentrantClockFailure = SimulationTimeAdvanceFailure.None;
-        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        AdmissionProbeRandomSource randomSource = new AdmissionProbeRandomSource(npc.RuntimeId, () =>
         {
             Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
             Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
             reentrantClockWasRejected = !records.Time.TryAdvanceDay(out reentrantClockFailure);
             operationObservations++;
         });
-        runtime = new SimulationRuntime(
-            records.Time,
-            null,
-            new[] { npc },
-            economyEnabled: false,
-            configuredActions: new[] { action },
-            npcDecisionSystem: new NpcDecisionSystem(new System.Collections.Generic.List<INpcActionProvider> { provider }),
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: new WorldId(Guid.NewGuid()));
-        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
+            time,
+            "daily-profile-clock-owner-profile",
+            cities: new[] { city },
+            npcs: new[] { npc },
+            configuredActions: actions,
+            decisionSystemFactory: (selectedRecords, selectedTravel, merchant) =>
+                new NpcDecisionSystem(new List<INpcActionProvider>(), randomSource));
+        records = profile.Records;
+        runtime = profile.Runtime;
+        Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True,
+            "The selected-profile clock test must publish its complete world before advancing it.");
 
-        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure before), Is.True, before.ToString());
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure before), Is.True,
+            "The published selected-profile fixture must begin with a valid census: " + before);
         Assert.That(records.Time.TryAdvanceDay(out SimulationTimeAdvanceFailure directClockFailure), Is.True,
-            directClockFailure.ToString());
+            "The runtime-owned clock must dispatch the selected daily core: " + directClockFailure);
         Assert.That(runtime.CurrentDay, Is.EqualTo(1L), "the runtime-owned clock dispatches a complete day advance");
         Assert.That(operationObservations, Is.EqualTo(1));
         Assert.That(reentrantClockWasRejected, Is.True);
         Assert.That(reentrantClockFailure, Is.EqualTo(SimulationTimeAdvanceFailure.RuntimeFaulted));
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure afterDirectClock), Is.True,
-            afterDirectClock.ToString());
+            "The runtime must remain assessable after direct clock dispatch: " + afterDirectClock);
 
         Assert.That(runtime.TryAdvanceDays(0, out int zeroDaysAdvanced, out SimulationRuntimeAdvanceFailure zeroFailure), Is.True);
         Assert.That(zeroDaysAdvanced, Is.Zero);
@@ -78,7 +788,7 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(invalidFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.InvalidDayCount));
 
         Assert.That(runtime.TryAdvanceDays(2, out int daysAdvanced, out SimulationRuntimeAdvanceFailure batchFailure), Is.True,
-            batchFailure.ToString());
+            "The runtime must retain clock ownership for a batch after direct clock dispatch: " + batchFailure);
         Assert.That(daysAdvanced, Is.EqualTo(2));
         Assert.That(runtime.CurrentDay, Is.EqualTo(3L));
         Assert.That(operationObservations, Is.EqualTo(3), "one outer scope covers each full multi-day batch");
@@ -102,7 +812,6 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(
             out _, out DailyCaptureEligibilityFailure stillNoBoundary), Is.False);
         Assert.That(stillNoBoundary, Is.EqualTo(DailyCaptureEligibilityFailure.NoCompletedBoundary));
-
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvance), Is.True,
             firstAdvance.ToString());
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(
@@ -148,6 +857,11 @@ public sealed class SimulationRuntimeAdmissionTests
     public void UnadmittedRestoredOwnerVectorCaptureIsReadOnlyAndQuiescent()
     {
         SimulationRuntime runtime = CreateUnpublishedDailyCaptureRuntime(new SimulationTime(8L));
+        DailyV1ExecutionBoundaryState executionState = runtime.ExecutionBoundaryState;
+        ContinuationCensusProtocol registeredProtocol =
+            ReadPrivateField<ContinuationCensusProtocol>(runtime, "npcRosterCensusProtocol");
+        Assert.That(executionState.SelectedRuntimeOwnerCensusSourceIdentity, Is.SameAs(executionState));
+        Assert.That(registeredProtocol.IsBoundTo(executionState), Is.True);
 
         Assert.That(runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
             out IReadOnlyList<OwnerSectionCensusSnapshot> first,
@@ -178,17 +892,49 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void CompatibilityHostPortKeepsP12FRowsUntilExactCoreOwnerGraphIsBound()
+    {
+        SimulationRuntime runtime = CreateUnpublishedDailyCaptureRuntime(new SimulationTime(8L));
+        Assert.That(runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                out IReadOnlyList<OwnerSectionCensusSnapshot> fullVector,
+                out long expectedEpoch,
+                out ContinuationCensusFailure fullFailure), Is.True, fullFailure.ToString());
+
+        IDailyV1SelectedRuntimeAdvanceHostPorts hostPorts =
+            (IDailyV1SelectedRuntimeAdvanceHostPorts)runtime;
+        Assert.That(hostPorts.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                out IReadOnlyList<OwnerSectionCensusSnapshot> hostRemainder,
+                out long observedEpoch,
+                out string diagnostic), Is.True, diagnostic);
+        Assert.That(observedEpoch, Is.EqualTo(expectedEpoch));
+        DailyV1ExecutionBoundaryState executionState =
+            ReadPrivateField<DailyV1ExecutionBoundaryState>(runtime, "dailyExecutionBoundary");
+        Assert.That(executionState.SelectedRuntimeOwnerGraph, Is.Null,
+            "This compatibility runtime has not yet been injected with an exact Core owner graph.");
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.CoreOwnedSelectedRuntimeSectionIds.All(
+            sectionId => hostRemainder.Any(section => section.SectionId == sectionId)), Is.True,
+            "The host retains Core-selected rows while the runtime lacks its exact owner graph.");
+        Assert.That(hostRemainder.Count, Is.EqualTo(fullVector.Count),
+            "The Unity host retains P12-F witnesses until the same owners are bound into Core.");
+        for (int i = 0; i < fullVector.Count; i++)
+        {
+            Assert.That(hostRemainder[i].SectionId, Is.EqualTo(fullVector[i].SectionId));
+            Assert.That(hostRemainder[i].OwnerInstanceIdentity, Is.SameAs(fullVector[i].OwnerInstanceIdentity));
+            Assert.That(hostRemainder[i].Cardinality, Is.EqualTo(fullVector[i].Cardinality));
+            Assert.That(hostRemainder[i].Revision, Is.EqualTo(fullVector[i].Revision));
+        }
+    }
+
+    [Test]
     public void UnadmittedRestoredOwnerVectorCaptureRejectsActiveAdvanceAndWrongThread()
     {
-        NpcActionData action = SimulationTestFactory.CreateAction("restore-vector-probe", NpcActionType.Travel);
-        action.baseUtility = 1f;
         NpcRuntime npc = new NpcRuntime("restore-vector-probe", SimulationTestFactory.CreateNpc("restore-vector-probe"));
-        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+        NpcActionData[] actions = CreatePositiveNormalProbeActions("restore-vector-probe-action", npc);
 
         SimulationRuntime runtime = null;
         bool capturedDuringAdvance = true;
         ContinuationCensusFailure advanceCaptureFailure = ContinuationCensusFailure.None;
-        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        AdmissionProbeRandomSource randomSource = new AdmissionProbeRandomSource(npc.RuntimeId, () =>
         {
             capturedDuringAdvance = runtime.TryCaptureUnadmittedRestoredDailyOwnerVector(
                 out _, out _, out advanceCaptureFailure);
@@ -196,8 +942,8 @@ public sealed class SimulationRuntimeAdmissionTests
         runtime = CreatePublishedDailyCaptureRuntime(
             new SimulationTime(),
             new[] { npc },
-            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
-            new[] { action });
+            new NpcDecisionSystem(new List<INpcActionProvider>(), randomSource),
+            actions);
 
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
             advanceFailure.ToString());
@@ -403,14 +1149,12 @@ public sealed class SimulationRuntimeAdmissionTests
     [Test]
     public void CompletedDailyTokenIsUnavailableDuringCallbacksAndBatchPublishesOnlyOnceAtReturn()
     {
-        NpcActionData action = SimulationTestFactory.CreateAction("daily-token-probe", NpcActionType.Travel);
-        action.baseUtility = 1f;
         NpcRuntime npc = new NpcRuntime("npc-daily-token-probe", SimulationTestFactory.CreateNpc("daily-token-probe"));
-        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+        NpcActionData[] actions = CreatePositiveNormalProbeActions("daily-token-probe-action", npc);
 
         SimulationRuntime runtime = null;
         int callbackCount = 0;
-        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        AdmissionProbeRandomSource randomSource = new AdmissionProbeRandomSource(npc.RuntimeId, () =>
         {
             Assert.That(runtime.TryGetCompletedDailyCaptureToken(
                 out _, out DailyCaptureEligibilityFailure failure), Is.False);
@@ -420,8 +1164,8 @@ public sealed class SimulationRuntimeAdmissionTests
         runtime = CreatePublishedDailyCaptureRuntime(
             new SimulationTime(),
             new[] { npc },
-            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
-            new[] { action });
+            new NpcDecisionSystem(new List<INpcActionProvider>(), randomSource),
+            actions);
 
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstFailure), Is.True,
             firstFailure.ToString());
@@ -440,14 +1184,12 @@ public sealed class SimulationRuntimeAdmissionTests
     [Test]
     public void PartialBatchExceptionKeepsOnlyNormallyCompletedCoreSequenceAndIssuesNoToken()
     {
-        NpcActionData action = SimulationTestFactory.CreateAction("daily-token-throw", NpcActionType.Travel);
-        action.baseUtility = 1f;
         NpcRuntime npc = new NpcRuntime("npc-daily-token-throw", SimulationTestFactory.CreateNpc("daily-token-throw"));
-        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+        NpcActionData[] actions = CreatePositiveNormalProbeActions("daily-token-throw-action", npc);
 
         SimulationRuntime runtime = null;
         int callbackCount = 0;
-        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        AdmissionProbeRandomSource randomSource = new AdmissionProbeRandomSource(npc.RuntimeId, () =>
         {
             callbackCount++;
             if (callbackCount == 2) throw new InvalidOperationException("injected second-day callback failure");
@@ -455,8 +1197,8 @@ public sealed class SimulationRuntimeAdmissionTests
         runtime = CreatePublishedDailyCaptureRuntime(
             new SimulationTime(),
             new[] { npc },
-            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
-            new[] { action });
+            new NpcDecisionSystem(new List<INpcActionProvider>(), randomSource),
+            actions);
 
         Assert.Throws<InvalidOperationException>(() => runtime.TryAdvanceDays(
             2, out _, out SimulationRuntimeAdvanceFailure _));
@@ -511,7 +1253,8 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(faulted, Is.EqualTo(DailyCaptureEligibilityFailure.RuntimeFaulted));
 
         SimulationRuntime overflowRuntime = CreatePublishedDailyCaptureRuntime(new SimulationTime());
-        WritePrivateField(overflowRuntime, "completedDailyCoreSequence", long.MaxValue - 2L);
+        object overflowBoundary = ReadPrivateField<object>(overflowRuntime, "dailyExecutionBoundary");
+        WritePrivateField(overflowBoundary, "completedCoreSequence", long.MaxValue - 2L);
         Assert.That(overflowRuntime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure finalAvailableAdvance), Is.True,
             finalAvailableAdvance.ToString());
         Assert.That(overflowRuntime.TryGetCompletedDailyCaptureToken(
@@ -577,16 +1320,14 @@ public sealed class SimulationRuntimeAdmissionTests
     [Test]
     public void CompletedDailyTokenRejectsFinalCensusMismatchAfterCompletedBatchCores()
     {
-        NpcActionData action = SimulationTestFactory.CreateAction("daily-token-final-census", NpcActionType.Travel);
-        action.baseUtility = 1f;
         NpcRuntime npc = new NpcRuntime("npc-daily-token-final-census", SimulationTestFactory.CreateNpc("final-census"));
-        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+        NpcActionData[] actions = CreatePositiveNormalProbeActions("daily-token-final-census-action", npc);
 
         SimulationRuntime runtime = null;
         ContinuationCensusProtocol protocol = null;
         int callbackCount = 0;
         bool removedSection = false;
-        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        AdmissionProbeRandomSource randomSource = new AdmissionProbeRandomSource(npc.RuntimeId, () =>
         {
             callbackCount++;
             if (callbackCount != 2) return;
@@ -607,8 +1348,8 @@ public sealed class SimulationRuntimeAdmissionTests
         runtime = CreatePublishedDailyCaptureRuntime(
             new SimulationTime(),
             new[] { npc },
-            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
-            new[] { action });
+            new NpcDecisionSystem(new List<INpcActionProvider>(), randomSource),
+            actions);
         protocol = ReadPrivateField<ContinuationCensusProtocol>(runtime, "npcRosterCensusProtocol");
 
         bool advanced = runtime.TryAdvanceDays(
@@ -632,29 +1373,35 @@ public sealed class SimulationRuntimeAdmissionTests
     [Test]
     public void CompletedDailyTokenIsNotPublishedAfterOperationScopeDisposalFault()
     {
-        NpcActionData action = SimulationTestFactory.CreateAction("daily-token-scope-disposal", NpcActionType.Travel);
-        action.baseUtility = 1f;
         NpcRuntime npc = new NpcRuntime("npc-daily-token-scope-disposal", SimulationTestFactory.CreateNpc("scope-disposal"));
-        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = action, baseUtility = 1f });
+        NpcActionData[] actions = CreatePositiveNormalProbeActions("daily-token-scope-disposal-action", npc);
 
         SimulationRuntime runtime = null;
         ContinuationCensusProtocol protocol = null;
+        DailyV1ExecutionBoundaryState executionBoundaryState = null;
         int callbackCount = 0;
-        AdmissionProbeActionProvider provider = new AdmissionProbeActionProvider(action, () =>
+        bool endedSharedProtocolOperation = false;
+        AdmissionProbeRandomSource randomSource = new AdmissionProbeRandomSource(npc.RuntimeId, () =>
         {
             callbackCount++;
-            WritePrivateField(protocol, "activeOperationCount", 0);
+            MethodInfo endProtocolOperation = typeof(DailyV1ExecutionBoundaryState).GetMethod(
+                "TryEndRuntimeProtocolOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            if (endProtocolOperation != null && executionBoundaryState != null)
+                endedSharedProtocolOperation = (bool)endProtocolOperation.Invoke(executionBoundaryState, null);
         });
         runtime = CreatePublishedDailyCaptureRuntime(
             new SimulationTime(),
             new[] { npc },
-            new NpcDecisionSystem(new List<INpcActionProvider> { provider }),
-            new[] { action });
+            new NpcDecisionSystem(new List<INpcActionProvider>(), randomSource),
+            actions);
         protocol = ReadPrivateField<ContinuationCensusProtocol>(runtime, "npcRosterCensusProtocol");
+        executionBoundaryState = ReadPrivateField<DailyV1ExecutionBoundaryState>(protocol, "sharedExecutionState");
 
         bool advanced = runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure failure);
 
         Assert.That(callbackCount, Is.EqualTo(1));
+        Assert.That(endedSharedProtocolOperation, Is.True,
+            "The test must remove the shared protocol scope before its matching scope object is disposed.");
         Assert.That(advanced, Is.False);
         Assert.That(failure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(runtime.CurrentDay, Is.EqualTo(1L), "the domain core completed before scope disposal detected the accounting fault");
@@ -751,7 +1498,7 @@ public sealed class SimulationRuntimeAdmissionTests
             "runtime.person.residence-bind",
             "runtime.person.parentage"
         };
-        HashSet<string> registeredOperations = ReadPrivateField<HashSet<string>>(protocol, "expectedOperations");
+        IReadOnlyCollection<string> registeredOperations = protocol.RegisteredOperationContractIds;
         CollectionAssert.AreEquivalent(operationIds, registeredOperations,
             "the probes must cover the full currently registered Daily-v1 operation inventory");
 
@@ -793,6 +1540,247 @@ public sealed class SimulationRuntimeAdmissionTests
                 operationId + ": " + afterScopeFailure);
         }
     }
+    [Test]
+    public void SelectedSoloTravelProjectsEachArrivalBeforeP12CensusInvalidation()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject simulationObject = new GameObject("daily-selected-travel-p12-projection-order");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+        simulation.Start();
+
+        SimulationRuntime runtime = simulation.Runtime;
+        Assert.That(runtime, Is.Not.Null);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialCensus), Is.True,
+            initialCensus.ToString());
+
+        IGrouping<CityRuntime, NpcRuntime> sourceGroup = runtime.NpcRuntimes
+            .Where(npc => npc != null && npc.IsAlive && !npc.IsTraveling && npc.CurrentCity != null)
+            .GroupBy(npc => npc.CurrentCity)
+            .Where(group => group.Count() >= 2)
+            .OrderBy(group => group.Key.RuntimeId, StringComparer.Ordinal)
+            .FirstOrDefault();
+        Assert.That(sourceGroup, Is.Not.Null,
+            "The arrival regression needs two selected NPC owners sharing one origin City.");
+        NpcRuntime[] travelers = sourceGroup.OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal)
+            .Take(2).ToArray();
+        Assert.That(travelers, Has.Length.EqualTo(2),
+            "The accepted Daily-v1 profile supplies two independent selected NPC owners for the arrival witness.");
+
+        CityRuntime commonDestination = runtime.Cities.FirstOrDefault(city =>
+            city != null && city.Location != null
+            && !ReferenceEquals(city, sourceGroup.Key));
+        Assert.That(commonDestination, Is.Not.Null,
+            "The arrival regression uses one destination City shared by both selected travel owners.");
+        Dictionary<NpcRuntime, CityRuntime> destinations = new Dictionary<NpcRuntime, CityRuntime>();
+        foreach (NpcRuntime npc in travelers)
+        {
+            CityRuntime destination = commonDestination;
+            Assert.That(StartSelectedTravelForAdmissionTest(
+                    runtime, npc, destination, 1, "p12-selected-arrival-" + npc.RuntimeId), Is.True,
+                "Starting travel must use the selected Core owner and admitted P12 boundary.");
+            destinations.Add(npc, destination);
+        }
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure departureCensus), Is.True,
+            departureCensus.ToString());
+
+        TravelSystem travelSystem = ReadPrivateField<TravelSystem>(runtime, "travelSystem");
+        MethodInfo advanceSelectedSoloTravels = typeof(TravelSystem).GetMethod(
+            "TryAdvanceSelectedSoloTravels", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(travelSystem, Is.Not.Null);
+        Assert.That(advanceSelectedSoloTravels, Is.Not.Null);
+
+        object[] arguments = { runtime.SelectedRuntimeOwnerGraph, runtime.NpcRuntimes.ToList(), null };
+        Assert.That(AdvanceSelectedSoloTravelsForAdmissionTest(
+                runtime, travelSystem, advanceSelectedSoloTravels, arguments), Is.True,
+            "The first boundary clears the established TravelStartedToday marker.");
+        Assert.That(arguments[2] as IReadOnlyList<NpcRuntime>, Is.Empty);
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure clearedCensus), Is.True,
+            clearedCensus.ToString());
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochBeforeArrivals, out ContinuationCensusFailure epochBeforeFailure), Is.True,
+            epochBeforeFailure.ToString());
+
+        Dictionary<NpcRuntime, OwnerSectionCensusWitness> spatialWitnessesBefore =
+            new Dictionary<NpcRuntime, OwnerSectionCensusWitness>();
+        Dictionary<NpcRuntime, bool> destinationKnownBefore = new Dictionary<NpcRuntime, bool>();
+        foreach (NpcRuntime npc in travelers)
+        {
+            IOwnerSectionCensusProvider locationsProvider = runtime.SpatialKnowledgeCensusProviders.Single(provider =>
+                string.Equals(provider.GetCurrentCensus().SectionId,
+                    SpatialKnowledgeCensusProvider.LocationsSectionPrefix + npc.RuntimeId,
+                    StringComparison.Ordinal));
+            OwnerSectionCensusWitness locations = locationsProvider.GetCurrentCensus();
+            Assert.That(locations.OwnerInstanceIdentity, Is.SameAs(npc.SpatialKnowledge));
+            spatialWitnessesBefore.Add(npc, locations);
+            destinationKnownBefore.Add(npc,
+                npc.SpatialKnowledge.KnowsLocation(commonDestination.Location.RuntimeId));
+        }
+
+        RuntimeIdAllocator runtimeIdAllocator = ReadPrivateField<RuntimeIdAllocator>(runtime, "runtimeIdAllocator");
+        SimulationRecordSequence recordSequence = ReadPrivateField<SimulationRecordSequence>(runtime, "simulationRecordSequence");
+        Assert.That(travelSystem, Is.Not.Null);
+        Assert.That(runtimeIdAllocator, Is.Not.Null);
+        Assert.That(recordSequence, Is.Not.Null);
+        DomainEventRecorder eventRecorder = ReadPrivateField<DomainEventRecorder>(travelSystem, "domainEventRecorder");
+        Assert.That(eventRecorder, Is.Not.Null);
+        DomainEventStore domainEventStore = ReadPrivateField<DomainEventStore>(eventRecorder, "eventStore");
+        Assert.That(domainEventStore, Is.Not.Null);
+        IOwnerSectionCensusProvider eventCounterProvider =
+            RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(runtimeIdAllocator);
+        SimulationRecordSequenceCensusProvider sequenceProvider =
+            new SimulationRecordSequenceCensusProvider(recordSequence);
+        long eventCounterBefore = eventCounterProvider.GetCurrentCensus().Revision;
+        long recordSequenceBefore = sequenceProvider.GetCurrentCensus().Revision;
+        int eventCountBefore = domainEventStore.Events.Count;
+        Dictionary<CityRuntime, long> cityPresenceRevisions = runtime.Cities.ToDictionary(
+            city => city, city => city.SelectedRuntimeOwners.NpcPresence.Revision);
+
+        arguments = new object[] { runtime.SelectedRuntimeOwnerGraph, runtime.NpcRuntimes.ToList(), null };
+        Assert.That(AdvanceSelectedSoloTravelsForAdmissionTest(
+                runtime, travelSystem, advanceSelectedSoloTravels, arguments), Is.True,
+            "Each arrival must project reciprocal Core/Unity presence before its P12 census notification and before the next NPC commits.");
+        IReadOnlyList<NpcRuntime> arrivals = arguments[2] as IReadOnlyList<NpcRuntime>;
+        Assert.That(arrivals, Has.Count.EqualTo(2));
+        foreach (NpcRuntime npc in travelers)
+        {
+            Assert.That(npc.CurrentCity, Is.SameAs(destinations[npc]));
+            Assert.That(destinations[npc].ContainsImportantNpc(npc), Is.True);
+            Assert.That(npc.HasConsistentSelectedTravelState, Is.True);
+        }
+        foreach (CityRuntime city in runtime.Cities)
+        {
+            long expectedArrivals = ReferenceEquals(city, commonDestination) ? travelers.Length : 0L;
+            Assert.That(city.SelectedRuntimeOwners.NpcPresence.Revision,
+                Is.EqualTo(cityPresenceRevisions[city] + expectedArrivals),
+                "Only the shared destination presence owner advances, exactly once for each committed arrival.");
+        }
+
+        long discoveryMutations = 0L;
+        foreach (NpcRuntime npc in travelers)
+        {
+            string locationsSectionId = SpatialKnowledgeCensusProvider.LocationsSectionPrefix + npc.RuntimeId;
+            string routesSectionId = SpatialKnowledgeCensusProvider.RoutesSectionPrefix + npc.RuntimeId;
+            IOwnerSectionCensusProvider locationsProvider = runtime.SpatialKnowledgeCensusProviders.Single(provider =>
+                string.Equals(provider.GetCurrentCensus().SectionId, locationsSectionId, StringComparison.Ordinal));
+            IOwnerSectionCensusProvider routesProvider = runtime.SpatialKnowledgeCensusProviders.Single(provider =>
+                string.Equals(provider.GetCurrentCensus().SectionId, routesSectionId, StringComparison.Ordinal));
+            OwnerSectionCensusWitness locationsAfter = locationsProvider.GetCurrentCensus();
+            OwnerSectionCensusWitness routesAfter = routesProvider.GetCurrentCensus();
+            long expectedDiscoveryRevision = spatialWitnessesBefore[npc].Revision
+                + (destinationKnownBefore[npc] ? 0L : 1L);
+            Assert.That(locationsAfter.OwnerInstanceIdentity, Is.SameAs(npc.SpatialKnowledge));
+            Assert.That(routesAfter.OwnerInstanceIdentity, Is.SameAs(npc.SpatialKnowledge));
+            Assert.That(locationsAfter.Revision, Is.EqualTo(expectedDiscoveryRevision),
+                "The selected arrival discovers only a previously unknown destination on its exact Core owner.");
+            Assert.That(routesAfter.Revision, Is.EqualTo(expectedDiscoveryRevision),
+                "Location and route sections share the exact SpatialKnowledge owner revision.");
+            Assert.That(locationsAfter.Cardinality,
+                Is.EqualTo(spatialWitnessesBefore[npc].Cardinality + (destinationKnownBefore[npc] ? 0 : 1)));
+            discoveryMutations += destinationKnownBefore[npc] ? 0L : 1L;
+        }
+
+        long eventCounterAfter = eventCounterProvider.GetCurrentCensus().Revision;
+        long recordSequenceAfter = sequenceProvider.GetCurrentCensus().Revision;
+        Assert.That(eventCounterAfter - eventCounterBefore, Is.EqualTo(arrivals.Count),
+            "Each arrival event uses the registered Event-ID counter owner once.");
+        Assert.That(recordSequenceAfter - recordSequenceBefore, Is.EqualTo(arrivals.Count),
+            "Each arrival event uses the registered record-sequence owner once.");
+        Assert.That(domainEventStore.Events.Count - eventCountBefore, Is.EqualTo(arrivals.Count));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochAfterArrivals, out ContinuationCensusFailure epochAfterFailure), Is.True,
+            epochAfterFailure.ToString());
+        Assert.That(epochAfterArrivals, Is.EqualTo(epochBeforeArrivals
+            + arrivals.Count // one travel-state + City-presence commit vector per NPC
+            + discoveryMutations
+            + (eventCounterAfter - eventCounterBefore)
+            + (recordSequenceAfter - recordSequenceBefore)),
+            "The shared P12 epoch advances once for each committed owner vector, including arrival knowledge and event identities.");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure arrivalCensus), Is.True,
+            arrivalCensus.ToString(),
+            "A fresh census assessment proves every exact per-NPC spatial section baseline accepted the committed owner revision.");
+    }
+
+    [Test]
+    public void SelectedSoloTravelUsesCoreDestinationPresenceInsteadOfStaleUnityCache()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject simulationObject = new GameObject("daily-selected-travel-destination-preflight");
+        simulationObjects.Add(simulationObject);
+        TesteSimulacao simulation = simulationObject.AddComponent<TesteSimulacao>();
+        typeof(TesteSimulacao).GetField("simulationConfig", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, config);
+        typeof(TesteSimulacao).GetField("runtimeAdmissionProfile", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(simulation, SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
+        simulation.Start();
+
+        SimulationRuntime runtime = simulation.Runtime;
+        NpcRuntime traveler = runtime.NpcRuntimes
+            .Where(npc => npc != null && npc.IsAlive && !npc.IsTraveling && npc.CurrentCity != null)
+            .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal)
+            .FirstOrDefault();
+        Assert.That(traveler, Is.Not.Null);
+        CityRuntime destination = runtime.Cities.First(city =>
+            city != null && city.Location != null && !ReferenceEquals(city, traveler.CurrentCity));
+        Assert.That(StartSelectedTravelForAdmissionTest(
+            runtime, traveler, destination, 2, "p12-destination-preflight"), Is.True);
+
+        TravelSystem travelSystem = ReadPrivateField<TravelSystem>(runtime, "travelSystem");
+        MethodInfo advanceSelectedSoloTravels = typeof(TravelSystem).GetMethod(
+            "TryAdvanceSelectedSoloTravels", BindingFlags.Instance | BindingFlags.NonPublic);
+        object[] arguments = { runtime.SelectedRuntimeOwnerGraph, runtime.NpcRuntimes.ToList(), null };
+        Assert.That(AdvanceSelectedSoloTravelsForAdmissionTest(
+                runtime, travelSystem, advanceSelectedSoloTravels, arguments), Is.True,
+            "The first boundary clears TravelStartedToday before testing the next travel day.");
+        Assert.That(traveler.TravelDaysRemaining, Is.EqualTo(2));
+
+        FieldInfo membershipField = typeof(CityRuntime).GetField("importantNpcs",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(membershipField, Is.Not.Null);
+        List<NpcRuntime> destinationProjection = (List<NpcRuntime>)membershipField.GetValue(destination);
+        Assert.That(destinationProjection, Is.Not.Null);
+        Assert.That(destinationProjection.Contains(traveler), Is.False);
+        destinationProjection.Add(traveler);
+        Assert.That(ReadPrivateField<object>(destination, "selectedRuntimeOwners"), Is.Not.Null);
+        Assert.That(destination.ImportantNpcs.Contains(traveler), Is.False,
+            "Selected City presence is projected from its Core owner, not the legacy Unity membership cache.");
+        Assert.That(destination.SelectedRuntimeOwners.NpcPresence.Contains(traveler.RuntimeId), Is.False);
+        Assert.That(traveler.SelectedRuntimeOwners.Travel.DestinationCityRuntimeId,
+            Is.EqualTo(destination.RuntimeId));
+
+        long travelRevision = traveler.SelectedRuntimeOwners.Travel.Revision;
+        long destinationPresenceRevision = destination.SelectedRuntimeOwners.NpcPresence.Revision;
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long mutationEpoch, out ContinuationCensusFailure epochFailure), Is.True,
+            epochFailure.ToString());
+        arguments = new object[] { runtime.SelectedRuntimeOwnerGraph, runtime.NpcRuntimes.ToList(), null };
+        Assert.That(AdvanceSelectedSoloTravelsForAdmissionTest(
+                runtime, travelSystem, advanceSelectedSoloTravels, arguments), Is.True,
+            "The stale Unity cache is not an authoritative travel precondition.");
+        Assert.That(arguments[2] as IReadOnlyList<NpcRuntime>, Is.Empty,
+            "A non-arrival must not report an arrival even when the ignored cache contains the traveler.");
+        Assert.That(traveler.TravelDaysRemaining, Is.EqualTo(1),
+            "The Core travel owner advances when the only inconsistency is in the discarded legacy City cache.");
+        Assert.That(traveler.SelectedRuntimeOwners.Travel.Revision, Is.EqualTo(travelRevision + 1L));
+        Assert.That(destination.SelectedRuntimeOwners.NpcPresence.Revision,
+            Is.EqualTo(destinationPresenceRevision));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long mutationEpochAfter, out ContinuationCensusFailure epochFailureAfter), Is.True,
+            epochFailureAfter.ToString());
+        Assert.That(mutationEpochAfter, Is.EqualTo(mutationEpoch + 1L),
+            "The accepted travel-state owner mutation invalidates the P12 census epoch once.");
+        Assert.That(traveler.CurrentCity, Is.Null);
+        Assert.That(traveler.DestinationCity, Is.SameAs(destination));
+    }
+
     [Test]
     public void DailyProfileAdmissionAcceptsExactInitialSpatialIdentityAndLegacyNetworkCardinalities()
     {
@@ -922,12 +1910,13 @@ public sealed class SimulationRuntimeAdmissionTests
         RecordFixture records = SimulationTestFactory.CreateRecordFixture();
         EconomyTransactionService economyTransactionService = new EconomyTransactionService();
         object owner = receiptOwner == "decision"
-            ? (object)records.DecisionRecorder
-            : economyTransactionService;
-        string stateField = receiptOwner == "decision" ? "occurrenceReceipts" : "keyedSaleReceipts";
-        object collection = owner.GetType()
-            .GetField(stateField, BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(owner);
+            ? GetDecisionOccurrenceReceiptAuthority(records.DecisionRecorder)
+            : GetEconomyKeyedSaleReceiptOwner(economyTransactionService);
+        const string stateField = "receipts";
+        FieldInfo state = owner.GetType().GetField(
+            stateField, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(state, Is.Not.Null);
+        object collection = state.GetValue(owner);
         if (collection is System.Collections.IDictionary dictionary)
             dictionary.Add("p12-exact-zero-receipt-test", null);
         else
@@ -970,14 +1959,10 @@ public sealed class SimulationRuntimeAdmissionTests
             initialFailure.ToString());
 
         object owner = receiptOwner == "decision"
-            ? (object)records.DecisionRecorder
-            : economyTransactionService;
-        string stateField = receiptOwner == "decision"
-            ? "occurrenceReceipts"
-            : "keyedSaleReceipts";
-        string revisionField = receiptOwner == "decision"
-            ? "occurrenceReceiptsRevision"
-            : "keyedSaleReceiptsRevision";
+            ? GetDecisionOccurrenceReceiptAuthority(records.DecisionRecorder)
+            : GetEconomyKeyedSaleReceiptOwner(economyTransactionService);
+        const string stateField = "receipts";
+        const string revisionField = "revision";
         if (driftKind == "revision")
         {
             FieldInfo revision = owner.GetType().GetField(
@@ -1001,6 +1986,26 @@ public sealed class SimulationRuntimeAdmissionTests
 
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure driftFailure), Is.False);
         Assert.That(driftFailure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+    }
+
+    private static object GetEconomyKeyedSaleReceiptOwner(EconomyTransactionService service)
+    {
+        FieldInfo ownerField = typeof(EconomyTransactionService).GetField(
+            "keyedSaleReceipts", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(ownerField, Is.Not.Null);
+        object owner = ownerField.GetValue(service);
+        Assert.That(owner, Is.Not.Null);
+        return owner;
+    }
+
+    private static object GetDecisionOccurrenceReceiptAuthority(NpcDecisionRecorder recorder)
+    {
+        FieldInfo ownerField = typeof(NpcDecisionRecorder).GetField(
+            "receiptAuthority", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(ownerField, Is.Not.Null);
+        object authority = ownerField.GetValue(recorder);
+        Assert.That(authority, Is.Not.Null);
+        return authority;
     }
 
     [TestCase("wrong-section")]
@@ -1081,6 +2086,79 @@ public sealed class SimulationRuntimeAdmissionTests
         }
     }
 
+    private sealed class SelectedMerchantDailyTradeProtocolStub
+        : IDailyV1SelectedP12MerchantDailyTradeProtocol
+    {
+        private sealed class Scope : IDisposable
+        {
+            private readonly SelectedMerchantDailyTradeProtocolStub owner;
+            private bool disposed;
+
+            internal Scope(SelectedMerchantDailyTradeProtocolStub owner) => this.owner = owner;
+
+            public void Dispose()
+            {
+                if (disposed) return;
+                disposed = true;
+                owner.DisposeCount++;
+            }
+        }
+
+        internal bool AcceptOwnerBindings = true;
+        internal int FaultCount;
+        internal int EnterCount;
+        internal int DisposeCount;
+        internal string[] ValidatedSectionIds;
+        internal readonly List<string[]> Notifications = new List<string[]>();
+
+        public bool TryValidateOwnerSections(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            IReadOnlyList<string> sectionIds)
+        {
+            if (graph == null || actor == null || sectionIds == null
+                || !graph.ContainsExactNpcOwner(actor) || sectionIds.Count != 7)
+                return false;
+            string[] expected =
+            {
+                DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind, actor.RuntimeId),
+                DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + actor.RuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + actor.RuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix + actor.RuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix + actor.RuntimeId,
+                DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix + actor.RuntimeId
+            };
+            HashSet<string> expectedSet = new HashSet<string>(expected, StringComparer.Ordinal);
+            HashSet<string> actualSet = new HashSet<string>(sectionIds, StringComparer.Ordinal);
+            if (expectedSet.Count != 7 || actualSet.Count != 7 || !expectedSet.SetEquals(actualSet))
+                return false;
+            ValidatedSectionIds = new List<string>(sectionIds).ToArray();
+            return AcceptOwnerBindings;
+        }
+
+        public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
+            sectionIds != null && sectionIds.Count > 0;
+
+        public bool TryEnterOperation(out IDisposable operationScope)
+        {
+            EnterCount++;
+            operationScope = new Scope(this);
+            return true;
+        }
+
+        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds)
+        {
+            if (sectionIds == null) return false;
+            Notifications.Add(new List<string>(sectionIds).ToArray());
+            return true;
+        }
+
+        public void FaultClosed() => FaultCount++;
+    }
+
     [Test]
     public void DailyKnowledgeWritersRefreshOwnerBaselinesBeforeMerchantRosterCall()
     {
@@ -1112,14 +2190,14 @@ public sealed class SimulationRuntimeAdmissionTests
             null,
             time,
             null);
-        SimulationRuntime runtime = new SimulationRuntime(
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
             time,
-            new[] { city },
-            new[] { merchant },
-            merchantSystem: merchantSystem,
+            "p12-merchant-daily-profile",
+            cities: new[] { city },
+            npcs: new[] { merchant },
             configuration: configuration,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: new WorldId(Guid.NewGuid()));
+            merchantSystem: merchantSystem);
+        SimulationRuntime runtime = profile.Runtime;
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
 
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
@@ -1143,6 +2221,150 @@ public sealed class SimulationRuntimeAdmissionTests
             assessment.ToString());
     }
 
+    [Test]
+    public void SelectedMerchantCoreHostPassAdmitsSevenRowsAndPublishesOneCensusEpoch()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+
+        GameObject hostObject = new GameObject("P12 Core-owned selected Merchant operation");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+
+        SimulationTime simulationTime = ReadPrivateField<SimulationTime>(runtime, "simulationTime");
+        MerchantSystem merchantSystem = new MerchantSystem(
+            new EffectiveMerchantTradeConfiguration(enabled: true),
+            new EffectiveCommercialKnowledgeConfiguration(), null, simulationTime, null);
+        FieldInfo merchantField = typeof(SimulationRuntime).GetField(
+            "merchantSystem", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(merchantField, Is.Not.Null);
+        merchantField.SetValue(runtime, merchantSystem);
+
+        NpcRuntime merchant = null;
+        ItemData item = null;
+        DailyV1ItemDefinition itemDefinition = null;
+        foreach (NpcRuntime candidate in runtime.NpcRuntimes)
+        {
+            if (candidate == null || !candidate.HasJobType(NpcJobType.Merchant)
+                || candidate.CurrentCity == null) continue;
+            ItemData candidateItem = candidate.CurrentCity.Market?.Items
+                .Select(row => row?.Item).FirstOrDefault(value => value != null);
+            if (candidateItem == null
+                || !candidate.TryGetSelectedDailyV1Item(candidateItem, out DailyV1ItemDefinition candidateDefinition))
+                continue;
+            merchant = candidate;
+            item = candidateItem;
+            itemDefinition = candidateDefinition;
+            break;
+        }
+        Assert.That(merchant, Is.Not.Null,
+            "The accepted bootstrap fixture must expose a selected Merchant with a bound market item.");
+        Assert.That(itemDefinition, Is.Not.Null);
+        DailyV1NpcRuntimeOwners actor = merchant.SelectedRuntimeOwners;
+        Assert.That(actor, Is.Not.Null);
+        Assert.That(graph.ContainsExactNpcOwner(actor), Is.True);
+
+        DailyV1ExecutionBoundaryState executionState = ReadPrivateField<DailyV1ExecutionBoundaryState>(
+            runtime, "dailyExecutionBoundary");
+        Assert.That(executionState, Is.Not.Null);
+        Assert.That(executionState.TryCreateSelectedP12MerchantDailyTradeSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        Assert.That(sectionIds, Has.Count.EqualTo(7));
+        CollectionAssert.AreEquivalent(new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanKind, actor.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId),
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix + actor.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix + actor.RuntimeId
+        }, sectionIds);
+
+        MethodInfo createHostPorts = typeof(SimulationRuntime).GetMethod(
+            "TryCreateSelectedDailyV1ActorTurnHostPorts",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(createHostPorts, Is.Not.Null);
+        object[] hostPortArguments = { graph, null };
+        Assert.That((bool)createHostPorts.Invoke(runtime, hostPortArguments), Is.True);
+        IDailyV1SelectedActorTurnHostPorts hostPorts =
+            hostPortArguments[1] as IDailyV1SelectedActorTurnHostPorts;
+        Assert.That(hostPorts, Is.Not.Null);
+        IDailyV1SelectedActorActionExecutionBoundary coreActionBoundary =
+            hostPorts as IDailyV1SelectedActorActionExecutionBoundary;
+        Assert.That(coreActionBoundary, Is.Not.Null,
+            "The selected SimulationRuntime actor-turn adapter must opt into Core-owned action selection and dispatch.");
+        Assert.That(coreActionBoundary.UsesSelectedDailyV1ActionExecution(actor), Is.True,
+            "Only the exact admitted actor owner is routed through Core's selected action stage.");
+        IDailyV1ActorTurnExecutionBoundary actorTurnBoundary =
+            hostPorts as IDailyV1ActorTurnExecutionBoundary;
+        Assert.That(actorTurnBoundary, Is.Not.Null);
+        long actionSlotRevisionBeforeHostFallback = actor.ActionSlot.Revision;
+        Assert.Throws<InvalidOperationException>(
+            () => actorTurnBoundary.EvaluateAndExecuteAction(actor),
+            "The selected Unity adapter must not fall back to Unity-owned action selection or execution.");
+        Assert.That(actor.ActionSlot.Revision, Is.EqualTo(actionSlotRevisionBeforeHostFallback),
+            "Rejecting a host-owned action callback must leave the exact Core action owner unchanged.");
+        Assert.That(DailyV1CoreSelectedMerchantTradeStateBoundary.TryCreate(
+            graph, null, hostPorts, out DailyV1CoreSelectedMerchantTradeStateBoundary merchantBoundary), Is.True);
+
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long beforeEpoch, out ContinuationCensusFailure beforeFailure), Is.True, beforeFailure.ToString());
+        long beforeRevision = actor.MerchantTradePlan.Revision;
+        Assert.That(hostPorts.ExecuteWithinSelectedMerchantDailyOperation(
+            actor,
+            () => merchantBoundary.TryInstallPlanState(
+                actor, itemDefinition, merchant.CurrentCity.RuntimeId, merchant.CurrentCity.RuntimeId,
+                2, 2, item.basePrice, 0, 0, "selected-core-merchant-scope-origin")), Is.True);
+        Assert.That(actor.MerchantTradePlan.Revision, Is.EqualTo(beforeRevision + 1));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long afterEpoch, out ContinuationCensusFailure afterFailure), Is.True, afterFailure.ToString());
+        Assert.That(afterEpoch, Is.EqualTo(beforeEpoch + 1),
+            "the production host projection must publish the selected Merchant owner change once at Core scope exit");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.True,
+            assessment.ToString());
+
+        long stableRevision = actor.MerchantTradePlan.Revision;
+        long stableEpoch = afterEpoch;
+        Assert.That(hostPorts.ExecuteWithinSelectedMerchantDailyOperation(
+            actor,
+            () => merchantBoundary.TryInstallPlanState(
+                actor, itemDefinition, merchant.CurrentCity.RuntimeId, merchant.CurrentCity.RuntimeId,
+                2, 2, item.basePrice, 0, 0, "selected-core-merchant-scope-origin")), Is.True);
+        Assert.That(actor.MerchantTradePlan.Revision, Is.EqualTo(stableRevision));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long noOpEpoch, out ContinuationCensusFailure noOpFailure), Is.True, noOpFailure.ToString());
+        Assert.That(noOpEpoch, Is.EqualTo(stableEpoch), "an idempotent no-op must not publish another epoch");
+
+        SelectedMerchantDailyTradeProtocolStub staleProtocol = new SelectedMerchantDailyTradeProtocolStub
+        {
+            AcceptOwnerBindings = false
+        };
+        Assert.That(executionState.ExecuteSelectedP12MerchantDailyTrade(
+            graph, actor, staleProtocol, () => true), Is.False);
+        Assert.That(staleProtocol.FaultCount, Is.EqualTo(1));
+        Assert.That(staleProtocol.Notifications, Is.Empty);
+
+        SelectedMerchantDailyTradeProtocolStub partialProtocol = new SelectedMerchantDailyTradeProtocolStub();
+        Assert.That(executionState.ExecuteSelectedP12MerchantDailyTrade(
+            graph, actor, partialProtocol,
+            () => executionState.TryCanCommitSelectedP12MerchantDailyTradeMutation(
+                new[] { DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + actor.RuntimeId },
+                out bool handled) && handled), Is.False);
+        Assert.That(partialProtocol.FaultCount, Is.EqualTo(1));
+        Assert.That(partialProtocol.Notifications, Is.Empty);
+    }
     [Test]
     public void DirectPlanOwnerCommitsOutsideMerchantOperationRefreshTheirBaselinesImmediately()
     {
@@ -1809,16 +3031,12 @@ public sealed class SimulationRuntimeAdmissionTests
             "p12-daily-market-production-city",
             cityData,
             new SpatialLocationRuntime("p12-daily-market-production-location"));
-        SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(),
-            new[] { city },
-            new NpcRuntime[0],
-            economyEnabled: true,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: new WorldId(Guid.NewGuid()));
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
+            "p12-daily-market-production-profile",
+            cities: new[] { city },
+            economyEnabled: true);
+        SimulationRuntime runtime = profile.Runtime;
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
-        EconomyTransactionService service = new EconomyTransactionService();
-        BindP12CensusRuntime(service, runtime);
         long initialMarketRevision = city.Market.Revision;
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
             Is.True, beforeFailure.ToString());
@@ -1847,16 +3065,12 @@ public sealed class SimulationRuntimeAdmissionTests
             "p12-daily-free-consumption-city",
             cityData,
             new SpatialLocationRuntime("p12-daily-free-consumption-location"));
-        SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(),
-            new[] { city },
-            new NpcRuntime[0],
-            economyEnabled: true,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: new WorldId(Guid.NewGuid()));
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
+            "p12-daily-free-consumption-profile",
+            cities: new[] { city },
+            economyEnabled: true);
+        SimulationRuntime runtime = profile.Runtime;
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
-        EconomyTransactionService service = new EconomyTransactionService();
-        BindP12CensusRuntime(service, runtime);
         long initialMarketRevision = city.Market.Revision;
         Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(out long before, out ContinuationCensusFailure beforeFailure),
             Is.True, beforeFailure.ToString());
@@ -1884,16 +3098,12 @@ public sealed class SimulationRuntimeAdmissionTests
             "p12-daily-price-refresh-city",
             cityData,
             new SpatialLocationRuntime("p12-daily-price-refresh-location"));
-        SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(),
-            new[] { city },
-            new NpcRuntime[0],
-            economyEnabled: true,
-            runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
-            worldId: new WorldId(Guid.NewGuid()));
+        DailyV1SelectedProfileFixture profile = DailyV1SelectedProfileFixture.Create(
+            "p12-daily-price-refresh-profile",
+            cities: new[] { city },
+            economyEnabled: true);
+        SimulationRuntime runtime = profile.Runtime;
         Assert.That(runtime.TryMarkWorldPublishedForFactualRead(), Is.True);
-        EconomyTransactionService service = new EconomyTransactionService();
-        BindP12CensusRuntime(service, runtime);
         long initialMarketRevision = city.Market.Revision;
         Assert.That(city.Market.GetPrice(item), Is.EqualTo(5f));
         item.basePrice = 6f;
@@ -2093,8 +3303,11 @@ public sealed class SimulationRuntimeAdmissionTests
         ContinuationCensusProtocol protocol = (ContinuationCensusProtocol)typeof(SimulationRuntime)
             .GetField("npcRosterCensusProtocol", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(runtime);
-        typeof(ContinuationCensusProtocol).GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(protocol, long.MaxValue);
+        object mutationEpochState = typeof(ContinuationCensusProtocol)
+            .GetField("mutationEpochState", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(protocol);
+        mutationEpochState.GetType().GetField("epoch", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(mutationEpochState, long.MaxValue);
 
         EconomyTransactionResult result = service.TryExecuteNpcTrade(buyer, seller, item, 2, 10f);
 
@@ -2108,6 +3321,20 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(seller.Inventory.GetAmount(item), Is.EqualTo(3));
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure assessment), Is.False);
         Assert.That(assessment, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    [Test]
+    public void SelectedSharedCensusProtocolReadsCoreOwnedFaultLatch()
+    {
+        SimulationRuntime runtime = CreateUnpublishedDailyCaptureRuntime(new SimulationTime());
+        DailyV1ExecutionBoundaryState state =
+            ReadPrivateField<DailyV1ExecutionBoundaryState>(runtime, "dailyExecutionBoundary");
+
+        state.MarkSelectedRuntimeCensusProtocolFaulted();
+
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted),
+            "A fault latched by the Core execution boundary is authoritative to the shared census protocol.");
     }
 
     [Test]
@@ -2265,11 +3492,16 @@ public sealed class SimulationRuntimeAdmissionTests
         }
 
         Assert.That(runtime.CurrentDay, Is.EqualTo(1L));
+        Assert.That(runtime.ExecutionBoundaryState.ActiveOperationCount, Is.Zero,
+            "The outer DailyAdvance scope closes when an admitted day-stage operation throws.");
+        Assert.That(runtime.ExecutionBoundaryState.ActiveRuntimeOperationCount, Is.Zero,
+            "The inner P12 runtime.advance-day scope also closes on the exception path.");
         Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.False);
         Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
         Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retryFailure), Is.False);
         Assert.That(retryFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
         Assert.That(runtime.CurrentDay, Is.EqualTo(1L));
+        Assert.That(runtime.ExecutionBoundaryState.ActiveOperationCount, Is.Zero);
     }
 
     [Test]
@@ -2653,8 +3885,11 @@ public sealed class SimulationRuntimeAdmissionTests
             bootstrap.Start();
 
             Assert.That(bootstrap.Bootstrap, Is.Not.Null);
-            Assert.That(ReadPrivateField<Thread>(bootstrap, "bootstrapStartThread"), Is.SameAs(Thread.CurrentThread));
-            Assert.That(ReadPrivateField<int>(bootstrap, "bootstrapStartThreadId"), Is.EqualTo(Thread.CurrentThread.ManagedThreadId));
+            SimulationRuntimeAdmissionContext admissionContext =
+                ReadPrivateField<SimulationRuntimeAdmissionContext>(bootstrap, "runtimeAdmissionContext");
+            Assert.That(admissionContext, Is.Not.Null);
+            Assert.That(admissionContext.ExpectedOwnerThread, Is.SameAs(Thread.CurrentThread));
+            Assert.That(admissionContext.ExpectedOwnerThreadId, Is.EqualTo(Thread.CurrentThread.ManagedThreadId));
             Assert.That(bootstrap.Runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure failure), Is.True,
                 failure.ToString());
 
@@ -2679,12 +3914,110 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(bootstrap.Bootstrap, Is.SameAs(activeSession.Composition),
                 "Rejected admission must keep the original active-session reference authoritative.");
 
+            DailyV1SelectedRuntimeOwnerGraph selectedOwnerGraph = bootstrap.Runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(selectedOwnerGraph, Is.Not.Null);
+            Dictionary<string, long> actionRevisionsBefore = selectedOwnerGraph.Npcs.ToDictionary(
+                owner => owner.RuntimeId,
+                owner => owner.ActionSlot.Revision,
+                StringComparer.Ordinal);
+
+            IDailyV1SelectedRuntimeAdvanceHostPorts preAdvanceHostPorts =
+                (IDailyV1SelectedRuntimeAdvanceHostPorts)bootstrap.Runtime;
+            Assert.That(preAdvanceHostPorts.TryCaptureOwnerSectionCensus(
+                    DailyV1CaptureScopeAllowance.None,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> initialHostSections,
+                    out _, out DailyCaptureEligibilityFailure initialHostCaptureFailure),
+                Is.True, "Initial host remainder capture: " + initialHostCaptureFailure);
+            Assert.That(initialHostSections, Is.Not.Null);
+            IOwnerSectionCensusProvider[] initialKnowledgeAndPlanProviders = DailyV1NpcOwnerCensusProviders
+                .CreateKnowledgeAndPlanProviders(selectedOwnerGraph)
+                .ToArray();
+            Assert.That(initialKnowledgeAndPlanProviders,
+                Has.Length.EqualTo(selectedOwnerGraph.Npcs.Count * 9));
+            foreach (IOwnerSectionCensusProvider provider in initialKnowledgeAndPlanProviders)
+            {
+                OwnerSectionCensusWitness expected = provider.GetCurrentCensus();
+                OwnerSectionCensusSnapshot captured = initialHostSections.Single(
+                    section => section.SectionId == expected.SectionId);
+                Assert.That(captured.OwnerInstanceIdentity, Is.SameAs(expected.OwnerInstanceIdentity),
+                    "The Unity census returns the source identity for Core to validate: " + expected.SectionId);
+                Assert.That(captured.Cardinality, Is.EqualTo(expected.Cardinality));
+                Assert.That(captured.Revision, Is.EqualTo(expected.Revision));
+            }
+
             bootstrap.Runtime.AdvanceDay();
             Assert.That(bootstrap.TryPublishRestoredSession(activeSession, activeSession), Is.False,
                 "A normal completed advance cannot be relabeled as restored-continuation admission.");
             Assert.That(bootstrap.Runtime.TryGetCompletedDailyCaptureToken(
                 out DailyCaptureEligibilityToken completedToken,
                 out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
+            Assert.That(DailyV1SelectedOwnerSectionCensusContract.IsStructurallyCompleteSnapshot(
+                completedToken.OwnerSections), Is.True,
+                "The completed Core boundary still publishes the structurally complete selected owner vector.");
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                    .TryGetExactCoreOwnedNpcRuntimeStateSectionIds(
+                        completedToken.OwnerSections,
+                        selectedOwnerGraph,
+                        out IReadOnlyList<string> exactRuntimeStateSectionIds,
+                        out string runtimeStateDiagnostic),
+                Is.True, runtimeStateDiagnostic);
+            Assert.That(DailyV1SelectedRuntimeOwnerCensusSource
+                    .TryGetExactCoreOwnedNpcKnowledgeAndPlanSectionIds(
+                        completedToken.OwnerSections,
+                        selectedOwnerGraph,
+                        out IReadOnlyList<string> exactNpcKnowledgeAndPlanSectionIds,
+                        out string knowledgeAndPlanDiagnostic),
+                Is.True, knowledgeAndPlanDiagnostic);
+            Assert.That(exactNpcKnowledgeAndPlanSectionIds,
+                Is.EquivalentTo(initialKnowledgeAndPlanProviders.Select(
+                    provider => provider.GetCurrentCensus().SectionId)));
+            IDailyV1SelectedRuntimeAdvanceHostPorts selectedHostPorts =
+                (IDailyV1SelectedRuntimeAdvanceHostPorts)bootstrap.Runtime;
+            Assert.That(selectedHostPorts.TryCaptureOwnerSectionCensus(
+                    DailyV1CaptureScopeAllowance.None,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> hostCensus,
+                    out long hostMutationEpoch,
+                    out DailyCaptureEligibilityFailure hostCaptureFailure),
+                Is.True, hostCaptureFailure.ToString());
+            Assert.That(hostMutationEpoch, Is.EqualTo(completedToken.MutationEpoch));
+            Assert.That(hostCensus, Has.Count.EqualTo(completedToken.OwnerSections.Count),
+                "The Unity host returns the complete source vector unchanged; Core owns selected-row classification.");
+            string currentActionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix;
+            Assert.That(hostCensus.Count(section =>
+                    section.SectionId.StartsWith(currentActionPrefix, StringComparison.Ordinal)),
+                Is.EqualTo(selectedOwnerGraph.Npcs.Count),
+                "The raw Unity census retains all source CurrentAction rows for Core to validate.");
+            Dictionary<string, OwnerSectionCensusSnapshot> hostRowsById = hostCensus.ToDictionary(
+                section => section.SectionId, StringComparer.Ordinal);
+            Assert.That(hostRowsById, Has.Count.EqualTo(hostCensus.Count));
+            foreach (OwnerSectionCensusSnapshot original in completedToken.OwnerSections)
+            {
+                Assert.That(hostRowsById.TryGetValue(original.SectionId, out OwnerSectionCensusSnapshot hostSection),
+                    Is.True, "The full host source vector retains " + original.SectionId);
+                Assert.That(hostSection.Role, Is.EqualTo(original.Role), original.SectionId);
+                Assert.That(hostSection.SchemaVersion, Is.EqualTo(original.SchemaVersion), original.SectionId);
+                Assert.That(hostSection.OwnerInstanceIdentity, Is.SameAs(original.OwnerInstanceIdentity), original.SectionId);
+                Assert.That(hostSection.Cardinality, Is.EqualTo(original.Cardinality), original.SectionId);
+                Assert.That(hostSection.Revision, Is.EqualTo(original.Revision), original.SectionId);
+            }
+            DailyV1NpcRuntimeOwners changedActionOwner = selectedOwnerGraph.Npcs.FirstOrDefault(owner =>
+                actionRevisionsBefore.TryGetValue(owner.RuntimeId, out long previousRevision)
+                && owner.ActionSlot.Revision > previousRevision);
+            Assert.That(changedActionOwner, Is.Not.Null,
+                "The authored Daily-v1 day changes at least one Core current-action owner.");
+            OwnerSectionCensusSnapshot actionOwnerSection = completedToken.OwnerSections.Single(section =>
+                section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+                    + changedActionOwner.RuntimeId);
+            Assert.That(actionOwnerSection.Role, Is.EqualTo(OwnerSectionRole.Required));
+            Assert.That(actionOwnerSection.OwnerInstanceIdentity, Is.SameAs(changedActionOwner),
+                "The captured current-action row must identify the same selected Core NPC owner instance.");
+            Assert.That(actionOwnerSection.Cardinality,
+                Is.EqualTo(changedActionOwner.ActionSlot.CurrentAction == null ? 0 : 1));
+            Assert.That(actionOwnerSection.Revision, Is.EqualTo(changedActionOwner.ActionSlot.Revision),
+                "The completed P12 row must carry the committed Core action-slot revision.");
+            Assert.That(bootstrap.Runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure postActionCensusFailure), Is.True,
+                postActionCensusFailure.ToString());
             Assert.That(completedToken.BoundaryProvenance, Is.EqualTo(DailyCaptureBoundaryProvenance.CompletedAdvance),
                 "A rejected exchange must leave the source completed-boundary behavior intact.");
             Assert.That(bootstrap.Bootstrap, Is.SameAs(activeSession.Composition));
@@ -2756,16 +4089,48 @@ public sealed class SimulationRuntimeAdmissionTests
                 Assert.That(activeOwner.TryPublishRestoredSession(sourceSession, candidateSession), Is.False,
                     "A restored session must not exchange while an owner operation is in flight.");
                 Assert.That(activeOwner.Bootstrap, Is.SameAs(sourceSession.Composition));
-                Assert.That(sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True,
-                    "Rejected exchange must leave the source boundary and active reference unchanged.");
+                Assert.That(ReadPrivateField<SimulationActiveSession>(activeOwner, "activeSession"),
+                    Is.SameAs(sourceSession),
+                    "Rejected exchange must leave the active-session reference unchanged.");
             }
             finally
             {
-                endOperation.Invoke(activeOwner, null);
+                endOperation.Invoke(activeOwner, new[] { Enum.ToObject(
+                    endOperation.GetParameters()[0].ParameterType, 0) });
             }
 
-            Assert.That(activeOwner.TryPublishRestoredSession(sourceSession, candidateSession), Is.True,
-                "An admitted restored candidate may publish at an idle owner-thread boundary.");
+            Assert.That(sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True,
+                "Rejected exchange must preserve the source completed boundary after the operation closes.");
+
+            Assert.That(activeOwner.TryPublishRestoredSession(sourceSession, candidateSession), Is.False,
+                "A Core restored replacement cannot publish without its exclusive owner-thread reservation.");
+
+            object application = ReadPrivateField<object>(activeOwner, "dailyV1Application");
+            PropertyInfo coreSessionProperty = typeof(SimulationActiveSession).GetProperty(
+                "CoreRuntimeSession", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(coreSessionProperty, Is.Not.Null);
+            object sourceCoreSession = coreSessionProperty.GetValue(sourceSession);
+            MethodInfo beginExclusive = application.GetType().GetMethod(
+                "TryBeginExclusiveOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginExclusive, Is.Not.Null);
+            object[] exclusiveArguments = { sourceCoreSession, null };
+            Assert.That((bool)beginExclusive.Invoke(application, exclusiveArguments), Is.True,
+                "The exact active Core session must be exclusively reserved before replacement.");
+            object exclusiveOperation = exclusiveArguments[1];
+            Assert.That(exclusiveOperation, Is.Not.Null);
+            MethodInfo commitRestored = typeof(TesteSimulacao).GetMethod(
+                "TryPublishRestoredSession",
+                BindingFlags.Instance | BindingFlags.NonPublic,
+                null,
+                new[] { typeof(SimulationActiveSession), typeof(SimulationActiveSession), exclusiveOperation.GetType() },
+                null);
+            Assert.That(commitRestored, Is.Not.Null);
+            using ((IDisposable)exclusiveOperation)
+            {
+                Assert.That((bool)commitRestored.Invoke(
+                    activeOwner, new[] { sourceSession, candidateSession, exclusiveOperation }), Is.True,
+                    "An admitted restored candidate may publish under its exact idle owner-thread reservation.");
+            }
             Assert.That(ReadPrivateField<SimulationActiveSession>(activeOwner, "activeSession"), Is.SameAs(candidateSession));
             Assert.That(activeOwner.Bootstrap, Is.SameAs(candidateSession.Composition));
             Assert.That(activeOwner.Runtime, Is.SameAs(candidateSession.Runtime));
@@ -2996,6 +4361,21 @@ public sealed class SimulationRuntimeAdmissionTests
                     npc => npc != null && npc.PersonId == expectedTerminalChoice.PersonId);
                 Assert.That(sourceMerchant.NpcData?.DefinitionId, Is.EqualTo("PEDRO"),
                     "The success path must use the authored Daily-v1 merchant rather than introducing a new NPC.");
+                string selectedDecisionId = expectedTerminalChoice.Dispositions[0].DecisionRecordId;
+                Assert.That(selectedDecisionId, Is.Not.Null.And.Not.Empty,
+                    "A successful actor choice must retain its Core decision identity at dispatch.");
+                Assert.That(sourceMerchant.CurrentActionRuntime, Is.Not.Null,
+                    "The selected Unity action projection remains installed after its successful attempt.");
+                Assert.That(sourceMerchant.CurrentActionRuntime.OriginDecisionId,
+                    Is.EqualTo(selectedDecisionId),
+                    "The Unity projection must be refreshed with the exact Core-allocated decision identity before slot admission.");
+                Assert.That(sourceMerchant.CurrentActionRuntime.MatchesSelectedOwner(), Is.True,
+                    "The installed Unity action projection must still match the exact selected Core payload.");
+                NpcDecisionRecord selectedDecision = sourceSession.Composition.Decisions.Decisions.Single(
+                    decision => decision != null && decision.DecisionId == selectedDecisionId);
+                Assert.That(selectedDecision.Origin, Is.EqualTo(NpcDecisionOrigin.ActorChoice));
+                Assert.That(selectedDecision.ActionDefinitionId,
+                    Is.EqualTo(expectedTerminalChoice.ActionDefinitionId));
             }
             else
             {
@@ -3357,6 +4737,8 @@ public sealed class SimulationRuntimeAdmissionTests
             long sourceRevisionBeforeRequest = sourceSession.Runtime.ActorChoiceStore.CensusRevision;
             long sourceSequenceBeforeRequest = sourceSession.Runtime.ActorChoiceStore.NextInputSequence;
             int sourceCountBeforeRequest = sourceSession.Runtime.ActorChoiceStore.Count;
+            long sourceMutationEpochBeforeRequest =
+                sourceSession.Runtime.ExecutionBoundaryState.MutationEpochState.CurrentEpoch;
             Assert.That(sourceCountBeforeRequest, Is.Zero);
             OwnerSectionCensusSnapshot p11AtCompletedBoundary = sourceCompletedBoundary.OwnerSections.Single(
                 section => section.SectionId == ActorChoiceP11CensusProvider.SectionId);
@@ -3393,6 +4775,9 @@ public sealed class SimulationRuntimeAdmissionTests
                 Is.EqualTo(sourceRevisionBeforeRequest + 1L));
             Assert.That(sourceSession.Runtime.ActorChoiceStore.NextInputSequence,
                 Is.EqualTo(sourceSequenceBeforeRequest + 1L));
+            Assert.That(sourceSession.Runtime.ExecutionBoundaryState.MutationEpochState.CurrentEpoch,
+                Is.EqualTo(sourceMutationEpochBeforeRequest + 1L),
+                "One admitted P11 ActorChoice input must publish exactly one selected census epoch.");
             OwnerSectionCensusWitness p11WitnessAfterRequest =
                 sourceSession.Composition.ActorChoiceInputCensusProvider.GetCurrentCensus();
             Assert.That(p11WitnessAfterRequest.SectionId, Is.EqualTo(ActorChoiceP11CensusProvider.SectionId));
@@ -3545,15 +4930,18 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceFirst),
                 Is.True, sourceFirst.ToString());
 
-            NpcData lateNpcDefinition = SimulationTestFactory.CreateNpc("p12g-dynamic-roster-late-npc");
             string sourceLateNpcId = sourceSession.Composition.RuntimeIdAllocator.AllocateNpcId();
             string controlLateNpcId = controlSession.Composition.RuntimeIdAllocator.AllocateNpcId();
             Assert.That(sourceLateNpcId, Is.EqualTo(controlLateNpcId));
+            NpcRuntime sourceTemplate = sourceSession.Runtime.NpcRuntimes[0];
+            NpcRuntime controlTemplate = controlSession.Runtime.NpcRuntimes[0];
+            NpcRuntime sourceLateNpc = CreateSelectedDailyV1RosterMember(sourceTemplate, sourceLateNpcId);
+            NpcRuntime controlLateNpc = CreateSelectedDailyV1RosterMember(controlTemplate, controlLateNpcId);
             Assert.That(sourceSession.Runtime.TryRegisterNpc(
-                    new NpcRuntime(sourceLateNpcId, lateNpcDefinition),
+                    sourceLateNpc,
                     out WorldNpcRegistryFailure sourceRegisterFailure), Is.True, sourceRegisterFailure.ToString());
             Assert.That(controlSession.Runtime.TryRegisterNpc(
-                    new NpcRuntime(controlLateNpcId, lateNpcDefinition),
+                    controlLateNpc,
                     out WorldNpcRegistryFailure controlRegisterFailure), Is.True, controlRegisterFailure.ToString());
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceSecond),
                 Is.True, sourceSecond.ToString());
@@ -3566,9 +4954,13 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(sourceGraph, Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, controlToken)),
                 "Equivalent supported roster transitions must produce the same completed-boundary owner graph.");
 
+            List<P12GDailyV1RestoreStage> restoreStages = new List<P12GDailyV1RestoreStage>();
             Assert.That(source.TryRestoreDailyContinuation(
-                    out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic), Is.True,
-                restoreFailure + ": " + restoreDiagnostic);
+                    restoreStages.Add,
+                    out P12GDailyV1RestoreFailure restoreFailure,
+                    out string restoreDiagnostic), Is.True,
+                restoreFailure + ": " + restoreDiagnostic
+                + " Stages: " + string.Join(",", restoreStages));
             SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
             Assert.That(restoredSession.AdmissionContext.IsRestoredContinuation, Is.True);
             DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
@@ -3588,11 +4980,808 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, nextRestoredToken),
                 Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, nextControlToken)),
                 "Identical continuation after restore must preserve deterministic owner-state parity after dynamic roster membership.");
+
+            Assert.That(restoredSession.Runtime.TryUnregisterNpc(
+                    sourceLateNpcId,
+                    out WorldNpcRegistryFailure sourceUnregisterFailure), Is.True,
+                sourceUnregisterFailure.ToString());
+            Assert.That(controlSession.Runtime.TryUnregisterNpc(
+                    controlLateNpcId,
+                    out WorldNpcRegistryFailure controlUnregisterFailure), Is.True,
+                controlUnregisterFailure.ToString());
+            Assert.That(restoredSession.Runtime.HasExactSelectedRuntimeOwnerGraph(
+                    restoredSession.Runtime.SelectedRuntimeOwnerGraph.Definitions), Is.True,
+                "The selected owner graph must track the exact roster after an admitted NPC is removed.");
+            Assert.That(controlSession.Runtime.HasExactSelectedRuntimeOwnerGraph(
+                    controlSession.Runtime.SelectedRuntimeOwnerGraph.Definitions), Is.True);
+
+            Assert.That(restoredSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredAfterRemoval),
+                Is.True, restoredAfterRemoval.ToString());
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlAfterRemoval),
+                Is.True, controlAfterRemoval.ToString());
+            DailyCaptureEligibilityToken restoredAfterRemovalToken = GetCompletedDailyToken(restoredSession.Runtime);
+            DailyCaptureEligibilityToken controlAfterRemovalToken = GetCompletedDailyToken(controlSession.Runtime);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredAfterRemovalToken),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession, controlAfterRemovalToken)),
+                "Removing a dynamic selected owner must preserve deterministic continuation and census parity.");
         }
         finally
         {
             UnityEngine.Object.DestroyImmediate(controlObject);
             UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
+    [Test]
+    public void SelectedCrimeJusticeDailyStagePublishesP12WritesAndUsesWholeRosterCompatibilityFallback()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        Assert.That(config.hiddenStatus, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12 selected Crime Justice daily stage mixed roster");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        NpcRuntime selected = runtime.NpcRuntimes.First(npc => npc != null && npc.UsesSelectedDailyV1Definitions);
+        Assert.That(runtime.HasExactSelectedRuntimeOwnerGraph(graph.Definitions), Is.True);
+        Assert.That(runtime.CrimeSystemForWorldBoundary, Is.Not.Null);
+        Assert.That(runtime.JusticeSystemForWorldBoundary, Is.Not.Null);
+        long selectedOwnerCrimeJusticeRevisionBefore =
+            selected.SelectedRuntimeOwners.CrimeJusticeRevision;
+
+        MethodInfo beginScope = typeof(SimulationRuntime).GetMethod(
+            "TryBeginP12CrimeJusticeActionScope", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(beginScope, Is.Not.Null);
+        object[] scopeArguments = { new[] { selected }, false, null };
+        Assert.That(beginScope.Invoke(runtime, scopeArguments), Is.EqualTo(true));
+        IDisposable selectedMutationScope = scopeArguments[2] as IDisposable;
+        Assert.That(selectedMutationScope, Is.Not.Null);
+        using (selectedMutationScope)
+        {
+            selected.AddStatus(config.hiddenStatus);
+            selected.HideForDays(2);
+        }
+        Assert.That(selected.HiddenDaysRemaining, Is.EqualTo(3));
+        Assert.That(selected.SelectedRuntimeOwners.CrimeJusticeRevision,
+            Is.EqualTo(selectedOwnerCrimeJusticeRevisionBefore + 2L),
+            "Each selected status or hidden-state leaf commit must advance the exact Core owner revision once.");
+
+        NpcRuntime unselected = new NpcRuntime(
+            "p12-selected-crime-justice-unselected-fallback",
+            SimulationTestFactory.CreateNpc("p12-selected-crime-justice-unselected-fallback"));
+        unselected.AddStatus(config.hiddenStatus);
+        unselected.HideForDays(2);
+        Assert.That(unselected.UsesSelectedDailyV1Definitions, Is.False);
+        Assert.That(runtime.TryRegisterNpc(
+                unselected, out WorldNpcRegistryFailure registerFailure), Is.True,
+            registerFailure.ToString());
+        Assert.That(runtime.HasExactSelectedRuntimeOwnerGraph(graph.Definitions), Is.True,
+            "The compatibility NPC must remain outside the selected owner graph.");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialCensusFailure), Is.True,
+            initialCensusFailure.ToString());
+
+        long selectedRevisionBefore = selected.P12CrimeJusticeRevision;
+        long unselectedRevisionBefore = unselected.P12CrimeJusticeRevision;
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochBefore, out ContinuationCensusFailure epochBeforeFailure), Is.True,
+            epochBeforeFailure.ToString());
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.True,
+            advanceFailure.ToString());
+
+        Assert.That(selected.HiddenDaysRemaining, Is.EqualTo(2));
+        Assert.That(unselected.HiddenDaysRemaining, Is.EqualTo(2),
+            "The established Unity Crime stage still traverses every NPC when the roster is mixed.");
+        Assert.That(selected.P12CrimeJusticeRevision, Is.EqualTo(selectedRevisionBefore + 1),
+            "The selected Core owner publishes the committed hidden-day decrement exactly once.");
+        Assert.That(unselected.P12CrimeJusticeRevision, Is.EqualTo(unselectedRevisionBefore + 1),
+            "The legacy compatibility owner publishes the committed hidden-day decrement exactly once.");
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochAfter, out ContinuationCensusFailure epochAfterFailure), Is.True,
+            epochAfterFailure.ToString());
+        Assert.That(epochAfter, Is.GreaterThan(epochBefore));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalCensusFailure), Is.True,
+            finalCensusFailure.ToString());
+
+        IDailyV1SelectedRuntimeAdvanceHostPorts selectedRuntimeHostPorts =
+            (IDailyV1SelectedRuntimeAdvanceHostPorts)runtime;
+        Assert.That(selectedRuntimeHostPorts.TryCaptureOwnerSectionCensus(
+                DailyV1CaptureScopeAllowance.None,
+                out IReadOnlyList<OwnerSectionCensusSnapshot> mixedRosterHostSections,
+                out _,
+                out DailyCaptureEligibilityFailure mixedRosterCaptureFailure),
+            Is.True, mixedRosterCaptureFailure.ToString());
+        Assert.That(mixedRosterHostSections.Count(section =>
+                section.SectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix,
+                    StringComparison.Ordinal)),
+            Is.EqualTo(runtime.NpcRuntimes.Count),
+            "A mixed roster keeps every selected and compatibility Inventory row in the complete host vector.");
+        OwnerSectionCensusSnapshot selectedInventorySection = mixedRosterHostSections.Single(section =>
+            section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + selected.RuntimeId);
+        Assert.That(selectedInventorySection.OwnerInstanceIdentity,
+            Is.SameAs(selected.SelectedRuntimeOwners.Inventory),
+            "Adding a compatibility NPC must retain the selected NPC's exact Core Inventory identity.");
+        OwnerSectionCensusSnapshot unselectedInventorySection = mixedRosterHostSections.Single(section =>
+            section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + unselected.RuntimeId);
+        Assert.That(unselectedInventorySection.OwnerInstanceIdentity,
+            Is.SameAs(unselected.ExistingInventory),
+            "The compatibility NPC keeps its own Unity InventoryRuntime identity.");
+        Assert.That(mixedRosterHostSections.Count(section =>
+                section.SectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
+                    StringComparison.Ordinal)),
+            Is.EqualTo(runtime.NpcRuntimes.Count),
+            "A mixed roster keeps every selected and compatibility MoneyAccount row in the whole-host vector.");
+        string[] knowledgeAndPlanPrefixes =
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcExplorableSiteKnowledgePrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyPlacesPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcLocalTopologyConnectionsPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureOppositionPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureNotableItemsPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureCommonResourcesPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcAdventureAccessPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix,
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanPrefix
+        };
+        foreach (string prefix in knowledgeAndPlanPrefixes)
+        {
+            Assert.That(mixedRosterHostSections.Count(section =>
+                    section.SectionId.StartsWith(prefix, StringComparison.Ordinal)),
+                Is.EqualTo(runtime.NpcRuntimes.Count),
+                "A mixed roster keeps every selected and compatibility Knowledge/Plan row for " + prefix);
+            Assert.That(mixedRosterHostSections.Any(section =>
+                    section.SectionId == prefix + unselected.RuntimeId), Is.True,
+                "The whole-roster compatibility path retains the unselected member for " + prefix);
+        }
+        Assert.That(mixedRosterHostSections.Any(section =>
+                section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix
+                    + unselected.RuntimeId), Is.True);
+        Assert.That(mixedRosterHostSections.Any(section =>
+                section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix
+                    + unselected.RuntimeId), Is.True);
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            Assert.That(mixedRosterHostSections.Any(section =>
+                    section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+                        + npc.RuntimeId), Is.True,
+                "A mixed roster keeps the current-action census row for every selected and compatibility NPC.");
+            Assert.That(mixedRosterHostSections.Any(section =>
+                    section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcLifeStatePrefix
+                        + npc.RuntimeId), Is.True,
+                "A mixed roster keeps the life-state census row for every selected and compatibility NPC.");
+            Assert.That(mixedRosterHostSections.Any(section =>
+                    section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(
+                        npc.RuntimeId)), Is.True,
+                "A mixed roster keeps the crime-state census row for every selected and compatibility NPC.");
+            Assert.That(mixedRosterHostSections.Any(section =>
+                    section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix
+                        + npc.RuntimeId), Is.True,
+                "A mixed roster keeps the travel-state census row for every selected and compatibility NPC.");
+        }
+        Assert.That(mixedRosterHostSections.Count(section =>
+                section.SectionId.StartsWith(
+                    DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix,
+                    StringComparison.Ordinal)),
+            Is.EqualTo(runtime.NpcRuntimes.Count),
+            "The mixed-roster fallback retains CurrentAction rows for the complete compatibility roster.");
+        Assert.That(mixedRosterHostSections.Any(section =>
+                section.SectionId == DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(
+                    unselected.RuntimeId)), Is.True,
+            "The nonmaterialized compatibility NPC retains its Residence census row in the whole-host vector.");
+
+        DailyV1Application application = ReadPrivateField<DailyV1Application>(host, "dailyV1Application");
+        DailyV1ActiveRuntimeSession coreSession = session.CoreRuntimeSession;
+        Assert.That(application, Is.Not.Null);
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            coreSession, out DailyV1P12GContinuationSaveOperation operation,
+            out DailyCaptureEligibilityFailure beginFailure), Is.True, beginFailure.ToString());
+        using (operation)
+        {
+            Assert.That(operation.CoreNpcOwnerSources, Is.Null,
+                "A partial Core graph must not bind a partial D/F vector for a mixed roster.");
+            Assert.That(operation.TryEncodeCoreP12DOwnerSections(
+                    out IReadOnlyList<P12AOwnerSection> coreBoundSections,
+                    out bool includesNpcOwnerSections,
+                    out P12AResult coreOwnerEncodingResult), Is.True,
+                coreOwnerEncodingResult?.SectionCode ?? coreOwnerEncodingResult?.Code.ToString());
+            Assert.That(includesNpcOwnerSections, Is.False,
+                "Mixed rosters must keep every NPC section on the whole-roster Unity compatibility path.");
+            Assert.That(coreBoundSections.Any(section =>
+                    DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes.Any(prefix =>
+                        section.Id.StartsWith(prefix, StringComparison.Ordinal))
+                    || section.Id.StartsWith(
+                        DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix,
+                        StringComparison.Ordinal)), Is.False);
+            DailyCaptureEligibilityToken token = operation.SourceWitness.Token;
+            Assert.That(P12DNpcRootOwnerSnapshot.TryCapture(
+                runtime, token, new object(), operation.SourceWitness.TokenOwnerSections,
+                out P12DNpcDProjection dProjection, out P12DNpcFProjection fProjection,
+                out P12DNpcRootOwnerSnapshotFailure captureFailure,
+                coreBoundNpcOwnerSources: operation.CoreNpcOwnerSources,
+                continuationSaveOperation: operation), Is.True, captureFailure.ToString());
+            Assert.That(dProjection.Rows, Has.Count.EqualTo(runtime.NpcRuntimes.Count));
+            Assert.That(fProjection.Rows, Has.Count.EqualTo(runtime.NpcRuntimes.Count));
+            Assert.That(dProjection.Rows.Single(row => row.RuntimeId == unselected.RuntimeId), Is.Not.Null,
+                "The established compatibility path must capture the unselected member in the same whole roster.");
+
+            List<P12AOwnerSection> adapterNpcSections = new List<P12AOwnerSection>();
+            foreach (P12DNpcDRow dRow in dProjection.Rows)
+            {
+                P12DNpcFRow fRow = fProjection.Rows.Single(row => row.RuntimeId == dRow.RuntimeId);
+                Assert.That(P12ANpcOwnerCodec.TryEncode(dRow, fRow,
+                        operation.SourceWitness.TokenOwnerSections,
+                        out IReadOnlyList<P12AOwnerSection> encodedNpcSections,
+                        out P12AResult npcEncodingResult), Is.True,
+                    npcEncodingResult?.SectionCode ?? npcEncodingResult?.Code.ToString());
+                adapterNpcSections.AddRange(encodedNpcSections);
+            }
+            Assert.That(adapterNpcSections.Any(section =>
+                    section.Id == DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix
+                        + unselected.RuntimeId), Is.True,
+                "The adapter provides a serialized Inventory row for the unselected compatibility NPC.");
+
+            Assert.That(operation.TryEncodeCoreP12EOwnerSections(token.AbsoluteDay,
+                    out IReadOnlyList<P12AOwnerSection> coreP12ESections,
+                    out P12AResult coreP12EEncodingResult), Is.True,
+                coreP12EEncodingResult?.SectionCode ?? coreP12EEncodingResult?.Code.ToString());
+            Assert.That(operation.TryEncodeCoreP12FOwnerSections(
+                    out IReadOnlyList<P12AOwnerSection> coreP12FSections,
+                    out P12AResult coreP12FEncodingResult), Is.True,
+                coreP12FEncodingResult?.SectionCode ?? coreP12FEncodingResult?.Code.ToString());
+            IReadOnlyList<OwnerSectionCensusSnapshot> receiptCensus = operation.SourceWitness.TokenOwnerSections;
+            OwnerSectionCensusSnapshot crimeReceiptCensus = receiptCensus.FirstOrDefault(section =>
+                section.SectionId == DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId);
+            OwnerSectionCensusSnapshot justiceReceiptCensus = receiptCensus.FirstOrDefault(section =>
+                section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+            Assert.That(operation.TryEncodeCoreP12BP18ReceiptSections(
+                    out IReadOnlyList<P12AOwnerSection> ignoredCoreReceiptSections,
+                    out P12AResult coreP12BP18EncodingResult), Is.False,
+                "The mixed-roster Unity runtime must not encode P12-B receipts from a different Core owner identity.");
+            Assert.That(coreP12BP18EncodingResult?.SectionCode,
+                Is.EqualTo("p12b.core-p18-receipt-census-binding"));
+            Assert.That(ignoredCoreReceiptSections, Is.Null);
+            Assert.That(ReferenceEquals(crimeReceiptCensus?.OwnerInstanceIdentity,
+                runtime.CrimeSystemForWorldBoundary), Is.True,
+                "The mixed-roster P12 census retains the exact Unity compatibility CrimeSystem owner.");
+            Assert.That(ReferenceEquals(justiceReceiptCensus?.OwnerInstanceIdentity,
+                runtime.JusticeSystemForWorldBoundary), Is.True,
+                "The mixed-roster P12 census retains the exact Unity compatibility JusticeSystem owner.");
+            Assert.That(runtime.CrimeSystemForWorldBoundary.TryCaptureP12AReceiptOwnerSnapshot(
+                    out P12ACrimeReceiptOwnerSnapshot compatibilityCrimeReceiptSnapshot), Is.True);
+            Assert.That(runtime.JusticeSystemForWorldBoundary.TryCaptureP12AReceiptOwnerSnapshot(
+                    out P12AJusticeReceiptOwnerSnapshot compatibilityJusticeReceiptSnapshot), Is.True);
+            Assert.That(compatibilityCrimeReceiptSnapshot.CensusRevision,
+                Is.EqualTo(crimeReceiptCensus.Revision));
+            Assert.That(compatibilityJusticeReceiptSnapshot.CensusRevision,
+                Is.EqualTo(justiceReceiptCensus.Revision));
+            Assert.That(P12AReceiptOwnerCodec.TryEncode(
+                    compatibilityCrimeReceiptSnapshot, compatibilityJusticeReceiptSnapshot,
+                    out IReadOnlyList<P12AOwnerSection> compatibilityReceiptSections,
+                    out P12AResult compatibilityReceiptEncodingResult), Is.True,
+                compatibilityReceiptEncodingResult?.SectionCode
+                    ?? compatibilityReceiptEncodingResult?.Code.ToString());
+            List<P12AOwnerSection> adapterEncodedSections = new List<P12AOwnerSection>(adapterNpcSections);
+            adapterEncodedSections.AddRange(compatibilityReceiptSections);
+            Assert.That(DailyV1Application.TryMergeCoreOwnedContinuationSections(
+                    coreBoundSections, coreP12ESections, coreP12FSections,
+                    Array.Empty<P12AOwnerSection>(), adapterEncodedSections,
+                    out IReadOnlyList<P12AOwnerSection> mergedSections,
+                    out P12AResult mergeResult), Is.True,
+                mergeResult?.SectionCode ?? mergeResult?.Code.ToString());
+            Assert.That(mergedSections.Select(section => section.Id).Distinct(StringComparer.Ordinal).Count(),
+                Is.EqualTo(mergedSections.Count),
+                "The mixed Core/adapter image section set has exactly one section for each identity.");
+            foreach (P12AOwnerSection adapterSection in adapterEncodedSections)
+                Assert.That(mergedSections.Any(section => section.Id == adapterSection.Id), Is.True,
+                    "Core section composition retains each compatibility-owned receipt and whole-roster NPC section.");
+            foreach (P12AOwnerSection coreSection in coreBoundSections
+                         .Concat(coreP12ESections).Concat(coreP12FSections))
+                Assert.That(mergedSections.Any(section => ReferenceEquals(section, coreSection)), Is.True,
+                    "The merged image retains each authoritative operation-bound Core section.");
+
+            Assert.That(operation.TryRevalidate(out DailyCaptureEligibilityFailure revalidationFailure), Is.True,
+                revalidationFailure.ToString());
+            Assert.That(application.ActiveSession, Is.SameAs(coreSession));
+            Assert.That(application.ActiveOperationCount, Is.EqualTo(1));
+        }
+        Assert.That(application.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedCrimeJusticeDailyStageUsesSeparateAdmittedP12WriterScopes()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        Assert.That(config.hiddenStatus, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12 selected Crime Justice daily stage owner scopes");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+        Assert.That(runtime.HasExactSelectedRuntimeOwnerGraph(graph.Definitions), Is.True);
+
+        JusticeSystem justice = runtime.JusticeSystemForWorldBoundary;
+        Assert.That(justice, Is.Not.Null);
+        Assert.That(ReferenceEquals(graph.JusticeRecordsOwner, justice.CoreOwner), Is.True);
+        NpcRuntime guard = runtime.NpcRuntimes.First(npc =>
+            npc != null && npc.UsesSelectedDailyV1Definitions
+            && npc.NpcData?.job?.jobType == NpcJobType.Guard);
+        NpcRuntime target = runtime.NpcRuntimes.First(npc =>
+            npc != null && npc != guard && npc.UsesSelectedDailyV1Definitions
+            && ReferenceEquals(npc.CurrentCity, guard.CurrentCity));
+        NpcRuntime hiddenActor = runtime.NpcRuntimes.First(npc =>
+            npc != null && npc != guard && npc != target && npc.UsesSelectedDailyV1Definitions);
+
+        MethodInfo beginActionScope = typeof(SimulationRuntime).GetMethod(
+            "TryBeginP12CrimeJusticeActionScope", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(beginActionScope, Is.Not.Null);
+        object[] scopeArguments = { new[] { target, guard, hiddenActor }, true, null };
+        Assert.That(beginActionScope.Invoke(runtime, scopeArguments), Is.EqualTo(true));
+        IDisposable setupScope = scopeArguments[2] as IDisposable;
+        Assert.That(setupScope, Is.Not.Null);
+        using (setupScope)
+        {
+            Assert.That(justice.CreateOrIncreaseWarrant(target, target.CurrentCity, 12f, 4), Is.Not.Null);
+            Assert.That(justice.Arrest(guard, target, target.CurrentCity), Is.True);
+            hiddenActor.AddStatus(config.hiddenStatus);
+            hiddenActor.HideForDays(2);
+        }
+
+        PrisonSentenceRuntime sentence = ReadPrivateField<IList<PrisonSentenceRuntime>>(
+            justice, "prisonSentences").Single();
+        Assert.That(justice.IsArrested(target), Is.True);
+        Assert.That(sentence.WasArrestedToday, Is.True);
+        Assert.That(hiddenActor.HiddenDaysRemaining, Is.GreaterThan(0));
+        long justiceRevisionBefore = justice.P12CrimeJusticeRevision;
+        long targetRevisionBefore = target.P12CrimeJusticeRevision;
+        long hiddenRevisionBefore = hiddenActor.P12CrimeJusticeRevision;
+        int sentenceDaysBefore = sentence.RemainingDays;
+        int hiddenDaysBefore = hiddenActor.HiddenDaysRemaining;
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochBefore, out ContinuationCensusFailure epochBeforeFailure), Is.True,
+            epochBeforeFailure.ToString());
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusBeforeFailure), Is.True,
+            censusBeforeFailure.ToString());
+
+        string dailyAdvanceOperationId =
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance;
+        Assert.That(dailyAdvanceOperationId, Is.EqualTo("runtime.advance-day"));
+        MethodInfo enterDailyAdvanceOperation = typeof(SimulationRuntime).GetMethod(
+            "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(enterDailyAdvanceOperation, Is.Not.Null);
+        object[] dailyOperationArguments = { dailyAdvanceOperationId, null };
+        Assert.That(enterDailyAdvanceOperation.Invoke(runtime, dailyOperationArguments), Is.EqualTo(true));
+        IDisposable dailyAdvanceScope = dailyOperationArguments[1] as IDisposable;
+        Assert.That(dailyAdvanceScope, Is.Not.Null);
+        using (dailyAdvanceScope)
+        {
+            MethodInfo runSelectedDailyStage = typeof(SimulationRuntime).GetMethod(
+                "TryAdvanceSelectedCrimeJusticeDailyStage", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(runSelectedDailyStage, Is.Not.Null);
+            Assert.That(runSelectedDailyStage.Invoke(runtime, new object[] { graph }), Is.EqualTo(true));
+        }
+
+        Assert.That(sentence.WasArrestedToday, Is.False,
+            "The first admitted Justice daily scope clears the same-day arrest marker.");
+        Assert.That(sentence.RemainingDays, Is.EqualTo(sentenceDaysBefore - 1),
+            "The later admitted Justice daily scope advances the sentence once.");
+        Assert.That(justice.P12CrimeJusticeRevision, Is.EqualTo(justiceRevisionBefore + 2),
+            "The arrest-marker clear and sentence decrement commit as separate Justice owner writes.");
+        Assert.That(hiddenActor.HiddenDaysRemaining, Is.EqualTo(hiddenDaysBefore - 1));
+        Assert.That(hiddenActor.P12CrimeJusticeRevision, Is.EqualTo(hiddenRevisionBefore + 1),
+            "The intervening Crime scope commits the hidden timer exactly once.");
+        Assert.That(target.P12CrimeJusticeRevision, Is.EqualTo(targetRevisionBefore),
+            "No extra selected target status mutation is published during the no-op wanted projection sync.");
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochAfter, out ContinuationCensusFailure epochAfterFailure), Is.True,
+            epochAfterFailure.ToString());
+        Assert.That(epochAfter, Is.EqualTo(epochBefore + 3),
+            "Only the two changing Justice scopes and the changing Crime scope consume a mutation epoch.");
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusAfterFailure), Is.True,
+            censusAfterFailure.ToString());
+    }
+
+    [TestCase("justiceSystem")]
+    [TestCase("crimeSystem")]
+    public void SelectedDailyAdvanceRejectsMismatchedCrimeJusticeProjectionBeforeClockOrOwnerMutation(
+        string projectionField)
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12 selected Crime Justice stale projection");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+        long initialDay = runtime.CurrentDay;
+        long initialJusticeRevision = graph.JusticeRecordsOwner.Revision;
+        DailyCaptureEligibilityToken initialToken = runtime.ExecutionBoundaryState.CurrentCaptureToken;
+        JusticeSystem staleJustice = new JusticeSystem(
+            config.freeStatus, config.wantedStatus, config.arrestedStatus, config.hiddenStatus);
+
+        if (projectionField == "justiceSystem")
+            WritePrivateField(runtime, projectionField, staleJustice);
+        else
+            WritePrivateField(runtime, projectionField,
+                new CrimeSystem(staleJustice, null, config.hiddenStatus));
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            runtime.TryAdvanceDay(out _));
+
+        Assert.That(failure.Message, Does.Contain("Unity projection bindings"));
+        Assert.That(runtime.CurrentDay, Is.EqualTo(initialDay),
+            "The stale host projection is rejected before the admitted clock increment.");
+        Assert.That(graph.JusticeRecordsOwner.Revision, Is.EqualTo(initialJusticeRevision),
+            "The selected Core Justice owner remains untouched after projection rejection.");
+        Assert.That(runtime.ExecutionBoundaryState.CompletedCoreSequence, Is.Zero);
+        Assert.That(runtime.ExecutionBoundaryState.CurrentCaptureToken, Is.Null,
+            "A failed admitted advance cannot retain or publish a capture token.");
+        if (initialToken != null)
+            Assert.That(runtime.ExecutionBoundaryState.CurrentCaptureToken, Is.Not.SameAs(initialToken));
+        Assert.That(runtime.ExecutionBoundaryState.AdvanceLeaseHeld, Is.False,
+            "The failed preflight releases the single-writer advance lease.");
+    }
+
+    [Test]
+    public void SelectedCrimeJusticeReceiptIdentityRemainsPinnedToTheCoreExecutionSession()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12 selected Crime/Justice pinned session binding");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstFailure), Is.True,
+            firstFailure.ToString());
+        long admittedDay = runtime.CurrentDay;
+        long justiceRevision = graph.JusticeRecordsOwner.Revision;
+        long completedSequence = runtime.ExecutionBoundaryState.CompletedCoreSequence;
+
+        FieldInfo boundCrimeField = typeof(SimulationRuntime).GetField(
+            "p12CrimeJusticeBoundCrimeSystem", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(boundCrimeField, Is.Not.Null);
+        boundCrimeField.SetValue(runtime, null);
+
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            runtime.TryAdvanceDay(out _));
+
+        Assert.That(failure.Message, Does.Contain("Unity projection bindings"));
+        Assert.That(runtime.CurrentDay, Is.EqualTo(admittedDay),
+            "A replacement or missing receipt identity is rejected before the next clock increment.");
+        Assert.That(graph.JusticeRecordsOwner.Revision, Is.EqualTo(justiceRevision),
+            "A changed session identity cannot authorize another Justice owner write.");
+        Assert.That(runtime.ExecutionBoundaryState.CompletedCoreSequence, Is.EqualTo(completedSequence),
+            "A rejected identity rebinding cannot complete a Core daily sequence.");
+        Assert.That(runtime.ExecutionBoundaryState.IsSelectedRuntimeCensusProtocolFaulted, Is.True,
+            "The exact execution session remains faulted after its host identity binding changes.");
+        Assert.That(runtime.ExecutionBoundaryState.AdvanceLeaseHeld, Is.False,
+            "The rejected rebind releases the serialized advance lease.");
+    }
+
+    [Test]
+    public void SelectedCrimeJusticeDailyMutationRejectsMissingExactCrimeReceiptIdentity()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12 selected Crime receipt identity mismatch");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+        Assert.That(ReadPrivateField<CrimeSystem>(runtime, "crimeSystem"), Is.Not.Null);
+
+        FieldInfo boundCrimeField = typeof(SimulationRuntime).GetField(
+            "p12CrimeJusticeBoundCrimeSystem", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(boundCrimeField, Is.Not.Null);
+        boundCrimeField.SetValue(runtime, null);
+
+        MethodInfo runMutation = typeof(SimulationRuntime).GetMethod(
+            "RunP12CrimeJusticeDailyMutation",
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null,
+            types: new[]
+            {
+                typeof(DailyV1SelectedRuntimeOwnerGraph),
+                typeof(DailyV1SelectedCrimeJusticeDailyPhase),
+                typeof(Action)
+            },
+            modifiers: null);
+        Assert.That(runMutation, Is.Not.Null);
+        int mutationCalls = 0;
+        TargetInvocationException failure = Assert.Throws<TargetInvocationException>(() =>
+            runMutation.Invoke(runtime, new object[]
+            {
+                graph,
+                DailyV1SelectedCrimeJusticeDailyPhase.AdvanceHiddenStatuses,
+                (Action)(() => mutationCalls++)
+            }));
+
+        Assert.That(failure.InnerException, Is.TypeOf<InvalidOperationException>());
+        Assert.That(failure.InnerException.Message,
+            Does.Contain("exact Crime receipt census identity"));
+        Assert.That(mutationCalls, Is.Zero,
+            "A missing exact Crime receipt census binding is rejected before the admitted mutation runs.");
+    }
+
+    [Test]
+    public void SelectedCrimeJusticeDailyStageContinuesAcrossPublicDailyAdvances()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        Assert.That(config.hiddenStatus, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12 selected Crime Justice multi-day public advance");
+        simulationObjects.Add(hostObject);
+        TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+        ConfigureSelectedBootstrap(host, config);
+        InvokeInitializeSimulation(host, null);
+
+        SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+        Assert.That(session, Is.Not.Null);
+        SimulationRuntime runtime = session.Runtime;
+        DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+        Assert.That(graph, Is.Not.Null);
+        Assert.That(runtime.HasExactSelectedRuntimeOwnerGraph(graph.Definitions), Is.True);
+        Assert.That(runtime.NpcRuntimes.All(npc => npc == null || npc.UsesSelectedDailyV1Definitions), Is.True,
+            "The Core stage is admitted only for the complete selected Daily-v1 owner roster.");
+
+        JusticeSystem justice = runtime.JusticeSystemForWorldBoundary;
+        Assert.That(justice, Is.Not.Null);
+        Assert.That(ReferenceEquals(graph.JusticeRecordsOwner, justice.CoreOwner), Is.True);
+        NpcRuntime guard = runtime.NpcRuntimes.First(npc =>
+            npc != null && npc.UsesSelectedDailyV1Definitions
+            && npc.NpcData?.job?.jobType == NpcJobType.Guard);
+        NpcRuntime target = runtime.NpcRuntimes.First(npc =>
+            npc != null && npc != guard && npc.UsesSelectedDailyV1Definitions
+            && ReferenceEquals(npc.CurrentCity, guard.CurrentCity));
+        PersonId targetPersonId = new PersonId("p12e-core-justice-target-person");
+        Assert.That(runtime.TryRegisterPerson(
+                new PersonRuntime(targetPersonId, runtime.CurrentDay),
+                out PersonStoreFailure personFailure), Is.True, personFailure.ToString());
+        Assert.That(runtime.TryBindExistingNpcToPerson(
+                targetPersonId, target.RuntimeId, out PersonMaterializationFailure bindingFailure),
+            Is.True, bindingFailure.ToString());
+        Assert.That(target.PersonId, Is.EqualTo(targetPersonId));
+        NpcRuntime hiddenActor = runtime.NpcRuntimes.First(npc =>
+            npc != null && npc != guard && npc != target && npc.UsesSelectedDailyV1Definitions);
+
+        MethodInfo beginActionScope = typeof(SimulationRuntime).GetMethod(
+            "TryBeginP12CrimeJusticeActionScope", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(beginActionScope, Is.Not.Null);
+        object[] scopeArguments = { new[] { target, guard, hiddenActor }, true, null };
+        Assert.That(beginActionScope.Invoke(runtime, scopeArguments), Is.EqualTo(true));
+        IDisposable setupScope = scopeArguments[2] as IDisposable;
+        Assert.That(setupScope, Is.Not.Null);
+        using (setupScope)
+        {
+            Assert.That(justice.CreateOrIncreaseWarrant(target, target.CurrentCity, 12f, 4), Is.Not.Null);
+            Assert.That(justice.Arrest(guard, target, target.CurrentCity), Is.True);
+            hiddenActor.AddStatus(config.hiddenStatus);
+            hiddenActor.HideForDays(3);
+        }
+
+        PrisonSentenceRuntime sentence = ReadPrivateField<IList<PrisonSentenceRuntime>>(
+            justice, "prisonSentences").Single();
+        int remainingSentenceDays = sentence.RemainingDays;
+        int remainingHiddenDays = hiddenActor.HiddenDaysRemaining;
+        long justiceRevision = justice.P12CrimeJusticeRevision;
+        long hiddenRevision = hiddenActor.P12CrimeJusticeRevision;
+        Assert.That(sentence.WasArrestedToday, Is.True);
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochBefore, out ContinuationCensusFailure epochFailure), Is.True,
+            epochFailure.ToString());
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure), Is.True,
+            censusFailure.ToString());
+        long startingDay = runtime.CurrentDay;
+
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvanceFailure), Is.True,
+            firstAdvanceFailure.ToString());
+        Assert.That(runtime.CurrentDay, Is.EqualTo(startingDay + 1));
+        Assert.That(sentence.WasArrestedToday, Is.False,
+            "The first public admitted day executes the selected Justice clear-arrested marker phase.");
+        Assert.That(sentence.RemainingDays, Is.EqualTo(remainingSentenceDays - 1),
+            "The first public admitted day decrements the selected sentence once.");
+        Assert.That(hiddenActor.HiddenDaysRemaining, Is.EqualTo(remainingHiddenDays - 1),
+            "The first public admitted day decrements the selected Crime hidden timer once.");
+        Assert.That(justice.P12CrimeJusticeRevision, Is.GreaterThanOrEqualTo(justiceRevision + 2),
+            "The arrest-marker clear and sentence advancement commit through admitted Justice writes.");
+        Assert.That(hiddenActor.P12CrimeJusticeRevision, Is.GreaterThanOrEqualTo(hiddenRevision + 1),
+            "The hidden-state decrement commits through its selected NPC owner.");
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochAfterFirst, out ContinuationCensusFailure firstEpochFailure), Is.True,
+            firstEpochFailure.ToString());
+        Assert.That(epochAfterFirst, Is.GreaterThan(epochBefore));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure firstCensusFailure), Is.True,
+            firstCensusFailure.ToString());
+
+        long justiceRevisionAfterFirst = justice.P12CrimeJusticeRevision;
+        long hiddenRevisionAfterFirst = hiddenActor.P12CrimeJusticeRevision;
+        Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure secondAdvanceFailure), Is.True,
+            secondAdvanceFailure.ToString());
+        Assert.That(runtime.CurrentDay, Is.EqualTo(startingDay + 2));
+        Assert.That(sentence.RemainingDays, Is.EqualTo(remainingSentenceDays - 2),
+            "The second public admitted day continues the same selected sentence exactly once.");
+        Assert.That(justice.IsArrested(target), Is.True,
+            "The selected actor remains arrested while its active sentence has days remaining.");
+        Assert.That(hiddenActor.HiddenDaysRemaining, Is.EqualTo(remainingHiddenDays - 2),
+            "The second public admitted day continues the selected Crime hidden timer exactly once.");
+        Assert.That(justice.P12CrimeJusticeRevision, Is.GreaterThan(justiceRevisionAfterFirst));
+        Assert.That(hiddenActor.P12CrimeJusticeRevision, Is.GreaterThan(hiddenRevisionAfterFirst));
+        Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+            out long epochAfterSecond, out ContinuationCensusFailure secondEpochFailure), Is.True,
+            secondEpochFailure.ToString());
+        Assert.That(epochAfterSecond, Is.GreaterThan(epochAfterFirst));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure secondCensusFailure), Is.True,
+            secondCensusFailure.ToString());
+
+        DailyV1Application application = ReadPrivateField<DailyV1Application>(host, "dailyV1Application");
+        DailyV1ActiveRuntimeSession coreSession = session.CoreRuntimeSession;
+        Assert.That(application, Is.Not.Null);
+        Assert.That(coreSession?.OwnerGraph, Is.Not.Null);
+        Assert.That(application.TryBeginContinuationSaveOperation(
+                coreSession, out DailyV1P12GContinuationSaveOperation saveOperation,
+                out DailyCaptureEligibilityFailure beginFailure), Is.True,
+            beginFailure.ToString());
+        using (saveOperation)
+        {
+            Assert.That(saveOperation.TryCaptureCoreP12EOwnerSources(
+                    saveOperation.SourceWitness.Token,
+                    saveOperation.SourceWitness.TokenOwnerSections,
+                    out DailyV1P12ECoreOwnerSourceSnapshots coreSources,
+                    out DailyV1P12ECoreOwnerSourceCaptureFailure sourceCaptureFailure,
+                    out string sourceCaptureDiagnostic), Is.True,
+                sourceCaptureFailure + ": " + sourceCaptureDiagnostic);
+            Assert.That(coreSources?.JusticeRecords, Is.Not.Null);
+            Assert.That(coreSources?.CrimeSocialAppraisal, Is.Not.Null,
+                "The active Core save operation must capture CrimeSocial from its selected owner graph.");
+            Assert.That(coreSources.CrimeSocialAppraisal.CapturedAbsoluteDay,
+                Is.EqualTo(saveOperation.SourceWitness.Token.AbsoluteDay));
+            Assert.That(P12EJusticeRecordsSnapshotAdapter.TryValidateCoreOwnerProjection(
+                    runtime, saveOperation.SourceWitness.Token,
+                    saveOperation.SourceWitness.TokenOwnerSections,
+                    coreSources.JusticeRecords,
+                    out P12EJusticeSnapshotFailure projectionFailure), Is.True,
+                projectionFailure?.Code.ToString());
+            P12EJusticeRecordsOwnerSnapshot wrongDayCoreSnapshot =
+                new P12EJusticeRecordsOwnerSnapshot(
+                    saveOperation.SourceWitness.Token.AbsoluteDay + 1L,
+                    coreSources.JusticeRecords.Records);
+            Assert.That(P12EJusticeRecordsSnapshotAdapter.TryValidateCoreOwnerProjection(
+                    runtime, saveOperation.SourceWitness.Token,
+                    saveOperation.SourceWitness.TokenOwnerSections,
+                    wrongDayCoreSnapshot,
+                    out P12EJusticeSnapshotFailure wrongDayFailure), Is.False,
+                "A Core snapshot from another day cannot satisfy the Unity compatibility bridge.");
+            Assert.That(wrongDayFailure?.Code,
+                Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidCaptureContext));
+            DailyV1JusticeRecordsOwner coreJustice = coreSession.OwnerGraph.JusticeRecordsOwner;
+            P12EJusticeRecordsSnapshotSection records = coreSources.JusticeRecords.Records;
+            P12EJusticeWantedSnapshotRow currentWanted = records.WantedRows.Single();
+            P12EJusticeSentenceSnapshotRow currentSentence = records.SentenceRows.Single();
+            const string wrongProjectionCityId = "p12e-justice-projection-mismatch-city";
+            P12EJusticeRecordsOwnerSnapshot wrongProjectionSnapshot =
+                new P12EJusticeRecordsOwnerSnapshot(
+                    coreSources.JusticeRecords.CapturedAbsoluteDay,
+                    new P12EJusticeRecordsSnapshotSection(
+                        records.SectionId, records.SchemaVersion, records.RecordCount, records.Revision,
+                        new[] { new P12EJusticeWantedSnapshotRow(
+                            currentWanted.Ordinal, currentWanted.TargetRuntimeId,
+                            currentWanted.TargetPersonIdValue, wrongProjectionCityId,
+                            currentWanted.Bounty, currentWanted.SentenceDays, currentWanted.IsResolved) },
+                        new[] { new P12EJusticeSentenceSnapshotRow(
+                            currentSentence.Ordinal, currentSentence.TargetRuntimeId,
+                            currentSentence.TargetPersonIdValue, wrongProjectionCityId,
+                            currentSentence.WarrantOrdinal, currentSentence.RemainingDays,
+                            currentSentence.FailedEscapeAttempts, currentSentence.WasArrestedToday) }));
+            Assert.That(P12EJusticeRecordsSnapshotAdapter.TryValidateCoreOwnerProjection(
+                    runtime, saveOperation.SourceWitness.Token,
+                    saveOperation.SourceWitness.TokenOwnerSections,
+                    wrongProjectionSnapshot,
+                    out P12EJusticeSnapshotFailure wrongProjectionFailure), Is.False,
+                "The shared Core values must still match the exact Unity City projection.");
+            Assert.That(wrongProjectionFailure?.Code,
+                Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidOwnerValues));
+            Assert.That(records.Revision, Is.EqualTo(coreJustice.Revision));
+            Assert.That(records.WantedRows, Has.Count.EqualTo(1));
+            Assert.That(records.SentenceRows, Has.Count.EqualTo(1));
+            Assert.That(records.RecordCount, Is.EqualTo(2));
+            Assert.That(records.WantedRows[0].Ordinal, Is.Zero);
+            Assert.That(records.WantedRows[0].TargetRuntimeId, Is.EqualTo(target.RuntimeId));
+            Assert.That(records.WantedRows[0].TargetPersonIdValue, Is.EqualTo(targetPersonId.Value));
+            Assert.That(records.WantedRows[0].CityRuntimeId, Is.EqualTo(target.CurrentCity.RuntimeId));
+            Assert.That(records.SentenceRows[0].Ordinal, Is.Zero);
+            Assert.That(records.SentenceRows[0].WarrantOrdinal, Is.Zero);
+            Assert.That(records.SentenceRows[0].TargetRuntimeId, Is.EqualTo(target.RuntimeId));
+            Assert.That(records.SentenceRows[0].TargetPersonIdValue, Is.EqualTo(targetPersonId.Value));
+            Assert.That(records.SentenceRows[0].CityRuntimeId, Is.EqualTo(target.CurrentCity.RuntimeId));
+            Assert.That(records.SentenceRows[0].RemainingDays, Is.EqualTo(sentence.RemainingDays));
+            Assert.That(records.SentenceRows[0].FailedEscapeAttempts, Is.EqualTo(sentence.FailedEscapeAttempts));
+            Assert.That(records.SentenceRows[0].WasArrestedToday, Is.EqualTo(sentence.WasArrestedToday));
+
+            OwnerSectionCensusSnapshot justiceWitness = saveOperation.SourceWitness.TokenOwnerSections.Single(
+                section => section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+            OwnerSectionCensusSnapshot receiptWitness = saveOperation.SourceWitness.TokenOwnerSections.Single(
+                section => section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+            Assert.That(justiceWitness.OwnerInstanceIdentity,
+                Is.SameAs(runtime.JusticeSystemForWorldBoundary));
+            Assert.That(justiceWitness.Cardinality, Is.EqualTo(records.RecordCount));
+            Assert.That(justiceWitness.Revision, Is.EqualTo(records.Revision));
+            Assert.That(receiptWitness.OwnerInstanceIdentity, Is.SameAs(justiceWitness.OwnerInstanceIdentity));
+            Assert.That(receiptWitness.Cardinality, Is.EqualTo(1));
+            Assert.That(receiptWitness.Revision, Is.Zero);
+            Assert.That(runtime.JusticeSystemForWorldBoundary.CoreOwner, Is.SameAs(coreJustice));
+
+            Assert.That(saveOperation.TryEncodeCoreP12EOwnerSections(
+                    saveOperation.SourceWitness.Token.AbsoluteDay,
+                    out IReadOnlyList<P12AOwnerSection> coreSections,
+                    out P12AResult encodeResult), Is.True,
+                encodeResult?.SectionCode ?? encodeResult?.Code.ToString());
+            P12AOwnerSection coreJusticeSection = coreSections.Single(section =>
+                section.Id == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+            Assert.That(coreJusticeSection.Revision, Is.EqualTo(records.Revision));
+            Assert.That(coreJusticeSection.Rows, Has.Count.EqualTo(records.RecordCount));
+
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                    session, session.AdmissionContext, saveOperation,
+                    out P12AContinuationImage image,
+                    out SimulationActiveSession restored,
+                    out P12GDailyV1RestoreFailure captureFailure,
+                    out string captureDiagnostic), Is.True,
+                captureFailure + ": " + captureDiagnostic);
+            Assert.That(restored, Is.Not.Null);
+            P12AOwnerSection imageJusticeSection = image.Sections.Single(section =>
+                section.Id == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+            Assert.That(imageJusticeSection.Major, Is.EqualTo(coreJusticeSection.Major));
+            Assert.That(imageJusticeSection.Role, Is.EqualTo(coreJusticeSection.Role));
+            Assert.That(imageJusticeSection.Revision, Is.EqualTo(coreJusticeSection.Revision));
+            Assert.That(imageJusticeSection.Rows.Count, Is.EqualTo(coreJusticeSection.Rows.Count));
+            for (int index = 0; index < coreJusticeSection.Rows.Count; index++)
+            {
+                Assert.That(imageJusticeSection.Rows[index].OwnerKey,
+                    Is.EqualTo(coreJusticeSection.Rows[index].OwnerKey));
+                Assert.That(imageJusticeSection.Rows[index].Revision,
+                    Is.EqualTo(coreJusticeSection.Rows[index].Revision));
+                Assert.That(imageJusticeSection.Rows[index].Payload,
+                    Is.EqualTo(coreJusticeSection.Rows[index].Payload));
+            }
         }
     }
 
@@ -3692,6 +5881,14 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(restoredSession.Runtime.GetGenealogyChildren(parentId).Single(), Is.EqualTo(childId));
             Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken), Is.EqualTo(sourceGraph),
                 "The restored D owner package must preserve exact Person identities, bindings and genealogy relations.");
+            Assert.That(restoredToken.OwnerSections.Single(section => section.SectionId ==
+                    DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId).Revision,
+                Is.EqualTo(sourceToken.OwnerSections.Single(section => section.SectionId ==
+                    DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId).Revision));
+            Assert.That(restoredToken.OwnerSections.Single(section => section.SectionId ==
+                    "p12d.genealogy.parentage").Revision,
+                Is.EqualTo(sourceToken.OwnerSections.Single(section => section.SectionId ==
+                    "p12d.genealogy.parentage").Revision));
             OwnerSectionCensusSnapshot[] restoredPersonSections = restoredToken.OwnerSections
                 .Where(section => section.SectionId.StartsWith(
                     PersonLifeResidenceCensusProvider.SectionPrefix, StringComparison.Ordinal))
@@ -3704,6 +5901,308 @@ public sealed class SimulationRuntimeAdmissionTests
                 Is.SameAs(restoredParent));
             Assert.That(restoredPersonSections.Single(section => section.SectionId == PersonLifeResidenceCensusProvider.SectionIdFor(childId)).OwnerInstanceIdentity,
                 Is.SameAs(restoredChild));
+
+            DailyV1Application application =
+                ReadPrivateField<DailyV1Application>(source, "dailyV1Application");
+            DailyV1ActiveRuntimeSession coreSession = restoredSession.CoreRuntimeSession;
+            Assert.That(application, Is.Not.Null);
+            Assert.That(coreSession?.OwnerGraph, Is.Not.Null);
+            Assert.That(application.TryBeginContinuationSaveOperation(
+                coreSession,
+                out DailyV1P12GContinuationSaveOperation operation,
+                out DailyCaptureEligibilityFailure beginFailure), Is.True, beginFailure.ToString());
+            using (operation)
+            {
+                Assert.That(operation.CoreNpcOwnerSources, Is.Not.Null,
+                    "The selected Daily-v1 capture must bind the complete Core NPC owner vector.");
+                DailyV1P12GCoreBoundDemographicOwnerSources demographic =
+                    operation.CoreDemographicOwnerSources;
+                Assert.That(demographic, Is.Not.Null);
+                Assert.That(demographic.Persons, Is.SameAs(coreSession.OwnerGraph.PersonStore));
+                Assert.That(demographic.Genealogy, Is.SameAs(coreSession.OwnerGraph.GenealogyStore));
+                Assert.That(demographic.Persons, Is.SameAs(restoredSession.Runtime.PersonStore));
+                Assert.That(demographic.Genealogy,
+                    Is.SameAs(restoredSession.Runtime.GenealogyStoreForWorldBoundary));
+                Assert.That(demographic.PersonSnapshot.MembershipCount, Is.EqualTo(2));
+                Assert.That(demographic.PersonSnapshot.Revision,
+                    Is.EqualTo(restoredToken.OwnerSections.Single(section =>
+                        section.SectionId == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId).Revision));
+                Assert.That(demographic.GenealogySnapshot.Records.Count, Is.EqualTo(1));
+                Assert.That(demographic.GenealogySnapshot.Revision,
+                    Is.EqualTo(operation.SourceWitness.TokenOwnerSections.Single(section =>
+                        section.SectionId == "p12d.genealogy.parentage").Revision));
+                DailyV1P12GCoreBoundSpatialOwnerSources spatial = operation.CoreSpatialOwnerSources;
+                SpatialNetworkRuntime spatialProjection = restoredSession.SpatialNetwork;
+                Assert.That(spatial, Is.Not.Null);
+                Assert.That(spatial.Owner, Is.SameAs(coreSession.OwnerGraph.SpatialNetwork));
+                Assert.That(spatialProjection, Is.Not.Null);
+                Assert.That(spatial.Owner, Is.SameAs(spatialProjection.SelectedOwner));
+                Assert.That(spatial.Snapshot.LocationRuntimeIds.Count,
+                    Is.EqualTo(spatialProjection.LocationCount));
+                Assert.That(spatial.Snapshot.Routes.Count,
+                    Is.EqualTo(spatialProjection.RouteCount));
+                OwnerSectionCensusSnapshot spatialLocations = operation.SourceWitness.TokenOwnerSections.Single(
+                    section => section.SectionId == P12ASpatialNetworkOwnerCodec.LocationsSectionId);
+                OwnerSectionCensusSnapshot spatialRoutes = operation.SourceWitness.TokenOwnerSections.Single(
+                    section => section.SectionId == P12ASpatialNetworkOwnerCodec.RoutesSectionId);
+                Assert.That(spatialLocations.OwnerInstanceIdentity,
+                    Is.SameAs(spatialProjection.SelectedOwner));
+                Assert.That(spatialLocations.OwnerInstanceIdentity,
+                    Is.SameAs(spatialRoutes.OwnerInstanceIdentity));
+                Assert.That(spatialLocations.Cardinality,
+                    Is.EqualTo(spatial.Snapshot.LocationRuntimeIds.Count));
+                Assert.That(spatialRoutes.Cardinality,
+                    Is.EqualTo(spatial.Snapshot.Routes.Count));
+                Assert.That(spatial.Snapshot.Revision, Is.EqualTo(spatialLocations.Revision));
+                Assert.That(spatial.Snapshot.Revision, Is.EqualTo(spatialRoutes.Revision));
+
+                Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                    restoredSession,
+                    sourceSession.AdmissionContext,
+                    operation,
+                    out P12AContinuationImage capturedImage,
+                    out SimulationActiveSession capturedRestore,
+                    out P12GDailyV1RestoreFailure captureFailure,
+                    out string captureDiagnostic), Is.True,
+                    captureFailure + ": " + captureDiagnostic);
+                Assert.That(capturedImage, Is.Not.Null);
+                Assert.That(operation.TryEncodeCoreP12DOwnerSections(
+                        out IReadOnlyList<P12AOwnerSection> coreP12DSections,
+                        out bool coreP12DIncludesNpcRows,
+                        out P12AResult coreP12DResult), Is.True,
+                    coreP12DResult?.SectionCode ?? coreP12DResult?.Code.ToString());
+                Assert.That(coreP12DSections, Is.Not.Empty);
+                foreach (P12AOwnerSection coreP12DSection in coreP12DSections)
+                {
+                    P12AOwnerSection imageSection = capturedImage.Sections.Single(
+                        section => section.Id == coreP12DSection.Id);
+                    Assert.That(imageSection.Major, Is.EqualTo(coreP12DSection.Major));
+                    Assert.That(imageSection.Minor, Is.EqualTo(coreP12DSection.Minor));
+                    Assert.That(imageSection.Role, Is.EqualTo(coreP12DSection.Role));
+                    Assert.That(imageSection.Revision, Is.EqualTo(coreP12DSection.Revision));
+                    Assert.That(imageSection.Rows.Count, Is.EqualTo(coreP12DSection.Rows.Count));
+                    for (int rowIndex = 0; rowIndex < coreP12DSection.Rows.Count; rowIndex++)
+                    {
+                        Assert.That(imageSection.Rows[rowIndex].OwnerKey,
+                            Is.EqualTo(coreP12DSection.Rows[rowIndex].OwnerKey));
+                        Assert.That(imageSection.Rows[rowIndex].Revision,
+                            Is.EqualTo(coreP12DSection.Rows[rowIndex].Revision));
+                        Assert.That(imageSection.Rows[rowIndex].Payload,
+                            Is.EqualTo(coreP12DSection.Rows[rowIndex].Payload));
+                    }
+                }
+                Assert.That(coreP12DIncludesNpcRows,
+                    Is.EqualTo(operation.CoreNpcOwnerSources != null));
+                DailyV1P12ECoreOwnerSourceSnapshots firstP12ESources =
+                    operation.CoreP12EOwnerSources;
+                Assert.That(firstP12ESources, Is.Not.Null,
+                    "P12-E Core sources must be captured and cached by the active save operation.");
+                P12EJusticeRecordsOwnerSnapshot coreJusticeSnapshot = firstP12ESources.JusticeRecords;
+                Assert.That(coreJusticeSnapshot, Is.Not.Null,
+                    "The active Core save operation must capture Justice from its selected owner graph.");
+                Assert.That(coreJusticeSnapshot.Records.Revision,
+                    Is.EqualTo(coreSession.OwnerGraph.JusticeRecordsOwner.Revision));
+                Assert.That(coreJusticeSnapshot.Records.RecordCount,
+                    Is.EqualTo(coreJusticeSnapshot.Records.WantedRows.Count
+                        + coreJusticeSnapshot.Records.SentenceRows.Count));
+                OwnerSectionCensusSnapshot justiceRecordsWitness =
+                    operation.SourceWitness.TokenOwnerSections.Single(section =>
+                        section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeRecordsSectionId);
+                OwnerSectionCensusSnapshot justiceReceiptWitness =
+                    operation.SourceWitness.TokenOwnerSections.Single(section =>
+                        section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+                JusticeSystem exactJusticeProjection = restoredSession.Runtime.JusticeSystemForWorldBoundary;
+                Assert.That(justiceRecordsWitness.OwnerInstanceIdentity, Is.SameAs(exactJusticeProjection));
+                Assert.That(justiceReceiptWitness.OwnerInstanceIdentity, Is.SameAs(exactJusticeProjection));
+                Assert.That(justiceReceiptWitness.Cardinality, Is.EqualTo(1));
+                Assert.That(justiceReceiptWitness.Revision, Is.Zero);
+                Assert.That(exactJusticeProjection.CoreOwner,
+                    Is.SameAs(coreSession.OwnerGraph.JusticeRecordsOwner));
+                Assert.That(operation.TryCaptureCoreP12EOwnerSources(
+                        operation.SourceWitness.Token,
+                        operation.SourceWitness.TokenOwnerSections,
+                        out DailyV1P12ECoreOwnerSourceSnapshots reusedP12ESources,
+                        out DailyV1P12ECoreOwnerSourceCaptureFailure p12ECaptureFailure,
+                        out string p12ECaptureDiagnostic), Is.True,
+                    p12ECaptureFailure + ": " + p12ECaptureDiagnostic);
+                Assert.That(reusedP12ESources, Is.SameAs(firstP12ESources),
+                    "Repeated package staging must reuse the exact operation-bound owner snapshots.");
+                Assert.That(operation.TryEncodeCoreP12EOwnerSections(
+                        operation.SourceWitness.Token.AbsoluteDay,
+                        out IReadOnlyList<P12AOwnerSection> coreP12ESections,
+                        out P12AResult coreP12EResult), Is.True,
+                    coreP12EResult?.SectionCode ?? coreP12EResult?.Code.ToString());
+                Assert.That(coreP12ESections, Is.Not.Empty);
+                Assert.That(coreP12ESections.Count(section => section.Id ==
+                        P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId), Is.EqualTo(1));
+                Assert.That(coreP12ESections.Count(section => section.Id ==
+                        P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId), Is.EqualTo(1));
+                Assert.That(coreP12ESections.Count(section => section.Id ==
+                        P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId), Is.EqualTo(1));
+                foreach (P12AOwnerSection coreP12ESection in coreP12ESections)
+                {
+                    P12AOwnerSection imageSection = capturedImage.Sections.Single(
+                        section => section.Id == coreP12ESection.Id);
+                    Assert.That(imageSection.Major, Is.EqualTo(coreP12ESection.Major));
+                    Assert.That(imageSection.Minor, Is.EqualTo(coreP12ESection.Minor));
+                    Assert.That(imageSection.Role, Is.EqualTo(coreP12ESection.Role));
+                    Assert.That(imageSection.AliasGroup, Is.EqualTo(coreP12ESection.AliasGroup));
+                    Assert.That(imageSection.Revision, Is.EqualTo(coreP12ESection.Revision));
+                    Assert.That(imageSection.Rows.Count, Is.EqualTo(coreP12ESection.Rows.Count));
+                    for (int rowIndex = 0; rowIndex < coreP12ESection.Rows.Count; rowIndex++)
+                    {
+                        Assert.That(imageSection.Rows[rowIndex].OwnerKey,
+                            Is.EqualTo(coreP12ESection.Rows[rowIndex].OwnerKey));
+                        Assert.That(imageSection.Rows[rowIndex].Revision,
+                            Is.EqualTo(coreP12ESection.Rows[rowIndex].Revision));
+                        Assert.That(imageSection.Rows[rowIndex].Payload,
+                            Is.EqualTo(coreP12ESection.Rows[rowIndex].Payload));
+                    }
+                }
+                Assert.That(operation.TryEncodeCoreP12FOwnerSections(
+                        out IReadOnlyList<P12AOwnerSection> coreP12FSections,
+                        out P12AResult coreP12FResult), Is.True,
+                    coreP12FResult?.SectionCode ?? coreP12FResult?.Code.ToString());
+                foreach (P12AOwnerSection coreP12FSection in coreP12FSections)
+                {
+                    P12AOwnerSection imageSection = capturedImage.Sections.Single(
+                        section => section.Id == coreP12FSection.Id);
+                    Assert.That(imageSection.Major, Is.EqualTo(coreP12FSection.Major));
+                    Assert.That(imageSection.Minor, Is.EqualTo(coreP12FSection.Minor));
+                    Assert.That(imageSection.Role, Is.EqualTo(coreP12FSection.Role));
+                    Assert.That(imageSection.Revision, Is.EqualTo(coreP12FSection.Revision));
+                    Assert.That(imageSection.Rows.Count, Is.EqualTo(coreP12FSection.Rows.Count));
+                    for (int rowIndex = 0; rowIndex < coreP12FSection.Rows.Count; rowIndex++)
+                    {
+                        Assert.That(imageSection.Rows[rowIndex].OwnerKey,
+                            Is.EqualTo(coreP12FSection.Rows[rowIndex].OwnerKey));
+                        Assert.That(imageSection.Rows[rowIndex].Revision,
+                            Is.EqualTo(coreP12FSection.Rows[rowIndex].Revision));
+                        Assert.That(imageSection.Rows[rowIndex].Payload,
+                            Is.EqualTo(coreP12FSection.Rows[rowIndex].Payload));
+                    }
+                }
+                Assert.That(capturedRestore, Is.Not.Null);
+                Assert.That(capturedImage.Header.WorldId,
+                    Is.EqualTo(operation.SourceWitness.Token.WorldId.Value));
+                Assert.That(capturedImage.Header.Day,
+                    Is.EqualTo(operation.SourceWitness.Token.AbsoluteDay));
+                Assert.That(capturedImage.Header.Sequence,
+                    Is.EqualTo(operation.SourceWitness.Token.CompletedCoreSequence));
+                Assert.That(capturedImage.Header.PoliticalWorldRevision,
+                    Is.EqualTo(restoredSession.Runtime.PoliticalWorldRevision),
+                    "P12 preserves the existing adapter-provided political revision scalar exactly.");
+                Assert.That(capturedImage.Header.Compatibility, Is.Not.Null,
+                    "The Unity adapter keeps creating the current-host v1 descriptor.");
+                Assert.That(capturedImage.Header.CompatibilityV2, Is.Null);
+                Assert.That(capturedImage.CausalRoots.P9Manifest,
+                    Is.SameAs(coreSession.P12CRoots.Manifest),
+                    "P12-C payloads must retain the exact manifest object from the active Core session.");
+                Assert.That(capturedImage.CausalRoots.RandomRoot.Seed,
+                    Is.EqualTo(coreSession.P12CRoots.Manifest.Seed));
+                Assert.That(capturedImage.Sections.Select(section => section.Id),
+                    Is.EqualTo(capturedImage.Sections.Select(section => section.Id)
+                        .OrderBy(id => id, StringComparer.Ordinal)),
+                    "Core application sealing must preserve the established ordinal P12-v1 section order.");
+                Assert.That(P12ADailyV1Census.TryCreateForImage(
+                        capturedImage, out P12ADailyV1Census capturedCensus,
+                        out P12AResult capturedCensusResult), Is.True,
+                    capturedCensusResult?.SectionCode ?? capturedCensusResult?.Code.ToString());
+                Assert.That(P12ADailyV1Census.TryCreate(
+                        operation.SourceWitness.Token.OwnerSections,
+                        out P12ADailyV1Census tokenCensus,
+                        out P12AResult tokenCensusResult), Is.True,
+                    tokenCensusResult?.SectionCode ?? tokenCensusResult?.Code.ToString());
+                Assert.That(tokenCensus.MatchesImage(capturedImage), Is.True,
+                    "The sealed image must retain the exact owner vector authorized by the save operation.");
+                Assert.That(capturedCensus.Manifest.Matches(capturedImage.Sections, out P12AResult manifestResult), Is.True,
+                    manifestResult?.SectionCode ?? manifestResult?.Code.ToString());
+                P12AOwnerSection personMembershipSection = capturedImage.Sections.Single(section =>
+                    section.Id == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId);
+                P12AOwnerSection genealogySection = capturedImage.Sections.Single(section =>
+                    section.Id == "p12d.genealogy.parentage");
+                P12AOwnerSection spatialLocationsSection = capturedImage.Sections.Single(section =>
+                    section.Id == P12ASpatialNetworkOwnerCodec.LocationsSectionId);
+                P12AOwnerSection spatialRoutesSection = capturedImage.Sections.Single(section =>
+                    section.Id == P12ASpatialNetworkOwnerCodec.RoutesSectionId);
+                Assert.That(personMembershipSection.Rows.Count,
+                    Is.EqualTo(demographic.PersonSnapshot.MembershipCount));
+                Assert.That(personMembershipSection.Revision,
+                    Is.EqualTo(demographic.PersonSnapshot.Revision));
+                Assert.That(genealogySection.Rows.Count,
+                    Is.EqualTo(demographic.GenealogySnapshot.Records.Count));
+                Assert.That(genealogySection.Revision,
+                    Is.EqualTo(demographic.GenealogySnapshot.Revision));
+                Assert.That(spatialLocationsSection.Rows.Count,
+                    Is.EqualTo(spatial.Snapshot.LocationRuntimeIds.Count));
+                Assert.That(spatialLocationsSection.Revision,
+                    Is.EqualTo(spatial.Snapshot.Revision));
+                Assert.That(spatialRoutesSection.Rows.Count,
+                    Is.EqualTo(spatial.Snapshot.Routes.Count));
+                Assert.That(spatialRoutesSection.Revision,
+                    Is.EqualTo(spatial.Snapshot.Revision));
+
+                P12ACompatibilityDescriptor validCompatibility =
+                    capturedImage.Header.Compatibility;
+                Assert.That(validCompatibility, Is.Not.Null);
+                string changedP8Fingerprint = string.Equals(validCompatibility.P8Fingerprint,
+                    new string('0', 64), StringComparison.Ordinal)
+                    ? new string('1', 64)
+                    : new string('0', 64);
+                string changedP9Fingerprint = string.Equals(validCompatibility.P9Fingerprint,
+                    new string('0', 64), StringComparison.Ordinal)
+                    ? new string('1', 64)
+                    : new string('0', 64);
+                Func<string, string, P12ACompatibilityDescriptor> cloneWithRootFingerprints =
+                    (p9, p8) => new P12ACompatibilityDescriptor(
+                        validCompatibility.ProfileId,
+                        validCompatibility.ProfileVersion,
+                        validCompatibility.ConfigurationFingerprint,
+                        validCompatibility.UnityVersion,
+                        validCompatibility.RuntimePlatform,
+                        validCompatibility.ScriptingBackend,
+                        validCompatibility.BuildGuid,
+                        validCompatibility.AssemblyMvids,
+                        validCompatibility.NumericProfileId,
+                        validCompatibility.NumericProfileVersion,
+                        validCompatibility.ContentFingerprint,
+                        validCompatibility.ProviderFingerprint,
+                        validCompatibility.CalendarId,
+                        validCompatibility.CalendarVersion,
+                        validCompatibility.CalendarFingerprint,
+                        p9,
+                        p8);
+
+                Assert.That(operation.TryComposeImage(
+                        cloneWithRootFingerprints(validCompatibility.P9Fingerprint,
+                            changedP8Fingerprint),
+                        null,
+                        capturedImage.Header.PoliticalWorldRevision,
+                        Array.Empty<P12AOwnerSection>(),
+                        out P12AContinuationImage p8MismatchImage,
+                        out P12ADailyV1SectionManifest p8MismatchManifest,
+                        out P12AResult p8MismatchResult), Is.False,
+                    "The active Core save operation must reject a host v1 descriptor whose P8 root differs from its exact Core snapshot before section composition.");
+                Assert.That(p8MismatchImage, Is.Null);
+                Assert.That(p8MismatchManifest, Is.Null);
+                Assert.That(p8MismatchResult?.Code,
+                    Is.EqualTo(P12AResultCode.IncompatibleContentOrConfiguration));
+
+                Assert.That(operation.TryComposeImage(
+                        cloneWithRootFingerprints(changedP9Fingerprint,
+                            validCompatibility.P8Fingerprint),
+                        null,
+                        capturedImage.Header.PoliticalWorldRevision,
+                        Array.Empty<P12AOwnerSection>(),
+                        out P12AContinuationImage p9MismatchImage,
+                        out P12ADailyV1SectionManifest p9MismatchManifest,
+                        out P12AResult p9MismatchResult), Is.False,
+                    "The active Core save operation must reject a host v1 descriptor whose P9 root differs from the exact Core session before section composition.");
+                Assert.That(p9MismatchImage, Is.Null);
+                Assert.That(p9MismatchManifest, Is.Null);
+                Assert.That(p9MismatchResult?.Code,
+                    Is.EqualTo(P12AResultCode.IncompatibleContentOrConfiguration));
+            }
 
             for (int boundary = 0; boundary < 2; boundary++)
             {
@@ -4070,6 +6569,108 @@ public sealed class SimulationRuntimeAdmissionTests
     }
 
     [Test]
+    public void DailyV1RestoreRejectsSameIdNpcProjectionOutsideTheAdmittedRuntimeGraph()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12-G reject counterfeit runtime identity projection");
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+            Assert.That(sourceSession, Is.Not.Null);
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+
+            SimulationActiveSession privateCandidate = null;
+            string counterfeitRuntimeId = null;
+            Assert.That(host.TryRestoreDailyContinuationForTest(candidate =>
+                {
+                    privateCandidate = candidate;
+                    NpcRuntime activeNpc = candidate.Runtime.NpcRuntimes.FirstOrDefault();
+                    Assert.That(activeNpc, Is.Not.Null);
+                    Dictionary<string, NpcRuntime> npcProjection =
+                        ReadPrivateField<Dictionary<string, NpcRuntime>>(
+                            candidate.IdentityRegistry, "npcsByRuntimeId");
+                    Assert.That(npcProjection, Is.Not.Null);
+                    Assert.That(npcProjection.TryGetValue(activeNpc.RuntimeId, out NpcRuntime registeredNpc), Is.True);
+                    Assert.That(registeredNpc, Is.SameAs(activeNpc));
+
+                    // Keep identity kind and RuntimeId unchanged while replacing
+                    // the private candidate's typed projection value. Admission
+                    // must reject it before publishing this detached graph.
+                    counterfeitRuntimeId = activeNpc.RuntimeId;
+                    npcProjection[activeNpc.RuntimeId] = new NpcRuntime(
+                        activeNpc.RuntimeId, activeNpc.NpcData, activeNpc.CurrentCity, 0f);
+                },
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic),
+                Is.False);
+            Assert.That(privateCandidate, Is.Not.Null);
+            Assert.That(counterfeitRuntimeId, Is.Not.Null.And.Not.Empty);
+            Assert.That(privateCandidate.Runtime.HasSameP12RuntimeIdentitySpatialOwners(
+                    privateCandidate.IdentityRegistry,
+                    privateCandidate.SpatialNetwork,
+                    privateCandidate.ExplorableSites),
+                Is.False);
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.BindingValidationFailed), diagnostic);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(host, "activeSession"), Is.SameAs(sourceSession));
+            Assert.That(sourceSession.Runtime.CurrentDay, Is.EqualTo(1L));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(hostObject);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestoreRejectsSourceIdentityProjectionOutsideTheAdmittedRuntimeGraph()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject hostObject = new GameObject("P12-G reject counterfeit source identity projection");
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+            Assert.That(sourceSession, Is.Not.Null);
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+            long sourceDay = sourceSession.Runtime.CurrentDay;
+            NpcRuntime activeNpc = sourceSession.Runtime.NpcRuntimes.FirstOrDefault();
+            Assert.That(activeNpc, Is.Not.Null);
+            Dictionary<string, NpcRuntime> npcProjection = ReadPrivateField<Dictionary<string, NpcRuntime>>(
+                sourceSession.IdentityRegistry, "npcsByRuntimeId");
+            Assert.That(npcProjection, Is.Not.Null);
+            npcProjection[activeNpc.RuntimeId] = new NpcRuntime(
+                activeNpc.RuntimeId, activeNpc.NpcData, activeNpc.CurrentCity, 0f);
+
+            Assert.That(sourceSession.Runtime.HasSameP12RuntimeIdentitySpatialOwners(
+                    sourceSession.IdentityRegistry,
+                    sourceSession.SpatialNetwork,
+                    sourceSession.ExplorableSites),
+                Is.False);
+            Assert.That(host.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure failure,
+                    out string diagnostic),
+                Is.False);
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.InvalidSourceSession), diagnostic);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(host, "activeSession"), Is.SameAs(sourceSession));
+            Assert.That(sourceSession.Runtime.CurrentDay, Is.EqualTo(sourceDay));
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(hostObject);
+        }
+    }
+
+    [Test]
     public void DailyV1RestoreDoesNotReplayFutureScheduledDirectiveAndItsFirstDueAdvanceMatches()
     {
         SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
@@ -4166,25 +6767,36 @@ public sealed class SimulationRuntimeAdmissionTests
     {
         SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
-        NpcActionData steal = AssetDatabase.LoadAssetAtPath<NpcActionData>(
-            "Assets/_Project/Data/Actions/Action-Roubar.asset");
         NpcActionData arrest = AssetDatabase.LoadAssetAtPath<NpcActionData>(
             "Assets/_Project/Data/Actions/Action-Prender.asset");
         Assert.That(sourceConfig, Is.Not.Null);
-        Assert.That(steal, Is.Not.Null);
         Assert.That(arrest, Is.Not.Null);
-        Assert.That(steal.actionType, Is.EqualTo(NpcActionType.Steal));
         Assert.That(arrest.actionType, Is.EqualTo(NpcActionType.Arrest));
 
         SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
         NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
             entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
         NpcData actorDefinition = actorConfig.npc;
+        const int initialSentenceDays = 5;
+        const float initialWarrantBounty = 50f;
         NpcActionData escape = SimulationTestFactory.CreateAction(
             "p12g-successful-directive-escape", NpcActionType.EscapePrison, NpcActionCategory.Justice);
         escape.canFail = false;
         escape.crimeSettings.escapeBountyPenalty = 7f;
+        // The restore/replay regression uses an admitted initial warrant and
+        // Core Guard, with autonomous Crime disabled. Scheduled Escape remains
+        // runtime-enabled while no independent autonomous Escape can occur on
+        // the boundary after the directive succeeds.
+        config.crimeAutonomousEnabled = false;
         config.Actions.Add(escape);
+        config.InitialWarrants.Clear();
+        config.InitialWarrants.Add(new InitialWantedRecordConfig
+        {
+            target = actorDefinition,
+            city = actorConfig.startingCity,
+            bounty = initialWarrantBounty,
+            sentenceDays = initialSentenceDays
+        });
         config.ScheduledDirectives.Add(new ScheduledDirectiveConfig
         {
             absoluteDay = 3L,
@@ -4194,12 +6806,14 @@ public sealed class SimulationRuntimeAdmissionTests
             action = escape
         });
 
-        bool originalStealCanFail = steal.canFail;
         bool originalArrestCanFail = arrest.canFail;
+        // Selected runtimes execute the immutable definition graph captured at
+        // bootstrap. Configure successful outcomes before either graph is built.
         GameObject uninterruptedObject = new GameObject("P12-G successful directive uninterrupted");
         GameObject restoredObject = new GameObject("P12-G successful directive restored");
         try
         {
+            arrest.canFail = false;
             TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
             TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
             ConfigureSelectedBootstrap(uninterrupted, config);
@@ -4247,12 +6861,28 @@ public sealed class SimulationRuntimeAdmissionTests
                         out ContinuationCensusFailure censusFailure), Is.True, censusFailure.ToString());
             }
 
-            void SelectOnly(SimulationRuntime runtime, NpcActionData action)
+            void AssertBuiltInDecisionConfiguration(SimulationRuntime runtime)
             {
-                List<NpcActionData> configuredActions = ReadPrivateField<List<NpcActionData>>(runtime, "configuredActions");
-                Assert.That(configuredActions, Is.Not.Null);
-                configuredActions.Clear();
-                configuredActions.Add(action);
+                EffectiveSimulationConfiguration effective = ReadPrivateField<EffectiveSimulationConfiguration>(
+                    runtime, "configuration");
+                NpcDecisionSystem decisions = ReadPrivateField<NpcDecisionSystem>(runtime, "npcDecisionSystem");
+                Assert.That(effective, Is.Not.Null);
+                Assert.That(effective.Crime.Enabled, Is.True);
+                Assert.That(effective.Crime.AutonomousEnabled, Is.False);
+                Assert.That(effective.GuardCrime.Enabled, Is.True);
+                Assert.That(decisions, Is.Not.Null);
+                Assert.That(decisions.HasProvider<CrimeSystem>(), Is.True);
+                Assert.That(decisions.HasProvider<GuardSystem>(), Is.True);
+                Assert.That(decisions.GetProviderForAction(escape), Is.TypeOf<CrimeSystem>());
+                Assert.That(decisions.GetProviderForAction(arrest), Is.TypeOf<GuardSystem>());
+            }
+
+            long ReadMutationEpoch(SimulationRuntime runtime)
+            {
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                        out long epoch, out ContinuationCensusFailure failure),
+                    Is.True, failure.ToString());
+                return epoch;
             }
 
             JusticeSystem controlJustice = ReadPrivateField<JusticeSystem>(uninterruptedSession.Runtime, "justiceSystem");
@@ -4260,28 +6890,18 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(controlJustice, Is.Not.Null);
             Assert.That(sourceJustice, Is.Not.Null);
 
-            SelectOnly(uninterruptedSession.Runtime, steal);
-            SelectOnly(sourceSession.Runtime, steal);
-            steal.canFail = false;
-            Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlTheftFailure),
-                Is.True, controlTheftFailure.ToString());
-            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceTheftFailure),
-                Is.True, sourceTheftFailure.ToString());
-            CrimeSocialAppraisalWorldState controlCrimeSocial = uninterruptedSession.Runtime.CrimeSocialAppraisal;
-            CrimeSocialAppraisalWorldState sourceCrimeSocial = sourceSession.Runtime.CrimeSocialAppraisal;
-            Assert.That(controlCrimeSocial.TheftOutcomes.Count, Is.GreaterThan(0));
-            Assert.That(controlCrimeSocial.CrimeKnowledge.Count, Is.GreaterThan(0));
-            Assert.That(controlCrimeSocial.SocialReactions.Count, Is.GreaterThan(0));
-            Assert.That(sourceCrimeSocial.TheftOutcomes.Count, Is.EqualTo(controlCrimeSocial.TheftOutcomes.Count));
-            Assert.That(sourceCrimeSocial.CrimeKnowledge.Count, Is.EqualTo(controlCrimeSocial.CrimeKnowledge.Count));
-            Assert.That(sourceCrimeSocial.SocialReactions.Count, Is.EqualTo(controlCrimeSocial.SocialReactions.Count));
-            Assert.That(controlJustice.HasActiveWarrantInCity(controlActor, controlActor.CurrentCity), Is.True,
-                "The selected Daily-v1 Jobson actor must create its warrant through a normal successful Steal action.");
+            Assert.That(controlJustice.HasActiveWarrantInCity(controlActor, controlActor.CurrentCity), Is.True);
             Assert.That(sourceJustice.HasActiveWarrantInCity(sourceActor, sourceActor.CurrentCity), Is.True);
+            Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
+                Is.EqualTo(initialWarrantBounty));
+            Assert.That(sourceJustice.GetBounty(sourceActor, sourceActor.CurrentCity),
+                Is.EqualTo(initialWarrantBounty));
 
-            SelectOnly(uninterruptedSession.Runtime, arrest);
-            SelectOnly(sourceSession.Runtime, arrest);
-            arrest.canFail = false;
+            // The effective built-in provider composition is a compatibility
+            // input. Autonomous Crime is disabled, while the same admitted
+            // Crime and Guard providers remain composed on every host.
+            AssertBuiltInDecisionConfiguration(uninterruptedSession.Runtime);
+            AssertBuiltInDecisionConfiguration(sourceSession.Runtime);
             Assert.That(controlJustice.HasActiveWarrantInCity(controlActor, controlActor.CurrentCity), Is.True);
             Assert.That(sourceJustice.HasActiveWarrantInCity(sourceActor, sourceActor.CurrentCity), Is.True);
             Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlArrestFailure),
@@ -4289,16 +6909,21 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceArrestFailure),
                 Is.True, sourceArrestFailure.ToString());
             Assert.That(controlJustice.IsArrested(controlActor), Is.True,
-                "The selected Daily-v1 Guard must arrest the warrant target through the normal Arrest action.");
+                "The selected Daily-v1 Guard must arrest the initial-warrant target through the normal Arrest action.");
             Assert.That(sourceJustice.IsArrested(sourceActor), Is.True);
             Assert.That(controlJustice.WasArrestedToday(controlActor), Is.True);
-            Assert.That(controlJustice.GetRemainingSentenceDays(controlActor), Is.GreaterThan(1));
+            Assert.That(sourceJustice.WasArrestedToday(sourceActor), Is.True);
+            Assert.That(controlJustice.GetRemainingSentenceDays(controlActor),
+                Is.EqualTo(initialSentenceDays));
+            Assert.That(sourceJustice.GetRemainingSentenceDays(sourceActor),
+                Is.EqualTo(initialSentenceDays));
 
             ScheduledDirectiveStore sourceDirectiveStore = sourceSession.Composition.ScheduledDirectives;
             ScheduledDirective sourceDirective = sourceDirectiveStore.Directives.Single();
             Assert.That(sourceDirective.State, Is.EqualTo(ScheduledDirectiveState.Pending));
             Assert.That(sourceDirective.AbsoluteDay, Is.EqualTo(3L));
             long sourceDirectiveRevision = sourceDirectiveStore.Revision;
+            long controlEpochAtSourceBoundary = ReadMutationEpoch(uninterruptedSession.Runtime);
             DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(sourceSession.Runtime);
             string sourceOwnerGraph = CaptureCompleteDailyV1OwnerProjection(sourceSession, sourceToken);
             string sourceRoots = CaptureContinuationRootFacts(sourceSession, includeWorldIdentity: false);
@@ -4313,32 +6938,71 @@ public sealed class SimulationRuntimeAdmissionTests
                 restoreFailure + ": " + restoreDiagnostic);
             SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
             Assert.That(restoredSession, Is.Not.SameAs(sourceSession));
+            AssertBuiltInDecisionConfiguration(restoredSession.Runtime);
             DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
             Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken), Is.EqualTo(sourceOwnerGraph));
             Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false), Is.EqualTo(sourceRoots));
+            Assert.That(restoredSession.Runtime.CurrentDay, Is.EqualTo(sourceSession.Runtime.CurrentDay));
 
             NpcRuntime restoredActor = restoredSession.Runtime.NpcRuntimes.Single(
                 npc => npc?.NpcData != null && string.Equals(npc.NpcData.id, actorDefinition.id, StringComparison.Ordinal));
             JusticeSystem restoredJustice = ReadPrivateField<JusticeSystem>(restoredSession.Runtime, "justiceSystem");
             Assert.That(restoredJustice.IsArrested(restoredActor), Is.True);
+            Assert.That(restoredJustice.WasArrestedToday(restoredActor),
+                Is.EqualTo(controlJustice.WasArrestedToday(controlActor)),
+                "Restore must retain the persisted day-1 Guard arrest marker at the captured boundary.");
             Assert.That(restoredJustice.WasArrestedToday(restoredActor), Is.True);
+
+            Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlResetFailure),
+                Is.True, controlResetFailure.ToString());
+            Assert.That(restoredSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredResetFailure),
+                Is.True, restoredResetFailure.ToString());
+            Assert.That(controlJustice.WasArrestedToday(controlActor), Is.False,
+                "Start-of-day reset clears the prior-day Guard arrest marker before the next sentence decrement.");
+            Assert.That(restoredJustice.WasArrestedToday(restoredActor), Is.False,
+                "The restored runtime must apply the same next-day reset after hydrating the true marker.");
             Assert.That(restoredJustice.GetRemainingSentenceDays(restoredActor),
                 Is.EqualTo(controlJustice.GetRemainingSentenceDays(controlActor)));
             Assert.That(restoredJustice.GetBounty(restoredActor, restoredActor.CurrentCity),
                 Is.EqualTo(controlJustice.GetBounty(controlActor, controlActor.CurrentCity)));
+            Assert.That(controlJustice.GetRemainingSentenceDays(controlActor), Is.GreaterThan(2),
+                "The day-3 RequestAction must remain eligible after that day's sentence decrement.");
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    restoredSession, GetCompletedDailyToken(restoredSession.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    uninterruptedSession, GetCompletedDailyToken(uninterruptedSession.Runtime))));
+            Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false),
+                Is.EqualTo(CaptureContinuationRootFacts(uninterruptedSession, includeWorldIdentity: false)));
+
             ScheduledDirective restoredDirective = restoredSession.Composition.ScheduledDirectives.Directives.Single();
             Assert.That(restoredDirective.DirectiveId, Is.EqualTo(sourceDirective.DirectiveId));
             Assert.That(restoredDirective.State, Is.EqualTo(ScheduledDirectiveState.Pending));
             Assert.That(restoredSession.Composition.ScheduledDirectives.Revision, Is.EqualTo(sourceDirectiveRevision));
+            // Shared mutation epochs are target-runtime bookkeeping rather
+            // than persisted owner state. Both boundary reads must be valid;
+            // continuation parity is checked by the next boundary's delta.
+            long sourceEpochAtRestoreBoundary = ReadMutationEpoch(sourceSession.Runtime);
+            long restoredEpochAtRestoreBoundary = ReadMutationEpoch(restoredSession.Runtime);
+            Assert.That(sourceEpochAtRestoreBoundary, Is.EqualTo(controlEpochAtSourceBoundary),
+                "The uninterrupted and source runtimes have applied the same day-1 mutations before restoration.");
+            Assert.That(sourceEpochAtRestoreBoundary, Is.GreaterThanOrEqualTo(0L));
+            Assert.That(restoredEpochAtRestoreBoundary, Is.GreaterThanOrEqualTo(0L));
 
-            SelectOnly(uninterruptedSession.Runtime, escape);
-            SelectOnly(restoredSession.Runtime, escape);
             float bountyBeforeEscape = controlJustice.GetBounty(controlActor, controlActor.CurrentCity);
             long directiveRevisionBeforeEscape = sourceDirectiveStore.Revision;
+            long controlEpochBeforeEscape = ReadMutationEpoch(uninterruptedSession.Runtime);
+            long restoredEpochBeforeEscape = ReadMutationEpoch(restoredSession.Runtime);
             Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlEscapeFailure),
                 Is.True, controlEscapeFailure.ToString());
             Assert.That(restoredSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredEscapeFailure),
                 Is.True, restoredEscapeFailure.ToString());
+            long controlEpochAfterEscape = ReadMutationEpoch(uninterruptedSession.Runtime);
+            long restoredEpochAfterEscape = ReadMutationEpoch(restoredSession.Runtime);
+            Assert.That(controlEpochAfterEscape, Is.GreaterThan(controlEpochBeforeEscape));
+            Assert.That(restoredEpochAfterEscape, Is.GreaterThan(restoredEpochBeforeEscape));
+            Assert.That(restoredEpochAfterEscape - restoredEpochBeforeEscape,
+                Is.EqualTo(controlEpochAfterEscape - controlEpochBeforeEscape),
+                "The restored runtime applies the same committed owner invalidations through the Escape/Guard boundary.");
 
             ScheduledDirective controlDirective = uninterruptedSession.Composition.ScheduledDirectives.Directives.Single();
             restoredDirective = restoredSession.Composition.ScheduledDirectives.Directives.Single();
@@ -4350,14 +7014,22 @@ public sealed class SimulationRuntimeAdmissionTests
                 Is.EqualTo(directiveRevisionBeforeEscape + 1L));
             Assert.That(restoredSession.Composition.ScheduledDirectives.Revision,
                 Is.EqualTo(uninterruptedSession.Composition.ScheduledDirectives.Revision));
-            Assert.That(controlJustice.IsArrested(controlActor), Is.False);
-            Assert.That(restoredJustice.IsArrested(restoredActor), Is.False);
-            Assert.That(controlJustice.GetRemainingSentenceDays(controlActor), Is.Zero);
-            Assert.That(restoredJustice.GetRemainingSentenceDays(restoredActor), Is.Zero);
+            Assert.That(controlJustice.IsArrested(controlActor), Is.True,
+                "The ordered Guard turn may re-arrest the actor after the scheduled Escape succeeds in the same daily boundary.");
+            Assert.That(restoredJustice.IsArrested(restoredActor), Is.True,
+                "Restoration must preserve the same-day ordered Guard response after the successful scheduled Escape.");
+            Assert.That(controlJustice.GetRemainingSentenceDays(controlActor),
+                Is.EqualTo(initialSentenceDays),
+                "The later ordered Guard arrest creates a fresh sentence from the committed warrant policy.");
+            Assert.That(restoredJustice.GetRemainingSentenceDays(restoredActor),
+                Is.EqualTo(controlJustice.GetRemainingSentenceDays(controlActor)));
+            Assert.That(controlJustice.WasArrestedToday(controlActor), Is.True);
+            Assert.That(restoredJustice.WasArrestedToday(restoredActor), Is.True);
             Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
                 Is.EqualTo(bountyBeforeEscape + escape.crimeSettings.escapeBountyPenalty));
+            float bountyAfterEscape = controlJustice.GetBounty(controlActor, controlActor.CurrentCity);
             Assert.That(restoredJustice.GetBounty(restoredActor, restoredActor.CurrentCity),
-                Is.EqualTo(controlJustice.GetBounty(controlActor, controlActor.CurrentCity)));
+                Is.EqualTo(bountyAfterEscape));
 
             restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
             DailyCaptureEligibilityToken controlToken = GetCompletedDailyToken(uninterruptedSession.Runtime);
@@ -4371,10 +7043,15 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(restoredSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredNextFailure),
                 Is.True, restoredNextFailure.ToString());
             Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
-                Is.EqualTo(bountyBeforeEscape + escape.crimeSettings.escapeBountyPenalty),
-                "A terminal successful directive must not apply its escape penalty again on a later boundary.");
+                Is.EqualTo(bountyAfterEscape),
+                "A terminal successful directive must not apply its Escape effect on a later boundary.");
             Assert.That(restoredJustice.GetBounty(restoredActor, restoredActor.CurrentCity),
-                Is.EqualTo(controlJustice.GetBounty(controlActor, controlActor.CurrentCity)));
+                Is.EqualTo(bountyAfterEscape),
+                "The restored terminal directive must not replay its Escape effect on a later boundary.");
+            Assert.That(controlDirective.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
+            Assert.That(controlDirective.ProcessedDay, Is.EqualTo(3L));
+            Assert.That(restoredDirective.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
+            Assert.That(restoredDirective.ProcessedDay, Is.EqualTo(3L));
             Assert.That(uninterruptedSession.Composition.ScheduledDirectives.Revision,
                 Is.EqualTo(directiveRevisionBeforeEscape + 1L));
             Assert.That(restoredSession.Composition.ScheduledDirectives.Revision,
@@ -4388,10 +7065,3246 @@ public sealed class SimulationRuntimeAdmissionTests
         }
         finally
         {
-            steal.canFail = originalStealCanFail;
             arrest.canFail = originalArrestCanFail;
             UnityEngine.Object.DestroyImmediate(uninterruptedObject);
             UnityEngine.Object.DestroyImmediate(restoredObject);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestorePreservesNonemptyCrimeSocialOwnersAcrossContinuation()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        NpcActionData steal = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-Roubar.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        Assert.That(steal, Is.Not.Null);
+        Assert.That(steal.actionType, Is.EqualTo(NpcActionType.Steal));
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        bool originalStealCanFail = steal.canFail;
+        GameObject uninterruptedObject = new GameObject("P12 CrimeSocial uninterrupted control");
+        GameObject restoredObject = new GameObject("P12 CrimeSocial restored continuation");
+        try
+        {
+            // The selected graph captures authored action policy at bootstrap.
+            // Make the proving Steal outcome deterministic before either host
+            // composes its Daily-v1 definition graph.
+            steal.canFail = false;
+            TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
+            TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(uninterrupted, config);
+            ConfigureSelectedBootstrap(restored, config);
+            InvokeInitializeSimulation(uninterrupted, null);
+            InvokeInitializeSimulation(restored, null);
+
+            SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(
+                uninterrupted, "activeSession");
+            SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(
+                restored, "activeSession");
+            Assert.That(controlSession, Is.Not.Null);
+            Assert.That(sourceSession, Is.Not.Null);
+
+            void SelectOnlySteal(SimulationRuntime runtime)
+            {
+                List<NpcActionData> configuredActions = ReadPrivateField<List<NpcActionData>>(
+                    runtime, "configuredActions");
+                Assert.That(configuredActions, Is.Not.Null);
+                configuredActions.Clear();
+                configuredActions.Add(steal);
+            }
+
+            NpcRuntime AdmitStealParticipants(SimulationRuntime runtime)
+            {
+                NpcRuntime thief = runtime.NpcRuntimes.FirstOrDefault(candidate =>
+                    candidate?.NpcData?.acoesPadrao != null
+                    && candidate.NpcData.acoesPadrao.Any(preference =>
+                        preference != null && ReferenceEquals(preference.action, steal)));
+                Assert.That(thief, Is.Not.Null,
+                    "The selected profile must retain the authored NPC with the default Steal action.");
+                CityRuntime city = thief.CurrentCity;
+                Assert.That(city, Is.Not.Null);
+                Assert.That(city.ImportantNpcs.Count, Is.GreaterThan(1),
+                    "The admitted local city roster must provide an eligible theft target.");
+
+                foreach (NpcRuntime participant in city.ImportantNpcs)
+                {
+                    PersonId personId = new PersonId("p12-crime-social-restore-" + participant.RuntimeId);
+                    Assert.That(runtime.TryRegisterPerson(new PersonRuntime(personId, runtime.CurrentDay),
+                        out PersonStoreFailure registrationFailure), Is.True, registrationFailure.ToString());
+                    Assert.That(runtime.TryBindExistingNpcToPerson(personId, participant.RuntimeId,
+                        out PersonMaterializationFailure bindingFailure), Is.True, bindingFailure.ToString());
+                }
+                Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure censusFailure),
+                    Is.True, censusFailure.ToString());
+                SelectOnlySteal(runtime);
+                return thief;
+            }
+
+            void AssertNonemptyCrimeSocial(SimulationRuntime runtime)
+            {
+                CrimeSocialAppraisalWorldState crimeSocial = runtime.CrimeSocialAppraisal;
+                Assert.That(crimeSocial, Is.Not.Null);
+                Assert.That(crimeSocial.TheftOutcomes.Count, Is.GreaterThan(0));
+                Assert.That(crimeSocial.CrimeKnowledge.Count, Is.GreaterThan(0));
+                Assert.That(crimeSocial.SocialReactions.Count, Is.GreaterThan(0));
+            }
+
+            NpcRuntime controlThief = AdmitStealParticipants(controlSession.Runtime);
+            NpcRuntime sourceThief = AdmitStealParticipants(sourceSession.Runtime);
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlFailure),
+                Is.True, controlFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceFailure),
+                Is.True, sourceFailure.ToString());
+            AssertNonemptyCrimeSocial(controlSession.Runtime);
+            AssertNonemptyCrimeSocial(sourceSession.Runtime);
+            Assert.That(controlSession.Runtime.JusticeSystemForWorldBoundary.HasActiveWarrantInCity(
+                    controlThief, controlThief.CurrentCity),
+                Is.True,
+                "The selected Daily-v1 actor must create a warrant through the successful Steal action.");
+            Assert.That(sourceSession.Runtime.JusticeSystemForWorldBoundary.HasActiveWarrantInCity(
+                    sourceThief, sourceThief.CurrentCity),
+                Is.True,
+                "The source runtime must retain the same Steal-to-Justice effect before capture.");
+
+            string controlProjection = CaptureCompleteDailyV1OwnerProjection(
+                controlSession, GetCompletedDailyToken(controlSession.Runtime));
+            string sourceProjection = CaptureCompleteDailyV1OwnerProjection(
+                sourceSession, GetCompletedDailyToken(sourceSession.Runtime));
+            Assert.That(sourceProjection, Is.EqualTo(controlProjection));
+
+            Assert.That(restored.TryRestoreDailyContinuation(
+                    out P12GDailyV1RestoreFailure restoreFailure,
+                    out string restoreDiagnostic), Is.True,
+                restoreFailure + ": " + restoreDiagnostic);
+            SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(
+                restored, "activeSession");
+            Assert.That(restoredSession, Is.Not.Null);
+            Assert.That(restoredSession, Is.Not.SameAs(sourceSession));
+            AssertNonemptyCrimeSocial(restoredSession.Runtime);
+            NpcRuntime restoredThief = restoredSession.Runtime.NpcRuntimes.Single(candidate =>
+                candidate?.RuntimeId == sourceThief.RuntimeId);
+            Assert.That(restoredSession.Runtime.JusticeSystemForWorldBoundary.HasActiveWarrantInCity(
+                    restoredThief, restoredThief.CurrentCity),
+                Is.True,
+                "Detached restore must preserve the warrant produced by the admitted Steal action.");
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    restoredSession, GetCompletedDailyToken(restoredSession.Runtime)),
+                Is.EqualTo(controlProjection));
+
+            // The uninterrupted and restored hosts use the same test action
+            // input for the next boundary, then compare all selected owners.
+            SelectOnlySteal(controlSession.Runtime);
+            SelectOnlySteal(restoredSession.Runtime);
+            Assert.That(controlSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextControlFailure),
+                Is.True, nextControlFailure.ToString());
+            Assert.That(restoredSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure nextRestoredFailure),
+                Is.True, nextRestoredFailure.ToString());
+            AssertNonemptyCrimeSocial(controlSession.Runtime);
+            AssertNonemptyCrimeSocial(restoredSession.Runtime);
+            Assert.That(CaptureCompleteDailyV1OwnerProjection(
+                    restoredSession, GetCompletedDailyToken(restoredSession.Runtime)),
+                Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
+                    controlSession, GetCompletedDailyToken(controlSession.Runtime))));
+        }
+        finally
+        {
+            steal.canFail = originalStealCanFail;
+            UnityEngine.Object.DestroyImmediate(uninterruptedObject);
+            UnityEngine.Object.DestroyImmediate(restoredObject);
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
+    public void SelectedDailyV1HideDispatchBoundaryUsesExactCoreSlotWithoutUnityActionProjection()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
+            entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
+        NpcActionData hide = SimulationTestFactory.CreateAction(
+            "core-hide-without-unity-action-projection",
+            NpcActionType.Hide, NpcActionCategory.Justice);
+        hide.canFail = true;
+        hide.baseSuccessChance = 1f;
+        hide.crimeSettings.hiddenDays = 2;
+        config.Actions.Add(hide);
+        config.InitialWarrants.Add(new InitialWantedRecordConfig
+        {
+            target = actorConfig.npc,
+            city = actorConfig.startingCity,
+            bounty = 12f,
+            sentenceDays = 4
+        });
+
+        GameObject hostObject = new GameObject("P12 selected Core Hide without action projection");
+        simulationObjects.Add(hostObject);
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+            Assert.That(graph.JusticeRecordsOwner, Is.Not.Null);
+
+            NpcRuntime actor = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData != null && string.Equals(
+                    npc.NpcData.id, actorConfig.npc.id, StringComparison.Ordinal));
+            DailyV1NpcRuntimeOwners actorOwner = actor.SelectedRuntimeOwners;
+            Assert.That(actorOwner, Is.Not.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                hide.id, out DailyV1ActionDefinition actionDefinition), Is.True);
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.HideActionTypeValue));
+
+            foreach (NpcRuntime participant in actor.CurrentCity.ImportantNpcs)
+            {
+                Assert.That(participant?.NpcData, Is.Not.Null);
+                PersonId personId = new PersonId(
+                    "p12-selected-core-hide-person-" + participant.NpcData.id);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            Assert.That(actor.CurrentActionRuntime, Is.Null);
+            Assert.That(actor.CurrentAction, Is.Null);
+            // Use the normal selected writer to commit the action slot and its
+            // P12 epoch. The later dispatch assertions then remove only the
+            // transient Unity projection while retaining that exact Core slot.
+            DailyV1ExecutionBoundaryState executionState = runtime.ExecutionBoundaryState;
+            Assert.That(executionState.TryBeginSelectedRuntimeDailyAdvanceOperation(), Is.True);
+            try
+            {
+                MethodInfo enterOperation = typeof(SimulationRuntime).GetMethod(
+                    "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(enterOperation, Is.Not.Null);
+                object[] operationArguments =
+                {
+                    DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+                    null
+                };
+                Assert.That((bool)enterOperation.Invoke(runtime, operationArguments), Is.True);
+                IDisposable operationScope = operationArguments[1] as IDisposable;
+                Assert.That(operationScope, Is.Not.Null);
+                try
+                {
+                    actor.SetCurrentActionRuntime(new NpcActionRuntime(hide));
+                }
+                finally
+                {
+                    operationScope.Dispose();
+                }
+            }
+            finally
+            {
+                Assert.That(executionState.TryEndRuntimeProtocolOperation(), Is.True);
+            }
+            DailyV1NpcActionPayloadOwner payload = actorOwner.ActionSlot.CurrentPayload;
+            Assert.That(payload, Is.Not.Null);
+            Assert.That(actorOwner.ActionSlot.CurrentAction, Is.SameAs(actionDefinition));
+            Assert.That(actor.CurrentActionRuntime.SelectedOwner, Is.SameAs(payload));
+            Assert.That(actor.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+
+            MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                "TryCreateSelectedActorActionExecutionBoundary",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(createBoundary, Is.Not.Null);
+            object[] createArguments = { actor, null, null };
+            Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true));
+            object actorBoundary = createArguments[2];
+            Assert.That(actorBoundary, Is.Not.Null);
+
+            MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+            Assert.That(getDispatchBoundary, Is.Not.Null);
+            PropertyInfo runtimeAdmissionProperty = typeof(SimulationRuntime).GetProperty(
+                "runtimeAdmissionContext", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(runtimeAdmissionProperty, Is.Not.Null);
+            SimulationRuntimeAdmissionContext liveRuntimeAdmission =
+                runtimeAdmissionProperty.GetValue(runtime) as SimulationRuntimeAdmissionContext;
+            Assert.That(liveRuntimeAdmission, Is.Not.Null);
+            Assert.That(runtime.ExecutionBoundaryState.AdmissionContext,
+                Is.SameAs(liveRuntimeAdmission));
+            Assert.That(liveRuntimeAdmission.IsOwnedByCurrentThread(), Is.True);
+
+            object[] dispatchArguments = { actorOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(actorBoundary, dispatchArguments),
+                Is.EqualTo(true));
+            IDailyV1SelectedActionDispatchBoundary dispatchBoundary =
+                dispatchArguments[1] as IDailyV1SelectedActionDispatchBoundary;
+            Assert.That(dispatchBoundary, Is.Not.Null);
+
+            Assert.That(dispatchBoundary.TryGetCrimeActionBoundary(
+                actorOwner, actionDefinition,
+                out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary crimeBoundary),
+                Is.True);
+            Assert.That(crimeBoundary, Is.Not.Null);
+            Assert.That(crimeBoundary.JusticeRecordsOwner,
+                Is.SameAs(graph.JusticeRecordsOwner));
+
+            SimulationRuntimeAdmissionContext admittedContext =
+                ReadPrivateField<SimulationRuntimeAdmissionContext>(
+                    runtime, "runtimeAdmissionContext");
+            Assert.That(admittedContext, Is.Not.Null);
+            long crimeJusticeRevisionBeforeRejectedDispatch = actorOwner.CrimeJusticeRevision;
+            long actionRevisionBeforeRejectedDispatch = actorOwner.ActionSlot.Revision;
+            int hiddenDaysBeforeRejectedDispatch = actorOwner.HiddenState.RemainingDays;
+            int statusCountBeforeRejectedDispatch = actorOwner.Status.Statuses.Count;
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochBeforeRejectedDispatch,
+                out ContinuationCensusFailure epochBeforeRejectedFailure),
+                Is.True, epochBeforeRejectedFailure.ToString());
+
+            WritePrivateField<SimulationRuntimeAdmissionContext>(
+                runtime.ExecutionBoundaryState, "<AdmissionContext>k__BackingField", null);
+            object[] unadmittedCreateArguments = { actor, null, null };
+            Assert.That(createBoundary.Invoke(runtime, unadmittedCreateArguments),
+                Is.EqualTo(true));
+            object[] unadmittedDispatchArguments = { actorOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(
+                unadmittedCreateArguments[2], unadmittedDispatchArguments),
+                Is.EqualTo(false));
+            Assert.That(unadmittedDispatchArguments[1], Is.Null);
+            Assert.That(actorOwner.CrimeJusticeRevision,
+                Is.EqualTo(crimeJusticeRevisionBeforeRejectedDispatch));
+            Assert.That(actorOwner.ActionSlot.Revision,
+                Is.EqualTo(actionRevisionBeforeRejectedDispatch));
+            Assert.That(actorOwner.HiddenState.RemainingDays,
+                Is.EqualTo(hiddenDaysBeforeRejectedDispatch));
+            Assert.That(actorOwner.Status.Statuses.Count,
+                Is.EqualTo(statusCountBeforeRejectedDispatch));
+            WritePrivateField(runtime.ExecutionBoundaryState, "<AdmissionContext>k__BackingField", admittedContext);
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterRejectedDispatch,
+                out ContinuationCensusFailure epochAfterRejectedFailure),
+                Is.True, epochAfterRejectedFailure.ToString());
+            Assert.That(mutationEpochAfterRejectedDispatch,
+                Is.EqualTo(mutationEpochBeforeRejectedDispatch),
+                "An unadmitted projectionless dispatch leaves the owner mutation epoch unchanged.");
+
+            NpcActionData staleAction = config.Actions.First(candidate =>
+                candidate != null && !ReferenceEquals(candidate, hide));
+            NpcActionRuntime staleProjection = new NpcActionRuntime(staleAction);
+            WritePrivateField(actor, "currentActionRuntime", staleProjection);
+            WritePrivateField(actor, "currentAction", staleAction);
+            object[] staleDispatchArguments = { actorOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(actorBoundary, staleDispatchArguments),
+                Is.EqualTo(false));
+            Assert.That(staleDispatchArguments[1], Is.Null,
+                "A present but non-matching Unity projection fails closed.");
+            WritePrivateField<NpcActionRuntime>(actor, "currentActionRuntime", null);
+            WritePrivateField<NpcActionData>(actor, "currentAction", null);
+            Assert.That(actorOwner.CrimeJusticeRevision,
+                Is.EqualTo(crimeJusticeRevisionBeforeRejectedDispatch));
+            Assert.That(actorOwner.ActionSlot.Revision,
+                Is.EqualTo(actionRevisionBeforeRejectedDispatch));
+            Assert.That(actorOwner.HiddenState.RemainingDays,
+                Is.EqualTo(hiddenDaysBeforeRejectedDispatch));
+            Assert.That(actorOwner.Status.Statuses.Count,
+                Is.EqualTo(statusCountBeforeRejectedDispatch));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterStaleProjection,
+                out ContinuationCensusFailure epochAfterStaleFailure),
+                Is.True, epochAfterStaleFailure.ToString());
+            Assert.That(mutationEpochAfterStaleProjection,
+                Is.EqualTo(mutationEpochBeforeRejectedDispatch),
+                "A stale Unity projection cannot authorize a Core owner write.");
+
+            Assert.That(actor.CurrentActionRuntime, Is.Null,
+                "Dispatch uses the exact Core action slot without reconstructing a Unity NpcActionRuntime.");
+
+            long justiceRevisionBefore = graph.JusticeRecordsOwner.Revision;
+            Assert.That(graph.JusticeRecordsOwner.FindActiveWantedRecord(
+                actor.RuntimeId, actor.CurrentCity.RuntimeId), Is.Not.Null);
+            long npcCrimeJusticeRevisionBefore = actorOwner.CrimeJusticeRevision;
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochBefore, out ContinuationCensusFailure epochBeforeFailure),
+                Is.True, epochBeforeFailure.ToString());
+            CoreSelectedActionCountingRandomSource randomSource = new CoreSelectedActionCountingRandomSource();
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                graph, actorOwner, randomSource, runtime.CurrentDay,
+                actorBoundary as IDailyV1SelectedActorActionExecutionBoundary,
+                out bool actionSucceeded, out NpcActionResultType? resultType,
+                out string resultMessage), Is.True);
+            Assert.That(actionSucceeded, Is.True);
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+            Assert.That(resultMessage, Is.Null);
+            Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+            Assert.That(randomSource.StreamKeys.Single(),
+                Is.EqualTo("action-success|" + actor.RuntimeId + "|"
+                    + actionDefinition.DefinitionId + "|"
+                    + actionDefinition.DefinitionId + "|" + runtime.CurrentDay));
+
+            DailyV1StatusDefinition hiddenStatus = graph.Definitions.Statuses[
+                graph.Definitions.Configuration.hiddenStatus];
+            Assert.That(actorOwner.HiddenState.RemainingDays,
+                Is.EqualTo(hide.crimeSettings.hiddenDays + 1));
+            Assert.That(actorOwner.Status.Contains(hiddenStatus), Is.True);
+            Assert.That(actor.IsHidden, Is.True);
+            Assert.That(graph.JusticeRecordsOwner.Revision,
+                Is.EqualTo(justiceRevisionBefore),
+                "Hide reads the exact Justice owner without mutating it.");
+            Assert.That(actorOwner.CrimeJusticeRevision,
+                Is.EqualTo(npcCrimeJusticeRevisionBefore + 2),
+                "The hidden timer and Hidden status retain separate P12 owner writes.");
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfter, out ContinuationCensusFailure epochAfterFailure),
+                Is.True, epochAfterFailure.ToString());
+            Assert.That(mutationEpochAfter, Is.EqualTo(mutationEpochBefore + 2),
+                "Each Hide owner write publishes its own admitted mutation epoch.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    private sealed class CoreSelectedActionCountingRandomSource : IAuthoritativeRandomSource
+    {
+        internal int DrawCount => StreamKeys.Count;
+        internal List<string> StreamKeys { get; } = new List<string>();
+
+        public float NextUnit(string streamKey, long drawIndex = 0L)
+        {
+            StreamKeys.Add(streamKey);
+            return 0f;
+        }
+
+        public DeterministicRandomStream CreateStream(string streamKey) =>
+            new DeterministicRandomSource(1).CreateStream(streamKey);
+    }
+
+    [Test]
+    public void SelectedDailyV1EscapeDispatchesFromExactCoreSlotWithoutUnityActionProjection()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
+            entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
+        NpcActionData escape = SimulationTestFactory.CreateAction(
+            "core-escape-without-unity-action-projection",
+            NpcActionType.EscapePrison, NpcActionCategory.Justice);
+        escape.canFail = true;
+        escape.baseSuccessChance = 1f;
+        escape.crimeSettings.escapeBountyPenalty = 3f;
+        escape.statusToRemove.Add(config.arrestedStatus);
+        escape.statusToAdd.Add(config.freeStatus);
+        config.Actions.Add(escape);
+        config.ScheduledDirectives.Clear();
+
+        GameObject hostObject = new GameObject("P12 selected Core Escape without action projection");
+        simulationObjects.Add(hostObject);
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+            Assert.That(graph.JusticeRecordsOwner, Is.Not.Null);
+
+            NpcRuntime actor = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData != null && string.Equals(
+                    npc.NpcData.id, actorConfig.npc.id, StringComparison.Ordinal));
+            DailyV1NpcRuntimeOwners actorOwner = actor.SelectedRuntimeOwners;
+            Assert.That(actorOwner, Is.Not.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                escape.id, out DailyV1ActionDefinition actionDefinition), Is.True);
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue));
+
+            Assert.That(actor.CurrentActionRuntime, Is.Null);
+
+            foreach (NpcRuntime participant in actor.CurrentCity.ImportantNpcs)
+            {
+                Assert.That(participant?.NpcData, Is.Not.Null);
+                PersonId personId = new PersonId(
+                    "p12-selected-core-escape-person-" + participant.NpcData.id);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            NpcRuntime guard = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData?.job != null
+                && npc.NpcData.job.jobType == NpcJobType.Guard
+                && ReferenceEquals(npc.CurrentCity, actor.CurrentCity));
+            JusticeSystem justice = ReadPrivateField<JusticeSystem>(runtime, "justiceSystem");
+            Assert.That(justice, Is.Not.Null);
+            MethodInfo beginCrimeJusticeScope = typeof(SimulationRuntime).GetMethod(
+                "TryBeginP12CrimeJusticeActionScope", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginCrimeJusticeScope, Is.Not.Null);
+            object[] arrestScopeArguments = { new[] { actor, guard }, true, null };
+            Assert.That(beginCrimeJusticeScope.Invoke(runtime, arrestScopeArguments), Is.EqualTo(true));
+            IDisposable arrestScope = arrestScopeArguments[2] as IDisposable;
+            Assert.That(arrestScope, Is.Not.Null);
+            using (arrestScope)
+            {
+                Assert.That(justice.CreateOrIncreaseWarrant(
+                    actor, actor.CurrentCity, 12f, 4), Is.Not.Null);
+                Assert.That(justice.Arrest(guard, actor, actor.CurrentCity), Is.True);
+            }
+            Assert.That(justice.IsArrested(actor), Is.True);
+            Assert.That(justice.WasArrestedToday(actor), Is.True);
+
+            // Clear the same-day arrest marker through the exact P12-bound
+            // sentence writer so Escape follows the existing later-day rule.
+            DailyV1JusticeSentenceOwner sentence =
+                graph.JusticeRecordsOwner.FindActiveSentence(actor.RuntimeId);
+            Assert.That(sentence, Is.Not.Null);
+            Assert.That(sentence.WasArrestedToday, Is.True);
+            object[] beginDayScopeArguments = { new[] { actor }, true, null };
+            Assert.That(beginCrimeJusticeScope.Invoke(runtime, beginDayScopeArguments), Is.EqualTo(true));
+            IDisposable beginDayScope = beginDayScopeArguments[2] as IDisposable;
+            Assert.That(beginDayScope, Is.Not.Null);
+            using (beginDayScope)
+                Assert.That(sentence.TryClearArrestedToday(), Is.True);
+            Assert.That(justice.IsArrested(actor), Is.True);
+            Assert.That(justice.WasArrestedToday(actor), Is.False);
+
+            MethodInfo beginDailyAdvanceScope = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginDailyAdvanceScope, Is.Not.Null);
+            object[] dailyAdvanceScopeArguments = { "runtime.advance-day", null };
+            Assert.That(beginDailyAdvanceScope.Invoke(runtime, dailyAdvanceScopeArguments), Is.EqualTo(true));
+            IDisposable dailyAdvanceScope = dailyAdvanceScopeArguments[1] as IDisposable;
+            Assert.That(dailyAdvanceScope, Is.Not.Null);
+            try
+            {
+                // Install the action using the normal selected NpcRuntime/P12 writer.
+                // The temporary loss below affects only Unity's compatibility view;
+                // the Core action slot and payload remain authoritative.
+                actor.SetCurrentActionRuntime(new NpcActionRuntime(escape));
+                Assert.That(actor.CurrentActionRuntime, Is.Not.Null);
+                Assert.That(actor.SelectedRuntimeOwners.ActionSlot.CurrentAction,
+                    Is.SameAs(actionDefinition));
+                DailyV1NpcActionPayloadOwner exactPayload =
+                    actorOwner.ActionSlot.CurrentPayload;
+                Assert.That(actor.CurrentActionRuntime.SelectedOwner, Is.SameAs(exactPayload));
+                Assert.That(actor.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+
+                long actionRevisionBeforeProjectionRecovery = actorOwner.ActionSlot.Revision;
+                // Simulate a host whose transient Unity projection was unavailable
+                // after the Core owner committed. The adapter must reconstruct the
+                // same compatibility view before dispatch and before P12 closes.
+                WritePrivateField<NpcActionRuntime>(actor, "currentActionRuntime", null);
+                WritePrivateField<NpcActionData>(actor, "currentAction", null);
+                Assert.That(actor.CurrentActionRuntime, Is.Null,
+                    "The exact Escape slot has no Unity action execution projection at dispatch entry.");
+
+                MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                "TryCreateSelectedActorActionExecutionBoundary",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(createBoundary, Is.Not.Null);
+                object[] createArguments = { actor, null, null };
+                Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true));
+                IDailyV1SelectedActorActionExecutionBoundary actorBoundary =
+                    createArguments[2] as IDailyV1SelectedActorActionExecutionBoundary;
+                Assert.That(actorBoundary, Is.Not.Null);
+
+                MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+                Assert.That(getDispatchBoundary, Is.Not.Null);
+                object[] dispatchArguments = { actorOwner, null };
+
+                long justiceRevisionBeforeRejectedDispatch = graph.JusticeRecordsOwner.Revision;
+                long npcCrimeJusticeRevisionBeforeRejectedDispatch = actorOwner.CrimeJusticeRevision;
+                RuntimeIdAllocator idAllocator = ReadPrivateField<RuntimeIdAllocator>(runtime, "runtimeIdAllocator");
+                SimulationRecordSequence recordSequence = ReadPrivateField<SimulationRecordSequence>(
+                    runtime, "simulationRecordSequence");
+                long eventIdRevisionBeforeRejectedDispatch = idAllocator.GetCensusRevision(
+                    RuntimeIdAllocatorCensusCounter.Events);
+                long recordSequenceRevisionBeforeRejectedDispatch = recordSequence.CensusRevision;
+                float bountyBeforeRejectedDispatch = justice.GetBounty(actor, actor.CurrentCity);
+                DailyV1JusticeSentenceOwner sentenceBeforeRejectedDispatch =
+                    graph.JusticeRecordsOwner.FindActiveSentence(actor.RuntimeId);
+                Assert.That(sentenceBeforeRejectedDispatch, Is.Not.Null);
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochBeforeRejectedDispatch,
+                    out ContinuationCensusFailure epochBeforeRejectedFailure),
+                    Is.True, epochBeforeRejectedFailure.ToString());
+
+                SimulationRuntimeAdmissionContext admittedContext =
+                    ReadPrivateField<SimulationRuntimeAdmissionContext>(runtime, "runtimeAdmissionContext");
+                Assert.That(admittedContext, Is.Not.Null);
+                WritePrivateField<SimulationRuntimeAdmissionContext>(runtime.ExecutionBoundaryState,
+                    "<AdmissionContext>k__BackingField", null);
+                try
+                {
+                    Assert.That(getDispatchBoundary.Invoke(actorBoundary, dispatchArguments),
+                        Is.EqualTo(false));
+                    Assert.That(dispatchArguments[1], Is.Null);
+                    Assert.That(actor.CurrentActionRuntime, Is.Null,
+                        "A rejected projectionless Escape does not reconstruct a compatibility projection.");
+                    Assert.That(graph.JusticeRecordsOwner.Revision,
+                        Is.EqualTo(justiceRevisionBeforeRejectedDispatch));
+                    Assert.That(actorOwner.CrimeJusticeRevision,
+                        Is.EqualTo(npcCrimeJusticeRevisionBeforeRejectedDispatch));
+                    Assert.That(actorOwner.ActionSlot.Revision,
+                        Is.EqualTo(actionRevisionBeforeProjectionRecovery));
+                    Assert.That(idAllocator.GetCensusRevision(RuntimeIdAllocatorCensusCounter.Events),
+                        Is.EqualTo(eventIdRevisionBeforeRejectedDispatch));
+                    Assert.That(recordSequence.CensusRevision,
+                        Is.EqualTo(recordSequenceRevisionBeforeRejectedDispatch));
+                    Assert.That(justice.GetBounty(actor, actor.CurrentCity),
+                        Is.EqualTo(bountyBeforeRejectedDispatch));
+                    Assert.That(graph.JusticeRecordsOwner.FindActiveSentence(actor.RuntimeId),
+                        Is.SameAs(sentenceBeforeRejectedDispatch));
+                    Assert.That(justice.IsArrested(actor), Is.True);
+                    Assert.That(justice.WasArrestedToday(actor), Is.False);
+                    Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                        out long mutationEpochAfterRejectedDispatch,
+                        out ContinuationCensusFailure epochAfterRejectedFailure),
+                        Is.True, epochAfterRejectedFailure.ToString());
+                    Assert.That(mutationEpochAfterRejectedDispatch,
+                        Is.EqualTo(mutationEpochBeforeRejectedDispatch),
+                        "Rejected projectionless Escape leaves Justice, NPC, event, sequence, and census state unchanged.");
+                }
+                finally
+                {
+                    WritePrivateField<SimulationRuntimeAdmissionContext>(runtime.ExecutionBoundaryState,
+                        "<AdmissionContext>k__BackingField", admittedContext);
+                }
+
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochBeforeProjectionRecovery,
+                    out ContinuationCensusFailure epochBeforeProjectionRecoveryFailure),
+                    Is.True, epochBeforeProjectionRecoveryFailure.ToString());
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, dispatchArguments),
+                    Is.EqualTo(true));
+                IDailyV1SelectedActionDispatchBoundary dispatchBoundary =
+                    dispatchArguments[1] as IDailyV1SelectedActionDispatchBoundary;
+                Assert.That(dispatchBoundary, Is.Not.Null);
+                Assert.That(actor.CurrentActionRuntime, Is.Not.Null,
+                    "The Unity adapter rebuilds the projection from the exact Core payload before P12 dispatch.");
+                Assert.That(actor.CurrentActionRuntime.SelectedOwner, Is.SameAs(exactPayload));
+                Assert.That(actor.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+                Assert.That(actorOwner.ActionSlot.Revision,
+                    Is.EqualTo(actionRevisionBeforeProjectionRecovery),
+                    "Restoring a compatibility projection does not write the Core action owner.");
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochAfterProjectionRecovery,
+                    out ContinuationCensusFailure epochAfterProjectionRecoveryFailure),
+                    Is.True, epochAfterProjectionRecoveryFailure.ToString());
+                Assert.That(mutationEpochAfterProjectionRecovery,
+                    Is.EqualTo(mutationEpochBeforeProjectionRecovery),
+                    "Restoring a compatibility projection does not publish a P12 owner mutation epoch.");
+                Assert.That(dispatchBoundary.TryGetCrimeActionBoundary(
+                    actorOwner, actionDefinition,
+                    out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary crimeBoundary),
+                    Is.True);
+                Assert.That(crimeBoundary.JusticeRecordsOwner,
+                    Is.SameAs(graph.JusticeRecordsOwner));
+
+                long justiceRevisionBefore = graph.JusticeRecordsOwner.Revision;
+                long npcCrimeJusticeRevisionBefore = actorOwner.CrimeJusticeRevision;
+                float bountyBefore = justice.GetBounty(actor, actor.CurrentCity);
+                long eventIdRevisionBefore = idAllocator.GetCensusRevision(RuntimeIdAllocatorCensusCounter.Events);
+                long recordSequenceRevisionBefore = recordSequence.CensusRevision;
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochBefore, out ContinuationCensusFailure epochBeforeFailure),
+                    Is.True, epochBeforeFailure.ToString());
+                CoreSelectedActionCountingRandomSource randomSource = new CoreSelectedActionCountingRandomSource();
+                Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                    graph, actorOwner, randomSource, runtime.CurrentDay, actorBoundary,
+                    out bool actionSucceeded, out NpcActionResultType? resultType,
+                    out string resultMessage), Is.True);
+                Assert.That(actionSucceeded, Is.True);
+                Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+                Assert.That(resultMessage, Is.Null);
+                Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+                Assert.That(randomSource.StreamKeys.Single(),
+                Is.EqualTo("action-success|" + actor.RuntimeId + "|"
+                    + actionDefinition.DefinitionId + "|"
+                    + actionDefinition.DefinitionId + "|" + runtime.CurrentDay));
+
+                Assert.That(justice.IsArrested(actor), Is.False);
+                Assert.That(justice.WasArrestedToday(actor), Is.False);
+                Assert.That(actorOwner.Status.Contains(graph.Definitions.Statuses[graph.Definitions.Configuration.freeStatus]), Is.True);
+                Assert.That(actorOwner.Status.Contains(graph.Definitions.Statuses[graph.Definitions.Configuration.arrestedStatus]), Is.False);
+                Assert.That(graph.JusticeRecordsOwner.FindActiveSentence(actor.RuntimeId), Is.Null);
+                Assert.That(justice.GetBounty(actor, actor.CurrentCity),
+                Is.EqualTo(bountyBefore + escape.crimeSettings.escapeBountyPenalty));
+                Assert.That(graph.JusticeRecordsOwner.Revision,
+                Is.EqualTo(justiceRevisionBefore + 2),
+                "Escape commits the warrant penalty and sentence removal to the exact Justice owner.");
+                Assert.That(actorOwner.CrimeJusticeRevision,
+                Is.EqualTo(npcCrimeJusticeRevisionBefore + 2),
+                "Escape removes Arrested and adds Free through two exact NPC owner writes.");
+                Assert.That(idAllocator.GetCensusRevision(RuntimeIdAllocatorCensusCounter.Events),
+                Is.EqualTo(eventIdRevisionBefore + 1),
+                "Escape publishes one event with the admitted event-id allocator.");
+                Assert.That(recordSequence.CensusRevision,
+                Is.EqualTo(recordSequenceRevisionBefore + 1),
+                "Escape publishes one event with the admitted record sequence.");
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochAfter, out ContinuationCensusFailure epochAfterFailure),
+                    Is.True, epochAfterFailure.ToString());
+                Assert.That(mutationEpochAfter, Is.EqualTo(mutationEpochBefore + 6),
+                "Two Justice writes, two NPC status writes, event identity, and record sequence each publish their admitted epoch.");
+            }
+            finally
+            {
+                dailyAdvanceScope.Dispose();
+            }
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+    [Test]
+    public void SelectedDailyV1FleeCityDispatchRebuildsProjectionFromExactCoreSlot()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
+            entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
+        NpcActionData flee = SimulationTestFactory.CreateAction(
+            "core-flee-city-without-unity-action-projection",
+            NpcActionType.FleeCity, NpcActionCategory.Crime);
+        flee.canFail = true;
+        flee.baseSuccessChance = 1f;
+        flee.statusNecessariosParaFazerAcao.Add(config.freeStatus);
+        config.Actions.Add(flee);
+        config.ScheduledDirectives.Clear();
+
+        GameObject hostObject = new GameObject("P12 selected Core FleeCity without action projection");
+        simulationObjects.Add(hostObject);
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+
+            NpcRuntime actor = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData != null && string.Equals(
+                    npc.NpcData.id, actorConfig.npc.id, StringComparison.Ordinal));
+            DailyV1NpcRuntimeOwners actorOwner = actor.SelectedRuntimeOwners;
+            Assert.That(actorOwner, Is.Not.Null);
+            Assert.That(actor.CurrentCity, Is.Not.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                flee.id, out DailyV1ActionDefinition actionDefinition), Is.True);
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.FleeCityActionTypeValue));
+            Assert.That(actor.CurrentActionRuntime, Is.Null);
+
+            CityRuntime destination = null;
+            float expectedTravelCost = -1f;
+            foreach (CityRuntime candidate in runtime.Cities)
+            {
+                DailyV1CityRuntimeOwners candidateOwner = candidate?.SelectedRuntimeOwners;
+                if (candidate == null || candidateOwner == null
+                    || ReferenceEquals(candidate, actor.CurrentCity)
+                    || !graph.ContainsExactCityOwner(candidateOwner)
+                    || !graph.TryPlanSelectedSoloTravel(actorOwner,
+                        actorOwner.Travel.CurrentLocationRuntimeId,
+                        candidateOwner.LocationRuntimeId,
+                        candidateOwner.RuntimeId,
+                        out SpatialRouteRuntime route,
+                        out float travelCost)
+                    || route == null
+                    || !actorOwner.MoneyAccount.CanDebit(travelCost))
+                    continue;
+
+                destination = candidate;
+                expectedTravelCost = travelCost;
+                break;
+            }
+            Assert.That(destination, Is.Not.Null,
+                "The admitted authored profile supplies an exact directly reachable destination city.");
+            DailyV1CityRuntimeOwners destinationOwner = destination.SelectedRuntimeOwners;
+            Assert.That(graph.ContainsExactCityOwner(destinationOwner), Is.True);
+
+            foreach (NpcRuntime participant in actor.CurrentCity.ImportantNpcs)
+            {
+                Assert.That(participant?.NpcData, Is.Not.Null);
+                PersonId personId = new PersonId(
+                    "p12-selected-core-flee-person-" + participant.NpcData.id);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            MethodInfo beginDailyAdvanceScope = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginDailyAdvanceScope, Is.Not.Null);
+            object[] dailyAdvanceScopeArguments = { "runtime.advance-day", null };
+            Assert.That(beginDailyAdvanceScope.Invoke(runtime, dailyAdvanceScopeArguments), Is.EqualTo(true));
+            IDisposable dailyAdvanceScope = dailyAdvanceScopeArguments[1] as IDisposable;
+            Assert.That(dailyAdvanceScope, Is.Not.Null);
+            try
+            {
+                actor.SetCurrentActionRuntime(new NpcActionRuntime(
+                    flee, destination, null, NpcTravelReason.Flee, expectedTravelCost, 0f));
+                Assert.That(actor.CurrentActionRuntime, Is.Not.Null);
+                DailyV1NpcActionPayloadOwner exactPayload = actorOwner.ActionSlot.CurrentPayload;
+                Assert.That(actorOwner.ActionSlot.CurrentAction, Is.SameAs(actionDefinition));
+                Assert.That(exactPayload.Action, Is.SameAs(actionDefinition));
+                Assert.That(exactPayload.TargetCityRuntimeId,
+                    Is.EqualTo(destinationOwner.RuntimeId));
+                Assert.That(actor.CurrentActionRuntime.SelectedOwner, Is.SameAs(exactPayload));
+                Assert.That(actor.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+
+                long actionRevisionBeforeRecovery = actorOwner.ActionSlot.Revision;
+                long travelPlanRevisionBeforeRecovery = actorOwner.TravelPlan.Revision;
+                long travelRevisionBeforeRecovery = actorOwner.Travel.Revision;
+                long moneyRevisionBeforeRecovery = actorOwner.MoneyAccount.Revision;
+                float moneyBalanceBeforeRecovery = actorOwner.MoneyAccount.Balance;
+                string currentCityBeforeRecovery = actorOwner.Travel.CurrentCityRuntimeId;
+                string currentLocationBeforeRecovery = actorOwner.Travel.CurrentLocationRuntimeId;
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochBeforeRecovery,
+                    out ContinuationCensusFailure epochBeforeRecoveryFailure),
+                    Is.True, epochBeforeRecoveryFailure.ToString());
+
+                WritePrivateField<NpcActionRuntime>(actor, "currentActionRuntime", null);
+                WritePrivateField<NpcActionData>(actor, "currentAction", null);
+                Assert.That(actor.CurrentActionRuntime, Is.Null);
+
+                MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                    "TryCreateSelectedActorActionExecutionBoundary",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(createBoundary, Is.Not.Null);
+                object[] createArguments = { actor, null, null };
+                Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true));
+                IDailyV1SelectedActorActionExecutionBoundary actorBoundary =
+                    createArguments[2] as IDailyV1SelectedActorActionExecutionBoundary;
+                Assert.That(actorBoundary, Is.Not.Null);
+                MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                    "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+                Assert.That(getDispatchBoundary, Is.Not.Null);
+                object[] dispatchArguments = { actorOwner, null };
+
+                SimulationRuntimeAdmissionContext admittedContext =
+                    ReadPrivateField<SimulationRuntimeAdmissionContext>(runtime, "runtimeAdmissionContext");
+                Assert.That(admittedContext, Is.Not.Null);
+                WritePrivateField<SimulationRuntimeAdmissionContext>(runtime.ExecutionBoundaryState,
+                    "<AdmissionContext>k__BackingField", null);
+                try
+                {
+                    Assert.That(getDispatchBoundary.Invoke(actorBoundary, dispatchArguments),
+                        Is.EqualTo(false));
+                    Assert.That(dispatchArguments[1], Is.Null);
+                    Assert.That(actor.CurrentActionRuntime, Is.Null,
+                        "An unadmitted FleeCity slot does not reconstruct its Unity projection.");
+                    Assert.That(actorOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                    Assert.That(actorOwner.TravelPlan.Revision,
+                        Is.EqualTo(travelPlanRevisionBeforeRecovery));
+                    Assert.That(actorOwner.Travel.Revision, Is.EqualTo(travelRevisionBeforeRecovery));
+                    Assert.That(actorOwner.MoneyAccount.Revision,
+                        Is.EqualTo(moneyRevisionBeforeRecovery));
+                    Assert.That(actorOwner.MoneyAccount.Balance, Is.EqualTo(moneyBalanceBeforeRecovery));
+                    Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                        out long mutationEpochAfterRejected,
+                        out ContinuationCensusFailure epochAfterRejectedFailure),
+                        Is.True, epochAfterRejectedFailure.ToString());
+                    Assert.That(mutationEpochAfterRejected, Is.EqualTo(mutationEpochBeforeRecovery));
+                }
+                finally
+                {
+                    WritePrivateField<SimulationRuntimeAdmissionContext>(runtime.ExecutionBoundaryState,
+                        "<AdmissionContext>k__BackingField", admittedContext);
+                }
+
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, dispatchArguments),
+                    Is.EqualTo(true));
+                IDailyV1SelectedActionDispatchBoundary dispatchBoundary =
+                    dispatchArguments[1] as IDailyV1SelectedActionDispatchBoundary;
+                Assert.That(dispatchBoundary, Is.Not.Null);
+                Assert.That(actor.CurrentActionRuntime, Is.Not.Null);
+                Assert.That(actor.CurrentActionRuntime.SelectedOwner, Is.SameAs(exactPayload));
+                Assert.That(actor.CurrentActionRuntime.TargetCity, Is.SameAs(destination));
+                Assert.That(actor.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+                Assert.That(actorOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(actorOwner.TravelPlan.Revision,
+                    Is.EqualTo(travelPlanRevisionBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochAfterRecovery,
+                    out ContinuationCensusFailure epochAfterRecoveryFailure),
+                    Is.True, epochAfterRecoveryFailure.ToString());
+                Assert.That(mutationEpochAfterRecovery, Is.EqualTo(mutationEpochBeforeRecovery),
+                    "Rebuilding the compatibility projection does not write the selected action owner or P12 epoch.");
+
+                CoreSelectedActionCountingRandomSource randomSource =
+                    new CoreSelectedActionCountingRandomSource();
+                Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                    graph, actorOwner, randomSource, runtime.CurrentDay, actorBoundary,
+                    out bool actionSucceeded, out NpcActionResultType? resultType,
+                    out string resultMessage), Is.True);
+                Assert.That(actionSucceeded, Is.True);
+                Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+                Assert.That(resultMessage, Is.Null);
+                Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+                Assert.That(randomSource.StreamKeys.Single(), Is.EqualTo(
+                    "action-success|" + actor.RuntimeId + "|"
+                    + actionDefinition.DefinitionId + "|"
+                    + actionDefinition.DefinitionId + "|" + runtime.CurrentDay));
+
+                Assert.That(actorOwner.TravelPlan.TargetCityRuntimeId,
+                    Is.EqualTo(destinationOwner.RuntimeId));
+                Assert.That(actorOwner.TravelPlan.TargetLocationRuntimeId,
+                    Is.EqualTo(destinationOwner.LocationRuntimeId));
+                Assert.That(actorOwner.TravelPlan.Reason, Is.EqualTo(NpcTravelReason.Flee));
+                Assert.That(actorOwner.TravelPlan.Utility, Is.EqualTo(80f));
+                Assert.That(actorOwner.TravelPlan.ExpectedCost, Is.EqualTo(expectedTravelCost));
+                Assert.That(actorOwner.TravelPlan.Revision,
+                    Is.EqualTo(travelPlanRevisionBeforeRecovery + 1));
+                Assert.That(actor.TravelPlan.TargetCity, Is.SameAs(destination));
+                Assert.That(actor.TravelPlan.TargetLocation, Is.SameAs(destination.Location));
+                Assert.That(actorOwner.Travel.Revision, Is.EqualTo(travelRevisionBeforeRecovery),
+                    "FleeCity prepares pending travel and does not move the actor.");
+                Assert.That(actorOwner.Travel.CurrentCityRuntimeId,
+                    Is.EqualTo(currentCityBeforeRecovery));
+                Assert.That(actorOwner.Travel.CurrentLocationRuntimeId,
+                    Is.EqualTo(currentLocationBeforeRecovery));
+                Assert.That(actorOwner.MoneyAccount.Revision, Is.EqualTo(moneyRevisionBeforeRecovery),
+                    "FleeCity records the route cost without charging the actor.");
+                Assert.That(actorOwner.MoneyAccount.Balance, Is.EqualTo(moneyBalanceBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long mutationEpochAfterFlee,
+                    out ContinuationCensusFailure epochAfterFleeFailure),
+                    Is.True, epochAfterFleeFailure.ToString());
+                Assert.That(mutationEpochAfterFlee, Is.EqualTo(mutationEpochBeforeRecovery + 1),
+                    "Only the committed TravelPlan owner write publishes a P12 census epoch.");
+            }
+            finally
+            {
+                dailyAdvanceScope.Dispose();
+            }
+
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
+    public void SelectedDailyV1GuardArrestDispatchRebuildsProjectionFromExactCoreSlot()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        NpcActionData arrest = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-Prender.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        Assert.That(arrest, Is.Not.Null);
+        Assert.That(arrest.actionType, Is.EqualTo(NpcActionType.Arrest));
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcSimulationConfig targetConfig = config.Npcs.Single(entry =>
+            entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
+        config.crimeAutonomousEnabled = false;
+        config.InitialWarrants.Clear();
+        config.InitialWarrants.Add(new InitialWantedRecordConfig
+        {
+            target = targetConfig.npc,
+            city = targetConfig.startingCity,
+            bounty = 50f,
+            sentenceDays = 5
+        });
+
+        bool originalCanFail = arrest.canFail;
+        float originalSuccessChance = arrest.baseSuccessChance;
+        GameObject hostObject = new GameObject(
+            "P12 selected Core Guard Arrest without action projection");
+        simulationObjects.Add(hostObject);
+        IDisposable dailyAdvanceScope = null;
+        try
+        {
+            arrest.canFail = true;
+            arrest.baseSuccessChance = 1f;
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                arrest.id, out DailyV1ActionDefinition actionDefinition), Is.True);
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.ArrestActionTypeValue));
+
+            NpcRuntime targetRuntime = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData != null && string.Equals(
+                    npc.NpcData.id, targetConfig.npc.id, StringComparison.Ordinal));
+            NpcRuntime guardRuntime = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData?.job != null
+                && npc.NpcData.job.jobType == NpcJobType.Guard
+                && ReferenceEquals(npc.CurrentCity, targetRuntime.CurrentCity));
+            Assert.That(targetRuntime.CurrentCity, Is.Not.Null);
+            Assert.That(guardRuntime.CurrentCity, Is.SameAs(targetRuntime.CurrentCity));
+            DailyV1NpcRuntimeOwners targetOwner = targetRuntime.SelectedRuntimeOwners;
+            DailyV1NpcRuntimeOwners guardOwner = guardRuntime.SelectedRuntimeOwners;
+            Assert.That(targetOwner, Is.Not.Null);
+            Assert.That(guardOwner, Is.Not.Null);
+            JusticeSystem justice = ReadPrivateField<JusticeSystem>(runtime, "justiceSystem");
+            Assert.That(justice, Is.Not.Null);
+            Assert.That(justice.HasActiveWarrantInCity(
+                targetRuntime, targetRuntime.CurrentCity), Is.True);
+
+            foreach (NpcRuntime participant in guardRuntime.CurrentCity.ImportantNpcs)
+            {
+                Assert.That(participant?.NpcData, Is.Not.Null);
+                PersonId personId = new PersonId(
+                    "core-guard-arrest-projection-" + participant.RuntimeId);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            MethodInfo beginDailyAdvanceScope = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginDailyAdvanceScope, Is.Not.Null);
+            object[] dailyAdvanceScopeArguments = { "runtime.advance-day", null };
+            Assert.That(beginDailyAdvanceScope.Invoke(runtime, dailyAdvanceScopeArguments),
+                Is.EqualTo(true));
+            dailyAdvanceScope = dailyAdvanceScopeArguments[1] as IDisposable;
+            Assert.That(dailyAdvanceScope, Is.Not.Null);
+
+            guardRuntime.SetCurrentActionRuntime(new NpcActionRuntime(arrest, targetRuntime));
+            DailyV1NpcActionPayloadOwner exactPayload = guardOwner.ActionSlot.CurrentPayload;
+            Assert.That(guardOwner.ActionSlot.CurrentAction, Is.SameAs(actionDefinition));
+            Assert.That(exactPayload.Action, Is.SameAs(actionDefinition));
+            Assert.That(exactPayload.TargetNpcRuntimeId, Is.EqualTo(targetOwner.RuntimeId));
+            Assert.That(exactPayload.TargetCityRuntimeId, Is.Null);
+            Assert.That(exactPayload.TargetItem, Is.Null);
+            Assert.That(exactPayload.Amount, Is.Zero);
+            Assert.That(guardRuntime.CurrentActionRuntime.SelectedOwner, Is.SameAs(exactPayload));
+            Assert.That(guardRuntime.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+
+            long actionRevisionBeforeRecovery = guardOwner.ActionSlot.Revision;
+            long justiceRevisionBeforeRecovery = graph.JusticeRecordsOwner.Revision;
+            long targetRevisionBeforeRecovery = targetOwner.CrimeJusticeRevision;
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochBeforeRecovery,
+                out ContinuationCensusFailure epochBeforeRecoveryFailure),
+                Is.True, epochBeforeRecoveryFailure.ToString());
+
+            WritePrivateField<NpcActionRuntime>(guardRuntime, "currentActionRuntime", null);
+            WritePrivateField<NpcActionData>(guardRuntime, "currentAction", null);
+            Assert.That(guardRuntime.CurrentActionRuntime, Is.Null);
+
+            MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                "TryCreateSelectedActorActionExecutionBoundary",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(createBoundary, Is.Not.Null);
+            object[] createArguments = { guardRuntime, null, null };
+            Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true));
+            IDailyV1SelectedActorActionExecutionBoundary actorBoundary =
+                createArguments[2] as IDailyV1SelectedActorActionExecutionBoundary;
+            Assert.That(actorBoundary, Is.Not.Null);
+            MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+            Assert.That(getDispatchBoundary, Is.Not.Null);
+
+            List<NpcRuntime> runtimeProjections =
+                ReadPrivateField<List<NpcRuntime>>(runtime, "npcRuntimes");
+            int targetProjectionIndex = runtimeProjections.IndexOf(targetRuntime);
+            Assert.That(targetProjectionIndex, Is.GreaterThanOrEqualTo(0));
+            runtimeProjections.RemoveAt(targetProjectionIndex);
+            try
+            {
+                object[] rejectedDispatchArguments = { guardOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, rejectedDispatchArguments),
+                    Is.EqualTo(false));
+                Assert.That(rejectedDispatchArguments[1], Is.Null);
+                Assert.That(guardRuntime.CurrentActionRuntime, Is.Null,
+                    "An unresolved exact target projection must not reconstruct the Guard action.");
+                Assert.That(guardOwner.ActionSlot.Revision,
+                    Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(graph.JusticeRecordsOwner.Revision,
+                    Is.EqualTo(justiceRevisionBeforeRecovery));
+                Assert.That(targetOwner.CrimeJusticeRevision,
+                    Is.EqualTo(targetRevisionBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long rejectedEpoch, out ContinuationCensusFailure rejectedEpochFailure),
+                    Is.True, rejectedEpochFailure.ToString());
+                Assert.That(rejectedEpoch, Is.EqualTo(mutationEpochBeforeRecovery));
+            }
+            finally
+            {
+                runtimeProjections.Insert(targetProjectionIndex, targetRuntime);
+            }
+
+            object[] dispatchArguments = { guardOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(actorBoundary, dispatchArguments),
+                Is.EqualTo(true));
+            Assert.That(dispatchArguments[1],
+                Is.InstanceOf<IDailyV1SelectedActionDispatchBoundary>());
+            Assert.That(guardRuntime.CurrentActionRuntime, Is.Not.Null);
+            Assert.That(guardRuntime.CurrentActionRuntime.SelectedOwner, Is.SameAs(exactPayload));
+            Assert.That(guardRuntime.CurrentActionRuntime.TargetNpc, Is.SameAs(targetRuntime));
+            Assert.That(guardRuntime.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+            Assert.That(guardOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterRecovery,
+                out ContinuationCensusFailure epochAfterRecoveryFailure),
+                Is.True, epochAfterRecoveryFailure.ToString());
+            Assert.That(mutationEpochAfterRecovery, Is.EqualTo(mutationEpochBeforeRecovery),
+                "Rebuilding the exact Guard action projection is not a P12 owner write.");
+
+            CoreSelectedActionCountingRandomSource randomSource =
+                new CoreSelectedActionCountingRandomSource();
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                graph, guardOwner, randomSource, runtime.CurrentDay, actorBoundary,
+                out bool actionSucceeded, out NpcActionResultType? resultType,
+                out string resultMessage), Is.True);
+            Assert.That(actionSucceeded, Is.True);
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+            Assert.That(resultMessage, Is.Null);
+            Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+
+            Assert.That(guardRuntime.CurrentActionRuntime, Is.Not.Null);
+            Assert.That(guardRuntime.CurrentActionRuntime.TargetNpc, Is.SameAs(targetRuntime));
+            Assert.That(guardRuntime.CurrentActionRuntime.SelectedOwner, Is.SameAs(exactPayload));
+            Assert.That(justice.IsArrested(targetRuntime), Is.True);
+            Assert.That(justice.WasArrestedToday(targetRuntime), Is.True);
+            DailyV1JusticeSentenceOwner sentence =
+                graph.JusticeRecordsOwner.FindActiveSentence(targetRuntime.RuntimeId);
+            Assert.That(sentence, Is.Not.Null);
+            Assert.That(sentence.TargetRuntimeId, Is.EqualTo(targetOwner.RuntimeId));
+            Assert.That(sentence.CityRuntimeId, Is.EqualTo(guardOwner.Travel.CurrentCityRuntimeId));
+            Assert.That(graph.JusticeRecordsOwner.Revision,
+                Is.EqualTo(justiceRevisionBeforeRecovery + 1),
+                "The Guard commits the sentence once to the exact Justice owner.");
+            Assert.That(targetOwner.CrimeJusticeRevision,
+                Is.EqualTo(targetRevisionBeforeRecovery + 2),
+                "The admitted arrest removes Free and adds Arrested through the exact NPC owner.");
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterArrest,
+                out ContinuationCensusFailure epochAfterArrestFailure),
+                Is.True, epochAfterArrestFailure.ToString());
+            Assert.That(mutationEpochAfterArrest, Is.GreaterThan(mutationEpochBeforeRecovery),
+                "The Guard's Justice and target-status commits publish their existing P12 epochs.");
+            dailyAdvanceScope.Dispose();
+            dailyAdvanceScope = null;
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
+            dailyAdvanceScope?.Dispose();
+            arrest.canFail = originalCanFail;
+            arrest.baseSuccessChance = originalSuccessChance;
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+    [Test]
+        public void SelectedDailyV1StealDispatchRebuildsProjectionFromExactCoreSlot()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        NpcActionData steal = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-Roubar.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        Assert.That(steal, Is.Not.Null);
+        Assert.That(steal.actionType, Is.EqualTo(NpcActionType.Steal));
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        if (!config.Actions.Contains(steal)) config.Actions.Add(steal);
+        bool originalStealCanFail = steal.canFail;
+        float originalStealBaseSuccessChance = steal.baseSuccessChance;
+        steal.canFail = true;
+        steal.baseSuccessChance = 1f;
+        GameObject hostObject = new GameObject("P12 selected Core Steal without action projection");
+        simulationObjects.Add(hostObject);
+        IDisposable dailyAdvanceScope = null;
+        try
+        {
+            NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
+                entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+            Assert.That(graph.JusticeRecordsOwner, Is.Not.Null);
+            JusticeSystem justice = ReadPrivateField<JusticeSystem>(runtime, "justiceSystem");
+            Assert.That(justice, Is.Not.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                steal.id, out DailyV1ActionDefinition actionDefinition), Is.True);
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.StealActionTypeValue));
+
+            NpcRuntime thiefRuntime = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData != null && string.Equals(
+                    npc.NpcData.id, actorConfig.npc.id, StringComparison.Ordinal));
+            CityRuntime city = thiefRuntime.CurrentCity;
+            Assert.That(city, Is.Not.Null);
+            NpcRuntime victimRuntime = city.ImportantNpcs.FirstOrDefault(candidate =>
+                candidate != null && !ReferenceEquals(candidate, thiefRuntime)
+                && ReferenceEquals(candidate.CurrentCity, city)
+                && candidate.SelectedRuntimeOwners?.Lifecycle?.LifeState == NpcLifeState.Alive
+                && candidate.SelectedRuntimeOwners?.MoneyAccount?.Balance >= 1f
+                && candidate.SelectedRuntimeOwners?.HiddenState?.RemainingDays <= 0);
+            Assert.That(victimRuntime, Is.Not.Null,
+                "The admitted local roster must include a living, co-located victim with spendable balance.");
+
+            DailyV1NpcRuntimeOwners thiefOwner = thiefRuntime.SelectedRuntimeOwners;
+            DailyV1NpcRuntimeOwners victimOwner = victimRuntime.SelectedRuntimeOwners;
+            Assert.That(thiefOwner, Is.Not.Null);
+            Assert.That(victimOwner, Is.Not.Null);
+            Assert.That(thiefRuntime.CurrentActionRuntime, Is.Null);
+            Assert.That(thiefRuntime.CurrentAction, Is.Null);
+
+            PersonId thiefPersonId = null;
+            PersonId victimPersonId = null;
+            foreach (NpcRuntime participant in city.ImportantNpcs)
+            {
+                Assert.That(participant?.SelectedRuntimeOwners, Is.Not.Null);
+                PersonId personId = new PersonId(
+                    "p12-selected-core-steal-person-" + participant.RuntimeId);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+                if (ReferenceEquals(participant, thiefRuntime)) thiefPersonId = personId;
+                if (ReferenceEquals(participant, victimRuntime)) victimPersonId = personId;
+            }
+            Assert.That(thiefPersonId, Is.Not.Null);
+            Assert.That(victimPersonId, Is.Not.Null);
+
+            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+                graph.Definitions,
+                actionDefinition,
+                victimOwner.RuntimeId,
+                null,
+                null,
+                1,
+                0f,
+                1f,
+                NpcTravelReason.None,
+                0f,
+                "core-steal-decision-" + thiefOwner.RuntimeId,
+                "core-steal-occurrence-" + thiefOwner.RuntimeId,
+                null,
+                null,
+                out DailyV1NpcActionPayloadOwner exactPayload), Is.True);
+            NpcActionRuntime initialProjection = new NpcActionRuntime(steal, victimRuntime);
+            Assert.That(initialProjection.TryUseSelectedPayload(
+                exactPayload, graph.Definitions), Is.True);
+            SetSelectedCurrentActionForAdmissionTest(runtime, thiefRuntime, initialProjection);
+            Assert.That(thiefRuntime.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            MethodInfo beginDailyAdvanceScope = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginDailyAdvanceScope, Is.Not.Null);
+            object[] dailyAdvanceScopeArguments = { "runtime.advance-day", null };
+            Assert.That(beginDailyAdvanceScope.Invoke(runtime, dailyAdvanceScopeArguments),
+                Is.EqualTo(true));
+            dailyAdvanceScope = dailyAdvanceScopeArguments[1] as IDisposable;
+            Assert.That(dailyAdvanceScope, Is.Not.Null);
+
+            // Keep the census baseline exact, then remove only the Unity compatibility projection
+            // to exercise the projectionless Core-owned dispatch path.
+            WritePrivateField<NpcActionRuntime>(thiefRuntime, "currentActionRuntime", null);
+            WritePrivateField<NpcActionData>(thiefRuntime, "currentAction", null);
+            Assert.That(thiefRuntime.CurrentActionRuntime, Is.Null);
+            Assert.That(thiefOwner.ActionSlot.CurrentPayload, Is.SameAs(exactPayload));
+
+            long actionRevisionBeforeRecovery = thiefOwner.ActionSlot.Revision;
+            long thiefMoneyRevisionBefore = thiefOwner.MoneyAccount.Revision;
+            long victimMoneyRevisionBefore = victimOwner.MoneyAccount.Revision;
+            long thiefCrimeJusticeRevisionBefore = thiefOwner.CrimeJusticeRevision;
+            long justiceRevisionBefore = graph.JusticeRecordsOwner.Revision;
+            float thiefBalanceBefore = thiefOwner.MoneyAccount.Balance;
+            float victimBalanceBefore = victimOwner.MoneyAccount.Balance;
+            int theftCountBefore = runtime.CrimeSocialAppraisal.TheftOutcomes.Count;
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochBefore,
+                out ContinuationCensusFailure epochBeforeFailure),
+                Is.True, epochBeforeFailure.ToString());
+
+            MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                "TryCreateSelectedActorActionExecutionBoundary",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(createBoundary, Is.Not.Null);
+            object[] createArguments = { thiefRuntime, null, null };
+            Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true));
+            IDailyV1SelectedActorActionExecutionBoundary actorBoundary =
+                createArguments[2] as IDailyV1SelectedActorActionExecutionBoundary;
+            Assert.That(actorBoundary, Is.Not.Null);
+            MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+            Assert.That(getDispatchBoundary, Is.Not.Null);
+            List<NpcRuntime> runtimeProjections = ReadPrivateField<List<NpcRuntime>>(
+                runtime, "npcRuntimes");
+            int victimProjectionIndex = runtimeProjections.IndexOf(victimRuntime);
+            Assert.That(victimProjectionIndex, Is.GreaterThanOrEqualTo(0));
+
+            CoreSelectedActionCountingRandomSource rejectedRandomSource =
+                new CoreSelectedActionCountingRandomSource();
+            runtimeProjections.RemoveAt(victimProjectionIndex);
+            try
+            {
+                object[] missingProjectionArguments = { thiefOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, missingProjectionArguments),
+                    Is.EqualTo(false));
+                Assert.That(missingProjectionArguments[1], Is.Null);
+                Assert.That(thiefRuntime.CurrentActionRuntime, Is.Null,
+                    "A missing exact victim projection cannot authorize reconstruction.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, thiefOwner, rejectedRandomSource, runtime.CurrentDay, actorBoundary,
+                        out _, out _, out _));
+                Assert.That(thiefOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(thiefOwner.MoneyAccount.Revision, Is.EqualTo(thiefMoneyRevisionBefore));
+                Assert.That(victimOwner.MoneyAccount.Revision, Is.EqualTo(victimMoneyRevisionBefore));
+                Assert.That(graph.JusticeRecordsOwner.Revision, Is.EqualTo(justiceRevisionBefore));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long missingProjectionEpoch,
+                    out ContinuationCensusFailure missingProjectionEpochFailure),
+                    Is.True, missingProjectionEpochFailure.ToString());
+                Assert.That(missingProjectionEpoch, Is.EqualTo(mutationEpochBefore));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+            }
+            finally
+            {
+                runtimeProjections.Insert(victimProjectionIndex, victimRuntime);
+            }
+
+            runtimeProjections.Add(victimRuntime);
+            try
+            {
+                object[] duplicateProjectionArguments = { thiefOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, duplicateProjectionArguments),
+                    Is.EqualTo(false));
+                Assert.That(duplicateProjectionArguments[1], Is.Null);
+                Assert.That(thiefRuntime.CurrentActionRuntime, Is.Null,
+                    "An ambiguous victim projection cannot authorize reconstruction.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, thiefOwner, rejectedRandomSource, runtime.CurrentDay, actorBoundary,
+                        out _, out _, out _));
+                Assert.That(thiefOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(thiefOwner.MoneyAccount.Revision, Is.EqualTo(thiefMoneyRevisionBefore));
+                Assert.That(victimOwner.MoneyAccount.Revision, Is.EqualTo(victimMoneyRevisionBefore));
+                Assert.That(graph.JusticeRecordsOwner.Revision, Is.EqualTo(justiceRevisionBefore));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long duplicateProjectionEpoch,
+                    out ContinuationCensusFailure duplicateProjectionEpochFailure),
+                    Is.True, duplicateProjectionEpochFailure.ToString());
+                Assert.That(duplicateProjectionEpoch, Is.EqualTo(mutationEpochBefore));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+            }
+            finally
+            {
+                runtimeProjections.RemoveAt(runtimeProjections.Count - 1);
+            }
+
+            object[] recoveredDispatchArguments = { thiefOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(actorBoundary, recoveredDispatchArguments),
+                Is.EqualTo(true));
+            Assert.That(recoveredDispatchArguments[1],
+                Is.InstanceOf<IDailyV1SelectedActionDispatchBoundary>());
+            NpcActionRuntime compatibilityProjection = thiefRuntime.CurrentActionRuntime;
+            Assert.That(compatibilityProjection, Is.Not.Null);
+            Assert.That(compatibilityProjection.SelectedOwner, Is.SameAs(exactPayload));
+            Assert.That(compatibilityProjection.TargetNpc, Is.SameAs(victimRuntime));
+            Assert.That(compatibilityProjection.Amount, Is.EqualTo(exactPayload.Amount));
+            Assert.That(compatibilityProjection.OriginDecisionId,
+                Is.EqualTo(exactPayload.OriginDecisionId));
+            Assert.That(compatibilityProjection.StableOccurrenceKey,
+                Is.EqualTo(exactPayload.StableOccurrenceKey));
+            Assert.That(compatibilityProjection.MatchesSelectedOwner(), Is.True);
+            Assert.That(thiefOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(thiefOwner.MoneyAccount.Revision, Is.EqualTo(thiefMoneyRevisionBefore));
+            Assert.That(victimOwner.MoneyAccount.Revision, Is.EqualTo(victimMoneyRevisionBefore));
+            Assert.That(graph.JusticeRecordsOwner.Revision, Is.EqualTo(justiceRevisionBefore));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterRecovery,
+                out ContinuationCensusFailure epochAfterRecoveryFailure),
+                Is.True, epochAfterRecoveryFailure.ToString());
+            Assert.That(mutationEpochAfterRecovery, Is.EqualTo(mutationEpochBefore),
+                "Rebuilding the exact Steal compatibility projection is not a P12 owner write.");
+
+            CoreSelectedActionCountingRandomSource randomSource =
+                new CoreSelectedActionCountingRandomSource();
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                graph, thiefOwner, randomSource, runtime.CurrentDay, actorBoundary,
+                out bool actionSucceeded, out NpcActionResultType? resultType,
+                out string resultMessage), Is.True);
+            Assert.That(actionSucceeded, Is.True);
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+            Assert.That(resultMessage, Is.Null);
+            Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+            Assert.That(randomSource.StreamKeys.Single(),
+                Is.EqualTo("action-success|" + thiefOwner.RuntimeId + "|"
+                    + exactPayload.OriginDecisionId + "|"
+                    + actionDefinition.DefinitionId + "|" + runtime.CurrentDay));
+            Assert.That(thiefOwner.MoneyAccount.Balance,
+                Is.EqualTo(thiefBalanceBefore + 1f).Within(0.0001f));
+            Assert.That(victimOwner.MoneyAccount.Balance,
+                Is.EqualTo(victimBalanceBefore - 1f).Within(0.0001f));
+            Assert.That(thiefOwner.MoneyAccount.Revision,
+                Is.EqualTo(thiefMoneyRevisionBefore + 1));
+            Assert.That(victimOwner.MoneyAccount.Revision,
+                Is.EqualTo(victimMoneyRevisionBefore + 1));
+            Assert.That(graph.JusticeRecordsOwner.Revision,
+                Is.EqualTo(justiceRevisionBefore + 1));
+            Assert.That(thiefOwner.CrimeJusticeRevision,
+                Is.GreaterThan(thiefCrimeJusticeRevisionBefore));
+            TheftOutcome theft = runtime.CrimeSocialAppraisal.TheftOutcomes.Outcomes.Single(outcome =>
+                string.Equals(outcome.OccurrenceKey, exactPayload.StableOccurrenceKey,
+                    StringComparison.Ordinal));
+            Assert.That(theft.PerpetratorPersonId, Is.EqualTo(thiefPersonId));
+            Assert.That(theft.VictimPersonId, Is.EqualTo(victimPersonId));
+            Assert.That(theft.LossAmount, Is.EqualTo(1));
+            Assert.That(theft.OccurredAbsoluteDay, Is.EqualTo(runtime.CurrentDay));
+            Assert.That(theft.OriginDecisionId, Is.EqualTo(exactPayload.OriginDecisionId));
+            Assert.That(runtime.CrimeSocialAppraisal.TheftOutcomes.Count,
+                Is.EqualTo(theftCountBefore + 1));
+            Assert.That(justice.HasActiveWarrantInCity(thiefRuntime, city), Is.True);
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterSteal,
+                out ContinuationCensusFailure epochAfterStealFailure),
+                Is.True, epochAfterStealFailure.ToString());
+            Assert.That(mutationEpochAfterSteal, Is.GreaterThan(mutationEpochBefore),
+                "The Steal money and Justice owner commits publish their admitted P12 epochs.");
+
+            dailyAdvanceScope.Dispose();
+            dailyAdvanceScope = null;
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
+            dailyAdvanceScope?.Dispose();
+            steal.canFail = originalStealCanFail;
+            steal.baseSuccessChance = originalStealBaseSuccessChance;
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+    [Test]
+    public void SelectedDailyV1LocalSellDispatchRebuildsProjectionFromExactCoreSlot()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        NpcActionData sell = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-VenderMercadoria.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        Assert.That(sell, Is.Not.Null);
+        Assert.That(sell.actionType, Is.EqualTo(NpcActionType.SellGoods));
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        if (!config.Actions.Contains(sell)) config.Actions.Add(sell);
+        bool originalCanFail = sell.canFail;
+        float originalSuccessChance = sell.baseSuccessChance;
+        sell.canFail = true;
+        sell.baseSuccessChance = 1f;
+        GameObject hostObject = new GameObject(
+            "P12 selected Core local SellGoods without action projection");
+        simulationObjects.Add(hostObject);
+        IDisposable dailyAdvanceScope = null;
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+
+            NpcRuntime seller = runtime.NpcRuntimes.FirstOrDefault(npc =>
+                npc?.NpcData?.job?.jobType == NpcJobType.Merchant
+                && npc.SelectedRuntimeOwners?.Lifecycle?.LifeState == NpcLifeState.Alive
+                && npc.SelectedRuntimeOwners?.MerchantTradePlan?.IsActive != true
+                && npc.SelectedRuntimeOwners?.Travel?.IsTraveling != true
+                && npc.CurrentCity?.Market?.Counterparty?.LiquidityMode == MarketLiquidityMode.Open);
+            Assert.That(seller, Is.Not.Null,
+                "UnityBootstrap-Daily-v1 must provide a live Merchant in an open local market.");
+            CityRuntime city = seller.CurrentCity;
+            DailyV1NpcRuntimeOwners sellerOwner = seller.SelectedRuntimeOwners;
+            Assert.That(city, Is.Not.Null);
+            Assert.That(sellerOwner, Is.Not.Null);
+            Assert.That(seller.CurrentActionRuntime, Is.Null);
+            Assert.That(seller.CurrentAction, Is.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                sell.id, out DailyV1ActionDefinition actionDefinition), Is.True);
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.SellGoodsActionTypeValue));
+
+            DailyV1ItemDefinition item = graph.Definitions.Items.Values
+                .OrderBy(candidate => candidate.DefinitionId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            Assert.That(item, Is.Not.Null);
+            Assert.That(seller.TryGetSelectedDailyV1ItemAsset(item, out ItemData itemAsset), Is.True);
+            Assert.That(itemAsset, Is.Not.Null);
+            Assert.That(AddSelectedInventoryItemForAdmissionTest(
+                runtime, seller, item, 2, item.Values.basePrice), Is.True);
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                    out ContinuationCensusFailure inventorySetupCensusFailure), Is.True,
+                inventorySetupCensusFailure + "; " + P12Diagnostic(runtime));
+            int inventoryBeforeSetup = sellerOwner.Inventory.GetAmount(item);
+            int marketBeforeSetup = city.SelectedRuntimeOwners.Market.GetAmount(item);
+            float balanceBeforeSetup = sellerOwner.MoneyAccount.Balance;
+
+            foreach (NpcRuntime participant in city.ImportantNpcs)
+            {
+                Assert.That(participant?.RuntimeId, Is.Not.Null);
+                PersonId personId = new PersonId(
+                    "p12-selected-core-sell-person-" + participant.RuntimeId);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+
+            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+                graph.Definitions,
+                actionDefinition,
+                null,
+                city.RuntimeId,
+                item,
+                1,
+                item.Values.basePrice,
+                1f,
+                NpcTravelReason.None,
+                0f,
+                "core-sell-decision-" + sellerOwner.RuntimeId,
+                "core-sell-occurrence-" + sellerOwner.RuntimeId,
+                null,
+                null,
+                out DailyV1NpcActionPayloadOwner exactPayload), Is.True);
+            NpcActionRuntime initialProjection = new NpcActionRuntime(
+                sell, city, itemAsset, exactPayload.Amount, exactPayload.ExpectedUnitPrice);
+            Assert.That(initialProjection.TryUseSelectedPayload(
+                exactPayload, graph.Definitions), Is.True);
+            SetSelectedCurrentActionForAdmissionTest(runtime, seller, initialProjection);
+            Assert.That(seller.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            MethodInfo beginDailyAdvanceScope = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginDailyAdvanceScope, Is.Not.Null);
+            object[] scopeArguments = { "runtime.advance-day", null };
+            Assert.That(beginDailyAdvanceScope.Invoke(runtime, scopeArguments), Is.EqualTo(true));
+            dailyAdvanceScope = scopeArguments[1] as IDisposable;
+            Assert.That(dailyAdvanceScope, Is.Not.Null);
+
+            WritePrivateField<NpcActionRuntime>(seller, "currentActionRuntime", null);
+            WritePrivateField<NpcActionData>(seller, "currentAction", null);
+            Assert.That(seller.CurrentActionRuntime, Is.Null);
+            Assert.That(sellerOwner.ActionSlot.CurrentAction, Is.SameAs(actionDefinition));
+            Assert.That(sellerOwner.ActionSlot.CurrentPayload, Is.SameAs(exactPayload));
+
+            long actionRevisionBeforeRecovery = sellerOwner.ActionSlot.Revision;
+            long accountRevisionBeforeRecovery = sellerOwner.MoneyAccount.Revision;
+            long inventoryRevisionBeforeRecovery = sellerOwner.Inventory.Revision;
+            long marketRevisionBeforeRecovery = city.SelectedRuntimeOwners.Market.Revision;
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochBeforeRecovery,
+                out ContinuationCensusFailure epochBeforeFailure),
+                Is.True, epochBeforeFailure.ToString());
+
+            MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                "TryCreateSelectedActorActionExecutionBoundary",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(createBoundary, Is.Not.Null);
+            object[] createArguments = { seller, null, null };
+            Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true));
+            IDailyV1SelectedActorActionExecutionBoundary actorBoundary =
+                createArguments[2] as IDailyV1SelectedActorActionExecutionBoundary;
+            Assert.That(actorBoundary, Is.Not.Null);
+            MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+            Assert.That(getDispatchBoundary, Is.Not.Null);
+
+            List<CityRuntime> cityProjections = ReadPrivateField<List<CityRuntime>>(runtime, "cities");
+            int cityProjectionIndex = cityProjections.IndexOf(city);
+            Assert.That(cityProjectionIndex, Is.GreaterThanOrEqualTo(0));
+            CoreSelectedActionCountingRandomSource rejectedRandomSource =
+                new CoreSelectedActionCountingRandomSource();
+            cityProjections.RemoveAt(cityProjectionIndex);
+            try
+            {
+                object[] missingCityArguments = { sellerOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, missingCityArguments),
+                    Is.EqualTo(false));
+                Assert.That(missingCityArguments[1], Is.Null);
+                Assert.That(seller.CurrentActionRuntime, Is.Null,
+                    "A missing exact City projection cannot reconstruct the SellGoods compatibility view.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, sellerOwner, rejectedRandomSource, runtime.CurrentDay,
+                        actorBoundary, out _, out _, out _));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+                Assert.That(sellerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(sellerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+                Assert.That(sellerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+                Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long missingCityEpoch, out ContinuationCensusFailure missingCityFailure),
+                    Is.True, missingCityFailure.ToString());
+                Assert.That(missingCityEpoch, Is.EqualTo(mutationEpochBeforeRecovery));
+            }
+            finally
+            {
+                cityProjections.Insert(cityProjectionIndex, city);
+            }
+
+            cityProjections.Add(city);
+            try
+            {
+                object[] ambiguousCityArguments = { sellerOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, ambiguousCityArguments),
+                    Is.EqualTo(false));
+                Assert.That(ambiguousCityArguments[1], Is.Null);
+                Assert.That(seller.CurrentActionRuntime, Is.Null,
+                    "Duplicate matching City projections are ambiguous and cannot authorize reconstruction.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, sellerOwner, rejectedRandomSource, runtime.CurrentDay,
+                        actorBoundary, out _, out _, out _));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+                Assert.That(sellerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(sellerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+                Assert.That(sellerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+                Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long ambiguousCityEpoch, out ContinuationCensusFailure ambiguousCityFailure),
+                    Is.True, ambiguousCityFailure.ToString());
+                Assert.That(ambiguousCityEpoch, Is.EqualTo(mutationEpochBeforeRecovery));
+            }
+            finally
+            {
+                cityProjections.RemoveAt(cityProjections.Count - 1);
+            }
+
+            object[] recoveredDispatchArguments = { sellerOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(actorBoundary, recoveredDispatchArguments),
+                Is.EqualTo(true));
+            Assert.That(recoveredDispatchArguments[1],
+                Is.InstanceOf<IDailyV1SelectedActionDispatchBoundary>());
+            NpcActionRuntime compatibilityProjection = seller.CurrentActionRuntime;
+            Assert.That(compatibilityProjection, Is.Not.Null);
+            Assert.That(compatibilityProjection.SelectedOwner, Is.SameAs(exactPayload));
+            Assert.That(compatibilityProjection.Action, Is.SameAs(sell));
+            Assert.That(compatibilityProjection.TargetCity, Is.SameAs(city));
+            Assert.That(compatibilityProjection.TargetItem, Is.SameAs(itemAsset));
+            Assert.That(compatibilityProjection.Amount, Is.EqualTo(exactPayload.Amount));
+            Assert.That(compatibilityProjection.ExpectedUnitPrice,
+                Is.EqualTo(exactPayload.ExpectedUnitPrice));
+            Assert.That(compatibilityProjection.OriginDecisionId,
+                Is.EqualTo(exactPayload.OriginDecisionId));
+            Assert.That(compatibilityProjection.StableOccurrenceKey,
+                Is.EqualTo(exactPayload.StableOccurrenceKey));
+            Assert.That(compatibilityProjection.MatchesSelectedOwner(), Is.True);
+            Assert.That(sellerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(sellerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+            Assert.That(sellerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+            Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterRecovery,
+                out ContinuationCensusFailure epochAfterRecoveryFailure),
+                Is.True, epochAfterRecoveryFailure.ToString());
+            Assert.That(mutationEpochAfterRecovery, Is.EqualTo(mutationEpochBeforeRecovery),
+                "Rebuilding the exact SellGoods compatibility view is not a P12 owner write.");
+
+            CoreSelectedActionCountingRandomSource randomSource =
+                new CoreSelectedActionCountingRandomSource();
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                graph, sellerOwner, randomSource, runtime.CurrentDay, actorBoundary,
+                out bool actionSucceeded, out NpcActionResultType? resultType,
+                out string resultMessage), Is.True);
+            Assert.That(actionSucceeded, Is.True);
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+            Assert.That(resultMessage, Is.Null);
+            Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+            Assert.That(randomSource.StreamKeys.Single(),
+                Is.EqualTo("action-success|" + sellerOwner.RuntimeId + "|"
+                    + exactPayload.OriginDecisionId + "|"
+                    + actionDefinition.DefinitionId + "|" + runtime.CurrentDay));
+            Assert.That(sellerOwner.MoneyAccount.Balance, Is.GreaterThan(balanceBeforeSetup));
+            Assert.That(sellerOwner.Inventory.GetAmount(item), Is.EqualTo(inventoryBeforeSetup - 1));
+            Assert.That(city.SelectedRuntimeOwners.Market.GetAmount(item), Is.EqualTo(marketBeforeSetup + 1));
+            Assert.That(sellerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(sellerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery + 1));
+            Assert.That(sellerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery + 1));
+            Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery + 1));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterSale,
+                out ContinuationCensusFailure epochAfterSaleFailure),
+                Is.True, epochAfterSaleFailure.ToString());
+            Assert.That(mutationEpochAfterSale, Is.EqualTo(mutationEpochBeforeRecovery + 3),
+                "The successful selected sale retains its existing account, inventory, and Market commit epochs.");
+            dailyAdvanceScope.Dispose();
+            dailyAdvanceScope = null;
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
+            dailyAdvanceScope?.Dispose();
+            sell.canFail = originalCanFail;
+            sell.baseSuccessChance = originalSuccessChance;
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
+    public void SelectedDailyV1PlannedLocalSellDispatchRebuildsProjectionFromExactCoreSlot()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        NpcActionData sell = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-VenderMercadoria.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        Assert.That(sell, Is.Not.Null);
+        Assert.That(sell.actionType, Is.EqualTo(NpcActionType.SellGoods));
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        if (!config.Actions.Contains(sell)) config.Actions.Add(sell);
+        bool originalCanFail = sell.canFail;
+        float originalSuccessChance = sell.baseSuccessChance;
+        sell.canFail = true;
+        sell.baseSuccessChance = 1f;
+        GameObject hostObject = new GameObject(
+            "P12 selected Core planned local SellGoods without action projection");
+        simulationObjects.Add(hostObject);
+        IDisposable dailyAdvanceScope = null;
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+
+            NpcRuntime seller = runtime.NpcRuntimes.FirstOrDefault(npc =>
+                npc?.NpcData?.job?.jobType == NpcJobType.Merchant
+                && npc.SelectedRuntimeOwners?.Lifecycle?.LifeState == NpcLifeState.Alive
+                && npc.SelectedRuntimeOwners?.MerchantTradePlan?.IsActive != true
+                && npc.SelectedRuntimeOwners?.Travel?.IsTraveling != true
+                && npc.CurrentCity?.Market?.Counterparty?.LiquidityMode == MarketLiquidityMode.Open);
+            Assert.That(seller, Is.Not.Null,
+                "UnityBootstrap-Daily-v1 must provide a live Merchant in an open local market.");
+            CityRuntime city = seller.CurrentCity;
+            DailyV1NpcRuntimeOwners sellerOwner = seller.SelectedRuntimeOwners;
+            Assert.That(city, Is.Not.Null);
+            Assert.That(sellerOwner, Is.Not.Null);
+            Assert.That(seller.CurrentActionRuntime, Is.Null);
+            Assert.That(seller.CurrentAction, Is.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                sell.id, out DailyV1ActionDefinition actionDefinition), Is.True);
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.SellGoodsActionTypeValue));
+
+            DailyV1ItemDefinition item = graph.Definitions.Items.Values
+                .OrderBy(candidate => candidate.DefinitionId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            Assert.That(item, Is.Not.Null);
+            Assert.That(seller.TryGetSelectedDailyV1ItemAsset(item, out ItemData itemAsset), Is.True);
+            Assert.That(itemAsset, Is.Not.Null);
+            Assert.That(AddSelectedInventoryItemForAdmissionTest(
+                runtime, seller, item, 2, item.Values.basePrice), Is.True);
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                    out ContinuationCensusFailure inventorySetupCensusFailure), Is.True,
+                inventorySetupCensusFailure + "; " + P12Diagnostic(runtime));
+            int inventoryBeforeSetup = sellerOwner.Inventory.GetAmount(item);
+            int marketBeforeSetup = city.SelectedRuntimeOwners.Market.GetAmount(item);
+            float balanceBeforeSetup = sellerOwner.MoneyAccount.Balance;
+
+            foreach (NpcRuntime participant in city.ImportantNpcs)
+            {
+                Assert.That(participant?.RuntimeId, Is.Not.Null);
+                PersonId personId = new PersonId(
+                    "p12-selected-core-sell-person-" + participant.RuntimeId);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+
+            Assert.That(SetSelectedMerchantPlanForAdmissionTest(
+                runtime, seller, itemAsset, city, city, 2, item.Values.basePrice,
+                "core-planned-sell-origin-" + sellerOwner.RuntimeId), Is.True);
+            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+                graph.Definitions,
+                actionDefinition,
+                null,
+                city.RuntimeId,
+                item,
+                1,
+                item.Values.basePrice,
+                1f,
+                NpcTravelReason.None,
+                0f,
+                "core-sell-decision-" + sellerOwner.RuntimeId,
+                "core-sell-occurrence-" + sellerOwner.RuntimeId,
+                null,
+                null,
+                out DailyV1NpcActionPayloadOwner exactPayload), Is.True);
+            NpcActionRuntime initialProjection = new NpcActionRuntime(
+                sell, city, itemAsset, exactPayload.Amount, exactPayload.ExpectedUnitPrice);
+            Assert.That(initialProjection.TryUseSelectedPayload(
+                exactPayload, graph.Definitions), Is.True);
+            SetSelectedCurrentActionForAdmissionTest(runtime, seller, initialProjection);
+            Assert.That(seller.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            MethodInfo beginDailyAdvanceScope = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginDailyAdvanceScope, Is.Not.Null);
+            object[] scopeArguments = { "runtime.advance-day", null };
+            Assert.That(beginDailyAdvanceScope.Invoke(runtime, scopeArguments), Is.EqualTo(true));
+            dailyAdvanceScope = scopeArguments[1] as IDisposable;
+            Assert.That(dailyAdvanceScope, Is.Not.Null);
+
+            WritePrivateField<NpcActionRuntime>(seller, "currentActionRuntime", null);
+            WritePrivateField<NpcActionData>(seller, "currentAction", null);
+            Assert.That(seller.CurrentActionRuntime, Is.Null);
+            Assert.That(sellerOwner.ActionSlot.CurrentAction, Is.SameAs(actionDefinition));
+            Assert.That(sellerOwner.ActionSlot.CurrentPayload, Is.SameAs(exactPayload));
+
+            long actionRevisionBeforeRecovery = sellerOwner.ActionSlot.Revision;
+            long accountRevisionBeforeRecovery = sellerOwner.MoneyAccount.Revision;
+            long inventoryRevisionBeforeRecovery = sellerOwner.Inventory.Revision;
+            long marketRevisionBeforeRecovery = city.SelectedRuntimeOwners.Market.Revision;
+            long planRevisionBeforeRecovery = sellerOwner.MerchantTradePlan.Revision;
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochBeforeRecovery,
+                out ContinuationCensusFailure epochBeforeFailure),
+                Is.True, epochBeforeFailure.ToString());
+
+            MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                "TryCreateSelectedActorActionExecutionBoundary",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(createBoundary, Is.Not.Null);
+            object[] createArguments = { seller, null, null };
+            Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true));
+            IDailyV1SelectedActorActionExecutionBoundary actorBoundary =
+                createArguments[2] as IDailyV1SelectedActorActionExecutionBoundary;
+            Assert.That(actorBoundary, Is.Not.Null);
+            MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+            Assert.That(getDispatchBoundary, Is.Not.Null);
+
+            List<CityRuntime> cityProjections = ReadPrivateField<List<CityRuntime>>(runtime, "cities");
+            int cityProjectionIndex = cityProjections.IndexOf(city);
+            Assert.That(cityProjectionIndex, Is.GreaterThanOrEqualTo(0));
+            CoreSelectedActionCountingRandomSource rejectedRandomSource =
+                new CoreSelectedActionCountingRandomSource();
+            cityProjections.RemoveAt(cityProjectionIndex);
+            try
+            {
+                object[] missingCityArguments = { sellerOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, missingCityArguments),
+                    Is.EqualTo(false));
+                Assert.That(missingCityArguments[1], Is.Null);
+                Assert.That(seller.CurrentActionRuntime, Is.Null,
+                    "A missing exact City projection cannot reconstruct the SellGoods compatibility view.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, sellerOwner, rejectedRandomSource, runtime.CurrentDay,
+                        actorBoundary, out _, out _, out _));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+                Assert.That(sellerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(sellerOwner.MerchantTradePlan.Revision, Is.EqualTo(planRevisionBeforeRecovery));
+                Assert.That(sellerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+                Assert.That(sellerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+                Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long missingCityEpoch, out ContinuationCensusFailure missingCityFailure),
+                    Is.True, missingCityFailure.ToString());
+                Assert.That(missingCityEpoch, Is.EqualTo(mutationEpochBeforeRecovery));
+            }
+            finally
+            {
+                cityProjections.Insert(cityProjectionIndex, city);
+            }
+
+            cityProjections.Add(city);
+            try
+            {
+                object[] ambiguousCityArguments = { sellerOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, ambiguousCityArguments),
+                    Is.EqualTo(false));
+                Assert.That(ambiguousCityArguments[1], Is.Null);
+                Assert.That(seller.CurrentActionRuntime, Is.Null,
+                    "Duplicate matching City projections are ambiguous and cannot authorize reconstruction.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, sellerOwner, rejectedRandomSource, runtime.CurrentDay,
+                        actorBoundary, out _, out _, out _));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+                Assert.That(sellerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(sellerOwner.MerchantTradePlan.Revision, Is.EqualTo(planRevisionBeforeRecovery));
+                Assert.That(sellerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+                Assert.That(sellerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+                Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long ambiguousCityEpoch, out ContinuationCensusFailure ambiguousCityFailure),
+                    Is.True, ambiguousCityFailure.ToString());
+                Assert.That(ambiguousCityEpoch, Is.EqualTo(mutationEpochBeforeRecovery));
+            }
+            finally
+            {
+                cityProjections.RemoveAt(cityProjections.Count - 1);
+            }
+
+            object[] recoveredDispatchArguments = { sellerOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(actorBoundary, recoveredDispatchArguments),
+                Is.EqualTo(true));
+            Assert.That(recoveredDispatchArguments[1],
+                Is.InstanceOf<IDailyV1SelectedActionDispatchBoundary>());
+            NpcActionRuntime compatibilityProjection = seller.CurrentActionRuntime;
+            Assert.That(compatibilityProjection, Is.Not.Null);
+            Assert.That(compatibilityProjection.SelectedOwner, Is.SameAs(exactPayload));
+            Assert.That(compatibilityProjection.Action, Is.SameAs(sell));
+            Assert.That(compatibilityProjection.TargetCity, Is.SameAs(city));
+            Assert.That(compatibilityProjection.TargetItem, Is.SameAs(itemAsset));
+            Assert.That(compatibilityProjection.Amount, Is.EqualTo(exactPayload.Amount));
+            Assert.That(compatibilityProjection.ExpectedUnitPrice,
+                Is.EqualTo(exactPayload.ExpectedUnitPrice));
+            Assert.That(compatibilityProjection.OriginDecisionId,
+                Is.EqualTo(exactPayload.OriginDecisionId));
+            Assert.That(compatibilityProjection.StableOccurrenceKey,
+                Is.EqualTo(exactPayload.StableOccurrenceKey));
+            Assert.That(compatibilityProjection.MatchesSelectedOwner(), Is.True);
+            Assert.That(sellerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(sellerOwner.MerchantTradePlan.Revision, Is.EqualTo(planRevisionBeforeRecovery));
+            Assert.That(sellerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+            Assert.That(sellerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+            Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterRecovery,
+                out ContinuationCensusFailure epochAfterRecoveryFailure),
+                Is.True, epochAfterRecoveryFailure.ToString());
+            Assert.That(mutationEpochAfterRecovery, Is.EqualTo(mutationEpochBeforeRecovery),
+                "Rebuilding the exact SellGoods compatibility view is not a P12 owner write.");
+
+            CoreSelectedActionCountingRandomSource randomSource =
+                new CoreSelectedActionCountingRandomSource();
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                graph, sellerOwner, randomSource, runtime.CurrentDay, actorBoundary,
+                out bool actionSucceeded, out NpcActionResultType? resultType,
+                out string resultMessage), Is.True);
+            Assert.That(actionSucceeded, Is.True);
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+            Assert.That(resultMessage, Is.Null);
+            Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+            Assert.That(randomSource.StreamKeys.Single(),
+                Is.EqualTo("action-success|" + sellerOwner.RuntimeId + "|"
+                    + exactPayload.OriginDecisionId + "|"
+                    + actionDefinition.DefinitionId + "|" + runtime.CurrentDay));
+            Assert.That(sellerOwner.MoneyAccount.Balance, Is.GreaterThan(balanceBeforeSetup));
+            Assert.That(sellerOwner.Inventory.GetAmount(item), Is.EqualTo(inventoryBeforeSetup - 1));
+            Assert.That(city.SelectedRuntimeOwners.Market.GetAmount(item), Is.EqualTo(marketBeforeSetup + 1));
+            Assert.That(sellerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(sellerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery + 1));
+            Assert.That(sellerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery + 1));
+            Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery + 1));
+            Assert.That(sellerOwner.MerchantTradePlan.Revision, Is.EqualTo(planRevisionBeforeRecovery + 1));
+            Assert.That(sellerOwner.MerchantTradePlan.IsActive, Is.True);
+            Assert.That(sellerOwner.MerchantTradePlan.RemainingAmount, Is.EqualTo(1));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterSale,
+                out ContinuationCensusFailure epochAfterSaleFailure),
+                Is.True, epochAfterSaleFailure.ToString());
+            Assert.That(mutationEpochAfterSale, Is.EqualTo(mutationEpochBeforeRecovery + 4),
+                "The successful planned sale retains its account, inventory, Market, and Merchant plan commit epochs.");
+            dailyAdvanceScope.Dispose();
+            dailyAdvanceScope = null;
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
+            dailyAdvanceScope?.Dispose();
+            sell.canFail = originalCanFail;
+            sell.baseSuccessChance = originalSuccessChance;
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
+    public void SelectedDailyV1PlannedNpcSellDispatchRebuildsProjectionFromExactCoreSlot()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        NpcActionData sell = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-VenderMercadoria.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        Assert.That(sell, Is.Not.Null);
+        Assert.That(sell.actionType, Is.EqualTo(NpcActionType.SellGoods));
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        if (!config.Actions.Contains(sell)) config.Actions.Add(sell);
+        bool originalCanFail = sell.canFail;
+        float originalSuccessChance = sell.baseSuccessChance;
+        sell.canFail = true;
+        sell.baseSuccessChance = 1f;
+        GameObject hostObject = new GameObject(
+            "P12 selected Core planned NPC SellGoods without action projection");
+        simulationObjects.Add(hostObject);
+        IDisposable dailyAdvanceScope = null;
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+
+            NpcRuntime seller = runtime.NpcRuntimes
+                .Where(npc => npc?.SelectedRuntimeOwners?.Lifecycle?.LifeState == NpcLifeState.Alive
+                    && npc.SelectedRuntimeOwners.Travel?.IsTraveling != true
+                    && npc.CurrentActionRuntime == null
+                    && npc.CurrentAction == null
+                    && npc.CurrentCity?.Market?.Counterparty?.LiquidityMode == MarketLiquidityMode.Open
+                    && DailyV1NpcDefinitionRules.HasJobType(
+                        npc.SelectedRuntimeOwners.Definition, graph.Definitions,
+                        DailyV1NpcDefinitionRules.MerchantJobTypeValue))
+                .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal)
+                .FirstOrDefault(candidate => runtime.NpcRuntimes.Any(buyer =>
+                    buyer != null
+                    && !ReferenceEquals(buyer, candidate)
+                    && ReferenceEquals(buyer.CurrentCity, candidate.CurrentCity)
+                    && buyer.SelectedRuntimeOwners?.Lifecycle?.LifeState == NpcLifeState.Alive
+                    && buyer.SelectedRuntimeOwners.Travel?.IsTraveling != true
+                    && DailyV1NpcDefinitionRules.HasJobType(
+                        buyer.SelectedRuntimeOwners.Definition, graph.Definitions,
+                        DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+                    && DailyV1NpcDefinitionRules.HasMerchantBehavior(
+                        buyer.SelectedRuntimeOwners.Definition, graph.Definitions,
+                        DailyV1NpcDefinitionRules.LocalMerchantBehaviorValue)));
+            Assert.That(seller, Is.Not.Null,
+                "UnityBootstrap-Daily-v1 must provide a live Merchant with a same-City local Merchant buyer.");
+            NpcRuntime buyer = runtime.NpcRuntimes
+                .Where(candidate => candidate != null
+                    && !ReferenceEquals(candidate, seller)
+                    && ReferenceEquals(candidate.CurrentCity, seller.CurrentCity)
+                    && candidate.SelectedRuntimeOwners?.Lifecycle?.LifeState == NpcLifeState.Alive
+                    && candidate.SelectedRuntimeOwners.Travel?.IsTraveling != true
+                    && DailyV1NpcDefinitionRules.HasJobType(
+                        candidate.SelectedRuntimeOwners.Definition, graph.Definitions,
+                        DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+                    && DailyV1NpcDefinitionRules.HasMerchantBehavior(
+                        candidate.SelectedRuntimeOwners.Definition, graph.Definitions,
+                        DailyV1NpcDefinitionRules.LocalMerchantBehaviorValue))
+                .OrderBy(candidate => candidate.RuntimeId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            Assert.That(buyer, Is.Not.Null);
+            CityRuntime city = seller.CurrentCity;
+            DailyV1NpcRuntimeOwners sellerOwner = seller.SelectedRuntimeOwners;
+            DailyV1NpcRuntimeOwners buyerOwner = buyer.SelectedRuntimeOwners;
+            Assert.That(city, Is.Not.Null);
+            Assert.That(buyer.CurrentCity, Is.SameAs(city));
+            Assert.That(sellerOwner, Is.Not.Null);
+            Assert.That(buyerOwner, Is.Not.Null);
+            Assert.That(seller.CurrentActionRuntime, Is.Null);
+            Assert.That(seller.CurrentAction, Is.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                sell.id, out DailyV1ActionDefinition actionDefinition), Is.True);
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.SellGoodsActionTypeValue));
+
+            EffectiveMerchantTradeConfiguration tradeConfiguration =
+                graph.Definitions.EffectiveConfiguration?.MerchantTrade
+                    ?? new EffectiveMerchantTradeConfiguration(enabled: true);
+            DailyV1ItemDefinition item = null;
+            float expectedUnitPrice = 0f;
+            foreach (DailyV1ItemDefinition candidate in graph.Definitions.Items.Values
+                .OrderBy(value => value.DefinitionId, StringComparer.Ordinal))
+            {
+                float retailPrice = city.SelectedRuntimeOwners.Market.GetPrice(candidate);
+                if (retailPrice <= 0f
+                    || !seller.TryGetSelectedDailyV1ItemAsset(candidate, out _))
+                    continue;
+                float preference = DailyV1NpcDefinitionRules.TryGetPreferredTradeItemMultiplier(
+                    buyerOwner.Definition, graph.Definitions, candidate,
+                    out float configuredPreference)
+                    ? UnityMathfCompatibility.Max(0.01f, configuredPreference)
+                    : 1f;
+                float candidatePrice = UnityMathfCompatibility.Max(0.01f, retailPrice)
+                    * UnityMathfCompatibility.Clamp(
+                        tradeConfiguration.LocalWholesalePriceMultiplier
+                        + UnityMathfCompatibility.Min(0.15f,
+                            UnityMathfCompatibility.Max(0f, preference - 1f) * 0.1f),
+                        0.5f, 0.85f);
+                float spendable = UnityMathfCompatibility.Max(0f,
+                    buyerOwner.MoneyAccount.Balance
+                        * (1f - tradeConfiguration.LocalReserveRatio));
+                if (spendable < candidatePrice) continue;
+                item = candidate;
+                expectedUnitPrice = candidatePrice;
+                break;
+            }
+            Assert.That(item, Is.Not.Null,
+                "The selected fixture must contain an item the exact local-Merchant buyer can afford.");
+            Assert.That(seller.TryGetSelectedDailyV1ItemAsset(
+                item, out ItemData itemAsset), Is.True);
+            Assert.That(itemAsset, Is.Not.Null);
+            Assert.That(AddSelectedInventoryItemForAdmissionTest(
+                runtime, seller, item, 2, item.Values.basePrice), Is.True);
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                    out ContinuationCensusFailure inventorySetupCensusFailure), Is.True,
+                inventorySetupCensusFailure + "; " + P12Diagnostic(runtime));
+            int sellerInventoryBeforeSetup = sellerOwner.Inventory.GetAmount(item);
+            int buyerInventoryBeforeSetup = buyerOwner.Inventory.GetAmount(item);
+            int marketBeforeSetup = city.SelectedRuntimeOwners.Market.GetAmount(item);
+            float sellerBalanceBeforeSetup = sellerOwner.MoneyAccount.Balance;
+            float buyerBalanceBeforeSetup = buyerOwner.MoneyAccount.Balance;
+
+            foreach (NpcRuntime participant in city.ImportantNpcs
+                .Concat(new[] { seller, buyer }).Where(value => value != null).Distinct())
+            {
+                PersonId personId = new PersonId(
+                    "p12-selected-core-planned-npc-sell-person-" + participant.RuntimeId);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+
+            Assert.That(SetSelectedMerchantPlanForAdmissionTest(
+                runtime, seller, itemAsset, city, city, 2, item.Values.basePrice,
+                "core-planned-npc-sell-origin-" + sellerOwner.RuntimeId), Is.True);
+            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+                graph.Definitions,
+                actionDefinition,
+                buyer.RuntimeId,
+                null,
+                item,
+                1,
+                expectedUnitPrice,
+                1f,
+                NpcTravelReason.None,
+                0f,
+                "core-planned-npc-sell-decision-" + sellerOwner.RuntimeId,
+                "core-planned-npc-sell-occurrence-" + sellerOwner.RuntimeId,
+                null,
+                null,
+                out DailyV1NpcActionPayloadOwner exactPayload), Is.True);
+            NpcActionRuntime initialProjection = new NpcActionRuntime(
+                sell, buyer, itemAsset, exactPayload.Amount, exactPayload.ExpectedUnitPrice);
+            Assert.That(initialProjection.TryUseSelectedPayload(
+                exactPayload, graph.Definitions), Is.True);
+            SetSelectedCurrentActionForAdmissionTest(runtime, seller, initialProjection);
+            Assert.That(seller.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            MethodInfo beginDailyAdvanceScope = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginDailyAdvanceScope, Is.Not.Null);
+            object[] scopeArguments = { "runtime.advance-day", null };
+            Assert.That(beginDailyAdvanceScope.Invoke(runtime, scopeArguments), Is.EqualTo(true));
+            dailyAdvanceScope = scopeArguments[1] as IDisposable;
+            Assert.That(dailyAdvanceScope, Is.Not.Null);
+
+            WritePrivateField<NpcActionRuntime>(seller, "currentActionRuntime", null);
+            WritePrivateField<NpcActionData>(seller, "currentAction", null);
+            Assert.That(seller.CurrentActionRuntime, Is.Null);
+            Assert.That(sellerOwner.ActionSlot.CurrentAction, Is.SameAs(actionDefinition));
+            Assert.That(sellerOwner.ActionSlot.CurrentPayload, Is.SameAs(exactPayload));
+
+            long actionRevisionBeforeRecovery = sellerOwner.ActionSlot.Revision;
+            long sellerAccountRevisionBeforeRecovery = sellerOwner.MoneyAccount.Revision;
+            long sellerInventoryRevisionBeforeRecovery = sellerOwner.Inventory.Revision;
+            long buyerAccountRevisionBeforeRecovery = buyerOwner.MoneyAccount.Revision;
+            long buyerInventoryRevisionBeforeRecovery = buyerOwner.Inventory.Revision;
+            long marketRevisionBeforeRecovery = city.SelectedRuntimeOwners.Market.Revision;
+            long planRevisionBeforeRecovery = sellerOwner.MerchantTradePlan.Revision;
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochBeforeRecovery,
+                out ContinuationCensusFailure epochBeforeFailure),
+                Is.True, epochBeforeFailure.ToString());
+
+            MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                "TryCreateSelectedActorActionExecutionBoundary",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(createBoundary, Is.Not.Null);
+            object[] createArguments = { seller, null, null };
+            Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true));
+            IDailyV1SelectedActorActionExecutionBoundary actorBoundary =
+                createArguments[2] as IDailyV1SelectedActorActionExecutionBoundary;
+            Assert.That(actorBoundary, Is.Not.Null);
+            MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+            Assert.That(getDispatchBoundary, Is.Not.Null);
+
+            CoreSelectedActionCountingRandomSource rejectedRandomSource =
+                new CoreSelectedActionCountingRandomSource();
+            void AssertRejectedWithoutMutation(string reason)
+            {
+                object[] rejectedArguments = { sellerOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, rejectedArguments),
+                    Is.False, reason);
+                Assert.That(rejectedArguments[1], Is.Null, reason);
+                Assert.That(seller.CurrentActionRuntime, Is.Null, reason);
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, sellerOwner, rejectedRandomSource, runtime.CurrentDay,
+                        actorBoundary, out _, out _, out _), reason);
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero, reason);
+                Assert.That(sellerOwner.ActionSlot.Revision,
+                    Is.EqualTo(actionRevisionBeforeRecovery), reason);
+                Assert.That(sellerOwner.MerchantTradePlan.Revision,
+                    Is.EqualTo(planRevisionBeforeRecovery), reason);
+                Assert.That(sellerOwner.MoneyAccount.Revision,
+                    Is.EqualTo(sellerAccountRevisionBeforeRecovery), reason);
+                Assert.That(sellerOwner.Inventory.Revision,
+                    Is.EqualTo(sellerInventoryRevisionBeforeRecovery), reason);
+                Assert.That(buyerOwner.MoneyAccount.Revision,
+                    Is.EqualTo(buyerAccountRevisionBeforeRecovery), reason);
+                Assert.That(buyerOwner.Inventory.Revision,
+                    Is.EqualTo(buyerInventoryRevisionBeforeRecovery), reason);
+                Assert.That(city.SelectedRuntimeOwners.Market.Revision,
+                    Is.EqualTo(marketRevisionBeforeRecovery), reason);
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long rejectedEpoch, out ContinuationCensusFailure rejectedFailure),
+                    Is.True, rejectedFailure.ToString());
+                Assert.That(rejectedEpoch, Is.EqualTo(mutationEpochBeforeRecovery), reason);
+            }
+
+            List<CityRuntime> cityProjections =
+                ReadPrivateField<List<CityRuntime>>(runtime, "cities");
+            int cityProjectionIndex = cityProjections.IndexOf(city);
+            Assert.That(cityProjectionIndex, Is.GreaterThanOrEqualTo(0));
+            cityProjections.RemoveAt(cityProjectionIndex);
+            try
+            {
+                AssertRejectedWithoutMutation(
+                    "A missing exact seller City projection cannot authorize the planned NPC sale.");
+            }
+            finally
+            {
+                cityProjections.Insert(cityProjectionIndex, city);
+            }
+
+            cityProjections.Add(city);
+            try
+            {
+                AssertRejectedWithoutMutation(
+                    "Duplicate matching City projections are ambiguous and cannot authorize reconstruction.");
+            }
+            finally
+            {
+                cityProjections.RemoveAt(cityProjections.Count - 1);
+            }
+
+            List<NpcRuntime> npcProjections =
+                ReadPrivateField<List<NpcRuntime>>(runtime, "npcRuntimes");
+            int buyerProjectionIndex = npcProjections.IndexOf(buyer);
+            Assert.That(buyerProjectionIndex, Is.GreaterThanOrEqualTo(0));
+            npcProjections.RemoveAt(buyerProjectionIndex);
+            try
+            {
+                AssertRejectedWithoutMutation(
+                    "A missing exact target NPC projection cannot authorize the planned sale.");
+            }
+            finally
+            {
+                npcProjections.Insert(buyerProjectionIndex, buyer);
+            }
+
+            npcProjections.Add(buyer);
+            try
+            {
+                AssertRejectedWithoutMutation(
+                    "Duplicate matching target NPC projections are ambiguous.");
+            }
+            finally
+            {
+                npcProjections.RemoveAt(npcProjections.Count - 1);
+            }
+
+            object[] recoveredDispatchArguments = { sellerOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(actorBoundary, recoveredDispatchArguments),
+                Is.True);
+            Assert.That(recoveredDispatchArguments[1],
+                Is.InstanceOf<IDailyV1SelectedActionDispatchBoundary>());
+            NpcActionRuntime compatibilityProjection = seller.CurrentActionRuntime;
+            Assert.That(compatibilityProjection, Is.Not.Null);
+            Assert.That(compatibilityProjection.SelectedOwner, Is.SameAs(exactPayload));
+            Assert.That(compatibilityProjection.Action, Is.SameAs(sell));
+            Assert.That(compatibilityProjection.TargetNpc, Is.SameAs(buyer));
+            Assert.That(compatibilityProjection.TargetCity, Is.Null);
+            Assert.That(compatibilityProjection.TargetItem, Is.SameAs(itemAsset));
+            Assert.That(compatibilityProjection.Amount, Is.EqualTo(exactPayload.Amount));
+            Assert.That(compatibilityProjection.ExpectedUnitPrice,
+                Is.EqualTo(exactPayload.ExpectedUnitPrice));
+            Assert.That(compatibilityProjection.OriginDecisionId,
+                Is.EqualTo(exactPayload.OriginDecisionId));
+            Assert.That(compatibilityProjection.StableOccurrenceKey,
+                Is.EqualTo(exactPayload.StableOccurrenceKey));
+            Assert.That(compatibilityProjection.MatchesSelectedOwner(), Is.True);
+            Assert.That(sellerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(sellerOwner.MerchantTradePlan.Revision, Is.EqualTo(planRevisionBeforeRecovery));
+            Assert.That(sellerOwner.MoneyAccount.Revision, Is.EqualTo(sellerAccountRevisionBeforeRecovery));
+            Assert.That(sellerOwner.Inventory.Revision, Is.EqualTo(sellerInventoryRevisionBeforeRecovery));
+            Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(buyerAccountRevisionBeforeRecovery));
+            Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(buyerInventoryRevisionBeforeRecovery));
+            Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterRecovery,
+                out ContinuationCensusFailure epochAfterRecoveryFailure),
+                Is.True, epochAfterRecoveryFailure.ToString());
+            Assert.That(mutationEpochAfterRecovery, Is.EqualTo(mutationEpochBeforeRecovery),
+                "Rebuilding the exact Core SellGoods compatibility view is not a P12 owner write.");
+
+            CoreSelectedActionCountingRandomSource randomSource =
+                new CoreSelectedActionCountingRandomSource();
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                graph, sellerOwner, randomSource, runtime.CurrentDay, actorBoundary,
+                out bool actionSucceeded, out NpcActionResultType? resultType,
+                out string resultMessage), Is.True);
+            Assert.That(actionSucceeded, Is.True);
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+            Assert.That(resultMessage, Is.Null);
+            Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+            Assert.That(randomSource.StreamKeys.Single(),
+                Is.EqualTo("action-success|" + sellerOwner.RuntimeId + "|"
+                    + exactPayload.OriginDecisionId + "|"
+                    + actionDefinition.DefinitionId + "|" + runtime.CurrentDay));
+            Assert.That(sellerOwner.MoneyAccount.Balance, Is.GreaterThan(sellerBalanceBeforeSetup));
+            Assert.That(buyerOwner.MoneyAccount.Balance, Is.LessThan(buyerBalanceBeforeSetup));
+            Assert.That(sellerOwner.Inventory.GetAmount(item),
+                Is.EqualTo(sellerInventoryBeforeSetup - 1));
+            Assert.That(buyerOwner.Inventory.GetAmount(item),
+                Is.EqualTo(buyerInventoryBeforeSetup + 1));
+            Assert.That(city.SelectedRuntimeOwners.Market.GetAmount(item),
+                Is.EqualTo(marketBeforeSetup),
+                "A successful NPC trade does not fall back to or mutate the local Market.");
+            Assert.That(sellerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(sellerOwner.MoneyAccount.Revision,
+                Is.EqualTo(sellerAccountRevisionBeforeRecovery + 1));
+            Assert.That(sellerOwner.Inventory.Revision,
+                Is.EqualTo(sellerInventoryRevisionBeforeRecovery + 1));
+            Assert.That(buyerOwner.MoneyAccount.Revision,
+                Is.EqualTo(buyerAccountRevisionBeforeRecovery + 1));
+            Assert.That(buyerOwner.Inventory.Revision,
+                Is.EqualTo(buyerInventoryRevisionBeforeRecovery + 1));
+            Assert.That(city.SelectedRuntimeOwners.Market.Revision,
+                Is.EqualTo(marketRevisionBeforeRecovery));
+            Assert.That(sellerOwner.MerchantTradePlan.Revision,
+                Is.EqualTo(planRevisionBeforeRecovery + 1));
+            Assert.That(sellerOwner.MerchantTradePlan.IsActive, Is.True);
+            Assert.That(sellerOwner.MerchantTradePlan.RemainingAmount, Is.EqualTo(1));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterSale,
+                out ContinuationCensusFailure epochAfterSaleFailure),
+                Is.True, epochAfterSaleFailure.ToString());
+            Assert.That(mutationEpochAfterSale, Is.EqualTo(mutationEpochBeforeRecovery + 5),
+                "The four trade owner writes and Merchant plan receipt each publish one P12 epoch.");
+            dailyAdvanceScope.Dispose();
+            dailyAdvanceScope = null;
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
+            dailyAdvanceScope?.Dispose();
+            sell.canFail = originalCanFail;
+            sell.baseSuccessChance = originalSuccessChance;
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+    [Test]
+    public void SelectedDailyV1LocalBuyDispatchRebuildsProjectionFromExactCoreSlot()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        NpcActionData buy = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-ComprarMercadoria.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        Assert.That(buy, Is.Not.Null);
+        Assert.That(buy.actionType, Is.EqualTo(NpcActionType.BuyGoods));
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        if (!config.Actions.Contains(buy)) config.Actions.Add(buy);
+        bool originalCanFail = buy.canFail;
+        float originalSuccessChance = buy.baseSuccessChance;
+        buy.canFail = true;
+        buy.baseSuccessChance = 1f;
+        GameObject hostObject = new GameObject(
+            "P12 selected Core local BuyGoods without action projection");
+        simulationObjects.Add(hostObject);
+        IDisposable dailyAdvanceScope = null;
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+
+            NpcRuntime buyer = runtime.NpcRuntimes.FirstOrDefault(npc =>
+                npc?.NpcData?.job?.jobType == NpcJobType.Merchant
+                && npc.SelectedRuntimeOwners?.Lifecycle?.LifeState == NpcLifeState.Alive
+                && npc.SelectedRuntimeOwners?.MerchantTradePlan?.IsActive != true
+                && npc.SelectedRuntimeOwners?.Travel?.IsTraveling != true
+                && npc.CurrentCity?.Market?.Counterparty?.LiquidityMode == MarketLiquidityMode.Open
+                && npc.CurrentCity?.SelectedRuntimeOwners?.Market != null
+                && graph.Definitions.Items.Values.Any(candidate =>
+                    npc.CurrentCity.SelectedRuntimeOwners.Market.GetAmount(candidate) > 0
+                    && npc.SelectedRuntimeOwners.MoneyAccount.Balance >=
+                        npc.CurrentCity.SelectedRuntimeOwners.Market.GetPrice(candidate)));
+            Assert.That(buyer, Is.Not.Null,
+                "UnityBootstrap-Daily-v1 must provide a live Merchant in an open local market.");
+            CityRuntime city = buyer.CurrentCity;
+            DailyV1NpcRuntimeOwners buyerOwner = buyer.SelectedRuntimeOwners;
+            Assert.That(city, Is.Not.Null);
+            Assert.That(buyerOwner, Is.Not.Null);
+            Assert.That(buyer.CurrentActionRuntime, Is.Null);
+            Assert.That(buyer.CurrentAction, Is.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                buy.id, out DailyV1ActionDefinition actionDefinition), Is.True);
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue));
+
+            DailyV1ItemDefinition item = graph.Definitions.Items.Values
+                .Where(candidate => city.SelectedRuntimeOwners.Market.GetAmount(candidate) > 0
+                    && buyerOwner.MoneyAccount.Balance >=
+                        city.SelectedRuntimeOwners.Market.GetPrice(candidate))
+                .OrderBy(candidate => candidate.DefinitionId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            Assert.That(item, Is.Not.Null);
+            Assert.That(buyer.TryGetSelectedDailyV1ItemAsset(item, out ItemData itemAsset), Is.True);
+            Assert.That(itemAsset, Is.Not.Null);
+            float expectedUnitPrice = city.SelectedRuntimeOwners.Market.GetPrice(item);
+            Assert.That(expectedUnitPrice, Is.GreaterThan(0f));
+            int inventoryBeforeSetup = buyerOwner.Inventory.GetAmount(item);
+            int marketBeforeSetup = city.SelectedRuntimeOwners.Market.GetAmount(item);
+            Assert.That(marketBeforeSetup, Is.GreaterThan(0));
+            float balanceBeforeSetup = buyerOwner.MoneyAccount.Balance;
+            Assert.That(balanceBeforeSetup, Is.GreaterThanOrEqualTo(expectedUnitPrice));
+
+            foreach (NpcRuntime participant in city.ImportantNpcs)
+            {
+                Assert.That(participant?.RuntimeId, Is.Not.Null);
+                PersonId personId = new PersonId(
+                    "p12-selected-core-buy-person-" + participant.RuntimeId);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+
+            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+                graph.Definitions,
+                actionDefinition,
+                null,
+                city.RuntimeId,
+                item,
+                1,
+                expectedUnitPrice,
+                1f,
+                NpcTravelReason.None,
+                0f,
+                "core-buy-decision-" + buyerOwner.RuntimeId,
+                "core-buy-occurrence-" + buyerOwner.RuntimeId,
+                null,
+                null,
+                out DailyV1NpcActionPayloadOwner exactPayload), Is.True);
+            NpcActionRuntime initialProjection = new NpcActionRuntime(
+                buy, city, itemAsset, exactPayload.Amount, exactPayload.ExpectedUnitPrice);
+            Assert.That(initialProjection.TryUseSelectedPayload(
+                exactPayload, graph.Definitions), Is.True);
+            SetSelectedCurrentActionForAdmissionTest(runtime, buyer, initialProjection);
+            Assert.That(buyer.CurrentActionRuntime.MatchesSelectedOwner(), Is.True);
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            MethodInfo beginDailyAdvanceScope = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginDailyAdvanceScope, Is.Not.Null);
+            object[] scopeArguments = { "runtime.advance-day", null };
+            Assert.That(beginDailyAdvanceScope.Invoke(runtime, scopeArguments), Is.EqualTo(true));
+            dailyAdvanceScope = scopeArguments[1] as IDisposable;
+            Assert.That(dailyAdvanceScope, Is.Not.Null);
+
+            WritePrivateField<NpcActionRuntime>(buyer, "currentActionRuntime", null);
+            WritePrivateField<NpcActionData>(buyer, "currentAction", null);
+            Assert.That(buyer.CurrentActionRuntime, Is.Null);
+            Assert.That(buyerOwner.ActionSlot.CurrentAction, Is.SameAs(actionDefinition));
+            Assert.That(buyerOwner.ActionSlot.CurrentPayload, Is.SameAs(exactPayload));
+
+            long actionRevisionBeforeRecovery = buyerOwner.ActionSlot.Revision;
+            long accountRevisionBeforeRecovery = buyerOwner.MoneyAccount.Revision;
+            long inventoryRevisionBeforeRecovery = buyerOwner.Inventory.Revision;
+            long marketRevisionBeforeRecovery = city.SelectedRuntimeOwners.Market.Revision;
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochBeforeRecovery,
+                out ContinuationCensusFailure epochBeforeFailure),
+                Is.True, epochBeforeFailure.ToString());
+            MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                "TryCreateSelectedActorActionExecutionBoundary",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(createBoundary, Is.Not.Null);
+            object[] createArguments = { buyer, null, null };
+            Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true));
+            IDailyV1SelectedActorActionExecutionBoundary actorBoundary =
+                createArguments[2] as IDailyV1SelectedActorActionExecutionBoundary;
+            Assert.That(actorBoundary, Is.Not.Null);
+            MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+            Assert.That(getDispatchBoundary, Is.Not.Null);
+
+            List<CityRuntime> cityProjections = ReadPrivateField<List<CityRuntime>>(runtime, "cities");
+            int cityProjectionIndex = cityProjections.IndexOf(city);
+            Assert.That(cityProjectionIndex, Is.GreaterThanOrEqualTo(0));
+            CoreSelectedActionCountingRandomSource rejectedRandomSource =
+                new CoreSelectedActionCountingRandomSource();
+            FieldInfo selectedBindingsField = typeof(NpcRuntime).GetField(
+                "selectedDefinitionBindings", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(selectedBindingsField, Is.Not.Null);
+            object selectedBindings = selectedBindingsField.GetValue(buyer);
+            Assert.That(selectedBindings, Is.Not.Null);
+            FieldInfo itemAssetsField = selectedBindings.GetType().GetField(
+                "assetsByNode", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(itemAssetsField, Is.Not.Null);
+            System.Collections.IDictionary itemAssetsByNode =
+                itemAssetsField.GetValue(selectedBindings) as System.Collections.IDictionary;
+            Assert.That(itemAssetsByNode, Is.Not.Null);
+            Assert.That(itemAssetsByNode.Contains(item), Is.True);
+            object exactItemAsset = itemAssetsByNode[item];
+            itemAssetsByNode.Remove(item);
+            Assert.That(itemAssetsByNode.Contains(item), Is.False);
+            try
+            {
+                object[] missingItemBindingArguments = { buyerOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, missingItemBindingArguments),
+                    Is.EqualTo(false));
+                Assert.That(missingItemBindingArguments[1], Is.Null);
+                Assert.That(buyer.CurrentActionRuntime, Is.Null,
+                    "A missing exact ItemData binding cannot reconstruct the BuyGoods compatibility view.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, buyerOwner, rejectedRandomSource, runtime.CurrentDay,
+                        actorBoundary, out _, out _, out _));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+                Assert.That(buyerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+                Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+                Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long missingItemEpoch, out ContinuationCensusFailure missingItemFailure),
+                    Is.True, missingItemFailure.ToString());
+                Assert.That(missingItemEpoch, Is.EqualTo(mutationEpochBeforeRecovery));
+            }
+            finally
+            {
+                if (!itemAssetsByNode.Contains(item)) itemAssetsByNode.Add(item, exactItemAsset);
+            }
+
+
+            cityProjections.RemoveAt(cityProjectionIndex);
+            try
+            {
+                object[] missingCityArguments = { buyerOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, missingCityArguments),
+                    Is.EqualTo(false));
+                Assert.That(missingCityArguments[1], Is.Null);
+                Assert.That(buyer.CurrentActionRuntime, Is.Null,
+                    "A missing exact City projection cannot reconstruct the BuyGoods compatibility view.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, buyerOwner, rejectedRandomSource, runtime.CurrentDay,
+                        actorBoundary, out _, out _, out _));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+                Assert.That(buyerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+                Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+                Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long missingCityEpoch, out ContinuationCensusFailure missingCityFailure),
+                    Is.True, missingCityFailure.ToString());
+                Assert.That(missingCityEpoch, Is.EqualTo(mutationEpochBeforeRecovery));
+            }
+            finally
+            {
+                cityProjections.Insert(cityProjectionIndex, city);
+            }
+
+            cityProjections.Add(city);
+            try
+            {
+                object[] ambiguousCityArguments = { buyerOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, ambiguousCityArguments),
+                    Is.EqualTo(false));
+                Assert.That(ambiguousCityArguments[1], Is.Null);
+                Assert.That(buyer.CurrentActionRuntime, Is.Null,
+                    "Duplicate matching City projections are ambiguous and cannot authorize reconstruction.");
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, buyerOwner, rejectedRandomSource, runtime.CurrentDay,
+                        actorBoundary, out _, out _, out _));
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero);
+                Assert.That(buyerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+                Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+                Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+                Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long ambiguousCityEpoch, out ContinuationCensusFailure ambiguousCityFailure),
+                    Is.True, ambiguousCityFailure.ToString());
+                Assert.That(ambiguousCityEpoch, Is.EqualTo(mutationEpochBeforeRecovery));
+            }
+            finally
+            {
+                cityProjections.RemoveAt(cityProjections.Count - 1);
+            }
+
+            object[] recoveredDispatchArguments = { buyerOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(actorBoundary, recoveredDispatchArguments),
+                Is.EqualTo(true));
+            Assert.That(recoveredDispatchArguments[1],
+                Is.InstanceOf<IDailyV1SelectedActionDispatchBoundary>());
+            NpcActionRuntime compatibilityProjection = buyer.CurrentActionRuntime;
+            Assert.That(compatibilityProjection, Is.Not.Null);
+            Assert.That(compatibilityProjection.SelectedOwner, Is.SameAs(exactPayload));
+            Assert.That(compatibilityProjection.Action, Is.SameAs(buy));
+            Assert.That(compatibilityProjection.TargetCity, Is.SameAs(city));
+            Assert.That(compatibilityProjection.TargetItem, Is.SameAs(itemAsset));
+            Assert.That(compatibilityProjection.Amount, Is.EqualTo(exactPayload.Amount));
+            Assert.That(compatibilityProjection.ExpectedUnitPrice,
+                Is.EqualTo(exactPayload.ExpectedUnitPrice));
+            Assert.That(compatibilityProjection.OriginDecisionId,
+                Is.EqualTo(exactPayload.OriginDecisionId));
+            Assert.That(compatibilityProjection.StableOccurrenceKey,
+                Is.EqualTo(exactPayload.StableOccurrenceKey));
+            Assert.That(compatibilityProjection.MatchesSelectedOwner(), Is.True);
+            Assert.That(buyerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+            Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+            Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterRecovery,
+                out ContinuationCensusFailure epochAfterRecoveryFailure),
+                Is.True, epochAfterRecoveryFailure.ToString());
+            Assert.That(mutationEpochAfterRecovery, Is.EqualTo(mutationEpochBeforeRecovery),
+                "Rebuilding the exact BuyGoods compatibility view is not a P12 owner write.");
+
+            CoreSelectedActionCountingRandomSource randomSource =
+                new CoreSelectedActionCountingRandomSource();
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                graph, buyerOwner, randomSource, runtime.CurrentDay, actorBoundary,
+                out bool actionSucceeded, out NpcActionResultType? resultType,
+                out string resultMessage), Is.True);
+            Assert.That(actionSucceeded, Is.True);
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+            Assert.That(resultMessage, Is.Null);
+            Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+            Assert.That(randomSource.StreamKeys.Single(),
+                Is.EqualTo("action-success|" + buyerOwner.RuntimeId + "|"
+                    + exactPayload.OriginDecisionId + "|"
+                    + actionDefinition.DefinitionId + "|" + runtime.CurrentDay));
+            Assert.That(buyerOwner.MoneyAccount.Balance, Is.LessThan(balanceBeforeSetup));
+            Assert.That(buyerOwner.Inventory.GetAmount(item), Is.EqualTo(inventoryBeforeSetup + 1));
+            Assert.That(city.SelectedRuntimeOwners.Market.GetAmount(item), Is.EqualTo(marketBeforeSetup - 1));
+            Assert.That(buyerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery + 1));
+            Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery + 1));
+            Assert.That(city.SelectedRuntimeOwners.Market.Revision, Is.EqualTo(marketRevisionBeforeRecovery + 1));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterSale,
+                out ContinuationCensusFailure epochAfterSaleFailure),
+                Is.True, epochAfterSaleFailure.ToString());
+            Assert.That(mutationEpochAfterSale, Is.EqualTo(mutationEpochBeforeRecovery + 3),
+                "The successful selected purchase retains its existing account, inventory, and Market commit epochs.");
+            dailyAdvanceScope.Dispose();
+            dailyAdvanceScope = null;
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
+            dailyAdvanceScope?.Dispose();
+            buy.canFail = originalCanFail;
+            buy.baseSuccessChance = originalSuccessChance;
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [Test]
+    public void SelectedDailyV1CrossCityBuyDispatchRebuildsProjectionFromExactCoreSlot()
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        NpcActionData buy = AssetDatabase.LoadAssetAtPath<NpcActionData>(
+            "Assets/_Project/Data/Actions/Action-ComprarMercadoria.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        Assert.That(buy, Is.Not.Null);
+        Assert.That(buy.actionType, Is.EqualTo(NpcActionType.BuyGoods));
+
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        if (!config.Actions.Contains(buy)) config.Actions.Add(buy);
+        bool originalCanFail = buy.canFail;
+        float originalSuccessChance = buy.baseSuccessChance;
+        buy.canFail = true;
+        buy.baseSuccessChance = 1f;
+        GameObject hostObject = new GameObject(
+            "P12 selected Core cross-city BuyGoods without action projection");
+        simulationObjects.Add(hostObject);
+        IDisposable dailyAdvanceScope = null;
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(
+                host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            DailyV1SelectedRuntimeOwnerGraph graph = runtime.SelectedRuntimeOwnerGraph;
+            Assert.That(graph, Is.Not.Null);
+            Assert.That(runtime.Cities.Count, Is.GreaterThan(1),
+                "The accepted Daily-v1 fixture must include distinct City owners for this supported Core action.");
+
+            NpcRuntime buyer = runtime.NpcRuntimes
+                .Where(npc => npc?.SelectedRuntimeOwners != null
+                    && npc.SelectedRuntimeOwners.Lifecycle?.LifeState == NpcLifeState.Alive
+                    && npc.SelectedRuntimeOwners.Travel?.IsTraveling != true
+                    && npc.SelectedRuntimeOwners.ActionSlot?.CurrentAction == null
+                    && npc.CurrentActionRuntime == null
+                    && npc.CurrentAction == null
+                    && npc.CurrentCity?.Market?.Counterparty?.LiquidityMode == MarketLiquidityMode.Open
+                    && npc.CurrentCity?.SelectedRuntimeOwners?.Market != null
+                    && npc.SelectedRuntimeOwners.MerchantTradePlan?.IsActive != true
+                    && DailyV1NpcDefinitionRules.HasJobType(
+                        npc.SelectedRuntimeOwners.Definition, graph.Definitions,
+                        DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+                    && DailyV1NpcDefinitionRules.HasMerchantBehavior(
+                        npc.SelectedRuntimeOwners.Definition, graph.Definitions,
+                        DailyV1NpcDefinitionRules.TravelingMerchantBehaviorValue)
+                    && !DailyV1NpcDefinitionRules.HasMerchantBehavior(
+                        npc.SelectedRuntimeOwners.Definition, graph.Definitions,
+                        DailyV1NpcDefinitionRules.LocalMerchantBehaviorValue))
+                .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal)
+                .FirstOrDefault(candidate => graph.Definitions.Items.Values.Any(item =>
+                    candidate.CurrentCity.SelectedRuntimeOwners.Market.GetAmount(item) > 0
+                    && candidate.SelectedRuntimeOwners.MoneyAccount.Balance
+                        >= candidate.CurrentCity.SelectedRuntimeOwners.Market.GetPrice(item)
+                    && candidate.TryGetSelectedDailyV1ItemAsset(item, out _)));
+            Assert.That(buyer, Is.Not.Null,
+                "UnityBootstrap-Daily-v1 must provide a live traveling Merchant with an open origin market.");
+            CityRuntime originCity = buyer.CurrentCity;
+            CityRuntime destinationCity = runtime.Cities
+                .Where(city => city != null && !ReferenceEquals(city, originCity)
+                    && city.SelectedRuntimeOwners != null
+                    && graph.ContainsExactCityOwner(city.SelectedRuntimeOwners))
+                .OrderBy(city => city.RuntimeId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            Assert.That(destinationCity, Is.Not.Null,
+                "The selected runtime graph must contain an exact destination City owner.");
+            DailyV1NpcRuntimeOwners buyerOwner = buyer.SelectedRuntimeOwners;
+            Assert.That(buyerOwner, Is.Not.Null);
+            Assert.That(originCity, Is.Not.Null);
+            Assert.That(graph.Definitions.Actions.TryGetValue(
+                buy.id, out DailyV1ActionDefinition actionDefinition), Is.True, "The selected action must be in the admitted graph.");
+            Assert.That(actionDefinition.Values.actionType?.Value,
+                Is.EqualTo(DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue));
+
+            DailyV1ItemDefinition item = graph.Definitions.Items.Values
+                .Where(candidate => originCity.SelectedRuntimeOwners.Market.GetAmount(candidate) > 0
+                    && buyerOwner.MoneyAccount.Balance
+                        >= originCity.SelectedRuntimeOwners.Market.GetPrice(candidate)
+                    && buyer.TryGetSelectedDailyV1ItemAsset(candidate, out _))
+                .OrderBy(candidate => candidate.DefinitionId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            Assert.That(item, Is.Not.Null, "The origin Market must expose an affordable selected item.");
+            Assert.That(buyer.TryGetSelectedDailyV1ItemAsset(item, out ItemData itemAsset), Is.True, "The actor must bind the exact selected ItemData projection.");
+            Assert.That(itemAsset, Is.Not.Null);
+            float expectedUnitPrice = originCity.SelectedRuntimeOwners.Market.GetPrice(item);
+            Assert.That(expectedUnitPrice, Is.GreaterThan(0f));
+            float balanceBeforeSetup = buyerOwner.MoneyAccount.Balance;
+            int inventoryBeforeSetup = buyerOwner.Inventory.GetAmount(item);
+            int originMarketBeforeSetup = originCity.SelectedRuntimeOwners.Market.GetAmount(item);
+            int destinationMarketBeforeSetup =
+                destinationCity.SelectedRuntimeOwners.Market.GetAmount(item);
+            Assert.That(originMarketBeforeSetup, Is.GreaterThan(0));
+            Assert.That(buyerOwner.MoneyAccount.Balance, Is.GreaterThanOrEqualTo(expectedUnitPrice));
+
+            foreach (NpcRuntime participant in runtime.NpcRuntimes.OrderBy(
+                candidate => candidate?.RuntimeId, StringComparer.Ordinal))
+            {
+                Assert.That(participant?.SelectedRuntimeOwners, Is.Not.Null);
+                PersonId personId = new PersonId(
+                    "p12-selected-cross-city-buy-person-" + participant.RuntimeId);
+                Assert.That(runtime.TryRegisterPerson(
+                    new PersonRuntime(personId, runtime.CurrentDay),
+                    out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                    personId, participant.RuntimeId,
+                    out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+
+            Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+                graph.Definitions,
+                actionDefinition,
+                null,
+                destinationCity.RuntimeId,
+                item,
+                1,
+                expectedUnitPrice,
+                1f,
+                NpcTravelReason.None,
+                0f,
+                "core-cross-city-buy-decision-" + buyerOwner.RuntimeId,
+                "core-cross-city-buy-occurrence-" + buyerOwner.RuntimeId,
+                null,
+                null,
+                out DailyV1NpcActionPayloadOwner exactPayload), Is.True, "The selected cross-city payload must be valid.");
+            NpcActionRuntime initialProjection = new NpcActionRuntime(
+                buy, destinationCity, itemAsset, exactPayload.Amount,
+                exactPayload.ExpectedUnitPrice);
+            Assert.That(initialProjection.TryUseSelectedPayload(
+                exactPayload, graph.Definitions), Is.True, "The initial action projection must match the selected payload.");
+            SetSelectedCurrentActionForAdmissionTest(runtime, buyer, initialProjection);
+            Assert.That(buyer.CurrentActionRuntime.MatchesSelectedOwner(), Is.True, "The installed action must preserve payload identity.");
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            MethodInfo beginDailyAdvanceScope = typeof(SimulationRuntime).GetMethod(
+                "TryEnterRuntimeAdmissionOperation", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginDailyAdvanceScope, Is.Not.Null);
+            object[] scopeArguments = { "runtime.advance-day", null };
+            Assert.That(beginDailyAdvanceScope.Invoke(runtime, scopeArguments), Is.EqualTo(true), "The enclosing daily-admission scope must open.");
+            dailyAdvanceScope = scopeArguments[1] as IDisposable;
+            Assert.That(dailyAdvanceScope, Is.Not.Null);
+
+            WritePrivateField<NpcActionRuntime>(buyer, "currentActionRuntime", null);
+            WritePrivateField<NpcActionData>(buyer, "currentAction", null);
+            Assert.That(buyer.CurrentActionRuntime, Is.Null);
+            Assert.That(buyerOwner.ActionSlot.CurrentAction, Is.SameAs(actionDefinition));
+            Assert.That(buyerOwner.ActionSlot.CurrentPayload, Is.SameAs(exactPayload));
+
+            long actionRevisionBeforeRecovery = buyerOwner.ActionSlot.Revision;
+            long accountRevisionBeforeRecovery = buyerOwner.MoneyAccount.Revision;
+            long inventoryRevisionBeforeRecovery = buyerOwner.Inventory.Revision;
+            long originMarketRevisionBeforeRecovery = originCity.SelectedRuntimeOwners.Market.Revision;
+            long destinationMarketRevisionBeforeRecovery =
+                destinationCity.SelectedRuntimeOwners.Market.Revision;
+            long merchantPlanRevisionBeforeRecovery = buyerOwner.MerchantTradePlan.Revision;
+            long travelPlanRevisionBeforeRecovery = buyerOwner.TravelPlan.Revision;
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochBeforeRecovery,
+                out ContinuationCensusFailure epochBeforeFailure),
+                Is.True, epochBeforeFailure.ToString());
+
+            MethodInfo createBoundary = typeof(SimulationRuntime).GetMethod(
+                "TryCreateSelectedActorActionExecutionBoundary",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(createBoundary, Is.Not.Null);
+            object[] createArguments = { buyer, null, null };
+            Assert.That(createBoundary.Invoke(runtime, createArguments), Is.EqualTo(true), "The selected actor execution boundary must be created.");
+            IDailyV1SelectedActorActionExecutionBoundary actorBoundary =
+                createArguments[2] as IDailyV1SelectedActorActionExecutionBoundary;
+            Assert.That(actorBoundary, Is.Not.Null);
+            MethodInfo getDispatchBoundary = actorBoundary.GetType().GetMethod(
+                "TryGetDispatchBoundary", BindingFlags.Instance | BindingFlags.Public);
+            Assert.That(getDispatchBoundary, Is.Not.Null);
+
+            List<CityRuntime> cityProjections =
+                ReadPrivateField<List<CityRuntime>>(runtime, "cities");
+            int destinationProjectionIndex = cityProjections.IndexOf(destinationCity);
+            Assert.That(destinationProjectionIndex, Is.GreaterThanOrEqualTo(0));
+            CoreSelectedActionCountingRandomSource rejectedRandomSource =
+                new CoreSelectedActionCountingRandomSource();
+
+            void AssertProjectionFailureHasNoP12Effects(string failureLabel)
+            {
+                object[] failedBoundaryArguments = { buyerOwner, null };
+                Assert.That(getDispatchBoundary.Invoke(actorBoundary, failedBoundaryArguments),
+                    Is.EqualTo(false), failureLabel);
+                Assert.That(failedBoundaryArguments[1], Is.Null, failureLabel);
+                Assert.That(buyer.CurrentActionRuntime, Is.Null, failureLabel);
+                Assert.Throws<InvalidOperationException>(() =>
+                    DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                        graph, buyerOwner, rejectedRandomSource, runtime.CurrentDay,
+                        actorBoundary, out _, out _, out _), failureLabel);
+                Assert.That(rejectedRandomSource.DrawCount, Is.Zero, failureLabel);
+                Assert.That(buyerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery), failureLabel);
+                Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery), failureLabel);
+                Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery), failureLabel);
+                Assert.That(originCity.SelectedRuntimeOwners.Market.Revision,
+                    Is.EqualTo(originMarketRevisionBeforeRecovery), failureLabel);
+                Assert.That(destinationCity.SelectedRuntimeOwners.Market.Revision,
+                    Is.EqualTo(destinationMarketRevisionBeforeRecovery), failureLabel);
+                Assert.That(buyerOwner.MerchantTradePlan.Revision,
+                    Is.EqualTo(merchantPlanRevisionBeforeRecovery), failureLabel);
+                Assert.That(buyerOwner.TravelPlan.Revision,
+                    Is.EqualTo(travelPlanRevisionBeforeRecovery), failureLabel);
+            }
+
+            cityProjections.RemoveAt(destinationProjectionIndex);
+            try
+            {
+                AssertProjectionFailureHasNoP12Effects("A missing exact destination City projection must reject before RNG or owner writes.");
+            }
+            finally
+            {
+                cityProjections.Insert(destinationProjectionIndex, destinationCity);
+            }
+
+            cityProjections.Add(destinationCity);
+            try
+            {
+                AssertProjectionFailureHasNoP12Effects("A duplicate destination City projection is ambiguous and must reject before RNG or owner writes.");
+            }
+            finally
+            {
+                cityProjections.RemoveAt(cityProjections.Count - 1);
+            }
+
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterRejectedProjectionRecovery,
+                out ContinuationCensusFailure rejectedProjectionEpochFailure),
+                Is.True, rejectedProjectionEpochFailure.ToString());
+            Assert.That(mutationEpochAfterRejectedProjectionRecovery,
+                Is.EqualTo(mutationEpochBeforeRecovery),
+                "Rejected or projection-only boundary reconstruction must leave the P12 census epoch unchanged once the exact projection set is restored.");
+
+            object[] recoveredDispatchArguments = { buyerOwner, null };
+            Assert.That(getDispatchBoundary.Invoke(actorBoundary, recoveredDispatchArguments),
+                Is.EqualTo(true), "The exact destination and item projections must rebuild the dispatch boundary.");
+            Assert.That(recoveredDispatchArguments[1],
+                Is.InstanceOf<IDailyV1SelectedActionDispatchBoundary>());
+            NpcActionRuntime compatibilityProjection = buyer.CurrentActionRuntime;
+            Assert.That(compatibilityProjection, Is.Not.Null);
+            Assert.That(compatibilityProjection.SelectedOwner, Is.SameAs(exactPayload));
+            Assert.That(compatibilityProjection.Action, Is.SameAs(buy));
+            Assert.That(compatibilityProjection.TargetCity, Is.SameAs(destinationCity));
+            Assert.That(compatibilityProjection.TargetItem, Is.SameAs(itemAsset));
+            Assert.That(compatibilityProjection.Amount, Is.EqualTo(exactPayload.Amount));
+            Assert.That(compatibilityProjection.ExpectedUnitPrice,
+                Is.EqualTo(exactPayload.ExpectedUnitPrice));
+            Assert.That(compatibilityProjection.OriginDecisionId,
+                Is.EqualTo(exactPayload.OriginDecisionId));
+            Assert.That(compatibilityProjection.StableOccurrenceKey,
+                Is.EqualTo(exactPayload.StableOccurrenceKey));
+            Assert.That(compatibilityProjection.MatchesSelectedOwner(), Is.True);
+            Assert.That(buyerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery));
+            Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery));
+            Assert.That(originCity.SelectedRuntimeOwners.Market.Revision,
+                Is.EqualTo(originMarketRevisionBeforeRecovery));
+            Assert.That(destinationCity.SelectedRuntimeOwners.Market.Revision,
+                Is.EqualTo(destinationMarketRevisionBeforeRecovery));
+            Assert.That(buyerOwner.MerchantTradePlan.Revision,
+                Is.EqualTo(merchantPlanRevisionBeforeRecovery));
+            Assert.That(buyerOwner.TravelPlan.Revision, Is.EqualTo(travelPlanRevisionBeforeRecovery));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterRecovery,
+                out ContinuationCensusFailure epochAfterRecoveryFailure),
+                Is.True, epochAfterRecoveryFailure.ToString());
+            Assert.That(mutationEpochAfterRecovery, Is.EqualTo(mutationEpochBeforeRecovery),
+                "Rebuilding an exact cross-city BuyGoods compatibility view is not a P12 owner write.");
+
+            CoreSelectedActionCountingRandomSource randomSource =
+                new CoreSelectedActionCountingRandomSource();
+            Assert.That(DailyV1SelectedActorActionExecutionStage.TryExecuteInstalledAction(
+                graph, buyerOwner, randomSource, runtime.CurrentDay, actorBoundary,
+                out bool actionSucceeded, out NpcActionResultType? resultType,
+                out string resultMessage), Is.True, "Core must accept and execute the admitted cross-city action slot.");
+            Assert.That(actionSucceeded, Is.True, "The cross-city purchase and travel plan should succeed.");
+            Assert.That(resultType, Is.EqualTo(NpcActionResultType.Success));
+            Assert.That(resultMessage, Is.Null);
+            Assert.That(randomSource.DrawCount, Is.EqualTo(1));
+            Assert.That(randomSource.StreamKeys.Single(),
+                Is.EqualTo("action-success|" + buyerOwner.RuntimeId + "|"
+                    + exactPayload.OriginDecisionId + "|"
+                    + actionDefinition.DefinitionId + "|" + runtime.CurrentDay));
+            Assert.That(buyerOwner.MoneyAccount.Balance,
+                Is.LessThan(balanceBeforeSetup));
+            Assert.That(buyerOwner.Inventory.GetAmount(item), Is.EqualTo(inventoryBeforeSetup + 1));
+            Assert.That(originCity.SelectedRuntimeOwners.Market.GetAmount(item),
+                Is.EqualTo(originMarketBeforeSetup - 1));
+            Assert.That(destinationCity.SelectedRuntimeOwners.Market.GetAmount(item),
+                Is.EqualTo(destinationMarketBeforeSetup));
+            Assert.That(buyerOwner.MerchantTradePlan.IsActive, Is.True, "The successful cross-city purchase must install its Merchant plan.");
+            Assert.That(buyerOwner.MerchantTradePlan.ItemDefinition, Is.SameAs(item));
+            Assert.That(buyerOwner.MerchantTradePlan.OriginCityRuntimeId,
+                Is.EqualTo(originCity.RuntimeId));
+            Assert.That(buyerOwner.MerchantTradePlan.TargetCityRuntimeId,
+                Is.EqualTo(destinationCity.RuntimeId));
+            Assert.That(buyerOwner.MerchantTradePlan.PlannedAmount, Is.EqualTo(1));
+            Assert.That(buyerOwner.TravelPlan.TargetCityRuntimeId,
+                Is.EqualTo(destinationCity.RuntimeId));
+            Assert.That(buyerOwner.TravelPlan.TargetLocationRuntimeId,
+                Is.EqualTo(destinationCity.Location.RuntimeId));
+            Assert.That(buyerOwner.TravelPlan.Reason, Is.EqualTo(NpcTravelReason.Trade));
+            Assert.That(buyer.TravelPlan.TargetCity, Is.SameAs(destinationCity));
+            Assert.That(buyer.TravelPlan.TargetLocation, Is.SameAs(destinationCity.Location));
+            Assert.That(buyerOwner.ActionSlot.Revision, Is.EqualTo(actionRevisionBeforeRecovery));
+            Assert.That(buyerOwner.MoneyAccount.Revision, Is.EqualTo(accountRevisionBeforeRecovery + 1));
+            Assert.That(buyerOwner.Inventory.Revision, Is.EqualTo(inventoryRevisionBeforeRecovery + 1));
+            Assert.That(originCity.SelectedRuntimeOwners.Market.Revision,
+                Is.EqualTo(originMarketRevisionBeforeRecovery + 1));
+            Assert.That(destinationCity.SelectedRuntimeOwners.Market.Revision,
+                Is.EqualTo(destinationMarketRevisionBeforeRecovery));
+            Assert.That(buyerOwner.MerchantTradePlan.Revision,
+                Is.EqualTo(merchantPlanRevisionBeforeRecovery + 1));
+            Assert.That(buyerOwner.TravelPlan.Revision, Is.EqualTo(travelPlanRevisionBeforeRecovery + 1));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                out long mutationEpochAfterPurchase,
+                out ContinuationCensusFailure epochAfterPurchaseFailure),
+                Is.True, epochAfterPurchaseFailure.ToString());
+            Assert.That(mutationEpochAfterPurchase, Is.EqualTo(mutationEpochBeforeRecovery + 5),
+                "Cross-city BuyGoods publishes account, inventory, origin Market, Merchant-plan and Travel-plan commits once each.");
+            dailyAdvanceScope.Dispose();
+            dailyAdvanceScope = null;
+            Assert.That(runtime.TryAssessNpcRosterCensus(
+                out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
+            dailyAdvanceScope?.Dispose();
+            buy.canFail = originalCanFail;
+            buy.baseSuccessChance = originalSuccessChance;
+            UnityEngine.Object.DestroyImmediate(config);
+        }
+    }
+
+    [TestCase(ScheduledDirectiveMode.ForceOutcome)]
+    [TestCase(ScheduledDirectiveMode.RequestAction)]
+    public void SelectedDailyV1EscapeCompletesStatusAndDirectiveWithoutCrimeProvider(
+        ScheduledDirectiveMode mode)
+    {
+        SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(sourceConfig, Is.Not.Null);
+        SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
+        NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
+            entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
+        NpcData actorDefinition = actorConfig.npc;
+        NpcActionData escape = SimulationTestFactory.CreateAction(
+            "p12-selected-forced-escape", NpcActionType.EscapePrison, NpcActionCategory.Justice);
+        escape.canFail = false;
+        escape.crimeSettings.escapeBountyPenalty = 3f;
+        escape.statusToRemove.Add(config.arrestedStatus);
+        escape.statusToAdd.Add(config.freeStatus);
+        config.Actions.Add(escape);
+        config.ScheduledDirectives.Add(new ScheduledDirectiveConfig
+        {
+            absoluteDay = 1L,
+            mode = mode,
+            operation = ScheduledDirectiveOperation.EscapePrison,
+            actor = actorDefinition,
+            action = escape
+        });
+
+        GameObject hostObject = new GameObject("P12 selected forced Escape scope reuse");
+        simulationObjects.Add(hostObject);
+        try
+        {
+            TesteSimulacao host = hostObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(host, config);
+            InvokeInitializeSimulation(host, null);
+            SimulationActiveSession session = ReadPrivateField<SimulationActiveSession>(host, "activeSession");
+            Assert.That(session, Is.Not.Null);
+            SimulationRuntime runtime = session.Runtime;
+            WritePrivateField(runtime, "npcDecisionSystem",
+                new NpcDecisionSystem(new List<INpcActionProvider>()));
+            NpcRuntime actor = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData != null && string.Equals(npc.NpcData.id, actorDefinition.id, StringComparison.Ordinal));
+            Assert.That(actor.CurrentCity, Is.Not.Null);
+            NpcRuntime guard = runtime.NpcRuntimes.Single(npc =>
+                npc?.NpcData?.job != null
+                && npc.NpcData.job.jobType == NpcJobType.Guard
+                && ReferenceEquals(npc.CurrentCity, actor.CurrentCity));
+
+            foreach (NpcRuntime participant in actor.CurrentCity.ImportantNpcs)
+            {
+                Assert.That(participant?.NpcData, Is.Not.Null);
+                PersonId personId = new PersonId("p12-selected-forced-escape-person-" + participant.NpcData.id);
+                Assert.That(runtime.TryRegisterPerson(
+                        new PersonRuntime(personId, runtime.CurrentDay), out PersonStoreFailure registrationFailure),
+                    Is.True, registrationFailure.ToString());
+                Assert.That(runtime.TryBindExistingNpcToPerson(
+                        personId, participant.RuntimeId, out PersonMaterializationFailure bindingFailure),
+                    Is.True, bindingFailure.ToString());
+            }
+            Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialCensusFailure),
+                Is.True, initialCensusFailure.ToString());
+
+            JusticeSystem justice = ReadPrivateField<JusticeSystem>(runtime, "justiceSystem");
+            Assert.That(justice, Is.Not.Null);
+            MethodInfo beginCrimeJusticeScope = typeof(SimulationRuntime).GetMethod(
+                "TryBeginP12CrimeJusticeActionScope", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(beginCrimeJusticeScope, Is.Not.Null);
+            object[] scopeArguments = { new[] { actor, guard }, true, null };
+            Assert.That(beginCrimeJusticeScope.Invoke(runtime, scopeArguments), Is.EqualTo(true));
+            IDisposable arrestScope = scopeArguments[2] as IDisposable;
+            Assert.That(arrestScope, Is.Not.Null);
+            using (arrestScope)
+            {
+                Assert.That(justice.CreateOrIncreaseWarrant(actor, actor.CurrentCity, 12f, 4), Is.Not.Null);
+                Assert.That(justice.Arrest(guard, actor, actor.CurrentCity), Is.True);
+            }
+
+            // Keep Escape as the scheduled action under test. A later ordered
+            // Guard turn is still allowed to respond to its successful release.
+            List<NpcActionData> configuredActions = ReadPrivateField<List<NpcActionData>>(
+                runtime, "configuredActions");
+            Assert.That(configuredActions, Is.Not.Null);
+            configuredActions.Clear();
+            configuredActions.Add(escape);
+
+            Assert.That(justice.IsArrested(actor), Is.True);
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long beforeEscapeEpoch, out ContinuationCensusFailure beforeEscapeFailure),
+                Is.True, beforeEscapeFailure.ToString());
+            Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+
+            ScheduledDirective directive = session.Composition.ScheduledDirectives.Directives.Single();
+            Assert.That(directive.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
+            Assert.That(directive.ProcessedDay, Is.EqualTo(1L));
+            if (mode == ScheduledDirectiveMode.RequestAction)
+            {
+                Assert.That(justice.IsArrested(actor), Is.True,
+                    "The ordered Guard turn may arrest the actor after a successful scheduled Escape in the same daily boundary.");
+                Assert.That(justice.WasArrestedToday(actor), Is.True);
+                Assert.That(actor.CurrentStatus.Any(status => ReferenceEquals(status, config.arrestedStatus)), Is.True);
+                Assert.That(actor.CurrentStatus.Any(status => ReferenceEquals(status, config.freeStatus)), Is.False);
+                Assert.That(justice.GetBounty(actor, actor.CurrentCity), Is.EqualTo(15f),
+                    "The successful Escape penalty remains committed even when a later Guard turn re-arrests the actor.");
+            }
+            else
+            {
+                Assert.That(justice.IsArrested(actor), Is.False);
+                Assert.That(actor.CurrentStatus.Any(status => ReferenceEquals(status, config.freeStatus)), Is.True);
+                Assert.That(actor.CurrentStatus.Any(status => ReferenceEquals(status, config.arrestedStatus)), Is.False);
+            }
+            Assert.That(actor.P12CrimeJusticeRevision, Is.GreaterThan(0L));
+            Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                    out long afterEscapeEpoch, out ContinuationCensusFailure afterEscapeFailure),
+                Is.True, afterEscapeFailure.ToString());
+            Assert.That(afterEscapeEpoch, Is.GreaterThan(beforeEscapeEpoch));
+            Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure finalCensusFailure),
+                Is.True, finalCensusFailure.ToString());
+        }
+        finally
+        {
             UnityEngine.Object.DestroyImmediate(config);
         }
     }
@@ -4401,23 +10314,35 @@ public sealed class SimulationRuntimeAdmissionTests
     {
         SimulationConfigData sourceConfig = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
             "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
-        NpcActionData steal = AssetDatabase.LoadAssetAtPath<NpcActionData>(
-            "Assets/_Project/Data/Actions/Action-Roubar.asset");
         NpcActionData arrest = AssetDatabase.LoadAssetAtPath<NpcActionData>(
             "Assets/_Project/Data/Actions/Action-Prender.asset");
         Assert.That(sourceConfig, Is.Not.Null);
-        Assert.That(steal, Is.Not.Null);
         Assert.That(arrest, Is.Not.Null);
 
         SimulationConfigData config = UnityEngine.Object.Instantiate(sourceConfig);
         NpcSimulationConfig actorConfig = config.Npcs.Single(entry =>
             entry?.npc != null && string.Equals(entry.npc.id, "JOBSON", StringComparison.Ordinal));
         NpcData actorDefinition = actorConfig.npc;
+        const int initialSentenceDays = 5;
+        const float initialWarrantBounty = 50f;
         NpcActionData escape = SimulationTestFactory.CreateAction(
             "p12g-successful-party-directive-escape", NpcActionType.EscapePrison, NpcActionCategory.Justice);
         escape.canFail = false;
         escape.crimeSettings.escapeBountyPenalty = 7f;
+        // The restore/replay regression uses an admitted initial warrant and
+        // Core Guard, with autonomous Crime disabled. Scheduled Escape remains
+        // runtime-enabled while no independent autonomous Escape can occur on
+        // the boundary after the directive succeeds.
+        config.crimeAutonomousEnabled = false;
         config.Actions.Add(escape);
+        config.InitialWarrants.Clear();
+        config.InitialWarrants.Add(new InitialWantedRecordConfig
+        {
+            target = actorDefinition,
+            city = actorConfig.startingCity,
+            bounty = initialWarrantBounty,
+            sentenceDays = initialSentenceDays
+        });
         config.ScheduledDirectives.Add(new ScheduledDirectiveConfig
         {
             absoluteDay = 3L,
@@ -4427,12 +10352,14 @@ public sealed class SimulationRuntimeAdmissionTests
             action = escape
         });
 
-        bool originalStealCanFail = steal.canFail;
         bool originalArrestCanFail = arrest.canFail;
+        // Selected runtimes execute the immutable definition graph captured at
+        // bootstrap. Configure successful outcomes before either graph is built.
         GameObject uninterruptedObject = new GameObject("P12-G successful directive-party uninterrupted");
         GameObject restoredObject = new GameObject("P12-G successful directive-party restored");
         try
         {
+            arrest.canFail = false;
             TesteSimulacao uninterrupted = uninterruptedObject.AddComponent<TesteSimulacao>();
             TesteSimulacao restored = restoredObject.AddComponent<TesteSimulacao>();
             ConfigureSelectedBootstrap(uninterrupted, config);
@@ -4480,12 +10407,28 @@ public sealed class SimulationRuntimeAdmissionTests
                         out ContinuationCensusFailure censusFailure), Is.True, censusFailure.ToString());
             }
 
-            void SelectOnly(SimulationRuntime runtime, NpcActionData action)
+            void AssertBuiltInDecisionConfiguration(SimulationRuntime runtime)
             {
-                List<NpcActionData> configuredActions = ReadPrivateField<List<NpcActionData>>(runtime, "configuredActions");
-                Assert.That(configuredActions, Is.Not.Null);
-                configuredActions.Clear();
-                configuredActions.Add(action);
+                EffectiveSimulationConfiguration effective = ReadPrivateField<EffectiveSimulationConfiguration>(
+                    runtime, "configuration");
+                NpcDecisionSystem decisions = ReadPrivateField<NpcDecisionSystem>(runtime, "npcDecisionSystem");
+                Assert.That(effective, Is.Not.Null);
+                Assert.That(effective.Crime.Enabled, Is.True);
+                Assert.That(effective.Crime.AutonomousEnabled, Is.False);
+                Assert.That(effective.GuardCrime.Enabled, Is.True);
+                Assert.That(decisions, Is.Not.Null);
+                Assert.That(decisions.HasProvider<CrimeSystem>(), Is.True);
+                Assert.That(decisions.HasProvider<GuardSystem>(), Is.True);
+                Assert.That(decisions.GetProviderForAction(escape), Is.TypeOf<CrimeSystem>());
+                Assert.That(decisions.GetProviderForAction(arrest), Is.TypeOf<GuardSystem>());
+            }
+
+            long ReadMutationEpoch(SimulationRuntime runtime)
+            {
+                Assert.That(runtime.TryReadNpcRosterCensusMutationEpoch(
+                        out long epoch, out ContinuationCensusFailure failure),
+                    Is.True, failure.ToString());
+                return epoch;
             }
 
             JusticeSystem controlJustice = ReadPrivateField<JusticeSystem>(uninterruptedSession.Runtime, "justiceSystem");
@@ -4506,29 +10449,43 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(sourceParty.MemberRuntimeIds, Does.Not.Contain(sourceGuard.RuntimeId));
             Assert.That(sourceParty.TravelPartyId, Is.EqualTo(controlParty.TravelPartyId));
 
-            SelectOnly(uninterruptedSession.Runtime, steal);
-            SelectOnly(sourceSession.Runtime, steal);
-            steal.canFail = false;
-            Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlTheftFailure),
-                Is.True, controlTheftFailure.ToString());
-            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceTheftFailure),
-                Is.True, sourceTheftFailure.ToString());
-            Assert.That(uninterruptedSession.Runtime.CrimeSocialAppraisal.TheftOutcomes.Count, Is.GreaterThan(0));
-            Assert.That(uninterruptedSession.Runtime.CrimeSocialAppraisal.CrimeKnowledge.Count, Is.GreaterThan(0));
-            Assert.That(uninterruptedSession.Runtime.CrimeSocialAppraisal.SocialReactions.Count, Is.GreaterThan(0));
-            Assert.That(controlJustice.HasActiveWarrantInCity(controlActor, controlActor.CurrentCity), Is.True);
-            Assert.That(sourceJustice.HasActiveWarrantInCity(sourceActor, sourceActor.CurrentCity), Is.True);
-
-            SelectOnly(uninterruptedSession.Runtime, arrest);
-            SelectOnly(sourceSession.Runtime, arrest);
-            arrest.canFail = false;
+            // Source, control, and restored hosts use the same effective
+            // built-in provider set; P12 compatibility binds that set rather
+            // than serializing the provider objects themselves.
+            AssertBuiltInDecisionConfiguration(uninterruptedSession.Runtime);
+            AssertBuiltInDecisionConfiguration(sourceSession.Runtime);
             Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlArrestFailure),
                 Is.True, controlArrestFailure.ToString());
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceArrestFailure),
                 Is.True, sourceArrestFailure.ToString());
+            Assert.That(controlJustice.IsArrested(controlActor), Is.True,
+                "The Core Guard must execute the admitted Arrest action against the initialized warrant.");
+            Assert.That(sourceJustice.IsArrested(sourceActor), Is.True);
+            Assert.That(controlJustice.WasArrestedToday(controlActor), Is.True);
+            Assert.That(sourceJustice.WasArrestedToday(sourceActor), Is.True);
+            Assert.That(controlJustice.GetRemainingSentenceDays(controlActor),
+                Is.EqualTo(initialSentenceDays));
+            Assert.That(sourceJustice.GetRemainingSentenceDays(sourceActor),
+                Is.EqualTo(initialSentenceDays));
+
+            Assert.That(uninterruptedSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlResetFailure),
+                Is.True, controlResetFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceResetFailure),
+                Is.True, sourceResetFailure.ToString());
+            Assert.That(controlJustice.WasArrestedToday(controlActor), Is.False,
+                "Start-of-day reset clears the prior-day Guard arrest marker before the next sentence decrement.");
+            Assert.That(sourceJustice.WasArrestedToday(sourceActor), Is.False);
+            Assert.That(controlJustice.HasActiveWarrantInCity(controlActor, controlActor.CurrentCity), Is.True);
+            Assert.That(sourceJustice.HasActiveWarrantInCity(sourceActor, sourceActor.CurrentCity), Is.True);
+            Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
+                Is.EqualTo(initialWarrantBounty));
+            Assert.That(sourceJustice.GetBounty(sourceActor, sourceActor.CurrentCity),
+                Is.EqualTo(initialWarrantBounty));
+
             Assert.That(controlJustice.IsArrested(controlActor), Is.True);
             Assert.That(sourceJustice.IsArrested(sourceActor), Is.True);
-            Assert.That(sourceJustice.GetRemainingSentenceDays(sourceActor), Is.GreaterThan(1));
+            Assert.That(sourceJustice.GetRemainingSentenceDays(sourceActor), Is.GreaterThan(2),
+                "The day-3 RequestAction must remain eligible after that day's sentence decrement.");
 
             // Restore at the completed day-2 boundary, with both the sentence and active commitment present.
             Assert.That(controlParty.IsActive, Is.True);
@@ -4559,6 +10516,7 @@ public sealed class SimulationRuntimeAdmissionTests
                 restoreFailure + ": " + restoreDiagnostic);
             SimulationActiveSession restoredSession = ReadPrivateField<SimulationActiveSession>(restored, "activeSession");
             Assert.That(restoredSession, Is.Not.SameAs(sourceSession));
+            AssertBuiltInDecisionConfiguration(restoredSession.Runtime);
             DailyCaptureEligibilityToken restoredToken = GetCompletedDailyToken(restoredSession.Runtime);
             Assert.That(CaptureCompleteDailyV1OwnerProjection(restoredSession, restoredToken), Is.EqualTo(sourceOwnerGraph));
             Assert.That(CaptureContinuationRootFacts(restoredSession, includeWorldIdentity: false), Is.EqualTo(sourceRoots));
@@ -4586,15 +10544,28 @@ public sealed class SimulationRuntimeAdmissionTests
                     restoredSession.IdentityRegistry.TryGetNpc(runtimeId, out NpcRuntime npc)
                         ? npc.TravelDaysRemaining : -1), Is.EqualTo(memberProgress));
 
-            SelectOnly(uninterruptedSession.Runtime, escape);
-            SelectOnly(restoredSession.Runtime, escape);
             float bountyBeforeEscape = controlJustice.GetBounty(controlActor, controlActor.CurrentCity);
             Assert.That(controlParty.IsActive, Is.True);
             Assert.That(restoredParty.IsActive, Is.True);
+            // The target rebuilds a fresh shared epoch on restore; only the
+            // subsequent committed mutation delta must match its source run.
+            long controlEpochBeforeEscape = ReadMutationEpoch(uninterruptedSession.Runtime);
+            long sourceEpochAtRestoreBoundary = ReadMutationEpoch(sourceSession.Runtime);
+            long restoredEpochBeforeEscape = ReadMutationEpoch(restoredSession.Runtime);
+            Assert.That(sourceEpochAtRestoreBoundary, Is.EqualTo(controlEpochBeforeEscape),
+                "The uninterrupted and source runtimes have applied the same pre-restore mutations.");
+            Assert.That(sourceEpochAtRestoreBoundary, Is.GreaterThanOrEqualTo(0L));
             Assert.That(uninterrupted.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure controlEscapeFailure),
                 Is.True, controlEscapeFailure.ToString());
             Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredEscapeFailure),
                 Is.True, restoredEscapeFailure.ToString());
+            long controlEpochAfterEscape = ReadMutationEpoch(uninterruptedSession.Runtime);
+            long restoredEpochAfterEscape = ReadMutationEpoch(restoredSession.Runtime);
+            Assert.That(controlEpochAfterEscape, Is.GreaterThan(controlEpochBeforeEscape));
+            Assert.That(restoredEpochAfterEscape, Is.GreaterThan(restoredEpochBeforeEscape));
+            Assert.That(restoredEpochAfterEscape - restoredEpochBeforeEscape,
+                Is.EqualTo(controlEpochAfterEscape - controlEpochBeforeEscape),
+                "The restored runtime applies the same committed owner invalidations through the Escape/Guard boundary.");
 
             ScheduledDirective controlDirective = uninterruptedSession.Composition.ScheduledDirectives.Directives.Single();
             restoredDirective = restoredSession.Composition.ScheduledDirectives.Directives.Single();
@@ -4606,12 +10577,15 @@ public sealed class SimulationRuntimeAdmissionTests
                 Is.EqualTo(sourceDirectiveRevision + 1L));
             Assert.That(restoredSession.Composition.ScheduledDirectives.Revision,
                 Is.EqualTo(uninterruptedSession.Composition.ScheduledDirectives.Revision));
-            Assert.That(controlJustice.IsArrested(controlActor), Is.False);
-            Assert.That(restoredJustice.IsArrested(restoredActor), Is.False);
+            Assert.That(controlJustice.IsArrested(controlActor), Is.True,
+                "The ordered Guard turn may re-arrest the actor after the scheduled Escape succeeds in the same daily boundary.");
+            Assert.That(restoredJustice.IsArrested(restoredActor), Is.True,
+                "Restoration must preserve the same-day ordered Guard response after the successful scheduled Escape.");
             Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
                 Is.EqualTo(bountyBeforeEscape + escape.crimeSettings.escapeBountyPenalty));
+            float bountyAfterEscape = controlJustice.GetBounty(controlActor, controlActor.CurrentCity);
             Assert.That(restoredJustice.GetBounty(restoredActor, restoredActor.CurrentCity),
-                Is.EqualTo(controlJustice.GetBounty(controlActor, controlActor.CurrentCity)));
+                Is.EqualTo(bountyAfterEscape));
             Assert.That(CaptureCompleteDailyV1OwnerProjection(
                     restoredSession, GetCompletedDailyToken(restoredSession.Runtime)),
                 Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(
@@ -4624,10 +10598,15 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(restored.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure restoredNextFailure),
                 Is.True, restoredNextFailure.ToString());
             Assert.That(controlJustice.GetBounty(controlActor, controlActor.CurrentCity),
-                Is.EqualTo(bountyBeforeEscape + escape.crimeSettings.escapeBountyPenalty),
-                "A terminal successful directive must not replay its effect on the next boundary.");
+                Is.EqualTo(bountyAfterEscape),
+                "A terminal successful directive must not apply its Escape effect on a later boundary.");
             Assert.That(restoredJustice.GetBounty(restoredActor, restoredActor.CurrentCity),
-                Is.EqualTo(controlJustice.GetBounty(controlActor, controlActor.CurrentCity)));
+                Is.EqualTo(bountyAfterEscape),
+                "The restored terminal directive must not replay its Escape effect on a later boundary.");
+            Assert.That(controlDirective.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
+            Assert.That(controlDirective.ProcessedDay, Is.EqualTo(3L));
+            Assert.That(restoredDirective.State, Is.EqualTo(ScheduledDirectiveState.Succeeded));
+            Assert.That(restoredDirective.ProcessedDay, Is.EqualTo(3L));
             Assert.That(uninterruptedSession.Composition.ScheduledDirectives.Revision,
                 Is.EqualTo(sourceDirectiveRevision + 1L));
             Assert.That(restoredSession.Composition.ScheduledDirectives.Revision,
@@ -4641,7 +10620,6 @@ public sealed class SimulationRuntimeAdmissionTests
         }
         finally
         {
-            steal.canFail = originalStealCanFail;
             arrest.canFail = originalArrestCanFail;
             UnityEngine.Object.DestroyImmediate(uninterruptedObject);
             UnityEngine.Object.DestroyImmediate(restoredObject);
@@ -5100,7 +11078,9 @@ public sealed class SimulationRuntimeAdmissionTests
             {
                 TravelPartyRuntime party = candidate.Composition.TravelParties.ActiveParties.Single();
                 Assert.That(candidate.IdentityRegistry.TryGetNpc(party.MemberRuntimeIds[0], out NpcRuntime member), Is.True);
-                WritePrivateField(member, "activeTravelPartyId", "p12g/missing-party");
+                object selectedOwners = ReadPrivateField<object>(member, "selectedRuntimeOwners");
+                object selectedTravelOwner = ReadPrivateField<object>(selectedOwners, "Travel");
+                WritePrivateField(selectedTravelOwner, "<ActiveTravelPartyId>k__BackingField", "p12g/missing-party");
             }, out P12GDailyV1RestoreFailure restoreFailure, out string diagnostic), Is.False);
             Assert.That(restoreFailure, Is.EqualTo(P12GDailyV1RestoreFailure.BindingValidationFailed));
             Assert.That(diagnostic, Does.Contain("ActiveTravelPartyId"));
@@ -5211,7 +11191,19 @@ public sealed class SimulationRuntimeAdmissionTests
             SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
             Assert.That(original, Is.Not.Null);
             Assert.That(original.Composition.Expeditions.Add(CreateUnsupportedDailyV1Expedition()), Is.True);
-            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure), Is.False);
+            SimulationRuntimeAdvanceFailure advanceFailure = SimulationRuntimeAdvanceFailure.None;
+            bool advanced = false;
+            try
+            {
+                advanced = original.Runtime.TryAdvanceDay(out advanceFailure);
+            }
+            catch (InvalidOperationException exception)
+            {
+                Assert.Fail("Unsupported populated Expedition state must reject the day without throwing: "
+                    + exception.Message + "; " + P12Diagnostic(original.Runtime));
+            }
+            Assert.That(advanced, Is.False,
+                "A populated unsupported Expedition must not produce a completed boundary.");
             Assert.That(advanceFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.RuntimeFaulted));
             Assert.That(original.Runtime.TryGetCompletedDailyCaptureToken(
                     out _, out DailyCaptureEligibilityFailure tokenFailure), Is.False);
@@ -5292,6 +11284,115 @@ public sealed class SimulationRuntimeAdmissionTests
             Assert.That(CaptureCompleteDailyV1OwnerProjection(retried, GetCompletedDailyToken(retried.Runtime)),
                 Is.EqualTo(sourceGraph),
                 "A rejected target-census mutation must not affect a later valid restore.");
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
+    [Test]
+    public void DailyV1RestoreRejectsFaultedUnscopedNpcMembershipBeforeBindingMutationGuard()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G faulted unscoped membership restore target");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession original = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(original, Is.Not.Null);
+            Assert.That(original.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+            DailyCaptureEligibilityToken sourceToken = GetCompletedDailyToken(original.Runtime);
+
+            SimulationActiveSession privateCandidate = null;
+            IDisposable unscopedMembershipScope = null;
+            bool faultInjected = false;
+            bool mutationGuardBoundStageObserved = false;
+            DailyV1Application application = ReadPrivateField<DailyV1Application>(
+                source, "dailyV1Application");
+            Assert.That(application, Is.Not.Null);
+            Assert.That(application.ActiveSession, Is.SameAs(original.CoreRuntimeSession));
+            Assert.That(application.TryBeginExclusiveOperation(
+                original.CoreRuntimeSession,
+                out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation),
+                Is.True);
+
+            SimulationActiveSession restored;
+            P12GDailyV1RestoreFailure failure;
+            string diagnostic;
+            bool restoreSucceeded;
+            using (replacementOperation)
+            {
+                restoreSucceeded = P12GDailyV1RestoreCoordinator.TryCreateRestoredSession(
+                    original,
+                    original.AdmissionContext,
+                    out restored,
+                    out failure,
+                    out diagnostic,
+                    stageObserver: stage =>
+                    {
+                        if (stage == P12GDailyV1RestoreStage.TargetTravelPartyBindingsValidated)
+                        {
+                            Assert.That(privateCandidate, Is.Not.Null);
+                            SimulationRuntime targetRuntime = privateCandidate.Runtime;
+                            Assert.That(targetRuntime.AreCoreMutationGuardAuthoritiesBound, Is.False);
+
+                            MethodInfo faultMembershipProtocol = typeof(SimulationRuntime).GetMethod(
+                                "FaultNpcMembershipCensusBoundary",
+                                BindingFlags.Instance | BindingFlags.NonPublic);
+                            MethodInfo beginMembershipScope = typeof(SimulationRuntime).GetMethod(
+                                "BeginNpcMembershipCensusScope",
+                                BindingFlags.Instance | BindingFlags.NonPublic);
+                            Assert.That(faultMembershipProtocol, Is.Not.Null);
+                            Assert.That(beginMembershipScope, Is.Not.Null);
+
+                            faultMembershipProtocol.Invoke(targetRuntime, null);
+                            unscopedMembershipScope = beginMembershipScope.Invoke(targetRuntime, null) as IDisposable;
+                            Assert.That(unscopedMembershipScope, Is.Not.Null,
+                                "The failed membership admission leaves its context available for the restored-boundary check.");
+                            object membershipContext = ReadPrivateField<object>(
+                                targetRuntime, "activeNpcMembershipCensusContext");
+                            Assert.That(membershipContext, Is.Not.Null);
+                            FieldInfo membershipProtocolScopeField = membershipContext.GetType().GetField(
+                                "ProtocolScope", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                            Assert.That(membershipProtocolScopeField, Is.Not.Null);
+                            Assert.That(membershipProtocolScopeField.GetValue(membershipContext), Is.Null,
+                                "The failed admission leaves no registered Core operation scope.");
+                            Assert.That(targetRuntime.TryAssessNpcRosterCensus(
+                                    out ContinuationCensusFailure censusFailure), Is.False);
+                            Assert.That(censusFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+                            Assert.That(targetRuntime.ExecutionBoundaryState.ActiveOperationCount, Is.Zero,
+                                "This failed membership admission has no Core operation scope, so quiescence must also inspect protocol health.");
+                            faultInjected = true;
+                        }
+                        else if (stage == P12GDailyV1RestoreStage.CandidateGuardBound)
+                        {
+                            mutationGuardBoundStageObserved = true;
+                        }
+                    },
+                    privateCandidateObserver: candidate => privateCandidate = candidate,
+                    replacementOperation: replacementOperation,
+                    application: application);
+            }
+
+            unscopedMembershipScope?.Dispose();
+
+            Assert.That(faultInjected, Is.True);
+            Assert.That(restoreSucceeded, Is.False);
+            Assert.That(mutationGuardBoundStageObserved, Is.False,
+                "Core must reject this unhealthy candidate before binding any owner mutation guard.");
+            Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.False);
+            Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.TargetAdmissionFailed), diagnostic);
+            Assert.That(diagnostic, Does.Contain("exact unadmitted Core owner-thread boundary"));
+            Assert.That(restored, Is.Null);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
+            Assert.That(original.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
+            Assert.That(original.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
         }
         finally
         {
@@ -6507,8 +12608,10 @@ public sealed class SimulationRuntimeAdmissionTests
                         if (stage != P12GDailyV1RestoreStage.BoundaryAdmitted) return;
                         Assert.That(privateCandidate, Is.Not.Null);
                         Assert.That(privateCandidate.Runtime.HasValidRestoredDailyBoundaryAdmission(), Is.True);
+                        object executionBoundary = ReadPrivateField<object>(
+                            privateCandidate.Runtime, "dailyExecutionBoundary");
                         WritePrivateField(
-                            privateCandidate.Runtime, "currentDailyCaptureToken", sourceToken);
+                            executionBoundary, "currentCaptureToken", sourceToken);
                         tokenCorruptedAfterAdmission = true;
                     },
                     candidate => privateCandidate = candidate), Is.False);
@@ -6592,7 +12695,8 @@ public sealed class SimulationRuntimeAdmissionTests
             }
             finally
             {
-                endOperation.Invoke(source, null);
+                endOperation.Invoke(source, new[] { Enum.ToObject(
+                    endOperation.GetParameters()[0].ParameterType, 0) });
             }
 
             Assert.That(ReadPrivateField<SimulationActiveSession>(source, "activeSession"), Is.SameAs(original));
@@ -9398,7 +15502,7 @@ public sealed class SimulationRuntimeAdmissionTests
                                 .FirstOrDefault();
                             Assert.That(targetLocation, Is.Not.Null,
                                 "The synthetic site must bind to an already-staged legacy location.");
-                            ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite(
+                            DailyV1ExplorableSiteDefinition definition = SimulationTestFactory.CreateExplorableSiteDefinition(
                                 "p12g-private-target-late-site-definition",
                                 ExplorableSiteKind.Generic);
                             injectedSite = new ExplorableSiteRuntime(
@@ -9860,12 +15964,15 @@ public sealed class SimulationRuntimeAdmissionTests
             WorldCommandAuthorityMode.Request, out ActorChoiceStoreFailureCode captureFailure),
             Is.True, captureFailure.ToString());
         ActorChoiceInput input = runtime.ActorChoiceStore.Inputs.Single(value => value.WorldCommandId == commandId);
-        Assert.That(runtime.ActorChoiceStore.TryMarkDispatchStarted(
-            input.InputId, runtime.CurrentDay, 0, decisionReference,
-            out ActorChoiceStoreFailureCode dispatchFailure), Is.True, dispatchFailure.ToString());
-        Assert.That(runtime.ActorChoiceStore.TryRecordAttemptReturned(
-            input.InputId, runtime.CurrentDay, 0, null,
-            out ActorChoiceStoreFailureCode attemptFailure), Is.True, attemptFailure.ToString());
+        RunSelectedApplicationOwnerOperation(runtime, () =>
+        {
+            Assert.That(runtime.ActorChoiceStore.TryMarkDispatchStarted(
+                input.InputId, runtime.CurrentDay, 0, decisionReference,
+                out ActorChoiceStoreFailureCode dispatchFailure), Is.True, dispatchFailure.ToString());
+            Assert.That(runtime.ActorChoiceStore.TryRecordAttemptReturned(
+                input.InputId, runtime.CurrentDay, 0, null,
+                out ActorChoiceStoreFailureCode attemptFailure), Is.True, attemptFailure.ToString());
+        });
     }
 
     private static void CaptureTerminalP11History(
@@ -9905,14 +16012,76 @@ public sealed class SimulationRuntimeAdmissionTests
         {
             ActorChoiceInput pending = runtime.ActorChoiceStore.Inputs.Single(
                 input => input.WorldCommandId == commandId);
-            Assert.That(runtime.ActorChoiceStore.TryReject(
-                    pending.InputId,
-                    runtime.CurrentDay,
-                    0,
-                    ActorChoiceFailure.ActionUnavailable,
-                    out ActorChoiceStoreFailureCode rejectFailure), Is.True,
-                rejectFailure.ToString());
+            RunSelectedApplicationOwnerOperation(runtime, () =>
+                Assert.That(runtime.ActorChoiceStore.TryReject(
+                        pending.InputId,
+                        runtime.CurrentDay,
+                        0,
+                        ActorChoiceFailure.ActionUnavailable,
+                        out ActorChoiceStoreFailureCode rejectFailure), Is.True,
+                    rejectFailure.ToString()));
         }
+    }
+
+    private static void RunSelectedApplicationOwnerOperation(
+        SimulationRuntime runtime,
+        Action mutation)
+    {
+        Assert.That(runtime, Is.Not.Null);
+        Assert.That(mutation, Is.Not.Null);
+        Assert.That(runtime.ExecutionBoundaryState.TryBeginOperation(
+                DailyV1OperationScopeKind.Application), Is.True,
+            "The fixture's direct P11 owner mutation must use the selected Core application scope.");
+        try
+        {
+            mutation();
+        }
+        finally
+        {
+            Assert.That(runtime.ExecutionBoundaryState.TryEndOperation(
+                    DailyV1OperationScopeKind.Application), Is.True,
+                "The fixture's selected Core application scope must close after the P11 owner mutation.");
+        }
+    }
+
+    private static void CommitSelectedCurrentActionSlotForTest(
+        SimulationRuntime runtime,
+        NpcRuntime actor,
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        Assert.That(runtime, Is.Not.Null);
+        Assert.That(actor, Is.Not.Null);
+        Assert.That(action, Is.Not.Null);
+        Assert.That(payload, Is.Not.Null);
+        string sectionId = DailyV1SelectedOwnerSectionCensusContract.NpcCurrentActionPrefix
+            + actor.RuntimeId;
+        MethodInfo canCommit = typeof(SimulationRuntime).GetMethod(
+            "CanCommitP12MutationSections", BindingFlags.Instance | BindingFlags.NonPublic);
+        MethodInfo notifyCommitted = typeof(SimulationRuntime).GetMethod(
+            "NotifyP12MutationSections", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(canCommit, Is.Not.Null);
+        Assert.That(notifyCommitted, Is.Not.Null);
+
+        // This direct slot setup stands in for the runtime's selected action
+        // operation. Admit and report the exact CurrentAction owner section so
+        // the following status mutation starts from a complete current vector.
+        RunSelectedApplicationOwnerOperation(runtime, () =>
+        {
+            bool admitted = false;
+            Assert.That(actor.SelectedRuntimeOwnerGraph.TryCommitCurrentActionSlot(
+                    actor.SelectedRuntimeOwners, action, payload, () =>
+                    {
+                        admitted = (bool)canCommit.Invoke(
+                            runtime, new object[] { new[] { sectionId } });
+                        return admitted;
+                    }), Is.True,
+                "The exact current-action owner write must pass P12 precommit admission.");
+            Assert.That(admitted, Is.True);
+            Assert.That((bool)notifyCommitted.Invoke(
+                    runtime, new object[] { new[] { sectionId } }), Is.True,
+                "The exact current-action owner write must refresh the complete P12 census and epoch.");
+        });
     }
 
     private static string CaptureSelectedDailyFacts(SimulationRuntime runtime)
@@ -10160,7 +16329,7 @@ public sealed class SimulationRuntimeAdmissionTests
             out ExplorableSiteOwnerSnapshot siteSnapshot, out var siteFailure), Is.True, siteFailure?.Message);
         snapshots.Add("D/EmptyExplorableSites", siteSnapshot);
 
-        Assert.That(P12EInstitutionOfficeOwnerSnapshot.TryCapture(
+        Assert.That(P12EInstitutionOfficeCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EInstitutionOfficeOwnerSnapshot institutionOfficeSnapshot,
             out P12EInstitutionOfficeSnapshotFailure institutionFailure), Is.True,
@@ -10172,26 +16341,26 @@ public sealed class SimulationRuntimeAdmissionTests
             out PropertyEstateOwnerSnapshotFailure propertyEstateFailure), Is.True,
             propertyEstateFailure?.Message);
         snapshots.Add("E/PropertyEstate", propertyEstateSnapshot);
-        Assert.That(P12EFactionOwnerSnapshot.TryCapture(
+        Assert.That(P12EFactionCaptureAdapter.TryCapture(
             runtime, GetRequiredOwner<FactionStore>(vector, FactionStoreCensusProvider.FactionsSectionId),
             token, vector,
             out P12EFactionOwnerSnapshot factionSnapshot,
             out P12EFactionSnapshotFailure factionFailure), Is.True,
             factionFailure?.Message);
         snapshots.Add("E/Factions", factionSnapshot);
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalClaimOwnerSnapshot claimSnapshot,
             out P12EPoliticalClaimSnapshotFailure claimFailure), Is.True,
             claimFailure?.Message);
         snapshots.Add("E/PoliticalClaims", claimSnapshot);
-        Assert.That(P12EPoliticalSupportOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalSupportCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalSupportOwnerSnapshot supportSnapshot,
             out P12EPoliticalSupportSnapshotFailure supportFailure), Is.True,
             supportFailure?.Message);
         snapshots.Add("E/PoliticalSupport", supportSnapshot);
-        Assert.That(P12EPoliticalDecisionOwnerSnapshot.TryCapture(
+        Assert.That(P12EPoliticalDecisionCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12EPoliticalDecisionOwnerSnapshot decisionSnapshot,
             out P12EPoliticalDecisionSnapshotFailure decisionFailure), Is.True,
@@ -10224,13 +16393,13 @@ public sealed class SimulationRuntimeAdmissionTests
             out PersistentBattleOwnerSnapshotFailure battleFailure), Is.True,
             battleFailure?.Message);
         snapshots.Add("E/Battles", battleSnapshot);
-        Assert.That(P12EJusticeRecordsOwnerSnapshot.TryCapture(
+        Assert.That(P12EJusticeRecordsSnapshotAdapter.TryCapture(
             runtime, token, vector,
             out P12EJusticeRecordsOwnerSnapshot justiceSnapshot,
             out P12EJusticeSnapshotFailure justiceFailure), Is.True,
             justiceFailure?.Message);
         snapshots.Add("E/Justice", justiceSnapshot);
-        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(
+        Assert.That(P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(
             runtime, token, vector,
             out P12ECrimeSocialAppraisalOwnerSnapshot crimeSocialSnapshot,
             out P12ECrimeSocialAppraisalSnapshotFailure crimeSocialFailure), Is.True,
@@ -10440,6 +16609,171 @@ public sealed class SimulationRuntimeAdmissionTests
             .Append(':').Append(value).Append(';');
     }
 
+    [TestCase((int)P12GDailyV1RestoreStage.OwnersStaged)]
+    [TestCase((int)P12GDailyV1RestoreStage.TargetChecksCompleted)]
+    [TestCase((int)P12GDailyV1RestoreStage.BoundaryAdmitted)]
+    public void CoreContinuationSaveRejectsOperationClosedByRestoreStageCallback(
+        int invalidateAtValue)
+    {
+        P12GDailyV1RestoreStage invalidateAt = (P12GDailyV1RestoreStage)invalidateAtValue;
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject sourceObject = new GameObject("P12-G Core save operation callback invalidation");
+        try
+        {
+            TesteSimulacao source = sourceObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(source, config);
+            InvokeInitializeSimulation(source, null);
+            SimulationActiveSession sourceSession =
+                ReadPrivateField<SimulationActiveSession>(source, "activeSession");
+            Assert.That(sourceSession?.CoreRuntimeSession, Is.Not.Null);
+            foreach (CityRuntime city in sourceSession.Runtime.Cities)
+            {
+                Assert.That(city.SelectedRuntimeOwners, Is.Not.Null,
+                    "The selected Daily-v1 save source must be bound to Core City owners.");
+
+                OwnerSectionCensusWitness presenceWitness = null;
+                foreach (IOwnerSectionCensusProvider provider in
+                    sourceSession.Composition.CityNpcPresenceCensusProviders)
+                {
+                    OwnerSectionCensusWitness candidate = provider.GetCurrentCensus();
+                    if (string.Equals(candidate.SectionId,
+                        CityNpcPresenceCensusProvider.SectionIdFor(city.RuntimeId),
+                        StringComparison.Ordinal))
+                    {
+                        presenceWitness = candidate;
+                        break;
+                    }
+                }
+                Assert.That(presenceWitness, Is.Not.Null);
+                Assert.That(presenceWitness.OwnerInstanceIdentity,
+                    Is.SameAs(city.SelectedRuntimeOwners.NpcPresence));
+                Assert.That(presenceWitness.Cardinality,
+                    Is.EqualTo(city.SelectedRuntimeOwners.NpcPresence.OrderedNpcRuntimeIds.Count));
+                Assert.That(presenceWitness.Revision,
+                    Is.EqualTo(city.SelectedRuntimeOwners.NpcPresence.Revision));
+
+                OwnerSectionCensusWitness marketWitness = null;
+                foreach (IOwnerSectionCensusProvider provider in
+                    sourceSession.Composition.CityMarketCensusProviders)
+                {
+                    OwnerSectionCensusWitness candidate = provider.GetCurrentCensus();
+                    if (string.Equals(candidate.SectionId,
+                        CityMarketCensusProvider.SectionIdFor(city.RuntimeId),
+                        StringComparison.Ordinal))
+                    {
+                        marketWitness = candidate;
+                        break;
+                    }
+                }
+                Assert.That(marketWitness, Is.Not.Null);
+                Assert.That(marketWitness.OwnerInstanceIdentity,
+                    Is.SameAs(city.SelectedRuntimeOwners.Market));
+                Assert.That(marketWitness.Cardinality,
+                    Is.EqualTo(city.SelectedRuntimeOwners.Market.Items.Count));
+                Assert.That(marketWitness.Revision,
+                    Is.EqualTo(city.SelectedRuntimeOwners.Market.Revision));
+            }
+            Assert.That(sourceSession.Composition.SpatialAuthority,
+                Is.SameAs(sourceSession.CoreRuntimeSession.GenesisComposition.SpatialAuthority),
+                "The admitted Unity runtime must retain Core's exact P12-C SpatialAuthorityStore owner.");
+            Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
+                Is.True, advanceFailure.ToString());
+
+            DailyV1Application application =
+                ReadPrivateField<DailyV1Application>(source, "dailyV1Application");
+            DailyV1ActiveRuntimeSession coreSession = sourceSession.CoreRuntimeSession;
+            Assert.That(application, Is.Not.Null);
+            Assert.That(application.TryBeginContinuationSaveOperation(
+                coreSession,
+                out DailyV1P12GContinuationSaveOperation operation,
+                out DailyCaptureEligibilityFailure beginFailure), Is.True, beginFailure.ToString());
+            DailyCaptureEligibilityToken exactToken = operation.SourceWitness.Token;
+            IReadOnlyList<OwnerSectionCensusSnapshot> exactOwnerSections =
+                operation.SourceWitness.TokenOwnerSections;
+            DailyV1P12GCoreBoundDemographicOwnerSources demographic =
+                operation.CoreDemographicOwnerSources;
+            Assert.That(demographic, Is.Not.Null);
+            Assert.That(demographic.Persons, Is.SameAs(coreSession.OwnerGraph.PersonStore));
+            Assert.That(demographic.Genealogy, Is.SameAs(coreSession.OwnerGraph.GenealogyStore));
+            Assert.That(demographic.PersonSnapshot.Revision,
+                Is.EqualTo(exactOwnerSections.Single(section =>
+                    section.SectionId == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId).Revision));
+            Assert.That(demographic.GenealogySnapshot.Revision,
+                Is.EqualTo(exactOwnerSections.Single(section =>
+                    section.SectionId == "p12d.genealogy.parentage").Revision));
+
+            bool callbackInvoked = false;
+            P12AContinuationImage image;
+            SimulationActiveSession restored;
+            P12GDailyV1RestoreFailure failure;
+            string diagnostic;
+            using (operation)
+            {
+                Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                    sourceSession,
+                    sourceSession.AdmissionContext,
+                    operation,
+                    out image,
+                    out restored,
+                    out failure,
+                    out diagnostic,
+                    stage =>
+                    {
+                        if (stage != invalidateAt) return;
+                        callbackInvoked = true;
+                        operation.Dispose();
+                    }), Is.False,
+                    "A closed Core continuation-save operation must not fall back to Unity token validation.");
+            }
+
+            Assert.That(callbackInvoked, Is.True,
+                invalidateAt + ": " + failure + ": " + diagnostic);
+            Assert.That(image, Is.Null);
+            Assert.That(restored, Is.Null);
+            Assert.That(failure, Is.Not.EqualTo(P12GDailyV1RestoreFailure.None), diagnostic);
+            Assert.That(application.ActiveSession, Is.SameAs(coreSession));
+            Assert.That(application.ActiveOperationCount, Is.Zero);
+            Assert.That(sourceSession.Runtime.IsHealthyDailyOwnerThreadBoundary(), Is.True);
+
+            Assert.That(operation.TryComposeImage(
+                    null, null, 0L, null,
+                    out P12AContinuationImage rejectedImage,
+                    out P12ADailyV1SectionManifest rejectedManifest,
+                    out P12AResult rejectedResult), Is.False,
+                "The application image-seal boundary must reject a closed save reservation before inspecting host inputs.");
+            Assert.That(rejectedImage, Is.Null);
+            Assert.That(rejectedManifest, Is.Null);
+            Assert.That(rejectedResult?.Code, Is.EqualTo(P12AResultCode.CaptureRejected));
+
+            var legacyBoundary = new AlwaysCurrentP12ECoreOwnerCaptureBoundary();
+            Assert.That(DailyV1P12ECoreOwnerSourceSnapshots.TryCapture(
+                    exactToken,
+                    exactOwnerSections,
+                    operation,
+                    legacyBoundary,
+                    out DailyV1P12ECoreOwnerSourceSnapshots coreSnapshots,
+                    out DailyV1P12ECoreOwnerSourceCaptureFailure coreFailure,
+                    out _), Is.False,
+                "An explicitly supplied closed Core operation must not fall back to a permissive legacy host boundary.");
+            Assert.That(coreSnapshots, Is.Null);
+            Assert.That(coreFailure, Is.EqualTo(DailyV1P12ECoreOwnerSourceCaptureFailure.StaleBoundary));
+            Assert.That(legacyBoundary.WasConsulted, Is.False,
+                "The Unity staging boundary is reserved for legacy/image staging without a Core save operation.");
+
+            Assert.That(application.TryBeginContinuationSaveOperation(
+                coreSession,
+                out DailyV1P12GContinuationSaveOperation retry,
+                out DailyCaptureEligibilityFailure retryFailure), Is.True, retryFailure.ToString());
+            retry.Dispose();
+        }
+        finally
+        {
+            UnityEngine.Object.DestroyImmediate(sourceObject);
+        }
+    }
+
     [Test]
     public void PersistedDailyV1ImageRestoresWithoutUsingSourceSessionAndContinuesIdentically()
     {
@@ -10448,6 +16782,7 @@ public sealed class SimulationRuntimeAdmissionTests
         Assert.That(config, Is.Not.Null);
         GameObject sourceObject = new GameObject("P12-A persisted source");
         GameObject controlObject = new GameObject("P12-A uninterrupted control");
+        GameObject failedStartObject = new GameObject("P12-A restore projection rejection");
         GameObject targetObject = new GameObject("P12-A detached target");
         GameObject idleObject = new GameObject("P12-A idle replacement target");
         string storageRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
@@ -10461,6 +16796,9 @@ public sealed class SimulationRuntimeAdmissionTests
             InvokeInitializeSimulation(source, null);
             SimulationActiveSession sourceSession = ReadPrivateField<SimulationActiveSession>(source, "activeSession");
             Assert.That(sourceSession, Is.Not.Null);
+            Assert.That(sourceSession.CoreRuntimeSession?.GenesisComposition, Is.Not.Null,
+                "A freshly bootstrapped source session must retain its exact Core genesis composition.");
+            string expectedP9ManifestFingerprint = sourceSession.CoreRuntimeSession.P12CRoots.Manifest.Fingerprint;
 
             TesteSimulacao control = controlObject.AddComponent<TesteSimulacao>();
             ConfigureSelectedBootstrap(control, config);
@@ -10469,6 +16807,40 @@ public sealed class SimulationRuntimeAdmissionTests
             SimulationActiveSession controlSession = ReadPrivateField<SimulationActiveSession>(control, "activeSession");
             Assert.That(controlSession, Is.Not.Null);
 
+            PersonId parentId = new PersonId("p12a-image-restore-genealogy-parent");
+            PersonId childId = new PersonId("p12a-image-restore-genealogy-child");
+            Assert.That(sourceSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(parentId, 0L), out PersonStoreFailure sourceParentFailure),
+                Is.True, sourceParentFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(childId, 0L), out PersonStoreFailure sourceChildFailure),
+                Is.True, sourceChildFailure.ToString());
+            Assert.That(controlSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(parentId, 0L), out PersonStoreFailure controlParentFailure),
+                Is.True, controlParentFailure.ToString());
+            Assert.That(controlSession.Runtime.TryRegisterPerson(
+                new PersonRuntime(childId, 0L), out PersonStoreFailure controlChildFailure),
+                Is.True, controlChildFailure.ToString());
+
+            NpcRuntime sourceNpc = sourceSession.Runtime.NpcRuntimes
+                .OrderBy(npc => npc.RuntimeId, StringComparer.Ordinal)
+                .First(npc => npc.PersonId == null);
+            NpcRuntime controlNpc = controlSession.Runtime.NpcRuntimes
+                .Single(npc => string.Equals(npc.RuntimeId, sourceNpc.RuntimeId, StringComparison.Ordinal));
+            Assert.That(controlNpc.PersonId, Is.Null);
+            Assert.That(sourceSession.Runtime.TryBindExistingNpcToPerson(
+                childId, sourceNpc.RuntimeId, out PersonMaterializationFailure sourceBindFailure),
+                Is.True, sourceBindFailure.ToString());
+            Assert.That(controlSession.Runtime.TryBindExistingNpcToPerson(
+                childId, controlNpc.RuntimeId, out PersonMaterializationFailure controlBindFailure),
+                Is.True, controlBindFailure.ToString());
+            Assert.That(sourceSession.Runtime.TryAddParentage(
+                parentId, childId, out PersonGenealogyFailure sourceGenealogyFailure),
+                Is.True, sourceGenealogyFailure.ToString());
+            Assert.That(controlSession.Runtime.TryAddParentage(
+                parentId, childId, out PersonGenealogyFailure controlGenealogyFailure),
+                Is.True, controlGenealogyFailure.ToString());
+
             Assert.That(sourceSession.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
                 Is.True, advanceFailure.ToString());
             Assert.That(controlSession.Runtime.TryAdvanceDay(out advanceFailure), Is.True, advanceFailure.ToString());
@@ -10476,6 +16848,123 @@ public sealed class SimulationRuntimeAdmissionTests
                     GetCompletedDailyToken(sourceSession.Runtime)),
                 Is.EqualTo(CaptureCompleteDailyV1OwnerProjection(controlSession,
                     GetCompletedDailyToken(controlSession.Runtime))));
+            Assert.That(sourceSession.CoreRuntimeSession.GenesisComposition, Is.Not.Null,
+                "The original Core session must retain its genesis roots after the completed advance.");
+            DailyV1Application sourceApplication =
+                ReadPrivateField<DailyV1Application>(source, "dailyV1Application");
+            DailyV1ActiveRuntimeSession sourceCoreSession = sourceSession.CoreRuntimeSession;
+            Assert.That(sourceApplication.TryBeginContinuationSaveOperation(
+                sourceCoreSession, out DailyV1P12GContinuationSaveOperation captureOperation,
+                out DailyCaptureEligibilityFailure captureBeginFailure), Is.True,
+                captureBeginFailure.ToString());
+            using (captureOperation)
+            {
+                Assert.That(captureOperation.TryEncodeCoreP12CRuntimeIdentitySections(
+                        out IReadOnlyList<P12AOwnerSection> coreIdentitySections,
+                        out P12AResult identityCaptureResult), Is.True,
+                    identityCaptureResult?.SectionCode ?? identityCaptureResult?.Code.ToString());
+                DailyV1RuntimeIdentityIndex identityOwner = sourceCoreSession.OwnerGraph.RuntimeIdentityIndex;
+                Assert.That(coreIdentitySections, Has.Count.EqualTo(4));
+                foreach (P12AOwnerSection identitySection in coreIdentitySections)
+                {
+                    DailyV1RuntimeIdentityKind kind;
+                    string familyId;
+                    switch (identitySection.Id)
+                    {
+                        case P12CRuntimeIdentitySectionContract.NpcsSectionId:
+                            kind = DailyV1RuntimeIdentityKind.Npc;
+                            familyId = "npc";
+                            break;
+                        case P12CRuntimeIdentitySectionContract.CitiesSectionId:
+                            kind = DailyV1RuntimeIdentityKind.City;
+                            familyId = "city";
+                            break;
+                        case P12CRuntimeIdentitySectionContract.LocationsSectionId:
+                            kind = DailyV1RuntimeIdentityKind.Location;
+                            familyId = "location";
+                            break;
+                        case P12CRuntimeIdentitySectionContract.RoutesSectionId:
+                            kind = DailyV1RuntimeIdentityKind.Route;
+                            familyId = "route";
+                            break;
+                        default:
+                            Assert.Fail("The Core identity encoder emitted an unselected identity family.");
+                            return;
+                    }
+
+                    OwnerSectionCensusWitness witness = identityOwner.GetOwnerSectionCensusWitness(kind);
+                    OwnerSectionCensusSnapshot census = captureOperation.SourceWitness.TokenOwnerSections
+                        .Single(section => section.SectionId == identitySection.Id);
+                    Assert.That(census.SchemaVersion, Is.EqualTo(witness.SchemaVersion));
+                    Assert.That(census.Role, Is.EqualTo(OwnerSectionRole.Required));
+                    Assert.That(census.OwnerInstanceIdentity, Is.SameAs(identityOwner));
+                    Assert.That(census.Cardinality, Is.EqualTo(witness.Cardinality));
+                    Assert.That(census.Revision, Is.EqualTo(witness.Revision));
+                    Assert.That(identitySection.Major, Is.EqualTo(witness.SchemaVersion));
+                    Assert.That(identitySection.Role, Is.EqualTo(OwnerSectionRole.Required));
+                    Assert.That(identitySection.Revision, Is.EqualTo(identityOwner.CensusRevision));
+                    Assert.That(identitySection.Rows.Count, Is.EqualTo(witness.Cardinality));
+                    string[] expectedRuntimeIds = identityOwner.CaptureRegisteredValues()
+                        .Where(value => value.Key == familyId)
+                        .Select(value => value.Value).ToArray();
+                    Assert.That(identitySection.Rows.Select(row => row.OwnerKey),
+                        Is.EqualTo(expectedRuntimeIds));
+                    Assert.That(identitySection.Rows.All(row => row.Revision == witness.Revision),
+                        Is.True);
+                }
+
+                DailyV1P12GCoreBoundNpcOwnerSources coreNpcSources =
+                    captureOperation.CoreNpcOwnerSources;
+                Assert.That(coreNpcSources, Is.Not.Null);
+                Assert.That(coreNpcSources.Owners.Count, Is.EqualTo(sourceSession.Runtime.NpcRuntimes.Count));
+                Assert.That(P12DNpcRootOwnerSnapshot.TryCapture(
+                    sourceSession.Runtime,
+                    captureOperation.SourceWitness.Token,
+                    new object(),
+                    captureOperation.SourceWitness.TokenOwnerSections,
+                    out P12DNpcDProjection coreBackedD,
+                    out P12DNpcFProjection coreBackedF,
+                    out P12DNpcRootOwnerSnapshotFailure coreCaptureFailure,
+                    coreBoundNpcOwnerSources: coreNpcSources,
+                    continuationSaveOperation: captureOperation), Is.True,
+                    coreCaptureFailure.ToString());
+                for (int index = 0; index < coreNpcSources.Owners.Count; index++)
+                {
+                    DailyV1NpcRuntimeOwners exactCoreOwner = coreNpcSources.Owners[index];
+                    NpcRuntime compatibilityProjection = sourceSession.Runtime.NpcRuntimes[index];
+                    Assert.That(compatibilityProjection.SelectedRuntimeOwners, Is.SameAs(exactCoreOwner));
+                    Assert.That(coreBackedD.Rows[index], Is.SameAs(coreNpcSources.DRows[index]),
+                        "The staged D row must be the immutable operation-owned Core row, not a Unity reconstruction.");
+                    Assert.That(coreBackedF.Rows[index], Is.SameAs(coreNpcSources.FRows[index]),
+                        "The staged F row must be the immutable operation-owned Core row, not a Unity reconstruction.");
+                    Assert.That(coreBackedD.Rows[index].RuntimeId, Is.EqualTo(exactCoreOwner.RuntimeId));
+                    Assert.That(coreBackedD.Rows[index].InventoryRevision,
+                        Is.EqualTo(exactCoreOwner.Inventory.Revision));
+                    Assert.That(coreBackedD.Rows[index].MoneyRevision,
+                        Is.EqualTo(exactCoreOwner.MoneyAccount.Revision));
+                    Assert.That(coreBackedF.Rows[index].TravelStateRevision,
+                        Is.EqualTo(exactCoreOwner.Travel.Revision));
+                    Assert.That(coreBackedF.Rows[index].TravelPlan.Revision,
+                        Is.EqualTo(exactCoreOwner.TravelPlan.Revision));
+                    Assert.That(coreBackedF.Rows[index].MerchantPlan.Revision,
+                        Is.EqualTo(exactCoreOwner.MerchantTradePlan.Revision));
+                    DailyV1NpcActionPayloadOwner payload = exactCoreOwner.ActionSlot.CurrentPayload;
+                    Assert.That(coreBackedF.Rows[index].Action?.ActionDefinitionId,
+                        Is.EqualTo(payload?.Action.DefinitionId));
+                    Assert.That(coreBackedF.Rows[index].Action?.TargetNpcRuntimeId,
+                        Is.EqualTo(payload?.TargetNpcRuntimeId));
+                    Assert.That(coreBackedF.Rows[index].Action?.TargetCityRuntimeId,
+                        Is.EqualTo(payload?.TargetCityRuntimeId));
+                    Assert.That(coreBackedF.Rows[index].Action?.TargetItemDefinitionId,
+                        Is.EqualTo(payload?.TargetItem?.DefinitionId));
+                    Assert.That(coreBackedF.Rows[index].Action?.Amount,
+                        Is.EqualTo(payload?.Amount));
+                    Assert.That(coreBackedF.Rows[index].Action?.OriginDecisionId,
+                        Is.EqualTo(payload?.OriginDecisionId));
+                    Assert.That(coreBackedF.Rows[index].Action?.StableOccurrenceKey,
+                        Is.EqualTo(payload?.StableOccurrenceKey));
+                }
+            }
             Assert.That(source.TrySaveDailyV1ContinuationToPathForTest(storageRoot, out string saveCode), Is.True, saveCode);
             Assert.That(saveCode, Is.EqualTo(P12AResultCode.Saved.ToString()));
 
@@ -10483,6 +16972,105 @@ public sealed class SimulationRuntimeAdmissionTests
             sourceObject = null;
             source = null;
             sourceSession = null;
+
+            TesteSimulacao failedStartTarget = failedStartObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(failedStartTarget, config);
+            MethodInfo compatibilityFactory = typeof(TesteSimulacao).GetMethods(
+                    BindingFlags.Instance | BindingFlags.NonPublic)
+                .Single(method => method.Name == "TryCreateCurrentDailyV1CompatibilityDescriptor"
+                    && method.GetParameters().Length == 6);
+            object[] compatibilityArguments = new object[6];
+            Assert.That(compatibilityFactory.Invoke(failedStartTarget, compatibilityArguments), Is.EqualTo(true),
+                compatibilityArguments[5] as string);
+            P12ACompatibilityDescriptor failedStartCompatibility =
+                (P12ACompatibilityDescriptor)compatibilityArguments[0];
+            EffectiveSimulationConfiguration failedStartEffective =
+                (EffectiveSimulationConfiguration)compatibilityArguments[1];
+            CalendarDefinition failedStartCalendar = (CalendarDefinition)compatibilityArguments[2];
+            DailyV1EffectiveDefinitions failedStartDefinitions =
+                (DailyV1EffectiveDefinitions)compatibilityArguments[3];
+            DailyV1Application failedStartApplication =
+                ReadPrivateField<DailyV1Application>(failedStartTarget, "dailyV1Application");
+            SimulationRuntimeAdmissionContext failedStartAdmissionContext =
+                ReadPrivateField<SimulationRuntimeAdmissionContext>(failedStartTarget, "runtimeAdmissionContext");
+            DailyV1ApplicationHost failedStartHost = new DailyV1ApplicationHost(
+                storageRoot, SystemAtomicFileSlotOperations.Instance, null, null,
+                unityV1Identity: failedStartCompatibility);
+            DailyV1ApplicationStartPreparation failedRestorePreparation = null;
+            SimulationActiveSession rejectedRestoredProjection = null;
+            DailyV1InitialRestoredImageCommitProof rejectedRestoreProof = null;
+
+            bool RestoreThenRejectProjection(
+                DailyV1ApplicationStartPreparation preparation,
+                out IDailyV1ApplicationHostProjection candidateProjection,
+                out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+                out string hostDiagnostic)
+            {
+                candidateProjection = null;
+                candidateHostPorts = null;
+                hostDiagnostic = null;
+                failedRestorePreparation = preparation;
+                Assert.That(preparation.Kind,
+                    Is.EqualTo(DailyV1ApplicationStartPreparationKind.RestoreRequired));
+                Assert.That(preparation.StartAdmission.Application, Is.SameAs(failedStartApplication));
+                Assert.That(preparation.RestoreImage,
+                    Is.SameAs(preparation.StartAdmission.RestoreImage));
+
+                bool restoredOk = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+                    preparation.RestoreImage, failedStartCompatibility, config,
+                    failedStartEffective, failedStartCalendar, failedStartDefinitions,
+                    failedStartAdmissionContext,
+                    out SimulationActiveSession restoredProjection,
+                    out P12GDailyV1RestoreFailure restoreFailure,
+                    out string restoreDiagnostic,
+                    application: failedStartApplication,
+                    initialStartAdmission: preparation.StartAdmission);
+                Assert.That(restoredOk, Is.True,
+                    restoreFailure + ": " + (restoreDiagnostic ?? string.Empty));
+                Assert.That(restoredProjection?.CoreRuntimeSession, Is.Not.Null);
+                Assert.That(restoredProjection.Runtime, Is.Not.Null);
+                Assert.That(restoredProjection.CoreRuntimeSession.TryGetInitialRestoreCommitProof(
+                    preparation.RestoreImage, out rejectedRestoreProof), Is.True,
+                    "The production restore coordinator must bind the exact image's one-use commit proof before projection can fail.");
+                Assert.That(rejectedRestoreProof, Is.Not.Null);
+
+                FieldInfo preparedImageField = typeof(DailyV1Application).GetField(
+                    "preparedInitialRestoredImage", BindingFlags.Instance | BindingFlags.NonPublic);
+                FieldInfo preparedSessionField = typeof(DailyV1Application).GetField(
+                    "preparedInitialRestoredSession", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.That(preparedImageField?.GetValue(failedStartApplication),
+                    Is.SameAs(preparation.RestoreImage));
+                Assert.That(preparedSessionField?.GetValue(failedStartApplication),
+                    Is.SameAs(restoredProjection.CoreRuntimeSession));
+
+                rejectedRestoredProjection = restoredProjection;
+                candidateProjection = restoredProjection;
+                candidateHostPorts = restoredProjection.Runtime;
+                hostDiagnostic = "The test rejects the valid restored Unity projection before Core publication.";
+                return false;
+            }
+
+            Assert.That(failedStartApplication.TryStartOnExistingApplication(
+                failedStartDefinitions, failedStartHost, RestoreThenRejectProjection,
+                out _, out P12AResult failedStartPersistenceResult,
+                out string failedStartDiagnostic), Is.False);
+            Assert.That(failedStartPersistenceResult.Code, Is.EqualTo(P12AResultCode.Loaded));
+            Assert.That(failedStartDiagnostic, Does.Contain("test rejects"));
+            Assert.That(failedRestorePreparation, Is.Not.Null);
+            Assert.That(rejectedRestoredProjection, Is.Not.Null);
+            Assert.That(failedStartApplication.ActiveSession, Is.Null,
+                "A host rejection after real detached restoration must leave the Core session unpublished.");
+            Assert.That(failedStartApplication.TryGetPublishedHostProjection(
+                rejectedRestoredProjection.CoreRuntimeSession, out _), Is.False);
+            Assert.That(typeof(DailyV1Application).GetField(
+                    "preparedInitialRestoredImage", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.GetValue(failedStartApplication), Is.Null);
+            Assert.That(typeof(DailyV1Application).GetField(
+                    "preparedInitialRestoredSession", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.GetValue(failedStartApplication), Is.Null);
+            Assert.That(rejectedRestoredProjection.CoreRuntimeSession.TryGetInitialRestoreCommitProof(
+                failedRestorePreparation.RestoreImage, out _), Is.False,
+                "The failed production start transaction must revoke the exact restored image's one-use proof.");
 
             TesteSimulacao target = targetObject.AddComponent<TesteSimulacao>();
             ConfigureSelectedBootstrap(target, config);
@@ -10492,14 +17080,82 @@ public sealed class SimulationRuntimeAdmissionTests
                 genesisIdentityAllocations++;
                 return new WorldId(Guid.NewGuid());
             }));
-            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(storageRoot), Is.True);
+            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(
+                storageRoot, SystemAtomicFileSlotOperations.Instance,
+                executeInitialStartTransaction: true), Is.True,
+                "The selected Start path must admit and prepare restoration on the same Core application before Unity projects it.");
             Assert.That(genesisIdentityAllocations, Is.Zero,
                 "Loading a persisted boundary must publish before and bypass genesis identity allocation.");
 
             SimulationActiveSession restored = ReadPrivateField<SimulationActiveSession>(target, "activeSession");
             Assert.That(restored, Is.Not.Null);
+            Assert.That(restored.CoreRuntimeSession?.GenesisComposition, Is.Null,
+                "A detached continuation must not be mislabeled as an initial genesis composition.");
+            Assert.That(restored.CoreRuntimeSession?.P12CRoots, Is.Not.Null,
+                "A detached continuation must retain its exact reconstructed P12-C roots for a later save.");
+            Assert.That(restored.CoreRuntimeSession.P12CRoots.Manifest.Fingerprint,
+                Is.EqualTo(expectedP9ManifestFingerprint));
             Assert.That(restored.Runtime, Is.Not.SameAs(controlSession.Runtime));
             Assert.That(restored.IdentityRegistry, Is.Not.SameAs(controlSession.IdentityRegistry));
+            DailyV1SelectedRuntimeOwnerGraph restoredOwnerGraph = restored.CoreRuntimeSession.OwnerGraph;
+            Assert.That(restoredOwnerGraph.PersonStore, Is.SameAs(restored.Runtime.PersonStore),
+                "The app-backed P12-D stage must carry the exact Core PersonStore into both Core and Unity composition.");
+            Assert.That(restoredOwnerGraph.GenealogyStore,
+                Is.SameAs(restored.Runtime.GenealogyStoreForWorldBoundary),
+                "The app-backed P12-D stage must carry the exact Core GenealogyStore into both Core and Unity composition.");
+            Assert.That(restored.Runtime.PersonStore.Revision,
+                Is.EqualTo(controlSession.Runtime.PersonStore.Revision));
+            Assert.That(restored.Runtime.PersonStore.MaterializedBindingCount,
+                Is.EqualTo(controlSession.Runtime.PersonStore.MaterializedBindingCount));
+            Assert.That(restored.Runtime.PersonStore.Persons.Select(person => person.PersonId.Value),
+                Is.EqualTo(controlSession.Runtime.PersonStore.Persons.Select(person => person.PersonId.Value)));
+            Assert.That(restored.Runtime.PersonStore.TryGet(childId, out PersonRuntime restoredChild), Is.True);
+            Assert.That(restoredChild.MaterializedNpcRuntimeId, Is.EqualTo(sourceNpc.RuntimeId));
+            Assert.That(restored.Runtime.GenealogyStoreForWorldBoundary.Revision,
+                Is.EqualTo(controlSession.Runtime.GenealogyStoreForWorldBoundary.Revision));
+            Assert.That(restored.Runtime.GenealogyStoreForWorldBoundary.Records,
+                Is.EqualTo(controlSession.Runtime.GenealogyStoreForWorldBoundary.Records).AsCollection);
+            Assert.That(restored.SpatialNetwork.SelectedOwner, Is.SameAs(restoredOwnerGraph.SpatialNetwork),
+                "The Unity spatial runtime must project the exact Core-staged SpatialNetworkOwner.");
+            Assert.That(restored.IdentityRegistry.CoreIdentityIndex,
+                Is.SameAs(restoredOwnerGraph.RuntimeIdentityIndex));
+            Assert.That(restored.IdentityRegistry.CensusRevision,
+                Is.EqualTo(controlSession.IdentityRegistry.CensusRevision),
+                "Detached restore must preserve the shared runtime-identity census revision.");
+            Assert.That(restoredOwnerGraph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.City),
+                Is.EqualTo(restored.Runtime.Cities.Count));
+            Assert.That(restoredOwnerGraph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Npc),
+                Is.EqualTo(restored.Runtime.NpcRuntimes.Count));
+            Assert.That(restoredOwnerGraph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Location),
+                Is.EqualTo(restored.SpatialNetwork.LocationCount));
+            Assert.That(restoredOwnerGraph.RuntimeIdentityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Route),
+                Is.EqualTo(restored.SpatialNetwork.RouteCount));
+            Assert.That(restored.Runtime.Cities.Select(city => city.RuntimeId),
+                Is.EqualTo(restoredOwnerGraph.Cities.Select(owner => owner.RuntimeId)),
+                "City projection order must follow the Core staged owner order.");
+            Assert.That(restored.Runtime.NpcRuntimes.Select(npc => npc.RuntimeId),
+                Is.EqualTo(restoredOwnerGraph.Npcs.Select(owner => owner.RuntimeId)),
+                "NPC projection order must follow the Core staged owner order.");
+            Assert.That(restored.SpatialNetwork.Routes.Select(route => route.RuntimeId),
+                Is.EqualTo(restoredOwnerGraph.SpatialNetwork.Routes.Select(route => route.RuntimeId)),
+                "Route order must follow the exact Core spatial owner.");
+            for (int i = 0; i < restored.Runtime.Cities.Count; i++)
+            {
+                CityRuntime cityProjection = restored.Runtime.Cities[i];
+                DailyV1CityRuntimeOwners cityOwner = restoredOwnerGraph.Cities[i];
+                Assert.That(cityProjection.SelectedRuntimeOwners, Is.SameAs(cityOwner));
+                Assert.That(cityProjection.ImportantNpcRevision, Is.EqualTo(cityOwner.NpcPresence.Revision));
+            }
+            for (int i = 0; i < restored.Runtime.NpcRuntimes.Count; i++)
+            {
+                NpcRuntime npcProjection = restored.Runtime.NpcRuntimes[i];
+                DailyV1NpcRuntimeOwners npcOwner = restoredOwnerGraph.Npcs[i];
+                Assert.That(npcProjection.SelectedRuntimeOwners, Is.SameAs(npcOwner));
+                Assert.That(npcProjection.TravelStateRevision, Is.EqualTo(npcOwner.Travel.Revision));
+                Assert.That(npcProjection.LifeStateRevision, Is.EqualTo(npcOwner.Lifecycle.LifeStateRevision));
+                Assert.That(npcProjection.ResidenceRevision, Is.EqualTo(npcOwner.Residence.Revision));
+                Assert.That(npcProjection.P12CrimeJusticeRevision, Is.EqualTo(npcOwner.CrimeJusticeRevision));
+            }
             Assert.That(restored.Runtime.CurrentDay, Is.EqualTo(controlSession.Runtime.CurrentDay));
             Assert.That(restored.Runtime.PoliticalWorldRevision,
                 Is.EqualTo(controlSession.Runtime.PoliticalWorldRevision));
@@ -10550,10 +17206,186 @@ public sealed class SimulationRuntimeAdmissionTests
             if (System.IO.Directory.Exists(storageRoot)) System.IO.Directory.Delete(storageRoot, true);
             if (sourceObject != null) UnityEngine.Object.DestroyImmediate(sourceObject);
             UnityEngine.Object.DestroyImmediate(controlObject);
+            UnityEngine.Object.DestroyImmediate(failedStartObject);
             UnityEngine.Object.DestroyImmediate(targetObject);
             UnityEngine.Object.DestroyImmediate(idleObject);
         }
     }
+    [Test]
+    public void MissingDailyV1SavePreparesCoreGenesisForSameApplicationPublication()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject targetObject = new GameObject("P12-A missing slot must reach Core NoSave admission");
+        string storageRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "P12AMissingBootstrap", System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            TesteSimulacao target = targetObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(target, config);
+            int genesisIdentityAllocations = 0;
+            WritePrivateField(target, "worldIdentityAllocator", (Func<WorldId>)(() =>
+            {
+                genesisIdentityAllocations++;
+                return new WorldId(System.Guid.NewGuid());
+            }));
+            CountingReadFileOperations loadFileOperations = new CountingReadFileOperations();
+
+            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(
+                storageRoot, loadFileOperations), Is.False,
+                "Core NoSave is the only initial-load result that falls through to the prepared genesis projection.");
+            Assert.That(loadFileOperations.OpenReadCount, Is.GreaterThan(0),
+                "The application, not Unity, must inspect the absent continuation slot.");
+            Assert.That(ReadPrivateField<bool>(target, "bootstrapFailed"), Is.False);
+            Assert.That(ReadPrivateField<SimulationActiveSession>(target, "activeSession"), Is.Null,
+                "The Core genesis is not prepared or published before Unity enters the ordered Core start pipeline.");
+            Assert.That(genesisIdentityAllocations, Is.Zero,
+                "The selected Core application owns world identity allocation; the Unity compatibility allocator is unused.");
+
+            DailyV1Application application = ReadPrivateField<DailyV1Application>(target, "dailyV1Application");
+            DailyV1ApplicationStartPreparation preparation =
+                ReadPrivateField<DailyV1ApplicationStartPreparation>(target, "dailyV1InitialStartPreparation");
+            Assert.That(preparation, Is.Null,
+                "The exact NoSave admission is retained, while Core genesis waits for the ordered stage callback.");
+            DailyV1ApplicationStartAdmission admission =
+                ReadPrivateField<DailyV1ApplicationStartAdmission>(target, "dailyV1StartAdmission");
+            Assert.That(admission, Is.Not.Null);
+            Assert.That(admission.Kind, Is.EqualTo(DailyV1ApplicationStartAdmissionKind.GenesisRequired));
+            Assert.That(admission.Application, Is.SameAs(application));
+            Assert.That(admission.PersistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+            Assert.That(application.ActiveSession, Is.Null);
+
+            DailyV1EffectiveDefinitions definitions =
+                ReadPrivateField<DailyV1EffectiveDefinitions>(target, "selectedDefinitions");
+            List<string> completedStages = new List<string>();
+            List<bool> preparationWasPublishedAtStage = new List<bool>();
+            DailyV1ApplicationStartPreparation preparationAtPublicationHook = null;
+            InvokeInitializeSimulation(target, stageId =>
+            {
+                completedStages.Add(stageId);
+                DailyV1ApplicationStartPreparation currentPreparation =
+                    ReadPrivateField<DailyV1ApplicationStartPreparation>(
+                        target, "dailyV1InitialStartPreparation");
+                preparationWasPublishedAtStage.Add(currentPreparation != null);
+                if (string.Equals(stageId, "p9.genesis.publish/v1", StringComparison.Ordinal))
+                    preparationAtPublicationHook = currentPreparation;
+            });
+
+            CollectionAssert.AreEqual(definitions.StageOrder, completedStages,
+                "The host hook must preserve the exact Core/Unity genesis stage order.");
+            Assert.That(preparationWasPublishedAtStage.Count, Is.EqualTo(completedStages.Count));
+            int validationStageIndex = completedStages.IndexOf("p9.genesis.validate-profile/v1");
+            Assert.That(validationStageIndex, Is.GreaterThan(0));
+            for (int index = 0; index < validationStageIndex; index++)
+                Assert.That(preparationWasPublishedAtStage[index], Is.False,
+                    "Core's ordered content-stage hooks must run before Core genesis preparation completes.");
+            for (int index = validationStageIndex; index < completedStages.Count; index++)
+                Assert.That(preparationWasPublishedAtStage[index], Is.True,
+                    "The validation and publication hooks follow their admitted Core candidate and runtime-stage work.");
+
+            preparation = preparationAtPublicationHook;
+            Assert.That(preparation, Is.Not.Null);
+            Assert.That(ReadPrivateField<DailyV1ApplicationStartPreparation>(
+                target, "dailyV1InitialStartPreparation"), Is.Null,
+                "Successful publication releases the unpublished preparation handle.");
+            Assert.That(preparation.Kind, Is.EqualTo(DailyV1ApplicationStartPreparationKind.GenesisPrepared));
+            Assert.That(preparation.Application, Is.SameAs(application));
+            Assert.That(preparation.StartAdmission, Is.SameAs(admission));
+            Assert.That(application.ActiveSession, Is.SameAs(preparation.CoreSession),
+                "The Core application publishes the exact prepared session during bootstrap completion.");
+
+            SimulationActiveSession published = ReadPrivateField<SimulationActiveSession>(target, "activeSession");
+            Assert.That(published, Is.Not.Null);
+            Assert.That(published.CoreRuntimeSession, Is.SameAs(preparation.CoreSession));
+            Assert.That(application.ActiveSession, Is.SameAs(preparation.CoreSession),
+                "Unity must publish the exact Core-prepared session through the same application.");
+            Assert.That(ReadPrivateField<DailyV1ApplicationStartPreparation>(
+                target, "dailyV1InitialStartPreparation"), Is.Null);
+        }
+        finally
+        {
+            if (System.IO.Directory.Exists(storageRoot)) System.IO.Directory.Delete(storageRoot, true);
+            UnityEngine.Object.DestroyImmediate(targetObject);
+        }
+    }
+
+    [Test]
+    public void SelectedDailyV1StartCommitsNoSaveGenesisOnTheAdmittingCoreApplication()
+    {
+        SimulationConfigData config = AssetDatabase.LoadAssetAtPath<SimulationConfigData>(
+            "Assets/_Project/Data/Simulations/Simulation-DailyV1.asset");
+        Assert.That(config, Is.Not.Null);
+        GameObject targetObject = new GameObject("P12-A selected Start commits NoSave genesis on its admitting Core application");
+        string storageRoot = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "P12AJoinedStart", System.Guid.NewGuid().ToString("N"));
+        try
+        {
+            TesteSimulacao target = targetObject.AddComponent<TesteSimulacao>();
+            ConfigureSelectedBootstrap(target, config);
+            CountingReadFileOperations loadFileOperations = new CountingReadFileOperations();
+
+            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(
+                storageRoot, loadFileOperations, executeInitialStartTransaction: true), Is.True,
+                "The selected Start handles NoSave only after Core commits the exact Unity projection.");
+            Assert.That(loadFileOperations.OpenReadCount, Is.GreaterThan(0));
+            Assert.That(ReadPrivateField<bool>(target, "bootstrapFailed"), Is.False);
+
+            DailyV1Application application = ReadPrivateField<DailyV1Application>(target, "dailyV1Application");
+            DailyV1ApplicationStartAdmission admission =
+                ReadPrivateField<DailyV1ApplicationStartAdmission>(target, "dailyV1StartAdmission");
+            DailyV1EffectiveDefinitions definitions =
+                ReadPrivateField<DailyV1EffectiveDefinitions>(target, "selectedDefinitions");
+            Assert.That(application, Is.Not.Null);
+            Assert.That(admission, Is.Not.Null);
+            Assert.That(admission.Application, Is.SameAs(application));
+            Assert.That(admission.Kind, Is.EqualTo(DailyV1ApplicationStartAdmissionKind.GenesisRequired));
+            Assert.That(admission.PersistenceResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+            Assert.That(definitions, Is.Not.Null);
+
+            SimulationActiveSession published =
+                ReadPrivateField<SimulationActiveSession>(target, "activeSession");
+            Assert.That(published, Is.Not.Null);
+            Assert.That(application.ActiveSession, Is.Not.Null);
+            Assert.That(published.CoreRuntimeSession, Is.SameAs(application.ActiveSession),
+                "Core publishes the same session whose Unity host projection was prepared.");
+            Assert.That(published.CoreRuntimeSession.Definitions, Is.SameAs(definitions),
+                "The published session remains bound to the exact admitted effective-definition graph.");
+            Assert.That(published.Runtime.SelectedRuntimeOwnerGraph,
+                Is.SameAs(published.CoreRuntimeSession.OwnerGraph),
+                "The Unity runtime projection must retain the exact Core-prepared owner graph.");
+            Assert.That(ReadPrivateField<DailyV1ExecutionBoundaryState>(published.Runtime, "dailyExecutionBoundary"),
+                Is.SameAs(published.CoreRuntimeSession.ExecutionBoundaryState),
+                "The Unity runtime projection must use the Core session's execution and admission boundary.");
+            Assert.That(ReadPrivateField<RuntimeIdAllocator>(published.Runtime, "runtimeIdAllocator"),
+                Is.SameAs(published.CoreRuntimeSession.GenesisComposition.RuntimeIdAllocator),
+                "The Unity runtime projection must not allocate a second runtime identity authority.");
+            Assert.That(ReadPrivateField<SimulationRecordSequence>(published.Runtime, "simulationRecordSequence"),
+                Is.SameAs(published.CoreRuntimeSession.GenesisComposition.RecordSequence),
+                "The Unity runtime projection must share the Core-prepared record sequence.");
+            Assert.That(published.Runtime.HasExactSelectedRuntimeOwnerGraph(definitions), Is.True,
+                "Projected City/NPC adapter instances must bind the complete Core owner graph without rebuilding it.");
+            Assert.That(ReadPrivateField<SimulationTime>(published.Runtime, "simulationTime"),
+                Is.SameAs(published.CoreRuntimeSession.SimulationTime),
+                "Unity must project the exact Core-prepared simulation clock.");
+            Assert.That(application.TryGetPublishedHostProjection(
+                application.ActiveSession, out IDailyV1ApplicationHostProjection publishedProjection), Is.True);
+            Assert.That(publishedProjection, Is.SameAs(published),
+                "The application gate owns the exact Unity projection returned by the start transaction.");
+            Assert.That(ReadPrivateField<DailyV1ApplicationStartPreparation>(
+                target, "dailyV1InitialStartPreparation"), Is.Null,
+                "A successful Core start releases its private preparation handle.");
+            Assert.That(ReadPrivateField<DailyV1ApplicationHost>(
+                target, "dailyV1InitialStartHost"), Is.Null,
+                "A successful Core start releases the temporary host handle.");
+        }
+        finally
+        {
+            if (System.IO.Directory.Exists(storageRoot)) System.IO.Directory.Delete(storageRoot, true);
+            UnityEngine.Object.DestroyImmediate(targetObject);
+        }
+    }
+
     [Test]
     public void PresentInvalidDailyV1SaveFailsClosedBeforeGenesis()
     {
@@ -10577,10 +17409,13 @@ public sealed class SimulationRuntimeAdmissionTests
             string slot = P12AContinuationStore.SlotPath(storageRoot);
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(slot));
             System.IO.File.WriteAllBytes(slot, new byte[] { 1, 2, 3, 4 });
+            CountingReadFileOperations loadFileOperations = new CountingReadFileOperations();
             UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error,
                 "P12-A continuation load failed; genesis was not started. CorruptOrTruncated");
-            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(storageRoot), Is.True,
+            Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(storageRoot, loadFileOperations), Is.True,
                 "A present slot is handled even when rejected, so Start cannot fall through to genesis.");
+            Assert.That(loadFileOperations.OpenReadCount, Is.EqualTo(1),
+                "The Core application reads the slot once through the injected file-operation port.");
             Assert.That(ReadPrivateField<bool>(target, "bootstrapFailed"), Is.True);
             Assert.That(ReadPrivateField<SimulationActiveSession>(target, "activeSession"), Is.Null);
             Assert.That(genesisIdentityAllocations, Is.Zero);
@@ -10613,7 +17448,7 @@ public sealed class SimulationRuntimeAdmissionTests
             }));
 
             UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error,
-                "P12-A continuation slot inspection failed; genesis was not started.");
+                "P12-A continuation load failed; genesis was not started. StorageFailure");
             Assert.That(target.TryLoadSavedDailyV1ContinuationFromPathForTest(
                 storageRoot, new SlotInspectionFailureFileOperations()), Is.True);
             Assert.That(ReadPrivateField<bool>(target, "bootstrapFailed"), Is.True);
@@ -10636,26 +17471,60 @@ public sealed class SimulationRuntimeAdmissionTests
 
     private static void ConfigureSelectedBootstrap(TesteSimulacao bootstrap, SimulationConfigData config)
     {
-        Thread ownerThread = Thread.CurrentThread;
         WritePrivateField(bootstrap, "simulationConfig", config);
         WritePrivateField(bootstrap, "runtimeAdmissionProfile", SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
-        WritePrivateField(bootstrap, "bootstrapStartThread", ownerThread);
-        WritePrivateField(bootstrap, "bootstrapStartThreadId", ownerThread.ManagedThreadId);
-        WritePrivateField(bootstrap, "runtimeAdmissionContext",
-            new SimulationRuntimeAdmissionContext(
-                SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
-                ownerThread,
-                ownerThread.ManagedThreadId));
+        DailyV1Application application = ReadPrivateField<DailyV1Application>(bootstrap, "dailyV1Application");
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext admissionContext), Is.True);
+        WritePrivateField(bootstrap, "runtimeAdmissionContext", admissionContext);
         WritePrivateField(bootstrap, "bootstrapStartAttempted", true);
     }
 
     private static void InvokeInitializeSimulation(TesteSimulacao bootstrap, Action<string> stageCompleted)
     {
+        if (ReadPrivateField<SimulationRuntimeAdmissionProfile>(
+                bootstrap, "runtimeAdmissionProfile") == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
+        {
+            DailyV1Application application = ReadPrivateField<DailyV1Application>(
+                bootstrap, "dailyV1Application");
+            bool inspected = application.TryInspectInitialContinuationSlotForStart(
+                "missing-slot-root", new MissingInitialSlotOperations(),
+                out bool exists, out P12AResult result);
+            if (inspected)
+            {
+                Assert.That(exists, Is.False);
+                Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+                Assert.That(application.TryCreateInitialStartAdmissionFromNoSave(
+                    out DailyV1ApplicationStartAdmission admission,
+                    out string admissionDiagnostic), Is.True, admissionDiagnostic);
+                WritePrivateField(bootstrap, "dailyV1StartAdmission", admission);
+            }
+            else
+            {
+                Assert.That(result.Code, Is.EqualTo(P12AResultCode.Busy),
+                    "A prior startup admission already owns this application's initial slot attempt.");
+            }
+        }
+
         MethodInfo method = typeof(TesteSimulacao).GetMethod(
             "InitializeSimulation",
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.That(method, Is.Not.Null);
         method.Invoke(bootstrap, new object[] { stageCompleted });
+    }
+
+    private static NpcActionData[] CreatePositiveNormalProbeActions(string idPrefix, NpcRuntime npc)
+    {
+        if (string.IsNullOrWhiteSpace(idPrefix)) throw new ArgumentException("A probe action prefix is required.", nameof(idPrefix));
+        if (npc == null) throw new ArgumentNullException(nameof(npc));
+
+        NpcActionData first = SimulationTestFactory.CreateAction(idPrefix + "-a", NpcActionType.Normal);
+        NpcActionData second = SimulationTestFactory.CreateAction(idPrefix + "-b", NpcActionType.Normal);
+        first.baseUtility = 1f;
+        second.baseUtility = 1f;
+        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = first, baseUtility = 1f });
+        npc.NpcData.acoesPadrao.Add(new NPCDefaultAction { action = second, baseUtility = 1f });
+        return new[] { first, second };
     }
 
     private static SimulationRuntime CreatePublishedDailyCaptureRuntime(
@@ -10679,15 +17548,138 @@ public sealed class SimulationRuntimeAdmissionTests
         NpcDecisionSystem npcDecisionSystem = null,
         IReadOnlyList<NpcActionData> configuredActions = null)
     {
-        return new SimulationRuntime(
-            time ?? new SimulationTime(),
+        // These capture/admission tests exercise the accepted Daily-v1
+        // continuation profile. Compose its real fixed owners and complete
+        // dynamic owner families instead of creating a partial runtime that
+        // must fail closed under the current P12 inventory contract.
+        List<CityRuntime> cities = new List<CityRuntime>();
+        if (npcRuntimes != null)
+        {
+            foreach (NpcRuntime npc in npcRuntimes)
+            {
+                CityRuntime currentCity = npc?.CurrentCity;
+                if (currentCity != null && !cities.Any(city => ReferenceEquals(city, currentCity)))
+                    cities.Add(currentCity);
+            }
+        }
+        for (int index = 0; cities.Count < 2; index++)
+        {
+            CityRuntime city = SimulationTestFactory.CreateCity(
+                "daily-capture-city-" + index,
+                "daily-capture-location-" + index);
+            if (cities.Any(existing => string.Equals(existing.RuntimeId, city.RuntimeId, StringComparison.Ordinal)))
+                continue;
+            cities.Add(city);
+        }
+
+        List<NpcRuntime> npcs = npcRuntimes != null
+            ? new List<NpcRuntime>(npcRuntimes)
+            : new List<NpcRuntime>();
+        for (int index = 0; npcs.Count < 10; index++)
+        {
+            string runtimeId = "daily-capture-npc-" + index;
+            if (npcs.Any(npc => npc != null && string.Equals(npc.RuntimeId, runtimeId, StringComparison.Ordinal)))
+                continue;
+            npcs.Add(new NpcRuntime(
+                runtimeId,
+                SimulationTestFactory.CreateNpc("definition-" + runtimeId),
+                cities[index % cities.Count],
+                0f));
+        }
+
+        RuntimeIdentityRegistry identities = new RuntimeIdentityRegistry();
+        foreach (CityRuntime city in cities)
+            Assert.That(identities.RegisterCity(city), Is.True, city.RuntimeId);
+        foreach (NpcRuntime npc in npcs)
+            Assert.That(identities.RegisterNpc(npc), Is.True, npc?.RuntimeId);
+
+        SpatialNetworkRuntime network = new SpatialNetworkRuntime(identities);
+        foreach (CityRuntime city in cities)
+            Assert.That(network.RegisterLocation(city.Location), Is.True, city.Location.RuntimeId);
+        for (int index = 0; index < cities.Count; index++)
+        {
+            CityRuntime origin = cities[index];
+            CityRuntime destination = cities[(index + 1) % cities.Count];
+            Assert.That(network.RegisterRoute(new SpatialRouteRuntime(
+                "daily-capture-route-" + index,
+                origin.Location,
+                destination.Location,
+                1)), Is.True);
+        }
+
+        RecordFixture records = SimulationTestFactory.CreateRecordFixtureWithTime(
+            time ?? new SimulationTime());
+        EconomyTransactionService transactionService = new EconomyTransactionService();
+        TravelSystem travelSystem = new TravelSystem(
+            network,
+            location => cities.FirstOrDefault(city => ReferenceEquals(city.Location, location)),
+            1f,
+            records.EventRecorder,
             null,
-            npcRuntimes,
+            transactionService);
+        ScheduledDirectiveStore directiveStore = new ScheduledDirectiveStore(records.Time);
+        ScheduledDirectiveSystem directiveSystem = new ScheduledDirectiveSystem(directiveStore, identities);
+        JusticeSystem justiceSystem = new JusticeSystem(null, null, null, null,
+            records.EventRecorder, null);
+        CrimeSystem crimeSystem = new CrimeSystem(
+            justiceSystem,
+            travelSystem,
+            null,
+            transactionService: transactionService,
+            configuration: new EffectiveCrimeConfiguration(false, false),
+            simulationTime: records.Time);
+        TravelPartyStore travelPartyStore = new TravelPartyStore();
+        TravelPartySystem travelPartySystem = new TravelPartySystem(
+            travelPartyStore,
+            records.Allocator,
+            identities,
+            travelSystem,
+            records.Time,
+            records.Sequence,
+            records.EventRecorder,
+            transactionService: transactionService);
+        ExplorableSiteStore siteStore = new ExplorableSiteStore();
+        ExplorableSiteKnowledgeSystem siteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
+        ExpeditionSystem expeditionSystem = new ExpeditionSystem(
+            new ExpeditionStore(),
+            records.Allocator,
+            identities,
+            siteStore,
+            travelPartySystem,
+            travelPartyStore,
+            siteKnowledgeSystem,
+            records.Time,
+            records.EventRecorder);
+
+        SimulationRuntime runtime = new SimulationRuntime(
+            records.Time,
+            cities,
+            npcs,
             economyEnabled: false,
             configuredActions: configuredActions,
+            scheduledDirectiveSystem: directiveSystem,
             npcDecisionSystem: npcDecisionSystem,
+            justiceSystem: justiceSystem,
+            crimeSystem: crimeSystem,
+            travelSystem: travelSystem,
+            travelPartySystem: travelPartySystem,
+            decisionRecorder: records.DecisionRecorder,
+            explorableSiteStore: siteStore,
+            explorableSiteKnowledgeSystem: siteKnowledgeSystem,
+            expeditionSystem: expeditionSystem,
+            spatialAuthorityStore: CreateSingleLocationSpatialAuthority(),
+            recordSequence: records.Sequence,
+            runtimeIdAllocator: records.Allocator,
+            economyTransactionService: transactionService,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            runtimeIdentityRegistry: identities,
+            spatialNetworkRuntime: network,
+            requireP12RuntimeIdentitySpatialCensusOwners: true,
+            requireP12ReceiptCensusOwners: true,
             worldId: worldId ?? new WorldId(Guid.NewGuid()));
+        Assert.That(runtime.TryAssessNpcRosterCensus(out ContinuationCensusFailure initialFailure), Is.True,
+            "The complete selected-profile test fixture must satisfy owner census before publication: " + initialFailure);
+        return runtime;
     }
 
     private static void AssertRestoredAdmissionWasNotPublished(SimulationRuntime runtime)
@@ -10700,8 +17692,42 @@ public sealed class SimulationRuntimeAdmissionTests
     private static T ReadPrivateField<T>(object target, string name)
     {
         FieldInfo field = target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(field, Is.Not.Null);
-        return (T)field.GetValue(target);
+        if (field != null)
+            return (T)field.GetValue(target);
+
+        // Core extraction moves some runtime values behind read-only properties.
+        // Keep these white-box assertions bound to the same semantic member
+        // without requiring the production runtime to retain duplicate fields.
+        PropertyInfo property = target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(property, Is.Not.Null, "Expected private field or property '" + name + "'.");
+        MethodInfo getter = property.GetGetMethod(nonPublic: true);
+        Assert.That(getter, Is.Not.Null, "Expected a readable private property '" + name + "'.");
+        return (T)property.GetValue(target);
+    }
+
+    private static NpcRuntime CreateSelectedDailyV1RosterMember(NpcRuntime admittedTemplate, string runtimeId)
+    {
+        Assert.That(admittedTemplate, Is.Not.Null);
+        object definition = ReadPrivateField<object>(admittedTemplate, "selectedDailyV1Definition");
+        object definitions = ReadPrivateField<object>(admittedTemplate, "selectedDefinitionGraph");
+        object bindings = ReadPrivateField<object>(admittedTemplate, "selectedDefinitionBindings");
+        MethodInfo factory = typeof(NpcRuntime).GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+            .Single(method =>
+            {
+                if (method.Name != "CreateSelectedDailyV1") return false;
+                ParameterInfo[] parameters = method.GetParameters();
+                return parameters.Length == 6
+                    && parameters[0].ParameterType == typeof(string)
+                    && parameters[1].ParameterType == typeof(DailyV1NpcDefinition)
+                    && parameters[2].ParameterType == typeof(DailyV1EffectiveDefinitions)
+                    && parameters[3].ParameterType == typeof(DailyV1DefinitionAdapter.SelectedBindings)
+                    && parameters[4].ParameterType == typeof(CityRuntime)
+                    && parameters[5].ParameterType == typeof(float);
+            });
+        return (NpcRuntime)factory.Invoke(null, new object[]
+        {
+            runtimeId, definition, definitions, bindings, admittedTemplate.CurrentCity, 0f
+        });
     }
 
     private static void WritePrivateField<T>(object target, string name, T value)
@@ -10711,7 +17737,7 @@ public sealed class SimulationRuntimeAdmissionTests
         field.SetValue(target, value);
     }
 
-    private sealed class SlotInspectionFailureFileOperations : IP12AContinuationFileOperations
+    private sealed class SlotInspectionFailureFileOperations : IAtomicFileSlotOperations
     {
         public void CreateDirectory(string path) => throw new NotSupportedException();
         public bool Exists(string path) => throw new NotSupportedException();
@@ -10721,6 +17747,55 @@ public sealed class SimulationRuntimeAdmissionTests
         public void Replace(string source, string destination) => throw new NotSupportedException();
         public void Move(string source, string destination) => throw new NotSupportedException();
         public void Delete(string path) => throw new NotSupportedException();
+    }
+
+    private sealed class CountingReadFileOperations : IAtomicFileSlotOperations
+    {
+        private readonly IAtomicFileSlotOperations inner = SystemAtomicFileSlotOperations.Instance;
+        internal int OpenReadCount { get; private set; }
+
+        public void CreateDirectory(string path) => inner.CreateDirectory(path);
+        public bool Exists(string path) => inner.Exists(path);
+        public Stream CreateNewTemporary(string path) => inner.CreateNewTemporary(path);
+        public Stream OpenRead(string path)
+        {
+            OpenReadCount++;
+            return inner.OpenRead(path);
+        }
+        public void FlushToDisk(Stream stream) => inner.FlushToDisk(stream);
+        public void Replace(string source, string destination) => inner.Replace(source, destination);
+        public void Move(string source, string destination) => inner.Move(source, destination);
+        public void Delete(string path) => inner.Delete(path);
+    }
+
+    private sealed class AdmissionProbeRandomSource : IAuthoritativeRandomSource
+    {
+        private readonly IAuthoritativeRandomSource inner = new DeterministicRandomSource();
+        private readonly string decisionStreamPrefix;
+        private readonly Action observeDecision;
+
+        public AdmissionProbeRandomSource(string actorRuntimeId, Action observeDecision)
+        {
+            if (string.IsNullOrWhiteSpace(actorRuntimeId))
+                throw new ArgumentException("An observed actor runtime identity is required.", nameof(actorRuntimeId));
+            decisionStreamPrefix = "npc-decision|" + actorRuntimeId + "|";
+            this.observeDecision = observeDecision;
+        }
+
+        public float NextUnit(string streamKey, long drawIndex = 0L)
+        {
+            float value = inner.NextUnit(streamKey, drawIndex);
+            if (observeDecision != null
+                && streamKey != null
+                && streamKey.StartsWith(decisionStreamPrefix, StringComparison.Ordinal))
+                observeDecision();
+            return value;
+        }
+
+        public DeterministicRandomStream CreateStream(string streamKey)
+        {
+            return inner.CreateStream(streamKey);
+        }
     }
 
     private sealed class AdmissionProbeActionProvider : INpcActionProvider
@@ -10745,6 +17820,19 @@ public sealed class SimulationRuntimeAdmissionTests
         public NpcActionResult TryExecuteAction(NpcRuntime npcRuntime, NpcActionRuntime actionRuntime)
         {
             return NpcActionResult.Succeeded();
+        }
+    }
+
+    private sealed class AlwaysCurrentP12ECoreOwnerCaptureBoundary : IDailyV1P12ECoreOwnerCaptureBoundary
+    {
+        internal bool WasConsulted { get; private set; }
+
+        public bool IsCaptureCurrent(
+            DailyCaptureEligibilityToken token,
+            IReadOnlyList<OwnerSectionCensusSnapshot> ownerSectionVector)
+        {
+            WasConsulted = true;
+            return true;
         }
     }
 }

@@ -385,16 +385,12 @@ public sealed class PropertyEstateMutationEpochTests
 
     private static int ReadActiveOperationCount(ContinuationCensusProtocol protocol)
     {
-        return (int)typeof(ContinuationCensusProtocol)
-            .GetField("activeOperationCount", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(protocol);
+        return protocol.ActiveOperationCount;
     }
 
     private static long ReadProtocolMutationEpoch(ContinuationCensusProtocol protocol)
     {
-        return (long)typeof(ContinuationCensusProtocol)
-            .GetField("mutationEpoch", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(protocol);
+        return SimulationTestFactory.ReadContinuationMutationEpoch(protocol);
     }
 
     private static void AssertMutation(

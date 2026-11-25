@@ -4,9 +4,9 @@ using System.Collections.Generic;
 /// <summary>Passive per-NPC witnesses for selected-profile spatial Knowledge counts.</summary>
 public static class SpatialKnowledgeCensusProvider
 {
-    public const string LocationsSectionPrefix = "p12f.spatial-knowledge.locations/";
-    public const string RoutesSectionPrefix = "p12f.spatial-knowledge.routes/";
-    public const int SchemaVersion = 1;
+    public const string LocationsSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix;
+    public const string RoutesSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     private enum Section
     {

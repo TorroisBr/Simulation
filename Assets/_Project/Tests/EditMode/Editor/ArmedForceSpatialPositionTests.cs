@@ -310,7 +310,8 @@ public sealed class ArmedForceSpatialPositionTests
 
         SpatialAuthorityStore authority = CreateAuthority(withChild);
         LocalTopologyStore topology = CreateTopology(authority, out CityRuntime city, out LocalPlaceRuntime place);
-        ArmedForceSpatialStateStore spatial = new ArmedForceSpatialStateStore(forces, authority, topology);
+        ArmedForceSpatialStateStore spatial = new ArmedForceSpatialStateStore(
+            forces, authority, new LocalTopologyArmedForceSubLocationResolver(topology));
         return new WorldParts(forces, authority, topology, spatial, forceId, childId, city, SpatialReference.ForSubLocation(
             LocalTopologyOwnerKind.City, city.RuntimeId, place.RuntimeId));
     }

@@ -1,0 +1,87 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+
+/// <summary>
+/// Passive P12-B evidence for the installed Person registry membership.
+/// Reads are unsynchronized and do not establish capture eligibility.
+/// </summary>
+public sealed class PersonMembershipCensusProvider : IOwnerSectionCensusProvider
+{
+    public const string SectionId = DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
+
+    private readonly PersonStore owner;
+
+    public PersonMembershipCensusProvider(PersonStore owner)
+    {
+        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+    }
+
+    public OwnerSectionCensusWitness GetCurrentCensus()
+    {
+        return owner.GetMembershipCensusWitness();
+    }
+}
+
+/// <summary>
+/// Passive P12-B evidence for the installed Person-to-NpcRuntime bindings.
+/// Reads are unsynchronized and do not establish capture eligibility.
+/// </summary>
+public sealed class PersonMaterializationBindingCensusProvider : IOwnerSectionCensusProvider
+{
+    public const string SectionId = DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
+
+    private readonly PersonStore owner;
+
+    public PersonMaterializationBindingCensusProvider(PersonStore owner)
+    {
+        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+    }
+
+    public OwnerSectionCensusWitness GetCurrentCensus()
+    {
+        return owner.GetMaterializationBindingCensusWitness();
+    }
+}
+
+/// <summary>
+/// Passive P12 census evidence for one Person's authoritative life/residence
+/// owner. The PersonStore composition owns provider membership; this provider
+/// reads the exact PersonRuntime instance and does not establish capture
+/// eligibility.
+/// </summary>
+public sealed class DailyV1CorePersonLifeResidenceCensusProvider : IOwnerSectionCensusProvider
+{
+    private readonly PersonRuntime owner;
+
+    public DailyV1CorePersonLifeResidenceCensusProvider(PersonRuntime owner)
+    {
+        this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
+    }
+
+    public OwnerSectionCensusWitness GetCurrentCensus()
+    {
+        return owner.GetLifeResidenceCensusWitness();
+    }
+}
+
+/// <summary>Creates the fixed census provider set for one installed PersonStore.</summary>
+public static class PersonStoreCensusProvider
+{
+    public static IReadOnlyList<IOwnerSectionCensusProvider> CreateProviders(PersonStore owner)
+    {
+        if (owner == null)
+        {
+            throw new ArgumentNullException(nameof(owner));
+        }
+
+        IOwnerSectionCensusProvider[] providers =
+        {
+            new PersonMembershipCensusProvider(owner),
+            new PersonMaterializationBindingCensusProvider(owner)
+        };
+        return new ReadOnlyCollection<IOwnerSectionCensusProvider>(providers);
+    }
+}

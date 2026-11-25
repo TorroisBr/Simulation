@@ -4,6 +4,139 @@ using NUnit.Framework;
 
 public sealed class SimulationRuntimeOrchestrationTests
 {
+    private sealed class MissingInitialContinuationSlotOperations : IAtomicFileSlotOperations
+    {
+        public void CreateDirectory(string path) => throw new System.NotSupportedException();
+        public bool Exists(string path) => false;
+        public System.IO.Stream CreateNewTemporary(string path) => throw new System.NotSupportedException();
+        public System.IO.Stream OpenRead(string path) => throw new System.IO.FileNotFoundException();
+        public void FlushToDisk(System.IO.Stream stream) => throw new System.NotSupportedException();
+        public void Replace(string source, string destination) => throw new System.NotSupportedException();
+        public void Move(string source, string destination) => throw new System.NotSupportedException();
+        public void Delete(string path) => throw new System.NotSupportedException();
+    }
+
+    private sealed class RejectedApplicationAdvanceBoundary : IDailyV1RuntimeAdvanceBoundary,
+        IDailyV1SelectedRuntimeAdvanceHostPorts
+    {
+        internal RejectedApplicationAdvanceBoundary(DailyV1ExecutionBoundaryState state) =>
+            ExecutionState = state;
+
+        public DailyV1ExecutionBoundaryState ExecutionState { get; }
+        public object SelectedRuntimeOwnerCensusSourceIdentity => this;
+        public bool HasExactCoreOwnedSelectedCensusSources => true;
+        public bool TryGetExactJusticeRecordsCensusProjectionIdentity(
+            DailyV1JusticeRecordsOwner owner, out object projectionIdentity, out long p18ReceiptRevision)
+        {
+            projectionIdentity = null;
+            p18ReceiptRevision = 0L;
+            return false;
+        }
+
+        public bool IsFactualReadWorldPublished => true;
+        public bool HasActiveDailyOperationContext => false;
+        public bool HasIntradayTimeline => false;
+
+        public bool TryEnterDailyAdvanceOperation(out System.IDisposable operationScope)
+        {
+            operationScope = null;
+            return false;
+        }
+
+        public bool TryCreateSelectedDailyExecutionBoundary(
+            out IDailyV1SelectedDailyExecutionBoundary executionBoundary)
+        {
+            executionBoundary = null;
+            return false;
+        }
+
+        public bool TryCreateSelectedDailyExecutionHostPorts(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            out IDailyV1SelectedDailyExecutionHostPorts hostPorts)
+        {
+            hostPorts = null;
+            return false;
+        }
+
+        public bool TryBindRestoredCandidateMutationGuard(out string diagnostic)
+        {
+            diagnostic = "This rejected advance-boundary fixture does not bind restored candidates.";
+            return false;
+        }
+
+        public bool TryCaptureUnadmittedRestoredDailyOwnerVector(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out string diagnostic)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            diagnostic = "This rejected advance-boundary fixture does not capture restored candidates.";
+            return false;
+        }
+
+        public bool TryAdvanceDayCore(out SimulationRuntimeAdvanceFailure failure)
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
+        public bool TryAdvanceIntradayToNextDayBoundary(out SimulationRuntimeAdvanceFailure failure)
+        {
+            failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+            return false;
+        }
+
+        public bool TryCaptureCompletedDailyCaptureEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        public bool TryCaptureDailyBoundaryAdmissionEvidence(
+            bool sessionReplacement,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        public bool TryCaptureContinuationSaveEvidence(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        public bool TryCaptureOwnerSectionCensus(
+            DailyV1CaptureScopeAllowance allowedOuterScope,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> ownerSections,
+            out long mutationEpoch,
+            out DailyCaptureEligibilityFailure failure)
+        {
+            ownerSections = null;
+            mutationEpoch = 0L;
+            failure = DailyCaptureEligibilityFailure.OperationInProgress;
+            return false;
+        }
+
+        public void FaultRuntimeAdmission() => ExecutionState.MutationGuard.MarkFaulted(
+            AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+    }
+
     [SetUp]
     public void SetUp()
     {
@@ -89,7 +222,8 @@ public sealed class SimulationRuntimeOrchestrationTests
             ScheduledDirectiveMode.RequestAction,
             ScheduledDirectiveOperation.EscapePrison,
             actor.RuntimeId,
-            escape);
+            escape.DefinitionId,
+            (int)escape.actionType);
         ScheduledDirectiveStore directiveStore = new ScheduledDirectiveStore(records.Time);
         Assert.That(directiveStore.Add(directive), Is.True);
         ScheduledDirectiveSystem directiveSystem = new ScheduledDirectiveSystem(directiveStore, registry);
@@ -100,7 +234,7 @@ public sealed class SimulationRuntimeOrchestrationTests
             records.Time,
             new[] { city },
             new[] { actor },
-            configuredActions: new[] { autonomousFallback },
+            configuredActions: new[] { autonomousFallback, escape },
             scheduledDirectiveSystem: directiveSystem,
             justiceSystem: justice,
             crimeSystem: crime,
@@ -544,6 +678,36 @@ public sealed class SimulationRuntimeOrchestrationTests
         Assert.That(overflowRuntime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure retryFailure), Is.False);
         Assert.That(retryFailure, Is.EqualTo(SimulationRuntimeAdvanceFailure.AbsoluteDayOverflow),
             "typed failure releases the lease rather than converting the retry into reentrancy rejection");
+
+        System.InvalidOperationException overflowException = Assert.Throws<System.InvalidOperationException>(
+            () => overflowRuntime.AdvanceDay());
+        Assert.That(overflowException.Message,
+            Is.EqualTo("SimulationTime cannot advance beyond the maximum AbsoluteDay."),
+            "The direct-runtime API retains its established typed-failure diagnostic.");
+    }
+
+    [Test]
+    public void ApplicationDoesNotPublishCoreSessionWhenHostCannotCaptureSelectedCensus()
+    {
+        DailyV1Application application = new DailyV1Application();
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(application.TryCaptureBootstrapAdmissionContext(out _), Is.True);
+        Assert.That(application.TryInspectInitialContinuationSlotForStart(
+            "missing-slot-root", new MissingInitialContinuationSlotOperations(),
+            out bool exists, out P12AResult result), Is.True);
+        Assert.That(exists, Is.False);
+        Assert.That(result.Code, Is.EqualTo(P12AResultCode.NoSave));
+        Assert.That(application.TryPrepareInitialGenesis(
+            definitions, allocateWorldId: null, stageCompleted: null,
+            out _, out DailyV1ActiveRuntimeSession session, out string diagnostic), Is.True, diagnostic);
+
+        RejectedApplicationAdvanceBoundary boundary =
+            new RejectedApplicationAdvanceBoundary(session.ExecutionBoundaryState);
+        Assert.That(application.TryBindRuntimeAdvanceBoundary(session, boundary), Is.True);
+        Assert.That(application.TryPublishInitial(session), Is.False,
+            "Initial publication requires the complete selected census, which this advance-only test double deliberately cannot capture.");
+        Assert.That(application.ActiveOperationCount, Is.Zero);
     }
 
     private sealed class ReentrantActionProvider : INpcActionProvider

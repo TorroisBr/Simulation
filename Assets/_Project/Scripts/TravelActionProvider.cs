@@ -1,9 +1,11 @@
 using UnityEngine;
 
-public class TravelActionProvider : INpcActionProvider
+public class TravelActionProvider : INpcActionProvider, ISelectedDefinitionNpcActionProvider
 {
     private readonly TravelSystem travelSystem;
     private readonly MerchantSystem merchantSystem;
+
+    internal TravelPartyStore SelectedTravelPartyStore => travelSystem?.SelectedTravelPartyStore;
 
     public TravelActionProvider(TravelSystem travelSystem, MerchantSystem merchantSystem = null)
     {
@@ -14,6 +16,12 @@ public class TravelActionProvider : INpcActionProvider
     public bool HandlesAction(NpcActionData action)
     {
         return action != null && action.actionType == NpcActionType.Travel;
+    }
+
+    bool ISelectedDefinitionNpcActionProvider.HandlesAction(NpcRuntime npcRuntime, NpcActionData action)
+    {
+        return npcRuntime != null && action != null
+            && npcRuntime.GetConfiguredActionType(action) == NpcActionType.Travel;
     }
 
     internal bool IsBoundTo(TravelSystem candidate)
@@ -48,16 +56,48 @@ public class TravelActionProvider : INpcActionProvider
             return null;
         }
 
-        float planUtility = plan.Utility;
-
-        if (plan.Reason == NpcTravelReason.Trade
-            && npcRuntime.MerchantTradePlan.IsActive == true
-            && npcRuntime.MerchantTradePlan.TargetCity == plan.TargetCity)
+        if (npcRuntime.UsesSelectedDailyV1Definitions)
         {
-            planUtility += Mathf.Min(30f, npcRuntime.MerchantTradePlan.PendingTravelDays * 10f);
-        }
+            bool matchingMerchantTradePlan = false;
+            int pendingTradeTravelDays = 0;
+            if (plan.Reason == NpcTravelReason.Trade
+                && npcRuntime.MerchantTradePlan.IsActive == true
+                && npcRuntime.MerchantTradePlan.TargetCity == plan.TargetCity)
+            {
+                matchingMerchantTradePlan = true;
+                pendingTradeTravelDays = npcRuntime.MerchantTradePlan.PendingTravelDays;
+            }
 
-        utility = Mathf.Max(utility, Mathf.Clamp(planUtility, 0f, 100f));
+            if (!npcRuntime.TryGetSelectedDailyV1ActionNode(action, out DailyV1ActionDefinition actionNode)
+                || !DailyV1TravelActionPlanning.TryApplyExistingTravelPlanUtility(
+                    npcRuntime.SelectedDailyV1DefinitionGraph,
+                    npcRuntime.SelectedDailyV1Definition,
+                    actionNode,
+                    plan.Utility,
+                    plan.Reason == NpcTravelReason.Trade,
+                    matchingMerchantTradePlan,
+                    pendingTradeTravelDays,
+                    utility,
+                    out float selectedUtility))
+            {
+                utility = 0f;
+                return null;
+            }
+
+            utility = selectedUtility;
+        }
+        else
+        {
+            float planUtility = plan.Utility;
+            if (plan.Reason == NpcTravelReason.Trade
+                && npcRuntime.MerchantTradePlan.IsActive == true
+                && npcRuntime.MerchantTradePlan.TargetCity == plan.TargetCity)
+            {
+                planUtility += UnityMathfCompatibility.Min(30f, npcRuntime.MerchantTradePlan.PendingTravelDays * 10f);
+            }
+
+            utility = UnityMathfCompatibility.Max(utility, UnityMathfCompatibility.Clamp(planUtility, 0f, 100f));
+        }
         NpcActionRuntime actionRuntime = new NpcActionRuntime(action, plan.TargetCity, null, plan.Reason, travelCost, 0f);
         actionRuntime.SetOriginDecisionId(plan.OriginDecisionId);
         return actionRuntime;

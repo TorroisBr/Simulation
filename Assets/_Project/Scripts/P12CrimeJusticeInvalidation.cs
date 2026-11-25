@@ -1,68 +1,135 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.ExceptionServices;
-using System.Threading;
 
 public sealed partial class SimulationRuntime
 {
-    private volatile P12CrimeJusticeMutationContext activeP12CrimeJusticeMutationContext;
-    private readonly HashSet<NpcRuntime> p12CrimeJusticeBoundNpcs = new HashSet<NpcRuntime>();
-    private JusticeSystem p12CrimeJusticeBoundJusticeSystem;
-    private CrimeSystem p12CrimeJusticeBoundCrimeSystem;
-
-    private enum P12CrimeJusticeMutationMode
-    {
-        DailyReserved,
-        ActionImmediate
-    }
-
-    private sealed class P12CrimeJusticeMutationContext
-    {
-        public readonly P12CrimeJusticeMutationMode Mode;
-        public readonly Thread OwnerThread;
-        public readonly int OwnerManagedThreadId;
-        public readonly HashSet<NpcRuntime> AllowedNpcs;
-        public readonly HashSet<string> AllowedSectionIds;
-        public readonly HashSet<string> ChangedSectionIds = new HashSet<string>(StringComparer.Ordinal);
-        public readonly ContinuationMutationEpochReservation EpochReservation;
-
-        public P12CrimeJusticeMutationContext(
-            P12CrimeJusticeMutationMode mode,
-            IEnumerable<NpcRuntime> allowedNpcs,
-            IEnumerable<string> allowedSectionIds,
-            ContinuationMutationEpochReservation epochReservation)
-        {
-            Mode = mode;
-            OwnerThread = Thread.CurrentThread;
-            OwnerManagedThreadId = OwnerThread.ManagedThreadId;
-            AllowedNpcs = new HashSet<NpcRuntime>(allowedNpcs ?? Array.Empty<NpcRuntime>());
-            AllowedSectionIds = new HashSet<string>(allowedSectionIds ?? Array.Empty<string>(), StringComparer.Ordinal);
-            EpochReservation = epochReservation;
-        }
-
-        public bool IsOwnedByCurrentThread() => ReferenceEquals(OwnerThread, Thread.CurrentThread)
-            && OwnerManagedThreadId == Thread.CurrentThread.ManagedThreadId;
-    }
-
     private sealed class P12CrimeJusticeMutationScope : IDisposable
     {
-        private readonly SimulationRuntime owner;
-        private readonly P12CrimeJusticeMutationContext context;
-        private bool disposed;
+        private IDisposable coreScope;
 
-        public P12CrimeJusticeMutationScope(
-            SimulationRuntime owner,
-            P12CrimeJusticeMutationContext context)
-        {
-            this.owner = owner ?? throw new ArgumentNullException(nameof(owner));
-            this.context = context ?? throw new ArgumentNullException(nameof(context));
-        }
+        internal P12CrimeJusticeMutationScope(IDisposable coreScope) => this.coreScope = coreScope;
 
         public void Dispose()
         {
-            if (disposed) return;
-            disposed = true;
-            owner.ExitP12CrimeJusticeActionScope(context);
+            IDisposable scope = coreScope;
+            coreScope = null;
+            scope?.Dispose();
+        }
+    }
+
+    private readonly HashSet<NpcRuntime> p12CrimeJusticeBoundNpcs = new HashSet<NpcRuntime>();
+    private JusticeSystem p12CrimeJusticeBoundJusticeSystem;
+    private CrimeSystem p12CrimeJusticeBoundCrimeSystem;
+    private DailyV1P12CrimeJusticeMutationCoordinator p12CrimeJusticeMutationCoordinator;
+    private IDailyV1P12CrimeJusticeMutationProtocol p12CrimeJusticeMutationProtocol;
+
+    private sealed class ContinuationCrimeJusticeMutationProtocolAdapter
+        : IDailyV1P12CrimeJusticeMutationProtocol,
+          IDailyV1P12CrimeJusticeMutationDiagnosticProtocol
+    {
+        private readonly Func<ContinuationCensusProtocol> resolveProtocol;
+
+        internal ContinuationCrimeJusticeMutationProtocolAdapter(
+            Func<ContinuationCensusProtocol> resolveProtocol) =>
+            this.resolveProtocol = resolveProtocol ?? throw new ArgumentNullException(nameof(resolveProtocol));
+
+        public void FaultClosed() => resolveProtocol()?.FaultClosed();
+
+        public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
+            resolveProtocol()?.TryValidateUnchangedSections(sectionIds, out _) == true;
+
+        public bool TryValidateUnchangedSections(
+            IReadOnlyList<string> sectionIds,
+            out string failure)
+        {
+            ContinuationCensusProtocol protocol = resolveProtocol();
+            if (protocol == null)
+            {
+                failure = "ProtocolUnavailable";
+                return false;
+            }
+
+            bool valid = protocol.TryValidateUnchangedSections(
+                sectionIds, out ContinuationCensusFailure censusFailure);
+            failure = valid
+                ? null
+                : censusFailure + (censusFailure == ContinuationCensusFailure.ProtocolFaulted
+                    && !string.IsNullOrWhiteSpace(protocol.FirstFaultSource)
+                    ? " after " + protocol.FirstFaultSource
+                        + (string.IsNullOrWhiteSpace(protocol.FirstFaultDetail)
+                            ? string.Empty
+                            : " (" + protocol.FirstFaultDetail + ")")
+                    : string.Empty);
+            return valid;
+        }
+
+        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds) =>
+            resolveProtocol()?.TryRefreshCommittedMutationBaselines(sectionIds, out _) == true;
+
+        public bool TryRefreshCommittedMutationBaselinesForReservation(
+            object reservationToken,
+            IReadOnlyCollection<string> sectionIds) =>
+            resolveProtocol()?.TryRefreshCommittedMutationBaselinesForReservation(
+                reservationToken, sectionIds, out _) == true;
+
+        public bool TryReserveMutationEpoch(out object reservation)
+        {
+            reservation = null;
+            ContinuationCensusProtocol protocol = resolveProtocol();
+            if (protocol == null
+                || !protocol.TryReserveMutationEpochCapacity(
+                    out ContinuationMutationEpochReservation candidate, out _))
+                return false;
+            reservation = candidate;
+            return true;
+        }
+
+        public bool TryNotifyReservedCommittedMutations(
+            object reservation,
+            IReadOnlyCollection<string> sectionIds) =>
+            reservation is ContinuationMutationEpochReservation typed
+            && resolveProtocol()?.TryNotifyReservedCommittedMutations(typed, sectionIds, out _) == true;
+
+        public void ReleaseMutationEpoch(object reservation)
+        {
+            if (reservation is ContinuationMutationEpochReservation typed)
+                resolveProtocol()?.ReleaseMutationEpochReservation(typed);
+        }
+
+        public bool TryValidateMutationEpochCapacity() =>
+            resolveProtocol()?.TryValidateMutationEpochCapacity(out _) == true;
+
+        public bool NotifyCommittedMutation(string sectionId) =>
+            resolveProtocol()?.NotifyCommittedMutation(sectionId, out _) == true;
+    }
+
+    private IDailyV1P12CrimeJusticeMutationProtocol P12CrimeJusticeMutationProtocol =>
+        p12CrimeJusticeMutationProtocol ??=
+            new ContinuationCrimeJusticeMutationProtocolAdapter(() => npcRosterCensusProtocol);
+    private DailyV1P12CrimeJusticeMutationCoordinator P12CrimeJusticeMutationCoordinator
+    {
+        get
+        {
+            DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
+            if (runtimeAdmissionContext != null && selectedGraph != null
+                && dailyExecutionBoundary != null)
+            {
+                if (!dailyExecutionBoundary.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                        P12CrimeJusticeMutationProtocol, selectedGraph,
+                        out DailyV1P12CrimeJusticeMutationCoordinator selectedCoordinator))
+                {
+                    FaultRuntimeAdmission();
+                    throw new InvalidOperationException(
+                        "The selected P12 Crime/Justice protocol could not bind to its Core execution state.");
+                }
+                return selectedCoordinator;
+            }
+
+            return p12CrimeJusticeMutationCoordinator ??= new DailyV1P12CrimeJusticeMutationCoordinator(
+                () => runtimeAdmissionContext != null,
+                IsRuntimeAdmissionOwnerThreadCurrent,
+                FaultRuntimeAdmission,
+                P12CrimeJusticeMutationProtocol);
         }
     }
 
@@ -76,11 +143,10 @@ public sealed partial class SimulationRuntime
                 P12CrimeJusticeCensusProvider.JusticeRecordsSectionProvider recordsProvider =
                     new P12CrimeJusticeCensusProvider.JusticeRecordsSectionProvider(
                         justiceSystem,
-                        npc => npc != null
-                            && !string.IsNullOrWhiteSpace(npc.RuntimeId)
-                            && npcRegistryById.TryGetValue(npc.RuntimeId, out NpcRuntime installed)
-                            && ReferenceEquals(installed, npc),
-                        city => city != null && cities.Contains(city));
+                        npcRuntimeId => !string.IsNullOrWhiteSpace(npcRuntimeId)
+                            && npcRegistryById.TryGetValue(npcRuntimeId, out NpcRuntime installed)
+                            && string.Equals(installed.RuntimeId, npcRuntimeId, StringComparison.Ordinal),
+                        IsExactInstalledP12JusticeCityRuntimeId);
                 OwnerSectionCensusWitness recordsWitness = recordsProvider.GetCurrentCensus();
                 if (recordsWitness.SchemaVersion != P12CrimeJusticeCensusProvider.SchemaVersion
                     || !ReferenceEquals(recordsWitness.OwnerInstanceIdentity, justiceSystem))
@@ -183,11 +249,27 @@ public sealed partial class SimulationRuntime
             }
             if (!npc.TryBindP12CrimeJusticeMutationBoundary(
                     CanCommitP12NpcCrimeJusticeMutation,
-                    NotifyP12NpcCrimeJusticeMutation))
+                    NotifyP12NpcCrimeJusticeMutation,
+                    selectedCoreRevisionCommittedByBoundary: npc.SelectedRuntimeOwners != null))
                 return false;
             p12CrimeJusticeBoundNpcs.Add(npc);
         }
+
         return true;
+    }
+
+    private bool IsExactInstalledP12JusticeCityRuntimeId(string cityRuntimeId)
+    {
+        if (string.IsNullOrWhiteSpace(cityRuntimeId)) return false;
+        int matches = 0;
+        foreach (CityRuntime city in cities)
+        {
+            if (city == null || !string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal))
+                continue;
+            matches++;
+            if (matches > 1) return false;
+        }
+        return matches == 1;
     }
 
     private string GetP12CrimeJusticeNpcSectionId(NpcRuntime npc)
@@ -197,7 +279,33 @@ public sealed partial class SimulationRuntime
             || !ReferenceEquals(installed, npc)
             || !p12CrimeJusticeBoundNpcs.Contains(npc))
             return null;
-        return P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(npc.RuntimeId);
+        DailyV1NpcRuntimeOwners selectedOwner = npc.SelectedRuntimeOwners;
+        if (selectedOwner != null
+            && !string.Equals(selectedOwner.RuntimeId, npc.RuntimeId, StringComparison.Ordinal))
+            return null;
+        return DailyV1SelectedOwnerSectionCensusContract.NpcStatusCrimeSectionIdFor(npc.RuntimeId);
+    }
+
+    private DailyV1P12CrimeJusticeOwnerBinding CreateP12CrimeJusticeNpcBinding(NpcRuntime npc)
+    {
+        string sectionId = GetP12CrimeJusticeNpcSectionId(npc);
+        if (sectionId == null) return null;
+        DailyV1NpcRuntimeOwners selectedOwner = npc.SelectedRuntimeOwners;
+        return selectedOwner != null
+            ? DailyV1P12CrimeJusticeOwnerBinding.ForNpcStatusOwner(selectedOwner)
+            : new DailyV1P12CrimeJusticeOwnerBinding(
+                npc, sectionId, () => npc.P12CrimeJusticeRevision);
+    }
+
+    private DailyV1P12CrimeJusticeOwnerBinding CreateP12CrimeJusticeJusticeBinding(JusticeSystem justice)
+    {
+        if (justice == null || !ReferenceEquals(justice, justiceSystem)
+            || !ReferenceEquals(p12CrimeJusticeBoundJusticeSystem, justice))
+            return null;
+        return new DailyV1P12CrimeJusticeOwnerBinding(
+            justice,
+            P12CrimeJusticeCensusProvider.JusticeRecordsSectionId,
+            () => justice.P12CrimeJusticeRevision);
     }
 
     private string[] CreateP12CrimeJusticeDailySectionIds()
@@ -236,10 +344,9 @@ public sealed partial class SimulationRuntime
             mutation();
             return;
         }
-
         if (!IsRuntimeAdmissionOwnerThreadCurrent()
             || npcRosterCensusProtocol == null
-            || activeP12CrimeJusticeMutationContext != null)
+            || !P12CrimeJusticeMutationCoordinator.CanBeginDailyMutation())
         {
             FaultRuntimeAdmission();
             throw new InvalidOperationException("P12 Crime/Justice daily mutation scope is unavailable.");
@@ -248,85 +355,100 @@ public sealed partial class SimulationRuntime
         string[] sections;
         try { sections = CreateP12CrimeJusticeDailySectionIds(); }
         catch { sections = null; }
+        List<DailyV1P12CrimeJusticeOwnerBinding> owners =
+            new List<DailyV1P12CrimeJusticeOwnerBinding>();
+        if (runtimeAdmissionContext != null && sections != null)
+        {
+            if (justiceSystem != null)
+            {
+                DailyV1P12CrimeJusticeOwnerBinding justiceBinding =
+                    CreateP12CrimeJusticeJusticeBinding(justiceSystem);
+                if (justiceBinding == null)
+                {
+                    FaultRuntimeAdmission();
+                    throw new InvalidOperationException("P12 Crime/Justice owner inventory is invalid.");
+                }
+                owners.Add(justiceBinding);
+            }
+            foreach (NpcRuntime npc in npcRuntimeSnapshot)
+            {
+                DailyV1P12CrimeJusticeOwnerBinding npcBinding = CreateP12CrimeJusticeNpcBinding(npc);
+                if (npcBinding == null)
+                {
+                    FaultRuntimeAdmission();
+                    throw new InvalidOperationException("P12 Crime/Justice owner inventory is invalid.");
+                }
+                owners.Add(npcBinding);
+            }
+        }
         if (sections == null)
         {
             FaultRuntimeAdmission();
             throw new InvalidOperationException("P12 Crime/Justice owner inventory is invalid.");
         }
-        if (sections.Length == 0)
+        P12CrimeJusticeMutationCoordinator.ExecuteDailyMutation(owners, sections, mutation);
+    }
+
+    private void RunP12CrimeJusticeDailyMutation(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1SelectedCrimeJusticeDailyPhase phase,
+        Action mutation)
+    {
+        if (mutation == null) throw new ArgumentNullException(nameof(mutation));
+        if (runtimeAdmissionContext == null)
         {
             mutation();
             return;
         }
-        if (new HashSet<string>(sections, StringComparer.Ordinal).Count != sections.Length
-            || !npcRosterCensusProtocol.TryValidateUnchangedSections(sections, out _)
-            || !npcRosterCensusProtocol.TryReserveMutationEpochCapacity(
-                out ContinuationMutationEpochReservation reservation,
-                out _))
+
+        if (npcRosterCensusProtocol == null)
         {
             FaultRuntimeAdmission();
-            throw new InvalidOperationException("P12 Crime/Justice daily mutation could not reserve its owner baseline and epoch.");
+            throw new InvalidOperationException(
+                "P12 selected Crime/Justice daily mutation lost its exact runtime admission boundary.");
         }
 
-        P12CrimeJusticeMutationContext context = new P12CrimeJusticeMutationContext(
-            P12CrimeJusticeMutationMode.DailyReserved,
-            npcRuntimeSnapshot,
-            sections,
-            reservation);
-        activeP12CrimeJusticeMutationContext = context;
-        Exception originalException = null;
+        if (justiceSystem != null
+            && (graph.JusticeRecordsOwner == null
+                || !ReferenceEquals(justiceSystem.CoreOwner, graph.JusticeRecordsOwner)))
+        {
+            FaultRuntimeAdmission();
+            throw new InvalidOperationException(
+                "P12 selected Crime/Justice daily mutation lost its exact Justice owner projection.");
+        }
+        if (crimeSystem != null
+            && (graph.JusticeRecordsOwner == null
+                || !ReferenceEquals(crimeSystem.JusticeOwner?.CoreOwner,
+                    graph.JusticeRecordsOwner)))
+        {
+            FaultRuntimeAdmission();
+            throw new InvalidOperationException(
+                "P12 selected Crime/Justice daily mutation lost its exact Crime-to-Justice owner projection.");
+        }
+        object crimeCensusOwnerIdentity = crimeSystem;
+        object crimeReceiptCensusOwnerIdentity = p12CrimeJusticeBoundCrimeSystem;
+        object justiceOwnerIdentity = justiceSystem;
+        object justiceReceiptCensusOwnerIdentity = p12CrimeJusticeBoundJusticeSystem;
+
         try
         {
-            mutation();
+            dailyExecutionBoundary.ExecuteSelectedP12CrimeJusticeDailyMutation(
+                P12CrimeJusticeMutationProtocol,
+                graph,
+                phase,
+                crimeCensusOwnerIdentity,
+                crimeReceiptCensusOwnerIdentity,
+                justiceOwnerIdentity,
+                justiceReceiptCensusOwnerIdentity,
+                includeCrimeReceiptSection: crimeSystem != null,
+                includeJusticeReceiptSection: justiceSystem != null,
+                mutation);
         }
-        catch (Exception exception)
-        {
-            originalException = exception;
-        }
-
-        bool completed = ExitP12CrimeJusticeDailyScope(context);
-        if (originalException != null)
-            ExceptionDispatchInfo.Capture(originalException).Throw();
-        if (!completed)
-            throw new InvalidOperationException("P12 Crime/Justice daily mutation notification failed.");
-    }
-
-    private bool ExitP12CrimeJusticeDailyScope(P12CrimeJusticeMutationContext context)
-    {
-        if (context == null) return false;
-        bool valid = context.Mode == P12CrimeJusticeMutationMode.DailyReserved
-            && context.IsOwnedByCurrentThread()
-            && ReferenceEquals(activeP12CrimeJusticeMutationContext, context)
-            && context.EpochReservation != null;
-        if (!valid)
+        catch
         {
             FaultRuntimeAdmission();
-            npcRosterCensusProtocol?.ReleaseMutationEpochReservation(context.EpochReservation);
-            if (ReferenceEquals(activeP12CrimeJusticeMutationContext, context))
-                activeP12CrimeJusticeMutationContext = null;
-            return false;
+            throw;
         }
-
-        bool notified;
-        if (context.ChangedSectionIds.Count == 0)
-        {
-            try
-            {
-                npcRosterCensusProtocol.ReleaseMutationEpochReservation(context.EpochReservation);
-                notified = true;
-            }
-            catch { notified = false; }
-        }
-        else
-        {
-            notified = npcRosterCensusProtocol.TryNotifyReservedCommittedMutations(
-                context.EpochReservation,
-                context.ChangedSectionIds,
-                out _);
-        }
-        if (!notified) FaultRuntimeAdmission();
-        activeP12CrimeJusticeMutationContext = null;
-        return notified;
     }
 
     private bool TryBeginP12CrimeJusticeActionScope(
@@ -338,14 +460,55 @@ public sealed partial class SimulationRuntime
         if (runtimeAdmissionContext == null) return true;
         if (!IsRuntimeAdmissionOwnerThreadCurrent()
             || npcRosterCensusProtocol == null
-            || activeP12CrimeJusticeMutationContext != null
             || participants == null)
         {
             FaultRuntimeAdmission();
             return false;
         }
 
-        List<NpcRuntime> exactNpcs = new List<NpcRuntime>(participants.Count);
+        DailyV1SelectedRuntimeOwnerGraph selectedGraph = SelectedRuntimeOwnerGraph;
+        if (!includeJustice && selectedGraph != null)
+        {
+            List<DailyV1NpcRuntimeOwners> selectedOwners =
+                new List<DailyV1NpcRuntimeOwners>(participants.Count);
+            HashSet<NpcRuntime> uniqueSelectedRuntimes = new HashSet<NpcRuntime>();
+            bool allParticipantsAreSelected = true;
+            foreach (NpcRuntime npc in participants)
+            {
+                if (npc == null || !uniqueSelectedRuntimes.Add(npc)) continue;
+                if (GetP12CrimeJusticeNpcSectionId(npc) == null)
+                {
+                    FaultRuntimeAdmission();
+                    return false;
+                }
+
+                DailyV1NpcRuntimeOwners selectedOwner = npc.SelectedRuntimeOwners;
+                if (selectedOwner == null)
+                {
+                    allParticipantsAreSelected = false;
+                    break;
+                }
+                selectedOwners.Add(selectedOwner);
+            }
+
+            if (allParticipantsAreSelected)
+            {
+                if (selectedOwners.Count == 0
+                    || !P12CrimeJusticeMutationCoordinator.TryBeginSelectedNpcStatusMutation(
+                        selectedGraph, selectedOwners, out IDisposable selectedCoreScope))
+                {
+                    FaultRuntimeAdmission();
+                    return false;
+                }
+                scope = selectedCoreScope == null
+                    ? null
+                    : new P12CrimeJusticeMutationScope(selectedCoreScope);
+                return true;
+            }
+        }
+
+        List<DailyV1P12CrimeJusticeOwnerBinding> owners =
+            new List<DailyV1P12CrimeJusticeOwnerBinding>(participants.Count + (includeJustice ? 1 : 0));
         List<string> sections = new List<string>(participants.Count + (includeJustice ? 3 : 0));
         HashSet<NpcRuntime> uniqueNpcs = new HashSet<NpcRuntime>();
         foreach (NpcRuntime npc in participants)
@@ -357,17 +520,26 @@ public sealed partial class SimulationRuntime
                 FaultRuntimeAdmission();
                 return false;
             }
-            exactNpcs.Add(npc);
+            DailyV1P12CrimeJusticeOwnerBinding binding = CreateP12CrimeJusticeNpcBinding(npc);
+            if (binding == null)
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+            owners.Add(binding);
             sections.Add(sectionId);
         }
 
         if (includeJustice && justiceSystem != null)
         {
-            if (!ReferenceEquals(p12CrimeJusticeBoundJusticeSystem, justiceSystem))
+            DailyV1P12CrimeJusticeOwnerBinding binding =
+                CreateP12CrimeJusticeJusticeBinding(justiceSystem);
+            if (binding == null)
             {
                 FaultRuntimeAdmission();
                 return false;
             }
+            owners.Add(binding);
             sections.Add(P12CrimeJusticeCensusProvider.JusticeRecordsSectionId);
             sections.Add(P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId);
         }
@@ -375,142 +547,154 @@ public sealed partial class SimulationRuntime
             sections.Add(P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId);
 
         if (sections.Count == 0
-            || new HashSet<string>(sections, StringComparer.Ordinal).Count != sections.Count
-            || !npcRosterCensusProtocol.TryValidateUnchangedSections(sections, out _))
+            || !P12CrimeJusticeMutationCoordinator.TryBeginImmediateMutation(
+                owners, sections, out IDisposable coreScope))
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        scope = coreScope == null ? null : new P12CrimeJusticeMutationScope(coreScope);
+        return true;
+    }
+
+    private bool CanReuseP12CrimeJusticeActionScopeForForcedEscape(
+        IReadOnlyList<NpcRuntime> participants)
+    {
+        if (runtimeAdmissionContext == null) return true;
+
+        if (!IsRuntimeAdmissionOwnerThreadCurrent()
+            || npcRosterCensusProtocol == null
+            || participants == null
+            || justiceSystem == null
+            || !ReferenceEquals(p12CrimeJusticeBoundJusticeSystem, justiceSystem))
         {
             FaultRuntimeAdmission();
             return false;
         }
 
-        P12CrimeJusticeMutationContext context = new P12CrimeJusticeMutationContext(
-            P12CrimeJusticeMutationMode.ActionImmediate,
-            exactNpcs,
-            sections,
-            null);
-        activeP12CrimeJusticeMutationContext = context;
-        scope = new P12CrimeJusticeMutationScope(this, context);
-        return true;
+        HashSet<NpcRuntime> expectedNpcs = new HashSet<NpcRuntime>();
+        List<DailyV1P12CrimeJusticeOwnerBinding> owners =
+            new List<DailyV1P12CrimeJusticeOwnerBinding>(participants.Count + 1);
+        List<string> expectedSections = new List<string>(participants.Count + 3);
+        foreach (NpcRuntime npc in participants)
+        {
+            if (npc == null || !expectedNpcs.Add(npc)) continue;
+            string sectionId = GetP12CrimeJusticeNpcSectionId(npc);
+            DailyV1P12CrimeJusticeOwnerBinding binding = CreateP12CrimeJusticeNpcBinding(npc);
+            if (sectionId == null || binding == null)
+            {
+                FaultRuntimeAdmission();
+                return false;
+            }
+            owners.Add(binding);
+            expectedSections.Add(sectionId);
+        }
+
+        if (expectedNpcs.Count != 1
+            || CreateP12CrimeJusticeJusticeBinding(justiceSystem) == null)
+        {
+            FaultRuntimeAdmission();
+            return false;
+        }
+        owners.Add(CreateP12CrimeJusticeJusticeBinding(justiceSystem));
+        expectedSections.Add(P12CrimeJusticeCensusProvider.JusticeRecordsSectionId);
+        expectedSections.Add(P12CrimeJusticeCensusProvider.JusticeP18ReceiptsSectionId);
+        if (crimeSystem != null)
+            expectedSections.Add(P12CrimeJusticeCensusProvider.CrimeP18ReceiptsSectionId);
+
+        return P12CrimeJusticeMutationCoordinator.CanReuseImmediateMutation(owners, expectedSections);
     }
 
-    private void ExitP12CrimeJusticeActionScope(P12CrimeJusticeMutationContext context)
+    private DailyV1SelectedActionStatusPlanResult ApplySelectedActionStatusOperation(
+        IReadOnlyList<NpcRuntime> participants,
+        bool reuseForcedEscapeScope,
+        Func<DailyV1SelectedActionStatusPlanResult> operation)
     {
-        if (context == null) return;
-        if (context.Mode != P12CrimeJusticeMutationMode.ActionImmediate
-            || !context.IsOwnedByCurrentThread()
-            || !ReferenceEquals(activeP12CrimeJusticeMutationContext, context))
-            FaultRuntimeAdmission();
-        if (ReferenceEquals(activeP12CrimeJusticeMutationContext, context))
-            activeP12CrimeJusticeMutationContext = null;
+        if (operation == null)
+            throw new ArgumentNullException(nameof(operation));
+        if (runtimeAdmissionContext == null)
+            return operation();
+
+        if (reuseForcedEscapeScope)
+        {
+            if (!CanReuseP12CrimeJusticeActionScopeForForcedEscape(participants))
+                throw new InvalidOperationException(
+                    "P12 forced Escape status effects lost their exact admitted operation scope.");
+            return operation();
+        }
+
+        if (!TryBeginP12CrimeJusticeActionScope(
+                participants, includeJustice: false,
+                out P12CrimeJusticeMutationScope scope))
+            throw new InvalidOperationException(
+                "P12 action status effects could not be admitted.");
+        using (scope) return operation();
     }
 
     private bool CanCommitP12NpcCrimeJusticeMutation(NpcRuntime npc)
     {
         if (runtimeAdmissionContext == null) return true;
-        string sectionId = GetP12CrimeJusticeNpcSectionId(npc);
-        P12CrimeJusticeMutationContext context = activeP12CrimeJusticeMutationContext;
-        if (sectionId == null || context == null || !context.IsOwnedByCurrentThread()
-            || !context.AllowedNpcs.Contains(npc)
-            || !context.AllowedSectionIds.Contains(sectionId))
+        DailyV1P12CrimeJusticeOwnerBinding binding = CreateP12CrimeJusticeNpcBinding(npc);
+        if (binding == null)
         {
             FaultRuntimeAdmission();
             return false;
         }
-        if (npc.P12CrimeJusticeRevision == long.MaxValue)
-        {
-            FaultRuntimeAdmission();
-            return false;
-        }
-        if (context.Mode == P12CrimeJusticeMutationMode.DailyReserved)
-        {
-            return context.EpochReservation != null
-                && (context.ChangedSectionIds.Contains(sectionId)
-                    || npcRosterCensusProtocol.TryValidateUnchangedSections(new[] { sectionId }, out _));
-        }
-        if (context.Mode != P12CrimeJusticeMutationMode.ActionImmediate
-            || !npcRosterCensusProtocol.TryValidateUnchangedSections(new[] { sectionId }, out _)
-            || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _))
-        {
-            FaultRuntimeAdmission();
-            return false;
-        }
-        return true;
+        return P12CrimeJusticeMutationCoordinator.CanCommit(
+            binding.OwnerIdentity, binding.SectionId);
     }
 
     private void NotifyP12NpcCrimeJusticeMutation(NpcRuntime npc)
     {
         if (runtimeAdmissionContext == null) return;
-        P12CrimeJusticeMutationContext context = activeP12CrimeJusticeMutationContext;
-        string sectionId = GetP12CrimeJusticeNpcSectionId(npc);
-        if (sectionId == null || context == null || !context.IsOwnedByCurrentThread()
-            || !context.AllowedNpcs.Contains(npc) || !context.AllowedSectionIds.Contains(sectionId))
+        DailyV1P12CrimeJusticeOwnerBinding binding = CreateP12CrimeJusticeNpcBinding(npc);
+        if (binding == null)
         {
             FaultRuntimeAdmission();
             return;
         }
-        if (context.Mode == P12CrimeJusticeMutationMode.DailyReserved)
+
+        // Selected NPC status/hidden state is witnessed by the Core owner
+        // revision. Commit through the Core boundary so its revision advances
+        // before the same coordinator refreshes the census section. The
+        // unselected compatibility path retains its Unity-owned revision.
+        if (binding.OwnerIdentity is DailyV1NpcRuntimeOwners selectedOwner)
         {
-            context.ChangedSectionIds.Add(sectionId);
+            if (dailyExecutionBoundary == null)
+            {
+                FaultRuntimeAdmission();
+                return;
+            }
+            dailyExecutionBoundary.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(
+                selectedOwner);
             return;
         }
-        if (context.Mode != P12CrimeJusticeMutationMode.ActionImmediate
-            || !npcRosterCensusProtocol.NotifyCommittedMutation(sectionId, out _))
-            FaultRuntimeAdmission();
+
+        P12CrimeJusticeMutationCoordinator.NotifyCommitted(
+            binding.OwnerIdentity, binding.SectionId);
     }
 
     private bool CanCommitP12JusticeRecordsMutation(JusticeSystem justice)
     {
         if (runtimeAdmissionContext == null) return true;
-        P12CrimeJusticeMutationContext context = activeP12CrimeJusticeMutationContext;
         string sectionId = P12CrimeJusticeCensusProvider.JusticeRecordsSectionId;
-        if (!ReferenceEquals(justice, justiceSystem)
-            || !ReferenceEquals(p12CrimeJusticeBoundJusticeSystem, justice)
-            || context == null || !context.IsOwnedByCurrentThread()
-            || !context.AllowedSectionIds.Contains(sectionId))
+        if (CreateP12CrimeJusticeJusticeBinding(justice) == null)
         {
             FaultRuntimeAdmission();
             return false;
         }
-        if (justice.P12CrimeJusticeRevision == long.MaxValue)
-        {
-            FaultRuntimeAdmission();
-            return false;
-        }
-        if (context.Mode == P12CrimeJusticeMutationMode.DailyReserved)
-        {
-            return context.EpochReservation != null
-                && (context.ChangedSectionIds.Contains(sectionId)
-                    || npcRosterCensusProtocol.TryValidateUnchangedSections(new[] { sectionId }, out _));
-        }
-        if (context.Mode != P12CrimeJusticeMutationMode.ActionImmediate
-            || !npcRosterCensusProtocol.TryValidateUnchangedSections(new[] { sectionId }, out _)
-            || !npcRosterCensusProtocol.TryValidateMutationEpochCapacity(out _))
-        {
-            FaultRuntimeAdmission();
-            return false;
-        }
-        return true;
+        return P12CrimeJusticeMutationCoordinator.CanCommit(justice, sectionId);
     }
 
     private void NotifyP12JusticeRecordsMutation(JusticeSystem justice)
     {
         if (runtimeAdmissionContext == null) return;
-        P12CrimeJusticeMutationContext context = activeP12CrimeJusticeMutationContext;
         string sectionId = P12CrimeJusticeCensusProvider.JusticeRecordsSectionId;
-        if (!ReferenceEquals(justice, justiceSystem)
-            || !ReferenceEquals(p12CrimeJusticeBoundJusticeSystem, justice)
-            || context == null || !context.IsOwnedByCurrentThread()
-            || !context.AllowedSectionIds.Contains(sectionId))
+        if (CreateP12CrimeJusticeJusticeBinding(justice) == null)
         {
             FaultRuntimeAdmission();
             return;
         }
-        if (context.Mode == P12CrimeJusticeMutationMode.DailyReserved)
-        {
-            context.ChangedSectionIds.Add(sectionId);
-            return;
-        }
-        if (context.Mode != P12CrimeJusticeMutationMode.ActionImmediate
-            || !npcRosterCensusProtocol.NotifyCommittedMutation(sectionId, out _))
-            FaultRuntimeAdmission();
+        P12CrimeJusticeMutationCoordinator.NotifyCommitted(justice, sectionId);
     }
 }

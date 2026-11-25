@@ -131,8 +131,10 @@ function Set-ProtectedEvidenceDirectory {
     if ($env:OS -ne 'Windows_NT') { throw 'Protected local evidence capture currently requires Windows ACL support.' }
     $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
     $sid = $identity.User
+    # Preserve an already-correct owner: SetOwner marks OWNER_SECURITY_INFORMATION and requires WRITE_OWNER even when the value is unchanged.
+    $currentOwnerSid = (Get-Acl -LiteralPath $full).GetOwner([System.Security.Principal.SecurityIdentifier]).Value
     $acl = [System.Security.AccessControl.DirectorySecurity]::new()
-    $acl.SetOwner($sid)
+    if ($currentOwnerSid -ne $sid.Value) { $acl.SetOwner($sid) }
     $acl.SetAccessRuleProtection($true, $false)
     $rule = [System.Security.AccessControl.FileSystemAccessRule]::new($sid, [System.Security.AccessControl.FileSystemRights]::FullControl, ([System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit), [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow)
     [void]$acl.AddAccessRule($rule)
@@ -559,8 +561,20 @@ function Assert-OriginalGateOutcome {
 
 function ConvertTo-EvidenceUtcText {
     param([Parameter(Mandatory)][object]$Value)
-    $date = [DateTime]::Parse([string]$Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind)
-    return $date.ToUniversalTime().ToString('o', [Globalization.CultureInfo]::InvariantCulture)
+    if ($Value -is [DateTimeOffset]) {
+        $date = $Value.UtcDateTime
+    } elseif ($Value -is [DateTime]) {
+        switch ($Value.Kind) {
+            ([DateTimeKind]::Utc) { $date = $Value }
+            ([DateTimeKind]::Local) { $date = $Value.ToUniversalTime() }
+            default { throw 'Evidence timestamps must include a time zone.' }
+        }
+    } else {
+        $date = [DateTime]::Parse([string]$Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind)
+        if ($date.Kind -eq [DateTimeKind]::Unspecified) { throw 'Evidence timestamps must include a time zone.' }
+        $date = $date.ToUniversalTime()
+    }
+    return $date.ToString('o', [Globalization.CultureInfo]::InvariantCulture)
 }
 
 function Get-RunManifestPublicRecord {

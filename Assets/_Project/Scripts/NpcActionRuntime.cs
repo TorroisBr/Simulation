@@ -20,21 +20,174 @@ public class NpcActionRuntime
     [NonSerialized] private NpcRuntime p12Owner;
     [NonSerialized] private Func<bool> p12MutationAdmission;
     [NonSerialized] private Action p12MutationCommitted;
+    [NonSerialized] private DailyV1NpcActionPayloadOwner selectedOwner;
+    [NonSerialized] private DailyV1EffectiveDefinitions selectedDefinitions;
+    [NonSerialized] private DailyV1DefinitionAdapter.SelectedBindings selectedBindings;
 
-    public NpcActionData Action => action;
+    public NpcActionData Action => selectedOwner == null || selectedBindings == null
+        ? action
+        : selectedBindings.TryGetAsset(selectedOwner.Action, out NpcActionData selectedAction)
+            ? selectedAction : null;
     public NpcRuntime TargetNpc => targetNpc;
     public CityRuntime TargetCity => targetCity;
-    public ItemData TargetItem => targetItem;
-    public int Amount => amount;
-    public float ExpectedUnitPrice => expectedUnitPrice;
-    public float ExpectedTravelCost => expectedUnitPrice;
-    public float SuccessChanceMultiplier => successChanceMultiplier;
-    public NpcTravelReason TravelReason => travelReason;
-    public float ExpectedNetValue => expectedNetValue;
-    public string OriginDecisionId => originDecisionId;
-    public string StableOccurrenceKey => stableOccurrenceKey;
-    public CommercialDecisionEvidence CommercialDecisionEvidence => commercialDecisionEvidence;
-    public CommercialScoutingEvidence CommercialScoutingEvidence => commercialScoutingEvidence;
+    public ItemData TargetItem => selectedOwner == null || selectedBindings == null
+        ? targetItem
+        : selectedOwner.TargetItem == null ? null
+        : selectedBindings.TryGetAsset(selectedOwner.TargetItem, out ItemData selectedItem)
+            ? selectedItem : null;
+    public int Amount => selectedOwner == null ? amount : selectedOwner.Amount;
+    public float ExpectedUnitPrice => selectedOwner == null ? expectedUnitPrice : selectedOwner.ExpectedUnitPrice;
+    public float ExpectedTravelCost => selectedOwner == null ? expectedUnitPrice : selectedOwner.ExpectedUnitPrice;
+    public float SuccessChanceMultiplier => selectedOwner == null ? successChanceMultiplier : selectedOwner.SuccessChanceMultiplier;
+    public NpcTravelReason TravelReason => selectedOwner == null ? travelReason : selectedOwner.TravelReason;
+    public float ExpectedNetValue => selectedOwner == null ? expectedNetValue : selectedOwner.ExpectedNetValue;
+    public string OriginDecisionId => selectedOwner == null ? originDecisionId : selectedOwner.OriginDecisionId;
+    public string StableOccurrenceKey => selectedOwner == null ? stableOccurrenceKey : selectedOwner.StableOccurrenceKey;
+    public CommercialDecisionEvidence CommercialDecisionEvidence => selectedOwner == null
+        ? commercialDecisionEvidence : selectedOwner.CommercialDecisionEvidence;
+    public CommercialScoutingEvidence CommercialScoutingEvidence => selectedOwner == null
+        ? commercialScoutingEvidence : selectedOwner.CommercialScoutingEvidence;
+
+    internal DailyV1NpcActionPayloadOwner SelectedOwner => selectedOwner;
+
+    /// <summary>Uses the exact Core-prepared payload as this Unity projection.</summary>
+    internal bool TryUseSelectedPayload(
+        DailyV1NpcActionPayloadOwner owner,
+        DailyV1EffectiveDefinitions definitions)
+    {
+        if (owner == null || definitions == null || action == null
+            || !definitions.Actions.TryGetValue(owner.Action.DefinitionId, out DailyV1ActionDefinition admittedAction)
+            || !ReferenceEquals(admittedAction, owner.Action)
+            || !string.Equals(action.DefinitionId, owner.Action.DefinitionId, StringComparison.Ordinal)
+            || !string.Equals(owner.TargetCityRuntimeId, targetCity?.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(owner.TargetNpcRuntimeId, targetNpc?.RuntimeId, StringComparison.Ordinal))
+            return false;
+
+        if (owner.TargetItem != null
+            && (!definitions.Items.TryGetValue(owner.TargetItem.DefinitionId, out DailyV1ItemDefinition admittedItem)
+                || !ReferenceEquals(admittedItem, owner.TargetItem)))
+            return false;
+        if (owner.TargetItem != null
+            && (targetItem == null
+                || !string.Equals(targetItem.DefinitionId, owner.TargetItem.DefinitionId, StringComparison.Ordinal)))
+            return false;
+        if (owner.TargetItem == null && targetItem != null) return false;
+
+        amount = owner.Amount;
+        expectedUnitPrice = owner.ExpectedUnitPrice;
+        successChanceMultiplier = owner.SuccessChanceMultiplier;
+        travelReason = owner.TravelReason;
+        expectedNetValue = owner.ExpectedNetValue;
+        originDecisionId = owner.OriginDecisionId;
+        stableOccurrenceKey = owner.StableOccurrenceKey;
+        commercialDecisionEvidence = owner.CommercialDecisionEvidence;
+        commercialScoutingEvidence = owner.CommercialScoutingEvidence;
+        selectedOwner = owner;
+        selectedDefinitions = definitions;
+        selectedBindings = null;
+        return true;
+    }
+
+    internal bool TryCreateSelectedOwner(
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ActionDefinition selectedAction,
+        out DailyV1NpcActionPayloadOwner owner)
+    {
+        owner = null;
+        if (selectedOwner != null)
+        {
+            if (!ReferenceEquals(selectedDefinitions, definitions)
+                || !ReferenceEquals(selectedOwner.Action, selectedAction)
+                || !Matches(selectedOwner, definitions, null))
+                return false;
+            owner = selectedOwner;
+            return true;
+        }
+        DailyV1ItemDefinition selectedItem = null;
+        if (targetItem != null
+            && (definitions == null
+                || !definitions.Items.TryGetValue(targetItem.DefinitionId, out selectedItem)
+                || selectedItem == null
+                || !string.Equals(selectedItem.DefinitionId, targetItem.DefinitionId, StringComparison.Ordinal)))
+            return false;
+
+        return DailyV1NpcActionPayloadOwner.TryCreate(definitions, selectedAction,
+            targetNpc?.RuntimeId, targetCity?.RuntimeId, selectedItem, amount,
+            expectedUnitPrice, successChanceMultiplier, travelReason, expectedNetValue,
+            originDecisionId, stableOccurrenceKey, commercialDecisionEvidence,
+            commercialScoutingEvidence, out owner);
+    }
+
+    internal bool TryBindSelectedOwner(
+        DailyV1NpcActionPayloadOwner owner,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings)
+    {
+        if (owner == null || definitions == null
+            || !Matches(owner, definitions, bindings)) return false;
+        if (selectedOwner != null)
+        {
+            if (!ReferenceEquals(selectedOwner, owner)) return false;
+            selectedDefinitions = definitions;
+            selectedBindings = bindings;
+            return true;
+        }
+        selectedOwner = owner;
+        selectedDefinitions = definitions;
+        selectedBindings = bindings;
+        return true;
+    }
+
+    internal bool MatchesSelectedOwner() => selectedOwner != null
+        && Matches(selectedOwner, selectedDefinitions, selectedBindings);
+
+    internal void UnbindSelectedOwner()
+    {
+        selectedOwner = null;
+        selectedDefinitions = null;
+        selectedBindings = null;
+    }
+
+    private bool Matches(
+        DailyV1NpcActionPayloadOwner owner,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings)
+    {
+        if (owner == null
+            || !string.Equals(owner.TargetNpcRuntimeId, targetNpc?.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(owner.TargetCityRuntimeId, targetCity?.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(owner.TargetItem?.DefinitionId, targetItem?.DefinitionId, StringComparison.Ordinal)
+            || owner.Amount != amount
+            || !owner.ExpectedUnitPrice.Equals(expectedUnitPrice)
+            || !owner.SuccessChanceMultiplier.Equals(successChanceMultiplier)
+            || owner.TravelReason != travelReason
+            || !owner.ExpectedNetValue.Equals(expectedNetValue)
+            || !string.Equals(owner.OriginDecisionId, originDecisionId, StringComparison.Ordinal)
+            || !string.Equals(owner.StableOccurrenceKey, stableOccurrenceKey, StringComparison.Ordinal)
+            || !ReferenceEquals(owner.CommercialDecisionEvidence, commercialDecisionEvidence)
+            || !ReferenceEquals(owner.CommercialScoutingEvidence, commercialScoutingEvidence)) return false;
+
+        if (definitions != null
+            && (!definitions.Actions.TryGetValue(owner.Action.DefinitionId, out DailyV1ActionDefinition admittedAction)
+                || !ReferenceEquals(admittedAction, owner.Action)
+                || (owner.TargetItem != null
+                    && (!definitions.Items.TryGetValue(owner.TargetItem.DefinitionId, out DailyV1ItemDefinition admittedItem)
+                        || !ReferenceEquals(admittedItem, owner.TargetItem))))) return false;
+
+        if (action == null || !string.Equals(action.DefinitionId, owner.Action.DefinitionId, StringComparison.Ordinal))
+            return false;
+        if (bindings == null) return true;
+        return bindings.TryGet(action, out DailyV1ActionDefinition mappedAction)
+            && ReferenceEquals(mappedAction, owner.Action)
+            && bindings.TryGetAsset(owner.Action, out NpcActionData mappedActionAsset)
+            && ReferenceEquals(mappedActionAsset, action)
+            && (owner.TargetItem == null
+                ? targetItem == null
+                : bindings.TryGet(targetItem, out DailyV1ItemDefinition mappedItemNode)
+                    && ReferenceEquals(mappedItemNode, owner.TargetItem)
+                    && bindings.TryGetAsset(owner.TargetItem, out ItemData mappedItem)
+                    && ReferenceEquals(mappedItem, targetItem));
+    }
 
     public NpcActionRuntime(NpcActionData action)
     {
@@ -51,7 +204,7 @@ public class NpcActionRuntime
     {
         this.action = action;
         this.targetNpc = targetNpc;
-        this.amount = Mathf.Max(0, amount);
+        this.amount = UnityMathfCompatibility.Max(0, amount);
     }
 
     public NpcActionRuntime(NpcActionData action, NpcRuntime targetNpc, ItemData targetItem, int amount, float expectedUnitPrice)
@@ -59,8 +212,8 @@ public class NpcActionRuntime
         this.action = action;
         this.targetNpc = targetNpc;
         this.targetItem = targetItem;
-        this.amount = Mathf.Max(0, amount);
-        this.expectedUnitPrice = Mathf.Max(0f, expectedUnitPrice);
+        this.amount = UnityMathfCompatibility.Max(0, amount);
+        this.expectedUnitPrice = UnityMathfCompatibility.Max(0f, expectedUnitPrice);
     }
 
     /// <summary>Creates an unpublished action payload without replaying its setters.</summary>
@@ -109,9 +262,11 @@ public class NpcActionRuntime
 
     public void SetSuccessChanceMultiplier(float multiplier)
     {
-        float normalized = Mathf.Max(0f, multiplier);
-        if (successChanceMultiplier.Equals(normalized)) return;
+        float normalized = UnityMathfCompatibility.Max(0f, multiplier);
+        float current = selectedOwner == null ? successChanceMultiplier : selectedOwner.SuccessChanceMultiplier;
+        if (current.Equals(normalized)) return;
         if (!CanCommitP12Mutation()) return;
+        selectedOwner?.SetSuccessChanceMultiplier(normalized);
         successChanceMultiplier = normalized;
         NotifyP12MutationCommitted();
     }
@@ -119,8 +274,10 @@ public class NpcActionRuntime
     public void SetOriginDecisionId(string decisionId)
     {
         string normalized = string.IsNullOrWhiteSpace(decisionId) ? null : decisionId;
-        if (string.Equals(originDecisionId, normalized, StringComparison.Ordinal)) return;
+        string current = selectedOwner == null ? originDecisionId : selectedOwner.OriginDecisionId;
+        if (string.Equals(current, normalized, StringComparison.Ordinal)) return;
         if (!CanCommitP12Mutation()) return;
+        selectedOwner?.SetOriginDecisionId(normalized);
         originDecisionId = normalized;
         NotifyP12MutationCommitted();
     }
@@ -134,24 +291,32 @@ public class NpcActionRuntime
         string normalized = string.IsNullOrWhiteSpace(occurrenceKey) == true
             ? null
             : occurrenceKey;
-        if (string.Equals(stableOccurrenceKey, normalized, StringComparison.Ordinal)) return;
+        string current = selectedOwner == null ? stableOccurrenceKey : selectedOwner.StableOccurrenceKey;
+        if (string.Equals(current, normalized, StringComparison.Ordinal)) return;
         if (!CanCommitP12Mutation()) return;
+        selectedOwner?.SetStableOccurrenceKey(normalized);
         stableOccurrenceKey = normalized;
         NotifyP12MutationCommitted();
     }
 
     public void SetCommercialDecisionEvidence(CommercialDecisionEvidence evidence)
     {
-        if (ReferenceEquals(commercialDecisionEvidence, evidence)) return;
+        CommercialDecisionEvidence current = selectedOwner == null
+            ? commercialDecisionEvidence : selectedOwner.CommercialDecisionEvidence;
+        if (ReferenceEquals(current, evidence)) return;
         if (!CanCommitP12Mutation()) return;
+        selectedOwner?.SetCommercialDecisionEvidence(evidence);
         commercialDecisionEvidence = evidence;
         NotifyP12MutationCommitted();
     }
 
     public void SetCommercialScoutingEvidence(CommercialScoutingEvidence evidence)
     {
-        if (ReferenceEquals(commercialScoutingEvidence, evidence)) return;
+        CommercialScoutingEvidence current = selectedOwner == null
+            ? commercialScoutingEvidence : selectedOwner.CommercialScoutingEvidence;
+        if (ReferenceEquals(current, evidence)) return;
         if (!CanCommitP12Mutation()) return;
+        selectedOwner?.SetCommercialScoutingEvidence(evidence);
         commercialScoutingEvidence = evidence;
         NotifyP12MutationCommitted();
     }
@@ -211,7 +376,7 @@ public class NpcActionRuntime
         this.targetCity = targetCity;
         this.targetItem = targetItem;
         this.travelReason = travelReason;
-        expectedUnitPrice = Mathf.Max(0f, expectedCost);
+        expectedUnitPrice = UnityMathfCompatibility.Max(0f, expectedCost);
         this.expectedNetValue = expectedNetValue;
     }
 }
@@ -228,6 +393,7 @@ public class NpcTravelPlanRuntime
     [SerializeField] private long revision;
     [NonSerialized] private Func<bool> p12MutationAdmission;
     [NonSerialized] private Action p12MutationCommitted;
+    [NonSerialized] private DailyV1NpcTravelPlanOwner selectedOwner;
 
     public SpatialLocationRuntime TargetLocation => targetLocation;
     public CityRuntime TargetCity => targetCity;
@@ -235,13 +401,62 @@ public class NpcTravelPlanRuntime
     public float Utility => utility;
     public float ExpectedCost => expectedCost;
     public string OriginDecisionId => originDecisionId;
-    public long Revision => revision;
+    public long Revision => selectedOwner == null ? revision : selectedOwner.Revision;
     public bool IsActive => targetLocation != null && reason != NpcTravelReason.None;
+
+    internal DailyV1NpcTravelPlanOwner SelectedOwner => selectedOwner;
+
+    internal bool TryBindSelectedOwner(DailyV1NpcTravelPlanOwner owner)
+    {
+        if (owner == null) return false;
+        if (selectedOwner != null) return ReferenceEquals(selectedOwner, owner) && MatchesSelectedOwner();
+        if (!owner.Matches(targetLocation?.RuntimeId, targetCity?.RuntimeId, reason,
+                utility, expectedCost, originDecisionId)
+            || owner.Revision != revision) return false;
+        selectedOwner = owner;
+        return true;
+    }
+
+    internal bool MatchesSelectedOwner() => selectedOwner != null
+        && (targetCity == null || ReferenceEquals(targetCity.Location, targetLocation))
+        && selectedOwner.Matches(targetLocation?.RuntimeId, targetCity?.RuntimeId,
+            reason, utility, expectedCost, originDecisionId)
+        && selectedOwner.Revision == revision;
 
     internal NpcTravelPlanState CaptureOwnerState() => new NpcTravelPlanState(
         targetLocation, targetCity, reason, utility, expectedCost, originDecisionId);
 
+    internal bool TryCreateCoreReceiptState(DailyV1SelectedRuntimeOwnerGraph graph,
+        NpcTravelPlanState state, out DailyV1NpcTravelPlanReceiptState coreState)
+    {
+        coreState = null;
+        if (graph == null || selectedOwner == null || state == null
+            || !MatchesSelectedOwner() || !CanProjectOwnerState(state)) return false;
+
+        string locationId = state.TargetLocation?.RuntimeId;
+        string cityId = state.TargetCity?.RuntimeId;
+        if (state.TargetLocation != null
+            && (!graph.SpatialNetwork.TryGetLocation(locationId, out SpatialLocationRuntime location)
+                || !ReferenceEquals(location, state.TargetLocation))) return false;
+        if (state.TargetCity != null)
+        {
+            DailyV1CityRuntimeOwners city = state.TargetCity.SelectedRuntimeOwners;
+            if (city == null || !graph.ContainsExactCityOwner(city)
+                || !graph.TryGetCityLocationRuntimeId(cityId, out string cityLocationId)
+                || !string.Equals(cityLocationId, locationId, StringComparison.Ordinal)) return false;
+        }
+        else if (locationId != null
+            && (!graph.TryGetUniqueCityOwnerForLocation(locationId,
+                    out DailyV1CityRuntimeOwners cityAtLocation)
+                || cityAtLocation != null)) return false;
+
+        coreState = new DailyV1NpcTravelPlanReceiptState(locationId, cityId,
+            state.Reason, state.Utility, state.ExpectedCost, state.OriginDecisionId);
+        return true;
+    }
+
     internal bool MatchesOwnerState(NpcTravelPlanState state) => state != null
+        && (selectedOwner == null || MatchesSelectedOwner())
         && ReferenceEquals(targetLocation, state.TargetLocation)
         && ReferenceEquals(targetCity, state.TargetCity)
         && reason == state.Reason
@@ -249,22 +464,82 @@ public class NpcTravelPlanRuntime
         && expectedCost.Equals(state.ExpectedCost)
         && string.Equals(originDecisionId, state.OriginDecisionId, StringComparison.Ordinal);
 
-    internal bool CanInstallOwnerState(NpcTravelPlanState state) => state != null
-        && (MatchesOwnerState(state)
-            || (revision < long.MaxValue && CanCommitP12Mutation()));
-
-    internal bool InstallOwnerState(NpcTravelPlanState state)
+    internal bool CanInstallOwnerState(NpcTravelPlanState state)
     {
-        if (state == null) return false;
+        return CanProjectOwnerState(state)
+            && (MatchesOwnerState(state) || CanCommitP12Mutation());
+    }
+
+    /// <summary>
+    /// Preflights the Unity projection for a Core-owned TravelPlan commit
+    /// without performing P12 admission. Core performs that admission
+    /// immediately before the authoritative owner write.
+    /// </summary>
+    internal bool CanProjectOwnerState(NpcTravelPlanState state)
+    {
+        if (state == null || (selectedOwner != null && !MatchesSelectedOwner())) return false;
         if (MatchesOwnerState(state)) return true;
-        if (revision == long.MaxValue || !CanCommitP12Mutation()) return false;
+        long currentRevision = Revision;
+        if (currentRevision == long.MaxValue) return false;
+        return selectedOwner == null
+            || selectedOwner.CanCommit(state.TargetLocation?.RuntimeId,
+                state.TargetCity?.RuntimeId, state.Reason, state.Utility,
+                state.ExpectedCost, state.OriginDecisionId);
+    }
+
+    /// <summary>Runs the existing P12 admission bound to this exact TravelPlan owner.</summary>
+    internal bool CanAdmitSelectedOwnerMutation() => CanCommitP12Mutation();
+
+    /// <summary>
+    /// Mirrors a Core-committed TravelPlan into the Unity compatibility
+    /// projection and publishes the existing P12 receipt. This does not write
+    /// the authoritative owner or repeat admission.
+    /// </summary>
+    internal bool PublishCommittedOwnerState(NpcTravelPlanState state)
+    {
+        if (state == null || selectedOwner == null
+            || !selectedOwner.Matches(state.TargetLocation?.RuntimeId,
+                state.TargetCity?.RuntimeId, state.Reason, state.Utility,
+                state.ExpectedCost, state.OriginDecisionId))
+            return false;
+
+        if (MatchesOwnerState(state))
+            return selectedOwner.Revision == revision && MatchesSelectedOwner();
+
+        if (revision == long.MaxValue
+            || selectedOwner.Revision != revision + 1L)
+            return false;
+
         targetLocation = state.TargetLocation;
         targetCity = state.TargetCity;
         reason = state.Reason;
         utility = state.Utility;
         expectedCost = state.ExpectedCost;
         originDecisionId = state.OriginDecisionId;
-        revision++;
+        revision = selectedOwner.Revision;
+        if (!MatchesSelectedOwner()) return false;
+        NotifyP12MutationCommitted();
+        return true;
+    }
+
+    internal bool InstallOwnerState(NpcTravelPlanState state)
+    {
+        if (state == null) return false;
+        if (MatchesOwnerState(state)) return true;
+        if (selectedOwner != null && !MatchesSelectedOwner()) return false;
+        if (Revision == long.MaxValue || !CanCommitP12Mutation()) return false;
+        if (selectedOwner != null
+            && !selectedOwner.TryCommit(state.TargetLocation?.RuntimeId,
+                state.TargetCity?.RuntimeId, state.Reason, state.Utility,
+                state.ExpectedCost, state.OriginDecisionId)) return false;
+        targetLocation = state.TargetLocation;
+        targetCity = state.TargetCity;
+        reason = state.Reason;
+        utility = state.Utility;
+        expectedCost = state.ExpectedCost;
+        originDecisionId = state.OriginDecisionId;
+        if (selectedOwner == null) revision++;
+        else revision = selectedOwner.Revision;
         NotifyP12MutationCommitted();
         return true;
     }
@@ -323,8 +598,8 @@ public class NpcTravelPlanRuntime
             targetLocation,
             targetCityProjection,
             reason,
-            Mathf.Max(0f, utility),
-            Mathf.Max(0f, expectedCost),
+            UnityMathfCompatibility.Max(0f, utility),
+            UnityMathfCompatibility.Max(0f, expectedCost),
             string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId);
         InstallOwnerState(next);
     }
@@ -333,6 +608,67 @@ public class NpcTravelPlanRuntime
     {
         InstallOwnerState(new NpcTravelPlanState(
             null, null, NpcTravelReason.None, 0f, 0f, null));
+    }
+
+    internal bool TryInstallSelectedTradePlan(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners npc,
+        string targetCityRuntimeId,
+        float utility,
+        string originDecisionId)
+    {
+        if (selectedOwner == null || npc == null
+            || !ReferenceEquals(npc.TravelPlan, selectedOwner) || graph == null) return false;
+        long priorRevision = selectedOwner.Revision;
+        if (!graph.TryCommitMerchantTradeTravelPlan(npc, targetCityRuntimeId,
+                utility, originDecisionId, CanCommitP12Mutation, out _)) return false;
+        if (selectedOwner.Revision != priorRevision) NotifyP12MutationCommitted();
+        return true;
+    }
+
+    internal bool CanAdmitSelectedTradeTravelPlanMutation() => CanCommitP12Mutation();
+
+    internal void PublishSelectedTradeTravelPlanMutation() => NotifyP12MutationCommitted();
+
+    internal bool CanProjectSelectedTradePlan(
+        DailyV1NpcTravelPlanOwner owner,
+        SpatialLocationRuntime location,
+        CityRuntime city) => selectedOwner != null
+        && ReferenceEquals(selectedOwner, owner)
+        && location != null && city != null
+        && ReferenceEquals(city.Location, location)
+        && string.Equals(owner.TargetLocationRuntimeId, location.RuntimeId, StringComparison.Ordinal)
+        && string.Equals(owner.TargetCityRuntimeId, city.RuntimeId, StringComparison.Ordinal);
+
+    internal bool CanProjectSelectedTradePlanTarget(
+        DailyV1NpcTravelPlanOwner owner,
+        DailyV1CityRuntimeOwners cityOwner,
+        string targetCityRuntimeId,
+        string targetLocationRuntimeId,
+        SpatialLocationRuntime location,
+        CityRuntime city) => selectedOwner != null
+        && ReferenceEquals(selectedOwner, owner)
+        && location != null && city != null
+        && cityOwner != null
+        && ReferenceEquals(city.SelectedRuntimeOwners, cityOwner)
+        && ReferenceEquals(city.Location, location)
+        && string.Equals(location.RuntimeId, targetLocationRuntimeId, StringComparison.Ordinal)
+        && string.Equals(city.RuntimeId, targetCityRuntimeId, StringComparison.Ordinal);
+
+    internal void ProjectSelectedTradePlan(
+        DailyV1NpcTravelPlanOwner owner,
+        SpatialLocationRuntime location,
+        CityRuntime city)
+    {
+        if (!CanProjectSelectedTradePlan(owner, location, city))
+            throw new InvalidOperationException("The committed selected trade travel plan has no exact Unity projection.");
+        targetLocation = location;
+        targetCity = city;
+        reason = owner.Reason;
+        utility = owner.Utility;
+        expectedCost = owner.ExpectedCost;
+        originDecisionId = owner.OriginDecisionId;
+        revision = owner.Revision;
     }
 
     internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
@@ -390,21 +726,6 @@ internal sealed class NpcTravelPlanState
     }
 }
 
-public enum NpcTravelReason
-{
-    None,
-    Trade,
-    Flee,
-    TradeReposition,
-    CommercialScout
-}
-
-public enum NpcActionResultType
-{
-    Success,
-    Failure
-}
-
 public class NpcActionResult
 {
     public NpcActionResultType ResultType { get; }
@@ -443,25 +764,130 @@ public class MerchantTradePlanRuntime
     [SerializeField] private long revision;
     [NonSerialized] private Func<bool> p12MutationAdmission;
     [NonSerialized] private Action p12MutationCommitted;
+    [NonSerialized] private DailyV1NpcMerchantTradePlanOwner selectedOwner;
+    [NonSerialized] private DailyV1DefinitionAdapter.SelectedBindings selectedBindings;
+    [NonSerialized] private Func<string, CityRuntime> selectedCityResolver;
 
-    public ItemData Item => item;
-    public CityRuntime OriginCity => originCity;
-    public CityRuntime TargetCity => targetCity;
-    public int PlannedAmount => plannedAmount;
-    public int RemainingAmount => remainingAmount > 0 ? remainingAmount : plannedAmount;
-    public float PurchasePricePerItem => purchasePricePerItem;
-    public int WaitDaysAtDestination => waitDaysAtDestination;
-    public int PendingTravelDays => pendingTravelDays;
-    public string OriginDecisionId => originDecisionId;
-    public long Revision => revision;
-    public bool HasData => item != null || originCity != null || targetCity != null || plannedAmount > 0 || remainingAmount > 0;
-    public bool IsActive => item != null && targetCity != null && RemainingAmount > 0;
+    public ItemData Item => selectedOwner == null ? item : ResolveSelectedItem();
+    public CityRuntime OriginCity => selectedOwner == null ? originCity : ResolveSelectedCity(selectedOwner.OriginCityRuntimeId);
+    public CityRuntime TargetCity => selectedOwner == null ? targetCity : ResolveSelectedCity(selectedOwner.TargetCityRuntimeId);
+    public int PlannedAmount => selectedOwner == null ? plannedAmount : selectedOwner.PlannedAmount;
+    public int RemainingAmount => selectedOwner == null
+        ? (remainingAmount > 0 ? remainingAmount : plannedAmount)
+        : selectedOwner.RemainingAmount;
+    public float PurchasePricePerItem => selectedOwner == null ? purchasePricePerItem : selectedOwner.PurchasePricePerItem;
+    public int WaitDaysAtDestination => selectedOwner == null ? waitDaysAtDestination : selectedOwner.WaitDaysAtDestination;
+    public int PendingTravelDays => selectedOwner == null ? pendingTravelDays : selectedOwner.PendingTravelDays;
+    public string OriginDecisionId => selectedOwner == null ? originDecisionId : selectedOwner.OriginDecisionId;
+    public long Revision => selectedOwner == null ? revision : selectedOwner.Revision;
+    public bool HasData => selectedOwner == null
+        ? item != null || originCity != null || targetCity != null || plannedAmount > 0 || remainingAmount > 0
+        : selectedOwner.HasData;
+    public bool IsActive => selectedOwner == null
+        ? item != null && targetCity != null && RemainingAmount > 0
+        : selectedOwner.IsActive && TargetCity != null;
 
-    internal MerchantTradePlanState CaptureOwnerState() => new MerchantTradePlanState(
-        item, originCity, targetCity, plannedAmount, remainingAmount,
-        purchasePricePerItem, waitDaysAtDestination, pendingTravelDays, originDecisionId);
+    internal DailyV1NpcMerchantTradePlanOwner SelectedOwner => selectedOwner;
 
-    internal bool MatchesOwnerState(MerchantTradePlanState state) => state != null
+    internal bool TryBindSelectedOwner(
+        DailyV1NpcMerchantTradePlanOwner owner,
+        DailyV1DefinitionAdapter.SelectedBindings bindings,
+        Func<string, CityRuntime> cityResolver)
+    {
+        if (owner == null || bindings == null || cityResolver == null
+            || !ReferenceEquals(owner.Definitions, bindings.Definitions)) return false;
+        if (selectedOwner != null)
+        {
+            if (!ReferenceEquals(selectedOwner, owner)
+                || selectedBindings == null
+                || !ReferenceEquals(selectedBindings.Definitions, bindings.Definitions)) return false;
+
+            // P12 staging may bind this projection with the exact item subset
+            // available to the owner section. When the complete selected asset
+            // inventory becomes available, permit that binding to grow only if
+            // it preserves the same item asset and City projection instances.
+            if (owner.ItemDefinition != null
+                && (!selectedBindings.TryGetAsset(owner.ItemDefinition, out ItemData previousItem)
+                    || !bindings.TryGetAsset(owner.ItemDefinition, out ItemData nextItem)
+                    || !ReferenceEquals(previousItem, nextItem))) return false;
+            if ((owner.OriginCityRuntimeId != null
+                    && !ReferenceEquals(selectedCityResolver?.Invoke(owner.OriginCityRuntimeId),
+                        cityResolver(owner.OriginCityRuntimeId)))
+                || (owner.TargetCityRuntimeId != null
+                    && !ReferenceEquals(selectedCityResolver?.Invoke(owner.TargetCityRuntimeId),
+                        cityResolver(owner.TargetCityRuntimeId)))) return false;
+
+            DailyV1DefinitionAdapter.SelectedBindings previousBindings = selectedBindings;
+            Func<string, CityRuntime> previousResolver = selectedCityResolver;
+            selectedBindings = bindings;
+            selectedCityResolver = cityResolver;
+            if (CanProjectSelectedOwner()) return true;
+            selectedBindings = previousBindings;
+            selectedCityResolver = previousResolver;
+            return false;
+        }
+
+        DailyV1ItemDefinition stagedItem = null;
+        if (item != null
+            && (!bindings.TryGet(item, out stagedItem)
+                || !ReferenceEquals(stagedItem, owner.ItemDefinition))) return false;
+        string stagedOriginId = originCity?.RuntimeId;
+        string stagedTargetId = targetCity?.RuntimeId;
+        if ((originCity != null && (string.IsNullOrWhiteSpace(stagedOriginId)
+                || !ReferenceEquals(cityResolver(stagedOriginId), originCity)))
+            || (targetCity != null && (string.IsNullOrWhiteSpace(stagedTargetId)
+                || !ReferenceEquals(cityResolver(stagedTargetId), targetCity)))
+            || !ReferenceEquals(stagedItem, owner.ItemDefinition)
+            || !string.Equals(stagedOriginId, owner.OriginCityRuntimeId, StringComparison.Ordinal)
+            || !string.Equals(stagedTargetId, owner.TargetCityRuntimeId, StringComparison.Ordinal)
+            || plannedAmount != owner.PlannedAmount || remainingAmount != owner.RawRemainingAmount
+            || !purchasePricePerItem.Equals(owner.PurchasePricePerItem)
+            || waitDaysAtDestination != owner.WaitDaysAtDestination
+            || pendingTravelDays != owner.PendingTravelDays
+            || !string.Equals(originDecisionId, owner.OriginDecisionId, StringComparison.Ordinal)
+            || revision != owner.Revision) return false;
+
+        selectedOwner = owner;
+        selectedBindings = bindings;
+        selectedCityResolver = cityResolver;
+        item = null;
+        originCity = null;
+        targetCity = null;
+        plannedAmount = 0;
+        remainingAmount = 0;
+        purchasePricePerItem = 0f;
+        waitDaysAtDestination = 0;
+        pendingTravelDays = 0;
+        originDecisionId = null;
+        revision = 0L;
+        if (CanProjectSelectedOwner()) return true;
+        selectedOwner = null;
+        selectedBindings = null;
+        selectedCityResolver = null;
+        return false;
+    }
+
+    internal MerchantTradePlanState CaptureOwnerState() => selectedOwner == null
+        ? new MerchantTradePlanState(item, originCity, targetCity, plannedAmount, remainingAmount,
+            purchasePricePerItem, waitDaysAtDestination, pendingTravelDays, originDecisionId)
+        : CaptureSelectedOwnerState();
+
+    internal bool TryCreateCoreReceiptState(MerchantTradePlanState state,
+        out DailyV1MerchantTradePlanReceiptState coreState)
+    {
+        coreState = null;
+        if (selectedOwner == null
+            || !TryConvertSelectedState(state, out DailyV1ItemDefinition selectedItem,
+                out string originId, out string targetId)) return false;
+        coreState = new DailyV1MerchantTradePlanReceiptState(selectedItem,
+            originId, targetId, state.PlannedAmount, state.RawRemainingAmount,
+            state.PurchasePricePerItem, state.WaitDaysAtDestination,
+            state.PendingTravelDays, state.OriginDecisionId);
+        return true;
+    }
+
+    internal bool MatchesOwnerState(MerchantTradePlanState state) => selectedOwner == null
+        ? state != null
         && ReferenceEquals(item, state.Item)
         && ReferenceEquals(originCity, state.OriginCity)
         && ReferenceEquals(targetCity, state.TargetCity)
@@ -470,17 +896,34 @@ public class MerchantTradePlanRuntime
         && purchasePricePerItem.Equals(state.PurchasePricePerItem)
         && waitDaysAtDestination == state.WaitDaysAtDestination
         && pendingTravelDays == state.PendingTravelDays
-        && string.Equals(originDecisionId, state.OriginDecisionId, StringComparison.Ordinal);
+        && string.Equals(originDecisionId, state.OriginDecisionId, StringComparison.Ordinal)
+        : TryConvertSelectedState(state, out DailyV1ItemDefinition selectedItem,
+            out string originId, out string targetId)
+            && selectedOwner.MatchesState(selectedItem, originId, targetId,
+                state.PlannedAmount, state.RawRemainingAmount, state.PurchasePricePerItem,
+                state.WaitDaysAtDestination, state.PendingTravelDays, state.OriginDecisionId);
 
     internal bool CanInstallOwnerState(MerchantTradePlanState state) => state != null
         && (MatchesOwnerState(state)
-            || (revision < long.MaxValue && CanCommitP12Mutation()));
+            || (Revision < long.MaxValue && CanCommitP12Mutation()
+                && (selectedOwner == null || CanConvertAndInstallSelectedState(state))));
 
     internal bool InstallOwnerState(MerchantTradePlanState state)
     {
         if (state == null) return false;
         if (MatchesOwnerState(state)) return true;
-        if (revision == long.MaxValue || !CanCommitP12Mutation()) return false;
+        if (Revision == long.MaxValue || !CanCommitP12Mutation()) return false;
+        if (selectedOwner != null)
+        {
+            if (!TryConvertSelectedState(state, out DailyV1ItemDefinition selectedItem,
+                    out string originId, out string targetId)
+                || !selectedOwner.TryInstallState(selectedItem, originId, targetId,
+                    state.PlannedAmount, state.RawRemainingAmount, state.PurchasePricePerItem,
+                    state.WaitDaysAtDestination, state.PendingTravelDays, state.OriginDecisionId))
+                return false;
+            NotifyP12MutationCommitted();
+            return true;
+        }
         item = state.Item;
         originCity = state.OriginCity;
         targetCity = state.TargetCity;
@@ -493,6 +936,114 @@ public class MerchantTradePlanRuntime
         revision++;
         NotifyP12MutationCommitted();
         return true;
+    }
+
+    internal bool TryInstallSelectedPlan(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners npc,
+        DailyV1ItemDefinition item,
+        string originCityRuntimeId,
+        string targetCityRuntimeId,
+        int plannedAmount,
+        float purchasePricePerItem,
+        string originDecisionId)
+    {
+        if (selectedOwner == null || npc == null
+            || !ReferenceEquals(npc.MerchantTradePlan, selectedOwner)) return false;
+        plannedAmount = UnityMathfCompatibility.Max(0, plannedAmount);
+        purchasePricePerItem = UnityMathfCompatibility.Max(0f, purchasePricePerItem);
+        originDecisionId = string.IsNullOrWhiteSpace(originDecisionId) ? null : originDecisionId;
+        if (MatchesSelectedPlan(item, originCityRuntimeId, targetCityRuntimeId,
+                plannedAmount, purchasePricePerItem, originDecisionId)) return true;
+        if (!CanCommitP12Mutation()) return false;
+        if (graph == null || !graph.TryInstallMerchantTradePlan(npc, item,
+                originCityRuntimeId, targetCityRuntimeId, plannedAmount,
+                purchasePricePerItem, originDecisionId)) return false;
+        NotifyP12MutationCommitted();
+        return true;
+    }
+
+    private bool MatchesSelectedPlan(
+        DailyV1ItemDefinition item,
+        string originCityRuntimeId,
+        string targetCityRuntimeId,
+        int plannedAmount,
+        float purchasePricePerItem,
+        string originDecisionId) => selectedOwner != null
+        && selectedOwner.MatchesState(item, originCityRuntimeId, targetCityRuntimeId,
+            plannedAmount, 0, purchasePricePerItem, 0, 0, originDecisionId);
+
+    private bool CanConvertAndInstallSelectedState(MerchantTradePlanState state) =>
+        TryConvertSelectedState(state, out DailyV1ItemDefinition selectedItem,
+            out string originId, out string targetId)
+        && selectedOwner.CanInstallState(selectedItem, originId, targetId,
+            state.PlannedAmount, state.RawRemainingAmount, state.PurchasePricePerItem,
+            state.WaitDaysAtDestination, state.PendingTravelDays, state.OriginDecisionId);
+
+    private bool TryConvertSelectedState(MerchantTradePlanState state,
+        out DailyV1ItemDefinition selectedItem, out string originId, out string targetId)
+    {
+        selectedItem = null;
+        originId = null;
+        targetId = null;
+        if (selectedOwner == null || state == null || selectedBindings == null
+            || selectedCityResolver == null) return false;
+        if (state.Item != null
+            && (!selectedBindings.TryGet(state.Item, out selectedItem)
+                || selectedItem == null
+                || !selectedOwner.Definitions.Items.TryGetValue(selectedItem.DefinitionId,
+                    out DailyV1ItemDefinition admittedItem)
+                || !ReferenceEquals(admittedItem, selectedItem))) return false;
+        if (state.OriginCity != null)
+        {
+            originId = state.OriginCity.RuntimeId;
+            if (string.IsNullOrWhiteSpace(originId)
+                || !ReferenceEquals(selectedCityResolver(originId), state.OriginCity)) return false;
+        }
+        if (state.TargetCity != null)
+        {
+            targetId = state.TargetCity.RuntimeId;
+            if (string.IsNullOrWhiteSpace(targetId)
+                || !ReferenceEquals(selectedCityResolver(targetId), state.TargetCity)) return false;
+        }
+        return true;
+    }
+
+    private ItemData ResolveSelectedItem()
+    {
+        if (selectedOwner?.ItemDefinition == null || selectedBindings == null
+            || !selectedBindings.TryGetAsset(selectedOwner.ItemDefinition, out ItemData selectedItem))
+            return null;
+        return selectedItem;
+    }
+
+    private CityRuntime ResolveSelectedCity(string runtimeId)
+    {
+        if (runtimeId == null) return null;
+        CityRuntime city = selectedCityResolver?.Invoke(runtimeId);
+        return city != null && string.Equals(city.RuntimeId, runtimeId, StringComparison.Ordinal)
+            ? city : null;
+    }
+
+    private bool CanProjectSelectedOwner()
+    {
+        if (selectedOwner == null || selectedBindings == null || selectedCityResolver == null)
+            return false;
+        if (selectedOwner.ItemDefinition != null && ResolveSelectedItem() == null) return false;
+        return (selectedOwner.OriginCityRuntimeId == null || ResolveSelectedCity(selectedOwner.OriginCityRuntimeId) != null)
+            && (selectedOwner.TargetCityRuntimeId == null || ResolveSelectedCity(selectedOwner.TargetCityRuntimeId) != null);
+    }
+
+    private MerchantTradePlanState CaptureSelectedOwnerState()
+    {
+        if (!CanProjectSelectedOwner())
+            throw new InvalidOperationException("The selected merchant-plan owner has no exact Unity projection.");
+        return new MerchantTradePlanState(ResolveSelectedItem(),
+            ResolveSelectedCity(selectedOwner.OriginCityRuntimeId),
+            ResolveSelectedCity(selectedOwner.TargetCityRuntimeId),
+            selectedOwner.PlannedAmount, selectedOwner.RawRemainingAmount,
+            selectedOwner.PurchasePricePerItem, selectedOwner.WaitDaysAtDestination,
+            selectedOwner.PendingTravelDays, selectedOwner.OriginDecisionId);
     }
 
     /// <summary>Creates an unpublished exact plan without replaying trade-plan mutations.</summary>
@@ -536,14 +1087,14 @@ public class MerchantTradePlanRuntime
 
     public void Set(ItemData item, CityRuntime originCity, CityRuntime targetCity, int plannedAmount, float purchasePricePerItem, string originDecisionId = null)
     {
-        int normalizedAmount = Mathf.Max(0, plannedAmount);
+        int normalizedAmount = UnityMathfCompatibility.Max(0, plannedAmount);
         InstallOwnerState(new MerchantTradePlanState(
             item,
             originCity,
             targetCity,
             normalizedAmount,
             normalizedAmount,
-            Mathf.Max(0f, purchasePricePerItem),
+            UnityMathfCompatibility.Max(0f, purchasePricePerItem),
             0,
             0,
             string.IsNullOrWhiteSpace(originDecisionId) == true ? null : originDecisionId));
@@ -551,36 +1102,36 @@ public class MerchantTradePlanRuntime
 
     public void RedirectTo(CityRuntime targetCity, string originDecisionId = null)
     {
-        int nextWaitDays = this.targetCity != targetCity ? 0 : waitDaysAtDestination;
+        int nextWaitDays = TargetCity != targetCity ? 0 : WaitDaysAtDestination;
         string nextDecisionId = string.IsNullOrWhiteSpace(originDecisionId) == false
             ? originDecisionId
-            : this.originDecisionId;
+            : OriginDecisionId;
         InstallOwnerState(new MerchantTradePlanState(
-            item, originCity, targetCity, plannedAmount, remainingAmount,
-            purchasePricePerItem, nextWaitDays, pendingTravelDays, nextDecisionId));
+            Item, OriginCity, targetCity, PlannedAmount, RemainingAmount,
+            PurchasePricePerItem, nextWaitDays, PendingTravelDays, nextDecisionId));
     }
 
     public void IncrementWaitDayAtDestination()
     {
         InstallOwnerState(new MerchantTradePlanState(
-            item, originCity, targetCity, plannedAmount, remainingAmount,
-            purchasePricePerItem, waitDaysAtDestination + 1, pendingTravelDays,
-            originDecisionId));
+            Item, OriginCity, TargetCity, PlannedAmount, RemainingAmount,
+            PurchasePricePerItem, WaitDaysAtDestination + 1, PendingTravelDays,
+            OriginDecisionId));
     }
 
     public void ResetWaitDaysAtDestination()
     {
         InstallOwnerState(new MerchantTradePlanState(
-            item, originCity, targetCity, plannedAmount, remainingAmount,
-            purchasePricePerItem, 0, pendingTravelDays, originDecisionId));
+            Item, OriginCity, TargetCity, PlannedAmount, RemainingAmount,
+            PurchasePricePerItem, 0, PendingTravelDays, OriginDecisionId));
     }
 
     public void IncrementPendingTravelDay()
     {
         InstallOwnerState(new MerchantTradePlanState(
-            item, originCity, targetCity, plannedAmount, remainingAmount,
-            purchasePricePerItem, waitDaysAtDestination, pendingTravelDays + 1,
-            originDecisionId));
+            Item, OriginCity, TargetCity, PlannedAmount, RemainingAmount,
+            PurchasePricePerItem, WaitDaysAtDestination, PendingTravelDays + 1,
+            OriginDecisionId));
     }
 
     public bool RegisterSale(int amountSold)
@@ -590,15 +1141,26 @@ public class MerchantTradePlanRuntime
             return false;
         }
 
-        int nextRemainingAmount = Mathf.Max(0, RemainingAmount - amountSold);
+        if (selectedOwner != null)
+        {
+            return selectedOwner.TryRegisterSale(
+                amountSold, CanCommitP12Mutation, NotifyP12MutationCommitted,
+                out bool selectedCompleted) && selectedCompleted;
+        }
+
+        int nextRemainingAmount = UnityMathfCompatibility.Max(0, RemainingAmount - amountSold);
         bool completed = nextRemainingAmount <= 0;
         MerchantTradePlanState next = completed
             ? new MerchantTradePlanState(null, null, null, 0, 0, 0f, 0, 0, null)
-            : new MerchantTradePlanState(item, originCity, targetCity,
-                plannedAmount, nextRemainingAmount, purchasePricePerItem, 0,
-                pendingTravelDays, originDecisionId);
+            : new MerchantTradePlanState(Item, OriginCity, TargetCity,
+                PlannedAmount, nextRemainingAmount, PurchasePricePerItem, 0,
+                PendingTravelDays, OriginDecisionId);
         return InstallOwnerState(next) && completed;
     }
+
+    internal bool CanAdmitSelectedPlanOwnerMutation() => CanCommitP12Mutation();
+
+    internal void PublishSelectedPlanOwnerMutation() => NotifyP12MutationCommitted();
 
     public void Clear()
     {

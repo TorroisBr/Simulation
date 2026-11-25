@@ -47,6 +47,9 @@ public sealed class SettlementPopulationRuntime
         catch { return false; }
     }
 
+    internal bool CanCommitP12AggregateMutation() =>
+        CanCommitP12PopulationMutation(aggregateChanged: true, receiptChanged: false);
+
     private void NotifyP12PopulationMutationCommitted(bool aggregateChanged, bool receiptChanged)
     {
         if (p12PopulationMutationCommitted == null) return;
@@ -85,6 +88,27 @@ public sealed class SettlementPopulationRuntime
             currentPopulation = population;
             revision = expectedRevision;
         }
+    }
+
+    internal bool CanRollbackSelectedDeathTransition(SettlementPopulationTransition transition)
+    {
+        if (transition == null
+            || !string.Equals(SettlementRuntimeId, transition.SettlementRuntimeId, StringComparison.Ordinal)
+            || transition.ExpectedRevision < 0L
+            || transition.ExpectedRevision == long.MaxValue)
+            return false;
+
+        bool unchanged = revision == transition.ExpectedRevision
+            && currentPopulation == transition.PopulationBefore;
+        bool applied = revision == transition.ExpectedRevision + 1L
+            && currentPopulation == transition.PopulationAfter;
+        return unchanged || applied;
+    }
+
+    internal void RollbackSelectedDeathTransition(SettlementPopulationTransition transition)
+    {
+        currentPopulation = transition.PopulationBefore;
+        revision = transition.ExpectedRevision;
     }
 
     internal void GetOperationReceiptCensus(out int cardinality, out long receiptRevision)
@@ -261,6 +285,37 @@ public sealed class SettlementPopulationRuntime
         return TryApplyTransitionCore(transition, out failure);
     }
 
+    internal bool TryApplyTransitionWithResidenceCommit(
+        SettlementPopulationTransition transition,
+        Func<bool> commitResidenceOwner,
+        out PopulationTransitionFailure failure)
+    {
+        failure = PopulationTransitionFailure.None;
+        if (!CanApplyTransition(transition, out failure))
+            return false;
+        if (commitResidenceOwner == null
+            || !CanCommitP12PopulationMutation(true, false))
+        {
+            failure = PopulationTransitionFailure.RuntimeFaulted;
+            return false;
+        }
+
+        bool residenceCommitted;
+        try { residenceCommitted = commitResidenceOwner(); }
+        catch { residenceCommitted = false; }
+        if (!residenceCommitted)
+        {
+            failure = PopulationTransitionFailure.RuntimeFaulted;
+            return false;
+        }
+
+        // The residence callback is the final failure-capable owner write.
+        // City state is assigned only after it succeeds.
+        currentPopulation = transition.PopulationAfter;
+        revision++;
+        NotifyP12PopulationMutationCommitted(true, false);
+        return true;
+    }
     internal bool TryApplyTransitionWithReceipt(
         string operationIdentity,
         string operationFingerprint,
@@ -436,6 +491,27 @@ public sealed class SettlementPopulationRuntime
         int destinationPopulationBefore,
         out PopulationTransitionFailure failure)
     {
+        return TryApplyPairedMigrationWithResidenceCommit(
+            origin,
+            destination,
+            originExpectedRevision,
+            destinationExpectedRevision,
+            originPopulationBefore,
+            destinationPopulationBefore,
+            null,
+            out failure);
+    }
+
+    internal static bool TryApplyPairedMigrationWithResidenceCommit(
+        SettlementPopulationRuntime origin,
+        SettlementPopulationRuntime destination,
+        long originExpectedRevision,
+        long destinationExpectedRevision,
+        int originPopulationBefore,
+        int destinationPopulationBefore,
+        Func<bool> commitResidenceOwner,
+        out PopulationTransitionFailure failure)
+    {
         failure = PopulationTransitionFailure.None;
 
         if (!originCanApply(origin, destination, out failure))
@@ -504,6 +580,22 @@ public sealed class SettlementPopulationRuntime
         {
             failure = PopulationTransitionFailure.RuntimeFaulted;
             return false;
+        }
+
+        // The residence owner is the third participant in a selected migration.
+        // Commit it only after both aggregate owners have completed all preflight,
+        // immediately before these paired writes, so no later validation can leave
+        // a partially applied migration.
+        if (commitResidenceOwner != null)
+        {
+            bool residenceCommitted;
+            try { residenceCommitted = commitResidenceOwner(); }
+            catch { residenceCommitted = false; }
+            if (!residenceCommitted)
+            {
+                failure = PopulationTransitionFailure.RuntimeFaulted;
+                return false;
+            }
         }
 
         // This boundary computes the only valid migration delta and commits both sides

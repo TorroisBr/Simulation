@@ -36,7 +36,9 @@ public sealed class SpatialNetworkCensusTests
         {
             OwnerSectionCensusWitness witness = provider.GetCurrentCensus();
             Assert.That(witness.SchemaVersion, Is.EqualTo(SpatialNetworkCensusProvider.SchemaVersion));
-            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(owner));
+            Assert.That(witness.OwnerInstanceIdentity, Is.SameAs(owner.SelectedOwner));
+            Assert.That(witness.OwnerInstanceIdentity, Is.Not.SameAs(owner),
+                "The passive census identifies the selected Core authority, not its Unity projection.");
             Assert.That(witness.Cardinality, Is.Zero);
             Assert.That(witness.Revision, Is.Zero);
         }
@@ -131,8 +133,7 @@ public sealed class SpatialNetworkCensusTests
         Assert.That(identityLocationsAfter.Revision, Is.EqualTo(identityLocationsBefore.Revision));
 
         RuntimeIdentityRegistry saturatedRegistry = new RuntimeIdentityRegistry();
-        typeof(RuntimeIdentityRegistry).GetField("censusRevision", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(saturatedRegistry, long.MaxValue);
+        SetCoreIdentityRevision(saturatedRegistry, long.MaxValue);
         SpatialNetworkRuntime saturatedOwner = new SpatialNetworkRuntime(saturatedRegistry);
         LogAssert.Expect(LogType.Error, "Cannot register Location runtime identity: census revision is exhausted.");
         Assert.That(saturatedOwner.RegisterLocation(new SpatialLocationRuntime("saturated-location")), Is.False);
@@ -186,13 +187,34 @@ public sealed class SpatialNetworkCensusTests
     {
         RuntimeIdentityRegistry registry = new RuntimeIdentityRegistry();
         SpatialNetworkRuntime owner = new SpatialNetworkRuntime(registry);
-        typeof(SpatialNetworkRuntime).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(owner, long.MaxValue);
+        SpatialLocationRuntime existingLocation = new SpatialLocationRuntime("existing-location");
+        SpatialLocationRuntime destination = new SpatialLocationRuntime("destination-location");
+        Assert.That(owner.RegisterLocation(existingLocation), Is.True);
+        Assert.That(owner.RegisterLocation(destination), Is.True);
+        SpatialRouteRuntime existingRoute = new SpatialRouteRuntime("existing-route", existingLocation, destination, 1);
+        Assert.That(owner.RegisterRoute(existingRoute), Is.True);
+        FieldInfo ownerField = typeof(SpatialNetworkRuntime).GetField("owner", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(ownerField, Is.Not.Null);
+        object spatialOwner = ownerField.GetValue(owner);
+        FieldInfo revisionField = typeof(SpatialNetworkOwner).GetField("revision", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(revisionField, Is.Not.Null);
+        revisionField.SetValue(spatialOwner, long.MaxValue);
 
         LogAssert.Expect(LogType.Error, "Cannot register spatial location: spatial network census revision is exhausted.");
+        Assert.That(owner.RegisterLocation(new SpatialLocationRuntime("existing-location")), Is.False);
+        LogAssert.Expect(LogType.Error, "Cannot register spatial location: spatial network census revision is exhausted.");
         Assert.That(owner.RegisterLocation(new SpatialLocationRuntime("saturated-location")), Is.False);
-        Assert.That(owner.LocationCount, Is.Zero);
+        LogAssert.Expect(LogType.Error, "Cannot register spatial route: spatial network census revision is exhausted.");
+        Assert.That(owner.RegisterRoute(new SpatialRouteRuntime("existing-route", existingLocation, destination, 1)), Is.False);
+        LogAssert.Expect(LogType.Error, "Cannot register spatial route: spatial network census revision is exhausted.");
+        Assert.That(owner.RegisterRoute(new SpatialRouteRuntime("saturated-route", existingLocation, destination, 1)), Is.False);
+        Assert.That(owner.LocationCount, Is.EqualTo(2));
+        Assert.That(owner.RouteCount, Is.EqualTo(1));
         Assert.That(owner.Revision, Is.EqualTo(long.MaxValue));
+        Assert.That(owner.TryGetLocation("existing-location", out SpatialLocationRuntime foundLocation), Is.True);
+        Assert.That(foundLocation, Is.SameAs(existingLocation));
+        Assert.That(owner.TryGetRoute("existing-route", out SpatialRouteRuntime foundRoute), Is.True);
+        Assert.That(foundRoute, Is.SameAs(existingRoute));
         Assert.That(owner.TryGetLocation("saturated-location", out _), Is.False);
     }
 
@@ -272,9 +294,10 @@ public sealed class SpatialNetworkCensusTests
         Assert.That(snapshot.Routes[1].DestinationLocationRuntimeId, Is.EqualTo("legacy-destination"));
         Assert.That(snapshot.Routes[1].TravelDays, Is.EqualTo(9));
 
+        RuntimeIdentityRegistry restoredRegistry = new RuntimeIdentityRegistry();
         Assert.That(SpatialNetworkRuntime.TryCreateFromOwnerSnapshot(
             snapshot,
-            new RuntimeIdentityRegistry(),
+            restoredRegistry,
             out SpatialNetworkRuntime restored,
             out SpatialNetworkSnapshotFailure failure), Is.True, failure.Message);
         Assert.That(failure.Code, Is.EqualTo(SpatialNetworkSnapshotFailureCode.None));
@@ -290,6 +313,13 @@ public sealed class SpatialNetworkCensusTests
             ).Select(route => route.RuntimeId), Is.EqualTo(new[] { "legacy-route-first", "legacy-route-parallel" }));
         Assert.That(restored.Routes[0].TravelDays, Is.EqualTo(4));
         Assert.That(restored.Routes[1].TravelDays, Is.EqualTo(9));
+        Assert.That(restoredRegistry.TryGetLocation("legacy-origin",
+            out SpatialLocationRuntime registeredOrigin), Is.True);
+        Assert.That(restored.Locations.Single(location => location.RuntimeId == "legacy-origin"),
+            Is.SameAs(registeredOrigin));
+        Assert.That(restoredRegistry.TryGetRoute("legacy-route-first",
+            out SpatialRouteRuntime registeredRoute), Is.True);
+        Assert.That(restored.Routes[0], Is.SameAs(registeredRoute));
     }
 
     [Test]
@@ -452,8 +482,7 @@ public sealed class SpatialNetworkCensusTests
         Assert.That(existing.LocationCount, Is.EqualTo(1));
 
         RuntimeIdentityRegistry saturated = new RuntimeIdentityRegistry();
-        typeof(RuntimeIdentityRegistry).GetField("censusRevision", BindingFlags.Instance | BindingFlags.NonPublic)
-            .SetValue(saturated, long.MaxValue);
+        SetCoreIdentityRevision(saturated, long.MaxValue);
         SpatialNetworkOwnerSnapshot capacity = new SpatialNetworkOwnerSnapshot(
             SpatialNetworkOwnerSnapshot.CurrentSchemaVersion,
             1,
@@ -475,5 +504,18 @@ public sealed class SpatialNetworkCensusTests
         string sectionId)
     {
         return providers.Single(provider => provider.GetCurrentCensus().SectionId == sectionId).GetCurrentCensus();
+    }
+
+    private static void SetCoreIdentityRevision(RuntimeIdentityRegistry registry, long revision)
+    {
+        FieldInfo indexField = typeof(RuntimeIdentityRegistry)
+            .GetField("identityIndex", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(indexField, Is.Not.Null);
+        object coreIdentityIndex = indexField.GetValue(registry);
+        Assert.That(coreIdentityIndex, Is.Not.Null);
+        FieldInfo revisionField = coreIdentityIndex.GetType()
+            .GetField("censusRevision", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(revisionField, Is.Not.Null);
+        revisionField.SetValue(coreIdentityIndex, revision);
     }
 }

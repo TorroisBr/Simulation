@@ -74,7 +74,7 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
         this.localTopologyKnowledgeSystem = new LocalTopologyKnowledgeSystem();
         this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
         this.domainEventRecorder = domainEventRecorder;
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
         this.placeContentStore = placeContentStore;
         this.localTopologyStore = localTopologyStore;
     }
@@ -1116,7 +1116,7 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
     {
         return mutationGuardBinding.CanBindTo(guard)
             && (worldRuntime == null || ReferenceEquals(worldRuntime.MutationGuard, guard))
-            && simulationTime.CanBindMutationGuard(guard)
+            && SimulationTimeOwnerBridge.CanBindMutationStatus(simulationTime, guard)
             && CanBindNested(expeditionStore, guard)
             && CanBindNested(explorableSiteStore, guard)
             && CanBindNested(travelPartySystem, guard)
@@ -1133,7 +1133,7 @@ public sealed class ExpeditionSystem : IAuthoritativeMutationGuardBindable
             return false;
         }
 
-        return simulationTime.TryBindMutationGuard(guard)
+        return SimulationTimeOwnerBridge.TryBindMutationStatus(simulationTime, guard)
             && TryBindNested(expeditionStore, guard)
             && TryBindNested(explorableSiteStore, guard)
             && TryBindNested(travelPartySystem, guard)

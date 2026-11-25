@@ -192,7 +192,7 @@ public sealed class AdventureExpeditionAutonomySystem : IAuthoritativeMutationGu
     internal bool CanBindMutationGuard(AuthoritativeMutationGuard guard)
     {
         return mutationGuardBinding.CanBindTo(guard)
-            && simulationTime.CanBindMutationGuard(guard)
+            && SimulationTimeOwnerBridge.CanBindMutationStatus(simulationTime, guard)
             && CanBindNested(expeditionSystem, guard)
             && CanBindNested(siteStore, guard)
             && CanBindNested(topologyStore, guard)
@@ -206,7 +206,7 @@ public sealed class AdventureExpeditionAutonomySystem : IAuthoritativeMutationGu
             return false;
         }
 
-        return simulationTime.TryBindMutationGuard(guard)
+        return SimulationTimeOwnerBridge.TryBindMutationStatus(simulationTime, guard)
             && TryBindNested(expeditionSystem, guard)
             && TryBindNested(siteStore, guard)
             && TryBindNested(topologyStore, guard)

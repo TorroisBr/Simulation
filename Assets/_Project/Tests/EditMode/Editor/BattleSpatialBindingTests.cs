@@ -32,7 +32,8 @@ public sealed class BattleSpatialBindingTests
         PersistentConflictStore conflicts = new PersistentConflictStore(forces);
         PersistentWarStore wars = new PersistentWarStore(forces, conflicts);
         SpatialAuthorityStore authority = CreateSubLocationWorld(out LocalTopologyStore topologyStore, out SpatialReference subLocation);
-        PersistentBattleStore battles = new PersistentBattleStore(forces, conflicts, wars, authority, topologyStore);
+        PersistentBattleStore battles = new PersistentBattleStore(forces, conflicts, wars, authority,
+            new LocalTopologyArmedForceSubLocationResolver(topologyStore));
 
         Assert.That(battles.TryRegister(CreateBattle(new BattleId("battle-hex"), SpatialReference.ForHex(new HexId("hex-main"))), out _), Is.True);
         Assert.That(battles.TryRegister(CreateBattle(new BattleId("battle-location"), SpatialReference.ForLocation(new LocationId("location-main"))), out _), Is.True);

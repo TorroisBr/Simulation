@@ -29,7 +29,8 @@ public sealed class SimulationBootstrapComposition
         RuntimeIdAllocator runtimeIdAllocator,
         ExplorableSiteStore sites,
         ExpeditionStore expeditions,
-        ExpeditionSystem expeditionSystem)
+        ExpeditionSystem expeditionSystem,
+        DailyV1EffectiveDefinitions selectedDefinitions = null)
     {
         WorldId = worldId ?? throw new ArgumentNullException(nameof(worldId));
         if (runtime == null)
@@ -43,6 +44,16 @@ public sealed class SimulationBootstrapComposition
             throw new ArgumentException("Bootstrap expedition owner and system must share the installed ExpeditionStore.");
 
         Manifest = manifest;
+        SelectedDefinitions = selectedDefinitions;
+        if (runtime.RequiresSelectedDailyV1DefinitionBindings
+            && (selectedDefinitions == null
+                || !HasExactSelectedRuntimeDefinitionBindings(selectedDefinitions, runtime)))
+        {
+            runtime.FaultRuntimeAdmission();
+            throw new ArgumentException(
+                "Every selected Daily-v1 City and NPC runtime must retain the exact typed graph node admitted for its authoring object.",
+                nameof(selectedDefinitions));
+        }
         SimulationTime = time;
         Calendar = calendar;
         RuntimeIdAllocator = runtimeIdAllocator ?? throw new ArgumentNullException(nameof(runtimeIdAllocator));
@@ -147,11 +158,41 @@ public sealed class SimulationBootstrapComposition
         ExpeditionCensusProvider = new ExpeditionCensusProvider(expeditions);
     }
 
+    private static bool HasExactSelectedRuntimeDefinitionBindings(
+        DailyV1EffectiveDefinitions definitions,
+        SimulationRuntime runtime)
+    {
+        if (definitions == null || runtime == null || runtime.Cities == null || runtime.NpcRuntimes == null)
+            return false;
+        foreach (CityRuntime city in runtime.Cities)
+        {
+            if (city == null || city.SelectedDailyV1Definition == null
+                || !ReferenceEquals(city.SelectedDailyV1DefinitionGraph, definitions)
+                || !definitions.Cities.TryGetValue(city.DefinitionId, out DailyV1CityDefinition node)
+                || !ReferenceEquals(node, city.SelectedDailyV1Definition))
+                return false;
+        }
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            if (npc == null || npc.SelectedDailyV1Definition == null
+                || !ReferenceEquals(npc.SelectedDailyV1DefinitionGraph, definitions)
+                || !definitions.Npcs.TryGetValue(npc.DefinitionId, out DailyV1NpcDefinition node)
+                || !ReferenceEquals(node, npc.SelectedDailyV1Definition))
+                return false;
+        }
+        if ((runtime.Cities.Count > 0 || runtime.NpcRuntimes.Count > 0)
+            && !runtime.HasExactSelectedRuntimeOwnerGraph(definitions))
+            return false;
+        return true;
+    }
+
     public string ProfileContractIdentity => Manifest.ContractIdentity;
     public string ProfileFingerprint => Manifest.Fingerprint;
     /// <summary>The stable identity allocated for this composed world continuation.</summary>
     public WorldId WorldId { get; }
     public SimulationGenesisManifest Manifest { get; }
+    /// <summary>Canonical immutable definition nodes used by this composed runtime, when available.</summary>
+    public DailyV1EffectiveDefinitions SelectedDefinitions { get; }
     public SimulationTime SimulationTime { get; }
     public CalendarDefinition Calendar { get; }
     internal RuntimeIdAllocator RuntimeIdAllocator { get; }

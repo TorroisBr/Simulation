@@ -235,16 +235,10 @@ public sealed class IdentitySequenceSnapshotTests
         out RuntimeIdAllocator allocator,
         out string diagnostic)
     {
-        MethodInfo factory = typeof(RuntimeIdAllocator).GetMethod(
-            "TryCreateStagedFromSnapshot",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        Assert.That(factory, Is.Not.Null);
-
-        object[] arguments = { snapshot, null, null };
-        bool result = (bool)factory.Invoke(null, arguments);
-        allocator = arguments[1] as RuntimeIdAllocator;
-        diagnostic = arguments[2] as string;
-        return result;
+        return RuntimeIdAllocatorOwnerBridge.TryCreateStagedFromSnapshot(
+            snapshot,
+            out allocator,
+            out diagnostic);
     }
 
     private static SimulationRecordSequence TryRestore(SimulationRecordSequenceSnapshot snapshot)
@@ -258,15 +252,9 @@ public sealed class IdentitySequenceSnapshotTests
         out SimulationRecordSequence sequence,
         out string diagnostic)
     {
-        MethodInfo factory = typeof(SimulationRecordSequence).GetMethod(
-            "TryCreateStagedFromSnapshot",
-            BindingFlags.Static | BindingFlags.NonPublic);
-        Assert.That(factory, Is.Not.Null);
-
-        object[] arguments = { snapshot, null, null };
-        bool result = (bool)factory.Invoke(null, arguments);
-        sequence = arguments[1] as SimulationRecordSequence;
-        diagnostic = arguments[2] as string;
-        return result;
+        return SimulationRecordSequenceOwnerBridge.TryCreateStagedFromSnapshot(
+            snapshot,
+            out sequence,
+            out diagnostic);
     }
 }

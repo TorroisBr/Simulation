@@ -4,7 +4,7 @@ using System.Collections.Generic;
 /// <summary>Bounded P10-A profile adapter for the first authored Ruin layout.</summary>
 public static class P10RuinLocalTopologyGenesis
 {
-    public const string StageId = "p10.genesis.ruin-local-topology/v1";
+    public const string StageId = P12CP9GenesisContract.P10LocalTopologyStageId;
     public const string ContractIdentity = "unity-authored-bootstrap/p10-ruin-local-topology-v1";
     public const int ContractSchemaVersion = 3;
     public const string CandidateOutputSchema = "P10LocalTopologyCandidate/v1";
@@ -40,16 +40,19 @@ public static class P10RuinLocalTopologyGenesis
 
     public static P10RuinLocalTopologyCandidate CreateCandidate(
         SimulationConfigData config,
-        SpatialAuthorityStore spatialAuthority)
+        SpatialAuthorityStore spatialAuthority,
+        DailyV1EffectiveDefinitions selectedDefinitions)
     {
         if (config == null) throw new ArgumentNullException(nameof(config));
         if (spatialAuthority == null) throw new ArgumentNullException(nameof(spatialAuthority));
         if (!config.useAuthoredGeographyProfile)
             throw new InvalidOperationException("P10 Ruin composition requires the selected P9-B geography profile.");
-        ExplorableSiteData ruinDefinition = config.authoredP10RuinSite;
-        if (ruinDefinition == null
+        ExplorableSiteData authoredRuin = config.authoredP10RuinSite;
+        if (authoredRuin == null || selectedDefinitions == null
+            || !selectedDefinitions.ExplorableSites.TryGetValue(authoredRuin.DefinitionId,
+                out DailyV1ExplorableSiteDefinition ruinDefinition)
             || string.IsNullOrWhiteSpace(ruinDefinition.DefinitionId)
-            || ruinDefinition.kind != ExplorableSiteKind.Ruin)
+            || ruinDefinition.Kind.Value != (int)ExplorableSiteKind.Ruin)
             throw new InvalidOperationException("P10 requires one authored Ruin definition with a stable DefinitionId.");
         foreach (ExplorableSiteConfig existingSite in config.ExplorableSites)
             if (existingSite?.site != null
@@ -70,6 +73,14 @@ public static class P10RuinLocalTopologyGenesis
         return new P10RuinLocalTopologyCandidate(ruinDefinition, selectedLocation, selectedAnchor, PlaceInputs, ConnectionInputs);
     }
 
+    public static P10RuinLocalTopologyCandidate CreateCandidate(
+        SimulationConfigData config,
+        SpatialAuthorityStore spatialAuthority)
+    {
+        return CreateCandidate(config, spatialAuthority,
+            config == null ? null : SimulationGenesisPipeline.CreateSelectedDefinitions(config));
+    }
+
     public static bool TryCompose(
         P10RuinLocalTopologyCandidate candidate,
         RuntimeIdAllocator idAllocator,
@@ -83,14 +94,54 @@ public static class P10RuinLocalTopologyGenesis
         out LegacySpatialAnchorBindingStore legacyAnchorBindings,
         out string diagnostic)
     {
+        legacyAnchorBindings = siteStore == null || spatialAuthority == null
+            ? null
+            : new LegacySpatialAnchorBindingStore(
+                spatialAuthority,
+                owner => owner != null
+                    && owner.Kind == SpatialAnchorOwnerKind.ExplorableSite
+                    && siteStore.TryGetByRuntimeId(owner.Value, out _));
+        return TryCompose(
+            candidate,
+            idAllocator,
+            identityRegistry,
+            spatialNetwork,
+            siteStore,
+            spatialAuthority,
+            localTopologyStore,
+            legacyAnchorBindings,
+            out siteRuntime,
+            out topology,
+            out diagnostic);
+    }
+
+    /// <summary>
+    /// Composes the bounded P10 Ruin into the exact P8 anchor owner already
+    /// selected by the host/Core graph, keeping all anchor facts under one
+    /// authoritative owner.
+    /// </summary>
+    public static bool TryCompose(
+        P10RuinLocalTopologyCandidate candidate,
+        RuntimeIdAllocator idAllocator,
+        RuntimeIdentityRegistry identityRegistry,
+        SpatialNetworkRuntime spatialNetwork,
+        ExplorableSiteStore siteStore,
+        SpatialAuthorityStore spatialAuthority,
+        LocalTopologyStore localTopologyStore,
+        LegacySpatialAnchorBindingStore legacyAnchorBindings,
+        out ExplorableSiteRuntime siteRuntime,
+        out LocalTopologyRuntime topology,
+        out string diagnostic)
+    {
         siteRuntime = null;
         topology = null;
-        legacyAnchorBindings = null;
         diagnostic = null;
         if (candidate == null || idAllocator == null || identityRegistry == null || spatialNetwork == null
-            || siteStore == null || spatialAuthority == null || localTopologyStore == null)
+            || siteStore == null || spatialAuthority == null || localTopologyStore == null
+            || legacyAnchorBindings == null
+            || !ReferenceEquals(legacyAnchorBindings.SpatialLocationLookup, spatialAuthority))
         {
-            diagnostic = "P10 composition requires the complete P9/P8 genesis authorities and runtime identity services.";
+            diagnostic = "P10 composition requires the complete P9/P8 genesis authorities, exact anchor owner, and runtime identity services.";
             return false;
         }
         if (!spatialAuthority.TryGet(candidate.Location.Id, out LocationRecord selectedLocation)
@@ -101,7 +152,7 @@ public static class P10RuinLocalTopologyGenesis
             return false;
         }
         foreach (ExplorableSiteRuntime existing in siteStore.Sites)
-            if (existing != null && (existing.Definition.kind == ExplorableSiteKind.Ruin
+            if (existing != null && (existing.Definition.Kind.Value == (int)ExplorableSiteKind.Ruin
                 || string.Equals(existing.DefinitionId, candidate.SiteDefinition.DefinitionId, StringComparison.Ordinal)))
             {
                 diagnostic = "P10 Ruin cardinality or DefinitionId conflicts with a composed ExplorableSite.";
@@ -128,11 +179,6 @@ public static class P10RuinLocalTopologyGenesis
             return false;
         }
 
-        legacyAnchorBindings = new LegacySpatialAnchorBindingStore(
-            spatialAuthority,
-            owner => owner != null
-                && owner.Kind == SpatialAnchorOwnerKind.ExplorableSite
-                && siteStore.TryGetByRuntimeId(owner.Value, out _));
         if (!legacyAnchorBindings.TryBindSite(pendingSite.RuntimeId, candidate.Location.Id, out SpatialAnchorBindingFailure anchorFailure))
         {
             diagnostic = "P10 Ruin P8 anchor binding failed: " + anchorFailure;
@@ -225,14 +271,14 @@ public static class P10RuinLocalTopologyGenesis
 }
 public sealed class P10RuinLocalTopologyCandidate
 {
-    public ExplorableSiteData SiteDefinition { get; }
+    public DailyV1ExplorableSiteDefinition SiteDefinition { get; }
     public LocationRecord Location { get; }
     public HexRecord Anchor { get; }
     public IReadOnlyList<P10LocalPlaceInput> Places { get; }
     public IReadOnlyList<P10LocalConnectionInput> Connections { get; }
 
     internal P10RuinLocalTopologyCandidate(
-        ExplorableSiteData siteDefinition,
+        DailyV1ExplorableSiteDefinition siteDefinition,
         LocationRecord location,
         HexRecord anchor,
         IEnumerable<P10LocalPlaceInput> places,

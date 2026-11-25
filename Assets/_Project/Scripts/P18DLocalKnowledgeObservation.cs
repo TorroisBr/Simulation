@@ -175,8 +175,9 @@ public sealed class NpcLocalKnowledgeObservationRuntime
     [UnityEngine.SerializeField] private long revision;
     [UnityEngine.SerializeField] private List<NpcLocalKnowledgeObservationReceipt> receipts =
         new List<NpcLocalKnowledgeObservationReceipt>();
+    [NonSerialized] private DailyV1NpcLocalObservationReceiptOwner selectedCoreOwner;
 
-    public long Revision => revision;
+    public long Revision => selectedCoreOwner != null ? selectedCoreOwner.Revision : revision;
     private List<NpcLocalKnowledgeObservationReceipt> ReceiptList =>
         receipts ?? (receipts = new List<NpcLocalKnowledgeObservationReceipt>());
 
@@ -189,9 +190,27 @@ public sealed class NpcLocalKnowledgeObservationRuntime
     {
         cardinality = 0;
         ownerRevision = 0L;
+        if (selectedCoreOwner != null)
+            return selectedCoreOwner.TryReadP12ReceiptCensus(out cardinality, out ownerRevision);
         if (receipts == null || revision < 0L) return false;
         cardinality = receipts.Count;
         ownerRevision = revision;
+        return true;
+    }
+
+    internal bool CanBindSelectedOwner(DailyV1NpcLocalObservationReceiptOwner owner)
+    {
+        if (owner == null || receipts == null || revision < 0L) return false;
+        if (ReferenceEquals(selectedCoreOwner, owner)) return true;
+        return receipts.Count == 0 && revision == 0L
+            && owner.IsExactEmpty
+            && (selectedCoreOwner == null || selectedCoreOwner.IsExactEmpty);
+    }
+
+    internal bool TryBindSelectedOwner(DailyV1NpcLocalObservationReceiptOwner owner)
+    {
+        if (!CanBindSelectedOwner(owner)) return false;
+        selectedCoreOwner = owner;
         return true;
     }
 
@@ -224,14 +243,15 @@ public sealed class NpcLocalKnowledgeObservationRuntime
         if (TryGetReceipt(operationIdentity, out NpcLocalKnowledgeObservationReceipt existing))
         {
             if (existing.DescriptorFingerprint != descriptorFingerprint) return false;
-        prepared = new PreparedNpcLocalKnowledgeObservationCommit(this,
-                actor, existing, null, null, null, null, revision, true,
+            prepared = new PreparedNpcLocalKnowledgeObservationCommit(this,
+                actor, existing, null, null, null, null, Revision, true,
                 merchantKnowledgeEnabled, true, manifest.AbsoluteDay);
             failure = TimelineFailure.None;
             return true;
         }
 
-        if (revision == long.MaxValue || step.OwnerRevision != GetRevisionToken(actor)) return false;
+        long ownerRevision = Revision;
+        if (ownerRevision == long.MaxValue || step.OwnerRevision != GetRevisionToken(actor)) return false;
         if (!TryCapture(actor, manifest.AbsoluteDay, merchantKnowledgeEnabled,
                 true,
                 out NpcLocalKnowledgeObservationSnapshot snapshot)) return false;
@@ -251,10 +271,12 @@ public sealed class NpcLocalKnowledgeObservationRuntime
             commercialInstall.ExpectedRevision, commercialInstall.NextRevision);
         List<NpcLocalKnowledgeObservationReceipt> nextReceipts =
             new List<NpcLocalKnowledgeObservationReceipt>(ReceiptList) { receipt };
+        if (!TryPrepareSelectedCoreInstall(receipt, ownerRevision,
+                out DailyV1NpcLocalObservationReceiptInstall selectedCoreInstall)) return false;
         prepared = new PreparedNpcLocalKnowledgeObservationCommit(this, actor,
             receipt, snapshot, spatialInstall, commercialInstall, nextReceipts,
-            revision, false, merchantKnowledgeEnabled, true,
-            manifest.AbsoluteDay);
+            ownerRevision, false, merchantKnowledgeEnabled, true,
+            manifest.AbsoluteDay, selectedCoreInstall);
         failure = TimelineFailure.None;
         return true;
     }
@@ -300,14 +322,15 @@ public sealed class NpcLocalKnowledgeObservationRuntime
         {
             if (existing.DescriptorFingerprint != descriptorFingerprint) return false;
             prepared = new PreparedNpcLocalKnowledgeObservationCommit(this, actor,
-                existing, null, null, null, null, revision, true,
+                existing, null, null, null, null, Revision, true,
                 true, false,
                 manifest.AbsoluteDay);
             failure = TimelineFailure.None;
             return true;
         }
 
-        if (revision == long.MaxValue
+        long ownerRevision = Revision;
+        if (ownerRevision == long.MaxValue
             || !TryCapture(actor, manifest.AbsoluteDay, true,
                 false,
                 out NpcLocalKnowledgeObservationSnapshot snapshot)
@@ -329,10 +352,12 @@ public sealed class NpcLocalKnowledgeObservationRuntime
             commercialInstall.ExpectedRevision, commercialInstall.NextRevision);
         List<NpcLocalKnowledgeObservationReceipt> nextReceipts =
             new List<NpcLocalKnowledgeObservationReceipt>(ReceiptList) { receipt };
+        if (!TryPrepareSelectedCoreInstall(receipt, ownerRevision,
+                out DailyV1NpcLocalObservationReceiptInstall selectedCoreInstall)) return false;
         prepared = new PreparedNpcLocalKnowledgeObservationCommit(this, actor,
             receipt, snapshot, spatialInstall, commercialInstall, nextReceipts,
-            revision, false, true, false,
-            manifest.AbsoluteDay);
+            ownerRevision, false, true, false,
+            manifest.AbsoluteDay, selectedCoreInstall);
         failure = TimelineFailure.None;
         return true;
     }
@@ -347,6 +372,27 @@ public sealed class NpcLocalKnowledgeObservationRuntime
     {
         receipt = null;
         if (string.IsNullOrWhiteSpace(operationIdentity)) return false;
+        if (selectedCoreOwner != null)
+        {
+            if (!selectedCoreOwner.TryResolve(operationIdentity,
+                    out DailyV1NpcLocalObservationReceiptState coreReceipt)) return false;
+            receipt = new NpcLocalKnowledgeObservationReceipt(
+                coreReceipt.OperationIdentity,
+                coreReceipt.DescriptorFingerprint,
+                coreReceipt.SnapshotFingerprint,
+                coreReceipt.ActorRuntimeId,
+                coreReceipt.PersonId,
+                coreReceipt.AbsoluteDay,
+                coreReceipt.LocationCount,
+                coreReceipt.MarketObservationCount,
+                coreReceipt.LiquidityObserved,
+                null,
+                coreReceipt.SpatialRevisionBefore,
+                coreReceipt.SpatialRevisionAfter,
+                coreReceipt.CommercialRevisionBefore,
+                coreReceipt.CommercialRevisionAfter);
+            return true;
+        }
         foreach (NpcLocalKnowledgeObservationReceipt candidate in ReceiptList)
         {
             if (candidate == null || candidate.OperationIdentity != operationIdentity) continue;
@@ -375,8 +421,8 @@ public sealed class NpcLocalKnowledgeObservationRuntime
         if (commit.IsReplay) return false;
 
         NpcRuntime actor = commit.Actor;
-        if (actor == null || revision != commit.ExpectedOwnerRevision
-            || revision == long.MaxValue
+        if (actor == null || Revision != commit.ExpectedOwnerRevision
+            || Revision == long.MaxValue
             || TryGetReceipt(commit.Receipt.OperationIdentity, out _)
             || actor.RuntimeId != commit.Receipt.ActorRuntimeId
             || (actor.PersonId != null ? actor.PersonId.Value : string.Empty) != commit.Receipt.PersonId
@@ -386,17 +432,53 @@ public sealed class NpcLocalKnowledgeObservationRuntime
                 out NpcLocalKnowledgeObservationSnapshot current)
             || !current.Matches(commit.SourceSnapshot)
             || !commit.SpatialInstall.CanInstall(actor.SpatialKnowledge)
-            || !commit.CommercialInstall.CanInstall(actor.CommercialKnowledge)) return false;
+            || !commit.CommercialInstall.CanInstall(actor.CommercialKnowledge)
+            || (selectedCoreOwner != null
+                && (commit.SelectedCoreInstall == null
+                    || !selectedCoreOwner.CanInstall(commit.SelectedCoreInstall)))
+            || (selectedCoreOwner == null && commit.SelectedCoreInstall != null)) return false;
 
         // Both child installs were prepared and preflighted above. This actor
         // owner installs them together with the receipt under the serialized
         // SimulationRuntime advance window.
         actor.SpatialKnowledge.InstallPrepared(commit.SpatialInstall);
         actor.CommercialKnowledge.InstallPrepared(commit.CommercialInstall);
-        receipts = commit.NextReceipts;
-        revision++;
+        if (selectedCoreOwner != null)
+            selectedCoreOwner.InstallPrepared(commit.SelectedCoreInstall);
+        else
+        {
+            receipts = commit.NextReceipts;
+            revision++;
+        }
         failure = TimelineFailure.None;
         return true;
+    }
+
+    private bool TryPrepareSelectedCoreInstall(
+        NpcLocalKnowledgeObservationReceipt receipt,
+        long expectedRevision,
+        out DailyV1NpcLocalObservationReceiptInstall install)
+    {
+        install = null;
+        if (selectedCoreOwner == null) return true;
+        DailyV1NpcLocalObservationReceiptState state =
+            new DailyV1NpcLocalObservationReceiptState(
+                receipt.OperationIdentity,
+                receipt.DescriptorFingerprint,
+                receipt.SnapshotFingerprint,
+                receipt.ActorRuntimeId,
+                receipt.PersonId,
+                receipt.AbsoluteDay,
+                receipt.LocationCount,
+                receipt.MarketObservationCount,
+                receipt.LiquidityObserved,
+                receipt.SpatialRevisionBefore,
+                receipt.SpatialRevisionAfter,
+                receipt.CommercialRevisionBefore,
+                receipt.CommercialRevisionAfter,
+                expectedRevision,
+                expectedRevision + 1L);
+        return selectedCoreOwner.TryPrepareInstall(expectedRevision, state, out install);
     }
 
     private static string CreateOperationIdentity(BoundaryContinuationManifest manifest,
@@ -432,8 +514,7 @@ public sealed class NpcLocalKnowledgeObservationRuntime
         bool marketEligible = actor.IsAlive && !actor.IsTraveling
             && (!includeCurrentLocation || currentLocation != null);
         bool merchant = marketEligible && merchantKnowledgeEnabled && currentCity != null
-            && actor.NpcData != null && actor.NpcData.job != null
-            && actor.NpcData.job.jobType == NpcJobType.Merchant;
+            && actor.HasJobType(NpcJobType.Merchant);
 
         List<string> locationIds = new List<string>();
         List<CommercialMarketObservation> marketObservations =
@@ -537,6 +618,10 @@ internal sealed class NpcLocalKnowledgeObservationReceipt
     public string SnapshotFingerprint => snapshotFingerprint;
     public string ActorRuntimeId => actorRuntimeId;
     public string PersonId => personId;
+    public long AbsoluteDay => absoluteDay;
+    public int LocationCount => locationCount;
+    public int MarketObservationCount => marketObservationCount;
+    public bool LiquidityObserved => liquidityObserved;
     public long SpatialRevisionBefore => spatialRevisionBefore;
     public long SpatialRevisionAfter => spatialRevisionAfter;
     public long CommercialRevisionBefore => commercialRevisionBefore;
@@ -617,9 +702,29 @@ internal sealed class NpcLocalKnowledgeObservationSnapshot
         for (int i = 0; i < ItemReferences.Count; i++)
         {
             if (!ReferenceEquals(ItemReferences[i], other.ItemReferences[i])
-                || !ReferenceEquals(MarketItemReferences[i], other.MarketItemReferences[i])) return false;
+                || !SameMarketItemProjection(MarketItemReferences[i],
+                    other.MarketItemReferences[i])) return false;
         }
         return true;
+    }
+
+    private static bool SameMarketItemProjection(MarketItemRuntime left,
+        MarketItemRuntime right)
+    {
+        if (ReferenceEquals(left, right)) return true;
+        if (left == null || right == null) return false;
+
+        // Selected Core markets materialize a fresh Unity-facing row projection
+        // for each read. Compare the immutable effective definition identity and
+        // exact projected facts; legacy markets retain reference-based detection.
+        DailyV1ItemDefinition definition = left.SelectedDefinition;
+        if (definition == null || !ReferenceEquals(definition, right.SelectedDefinition)
+            || !ReferenceEquals(left.Item, right.Item)
+            || left.Amount != right.Amount
+            || left.DesiredAmount != right.DesiredAmount) return false;
+
+        return BitConverter.ToInt32(BitConverter.GetBytes(left.CurrentPrice), 0)
+            == BitConverter.ToInt32(BitConverter.GetBytes(right.CurrentPrice), 0);
     }
 }
 
@@ -636,6 +741,7 @@ internal sealed class PreparedNpcLocalKnowledgeObservationCommit : IBoundaryCont
     public SpatialKnowledgeDiscoveryInstall SpatialInstall { get; }
     public CommercialKnowledgeObservationInstall CommercialInstall { get; }
     public List<NpcLocalKnowledgeObservationReceipt> NextReceipts { get; }
+    public DailyV1NpcLocalObservationReceiptInstall SelectedCoreInstall { get; }
     public long ExpectedOwnerRevision { get; }
     public bool IsReplay { get; }
     public bool MerchantKnowledgeEnabled { get; }
@@ -653,7 +759,8 @@ internal sealed class PreparedNpcLocalKnowledgeObservationCommit : IBoundaryCont
         CommercialKnowledgeObservationInstall commercialInstall,
         List<NpcLocalKnowledgeObservationReceipt> nextReceipts,
         long expectedOwnerRevision, bool isReplay,
-        bool merchantKnowledgeEnabled, bool includeCurrentLocation, long absoluteDay)
+        bool merchantKnowledgeEnabled, bool includeCurrentLocation, long absoluteDay,
+        DailyV1NpcLocalObservationReceiptInstall selectedCoreInstall = null)
     {
         Owner = owner;
         Actor = actor;
@@ -662,6 +769,7 @@ internal sealed class PreparedNpcLocalKnowledgeObservationCommit : IBoundaryCont
         SpatialInstall = spatialInstall;
         CommercialInstall = commercialInstall;
         NextReceipts = nextReceipts;
+        SelectedCoreInstall = selectedCoreInstall;
         ExpectedOwnerRevision = expectedOwnerRevision;
         IsReplay = isReplay;
         MerchantKnowledgeEnabled = merchantKnowledgeEnabled;

@@ -138,7 +138,8 @@ public sealed class NaturalLanguageWorldCommandContractTests
         FixedTranslator translator = new FixedTranslator(NaturalLanguageTranslationResult.Unsupported(
             new[] { new WorldCommandTranslationDiagnostic("UnsupportedIntent", "No event was recorded.") }));
         HistoryStore history = new HistoryStore();
-        DomainEventStore events = new DomainEventStore(history, new HistoryPolicy());
+        DomainEventStore events = new DomainEventStore(
+            history, new HistoryPolicy(), UnitySimulationLoggerAdapter.Create(null));
 
         translator.Translate(new NaturalLanguageWorldCommandRequest("gere um evento", WorldCommandOrigin.GM), new WorldCommandTranslationContext());
 

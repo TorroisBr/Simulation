@@ -334,7 +334,7 @@ public sealed class ExplorableSiteKnowledgeTests
     [Test]
     public void KnowledgeMutationDoesNotMutateExplorableSiteTruth()
     {
-        ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("truth-definition", ExplorableSiteKind.Dungeon, "Truth Display");
+        DailyV1ExplorableSiteDefinition definition = SimulationTestFactory.CreateExplorableSiteDefinition("truth-definition", ExplorableSiteKind.Dungeon, "Truth Display");
         SpatialLocationRuntime location = new SpatialLocationRuntime("truth-location");
         ExplorableSiteRuntime site = new ExplorableSiteRuntime("truth-site", definition, location);
         NpcRuntime npc = new NpcRuntime("npc-knowledge", SimulationTestFactory.CreateNpc("knowledge"));
@@ -353,7 +353,7 @@ public sealed class ExplorableSiteKnowledgeTests
     {
         return new ExplorableSiteRuntime(
             runtimeId,
-            SimulationTestFactory.CreateExplorableSite("definition-" + runtimeId),
+            SimulationTestFactory.CreateExplorableSiteDefinition("definition-" + runtimeId),
             new SpatialLocationRuntime(locationRuntimeId));
     }
 

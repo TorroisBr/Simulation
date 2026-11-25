@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -46,6 +47,95 @@ public sealed class MerchantBoundaryOwnerStepTests
             out IBoundaryContinuationStepCommit replay, out _), Is.True);
         Assert.That(replay.TryCommit(out _), Is.True);
         Assert.That(merchant.MerchantTradePlan.PendingTravelDays, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void SelectedP18MerchantReceiptCommitsThroughCoreOwnerAndKeepsP12ExactEmptyBoundary()
+    {
+        CityData cityAsset = SimulationTestFactory.CreateCityData("selected-p18-receipt-city");
+        NpcData npcAsset = SimulationTestFactory.CreateNpc("selected-p18-receipt-npc");
+        ItemData itemAsset = SimulationTestFactory.CreateItem("selected-p18-receipt-item", 9f);
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        cityAsset.marketItems.Add(new MarketItemConfig { item = itemAsset });
+        config.Cities.Add(cityAsset);
+        config.Npcs.Add(new NpcSimulationConfig { npc = npcAsset, startingCity = cityAsset });
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: config.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(config.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            config, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder =
+            new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator allocator = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(allocator, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(allocator,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1CityRuntimeOwners cityOwner = builder.Cities.Single();
+        DailyV1NpcRuntimeOwners npcOwner = builder.Npcs.Single();
+        Assert.That(graph.SpatialNetwork.TryGetLocation(cityOwner.LocationRuntimeId,
+            out SpatialLocationRuntime location), Is.True);
+        CityRuntime city = CityRuntime.CreateSelectedDailyV1(
+            cityOwner.RuntimeId, cityOwner.Definition, definitions, bindings,
+            cityOwner, location);
+        NpcRuntime actor = NpcRuntime.CreateSelectedDailyV1(
+            npcOwner.RuntimeId, npcOwner.Definition, definitions, bindings,
+            npcOwner, city);
+        Assert.That(actor.TryBindSelectedDailyV1Definition(
+            npcOwner.Definition, definitions, bindings,
+            runtimeId => string.Equals(runtimeId, city.RuntimeId, System.StringComparison.Ordinal)
+                ? city : null), Is.True);
+        Assert.That(actor.TryBindSelectedRuntimeOwnerGraphProvider(() => graph), Is.True);
+
+        IReadOnlyList<IOwnerSectionCensusProvider> receiptProviders =
+            P12DNpcReceiptOwnerCensusProvider.CreateProviders(new[] { actor });
+        IOwnerSectionCensusProvider p12MerchantProvider = receiptProviders[1];
+        OwnerSectionCensusWitness initialP12Witness = p12MerchantProvider.GetCurrentCensus();
+        Assert.That(initialP12Witness.OwnerInstanceIdentity,
+            Is.SameAs(npcOwner.MerchantTradeStateReceipts));
+        Assert.That(initialP12Witness.Cardinality, Is.Zero);
+        Assert.That(initialP12Witness.Revision, Is.Zero);
+
+        MerchantTradePlanState expectedPlan = actor.MerchantTradePlan.CaptureOwnerState();
+        NpcTravelPlanState expectedTravel = actor.TravelPlan.CaptureOwnerState();
+        MerchantTradePlanState nextPlan = new MerchantTradePlanState(
+            itemAsset, city, city, 2, 2, 9f, 0, 0, "decision/selected-p18");
+        NpcTravelPlanState nextTravel = new NpcTravelPlanState(
+            city.Location, city, NpcTravelReason.Trade, 70f, 2f,
+            "decision/selected-p18");
+        NpcMerchantTradeStateRuntime compatibilityOwner = actor.ExistingMerchantTradeStateRuntime;
+
+        Assert.That(compatibilityOwner.TryPrepareInstall(actor,
+            "selected-p18-operation", "selected-p18-fingerprint",
+            expectedPlan, expectedTravel, nextPlan, nextTravel,
+            out IBoundaryContinuationStepCommit prepared), Is.True);
+        Assert.That(prepared, Is.TypeOf<DailyV1NpcMerchantTradeStateReceiptCommit>(),
+            "The selected Unity boundary must prepare the Core-owned receipt transaction.");
+        Assert.That(prepared.TryCommit(out TimelineFailure failure), Is.True, failure.ToString());
+
+        Assert.That(npcOwner.MerchantTradePlan.Revision, Is.EqualTo(1L));
+        Assert.That(npcOwner.TravelPlan.Revision, Is.EqualTo(1L));
+        Assert.That(npcOwner.MerchantTradeStateReceipts.Revision, Is.EqualTo(1L));
+        Assert.That(actor.TravelPlan.MatchesSelectedOwner(), Is.True,
+            "The Unity projection must reflect the Core-committed TravelPlan state.");
+        Assert.That(actor.TravelPlan.TargetLocation, Is.SameAs(city.Location));
+        Assert.That(actor.TravelPlan.TargetCity, Is.SameAs(city));
+        Assert.That(actor.TravelPlan.Reason, Is.EqualTo(NpcTravelReason.Trade));
+        Assert.That(actor.TravelPlan.Utility, Is.EqualTo(70f));
+        Assert.That(actor.TravelPlan.ExpectedCost, Is.EqualTo(2f));
+        Assert.That(actor.TravelPlan.OriginDecisionId, Is.EqualTo("decision/selected-p18"));
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(1L));
+        Assert.That(compatibilityOwner.Revision, Is.Zero,
+            "The selected compatibility receipt ledger must not become a second authority.");
+        Assert.That(compatibilityOwner.TryResolve(actor,
+            "selected-p18-operation", "selected-p18-fingerprint",
+            out NpcMerchantTradeStateReceipt resolved), Is.True);
+        Assert.That(resolved.ActorRuntimeId, Is.EqualTo(npcOwner.RuntimeId));
+        Assert.That(resolved.OwnerRevisionBefore, Is.Zero);
+        Assert.That(resolved.OwnerRevisionAfter, Is.EqualTo(1L));
+        Assert.Throws<System.InvalidOperationException>(
+            () => p12MerchantProvider.GetCurrentCensus(),
+            "A populated P18 owner remains outside P12 Daily-v1's exact-empty receipt contract.");
     }
 
     [Test]
@@ -139,6 +229,88 @@ public sealed class MerchantBoundaryOwnerStepTests
     }
 
     [Test]
+    public void CoreCommittedTravelPlanSnapshotProjectsSetReplayAndClearOnce()
+    {
+        ThreeCityFixture world = new ThreeCityFixture();
+        DailyV1NpcTravelPlanOwner owner = new DailyV1NpcTravelPlanOwner();
+        NpcTravelPlanRuntime projection = new NpcTravelPlanRuntime();
+        Assert.That(projection.TryBindSelectedOwner(owner), Is.True);
+        List<string> notifications = new List<string>();
+        projection.BindP12MutationBoundary(
+            () =>
+            {
+                notifications.Add("admit:" + owner.Revision);
+                return true;
+            },
+            () => notifications.Add("receipt:" + owner.Revision));
+
+        Assert.That(projection.CanAdmitSelectedOwnerMutation(), Is.True);
+        Assert.That(owner.TryCommit(world.B.Location.RuntimeId, world.B.RuntimeId,
+            NpcTravelReason.Trade, 70f, 2f, "decision/core-travel-set"), Is.True);
+        NpcTravelPlanState committedSet = new NpcTravelPlanState(
+            world.B.Location, world.B, NpcTravelReason.Trade,
+            70f, 2f, "decision/core-travel-set");
+        Assert.That(projection.PublishCommittedOwnerState(committedSet), Is.True);
+        Assert.That(projection.MatchesSelectedOwner(), Is.True);
+        Assert.That(projection.TargetCity, Is.SameAs(world.B));
+        Assert.That(projection.TargetLocation, Is.SameAs(world.B.Location));
+        Assert.That(projection.TargetCity.RuntimeId, Is.EqualTo(owner.TargetCityRuntimeId));
+        Assert.That(projection.TargetLocation.RuntimeId,
+            Is.EqualTo(owner.TargetLocationRuntimeId));
+        Assert.That(projection.Revision, Is.EqualTo(1L));
+        Assert.That(notifications, Is.EqualTo(new[] { "admit:0", "receipt:1" }));
+
+        Assert.That(owner.TryCommit(world.B.Location.RuntimeId, world.B.RuntimeId,
+            NpcTravelReason.Trade, 70f, 2f, "decision/core-travel-set"), Is.True,
+            "Replaying the exact Core state is a no-op.");
+        Assert.That(projection.PublishCommittedOwnerState(committedSet), Is.True,
+            "An exact replay does not repeat the P12 receipt.");
+        Assert.That(owner.Revision, Is.EqualTo(1L));
+        Assert.That(projection.MatchesSelectedOwner(), Is.True);
+        Assert.That(notifications, Is.EqualTo(new[] { "admit:0", "receipt:1" }));
+
+        Assert.That(projection.CanAdmitSelectedOwnerMutation(), Is.True);
+        Assert.That(owner.TryCommit(null, null, NpcTravelReason.None,
+            0f, 0f, null), Is.True);
+        NpcTravelPlanState committedClear = new NpcTravelPlanState(
+            null, null, NpcTravelReason.None, 0f, 0f, null);
+        Assert.That(projection.PublishCommittedOwnerState(committedClear), Is.True);
+        Assert.That(projection.MatchesSelectedOwner(), Is.True);
+        Assert.That(projection.TargetCity, Is.Null);
+        Assert.That(projection.TargetLocation, Is.Null);
+        Assert.That(projection.Reason, Is.EqualTo(NpcTravelReason.None));
+        Assert.That(projection.Revision, Is.EqualTo(2L));
+        Assert.That(notifications, Is.EqualTo(new[]
+        {
+            "admit:0", "receipt:1", "admit:1", "receipt:2"
+        }), "Each Core owner write admits once, then publishes one exact-revision P12 receipt.");
+    }
+
+    [Test]
+    public void CoreCommittedTravelPlanProjectionRejectsMismatchedOwnerSnapshot()
+    {
+        ThreeCityFixture world = new ThreeCityFixture();
+        DailyV1NpcTravelPlanOwner owner = new DailyV1NpcTravelPlanOwner();
+        NpcTravelPlanRuntime projection = new NpcTravelPlanRuntime();
+        Assert.That(projection.TryBindSelectedOwner(owner), Is.True);
+        int receipts = 0;
+        projection.BindP12MutationBoundary(() => true, () => receipts++);
+
+        Assert.That(owner.TryCommit(world.B.Location.RuntimeId, world.B.RuntimeId,
+            NpcTravelReason.Trade, 70f, 2f, "decision/core-travel-mismatch"), Is.True);
+        NpcTravelPlanState mismatched = new NpcTravelPlanState(
+            world.A.Location, world.A, NpcTravelReason.Trade,
+            70f, 2f, "decision/core-travel-mismatch");
+
+        Assert.That(projection.PublishCommittedOwnerState(mismatched), Is.False);
+        Assert.That(projection.TargetCity, Is.Null);
+        Assert.That(projection.TargetLocation, Is.Null);
+        Assert.That(projection.MatchesSelectedOwner(), Is.False);
+        Assert.That(receipts, Is.Zero,
+            "A mismatched projection cannot publish a P12 receipt for the committed owner.");
+    }
+
+    [Test]
     public void PlanUrgencyDescriptor_FreezesRosterOrderAndStablePersonIdentity()
     {
         ThreeCityFixture world = new ThreeCityFixture();
@@ -224,8 +396,8 @@ public sealed class MerchantBoundaryOwnerStepTests
             world.B.Location.RuntimeId, item, 150f, 10, 6L, 6L));
 
         SimulationTime time = new SimulationTime(6L);
-        RecordFixture records = SimulationTestFactory.CreateRecordFixture(6L);
-        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { trade = true });
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(new SimulationLogSettings { trade = true });
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture(6L, logger);
         MerchantSystem system = new MerchantSystem(
             new EffectiveMerchantTradeConfiguration(enabled: true),
             new EffectiveCommercialKnowledgeConfiguration(), world.CreateTravelSystem(time),
@@ -308,7 +480,7 @@ public sealed class MerchantBoundaryOwnerStepTests
             world.B.Location.RuntimeId, item, 150f, 10, 6L, 6L));
 
         SimulationTime time = new SimulationTime(6L);
-        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { trade = true });
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(new SimulationLogSettings { trade = true });
         MerchantSystem system = new MerchantSystem(
             new EffectiveMerchantTradeConfiguration(enabled: true),
             new EffectiveCommercialKnowledgeConfiguration(), world.CreateTravelSystem(time),

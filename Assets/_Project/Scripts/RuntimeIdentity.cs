@@ -3,405 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Collections.ObjectModel;
 
-public sealed class RuntimeIdAllocatorCounterSnapshot
-{
-    public string FamilyId { get; }
-    public long NextSequence { get; }
-
-    public RuntimeIdAllocatorCounterSnapshot(string familyId, long nextSequence)
-    {
-        FamilyId = familyId;
-        NextSequence = nextSequence;
-    }
-}
-
-public sealed class RuntimeIdAllocatorSnapshot
-{
-    public const string CurrentSchemaId = "runtime-id-allocator";
-    public const int CurrentSchemaVersion = 1;
-
-    private readonly ReadOnlyCollection<RuntimeIdAllocatorCounterSnapshot> counters;
-
-    public string SchemaId { get; }
-    public int SchemaVersion { get; }
-    public IReadOnlyList<RuntimeIdAllocatorCounterSnapshot> Counters => counters;
-
-    public RuntimeIdAllocatorSnapshot(
-        string schemaId,
-        int schemaVersion,
-        IEnumerable<RuntimeIdAllocatorCounterSnapshot> counters)
-    {
-        SchemaId = schemaId;
-        SchemaVersion = schemaVersion;
-
-        if (counters != null)
-        {
-            this.counters = new ReadOnlyCollection<RuntimeIdAllocatorCounterSnapshot>(
-                new List<RuntimeIdAllocatorCounterSnapshot>(counters));
-        }
-    }
-}
-
-public sealed class RuntimeIdAllocator
-{
-    private static readonly string[] SupportedFamilyIds =
-    {
-        "npc", "city", "location", "route", "event", "directive", "decision",
-        "travel-party", "organization", "site", "expedition", "local-place",
-        "local-connection", "notable-item"
-    };
-
-    private readonly object censusOwnerIdentity = new object();
-    private long nextNpcSequence = 1;
-    private long nextCitySequence = 1;
-    private long nextLocationSequence = 1;
-    private long nextRouteSequence = 1;
-    private long nextEventSequence = 1;
-    private long nextDirectiveSequence = 1;
-    private long nextDecisionSequence = 1;
-    private long nextTravelPartySequence = 1;
-    private long nextOrganizationSequence = 1;
-    private long nextExplorableSiteSequence = 1;
-    private long nextExpeditionSequence = 1;
-    private long nextLocalPlaceSequence = 1;
-    private long nextLocalConnectionSequence = 1;
-    private long nextNotableItemSequence = 1;
-    private Func<bool> p12EventIdMutationAdmission;
-    private Action p12EventIdMutationCommitted;
-    private Func<bool> p12DecisionIdMutationAdmission;
-    private Action p12DecisionIdMutationCommitted;
-    private Func<bool> p12TravelPartyIdMutationAdmission;
-    private Action p12TravelPartyIdMutationCommitted;
-
-    public RuntimeIdAllocator()
-    {
-    }
-
-    internal object CensusOwnerIdentity => censusOwnerIdentity;
-
-    internal long GetCensusRevision(RuntimeIdAllocatorCensusCounter counter)
-    {
-        switch (counter)
-        {
-            case RuntimeIdAllocatorCensusCounter.Npcs: return nextNpcSequence - 1L;
-            case RuntimeIdAllocatorCensusCounter.Cities: return nextCitySequence - 1L;
-            case RuntimeIdAllocatorCensusCounter.Locations: return nextLocationSequence - 1L;
-            case RuntimeIdAllocatorCensusCounter.Routes: return nextRouteSequence - 1L;
-            case RuntimeIdAllocatorCensusCounter.Events: return nextEventSequence - 1L;
-            case RuntimeIdAllocatorCensusCounter.Directives: return nextDirectiveSequence - 1L;
-            case RuntimeIdAllocatorCensusCounter.Decisions: return nextDecisionSequence - 1L;
-            case RuntimeIdAllocatorCensusCounter.TravelParties: return nextTravelPartySequence - 1L;
-            case RuntimeIdAllocatorCensusCounter.Organizations: return nextOrganizationSequence - 1L;
-            case RuntimeIdAllocatorCensusCounter.ExplorableSites: return nextExplorableSiteSequence - 1L;
-            case RuntimeIdAllocatorCensusCounter.Expeditions: return nextExpeditionSequence - 1L;
-            case RuntimeIdAllocatorCensusCounter.LocalPlaces: return nextLocalPlaceSequence - 1L;
-            case RuntimeIdAllocatorCensusCounter.LocalConnections: return nextLocalConnectionSequence - 1L;
-            case RuntimeIdAllocatorCensusCounter.NotableItems: return nextNotableItemSequence - 1L;
-            default: throw new ArgumentOutOfRangeException(nameof(counter));
-        }
-    }
-
-    public RuntimeIdAllocatorSnapshot CaptureSnapshot()
-    {
-        return new RuntimeIdAllocatorSnapshot(
-            RuntimeIdAllocatorSnapshot.CurrentSchemaId,
-            RuntimeIdAllocatorSnapshot.CurrentSchemaVersion,
-            new[]
-            {
-                new RuntimeIdAllocatorCounterSnapshot("npc", nextNpcSequence),
-                new RuntimeIdAllocatorCounterSnapshot("city", nextCitySequence),
-                new RuntimeIdAllocatorCounterSnapshot("location", nextLocationSequence),
-                new RuntimeIdAllocatorCounterSnapshot("route", nextRouteSequence),
-                new RuntimeIdAllocatorCounterSnapshot("event", nextEventSequence),
-                new RuntimeIdAllocatorCounterSnapshot("directive", nextDirectiveSequence),
-                new RuntimeIdAllocatorCounterSnapshot("decision", nextDecisionSequence),
-                new RuntimeIdAllocatorCounterSnapshot("travel-party", nextTravelPartySequence),
-                new RuntimeIdAllocatorCounterSnapshot("organization", nextOrganizationSequence),
-                new RuntimeIdAllocatorCounterSnapshot("site", nextExplorableSiteSequence),
-                new RuntimeIdAllocatorCounterSnapshot("expedition", nextExpeditionSequence),
-                new RuntimeIdAllocatorCounterSnapshot("local-place", nextLocalPlaceSequence),
-                new RuntimeIdAllocatorCounterSnapshot("local-connection", nextLocalConnectionSequence),
-                new RuntimeIdAllocatorCounterSnapshot("notable-item", nextNotableItemSequence)
-            });
-    }
-
-    internal static bool TryCreateStagedFromSnapshot(
-        RuntimeIdAllocatorSnapshot snapshot,
-        out RuntimeIdAllocator allocator,
-        out string diagnostic)
-    {
-        allocator = null;
-        diagnostic = null;
-
-        if (snapshot == null)
-        {
-            diagnostic = "Runtime ID allocator snapshot is null.";
-            return false;
-        }
-
-        if (string.Equals(snapshot.SchemaId, RuntimeIdAllocatorSnapshot.CurrentSchemaId, StringComparison.Ordinal) == false
-            || snapshot.SchemaVersion != RuntimeIdAllocatorSnapshot.CurrentSchemaVersion)
-        {
-            diagnostic = "Runtime ID allocator snapshot schema is unsupported.";
-            return false;
-        }
-
-        if (snapshot.Counters == null)
-        {
-            diagnostic = "Runtime ID allocator snapshot counters are missing.";
-            return false;
-        }
-
-        Dictionary<string, long> nextSequences = new Dictionary<string, long>(StringComparer.Ordinal);
-        foreach (RuntimeIdAllocatorCounterSnapshot counter in snapshot.Counters)
-        {
-            if (counter == null || string.IsNullOrWhiteSpace(counter.FamilyId) == true)
-            {
-                diagnostic = "Runtime ID allocator snapshot contains a missing family.";
-                return false;
-            }
-
-            if (ArrayContains(SupportedFamilyIds, counter.FamilyId) == false)
-            {
-                diagnostic = "Runtime ID allocator snapshot contains an unknown family '" + counter.FamilyId + "'.";
-                return false;
-            }
-
-            if (nextSequences.ContainsKey(counter.FamilyId) == true)
-            {
-                diagnostic = "Runtime ID allocator snapshot contains duplicate family '" + counter.FamilyId + "'.";
-                return false;
-            }
-
-            if (counter.NextSequence < 1L || counter.NextSequence == long.MaxValue)
-            {
-                diagnostic = "Runtime ID allocator snapshot contains an invalid or exhausted next sequence for '" + counter.FamilyId + "'.";
-                return false;
-            }
-
-            nextSequences.Add(counter.FamilyId, counter.NextSequence);
-        }
-
-        if (nextSequences.Count != SupportedFamilyIds.Length)
-        {
-            diagnostic = "Runtime ID allocator snapshot does not contain the exact supported family set.";
-            return false;
-        }
-
-        foreach (string familyId in SupportedFamilyIds)
-        {
-            if (nextSequences.ContainsKey(familyId) == false)
-            {
-                diagnostic = "Runtime ID allocator snapshot is missing family '" + familyId + "'.";
-                return false;
-            }
-        }
-
-        allocator = new RuntimeIdAllocator(nextSequences);
-        return true;
-    }
-
-    private RuntimeIdAllocator(IDictionary<string, long> nextSequences)
-    {
-        nextNpcSequence = nextSequences["npc"];
-        nextCitySequence = nextSequences["city"];
-        nextLocationSequence = nextSequences["location"];
-        nextRouteSequence = nextSequences["route"];
-        nextEventSequence = nextSequences["event"];
-        nextDirectiveSequence = nextSequences["directive"];
-        nextDecisionSequence = nextSequences["decision"];
-        nextTravelPartySequence = nextSequences["travel-party"];
-        nextOrganizationSequence = nextSequences["organization"];
-        nextExplorableSiteSequence = nextSequences["site"];
-        nextExpeditionSequence = nextSequences["expedition"];
-        nextLocalPlaceSequence = nextSequences["local-place"];
-        nextLocalConnectionSequence = nextSequences["local-connection"];
-        nextNotableItemSequence = nextSequences["notable-item"];
-    }
-
-    private static bool ArrayContains(string[] values, string expected)
-    {
-        for (int index = 0; index < values.Length; index++)
-        {
-            if (string.Equals(values[index], expected, StringComparison.Ordinal) == true)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public string AllocateNpcId()
-    {
-        return Allocate("npc", ref nextNpcSequence);
-    }
-
-    public string AllocateCityId()
-    {
-        return Allocate("city", ref nextCitySequence);
-    }
-
-    public string AllocateLocationId()
-    {
-        return Allocate("location", ref nextLocationSequence);
-    }
-
-    public string AllocateRouteId()
-    {
-        return Allocate("route", ref nextRouteSequence);
-    }
-
-    public string AllocateEventId()
-    {
-        if (nextEventSequence == long.MaxValue)
-        {
-            throw new InvalidOperationException("RuntimeId sequence exhausted for type 'event'.");
-        }
-
-        if (p12EventIdMutationAdmission != null && !CanCommitP12EventIdMutation())
-        {
-            throw new InvalidOperationException("The P12 Event-ID mutation was rejected before allocation.");
-        }
-
-        string runtimeId = "event-" + nextEventSequence.ToString("D6", CultureInfo.InvariantCulture);
-        nextEventSequence++;
-        p12EventIdMutationCommitted?.Invoke();
-        return runtimeId;
-    }
-
-    internal void BindP12EventIdMutationBoundary(Func<bool> admission, Action committed)
-    {
-        if (admission == null) throw new ArgumentNullException(nameof(admission));
-        if (committed == null) throw new ArgumentNullException(nameof(committed));
-        if (p12EventIdMutationAdmission != null || p12EventIdMutationCommitted != null)
-            throw new InvalidOperationException("RuntimeIdAllocator Event IDs are already bound to a P12 mutation boundary.");
-        p12EventIdMutationAdmission = admission;
-        p12EventIdMutationCommitted = committed;
-    }
-
-    private bool CanCommitP12EventIdMutation()
-    {
-        try { return p12EventIdMutationAdmission(); }
-        catch { return false; }
-    }
-
-    public string AllocateDirectiveId()
-    {
-        return Allocate("directive", ref nextDirectiveSequence);
-    }
-
-    public string AllocateDecisionId()
-    {
-        if (nextDecisionSequence == long.MaxValue)
-        {
-            throw new InvalidOperationException("RuntimeId sequence exhausted for type 'decision'.");
-        }
-
-        if (p12DecisionIdMutationAdmission != null && !CanCommitP12DecisionIdMutation())
-        {
-            throw new InvalidOperationException("The P12 Decision-ID mutation was rejected before allocation.");
-        }
-
-        string runtimeId = "decision-" + nextDecisionSequence.ToString("D6", CultureInfo.InvariantCulture);
-        nextDecisionSequence++;
-        p12DecisionIdMutationCommitted?.Invoke();
-        return runtimeId;
-    }
-
-    internal void BindP12DecisionIdMutationBoundary(Func<bool> admission, Action committed)
-    {
-        if (admission == null) throw new ArgumentNullException(nameof(admission));
-        if (committed == null) throw new ArgumentNullException(nameof(committed));
-        if (p12DecisionIdMutationAdmission != null || p12DecisionIdMutationCommitted != null)
-            throw new InvalidOperationException("RuntimeIdAllocator Decision IDs are already bound to a P12 mutation boundary.");
-        p12DecisionIdMutationAdmission = admission;
-        p12DecisionIdMutationCommitted = committed;
-    }
-
-    private bool CanCommitP12DecisionIdMutation()
-    {
-        try { return p12DecisionIdMutationAdmission(); }
-        catch { return false; }
-    }
-
-    public string AllocateTravelPartyId()
-    {
-        if (nextTravelPartySequence == long.MaxValue)
-        {
-            throw new InvalidOperationException("RuntimeId sequence exhausted for type 'travel-party'.");
-        }
-
-        if (p12TravelPartyIdMutationAdmission != null && !CanCommitP12TravelPartyIdMutation())
-        {
-            throw new InvalidOperationException("The P12 TravelParty-ID mutation was rejected before allocation.");
-        }
-
-        string runtimeId = "travel-party-" + nextTravelPartySequence.ToString("D6", CultureInfo.InvariantCulture);
-        nextTravelPartySequence++;
-        p12TravelPartyIdMutationCommitted?.Invoke();
-        return runtimeId;
-    }
-
-    internal void BindP12TravelPartyIdMutationBoundary(Func<bool> admission, Action committed)
-    {
-        if (admission == null) throw new ArgumentNullException(nameof(admission));
-        if (committed == null) throw new ArgumentNullException(nameof(committed));
-        if (p12TravelPartyIdMutationAdmission != null || p12TravelPartyIdMutationCommitted != null)
-            throw new InvalidOperationException("RuntimeIdAllocator TravelParty IDs are already bound to a P12 mutation boundary.");
-        p12TravelPartyIdMutationAdmission = admission;
-        p12TravelPartyIdMutationCommitted = committed;
-    }
-
-    private bool CanCommitP12TravelPartyIdMutation()
-    {
-        try { return p12TravelPartyIdMutationAdmission(); }
-        catch { return false; }
-    }
-
-    public string AllocateOrganizationId()
-    {
-        return Allocate("organization", ref nextOrganizationSequence);
-    }
-
-    public string AllocateExplorableSiteId()
-    {
-        return Allocate("site", ref nextExplorableSiteSequence);
-    }
-
-    public string AllocateExpeditionId()
-    {
-        return Allocate("expedition", ref nextExpeditionSequence);
-    }
-
-    public string AllocateLocalPlaceId()
-    {
-        return Allocate("local-place", ref nextLocalPlaceSequence);
-    }
-
-    public string AllocateLocalConnectionId()
-    {
-        return Allocate("local-connection", ref nextLocalConnectionSequence);
-    }
-
-    public string AllocateNotableItemId()
-    {
-        return Allocate("notable-item", ref nextNotableItemSequence);
-    }
-
-    private static string Allocate(string prefix, ref long nextSequence)
-    {
-        if (nextSequence == long.MaxValue)
-        {
-            throw new InvalidOperationException($"RuntimeId sequence exhausted for type '{prefix}'.");
-        }
-
-        string runtimeId = prefix + "-" + nextSequence.ToString("D6", CultureInfo.InvariantCulture);
-        nextSequence++;
-        return runtimeId;
-    }
-}
-
 public sealed class RuntimeIdentityRegistry
 {
     private readonly Dictionary<string, NpcRuntime> npcsByRuntimeId = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
@@ -413,13 +14,122 @@ public sealed class RuntimeIdentityRegistry
     private readonly Dictionary<string, LocalTopologyConnectionRuntime> localConnectionsByRuntimeId = new Dictionary<string, LocalTopologyConnectionRuntime>(StringComparer.Ordinal);
     private readonly Dictionary<string, NotableItemRuntime> notableItemsByRuntimeId = new Dictionary<string, NotableItemRuntime>(StringComparer.Ordinal);
     private readonly SimulationLogger logger;
-    private long censusRevision;
+    private readonly DailyV1RuntimeIdentityIndex identityIndex = new DailyV1RuntimeIdentityIndex();
 
-    internal long CensusRevision => censusRevision;
+    internal long CensusRevision => identityIndex.CensusRevision;
+    internal object CensusOwnerIdentity => identityIndex.CensusOwnerIdentity;
+    internal DailyV1RuntimeIdentityIndex CoreIdentityIndex => identityIndex;
 
     public RuntimeIdentityRegistry(SimulationLogger logger = null)
+        : this(logger, null)
     {
-        this.logger = logger ?? new SimulationLogger(null);
+    }
+
+    internal RuntimeIdentityRegistry(
+        SimulationLogger logger,
+        DailyV1RuntimeIdentityIndex sharedIdentityIndex)
+    {
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
+        identityIndex = sharedIdentityIndex ?? new DailyV1RuntimeIdentityIndex();
+    }
+
+    internal bool HasNoBoundRuntimeProjections =>
+        npcsByRuntimeId.Count == 0
+        && citiesByRuntimeId.Count == 0
+        && locationsByRuntimeId.Count == 0
+        && routesByRuntimeId.Count == 0
+        && explorableSitesByRuntimeId.Count == 0
+        && localPlacesByRuntimeId.Count == 0
+        && localConnectionsByRuntimeId.Count == 0
+        && notableItemsByRuntimeId.Count == 0;
+    internal bool BindSelectedNpcProjection(NpcRuntime npcRuntime) =>
+        npcRuntime != null && TryBindProjection(npcRuntime.RuntimeId,
+            DailyV1RuntimeIdentityKind.Npc, npcsByRuntimeId, npcRuntime);
+
+    internal bool BindSelectedCityProjection(CityRuntime cityRuntime) =>
+        cityRuntime != null && TryBindProjection(cityRuntime.RuntimeId,
+            DailyV1RuntimeIdentityKind.City, citiesByRuntimeId, cityRuntime);
+
+    internal bool BindSelectedLocationProjection(SpatialLocationRuntime location) =>
+        location != null && TryBindProjection(location.RuntimeId,
+            DailyV1RuntimeIdentityKind.Location, locationsByRuntimeId, location);
+
+    internal bool BindSelectedRouteProjection(SpatialRouteRuntime route) =>
+        route != null && TryBindProjection(route.RuntimeId,
+            DailyV1RuntimeIdentityKind.Route, routesByRuntimeId, route);
+
+    internal void RollbackSelectedRouteProjection(SpatialRouteRuntime route)
+    {
+        if (route == null
+            || !routesByRuntimeId.TryGetValue(route.RuntimeId, out SpatialRouteRuntime current)
+            || !ReferenceEquals(route, current)
+            || !routesByRuntimeId.Remove(route.RuntimeId))
+            throw new InvalidOperationException(
+                "Cannot roll back a selected Route lookup that does not match its Core identity.");
+    }
+
+    internal bool TryBindSelectedLocationProjection(
+        SpatialLocationRuntime location,
+        IDictionary<string, SpatialLocationRuntime> selectedLocationsByRuntimeId)
+    {
+        if (location == null || selectedLocationsByRuntimeId == null
+            || !BindSelectedLocationProjection(location)) return false;
+
+        bool selectedLookupAdded = false;
+        try
+        {
+            selectedLocationsByRuntimeId.Add(location.RuntimeId, location);
+            selectedLookupAdded = true;
+            return true;
+        }
+        catch
+        {
+            if (selectedLookupAdded)
+            {
+                if (!selectedLocationsByRuntimeId.TryGetValue(location.RuntimeId,
+                        out SpatialLocationRuntime current)
+                    || !ReferenceEquals(current, location)
+                    || !selectedLocationsByRuntimeId.Remove(location.RuntimeId))
+                    throw new InvalidOperationException(
+                        "A failed selected Location projection could not roll back its staged runtime lookup.");
+            }
+            RollbackSelectedLocationProjection(location);
+            throw;
+        }
+    }
+
+    internal void RollbackSelectedLocationProjection(SpatialLocationRuntime location)
+    {
+        if (location == null || !locationsByRuntimeId.TryGetValue(location.RuntimeId, out SpatialLocationRuntime current)
+            || !ReferenceEquals(location, current))
+            throw new InvalidOperationException("Cannot roll back a selected Location projection that does not match its Core identity.");
+        locationsByRuntimeId.Remove(location.RuntimeId);
+    }
+
+    internal void RollbackSelectedLocationProjection(
+        SpatialLocationRuntime location,
+        IDictionary<string, SpatialLocationRuntime> selectedLocationsByRuntimeId)
+    {
+        if (location == null || selectedLocationsByRuntimeId == null
+            || !selectedLocationsByRuntimeId.TryGetValue(location.RuntimeId,
+                out SpatialLocationRuntime current)
+            || !ReferenceEquals(location, current)
+            || !selectedLocationsByRuntimeId.Remove(location.RuntimeId))
+            throw new InvalidOperationException(
+                "Cannot roll back a selected Location lookup that does not match its Core identity.");
+
+        RollbackSelectedLocationProjection(location);
+    }
+
+    private bool TryBindProjection<TValue>(
+        string runtimeId,
+        DailyV1RuntimeIdentityKind kind,
+        Dictionary<string, TValue> projections,
+        TValue value)
+    {
+        return identityIndex.HasIdentity(runtimeId, kind)
+            && !projections.ContainsKey(runtimeId)
+            && projections.TryAdd(runtimeId, value);
     }
 
     public bool RegisterNpc(NpcRuntime npcRuntime)
@@ -447,6 +157,7 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (!TryStageIdentity(npcRuntime.RuntimeId, DailyV1RuntimeIdentityKind.Npc, "NPC")) return false;
         npcsByRuntimeId.Add(npcRuntime.RuntimeId, npcRuntime);
         AdvanceCensusRevision();
         return true;
@@ -472,7 +183,7 @@ public sealed class RuntimeIdentityRegistry
             duplicateIdentity = true;
             return false;
         }
-        return censusRevision < long.MaxValue;
+        return identityIndex.CensusRevision < long.MaxValue;
     }
 
     public bool RegisterCity(CityRuntime cityRuntime)
@@ -500,6 +211,7 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (!TryStageIdentity(cityRuntime.RuntimeId, DailyV1RuntimeIdentityKind.City, "City")) return false;
         citiesByRuntimeId.Add(cityRuntime.RuntimeId, cityRuntime);
         AdvanceCensusRevision();
         return true;
@@ -541,9 +253,12 @@ public sealed class RuntimeIdentityRegistry
         }
 
         bool indexAdded = false;
+        bool identityAdded = false;
         bool revisionAdvanced = false;
         try
         {
+            if (!TryStageIdentity(location.RuntimeId, DailyV1RuntimeIdentityKind.Location, "Location")) return false;
+            identityAdded = true;
             locationsByRuntimeId.Add(location.RuntimeId, location);
             indexAdded = true;
             completedMutation?.Invoke("RuntimeIdentity.Location.Index");
@@ -554,8 +269,9 @@ public sealed class RuntimeIdentityRegistry
         }
         catch
         {
-            if (revisionAdvanced) censusRevision--;
+            if (revisionAdvanced) RollbackCensusRevision();
             if (indexAdded) locationsByRuntimeId.Remove(location.RuntimeId);
+            if (identityAdded) identityIndex.TryRemoveStaged(location.RuntimeId, DailyV1RuntimeIdentityKind.Location);
             throw;
         }
     }
@@ -585,6 +301,7 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (!TryStageIdentity(route.RuntimeId, DailyV1RuntimeIdentityKind.Route, "Route")) return false;
         routesByRuntimeId.Add(route.RuntimeId, route);
         AdvanceCensusRevision();
         return true;
@@ -626,9 +343,12 @@ public sealed class RuntimeIdentityRegistry
         }
 
         bool indexAdded = false;
+        bool identityAdded = false;
         bool revisionAdvanced = false;
         try
         {
+            if (!TryStageIdentity(site.RuntimeId, DailyV1RuntimeIdentityKind.ExplorableSite, "ExplorableSite")) return false;
+            identityAdded = true;
             explorableSitesByRuntimeId.Add(site.RuntimeId, site);
             indexAdded = true;
             completedMutation?.Invoke("RuntimeIdentity.ExplorableSite.Index");
@@ -639,8 +359,9 @@ public sealed class RuntimeIdentityRegistry
         }
         catch
         {
-            if (revisionAdvanced) censusRevision--;
+            if (revisionAdvanced) RollbackCensusRevision();
             if (indexAdded) explorableSitesByRuntimeId.Remove(site.RuntimeId);
+            if (identityAdded) identityIndex.TryRemoveStaged(site.RuntimeId, DailyV1RuntimeIdentityKind.ExplorableSite);
             throw;
         }
     }
@@ -670,6 +391,7 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (!TryStageIdentity(localPlace.RuntimeId, DailyV1RuntimeIdentityKind.LocalPlace, "LocalPlace")) return false;
         localPlacesByRuntimeId.Add(localPlace.RuntimeId, localPlace);
         AdvanceCensusRevision();
         return true;
@@ -700,6 +422,7 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (!TryStageIdentity(localConnection.RuntimeId, DailyV1RuntimeIdentityKind.LocalConnection, "LocalConnection")) return false;
         localConnectionsByRuntimeId.Add(localConnection.RuntimeId, localConnection);
         AdvanceCensusRevision();
         return true;
@@ -730,6 +453,7 @@ public sealed class RuntimeIdentityRegistry
             return false;
         }
 
+        if (!TryStageIdentity(notableItem.RuntimeId, DailyV1RuntimeIdentityKind.NotableItem, "NotableItem")) return false;
         notableItemsByRuntimeId.Add(notableItem.RuntimeId, notableItem);
         AdvanceCensusRevision();
         return true;
@@ -830,12 +554,17 @@ public sealed class RuntimeIdentityRegistry
 
         int addedPlaces = 0;
         int addedConnections = 0;
+        int stagedPlaces = 0;
+        int stagedConnections = 0;
         bool revisionAdvanced = false;
         try
         {
             for (int i = 0; i < localPlaces.Count; i++)
             {
                 LocalPlaceRuntime localPlace = localPlaces[i];
+                if (!TryStageIdentity(localPlace.RuntimeId, DailyV1RuntimeIdentityKind.LocalPlace, "LocalPlace"))
+                    throw new InvalidOperationException("The Core runtime identity index rejected a prevalidated LocalPlace id.");
+                stagedPlaces++;
                 localPlacesByRuntimeId.Add(localPlace.RuntimeId, localPlace);
                 addedPlaces++;
                 completedMutation?.Invoke("RuntimeIdentity.LocalPlace.Index." + i.ToString(CultureInfo.InvariantCulture));
@@ -844,6 +573,9 @@ public sealed class RuntimeIdentityRegistry
             for (int i = 0; i < localConnections.Count; i++)
             {
                 LocalTopologyConnectionRuntime localConnection = localConnections[i];
+                if (!TryStageIdentity(localConnection.RuntimeId, DailyV1RuntimeIdentityKind.LocalConnection, "LocalConnection"))
+                    throw new InvalidOperationException("The Core runtime identity index rejected a prevalidated LocalConnection id.");
+                stagedConnections++;
                 localConnectionsByRuntimeId.Add(localConnection.RuntimeId, localConnection);
                 addedConnections++;
                 completedMutation?.Invoke("RuntimeIdentity.LocalConnection.Index." + i.ToString(CultureInfo.InvariantCulture));
@@ -860,11 +592,15 @@ public sealed class RuntimeIdentityRegistry
         }
         catch
         {
-            if (revisionAdvanced) censusRevision--;
+            if (revisionAdvanced) RollbackCensusRevision();
             for (int i = addedConnections - 1; i >= 0; i--)
                 localConnectionsByRuntimeId.Remove(localConnections[i].RuntimeId);
             for (int i = addedPlaces - 1; i >= 0; i--)
                 localPlacesByRuntimeId.Remove(localPlaces[i].RuntimeId);
+            for (int i = stagedConnections - 1; i >= 0; i--)
+                identityIndex.TryRemoveStaged(localConnections[i].RuntimeId, DailyV1RuntimeIdentityKind.LocalConnection);
+            for (int i = stagedPlaces - 1; i >= 0; i--)
+                identityIndex.TryRemoveStaged(localPlaces[i].RuntimeId, DailyV1RuntimeIdentityKind.LocalPlace);
             throw;
         }
     }
@@ -873,37 +609,146 @@ public sealed class RuntimeIdentityRegistry
     {
         switch (index)
         {
-            case RuntimeIdentityCensusIndex.Npcs: return npcsByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.Cities: return citiesByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.Locations: return locationsByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.Routes: return routesByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.ExplorableSites: return explorableSitesByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.LocalPlaces: return localPlacesByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.LocalConnections: return localConnectionsByRuntimeId.Count;
-            case RuntimeIdentityCensusIndex.NotableItems: return notableItemsByRuntimeId.Count;
+            case RuntimeIdentityCensusIndex.Npcs: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Npc);
+            case RuntimeIdentityCensusIndex.Cities: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.City);
+            case RuntimeIdentityCensusIndex.Locations: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Location);
+            case RuntimeIdentityCensusIndex.Routes: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.Route);
+            case RuntimeIdentityCensusIndex.ExplorableSites: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.ExplorableSite);
+            case RuntimeIdentityCensusIndex.LocalPlaces: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.LocalPlace);
+            case RuntimeIdentityCensusIndex.LocalConnections: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.LocalConnection);
+            case RuntimeIdentityCensusIndex.NotableItems: return identityIndex.GetCardinality(DailyV1RuntimeIdentityKind.NotableItem);
             default: throw new ArgumentOutOfRangeException(nameof(index));
+        }
+    }
+
+    /// <summary>
+    /// Verifies that every Unity-facing lookup projection still mirrors the
+    /// Core-owned identity index. Restore and composition admission use this
+    /// read-only check so a valid Core census cannot mask a stale host lookup.
+    /// </summary>
+    internal bool HasConsistentCoreIdentityProjections(
+        IEnumerable<NpcRuntime> activeNpcs,
+        IEnumerable<CityRuntime> cities,
+        IEnumerable<SpatialLocationRuntime> locations,
+        IEnumerable<SpatialRouteRuntime> routes,
+        IEnumerable<ExplorableSiteRuntime> sites,
+        IEnumerable<LocalTopologyRuntime> localTopologies,
+        IEnumerable<NotableItemRuntime> notableItems)
+    {
+        return HasMatchingCoreIdentityProjectionCardinalities()
+            && IsConsistentProjectionEntries(npcsByRuntimeId, DailyV1RuntimeIdentityKind.Npc,
+                value => value?.RuntimeId, activeNpcs, allowRetainedNpcIdentities: true)
+            && IsConsistentProjectionEntries(citiesByRuntimeId, DailyV1RuntimeIdentityKind.City,
+                value => value?.RuntimeId, cities)
+            && IsConsistentProjectionEntries(locationsByRuntimeId, DailyV1RuntimeIdentityKind.Location,
+                value => value?.RuntimeId, locations)
+            && IsConsistentProjectionEntries(routesByRuntimeId, DailyV1RuntimeIdentityKind.Route,
+                value => value?.RuntimeId, routes)
+            && IsConsistentProjectionEntries(explorableSitesByRuntimeId, DailyV1RuntimeIdentityKind.ExplorableSite,
+                value => value?.RuntimeId, sites)
+            && IsConsistentProjectionEntries(localPlacesByRuntimeId, DailyV1RuntimeIdentityKind.LocalPlace,
+                value => value?.RuntimeId, EnumerateLocalPlaces(localTopologies))
+            && IsConsistentProjectionEntries(localConnectionsByRuntimeId, DailyV1RuntimeIdentityKind.LocalConnection,
+                value => value?.RuntimeId, EnumerateLocalConnections(localTopologies))
+            && IsConsistentProjectionEntries(notableItemsByRuntimeId, DailyV1RuntimeIdentityKind.NotableItem,
+                value => value?.RuntimeId, notableItems);
+    }
+
+    internal bool HasMatchingCoreIdentityProjectionCardinalities() =>
+        HasProjectionCardinality(npcsByRuntimeId, DailyV1RuntimeIdentityKind.Npc)
+        && HasProjectionCardinality(citiesByRuntimeId, DailyV1RuntimeIdentityKind.City)
+        && HasProjectionCardinality(locationsByRuntimeId, DailyV1RuntimeIdentityKind.Location)
+        && HasProjectionCardinality(routesByRuntimeId, DailyV1RuntimeIdentityKind.Route)
+        && HasProjectionCardinality(explorableSitesByRuntimeId, DailyV1RuntimeIdentityKind.ExplorableSite)
+        && HasProjectionCardinality(localPlacesByRuntimeId, DailyV1RuntimeIdentityKind.LocalPlace)
+        && HasProjectionCardinality(localConnectionsByRuntimeId, DailyV1RuntimeIdentityKind.LocalConnection)
+        && HasProjectionCardinality(notableItemsByRuntimeId, DailyV1RuntimeIdentityKind.NotableItem);
+
+    private bool HasProjectionCardinality<TValue>(
+        Dictionary<string, TValue> projection,
+        DailyV1RuntimeIdentityKind kind)
+        where TValue : class =>
+        projection != null && projection.Count == identityIndex.GetCardinality(kind);
+
+    private bool IsConsistentProjectionEntries<TValue>(
+        Dictionary<string, TValue> projection,
+        DailyV1RuntimeIdentityKind kind,
+        Func<TValue, string> runtimeId,
+        IEnumerable<TValue> expectedOwners,
+        bool allowRetainedNpcIdentities = false)
+        where TValue : class
+    {
+        if (projection == null || runtimeId == null || expectedOwners == null) return false;
+
+        HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
+        int expectedCount = 0;
+        foreach (TValue expectedOwner in expectedOwners)
+        {
+            string expectedId = runtimeId(expectedOwner);
+            if (expectedOwner == null
+                || string.IsNullOrWhiteSpace(expectedId)
+                || !expectedIds.Add(expectedId)
+                || !identityIndex.HasIdentity(expectedId, kind)
+                || !projection.TryGetValue(expectedId, out TValue projectedOwner)
+                || !ReferenceEquals(projectedOwner, expectedOwner))
+                return false;
+
+            expectedCount++;
+        }
+
+        if (expectedCount > projection.Count
+            || (!allowRetainedNpcIdentities && expectedCount != projection.Count))
+            return false;
+
+        foreach (KeyValuePair<string, TValue> entry in projection)
+        {
+            string valueId = runtimeId(entry.Value);
+            if (entry.Value == null
+                || string.IsNullOrWhiteSpace(entry.Key)
+                || !string.Equals(entry.Key, valueId, StringComparison.Ordinal)
+                || !identityIndex.HasIdentity(entry.Key, kind)
+                || (!allowRetainedNpcIdentities && !expectedIds.Contains(entry.Key)))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static IEnumerable<LocalPlaceRuntime> EnumerateLocalPlaces(
+        IEnumerable<LocalTopologyRuntime> localTopologies)
+    {
+        foreach (LocalTopologyRuntime topology in localTopologies ?? Array.Empty<LocalTopologyRuntime>())
+        {
+            if (topology == null)
+            {
+                yield return null;
+                continue;
+            }
+
+            foreach (LocalPlaceRuntime place in topology.Places)
+                yield return place;
+        }
+    }
+
+    private static IEnumerable<LocalTopologyConnectionRuntime> EnumerateLocalConnections(
+        IEnumerable<LocalTopologyRuntime> localTopologies)
+    {
+        foreach (LocalTopologyRuntime topology in localTopologies ?? Array.Empty<LocalTopologyRuntime>())
+        {
+            if (topology == null)
+            {
+                yield return null;
+                continue;
+            }
+
+            foreach (LocalTopologyConnectionRuntime connection in topology.Connections)
+                yield return connection;
         }
     }
 
     internal IReadOnlyList<KeyValuePair<string, string>> CaptureRegisteredRuntimeIdentityValues()
     {
-        List<KeyValuePair<string, string>> values = new List<KeyValuePair<string, string>>();
-        AddIdentityValues(values, "npc", npcsByRuntimeId);
-        AddIdentityValues(values, "city", citiesByRuntimeId);
-        AddIdentityValues(values, "location", locationsByRuntimeId);
-        AddIdentityValues(values, "route", routesByRuntimeId);
-        AddIdentityValues(values, "site", explorableSitesByRuntimeId);
-        AddIdentityValues(values, "local-place", localPlacesByRuntimeId);
-        AddIdentityValues(values, "local-connection", localConnectionsByRuntimeId);
-        AddIdentityValues(values, "notable-item", notableItemsByRuntimeId);
-        values.Sort((left, right) =>
-        {
-            int familyOrder = string.Compare(left.Key, right.Key, StringComparison.Ordinal);
-            return familyOrder != 0
-                ? familyOrder
-                : string.Compare(left.Value, right.Value, StringComparison.Ordinal);
-        });
-        return values.AsReadOnly();
+        return identityIndex.CaptureRegisteredValues();
     }
 
     private static void AddIdentityValues<TValue>(
@@ -917,7 +762,7 @@ public sealed class RuntimeIdentityRegistry
 
     private bool CanAdvanceCensusRevision(string identityKind)
     {
-        if (censusRevision < long.MaxValue)
+        if (identityIndex.CensusRevision < long.MaxValue)
         {
             return true;
         }
@@ -928,31 +773,55 @@ public sealed class RuntimeIdentityRegistry
 
     private void AdvanceCensusRevision()
     {
-        censusRevision++;
+        if (!identityIndex.TryAdvanceRevision())
+            throw new InvalidOperationException("Runtime identity census revision is exhausted.");
+    }
+
+    private bool TryStageIdentity(string runtimeId, DailyV1RuntimeIdentityKind kind, string identityKind)
+    {
+        if (!identityIndex.TryStageRegister(runtimeId, kind))
+        {
+            if (identityIndex.CensusRevision == long.MaxValue)
+                logger.LogError($"Cannot register {identityKind} runtime identity: census revision is exhausted.");
+            else
+                logger.LogError($"Cannot register {identityKind} runtime identity: Core rejected duplicate or invalid RuntimeId '{runtimeId}'.");
+            return false;
+        }
+        return true;
+    }
+
+    private void RollbackCensusRevision()
+    {
+        if (!identityIndex.TryRollbackRevision())
+            throw new InvalidOperationException("Runtime identity census revision rollback failed.");
     }
 
     internal void RollbackGenesisExplorableSite(ExplorableSiteRuntime site)
     {
         if (site == null || !explorableSitesByRuntimeId.TryGetValue(site.RuntimeId, out ExplorableSiteRuntime current)
-            || !ReferenceEquals(site, current) || censusRevision <= 0)
+            || !ReferenceEquals(site, current) || CensusRevision <= 0)
             throw new InvalidOperationException("Cannot roll back the P10-B ExplorableSite identity insertion.");
         explorableSitesByRuntimeId.Remove(site.RuntimeId);
-        censusRevision--;
+        if (!identityIndex.TryRemoveStaged(site.RuntimeId, DailyV1RuntimeIdentityKind.ExplorableSite)
+            || !identityIndex.TryRollbackRevision())
+            throw new InvalidOperationException("Core ExplorableSite identity rollback failed.");
     }
 
     internal void RollbackGenesisLocation(SpatialLocationRuntime location)
     {
         if (location == null || !locationsByRuntimeId.TryGetValue(location.RuntimeId, out SpatialLocationRuntime current)
-            || !ReferenceEquals(location, current) || censusRevision <= 0)
+            || !ReferenceEquals(location, current) || CensusRevision <= 0)
             throw new InvalidOperationException("Cannot roll back the P10-B Location identity insertion.");
         locationsByRuntimeId.Remove(location.RuntimeId);
-        censusRevision--;
+        if (!identityIndex.TryRemoveStaged(location.RuntimeId, DailyV1RuntimeIdentityKind.Location)
+            || !identityIndex.TryRollbackRevision())
+            throw new InvalidOperationException("Core Location identity rollback failed.");
     }
 
     internal void RollbackGenesisLocalTopologyMembers(
         IReadOnlyList<LocalPlaceRuntime> places, IReadOnlyList<LocalTopologyConnectionRuntime> connections)
     {
-        if (places == null || connections == null || censusRevision <= 0)
+        if (places == null || connections == null || CensusRevision <= 0)
             throw new InvalidOperationException("Cannot roll back the P10-B LocalTopology identity batch.");
         foreach (LocalPlaceRuntime place in places)
             if (place == null || !localPlacesByRuntimeId.TryGetValue(place.RuntimeId, out LocalPlaceRuntime currentPlace)
@@ -964,7 +833,14 @@ public sealed class RuntimeIdentityRegistry
                 throw new InvalidOperationException("P10-B LocalConnection identity rollback did not match the inserted object.");
         foreach (LocalPlaceRuntime place in places) localPlacesByRuntimeId.Remove(place.RuntimeId);
         foreach (LocalTopologyConnectionRuntime connection in connections) localConnectionsByRuntimeId.Remove(connection.RuntimeId);
-        censusRevision--;
+        foreach (LocalPlaceRuntime place in places)
+            if (!identityIndex.TryRemoveStaged(place.RuntimeId, DailyV1RuntimeIdentityKind.LocalPlace))
+                throw new InvalidOperationException("Core LocalPlace identity rollback failed.");
+        foreach (LocalTopologyConnectionRuntime connection in connections)
+            if (!identityIndex.TryRemoveStaged(connection.RuntimeId, DailyV1RuntimeIdentityKind.LocalConnection))
+                throw new InvalidOperationException("Core LocalConnection identity rollback failed.");
+        if (!identityIndex.TryRollbackRevision())
+            throw new InvalidOperationException("Core LocalTopology revision rollback failed.");
     }
 
     public bool TryGetNpc(string runtimeId, out NpcRuntime npcRuntime)
@@ -1161,54 +1037,22 @@ public sealed class RuntimeIdentityRegistry
 
     private bool TryGetRegisteredType(string runtimeId, out string registeredType)
     {
-        if (npcsByRuntimeId.ContainsKey(runtimeId) == true)
+        if (identityIndex.TryGetKind(runtimeId, out DailyV1RuntimeIdentityKind kind))
         {
-            registeredType = "NPC";
+            registeredType = kind switch
+            {
+                DailyV1RuntimeIdentityKind.Npc => "NPC",
+                DailyV1RuntimeIdentityKind.City => "City",
+                DailyV1RuntimeIdentityKind.Location => "Location",
+                DailyV1RuntimeIdentityKind.Route => "Route",
+                DailyV1RuntimeIdentityKind.ExplorableSite => "ExplorableSite",
+                DailyV1RuntimeIdentityKind.LocalPlace => "LocalPlace",
+                DailyV1RuntimeIdentityKind.LocalConnection => "LocalConnection",
+                DailyV1RuntimeIdentityKind.NotableItem => "NotableItem",
+                _ => null
+            };
             return true;
         }
-
-        if (citiesByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "City";
-            return true;
-        }
-
-        if (locationsByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "Location";
-            return true;
-        }
-
-        if (routesByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "Route";
-            return true;
-        }
-
-        if (explorableSitesByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "ExplorableSite";
-            return true;
-        }
-
-        if (localPlacesByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "LocalPlace";
-            return true;
-        }
-
-        if (localConnectionsByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "LocalConnection";
-            return true;
-        }
-
-        if (notableItemsByRuntimeId.ContainsKey(runtimeId) == true)
-        {
-            registeredType = "NotableItem";
-            return true;
-        }
-
         registeredType = null;
         return false;
     }

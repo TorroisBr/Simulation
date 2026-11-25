@@ -30,13 +30,6 @@ public enum PlaceSiteState
     Secured
 }
 
-public enum PlaceAccessState
-{
-    Inaccessible,
-    Contested,
-    Accessible
-}
-
 [Serializable]
 public sealed class PlaceContentOwnerReference
 {

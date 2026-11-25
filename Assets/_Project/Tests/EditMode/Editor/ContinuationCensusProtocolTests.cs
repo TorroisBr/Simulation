@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
@@ -130,6 +131,82 @@ public sealed class ContinuationCensusProtocolTests
         Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure refreshed), Is.True,
             "Both changed section baselines must be refreshed by the one notification.");
         Assert.That(refreshed, Is.EqualTo(ContinuationCensusFailure.None));
+    }
+
+    [Test]
+    public void CoreOwnedCommitRefreshesProviderBaselineWithoutHostEpochAdvance()
+    {
+        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
+        ContinuationCensusProtocol protocol = CreateProtocol(
+            records.DecisionRecorder, OwnerSectionRole.Required);
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out _), Is.True);
+        Assert.That(protocol.TryEnterOperation(
+            "bootstrap.publish", out SimulationOperationScope scope, out _), Is.True);
+
+        RecordOccurrence(records.DecisionRecorder, "core-owned-epoch-boundary");
+        Assert.That(protocol.TryRefreshCommittedMutationBaselines(
+            new[] { ReceiptSectionId }, out ContinuationCensusFailure refreshFailure), Is.True,
+            refreshFailure.ToString());
+        Assert.That(protocol.TryReadMutationEpoch(out long epoch, out _), Is.True);
+        Assert.That(epoch, Is.Zero,
+            "The Unity census adapter refreshes exact provider witnesses but cannot publish a Core-owned epoch.");
+
+        scope.Dispose();
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure assessmentFailure), Is.True,
+            assessmentFailure.ToString());
+        Assert.That(protocol.TryReadMutationEpoch(out epoch, out _), Is.True);
+        Assert.That(epoch, Is.Zero,
+            "Witness-baseline refresh alone must not advance the shared mutation epoch.");
+    }
+
+    [Test]
+    public void CoreReservationRefreshesProductionCensusBeforeSingleEpochCompletion()
+    {
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        DailyV1ExecutionBoundaryState runtimeState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(), admission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(System.Guid.NewGuid()));
+        ContinuationCensusProtocol protocol = CreateOperationProtocol(
+            runtimeState, out _, out Dictionary<string, MutableWitnessProvider> mutableProviders);
+
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure initial), Is.True,
+            initial.ToString());
+        const string changedSectionId = "p12e.political-support.relations";
+        MutableWitnessProvider changedProvider = mutableProviders[changedSectionId];
+        OwnerSectionCensusWitness baseline = changedProvider.Witness;
+        changedProvider.Witness = CreateWitness(
+            changedSectionId, baseline.OwnerInstanceIdentity, baseline.Cardinality, baseline.Revision + 1L);
+        Assert.That(protocol.TryEnterOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcTrade,
+            out SimulationOperationScope operationScope,
+            out ContinuationCensusFailure operationFailure), Is.True, operationFailure.ToString());
+        Assert.That(protocol.TryReserveMutationEpochCapacity(
+            out ContinuationMutationEpochReservation reservation,
+            out ContinuationCensusFailure reservationFailure), Is.True, reservationFailure.ToString());
+
+        Assert.That(protocol.TryRefreshCommittedMutationBaselines(
+            new[] { changedSectionId }, out ContinuationCensusFailure unreservedFailure), Is.False,
+            "The ordinary path cannot refresh while any epoch reservation is active.");
+        Assert.That(unreservedFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(protocol.TryRefreshCommittedMutationBaselinesForReservation(
+            new object(), new[] { changedSectionId }, out ContinuationCensusFailure wrongTokenFailure), Is.False,
+            "A different operation cannot borrow the active reservation.");
+        Assert.That(wrongTokenFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+
+        Assert.That(protocol.TryRefreshCommittedMutationBaselinesForReservation(
+            reservation.Token, new[] { changedSectionId }, out ContinuationCensusFailure refreshFailure), Is.True,
+            refreshFailure.ToString());
+        Assert.That(runtimeState.MutationEpochState.CurrentEpoch, Is.Zero,
+            "The census adapter refreshes witnesses but never publishes the Core-owned epoch.");
+        Assert.That(protocol.TryCompleteMutationEpochReservation(
+            reservation, committedMutation: true, out ContinuationCensusFailure completionFailure), Is.True,
+            completionFailure.ToString());
+        Assert.That(runtimeState.MutationEpochState.CurrentEpoch, Is.EqualTo(1L),
+            "The exact reserved operation publishes one epoch after successful baseline refresh.");
+        operationScope.Dispose();
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure complete), Is.True,
+            complete.ToString());
     }
 
     [Test]
@@ -303,6 +380,170 @@ public sealed class ContinuationCensusProtocolTests
     }
 
     [Test]
+    public void RuntimeProtocolAndApplicationScopesShareTheCoreBoundaryRegistry()
+    {
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        DailyV1ExecutionBoundaryState runtimeState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(), admission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(System.Guid.NewGuid()));
+        ContinuationCensusProtocol protocol = CreateOperationProtocol(runtimeState);
+        IReadOnlyList<DailyV1OwnerSectionContractIdentity> coreSectionContracts =
+            runtimeState.GetExpectedOwnerSectionContractInventory(out _);
+        Assert.That(runtimeState.ExpectedOwnerSectionContractInventorySealed, Is.True);
+        Assert.That(coreSectionContracts, Has.Count.EqualTo(89));
+        Assert.That(ContainsSection(coreSectionContracts, ReceiptSectionId), Is.True);
+
+        Assert.That(protocol.MutationEpochState, Is.SameAs(runtimeState.MutationEpochState),
+            "P12 mutation epoch state belongs to the same Core runtime boundary as operation and capture state.");
+
+        Assert.That(protocol.TryAssessRegisteredOperationQuiescence(out _), Is.True);
+        Assert.That(protocol.TryEnterOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance,
+            out SimulationOperationScope runtimeOperation, out _), Is.True);
+        Assert.That(runtimeState.ActiveOperationCount, Is.EqualTo(1));
+        Assert.That(runtimeState.ActiveRuntimeOperationCount, Is.EqualTo(1));
+        Assert.That(runtimeState.TryBeginOperation(), Is.True,
+            "The active-session operation enters the same Core boundary state.");
+        Assert.That(runtimeState.ActiveOperationCount, Is.EqualTo(2));
+        Assert.That(runtimeState.ActiveRuntimeOperationCount, Is.EqualTo(1));
+
+        runtimeOperation.Dispose();
+        Assert.That(runtimeState.ActiveOperationCount, Is.EqualTo(1));
+        Assert.That(runtimeState.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(protocol.TryAssessRegisteredOperationQuiescence(out _), Is.True,
+            "P12 quiescence retains its established runtime-protocol scope semantics while the outer session call is active.");
+
+        Assert.That(runtimeState.TryEndOperation(), Is.True);
+        Assert.That(runtimeState.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
+    public void SelectedSoloTravelAvailabilityComesFromSealedCoreOperationInventory()
+    {
+        SimulationRuntimeAdmissionContext noTravelAdmission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        DailyV1ExecutionBoundaryState noTravelState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(), noTravelAdmission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(System.Guid.NewGuid()));
+        CreateOperationProtocol(noTravelState, hasTravelSystem: false);
+
+        Assert.That(noTravelState.HasRuntimeProtocolOperationInventory, Is.True);
+        Assert.That(noTravelState.HasRuntimeProtocolOperationContract(
+            DailyV1RuntimeProtocolOperationContracts.SoloTravelStart), Is.False);
+        Assert.That(DailyV1SelectedDailyExecutionStage.ShouldAdvanceSelectedSoloTravel(
+            noTravelState, hostReportedTravelAvailability: true), Is.False,
+            "A Unity host component cannot enable a selected Core operation absent from the sealed inventory.");
+
+        SimulationRuntimeAdmissionContext travelAdmission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        DailyV1ExecutionBoundaryState travelState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(), travelAdmission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(System.Guid.NewGuid()));
+        CreateOperationProtocol(travelState, hasTravelSystem: true);
+
+        Assert.That(travelState.HasRuntimeProtocolOperationInventory, Is.True);
+        Assert.That(travelState.HasRuntimeProtocolOperationContract(
+            DailyV1RuntimeProtocolOperationContracts.SoloTravelStart), Is.True);
+        Assert.That(DailyV1SelectedDailyExecutionStage.ShouldAdvanceSelectedSoloTravel(
+            travelState, hostReportedTravelAvailability: false), Is.True,
+            "The admitted Core capability remains authoritative when the host does not select the stage.");
+    }
+    [Test]
+    public void SharedCaptureRequiresTheExactAuthorizedOuterScopeAndNoProtocolReservation()
+    {
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        DailyV1ExecutionBoundaryState runtimeState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(), admission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(System.Guid.NewGuid()));
+        ContinuationCensusProtocol protocol = CreateOperationProtocol(runtimeState);
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure baseline), Is.True,
+            baseline.ToString());
+
+        Assert.That(runtimeState.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            out _, out _, out ContinuationCensusFailure strictFailure), Is.False,
+            "The default capture route must remain strict-zero.");
+        Assert.That(strictFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.ContinuationSave,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> saveSnapshots,
+            out _,
+            out ContinuationCensusFailure saveFailure), Is.True, saveFailure.ToString());
+        Assert.That(saveSnapshots, Has.Count.EqualTo(89));
+
+        Assert.That(runtimeState.TryBeginOperation(DailyV1OperationScopeKind.Application), Is.True);
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.ContinuationSave,
+            out _, out _, out ContinuationCensusFailure nestedFailure), Is.False);
+        Assert.That(nestedFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(runtimeState.TryEndOperation(DailyV1OperationScopeKind.Application), Is.True);
+
+        Assert.That(protocol.TryEnterOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcTrade, out SimulationOperationScope runtimeOperation, out ContinuationCensusFailure enterFailure),
+            Is.True, enterFailure.ToString());
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.ContinuationSave,
+            out _, out _, out ContinuationCensusFailure protocolFailure), Is.False);
+        Assert.That(protocolFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        runtimeOperation.Dispose();
+        Assert.That(runtimeState.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+
+        Assert.That(runtimeState.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.DailyAdvance,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> idleAdvanceSnapshots,
+            out _, out ContinuationCensusFailure idleAdvanceFailure), Is.True,
+            idleAdvanceFailure.ToString());
+        Assert.That(idleAdvanceSnapshots, Has.Count.EqualTo(89),
+            "The exact outer DailyAdvance scope captures the complete selected P12 owner vector after registered protocol work has closed.");
+        Assert.That(protocol.TryEnterOperation(
+            DailyV1RuntimeProtocolOperationContracts.DailyAdvance, out SimulationOperationScope advanceProtocolOperation, out _), Is.True);
+        Assert.That(runtimeState.ActiveOperationCount, Is.EqualTo(2),
+            "One outer DailyAdvance and one registered RuntimeProtocol scope share the same registry.");
+        Assert.That(runtimeState.ActiveRuntimeOperationCount, Is.EqualTo(1),
+            "The P12 protocol's active-operation cardinality remains one inside daily mutation.");
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.DailyAdvance,
+            out _, out _, out ContinuationCensusFailure nestedAdvanceFailure), Is.False,
+            "Token finalization cannot start before the inner protocol scope has closed.");
+        Assert.That(nestedAdvanceFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+
+        Assert.That(protocol.TryReserveMutationEpochCapacity(out ContinuationMutationEpochReservation advanceReservation,
+            out ContinuationCensusFailure reservationFailure), Is.True, reservationFailure.ToString());
+        advanceProtocolOperation.Dispose();
+        Assert.That(runtimeState.ActiveOperationCount, Is.EqualTo(1));
+        Assert.That(runtimeState.ActiveRuntimeOperationCount, Is.Zero);
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.DailyAdvance,
+            out _, out _, out ContinuationCensusFailure reservedAdvanceFailure), Is.False,
+            "A pending mutation-epoch reservation forbids capture after the protocol scope closes.");
+        Assert.That(reservedAdvanceFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        protocol.ReleaseMutationEpochReservation(advanceReservation);
+
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.DailyAdvance,
+            out IReadOnlyList<OwnerSectionCensusSnapshot> advanceSnapshots,
+            out _,
+            out ContinuationCensusFailure advanceFailure), Is.True, advanceFailure.ToString());
+        Assert.That(advanceSnapshots, Has.Count.EqualTo(89));
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.ContinuationSave,
+            out _, out _, out ContinuationCensusFailure wrongAllowanceFailure), Is.False);
+        Assert.That(wrongAllowanceFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(runtimeState.TryBeginOperation(DailyV1OperationScopeKind.Application), Is.True);
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.DailyAdvance,
+            out _, out _, out ContinuationCensusFailure unrelatedScopeFailure), Is.False,
+            "A generic application operation cannot be nested into daily finalization.");
+        Assert.That(unrelatedScopeFailure, Is.EqualTo(ContinuationCensusFailure.OperationInProgress));
+        Assert.That(runtimeState.TryEndOperation(DailyV1OperationScopeKind.Application), Is.True);
+        Assert.That(runtimeState.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        Assert.That(runtimeState.ActiveOperationCount, Is.Zero);
+    }
+
+    [Test]
     public void QuiescentSnapshotCopiesCurrentOwnersInOrdinalSectionOrder()
     {
         object firstOwner = new object();
@@ -405,11 +646,7 @@ public sealed class ContinuationCensusProtocolTests
 
         Assert.That(protocol.TryAssessRegisteredOperationQuiescence(out ContinuationCensusFailure failure), Is.False);
         Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
-        FieldInfo activeOperationCount = typeof(ContinuationCensusProtocol).GetField(
-            "activeOperationCount",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.That(activeOperationCount, Is.Not.Null);
-        Assert.That((int)activeOperationCount.GetValue(protocol), Is.EqualTo(1),
+        Assert.That(protocol.ActiveOperationCount, Is.EqualTo(1),
             "off-thread disposal must preserve the active count because the owner thread did not close the scope");
     }
 
@@ -480,6 +717,133 @@ public sealed class ContinuationCensusProtocolTests
     }
 
     [Test]
+    public void DynamicRosterAndMaterializationTransitionKeepsCensusInventoryInSync()
+    {
+        PersonStore store = new PersonStore();
+        PersonRuntime person = new PersonRuntime(new PersonId("person-shared-roster-transition"));
+        Assert.That(store.TryRegister(person, out _), Is.True);
+
+        List<NpcRuntime> roster = new List<NpcRuntime>
+        {
+            new NpcRuntime("npc-shared-roster-before", null)
+        };
+        ContinuationCensusProtocol protocol = CreateSpatialKnowledgeProtocol(store, roster);
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure initialFailure), Is.True,
+            initialFailure.ToString());
+        Assert.That(protocol.SpatialKnowledgeFamilyProviders, Has.Count.EqualTo(2));
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> snapshotsBefore,
+            out long mutationEpochBefore,
+            out ContinuationCensusFailure captureBeforeFailure), Is.True, captureBeforeFailure.ToString());
+        Assert.That(snapshotsBefore, Has.Count.EqualTo(4));
+        Assert.That(mutationEpochBefore, Is.Zero);
+        long personStoreRevisionAtStart = store.Revision;
+        NpcRuntime materializedNpc = new NpcRuntime("npc-shared-roster-after", null);
+
+        Assert.That(protocol.TryEnterOperation(
+            DailyV1RuntimeProtocolOperationContracts.NpcMembership,
+            out SimulationOperationScope membershipScope,
+            out ContinuationCensusFailure enterFailure), Is.True, enterFailure.ToString());
+        roster.Add(materializedNpc);
+        Assert.That(TryBindPerson(store, person.PersonId, materializedNpc.RuntimeId), Is.True);
+        Assert.That(store.Revision, Is.EqualTo(personStoreRevisionAtStart + 1L));
+        Assert.That(store.MaterializedBindingCount, Is.EqualTo(1));
+
+        Assert.That(protocol.TryReconcileSpatialKnowledgeRosterAndNotifyCommittedMutations(
+            new[]
+            {
+                PersonMembershipCensusProvider.SectionId,
+                PersonMaterializationBindingCensusProvider.SectionId
+            },
+            personStoreRevisionAtStart,
+            out ContinuationCensusFailure transitionFailure), Is.True, transitionFailure.ToString());
+        membershipScope.Dispose();
+
+        Assert.That(protocol.TryReadMutationEpoch(out long mutationEpochAfter, out ContinuationCensusFailure epochFailure),
+            Is.True, epochFailure.ToString());
+        Assert.That(mutationEpochAfter, Is.EqualTo(mutationEpochBefore + 1L));
+        Assert.That(protocol.SpatialKnowledgeFamilyProviders, Has.Count.EqualTo(4));
+        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure finalFailure), Is.True,
+            finalFailure.ToString());
+
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            out IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
+            out long observedMutationEpoch,
+            out ContinuationCensusFailure captureFailure), Is.True, captureFailure.ToString());
+        Assert.That(snapshots, Has.Count.EqualTo(snapshotsBefore.Count + 2));
+        Assert.That(observedMutationEpoch, Is.EqualTo(mutationEpochAfter));
+
+        for (int index = 0; index < snapshots.Count; index++)
+        {
+            if (index > 0)
+                Assert.That(StringComparer.Ordinal.Compare(
+                    snapshots[index - 1].SectionId, snapshots[index].SectionId), Is.LessThan(0),
+                    "The staged census projection remains in deterministic ordinal order.");
+        }
+        foreach (OwnerSectionCensusSnapshot previous in snapshotsBefore)
+        {
+            OwnerSectionCensusSnapshot retained = FindSnapshot(snapshots, previous.SectionId);
+            Assert.That(retained.SchemaVersion, Is.EqualTo(previous.SchemaVersion));
+            Assert.That(retained.Role, Is.EqualTo(previous.Role));
+        }
+
+        OwnerSectionCensusSnapshot membershipSnapshot = FindSnapshot(
+            snapshots, PersonMembershipCensusProvider.SectionId);
+        OwnerSectionCensusSnapshot bindingSnapshot = FindSnapshot(
+            snapshots, PersonMaterializationBindingCensusProvider.SectionId);
+        Assert.That(membershipSnapshot.Cardinality, Is.EqualTo(1));
+        Assert.That(bindingSnapshot.Cardinality, Is.EqualTo(1));
+        Assert.That(membershipSnapshot.Revision, Is.EqualTo(store.Revision));
+        Assert.That(bindingSnapshot.Revision, Is.EqualTo(store.Revision));
+    }
+
+    [Test]
+    public void PartialOwnerInventoryCannotPublishSelectedDailyV1CensusReadiness()
+    {
+        PersonStore store = new PersonStore();
+        List<NpcRuntime> roster = new List<NpcRuntime>
+        {
+            new NpcRuntime("npc-partial-selected-census", null)
+        };
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        DailyV1ExecutionBoundaryState sharedExecutionState = new DailyV1ExecutionBoundaryState(
+            new SimulationTime(), admission, SimulationRuntimeCompositionProfile.Standard,
+            new WorldId(System.Guid.NewGuid()));
+        Assert.That(sharedExecutionState.TryBindRuntimeConfiguration(
+            SimulationConfigurationResolver.ResolveOrThrow(),
+            new SimulationCalendar(new CalendarDefinition(1, 1, 1))), Is.True);
+
+        ContinuationCensusProtocol protocol =
+            CreateSpatialKnowledgeProtocol(store, roster, sharedExecutionState);
+        IReadOnlyList<DailyV1OwnerSectionContractIdentity> contracts =
+            sharedExecutionState.GetExpectedOwnerSectionContractInventory(out _);
+        Assert.That(contracts, Has.Count.EqualTo(4),
+            "This fixture deliberately contains only PersonStore and SpatialKnowledge rows.");
+        Assert.That(contracts, Has.Count.Not.EqualTo(89),
+            "A partial provider inventory must not masquerade as the accepted selected profile.");
+
+        Assert.That(protocol.TryAssessOwnerSectionInventory(
+            out ContinuationCensusFailure failure), Is.False);
+        Assert.That(failure, Is.EqualTo(ContinuationCensusFailure.OwnerCoverageIncomplete));
+        Assert.That(sharedExecutionState.TryReadSelectedRuntimeCensusOperationCount(out int operationCount), Is.False);
+        Assert.That(operationCount, Is.Zero);
+        Assert.That(protocol.TryCaptureQuiescentOwnerSectionSnapshot(
+            out _, out _, out ContinuationCensusFailure captureFailure), Is.False);
+        Assert.That(captureFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
+    }
+
+    private static OwnerSectionCensusSnapshot FindSnapshot(
+        IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
+        string sectionId)
+    {
+        foreach (OwnerSectionCensusSnapshot snapshot in snapshots)
+            if (snapshot.SectionId == sectionId) return snapshot;
+        Assert.Fail("Expected owner section was not captured: " + sectionId);
+        return null;
+    }
+
+    [Test]
     public void DuplicateNpcInReconciliationFailsBeforePublishingAnyFamilyOrEpoch()
     {
         PersonStore store = new PersonStore();
@@ -516,6 +880,28 @@ public sealed class ContinuationCensusProtocolTests
         Assert.That(epochFailure, Is.EqualTo(ContinuationCensusFailure.ProtocolFaulted));
     }
 
+    [Test]
+    public void SharedCensusBindingPublishesReadinessAndFaultsCoreState()
+    {
+        SimulationRuntimeAdmissionContext admission =
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1();
+        DailyV1ExecutionBoundaryState sharedExecutionState =
+            new DailyV1ExecutionBoundaryState(
+                new SimulationTime(), admission,
+                SimulationRuntimeCompositionProfile.Standard,
+                new WorldId(System.Guid.NewGuid()));
+
+        ContinuationCensusProtocol protocol = CreateOperationProtocol(sharedExecutionState);
+        Assert.That(sharedExecutionState.TryReadSelectedRuntimeCensusOperationCount(
+            out int count), Is.True);
+        Assert.That(count, Is.Zero);
+
+        protocol.FaultClosed();
+
+        Assert.That(sharedExecutionState.TryReadSelectedRuntimeCensusOperationCount(
+            out count), Is.False);
+        Assert.That(count, Is.Zero);
+    }
     private static ContinuationCensusProtocol CreateProtocol(
         IOwnerSectionCensusProvider provider,
         OwnerSectionRole role)
@@ -532,21 +918,143 @@ public sealed class ContinuationCensusProtocolTests
         return protocol;
     }
 
-    private static ContinuationCensusProtocol CreateOperationProtocol()
+    private static ContinuationCensusProtocol CreateOperationProtocol(
+        DailyV1ExecutionBoundaryState sharedExecutionState = null, bool hasTravelSystem = false) =>
+        CreateOperationProtocol(sharedExecutionState, out _, out _, hasTravelSystem);
+
+    private static ContinuationCensusProtocol CreateOperationProtocol(
+        DailyV1ExecutionBoundaryState sharedExecutionState,
+        out RecordFixture records,
+        bool hasTravelSystem = false) =>
+        CreateOperationProtocol(sharedExecutionState, out records, out _, hasTravelSystem);
+
+    private static ContinuationCensusProtocol CreateOperationProtocol(
+        DailyV1ExecutionBoundaryState sharedExecutionState,
+        out RecordFixture records,
+        out Dictionary<string, MutableWitnessProvider> mutableProviders,
+        bool hasTravelSystem = false)
     {
-        RecordFixture records = SimulationTestFactory.CreateRecordFixture();
-        ContinuationCensusProtocol protocol = new ContinuationCensusProtocol();
-        Assert.That(protocol.RegisterExpectedSection(new OwnerSectionContract(
-            ReceiptSectionId, NpcDecisionRecorder.OccurrenceReceiptSectionSchemaVersion,
-            OwnerSectionRole.Required), out _), Is.True);
-        Assert.That(protocol.RegisterCensusProvider(ReceiptSectionId, records.DecisionRecorder, out _), Is.True);
+        records = SimulationTestFactory.CreateRecordFixture();
+        ContinuationCensusProtocol protocol = new ContinuationCensusProtocol(sharedExecutionState);
+        mutableProviders = new Dictionary<string, MutableWitnessProvider>(StringComparer.Ordinal);
+        if (sharedExecutionState == null)
+        {
+            Assert.That(protocol.RegisterExpectedSection(new OwnerSectionContract(
+                ReceiptSectionId, NpcDecisionRecorder.OccurrenceReceiptSectionSchemaVersion,
+                OwnerSectionRole.Required), out _), Is.True);
+            Assert.That(protocol.RegisterCensusProvider(ReceiptSectionId, records.DecisionRecorder, out _), Is.True);
+        }
+        else
+        {
+            RegisterCompleteSelectedCoreCensus(protocol, records, mutableProviders);
+        }
         Assert.That(protocol.SealExpectedSectionInventory(out _), Is.True);
         Assert.That(protocol.SealCensusProviderInventory(out _), Is.True);
-        Assert.That(protocol.RegisterExpectedOperation("bootstrap.publish", out _), Is.True);
-        Assert.That(protocol.RegisterExpectedOperation("runtime.advance", out _), Is.True);
+        if (sharedExecutionState == null)
+        {
+            Assert.That(protocol.RegisterExpectedOperation("bootstrap.publish", out _), Is.True);
+            Assert.That(protocol.RegisterExpectedOperation("runtime.advance", out _), Is.True);
+            Assert.That(protocol.RegisterExpectedOperation("runtime.advance-day", out _), Is.True);
+        }
+        else
+        {
+            Assert.That(sharedExecutionState.TryBindRuntimeConfiguration(
+                SimulationConfigurationResolver.ResolveOrThrow(),
+                new SimulationCalendar(new CalendarDefinition(1, 1, 1))), Is.True);
+            IReadOnlyList<string> operationContractIds =
+                DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                    hasRuntimeAdmission: true,
+                    hasTravelPartySystem: false,
+                    hasTravelSystem: hasTravelSystem);
+            foreach (string operationContractId in operationContractIds)
+                Assert.That(protocol.RegisterExpectedOperation(operationContractId, out _), Is.True);
+        }
         Assert.That(protocol.SealOperationInventory(out _), Is.True);
         Assert.That(protocol.BindOwnerThread(out _), Is.True);
+        if (sharedExecutionState != null)
+            Assert.That(protocol.TryAssessOwnerSectionInventory(
+                out ContinuationCensusFailure initialCensusFailure), Is.True, initialCensusFailure.ToString());
         return protocol;
+    }
+
+    private static void RegisterCompleteSelectedCoreCensus(
+        ContinuationCensusProtocol protocol,
+        RecordFixture records,
+        Dictionary<string, MutableWitnessProvider> mutableProviders)
+    {
+        const string npcRuntimeId = "census-fixture-npc";
+        const string personIdValue = "census-fixture-person";
+        const string cityIdValue = "census-fixture-city";
+        List<string> sectionIds = new List<string>(89);
+        sectionIds.AddRange(DailyV1SelectedOwnerSectionCensusContract.FixedRequired);
+        sectionIds.AddRange(DailyV1SelectedOwnerSectionCensusContract.FixedEmpty);
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.NpcPrefixes)
+            sectionIds.Add(prefix + npcRuntimeId);
+        sectionIds.Add(DailyV1SelectedOwnerSectionCensusContract.NpcResidencePrefix + npcRuntimeId);
+        PersonId personId = new PersonId(personIdValue);
+        sectionIds.Add(DailyV1PersonCensusIdentity.SectionIdFor(personId));
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.CityPrefixes)
+        {
+            sectionIds.Add(string.Equals(prefix,
+                    DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionPrefix,
+                    StringComparison.Ordinal)
+                ? prefix + cityIdValue
+                : prefix + cityIdValue.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + ":" + cityIdValue);
+        }
+
+        Assert.That(sectionIds, Has.Count.EqualTo(89),
+            "The selected test profile must provide all 89 canonical P12 rows.");
+        HashSet<string> fixedEmpty = new HashSet<string>(
+            DailyV1SelectedOwnerSectionCensusContract.FixedEmpty, StringComparer.Ordinal);
+        HashSet<string> uniqueIds = new HashSet<string>(StringComparer.Ordinal);
+        Dictionary<string, object> aliasOwners = new Dictionary<string, object>(StringComparer.Ordinal);
+
+        foreach (string sectionId in sectionIds)
+        {
+            Assert.That(uniqueIds.Add(sectionId), Is.True, "Duplicate selected owner ID: " + sectionId);
+            int schemaVersion = sectionId == ReceiptSectionId
+                ? NpcDecisionRecorder.OccurrenceReceiptSectionSchemaVersion
+                : DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
+            OwnerSectionRole role = fixedEmpty.Contains(sectionId)
+                ? OwnerSectionRole.ExplicitlyEmpty
+                : OwnerSectionRole.Required;
+            Assert.That(protocol.RegisterExpectedSection(
+                new OwnerSectionContract(sectionId, schemaVersion, role), out ContinuationCensusFailure contractFailure),
+                Is.True, contractFailure + ": " + sectionId);
+
+            IOwnerSectionCensusProvider provider;
+            if (sectionId == ReceiptSectionId)
+            {
+                provider = records.DecisionRecorder;
+            }
+            else
+            {
+                string alias = DailyV1SelectedOwnerSectionCensusContract.ExpectedAliasGroupForSection(sectionId);
+                if (alias == null)
+                    aliasOwners.Add(sectionId, new object());
+                else if (!aliasOwners.TryGetValue(alias, out object aliasOwner))
+                    aliasOwners.Add(alias, aliasOwner = new object());
+
+                object ownerIdentity = alias == null ? aliasOwners[sectionId] : aliasOwners[alias];
+                MutableWitnessProvider mutable = new MutableWitnessProvider(
+                    CreateWitness(sectionId, ownerIdentity, cardinality: 0, revision: 0L));
+                provider = mutable;
+                mutableProviders.Add(sectionId, mutable);
+            }
+
+            Assert.That(protocol.RegisterCensusProvider(sectionId, provider, out ContinuationCensusFailure providerFailure),
+                Is.True, providerFailure + ": " + sectionId);
+        }
+    }
+
+    private static bool ContainsSection(
+        IReadOnlyList<DailyV1OwnerSectionContractIdentity> contracts,
+        string sectionId)
+    {
+        foreach (DailyV1OwnerSectionContractIdentity contract in contracts)
+            if (string.Equals(contract.SectionId, sectionId, StringComparison.Ordinal)) return true;
+        return false;
     }
 
     private static ContinuationCensusProtocol CreateTwoSectionProtocol(
@@ -570,10 +1078,11 @@ public sealed class ContinuationCensusProtocolTests
 
     private static ContinuationCensusProtocol CreateSpatialKnowledgeProtocol(
         PersonStore store,
-        IReadOnlyList<NpcRuntime> roster)
+        IReadOnlyList<NpcRuntime> roster,
+        DailyV1ExecutionBoundaryState sharedExecutionState = null)
     {
         IReadOnlyList<IOwnerSectionCensusProvider> personProviders = PersonStoreCensusProvider.CreateProviders(store);
-        ContinuationCensusProtocol protocol = new ContinuationCensusProtocol();
+        ContinuationCensusProtocol protocol = new ContinuationCensusProtocol(sharedExecutionState);
         Assert.That(protocol.RegisterExpectedSection(new OwnerSectionContract(
             PersonMembershipCensusProvider.SectionId,
             PersonMembershipCensusProvider.SchemaVersion,
@@ -590,11 +1099,26 @@ public sealed class ContinuationCensusProtocolTests
             familyFailure.ToString());
         Assert.That(protocol.SealExpectedSectionInventory(out _), Is.True);
         Assert.That(protocol.SealCensusProviderInventory(out _), Is.True);
-        Assert.That(protocol.RegisterExpectedOperation("runtime.npc-membership", out _), Is.True);
+        if (sharedExecutionState == null)
+        {
+            Assert.That(protocol.RegisterExpectedOperation(
+                DailyV1RuntimeProtocolOperationContracts.NpcMembership, out _), Is.True);
+        }
+        else
+        {
+            IReadOnlyList<string> operationContractIds =
+                DailyV1RuntimeProtocolOperationContracts.GetExpectedOperationContractIds(
+                    hasRuntimeAdmission: true,
+                    hasTravelPartySystem: false,
+                    hasTravelSystem: false);
+            foreach (string operationContractId in operationContractIds)
+                Assert.That(protocol.RegisterExpectedOperation(operationContractId, out _), Is.True);
+        }
         Assert.That(protocol.SealOperationInventory(out _), Is.True);
         Assert.That(protocol.BindOwnerThread(out _), Is.True);
-        Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure initialFailure), Is.True,
-            initialFailure.ToString());
+        if (sharedExecutionState == null)
+            Assert.That(protocol.TryAssessOwnerSectionInventory(out ContinuationCensusFailure initialFailure), Is.True,
+                initialFailure.ToString());
         return protocol;
     }
 

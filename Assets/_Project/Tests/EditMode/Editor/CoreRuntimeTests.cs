@@ -79,6 +79,40 @@ public sealed class CoreRuntimeTests
     }
 
     [Test]
+    public void DecisionOccurrenceReceiptFailureUsesDefaultRecorderLoggerWhenOmitted()
+    {
+        RuntimeIdAllocator runtimeIds = new RuntimeIdAllocator();
+        SimulationTime simulationTime = new SimulationTime();
+        SimulationRecordSequence sequence = new SimulationRecordSequence();
+        FieldInfo nextSequenceField = typeof(SimulationRecordSequence).GetField(
+            "nextSequence", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(nextSequenceField, Is.Not.Null);
+        nextSequenceField.SetValue(sequence, long.MaxValue);
+        NpcDecisionStore decisions = new NpcDecisionStore();
+        NpcDecisionRecorder recorder = new NpcDecisionRecorder(
+            runtimeIds, simulationTime, sequence, decisions);
+
+        LogAssert.Expect(LogType.Error,
+            "Cannot allocate NPC decision record identity: Simulation record sequence is exhausted.");
+        Assert.That(recorder.TryRecordOccurrenceOnce(
+            "default-logger-operation",
+            "default-logger-fingerprint",
+            "npc-default-logger",
+            NpcDecisionType.Action,
+            NpcDecisionOrigin.Autonomous,
+            "action-default-logger",
+            null,
+            null,
+            out NpcDecisionRecord decision), Is.False);
+
+        Assert.That(decision, Is.Null);
+        OwnerSectionCensusWitness receipts = recorder.GetOccurrenceReceiptCensus();
+        Assert.That(receipts.Cardinality, Is.Zero);
+        Assert.That(receipts.Revision, Is.Zero);
+        Assert.That(sequence.CaptureSnapshot().NextSequence, Is.EqualTo(long.MaxValue));
+    }
+
+    [Test]
     public void FailedRecordConstructionStillAdvancesTheConsumedSequenceRevision()
     {
         RecordFixture fixture = SimulationTestFactory.CreateRecordFixture();
@@ -90,6 +124,64 @@ public sealed class CoreRuntimeTests
         Assert.That(provider.GetCurrentCensus().Cardinality, Is.EqualTo(1));
         Assert.That(provider.GetCurrentCensus().Revision, Is.EqualTo(1L));
         Assert.That(fixture.Events.Events, Is.Empty);
+    }
+
+    [Test]
+    public void ExistingTravelDecisionIdentityDispatchesThroughRecorderWithoutAllocatingRecord()
+    {
+        CityData cityAsset = SimulationTestFactory.CreateCityData("travel-recorder-city");
+        NpcActionData travelAsset = SimulationTestFactory.CreateAction(
+            "travel-recorder-action", NpcActionType.Travel);
+        NpcData npcAsset = SimulationTestFactory.CreateNpc("travel-recorder-npc");
+        npcAsset.acoesPadrao.Add(new NPCDefaultAction { action = travelAsset, baseUtility = 1f });
+        SimulationConfigData config = SimulationTestFactory.CreateSimulationConfig();
+        config.Cities.Add(cityAsset);
+        config.Npcs.Add(new NpcSimulationConfig { npc = npcAsset, startingCity = cityAsset });
+        config.Actions.Add(travelAsset);
+        EffectiveSimulationConfiguration effective = SimulationConfigurationResolver.ResolveOrThrow(
+            contentOverrides: config.CreateConfigurationOverrides());
+        CalendarDefinition calendar = CalendarDefinition.CreateValidatedOrDefault(config.Calendar, out _);
+        DailyV1EffectiveDefinitions definitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+            config, effective, calendar, out DailyV1DefinitionAdapter.SelectedBindings bindings);
+        DailyV1SelectedRuntimeOwnerGraphBuilder builder = new DailyV1SelectedRuntimeOwnerGraphBuilder(definitions);
+        RuntimeIdAllocator runtimeIds = new RuntimeIdAllocator();
+        Assert.That(builder.TryCreateConfiguredCities(runtimeIds, _ => true), Is.True);
+        Assert.That(builder.TryCreateConfiguredNpcs(runtimeIds,
+            cityDefinitionId => builder.ResolveUniqueStartingCity(cityDefinitionId)?.RuntimeId), Is.True);
+        Assert.That(builder.TryBuild(out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+        DailyV1NpcRuntimeOwners actorOwner = builder.Npcs[0];
+        DailyV1CityRuntimeOwners cityOwner = builder.Cities[0];
+        Assert.That(graph.SpatialNetwork.TryGetLocation(cityOwner.LocationRuntimeId,
+            out SpatialLocationRuntime location), Is.True);
+        CityRuntime cityProjection = CityRuntime.CreateSelectedDailyV1(
+            cityOwner.RuntimeId, cityOwner.Definition, definitions, bindings, cityOwner, location);
+        NpcRuntime actor = NpcRuntime.CreateSelectedDailyV1(
+            actorOwner.RuntimeId, actorOwner.Definition, definitions, bindings, actorOwner, cityProjection);
+        Assert.That(actor.TryBindSelectedRuntimeOwnerGraphProvider(() => graph), Is.True);
+        NpcActionRuntime action = new NpcActionRuntime(travelAsset);
+        const string existingDecisionId = "decision/from-travel-plan";
+        action.SetOriginDecisionId(existingDecisionId);
+        RecordFixture fixture = SimulationTestFactory.CreateRecordFixture();
+
+        Assert.That(fixture.DecisionRecorder.TryRecordAndInstallSelectedAction(
+            actor, action, NpcDecisionOrigin.Autonomous,
+            out NpcDecisionRecord decision, out bool handled), Is.True);
+
+        Assert.That(handled, Is.True);
+        Assert.That(decision, Is.Null);
+        Assert.That(action.OriginDecisionId, Is.EqualTo(existingDecisionId));
+        Assert.That(fixture.Decisions.Decisions, Is.Empty);
+        Assert.That(fixture.Sequence.CaptureSnapshot().NextSequence, Is.EqualTo(1L));
+        Assert.That(actorOwner.ActionSlot.Revision, Is.EqualTo(1L));
+        Assert.That(actorOwner.ActionSlot.CurrentAction,
+            Is.SameAs(definitions.Actions[travelAsset.DefinitionId]));
+        Assert.That(actorOwner.ActionSlot.CurrentPayload.OriginDecisionId, Is.EqualTo(existingDecisionId));
+
+        NpcDecisionRecord next = fixture.DecisionRecorder.Record(
+            actor.RuntimeId, NpcDecisionType.Action, NpcDecisionOrigin.Autonomous,
+            "next-action", null, null, null);
+        Assert.That(next.DecisionId, Is.EqualTo("decision-000001"));
+        Assert.That(next.RecordSequence, Is.EqualTo(1L));
     }
 
     [Test]
@@ -136,6 +228,33 @@ public sealed class CoreRuntimeTests
             LogType.Error,
             "Duplicate RuntimeId 'duplicate-runtime' while registering City; it is already registered as NPC.");
         Assert.That(registry.RegisterCity(city), Is.False);
+    }
+
+    [Test]
+    public void SelectedLocationProjectionCollisionRollsBackRegistryProjectionBeforeRethrow()
+    {
+        const string runtimeId = "location/selected-projection-collision";
+        DailyV1RuntimeIdentityIndex identityIndex = new DailyV1RuntimeIdentityIndex();
+        Assert.That(identityIndex.TryStageRegister(runtimeId, DailyV1RuntimeIdentityKind.Location), Is.True);
+        RuntimeIdentityRegistry registry = new RuntimeIdentityRegistry(null, identityIndex);
+        SpatialLocationRuntime location = new SpatialLocationRuntime(runtimeId);
+        SpatialLocationRuntime preexistingLookup = new SpatialLocationRuntime(runtimeId);
+        System.Collections.Generic.Dictionary<string, SpatialLocationRuntime> selectedLocations =
+            new System.Collections.Generic.Dictionary<string, SpatialLocationRuntime>
+            {
+                [runtimeId] = preexistingLookup
+            };
+
+        Assert.Throws<System.ArgumentException>(() =>
+            registry.TryBindSelectedLocationProjection(location, selectedLocations));
+        Assert.That(selectedLocations[runtimeId], Is.SameAs(preexistingLookup));
+        LogAssert.Expect(LogType.Warning,
+            "Location runtime resolution failed: RuntimeId 'location/selected-projection-collision' is registered as Location, not Location.");
+        Assert.That(registry.TryGetLocation(runtimeId, out _), Is.False,
+            "The registry projection must be rolled back before the callback exception escapes.");
+
+        Assert.That(identityIndex.TryRemoveStaged(runtimeId, DailyV1RuntimeIdentityKind.Location), Is.True,
+            "The caller that staged the shared Core identity retains rollback ownership.");
     }
 
     [Test]

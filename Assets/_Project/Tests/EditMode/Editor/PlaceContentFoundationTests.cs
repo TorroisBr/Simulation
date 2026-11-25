@@ -440,7 +440,7 @@ public sealed class PlaceContentFoundationTests
     {
         return new ExplorableSiteRuntime(
             "content-site",
-            SimulationTestFactory.CreateExplorableSite("content-site-definition"),
+            SimulationTestFactory.CreateExplorableSiteDefinition("content-site-definition"),
             new SpatialLocationRuntime("content-site-location"));
     }
 

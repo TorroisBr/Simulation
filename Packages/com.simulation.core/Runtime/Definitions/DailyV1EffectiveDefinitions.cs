@@ -126,6 +126,26 @@ public sealed class DailyV1ActionDefinition : DailyV1DefinitionRecord
 { public DailyV1NpcActionData Values { get; } internal DailyV1ActionDefinition(string type, string id, DailyV1NpcActionData values) : base(type, id) { Values = values ?? throw new ArgumentNullException(nameof(values)); } }
 public sealed class DailyV1StatusDefinition : DailyV1DefinitionRecord
 { public DailyV1NpcStatusData Values { get; } internal DailyV1StatusDefinition(string type, string id, DailyV1NpcStatusData values) : base(type, id) { Values = values ?? throw new ArgumentNullException(nameof(values)); } }
+public sealed class DailyV1TraitDefinition : DailyV1DefinitionRecord
+{
+    public string DisplayName { get; }
+    internal DailyV1TraitDefinition(string type, string id, string displayName) : base(type, id)
+    { DisplayName = string.IsNullOrWhiteSpace(displayName) ? id : displayName; }
+}
+public sealed class DailyV1CapabilityAttributeDefinition : DailyV1DefinitionRecord
+{
+    public string DisplayName { get; }
+    internal DailyV1CapabilityAttributeDefinition(string type, string id, string displayName) : base(type, id)
+    { DisplayName = string.IsNullOrWhiteSpace(displayName) ? id : displayName; }
+}
+public sealed class DailyV1ExplorableSiteDefinition : DailyV1DefinitionRecord
+{
+    public DailyV1ExplorableSiteData Values { get; }
+    public string DisplayName => Values.siteName;
+    public DailyV1EnumValue Kind => Values.kind;
+    internal DailyV1ExplorableSiteDefinition(string type, string id, DailyV1ExplorableSiteData values) : base(type, id)
+    { Values = values ?? throw new ArgumentNullException(nameof(values)); }
+}
 
 /// <summary>Immutable resolved calendar values, preserving both uniform and custom-month shape.</summary>
 /// <summary>Immutable effective Daily-v1 configuration and selected definition graph.</summary>
@@ -137,6 +157,9 @@ public sealed class DailyV1EffectiveDefinitions
     private readonly IReadOnlyDictionary<string, DailyV1JobDefinition> jobs;
     private readonly IReadOnlyDictionary<string, DailyV1ActionDefinition> actions;
     private readonly IReadOnlyDictionary<string, DailyV1StatusDefinition> statuses;
+    private readonly IReadOnlyDictionary<string, DailyV1TraitDefinition> traits;
+    private readonly IReadOnlyDictionary<string, DailyV1CapabilityAttributeDefinition> capabilityAttributes;
+    private readonly IReadOnlyDictionary<string, DailyV1ExplorableSiteDefinition> explorableSites;
     private readonly IReadOnlyDictionary<string, DailyV1ContentRecord> contentRecords;
 
     public DailyV1SimulationConfigData Configuration { get; }
@@ -151,6 +174,9 @@ public sealed class DailyV1EffectiveDefinitions
     public IReadOnlyDictionary<string, DailyV1JobDefinition> Jobs => jobs;
     public IReadOnlyDictionary<string, DailyV1ActionDefinition> Actions => actions;
     public IReadOnlyDictionary<string, DailyV1StatusDefinition> Statuses => statuses;
+    public IReadOnlyDictionary<string, DailyV1TraitDefinition> Traits => traits;
+    public IReadOnlyDictionary<string, DailyV1CapabilityAttributeDefinition> CapabilityAttributes => capabilityAttributes;
+    public IReadOnlyDictionary<string, DailyV1ExplorableSiteDefinition> ExplorableSites => explorableSites;
     public IReadOnlyList<string> StageOrder { get; }
     public string ProfileContractIdentity { get; }
     public string GeographyProfileContractIdentity { get; }
@@ -171,7 +197,10 @@ public sealed class DailyV1EffectiveDefinitions
         IEnumerable<DailyV1NpcActionData> actions, IEnumerable<DailyV1NpcStatusData> statuses,
         IEnumerable<string> stageOrder, string profileContractIdentity,
         string geographyProfileContractIdentity, string geographyStageIdentity,
-        string hexCoordinateConvention, string hexCoordinateCanonicalOrder)
+        string hexCoordinateConvention, string hexCoordinateCanonicalOrder,
+        IEnumerable<KeyValuePair<string, string>> traitDefinitions = null,
+        IEnumerable<KeyValuePair<string, string>> capabilityAttributeDefinitions = null,
+        IEnumerable<DailyV1ExplorableSiteData> explorableSites = null)
     {
         return new DailyV1EffectiveDefinitions(configuration, effectiveConfiguration, resolvedCalendar, null,
             Wrap(cities, value => new DailyV1CityDefinition("CityData", value.id, value)),
@@ -181,7 +210,10 @@ public sealed class DailyV1EffectiveDefinitions
             Wrap(actions, value => new DailyV1ActionDefinition("NpcActionData", value.id, value)),
             Wrap(statuses, value => new DailyV1StatusDefinition("NpcStatusData", value.id, value)),
             null, stageOrder, profileContractIdentity, geographyProfileContractIdentity,
-            geographyStageIdentity, hexCoordinateConvention, hexCoordinateCanonicalOrder, null);
+            geographyStageIdentity, hexCoordinateConvention, hexCoordinateCanonicalOrder, null,
+            WrapPairs(traitDefinitions, (id, name) => new DailyV1TraitDefinition("TraitData", id, name)),
+            WrapPairs(capabilityAttributeDefinitions, (id, name) => new DailyV1CapabilityAttributeDefinition("CapabilityAttributeData", id, name)),
+            Wrap(explorableSites, value => new DailyV1ExplorableSiteDefinition("ExplorableSiteData", value.id, value)));
     }
 
     /// <summary>Returns a copied graph with the validated selected P12 content projection attached.</summary>
@@ -191,7 +223,8 @@ public sealed class DailyV1EffectiveDefinitions
         return new DailyV1EffectiveDefinitions(Configuration, EffectiveConfiguration, Calendar, null,
             cities.Values, items.Values, npcs.Values, jobs.Values, actions.Values, statuses.Values,
             contentRecords, StageOrder, ProfileContractIdentity, GeographyProfileContractIdentity,
-            GeographyStageIdentity, HexCoordinateConvention, HexCoordinateCanonicalOrder, projection);
+            GeographyStageIdentity, HexCoordinateConvention, HexCoordinateCanonicalOrder, projection,
+            traits.Values, capabilityAttributes.Values, explorableSites.Values);
     }
 
     internal DailyV1EffectiveDefinitions(DailyV1SimulationConfigData configuration,
@@ -205,7 +238,10 @@ public sealed class DailyV1EffectiveDefinitions
         IEnumerable<string> stageOrder, string profileContractIdentity,
         string geographyProfileContractIdentity, string geographyStageIdentity,
         string hexCoordinateConvention, string hexCoordinateCanonicalOrder,
-        DailyV1SelectedContentProjection contentProjection)
+        DailyV1SelectedContentProjection contentProjection,
+        IEnumerable<DailyV1TraitDefinition> traits = null,
+        IEnumerable<DailyV1CapabilityAttributeDefinition> capabilityAttributes = null,
+        IEnumerable<DailyV1ExplorableSiteDefinition> explorableSites = null)
     {
         Configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         EffectiveConfiguration = effectiveConfiguration ?? throw new ArgumentNullException(nameof(effectiveConfiguration));
@@ -216,6 +252,9 @@ public sealed class DailyV1EffectiveDefinitions
         this.jobs = Freeze(jobs);
         this.actions = Freeze(actions);
         this.statuses = Freeze(statuses);
+        this.traits = Freeze(traits);
+        this.capabilityAttributes = Freeze(capabilityAttributes);
+        this.explorableSites = Freeze(explorableSites);
         this.contentRecords = FreezeContent(contentRecords);
         ContentProjection = contentProjection;
         ContentFingerprint = contentProjection != null ? contentProjection.Fingerprint
@@ -258,6 +297,17 @@ public sealed class DailyV1EffectiveDefinitions
             if (value == null) { result.Add(null); continue; }
             result.Add(create(value));
         }
+        return result;
+    }
+
+    private static IEnumerable<TWrapper> WrapPairs<TWrapper>(IEnumerable<KeyValuePair<string, string>> values,
+        Func<string, string, TWrapper> create)
+        where TWrapper : DailyV1DefinitionRecord
+    {
+        if (values == null) return null;
+        List<TWrapper> result = new List<TWrapper>();
+        foreach (KeyValuePair<string, string> value in values)
+            result.Add(create(value.Key, value.Value));
         return result;
     }
 

@@ -38,14 +38,10 @@ public sealed class ExplorableSiteFoundationTests
     [TestCase(null)]
     [TestCase("")]
     [TestCase(" ")]
-    public void ExplorableSiteRuntime_RequiresDefinitionId(string definitionId)
+    public void ExplorableSiteDefinitionNode_RequiresDefinitionId(string definitionId)
     {
-        ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite(definitionId);
-
-        Assert.Throws<ArgumentException>(() => new ExplorableSiteRuntime(
-            "site-runtime",
-            definition,
-            new SpatialLocationRuntime("location-runtime")));
+        Assert.Throws<System.Reflection.TargetInvocationException>(
+            () => SimulationTestFactory.CreateExplorableSiteDefinition(definitionId));
     }
 
     [Test]
@@ -53,7 +49,7 @@ public sealed class ExplorableSiteFoundationTests
     {
         Assert.Throws<ArgumentNullException>(() => new ExplorableSiteRuntime(
             "site-runtime",
-            SimulationTestFactory.CreateExplorableSite("site-definition"),
+            SimulationTestFactory.CreateExplorableSiteDefinition("site-definition"),
             null));
     }
 
@@ -62,14 +58,14 @@ public sealed class ExplorableSiteFoundationTests
     {
         Assert.Throws<ArgumentException>(() => new ExplorableSiteRuntime(
             "same-runtime-id",
-            SimulationTestFactory.CreateExplorableSite("site-definition"),
+            SimulationTestFactory.CreateExplorableSiteDefinition("site-definition"),
             new SpatialLocationRuntime("same-runtime-id")));
     }
 
     [Test]
     public void ExplorableSiteRuntime_SeparatesSiteIdentityFromLocationAndDefinitionDisplay()
     {
-        ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite(
+        DailyV1ExplorableSiteDefinition definition = SimulationTestFactory.CreateExplorableSiteDefinition(
             "ruin-definition",
             ExplorableSiteKind.Ruin,
             "The Old Display");
@@ -170,11 +166,11 @@ public sealed class ExplorableSiteFoundationTests
         SpatialLocationRuntime sharedLocation = new SpatialLocationRuntime("shared-location");
         ExplorableSiteRuntime first = new ExplorableSiteRuntime(
             "site-one",
-            SimulationTestFactory.CreateExplorableSite("definition-one"),
+            SimulationTestFactory.CreateExplorableSiteDefinition("definition-one"),
             sharedLocation);
         ExplorableSiteRuntime second = new ExplorableSiteRuntime(
             "site-two",
-            SimulationTestFactory.CreateExplorableSite("definition-two"),
+            SimulationTestFactory.CreateExplorableSiteDefinition("definition-two"),
             sharedLocation);
 
         Assert.That(store.Add(first), Is.True);
@@ -190,7 +186,7 @@ public sealed class ExplorableSiteFoundationTests
     {
         return new ExplorableSiteRuntime(
             runtimeId,
-            SimulationTestFactory.CreateExplorableSite("site-definition"),
+            SimulationTestFactory.CreateExplorableSiteDefinition("site-definition"),
             new SpatialLocationRuntime(locationRuntimeId));
     }
 }

@@ -141,7 +141,7 @@ public sealed class P12ANpcSpatialKnowledgeOwnerCodecTests
             Array.Empty<AdventureOppositionObservation>(), Array.Empty<AdventureNotableItemObservation>(),
             Array.Empty<AdventureCommonResourceObservation>(), Array.Empty<AdventureAccessObservation>(), 0L,
             Array.Empty<P12DNpcCommercialMarketValue>(), Array.Empty<P12DNpcCommercialLiquidityValue>(),
-            Array.Empty<CommercialKnowledgeShareReceipt>(), 0L);
+            Array.Empty<P12DNpcCommercialShareReceiptValue>(), 0L);
 
     private static P12AOwnerSection Copy(P12AOwnerSection source,
         IEnumerable<P12AOwnerRow> rows = null, string aliasGroup = null,

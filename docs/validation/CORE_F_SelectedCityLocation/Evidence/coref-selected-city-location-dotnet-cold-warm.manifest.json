@@ -1,0 +1,3079 @@
+{
+  "schema": "validation-evidence-trx-package-v1",
+  "bundleId": "coref-selected-city-location-dotnet-cold-warm",
+  "format": {
+    "reportProfile": "trx-vstest-flat-v1",
+    "counterProfile": "vstest-17.14.1-flat",
+    "projectionPolicy": "trx-private-metadata-v1"
+  },
+  "tool": {
+    "commit": "6ff1fd4c262c4e05bb236aca29cf4373efb2d451",
+    "tree": "9a043c0042f9b093b8e10e3cdc330278f0ed84af",
+    "version": "1.2.1",
+    "files": [
+      {
+        "path": "Tools/UnityValidation/Package-UnityValidationEvidence.ps1",
+        "bytes": 4029,
+        "sha256": "9423c3bc4623154e170e37ce2a6ae18d97e1a2765a42c2774e3d2c8ef0553f61"
+      },
+      {
+        "path": "Tools/UnityValidation/UnityValidationEvidence.psm1",
+        "bytes": 76859,
+        "sha256": "1c68f0b5c931e90c9de4e025ec8e2d15806f99988fb4f51eff1d27149899a8c2"
+      },
+      {
+        "path": "Tools/UnityValidation/TrxValidationEvidence.psm1",
+        "bytes": 154898,
+        "sha256": "54d91eb7b861acaabf229fffaf8c568b6c391069ad34031ac1f75cd3f5cf4651"
+      }
+    ],
+    "runtime": {
+      "powershellEdition": "Core",
+      "powershellVersion": "7.6.5",
+      "dotnetVersion": "10.0.11",
+      "compressionAssemblyVersion": "10.0.0.0"
+    }
+  },
+  "archive": {
+    "file": "coref-selected-city-location-dotnet-cold-warm.zip",
+    "bytes": 317255,
+    "sha256": "8621a8c8226a2a7d1c7d20e78e03d18284ccc96fbdf18095faae6e554d5d976c",
+    "format": "zip-deflate-fixed-1980-01-01",
+    "entryPolicy": "normalized-trx-only"
+  },
+  "runs": [
+    {
+      "runnerRunId": "e5da8c26f23340419b7deb2fe5d251e5",
+      "source": {
+        "commit": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+        "tree": "a0f820e988e1d20308a28019350b443f783ce1c7",
+        "originalInputDigest": "2e25c61be420c275b67cd547151cde5569c8293289219332e41ad938b8ad8e67",
+        "inputStable": true,
+        "files": [
+          {
+            "path": "Assets/_Project/Scripts/CoreAdapters/DailyV1DefinitionAdapter.cs",
+            "bytes": 40759,
+            "sha256": "aaeaec5963cfa07295a4bb2862566bf05bb0b0003fe6d1b2018f4041bd517bf1"
+          },
+          {
+            "path": "Assets/_Project/Scripts/CoreAdapters/DailyV1DefinitionAdapter.cs.meta",
+            "bytes": 62,
+            "sha256": "0e4fac1b4db848d62c62d9d382eef7dec575578ab95ee203619fa9a9fcb1cf5e"
+          },
+          {
+            "path": "Assets/_Project/Scripts/CoreAdapters/P12ADailyV1ContentAdapter.cs",
+            "bytes": 16290,
+            "sha256": "e132d89f9e71453458469a9d32947afa2dd92ade6bdee3ecb7e6a3b2e69025f4"
+          },
+          {
+            "path": "Assets/_Project/Scripts/CoreAdapters/P12ADailyV1ContentAdapter.cs.meta",
+            "bytes": 251,
+            "sha256": "7be261ccd8b02d96aef23bd4242a8ba27ed36eb11bbf9ebfe9750ae608dcbc22"
+          },
+          {
+            "path": "Assets/_Project/Scripts/SpatialRouteKnowledge.cs",
+            "bytes": 21919,
+            "sha256": "3545b8023da61c742af9675e0a1bbcfe2944646585b6c0809de72701b24195d0"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs",
+            "bytes": 18156,
+            "sha256": "9550e79da1b85048695da93c761c5b881f637d4bb316151bf1b32000dc6b7f80"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarCoreTests.cs.meta",
+            "bytes": 251,
+            "sha256": "fa53413aea9c4ddafeadba6fa8478f05a722f71c7aa3fae9a4db4c4f1fb6be47"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarParityTests.cs",
+            "bytes": 8360,
+            "sha256": "ee8178a82a541a5733a9d7e461400025324695d561e288417598fbb0d210473d"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Calendar/CalendarParityTests.cs.meta",
+            "bytes": 62,
+            "sha256": "dac04226ad7917ca8b2813deb80c6190fdd5a0cc2bd438c3a9016595e5599be1"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/CORE_F_CompatibilityParityTests.cs",
+            "bytes": 17393,
+            "sha256": "669dc2a747ab292f7635884cd503d7aa9fb38815bb581941f87baab0d034e00b"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/CORE_F_CompatibilityParityTests.cs.meta",
+            "bytes": 62,
+            "sha256": "bd62cf2aaac6d5871abca9bc965bbd73e98cb757539fdc4a30472ff60b7b2eef"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/DailyV1CapturedSelectedContentFixture.cs",
+            "bytes": 169439,
+            "sha256": "91420f481f6fac3fd0fef0a0f6b28a81f8ad1f64afc179691ece32cb8ef6e09d"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/DailyV1CapturedSelectedContentFixture.cs.meta",
+            "bytes": 251,
+            "sha256": "04ef154980f2d070a4041dab8a7f2792f636a831ddb2fdbe808025ffe5c546e0"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/DailyV1DefinitionAdapterTypedParityTests.cs",
+            "bytes": 12932,
+            "sha256": "4fc47253ddfbab48fa837384a875d1e6c1dfeb9a7262cadd3736cfa55da4280b"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/DailyV1DefinitionAdapterTypedParityTests.cs.meta",
+            "bytes": 251,
+            "sha256": "fa6a1e51109a582d111c62cf80ff06af5d05304890e12be09aa0062666021cce"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/DeterministicDemographyPolicyTests.cs",
+            "bytes": 16062,
+            "sha256": "34612a7a0327f596d0825e44f20eff44d627076757b4a1f601cbf2c0de08c11d"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/DeterministicDemographyPolicyTests.cs.meta",
+            "bytes": 62,
+            "sha256": "dfe0003389d1f639ac0150b148da0ccc9230edaf7d337d8189da6c6cdd0f0a19"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/DeterministicRandomCoreTests.cs",
+            "bytes": 1959,
+            "sha256": "7f165ac2f3bb535afc49c3a8f03664fa9111fc432f980ec2517eab0118be37d4"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/DeterministicRandomCoreTests.cs.meta",
+            "bytes": 159,
+            "sha256": "620b36db77d2e08c07adb63620709c3216360cc4fd104b847cf00dd2e1e12f91"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceProductionKernelTests.cs",
+            "bytes": 8962,
+            "sha256": "5eb68005e86173750fe5a0a9465fc4e30c672e177ee17d7fb3605a6ad458c663"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceProductionKernelTests.cs.meta",
+            "bytes": 62,
+            "sha256": "691d8d0d7a16743f95ca50e38d62253bc625e6071691a5f6a772fe8405491112"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioParityVectors.cs",
+            "bytes": 1673,
+            "sha256": "cef149d82ff87fbf8c9f7c6a559c31a8a5646d8313201180bb287bec5aea3168"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioParityVectors.cs.meta",
+            "bytes": 62,
+            "sha256": "11f0c59e9bff7dfac6bdeb313329ca0c2cc8c8749dd34ac014876719babfe953"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioRuntimeTests.cs",
+            "bytes": 17854,
+            "sha256": "27f7a74635614bdbaccd9bef98954798bb9f7db480b3cac28782a56c52cd093b"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioRuntimeTests.cs.meta",
+            "bytes": 62,
+            "sha256": "afde504459ea5377fabd2dd54c3278ef086b303ddd966b803e7f6168543068ee"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceCalculatorParityTests.cs",
+            "bytes": 802,
+            "sha256": "beb063b03ef5ec8b5ab133515e1f4e12974f5e958125d7e85ac4ef3c71b95c71"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceCalculatorParityTests.cs.meta",
+            "bytes": 62,
+            "sha256": "bbcf479b87f44b2fdb9d43ce14853a89f6ceea40d3aaad337c42eaf3f1e3bc64"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceParityVectors.cs",
+            "bytes": 1600,
+            "sha256": "1944e9f9e986b87b1fd4c72fe5df84ed1685f70d559f1a2d151eeae3d4153c57"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceParityVectors.cs.meta",
+            "bytes": 62,
+            "sha256": "e921ddda420dc9342c03ac7dbad72335945b302b56f4ef40b072ce6c96044dd4"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationFaultMatrixTests.cs",
+            "bytes": 10113,
+            "sha256": "2f3d61232065324e02eb28cd8db6c97ba07573dda229061bb8ac08468ab6ec44"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationFaultMatrixTests.cs.meta",
+            "bytes": 62,
+            "sha256": "39ec609128c629474b591441fdbdce440b90a34b4b35b4bcae2b16311073450d"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationTests.cs",
+            "bytes": 26475,
+            "sha256": "2f0488ad7fd03d2fab547af37ab022048264931b359b93e54a6c7fa2be202b88"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/PersistenceFoundationTests.cs.meta",
+            "bytes": 65,
+            "sha256": "c3541a2b3dc4196cba0538d7f82b66160bb227793f250cf6501e571deb87e591"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/StableKeyEncodingTests.cs",
+            "bytes": 1248,
+            "sha256": "11d11c63e39b626f427011aa82a6fe86478fa6afeb66efe736ecddb23ff6059a"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Core/StableKeyEncodingTests.cs.meta",
+            "bytes": 159,
+            "sha256": "a2a7b647e2cd144c8f14a2ce0e2cdef4435904c3b0eb1b3c043e6662ef27f59e"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/DeterministicRandomRootSnapshotTests.cs",
+            "bytes": 6774,
+            "sha256": "490b3c332db5ff7caba9231a83927fcf7ba8ded51d8dc56f1e3bf8fc7afa78f5"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/DeterministicRandomTests.cs",
+            "bytes": 2785,
+            "sha256": "811dad934854ccdb010e8ff36276b8e385d7a609533773354268aeac307800f1"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/LogicalTimelineTests.cs",
+            "bytes": 61130,
+            "sha256": "b6fc0ffbdf91b7901fab40fcee167f7157802244a5b24a58c8ed4b5fc264ae75"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/P18DDailyBoundaryOwnerTests.cs",
+            "bytes": 7397,
+            "sha256": "a6faf96db02a43665448e5f66d6ec222c161f869777169fbada57631eec1f9a2"
+          },
+          {
+            "path": "Assets/_Project/Tests/EditMode/Editor/Person/PersonOwnerSnapshotTests.cs",
+            "bytes": 20114,
+            "sha256": "0c2bb338f760dbf6e5a666b7b7d1c292f5394d686200b775704fbd46701eef20"
+          },
+          {
+            "path": "docs/architecture/CORE_F_SELECTED_VALUE_MEMBERS.csv",
+            "bytes": 33463,
+            "sha256": "7ef3a47ade07697011af422f1274bb336be4d9ca37b52eac0b9c40cfabe44bc4"
+          },
+          {
+            "path": "docs/validation/CORE_F_SharedRuntimeSource/JSON_PAYLOAD_ORACLE.csv",
+            "bytes": 4469,
+            "sha256": "63f5829227c6a507e0b78b42d195aeaa5717ee2918154e68ee617d78f4ee6c1c"
+          },
+          {
+            "path": "docs/validation/CORE_F_SharedRuntimeSource/NUMERIC_ORACLE_VECTORS.csv",
+            "bytes": 10107,
+            "sha256": "2a5d2c653cec82421936939a0ffbababbb2f12b8834afa645b890d884deaf2f1"
+          },
+          {
+            "path": "docs/validation/CORE_F_SharedRuntimeSource/UNITY_ORACLE_CAPTURE_RESULTS_d8b4c40e.csv",
+            "bytes": 181513,
+            "sha256": "95e3912a43712693cf6ef68cf22e306a770b53a51818b0d6123842f6fa1d7a44"
+          },
+          {
+            "path": "global.json",
+            "bytes": 111,
+            "sha256": "6a177687fe58885fa8c9d2fc1d5261ed8ff5065e4c6c304c6bb81509f9e08aaf"
+          },
+          {
+            "path": "Packages/com.simulation.core/package.json",
+            "bytes": 202,
+            "sha256": "da3c84b1339815dcbbf633345dbcf0b66da19f8d49ff44c800840735ed8199b5"
+          },
+          {
+            "path": "Packages/com.simulation.core/package.json.meta",
+            "bytes": 167,
+            "sha256": "c4206b2b5ed2e707b9bee5065ef1fc8c8190c1b3825f8c6b31ac78495495d23c"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime.meta",
+            "bytes": 177,
+            "sha256": "e380857574ff4608cf7fb179c5aa83f31482b1cb35cb659ef332b66fbe940ace"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/ActionExecution.cs",
+            "bytes": 8045,
+            "sha256": "9497e8ebbfee3fbc56d99488db04208523b8108d87a68dddebcdb1a124df9827"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/ActorChoiceContracts.cs",
+            "bytes": 12065,
+            "sha256": "1401c4d0b109bf843eed59dbcd6c53f85ca7ec933e75e866a4a327970f97025f"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/ActorChoiceStore.cs",
+            "bytes": 61484,
+            "sha256": "516e093ec7303bc88da175d33807af32861f40888cc7d5a43fb41c5a2722dc56"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyCaptureEligibilityToken.cs",
+            "bytes": 5133,
+            "sha256": "f884ae74970babd2a004717e513746f3b27a8b19f6ccb06ab2453d8cd2f45536"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1ActorTurnExecutionStage.cs",
+            "bytes": 25249,
+            "sha256": "b9f455997b894d2da1844f5fc73161a8f2c61ee6a7ec348381ad687029cd9fff"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationHost.cs",
+            "bytes": 7446,
+            "sha256": "c867e8f8c7f6d0301706444425c1fc7758776b2d3ca1a2465e213f495c3c5078"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationSessionGate.cs",
+            "bytes": 10894,
+            "sha256": "593b8df4aa0c7b9674570430a101019c9f33da7c12640a3c8baf506420aa3b7c"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1CommercialKnowledgeSharingStage.cs",
+            "bytes": 9456,
+            "sha256": "695a7274e85de84c3ba0b2691164c777bda3e365d99cf0593270ffd307a9a8d7"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1ExecutionBoundaryState.cs",
+            "bytes": 41068,
+            "sha256": "c5380e2cc1033dc1114c4a02d9866ae64046ac18a105b01ea547be77dbb8b9db"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1GenesisComposer.cs",
+            "bytes": 22056,
+            "sha256": "2cd51e6aa102de988f0564cd66da0562557d6c613aee9530dd1a78e9b255ef36"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1MutationEpochState.cs",
+            "bytes": 2544,
+            "sha256": "86a6113cf9435d9e969f7a1d4cce31ae906e8848a25de0a980efeb5b2ea34d43"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1RuntimeAdvanceStage.cs",
+            "bytes": 15826,
+            "sha256": "11626b2a450efed0a0388d299a481ea6d4992efd2f1ecc8ec4696b4497320cde"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedActionExecutionStage.cs",
+            "bytes": 91333,
+            "sha256": "84802520d1f9ad73df4aad2317dd55257013fe7a98fa6f96a29859c85b5d5223"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedActorActionExecutionStage.cs",
+            "bytes": 22901,
+            "sha256": "4c94d1d14339046e09a93274b7318bd5cf35fe5a39c1af9f3f69d004abbb2a95"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedCrimeActionExecutionStage.cs",
+            "bytes": 16035,
+            "sha256": "e0b55e2aed6ce92ce86698d2e7d1659966677ed53213871cf2204f60b031ce67"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedCrimeJusticeDailyStage.cs",
+            "bytes": 17688,
+            "sha256": "69daf8a429b197a652dccedd6b30b90e3dadacf0c854677418f9fd9caac2071d"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedCrimeJusticeDailyStage.cs.meta",
+            "bytes": 62,
+            "sha256": "3bbf3da2a8db836133c821da4a324b78188758919667b21e298281ac71c35a6b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedDailyExecutionStage.cs",
+            "bytes": 25172,
+            "sha256": "41f1af0a940d3bbea2c21f426d882bd58c349ae73c5f7ec14f89be0b5b71da7b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedDemographyStage.cs",
+            "bytes": 9105,
+            "sha256": "71000496ae317e94dff7f6d6b1bcc18fad96e557cd2635557cac5d1d3873802a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedLocalKnowledgeOwnerBinding.cs",
+            "bytes": 6378,
+            "sha256": "24e260dd65ceabcb45bb75ca823bc403cb6c91d90283dcbb306ba364437e9a2a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedLocalKnowledgeRefreshStage.cs",
+            "bytes": 2766,
+            "sha256": "52e3aeee478ab195477d625559ffc7bd077cafc401d7a87bbcff459fc91fdddc"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedMerchantTradeStateOperation.cs",
+            "bytes": 30519,
+            "sha256": "77d48ff862f04542f92b15f78dcb4cee1014455a1e0f8397f4bf87c1f045123b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedOwnerSectionCensusContract.cs",
+            "bytes": 15820,
+            "sha256": "493800fd1290f3dd95deb55aeb07c7ae2ddaa3b9ed5225e22c1165eea36bf6f7"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedRuntimeOwnerGraph.cs",
+            "bytes": 132395,
+            "sha256": "5cf928c876c36a120cadd0e99df65fc7c0a5288da34fb9d69b3a3f9d397ea64a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedStealActionExecutionStage.cs",
+            "bytes": 14548,
+            "sha256": "b35b5e9238b1435d21fb8e564aa26e72ccdd9a05963f98ffc75200ca03e348d8"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/DailyV1SelectedTravelDayStage.cs",
+            "bytes": 5213,
+            "sha256": "cd1d5be1cc9d6663ecf811a70a76be97eb400aeb79d1a4e9ea91a74c89ad24b8"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/ScheduledDirectiveStore.cs",
+            "bytes": 20338,
+            "sha256": "0cf533534f3f7112f9f754cde1cb557c9619141f6b7fbcf923aad9dd6aab3f41"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/SimulationLogger.cs",
+            "bytes": 25352,
+            "sha256": "ae18fa2bd6783956e1e6b0eaf4a4010c5cb898beb9f09b4cc7f88b516ee5c048"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Application/SimulationRuntimeAdmissionContext.cs",
+            "bytes": 3137,
+            "sha256": "50c3bfdb1ad50a4077249d210e966789384db20d60606c650ad931d41d6806cb"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar.meta",
+            "bytes": 177,
+            "sha256": "be132aa212ac2859d56c166087f789e875f77d796fbe34ac5bdcd2da34b04507"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/CalendarDefinition.cs",
+            "bytes": 6764,
+            "sha256": "6cfe18a89d3914916566f87aef94b52a114e1a3038134c0275089b1570aed5f6"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/CalendarDefinition.cs.meta",
+            "bytes": 62,
+            "sha256": "39ae710a0cc119ec5265988da7403d5f515665cb5d767d387850eb2335da3543"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/SimulationCalendar.cs",
+            "bytes": 8177,
+            "sha256": "de010c4853f65161d21044da2ca81aa6332e65ca89c6098c3772b83b2ebcede9"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/SimulationCalendar.cs.meta",
+            "bytes": 62,
+            "sha256": "0c82f484eab8a9180a8f623ddaf86ed07cbe53449e2fe2f052553fcf305a76f2"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/SimulationDate.cs",
+            "bytes": 2684,
+            "sha256": "791a56a0612cacb9076494ae7b386751884e09b13c923996320bc14bad5ae0f8"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/SimulationDate.cs.meta",
+            "bytes": 62,
+            "sha256": "144e50758593313d74ccf0801287e0cd5c1adb502d6041f49cbbe5077ef7e4a2"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/SimulationTime.cs",
+            "bytes": 3957,
+            "sha256": "53215f804dc769bf0101d3ee0249be00e7318c700e3229e4ae96f7cdaec9b463"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Calendar/SimulationTimeOwnerBridge.cs",
+            "bytes": 2045,
+            "sha256": "deb5ce178f8451ad978981e7cdc56aba527ecc6570c4fdcadeda207c0d528b65"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/City/DailyV1CityEconomyContinuation.cs",
+            "bytes": 40932,
+            "sha256": "0133a5f3a07c05d6f792d6dabb9c63ed42fba91c4089c530432eb827cba2d9b1"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/City/DailyV1CityRuntimeOwners.cs",
+            "bytes": 38111,
+            "sha256": "63e4d36d1877ff6c5c8e9c9292f5a947cfcb51678fb132c66177a1dfdbdecfa2"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/City/DailyV1FiniteProductionSourceOwner.cs",
+            "bytes": 4775,
+            "sha256": "fcb456aad5bf9ab83e583ad600a1ba61bd9581190b8aa007417b0c4b65943cfd"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/City/DailyV1SelectedSoloTravelExecution.cs",
+            "bytes": 2343,
+            "sha256": "cf8cb03bd24219ff76bfd83cddee58656f4bc6e4584fff34c165f69665ec46a5"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelTransitionPlan.cs",
+            "bytes": 25062,
+            "sha256": "3d53c3ee256b6261f66d3a4a81c7981e6e9475a6823f39a3af0f0e248c49eb1b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Configuration.meta",
+            "bytes": 60,
+            "sha256": "2c04259afa7cd43677c61c905fb23df35350ac031ca412ad53987ec4a885d6b4"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Configuration/SimulationCompositionValidator.cs",
+            "bytes": 1878,
+            "sha256": "b3653178b81b5ffc6f72e0fce059163bf8ac756989b5abe9b4d0c9cbd743f445"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationDefaults.cs",
+            "bytes": 1573,
+            "sha256": "902d563ae44ffa30900f3bfd5b9ea0a4f3ab7dd10b41d56cc3b8cc6f4bad7015"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationDefaults.cs.meta",
+            "bytes": 159,
+            "sha256": "0b110c35cb34df13965442d3294745456f797da2c4dec30d11defdd6694efe24"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationResolver.cs",
+            "bytes": 10340,
+            "sha256": "bb9ed0be1d5ffa3cda3f7eedce728597568fef6c6dfc4d7a46c5380a6ae8404c"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationResolver.cs.meta",
+            "bytes": 159,
+            "sha256": "c3e825b3d5cc12819984152793b98c69bfc0aa96c89ed045e028bb082905d8ca"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationTypes.cs",
+            "bytes": 21507,
+            "sha256": "9db9d44d9682167a2856227852066af91301d2b1233fa599b34d4f3b66ef9f0c"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationTypes.cs.meta",
+            "bytes": 159,
+            "sha256": "16fb4137f1349fc54670b4492fe738c4849af28bdbd2841a1c751c8534ed9257"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationValidationResult.cs",
+            "bytes": 582,
+            "sha256": "10843ede82a664a00dc65f27bc2f13d641c775519d02e2c9cd355ef32c453def"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationValidationResult.cs.meta",
+            "bytes": 159,
+            "sha256": "a64c0109740ca9016838ea2d20f66ef27498616e20667fcb0ba6fc9458c70d4d"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationValidator.cs",
+            "bytes": 8312,
+            "sha256": "f2b17921dcd71a6e9953cc296a943a17f037b91370021e31d9b246ca40c947e6"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationValidator.cs.meta",
+            "bytes": 159,
+            "sha256": "1a94727775d1d44f0d2d5745c89ff0c161851dfc348054c6f554a45d0b5e181e"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/DailyV1DecisionRecordOperation.cs",
+            "bytes": 7662,
+            "sha256": "9014f1b5d38efcc496bdde95decadedbb07363f581f63a14adef5b89d80b89f9"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/DailyV1DecisionRecords.cs",
+            "bytes": 15420,
+            "sha256": "df18a9bc235569564774641e14060fbdaf4d384ae82fd172e2a5a9dbc6d95549"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions.meta",
+            "bytes": 177,
+            "sha256": "f9ca61b0ba6ccd00c152ec05e450d7f1dfd1ac502faaa398a25809be807d75a0"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1ContentProjection.cs",
+            "bytes": 51828,
+            "sha256": "53d4f7ca86cc3ce9563b4818b3a858cbb7663813c337d7096eb58a456ddced92"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1ContentProjection.cs.meta",
+            "bytes": 62,
+            "sha256": "958a93011082d2676c1701d10325c94e3f54213a5008e259eeb43a70b628dfae"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1CrimeActionPlanning.cs",
+            "bytes": 21806,
+            "sha256": "4fa277039c769e65170e36e8787a6474ef9acad7ef3386d5150356dcfaab9045"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1DefinitionIdentity.cs",
+            "bytes": 27196,
+            "sha256": "eefe14e93610957e47386aa7ff92e7e8a164cf01141a47d9d0caabad85594caf"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1DefinitionIdentity.cs.meta",
+            "bytes": 62,
+            "sha256": "51dc75b435b561e3428482226f1d1b8d61e696e8ab4c5e8f70ff9eb2f85a3d8a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1EffectiveDefinitions.cs",
+            "bytes": 20522,
+            "sha256": "d0f2799b77ccb114899f607207708b378e6f8f971ff9a981835064a3727a7839"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1EffectiveDefinitions.cs.meta",
+            "bytes": 62,
+            "sha256": "3ee666436f7019481041d5a5cd8847895a4d378b9034c5e508077aa8934d97fc"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1GuardActionPlanning.cs",
+            "bytes": 8095,
+            "sha256": "4f1be9347ac0694400ccf218f5622e696ef1647b8bd4cec7e6e1394ac0b06dfb"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1MerchantActionPlanning.cs",
+            "bytes": 47099,
+            "sha256": "55a6653c96fdd1979c3ec3c5a3f2d0a6a4c3cac2b0462c60ef286b0a9d58be86"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1NpcActionDecision.cs",
+            "bytes": 31818,
+            "sha256": "c4ea17ed9451d9076a7ca6a16975d313f3f77f622c0cf23212f7501d9d92a870"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1NpcDefinitionRules.cs",
+            "bytes": 14622,
+            "sha256": "a26282bfa029b384aea557042da8ced78e6e7a3549a8ff8ce2433b3287efef73"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1NpcStatusOwner.cs",
+            "bytes": 4332,
+            "sha256": "04505a32abba53ed2f204611d07fbd941e4c0a5ebc132f7c399db0cb2eda6a10"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1TravelActionPlanning.cs",
+            "bytes": 1167,
+            "sha256": "f143e9160db6b3f27079bf2568595c9db047680d075fabec12681ca1c7ae6a47"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1TypedDefinitionValues.cs",
+            "bytes": 28538,
+            "sha256": "5cfae78e670df0cfb9ae686876d5116c99abc54a60f0d2646f3f91438029e47d"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Definitions/DailyV1TypedDefinitionValues.cs.meta",
+            "bytes": 62,
+            "sha256": "f22d7de50ba1f6c76c994961edadaf8b31ac8a6f6719dfeb9c36b19135213101"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Determinism.meta",
+            "bytes": 177,
+            "sha256": "90c08523187c77a38b6b4a3fd74cd082679c6499bb5c4f31fb29295a1f1ce7d3"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Determinism/DeterministicRandom.cs",
+            "bytes": 6572,
+            "sha256": "3628d8cfa7d3ca0081a44b90bf33b3a12cfe844a66437c372cea299bcaf42b2d"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Determinism/DeterministicRandom.cs.meta",
+            "bytes": 60,
+            "sha256": "847a710dc64f24aaf1fb3775c8578555d417149e08403381cd7854485a28ac17"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy.meta",
+            "bytes": 62,
+            "sha256": "fd3b8208f8d014f99ef86f2bcc8cd8e7103c771a810ac579d13150feb44dae3b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/CityConsumptionResult.cs",
+            "bytes": 1735,
+            "sha256": "0acaa1cd1565127f131b05f9b3d768ce1f96959d3c97515c091f7bfa1af662b1"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/CityMaterialFlowProfiles.cs",
+            "bytes": 540,
+            "sha256": "18363d8ba63f79b1cb218f67675435822200700d578551278f1a33584ee28693"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/CityProductionResult.cs",
+            "bytes": 1717,
+            "sha256": "3c2749d1d467b23986c2cd36bb0bebdb9ecea6d19888185a4a9ca33a6cd9176f"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/DailyV1InventoryMarketOwners.cs",
+            "bytes": 35349,
+            "sha256": "18bb541c90905396ce972f71bf825555be7550cad64dfb55a2a7412fc7107e3b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/DailyV1MixedSourceProfileAdmission.cs",
+            "bytes": 3608,
+            "sha256": "1caad9a784c2012d7f66a3d0fcbc3a0cc8eec75a42c2b9d99d3551eccdc265a6"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/DailyV1MoneyTransferOperation.cs",
+            "bytes": 3948,
+            "sha256": "b9b07d4461b9c9e27bbdd6418e88f5392de291a146d0c90f06a2a41191376ff2"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/DailyV1PopulationConsumptionOperation.cs",
+            "bytes": 10409,
+            "sha256": "62e63db5c38521fa0ba0bc4936539f4dba32119abbab705cc8135441c208b970"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedCrossCityBuyExecution.cs",
+            "bytes": 11216,
+            "sha256": "291af9cba63cdfc805791940a14e15078f93a351c8105f10de08e76627ecf603"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedMarketSaleProfit.cs",
+            "bytes": 400,
+            "sha256": "b27d4a287fe5ab56ed6eb381cc5a77130537f8df95c42e0fbb296ec329daa385"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedNpcTradeExecution.cs",
+            "bytes": 9245,
+            "sha256": "241349b19753e6f5177d6aed3287f7c17c3c735c873bbfad36dbea7827131643"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedOpenMarketActionExecution.cs",
+            "bytes": 2837,
+            "sha256": "0faddf292bbec753b25df550c7680ce0426ee8b5795cee7ce0661a7a64287511"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedOpenMarketPurchase.cs",
+            "bytes": 12875,
+            "sha256": "f06ea99301fcd0aff9ee5defdb663ebcc73b15fd8453081575720e887843a0a9"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedOpenMarketSale.cs",
+            "bytes": 12874,
+            "sha256": "9c85d9dcb68f67c40f052f745ad150d9ccdad4b1d9754922cca2ff08c1c9dc54"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/EconomyTransactionResult.cs",
+            "bytes": 7030,
+            "sha256": "7130575577b52b5e0214983fb5006b7a6ac1a5d623216398ee73beaa3524a4bb"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/FiniteSourceProductionKernel.cs",
+            "bytes": 10883,
+            "sha256": "720262083ea6a9991c7874618c0fd53edf561694b53773e91f9c0a9482186d9b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/FiniteSourceProductionKernel.cs.meta",
+            "bytes": 62,
+            "sha256": "822721272af8e44c097ab55e770017d02315bd047ac468dd60aadf1094fea353"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/FiniteSourceScenarioRuntime.cs",
+            "bytes": 17116,
+            "sha256": "0db306d122c2c8e51088e7fc170ab577371527beeb24eeaef9eaed38f79632c4"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/FiniteSourceScenarioRuntime.cs.meta",
+            "bytes": 62,
+            "sha256": "52770ef2614db6559e3a2e0a767c86e30b3d4dbec4d9efab2b115d6b164107c1"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/LocalDailyMaterialFlow.cs",
+            "bytes": 4083,
+            "sha256": "8b7c4ff13c8090328a9f67a8a4cd923ab40941245fc78105eedfb97188029937"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/MarketCounterpartyRuntime.cs",
+            "bytes": 1741,
+            "sha256": "ecb512647f664e109e27896c572c788e536270e876779203ad45763021406140"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/MarketItemDefinition.cs",
+            "bytes": 385,
+            "sha256": "48be9d78da92149063b7c52c339632a0599d8c2cd30a48b87806ac6ed17dab9a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/MarketItemDefinition.cs.meta",
+            "bytes": 62,
+            "sha256": "ab88bf703b1c299edc7243b26ed8809bf995a69d80851cf4a6bd58bfda6456da"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/MarketPriceCalculator.cs",
+            "bytes": 702,
+            "sha256": "4a52c77c6ee0b6132e36b7bf63d29dab8e6a78022637303b74e922c7c2175e84"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/MarketPriceCalculator.cs.meta",
+            "bytes": 62,
+            "sha256": "72a428b227d5cadc926f9f4fc15eee0c73c9e6a95e87e2ea651bd0317f918353"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/MoneyAccountOwnerBridge.cs",
+            "bytes": 2312,
+            "sha256": "1e13b96ebf932dbef36320dd43cad688a58b8a6b03f8ab64d8dcdea7847a4a9e"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/MoneyAccountRuntime.cs",
+            "bytes": 6044,
+            "sha256": "a52a6d2d8aeba1cd9ed68712f69dd560059a7fe733f7067233a060c59aee9531"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Economy/PopulationEconomyRuntime.cs",
+            "bytes": 2618,
+            "sha256": "71309b51cf4bfdb2760b9bd060ad71d3a8e06233d5e441d861ec37aedb65bd69"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/ExpeditionCensusProvider.cs",
+            "bytes": 868,
+            "sha256": "c8ad8ec0ad87cd8175e07ab366a82a1c0702226799aec716d4c7a365d85e3064"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/ExpeditionRuntime.cs",
+            "bytes": 27078,
+            "sha256": "d4eb2dc13038e70ee7ef9e7b789728335ed7090e9b9bd995e2f6e4de00310cd8"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/ExpeditionStore.cs",
+            "bytes": 14220,
+            "sha256": "c2c0b5de973cd9784c4ee61d5ce5bcf7cf488d1d98848a62ca69b574357bd79d"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Genealogy/GenealogyContracts.cs",
+            "bytes": 5333,
+            "sha256": "547bfaadff411ecfd8a98cfe80d8acb2af4f09ea8db63c7bfb3457c1691bf132"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Genealogy/GenealogyOwnerBridge.cs",
+            "bytes": 2387,
+            "sha256": "0be7d0c145b0d7a4fa8272aa0fa5ff23e00afe81c1f439b577feff96e39b9ef4"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Genealogy/GenealogyStore.cs",
+            "bytes": 17070,
+            "sha256": "864ce55ba0eb86010a96ab05c7e3101fd9ffc64fef9941fa5a27222247d79ce7"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Geography/GeographyRecords.cs",
+            "bytes": 3159,
+            "sha256": "d68d74a0696fd52fe12b3dae5da5884f901a16fc09af229ff0f6612c171b2a68"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Geography/LegacySpatialAnchorBindingStore.cs",
+            "bytes": 13567,
+            "sha256": "a47d20248d1ed3c4edb822cb41bee7e2b19bcf7ec50bcbb75c7ebd2cad19874d"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Geography/P12P8CCensusProviders.cs",
+            "bytes": 1629,
+            "sha256": "55789a3733eb5cd8bfab20bc32b1316ff7d2ad8e75cf38b8e510af0e09b1e9cd"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Geography/PersonSpatialPositionStore.cs",
+            "bytes": 25223,
+            "sha256": "3d40d5547da3eb7bbfb13abd90b3a165df3dd78e16dd918683ab63ba30b8db59"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Geography/SpatialAuthority.cs",
+            "bytes": 46700,
+            "sha256": "ea14fdc286cc9ba6a016086aaf5ef5c892064d5e8f696c831982e729fcb37a2e"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Geography/SpatialGeography.cs",
+            "bytes": 9065,
+            "sha256": "549dc839a3920259e5e5b62544c780f1d88181b7e07e57cb6c44fde43c22426b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Geography/SpatialNetworkOwner.cs",
+            "bytes": 9094,
+            "sha256": "cfa2de37917b743268013e3a70c6066136343917065531e4281ba96110cb322b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Geography/SpatialPassageAuthority.cs",
+            "bytes": 42029,
+            "sha256": "6b294ba9d0b3511eab5a9b3afcbaf6e1c3716adba0db2d92ad12e8a3105833d8"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Geography/SpatialPassageIdentity.cs",
+            "bytes": 5167,
+            "sha256": "40e9749ea3f028609158b884a4d80a5fa68b819d08311bd83efdf6715e216c5a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Geography/SpatialPassageTraversalOptionResolver.cs",
+            "bytes": 1552,
+            "sha256": "65041382f9cc4c3fbc2a9bfe93e6418cbc7d0ed83cdcd2d9c441797dca83ff99"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Geography/SpatialRuntimeValues.cs",
+            "bytes": 1902,
+            "sha256": "398cc32235d2b56fe3b79dde094369273a91f121b6234f81438761ef1744e67c"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/IAuthoritativeMutationStatus.cs",
+            "bytes": 260,
+            "sha256": "e5d3eee84a68cf3b5dc86483c7de665ed34243f5907f4240b666da597dc55ae8"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity.meta",
+            "bytes": 177,
+            "sha256": "5f51cd9ee22fde4aee38847eedfa12d1784ff367d70fcda6732ba3462b4a8078"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity/DailyV1RuntimeIdentityIndex.cs",
+            "bytes": 6193,
+            "sha256": "f5c0496cadfa6444420a4322964b7d6ea7057ea3173fa3253358aa88cc7e3436"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity/PersonId.cs",
+            "bytes": 1691,
+            "sha256": "4895a295a898bc5614cda90ee002068338120f3921e607b58c1590629a99c9e5"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity/PersonId.cs.meta",
+            "bytes": 159,
+            "sha256": "753dcaf6fac00ef8412d14af47a65199e591441a69484f6191584254bd0b0041"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocator.cs",
+            "bytes": 16169,
+            "sha256": "6e25a46843156eb4a0916e3343b3640793b0258a821c53ff98ad7a9af88e1ae8"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocatorCensusCounter.cs",
+            "bytes": 379,
+            "sha256": "f66499530853c4e02718542b92755c8a17feb7dfd2ef3ce5bd6e36e4475abad7"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocatorOwnerBridge.cs",
+            "bytes": 2550,
+            "sha256": "7f131041d6b0ae619f90659056d25cb7207ae1aab8bf46962563012c8f80fdcd"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity/StableKeyEncoding.cs",
+            "bytes": 647,
+            "sha256": "378d9e3c388817c7f4202ad77d0ede67f652715c78960aab2d2d42496edba6f8"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity/StableKeyEncoding.cs.meta",
+            "bytes": 251,
+            "sha256": "bd0b1912318736a341cd5c43bb6f3f1d0d7688b5acd231d4ecf4b6f0f450330b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Identity/WorldIdentity.cs",
+            "bytes": 2448,
+            "sha256": "f5a5b33dc1249fd2d939d4cb6e75f40095a7855fdfebe2aac6bd52742b82c320"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Institution/InstitutionalVacancyRecognition.cs",
+            "bytes": 6800,
+            "sha256": "5f9e9da33fbc4a34be170d8051086230480e75a54c47db18a716f14deb381165"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Institution/InstitutionContracts.cs",
+            "bytes": 15123,
+            "sha256": "b551445251e2df40c4d7dd4a8d88429cca9c29bf89643c6bfd66c503cda7eafa"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Institution/InstitutionOfficeOwnerBridge.cs",
+            "bytes": 3951,
+            "sha256": "9e221934da81ab623dca382f40f60027544a1982d39d6d93abd909ef422ccc4b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Institution/InstitutionStores.cs",
+            "bytes": 23523,
+            "sha256": "1a2007a220c53fdfed07de4aa1a74835f101069c8e55a534f040b0be3c14f46a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/IOwnerSectionCensusProvider.cs",
+            "bytes": 182,
+            "sha256": "b0c25034830ce0c47b0615db4d0575613f25892400084276492c2beef86055cc"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Knowledge/CommercialActionEvidence.cs",
+            "bytes": 11977,
+            "sha256": "4a716c2c30beb25cc6664ab5b33cd9b83f01bd1d58a702a8153962bcfa55af9c"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Knowledge/DailyV1CommercialKnowledgeOwner.cs",
+            "bytes": 34510,
+            "sha256": "179b159f146d7e13a730ba65598d0e8a187ce07001324b8f3cf06fbc9dec8577"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Knowledge/SpatialKnowledgeRuntime.cs",
+            "bytes": 9900,
+            "sha256": "54eef48956729bca79ec64be69999d0cb99a576221ced8c147f3c13f3bddd228"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Mutation/AuthoritativeMutationGuard.cs",
+            "bytes": 2452,
+            "sha256": "7a60f16270cdb006ad62e0e4aa2a128f3e33d56909a0b99252eda1bb51c944a2"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/MutationStatusBinding.cs",
+            "bytes": 919,
+            "sha256": "b7d9ed7ae232fa137c98280e8042f40c4fda5dcfabba1536dd951e65f5fae5cb"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Numerics.meta",
+            "bytes": 177,
+            "sha256": "ff4699c1d436a5fc08bdc2a56bcbe6eef53b3b403b0fa88775b110fdb3cbf310"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Numerics/UnityMathfCompatibility.cs",
+            "bytes": 2137,
+            "sha256": "e867ca7663df10d1ff5503137645b298416413571901ff9aefd6d98c4ab3cc86"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Numerics/UnityMathfCompatibility.cs.meta",
+            "bytes": 62,
+            "sha256": "7851e8f52caab9aa646c82bdf0ea77a6af8fe7b0a463982f65e4d5b8b1abe0c7"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/P12FExpeditionOwnerSnapshot.cs",
+            "bytes": 4073,
+            "sha256": "6bcff7e3b92163611371861feec99636bb35c9dd497550cf051f685ea88b7b50"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence.meta",
+            "bytes": 177,
+            "sha256": "0b1c5a6b3630ddb539c3763fc79c968df9e7e4f6533f116c59c0d4ef0a25b98a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/AtomicFileSlot.cs",
+            "bytes": 7481,
+            "sha256": "e4e7d8895105652d85ffa46b0f21a2ad4c11d30761d96481ec4bc4d297b4309c"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/AtomicFileSlot.cs.meta",
+            "bytes": 65,
+            "sha256": "a23b7206800e5706677d080cb5d8d39d6bc594d93c25680f8b6523a8c2ea5c0f"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/ContinuationDescriptorV2.cs",
+            "bytes": 17135,
+            "sha256": "5bdf72d69a4847c8842a7f8034b8dbedf9175cb025fd90338442efd91f82d1cf"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/ContinuationDescriptorV2.cs.meta",
+            "bytes": 65,
+            "sha256": "d705ff97e9a20ee058593ec2458e27c85a539c5371f4bd6816508c6c2a48f9b0"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/ContinuationWire.cs",
+            "bytes": 2892,
+            "sha256": "56acbf658e55004d826a22b9738383b03228838d85819f788bbb1ec74da8c678"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/ContinuationWire.cs.meta",
+            "bytes": 65,
+            "sha256": "958a92eaa910f3e2a8307ea87eac43d97743f380ad95214697d17975217234d0"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/DailyV1CompatibilityFingerprint.cs",
+            "bytes": 3868,
+            "sha256": "6a53540ab9a701588350e28218120d1d9e791e0bb03f648a8c175c136681308a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/NumericProfileIdentity.cs",
+            "bytes": 3094,
+            "sha256": "16b83c2a614d12288a7c6bc4dc1d0cebfcfecf85d535d2a4f34601bfdec8bdfc"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/NumericProfileIdentity.cs.meta",
+            "bytes": 62,
+            "sha256": "28a3fad9b4fce7874f98eb6ec2693de6c28eff16996683f7dab1bdf9fed47949"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/P12ACompatibilityDescriptor.cs",
+            "bytes": 10987,
+            "sha256": "062eace4f5d01f6467254593afb6f48b2edea800e541e4e91f077d0cda77b2e5"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/P12ACompatibilityDescriptor.cs.meta",
+            "bytes": 65,
+            "sha256": "4db1b9979f6a19fb1b05ac12ecc4df1fb28f9e31233b06bb8e5c52112bfa89aa"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/P18DCommercialSharingCodec.cs",
+            "bytes": 21260,
+            "sha256": "f85d166fdb6fcfa39345802d10839b93c6a90d252c3b248b0b2b121925b74f2a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/P18DCommercialSharingCodec.cs.meta",
+            "bytes": 62,
+            "sha256": "531d6a13b3ffc6cc16f69f01f0d68c2973520e00e431f563cd8be1ef8e2d89cb"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/SimulationRecordSequence.cs",
+            "bytes": 3944,
+            "sha256": "17d87d290804509aa62a285ccb9957e16d8c43f1070ab850d6e6f50f71257785"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Persistence/SimulationRecordSequenceOwnerBridge.cs",
+            "bytes": 2392,
+            "sha256": "50a7da4dea77a6e6ad8332b03e8835ba958623c7b93bd75b918be9bfeeee2cbc"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Person/DailyV1JusticeRecordsOwner.cs",
+            "bytes": 20931,
+            "sha256": "d31a58ba6dcb25d6e2c5197cee3006d90243a21b84c8e8c97e4af598a7152660"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Person/DailyV1NpcMerchantTradePlanOwner.cs",
+            "bytes": 10966,
+            "sha256": "e9c675730cb8849f6e728f35157ea372afc40ffea9dc5ac285ea6c6eff819ec9"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Person/DailyV1NpcRuntimeOwners.cs",
+            "bytes": 26147,
+            "sha256": "63259bba8cc55eafd31d7449bccc00a78a8db944ae2b62d76d4b81346e590c0b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Person/NpcLifeState.cs",
+            "bytes": 1051,
+            "sha256": "bce6907d9c61f71181d5965cbdd5880b4afe6491124df8f5a914c7026d693e47"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Person/PersonAgeCalculator.cs",
+            "bytes": 3839,
+            "sha256": "8cfcd53463351f6c497e7a29839778f12eebafb7df8a81214ab7ec0f1c9c6d24"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Person/PersonChronologyOwnerBridge.cs",
+            "bytes": 2627,
+            "sha256": "1d3d4f8bd99ac870dc6c51bc3b9224b441f0bf12282bddd9589ac7f299a459dc"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Person/PersonChronologyResults.cs",
+            "bytes": 1902,
+            "sha256": "af2baebf0c8e9b1d374cafa707a537ced788ceabd17c97de9184eb426f9afab1"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Person/PersonMaturityCalculator.cs",
+            "bytes": 3963,
+            "sha256": "a7733e16ce5010e131a17fc8921d7d4dfbe31f4cb5d081893727b636079147d5"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Person/PersonNaturalMortalityQuery.cs",
+            "bytes": 5926,
+            "sha256": "6450d1c19fdb50744b6c3b9a26dffb24c87fd431e23f8bce80879a830f5e6935"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Person/PersonRuntime.cs",
+            "bytes": 8119,
+            "sha256": "4d8115d4e20c77557eed20ebc51422ef00aa52232aa9f27067617a0b015053cd"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Person/PersonRuntimeOwnerBridge.cs",
+            "bytes": 3316,
+            "sha256": "714f6215c2e8752038175055c3aa4c4e2b9729d482fdf5bd78eb568c9a67e1c6"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Person/PersonStore.cs",
+            "bytes": 20098,
+            "sha256": "84d8b204aef82e5b56c0a1294e3f4768ace65bd428069d071be98bb198cff9af"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Political/PoliticalClaimContracts.cs",
+            "bytes": 20434,
+            "sha256": "dffb63e917aa152dc85447cf1e54988ca410a72cd94be11091aa1364b7a086b7"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Political/PoliticalClaimOwnerBridge.cs",
+            "bytes": 3486,
+            "sha256": "0fbbae7b69a03cc1d9f78262de23bc74b63d6536d97da40d226d8fd748bc73ac"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Political/PoliticalClaimStore.cs",
+            "bytes": 14916,
+            "sha256": "6f18438d876918cad784751c4b69f935c8054ff2d5d0b4c21e5b41a871d75529"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Political/PoliticalClaimTransitions.cs",
+            "bytes": 11964,
+            "sha256": "5cec94cfb76b0eac50940eedc52587e72a32f3a0a38e8a4662f9f9b224f86fdc"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population.meta",
+            "bytes": 177,
+            "sha256": "55e800902c5647db845e8e56d00b04d619a0dbb9832a752ab2af99e432e431e3"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/AggregateDemographyContracts.cs",
+            "bytes": 848,
+            "sha256": "88c88c6f7b970db9dec13095312f1f80cabb6271e0e70c59a93867065c8f2117"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/AggregateDemographyPolicyContracts.cs",
+            "bytes": 4169,
+            "sha256": "8fc260d99843958d6cdf8ab7f89bade5bef127f8ecb89d1b2d7342cacb2a6693"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/AggregateDemographyPolicyContracts.cs.meta",
+            "bytes": 60,
+            "sha256": "bc1b94f05b5a3e6ec1504f97fb465c2c2556363ef67d986e7052c91f70a2383a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/AggregateDemographySystem.cs",
+            "bytes": 15325,
+            "sha256": "e0a1ecbd8e8c60adba4b8cbdc7cc6d8b738fdfdc7bb5b4c67703a08049462c3a"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/AggregateDemographyTransition.cs",
+            "bytes": 3121,
+            "sha256": "8b1e3003ff3d494fe2a078d84de3926c39c789edf8b6e7e278e4f839c1cd360d"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/DemographicSampling.cs",
+            "bytes": 2422,
+            "sha256": "f98780e355aad6406690152f64808ebcce9fc25e36fbfee96b01363357e0f673"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/DemographicSampling.cs.meta",
+            "bytes": 60,
+            "sha256": "ed1a3b9ea52ddc9e77300f82d39bc46c5f53a2e4b2662206dd5cc6f89c58652b"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/DeterministicAggregateDemographyProvider.cs",
+            "bytes": 2959,
+            "sha256": "f821309a93fbe4364c921ce5247384e4da3de7566ecac76b4c898c7becca5b55"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/DeterministicAggregateDemographyProvider.cs.meta",
+            "bytes": 60,
+            "sha256": "da20a608c744731ff984bb8ba14780e6bf9a3466a6923cfe7dfc89cfa0683d85"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/PopulationChangeSet.cs",
+            "bytes": 1810,
+            "sha256": "f479b8609db6a8ad740bc3f08c3fcd7ee314714f47d41c2d7655b315721044e2"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/PopulationOwnerBridge.cs",
+            "bytes": 5872,
+            "sha256": "86514741b28d5ac25d0dd7c5abea6e09ef8d53dba1f3636874619de854a758ec"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/PopulationRollbackPoint.cs",
+            "bytes": 605,
+            "sha256": "e971e571e32c4d9fc68e401298078455c23ab4c2300ba1bba312db26379f5824"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/SettlementPopulationRuntime.cs",
+            "bytes": 22169,
+            "sha256": "06ca19edf6de937048281adb889adac46b384cdcb2ee623759381011b046175f"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/SettlementPopulationSystem.cs",
+            "bytes": 2255,
+            "sha256": "bd889b863bd19f7500c7e88ea7aaae21d1870d3a18dac78a248ec93be8cbaf0f"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Population/SettlementPopulationTransition.cs",
+            "bytes": 3642,
+            "sha256": "9ecd62677a5e2f89428cee497d14919850f3e80760755650e6ad23a3bdc715ce"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Property/PropertyContracts.cs",
+            "bytes": 4949,
+            "sha256": "b3f27a0bde9c21fd3e08b0061f0d98900a5ad8512a1d953ab5ad85d1e9d5b184"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Simulation.Core.asmdef",
+            "bytes": 197,
+            "sha256": "118dabd8287da82311dd19e042c7c73af8c6b33b765f25fc1a6912a9fa0e2366"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Simulation.Core.asmdef.meta",
+            "bytes": 170,
+            "sha256": "e26883d8878491eb2fd6758f093e61263f5c6e6759331c83eff762765a4efa2c"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Social/CrimeSocialAppraisal.cs",
+            "bytes": 52787,
+            "sha256": "956b34f22fb9f9304b73cbb90f7b8f5f0049b61f10fb14bc51e6743298e6000f"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Social/P12CrimeSocialAppraisalBoundaries.cs",
+            "bytes": 575,
+            "sha256": "879e9bd3c207a04712cd1d7a6f5b734e33a7e8ac08c7d5e32711453a824d5045"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Social/SocialAppraisalContracts.cs",
+            "bytes": 33062,
+            "sha256": "3a8176450f8f374f64ce656bf2510da3859997d770178057d93e4fcdb8950cce"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Temporal.meta",
+            "bytes": 177,
+            "sha256": "2dd19e46350d68f18500080b2630516852d7ad7a0c3a1a6b6317bdb0d95d666c"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Temporal/LogicalTimeline.cs",
+            "bytes": 57370,
+            "sha256": "9513398b6a4c8aca3692fa38f3969ec13b2b24ff3d640f8f93b57765f4fb8eaa"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Temporal/LogicalTimeline.cs.meta",
+            "bytes": 62,
+            "sha256": "d5c3c90f76064bee83e33fdb07650ba82e30865965937263d4ca4bd6d3ec7e69"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Temporal/P18DDailyBoundaryOwner.cs",
+            "bytes": 21585,
+            "sha256": "577ebd8075d1ee64a1b378af73f314a3786d8b3539cf2d89867f996af2ca74bb"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/Travel/TravelPartyOwners.cs",
+            "bytes": 17311,
+            "sha256": "f6125cae98230c45fde091da8d57e9e1d1d48dfc846ad101ab74b8cc398178e8"
+          },
+          {
+            "path": "Packages/com.simulation.core/Runtime/WorldCommandValues.cs",
+            "bytes": 408,
+            "sha256": "de18a8ea78b59524a695acd9752988ca506ee403f7aa582018856fca6fe09ab4"
+          },
+          {
+            "path": "src/Simulation.Core/Simulation.Core.csproj",
+            "bytes": 25766,
+            "sha256": "1555cb9e0402b184c563b02a8bbe2539e6d0f38e34a78613760fc52d59d3ae9e"
+          },
+          {
+            "path": "src/Simulation.DailyV1.DotNetHostIdentity/DailyV1DotNetHostEnvironmentIdentityFactory.cs",
+            "bytes": 4284,
+            "sha256": "7af938f80c06bc3c8d7743485c842741a093f99b58822d18e8753f7a95de3025"
+          },
+          {
+            "path": "src/Simulation.DailyV1.DotNetHostIdentity/Simulation.DailyV1.DotNetHostIdentity.csproj",
+            "bytes": 680,
+            "sha256": "08b3c5f44f48c859e81bbf21b25095851ead480ea73eb3dffa5191921b70cbc9"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/ActionExecutionTests.cs",
+            "bytes": 1791,
+            "sha256": "69f0ee6e96ff8b71f213f3d6ae3633d2f866c34d9b5449c5dd5a3db1719054ca"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1ActorChoiceStoreTests.cs",
+            "bytes": 24511,
+            "sha256": "7a653339bc31991904ada10ce52a8ee8390ff0db97492aa6de7c36833887b3f2"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1ActorTurnExecutionStageTests.cs",
+            "bytes": 86348,
+            "sha256": "371e89e456142da0ff3cf5a6adb13e5e316c59f0e8bedaf9dbbfd64b0287e15d"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1ApplicationHostTests.cs",
+            "bytes": 4227,
+            "sha256": "a937968c1393991ea64f6843830554d8a9d04ade814a9e7c50d336f2fba41e08"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1ApplicationSessionGateTests.cs",
+            "bytes": 15232,
+            "sha256": "df2f326dc2b99d83734a9957a057edd878a74d4dd84ecbbf7599fae96d22f60e"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1CityEconomicOwnerCoreTests.cs",
+            "bytes": 55646,
+            "sha256": "eb8388e112998af367604cf3cf2adb9d753adc9106c8307400ba0fc296cd3d5a"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1CommercialKnowledgeOwnerTests.cs",
+            "bytes": 9140,
+            "sha256": "82e411bdc821ffd3c6bbf03d139e929b013c0a77de49231a1de48a0104f9ea4b"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1CommercialKnowledgeSharingStageTests.cs",
+            "bytes": 11900,
+            "sha256": "ab507b3182f1a20040292e2cf5f7d191e477b8367f91ae040c110e51a709f99c"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1ContentProjectionTests.cs",
+            "bytes": 24811,
+            "sha256": "667e9120b78118429a6eac96c2b4539e857c0e96c7eff76fdc7ec3ff9dd6e266"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1CrimeActionPlanningTests.cs",
+            "bytes": 38697,
+            "sha256": "ab148e01912259fded9e55ae0aee3aa02215360daf409d5966516c5ea548bdf4"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1CrimeSocialAppraisalOwnerTests.cs",
+            "bytes": 4730,
+            "sha256": "a684073e491589d7e65352b57502ec15c616caee8f77a4bcdb94d113f1370d2f"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1DecisionRecordsTests.cs",
+            "bytes": 14901,
+            "sha256": "042bd52f6996e687c2f35c81b7497410040c7e9fd71cb59120bbb8ffc97a2268"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1DefinitionIdentityTests.cs",
+            "bytes": 6138,
+            "sha256": "f4452635d59364efa23df99f75fa7a62aa0e91cffc40f046025f79293a3f0519"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1DefinitionProviderVectors.cs",
+            "bytes": 4731,
+            "sha256": "042fa93ce980186e264458aedeb6ee794b27fc146bacd5ba7e9f505d5768299c"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1DotNetHostEnvironmentIdentityFactoryTests.cs",
+            "bytes": 3656,
+            "sha256": "547f98ac07fbefad1ab310bbe0eee96c4f88fe20ed6aa685cec1384fc998b7d8"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1ExecutionBoundaryStateTests.cs",
+            "bytes": 19549,
+            "sha256": "d546a595d54270ee8710a92efd6a8952b6f9ecba870741ee39b06fbb466d26fe"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1GenesisComposerTests.cs",
+            "bytes": 11695,
+            "sha256": "1e69ce38b3fe1a25a3bba2da92596cb5075ea78194fba23abb5289f6a79bcdf4"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1GuardActionPlanningTests.cs",
+            "bytes": 29653,
+            "sha256": "290b832eeb1066f05de3592dcf72ed0d14547205f945ed58a6dedd6070a0d70c"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1InventoryMarketOwnerTests.cs",
+            "bytes": 14059,
+            "sha256": "4b04c3159a1cdcad484d91b53b882ec2d30aa16568d28640a5544fc16dbe6591"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1JusticeRecordsOwnerTests.cs",
+            "bytes": 8077,
+            "sha256": "63ec43ab6b6928ce87810f69667749de8c8aec22c742573fc3228604cb4e6c5a"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1MerchantActionPlanningTests.cs",
+            "bytes": 37342,
+            "sha256": "4aa440cc16d53cec8512f865d96d04e57280212237f9046b378446d599f4998b"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1MixedSourceProfileAdmissionTests.cs",
+            "bytes": 5200,
+            "sha256": "75e8265890df951f57a88a372b39848ff992f2851330d5a896bfd36023523254"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1MoneyTransferOperationTests.cs",
+            "bytes": 3955,
+            "sha256": "12420d6fd2bbb458dcc2f5519cd1e0002c3fab4b0cddbf1b19254516bbf762e5"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1MutationEpochStateTests.cs",
+            "bytes": 3291,
+            "sha256": "cab6fbd624bb7d29ffc21d115dbdd3ce767dd8431298deab97e4920de96bd922"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1NpcActionSlotOwnerTests.cs",
+            "bytes": 11324,
+            "sha256": "b31e2de7f63da3cbc95b3303c89247e2f14dd8c37a9edf3fd9ea220b6e8f42ee"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1NpcDefinitionRulesTests.cs",
+            "bytes": 17368,
+            "sha256": "c02dedce299f25f8cda85988fc46f0b7764b99a2446824dacb903560de0e3112"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1NpcMerchantTradePlanOwnerTests.cs",
+            "bytes": 5642,
+            "sha256": "88a1eab33f959b07255d17a58fb6d3418b8a396ab0d3d37d19ffbe9fef112a70"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1NpcStatusOwnerTests.cs",
+            "bytes": 24673,
+            "sha256": "ac9deb8d1e36adf613e8f16cc66fdc8356c2ed5fa851afd098f0a594ab9f4602"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1PopulationConsumptionOperationTests.cs",
+            "bytes": 13953,
+            "sha256": "2fde9db97b801bc80fe824fdacddfaa756020a6a7b6d99845363799b48affa64"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1RuntimeAdvanceStageTests.cs",
+            "bytes": 18257,
+            "sha256": "4a5ca4bd497fbf62cb435bfe424d0e8885c037e4cb2fd8bf7d243ac629b36363"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1RuntimeIdentityIndexTests.cs",
+            "bytes": 4469,
+            "sha256": "712faf36ced7cc29715df2f0c67b87aae0a6bbe7baabc011df76cb255e0461d9"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedCrimeActionExecutionTests.cs",
+            "bytes": 27286,
+            "sha256": "22b605b11db61a81ea12ede14d67e9a017c17304ede7fd2494c16402672d5087"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedCrimeJusticeDailyStageTests.cs",
+            "bytes": 18796,
+            "sha256": "c9fbfb93dfafcc00728c7c09d3735793e406d09b4708cb1388676a18b0cbd815"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedCrossCityBuyExecutionTests.cs",
+            "bytes": 23279,
+            "sha256": "a65c5e751c6a96b972c943d6d7b9a9d0e20e1842110f99031205461ca338a2d9"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedDailyExecutionStageTests.cs",
+            "bytes": 62428,
+            "sha256": "f474196fd90ca24dd9c82e2b804ab8fd4d685127b87a9e3aa56e3d474649c53a"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedDemographyStageTests.cs",
+            "bytes": 6272,
+            "sha256": "007ddd170d90cc9ff5cde015ee31e77cf6e516287b19c54d3e9c9f0355b1560f"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedLocalKnowledgeOwnerBindingTests.cs",
+            "bytes": 10567,
+            "sha256": "d98150ce5322c0be54126f4bd5ada7adc3fce9969a1dbe5775b4f3490d3ac657"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedMemberCoverageTests.cs",
+            "bytes": 2579,
+            "sha256": "eb8caba3f8ef6052ac09120be8bb85f0a3bc5d2c2d1659b75dea836fa1100856"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedMerchantTradeStateOperationTests.cs",
+            "bytes": 34686,
+            "sha256": "2e8705134733ddf4897a0eab357d2853f25580074c627ed2fa1917cc83d90592"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedNpcTradeExecutionTests.cs",
+            "bytes": 44478,
+            "sha256": "2057f2ccd680a44dcdda305d63c9be37e9a70c209b5b56a507aae29ead23cd2c"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedOpenMarketActionExecutionTests.cs",
+            "bytes": 39522,
+            "sha256": "9ce4a29bd0089c7e7f2d5c96e4dadc30115cefb8c0b1f78f3fa433a5ab71b79b"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedOpenMarketPurchaseTests.cs",
+            "bytes": 6455,
+            "sha256": "d19fffb924191b4d90d42d0f849f0342ae2b08ed366a0f3cabc33cb53b2c5596"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedOpenMarketSaleTests.cs",
+            "bytes": 15621,
+            "sha256": "fca73d406d840a0212ffb73d2730ab3fae2261ad3cce2fe25c12febaec7af37b"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedRuntimeOwnerGraphTests.cs",
+            "bytes": 142623,
+            "sha256": "b1a8282c91aeb70c750ceb9f734f4eb9c5f7a8fe1ddfd67f700c666309c984bd"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedStealActionExecutionTests.cs",
+            "bytes": 22334,
+            "sha256": "d2290a778ea524ec6d090e2140e5e445ec7ad715015ec54164ad8f8ecbb6d4f2"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1SelectedTravelTransitionPlanTests.cs",
+            "bytes": 19708,
+            "sha256": "80537a743c5a35ede3312154d50eeae1bde9fb5a9a3f33811b4d01aff1a2e560"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1TravelActionPlanningTests.cs",
+            "bytes": 35084,
+            "sha256": "ff31a91fa8fe298d570243c9a33c2fce509637c0387275acdd57e5e688799319"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/DailyV1TypedDefinitionGraphTests.cs",
+            "bytes": 15103,
+            "sha256": "5f256cca2dacb5f81c8942923b4b66a597c59eb79f860fed24a8dc74fedea44a"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/ExpeditionStoreCoreTests.cs",
+            "bytes": 3536,
+            "sha256": "5002a2533dd7f148aad8785f79da0a87c4719f74e85c83c01e72fe08874a0509"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/Fixtures/CORE_F_WP1_VALUES_BASELINE.md",
+            "bytes": 1659,
+            "sha256": "7d63e2e722dc70ba1134433fdc77903b2e45493ccb0b83cf5764a9378c820c8e"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/Fixtures/CORE_F_WP1_VALUES_BASELINE.txt",
+            "bytes": 212100,
+            "sha256": "422805cbe373cf1410ee6a928d363fa1ef413dbcf50dc062dce7867ed4fdd1b3"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/Genealogy/GenealogyOwnerTests.cs",
+            "bytes": 15468,
+            "sha256": "de51f12340055c5a86b0aa32369e84a768598c643d7c30ee2552a1a77cbad0c4"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/LegacySpatialAnchorBindingStoreCoreTests.cs",
+            "bytes": 5538,
+            "sha256": "a1370bbfe9fc6562db72d642ef6b3721ac0eaacb16dff9b49a9583f8e4fb747f"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/MoneyAccountRuntimeCoreTests.cs",
+            "bytes": 3546,
+            "sha256": "eafa7bd5c7db59fad21969f188235d13178ed225b715e496c4a61dba14c22002"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/packages.lock.json",
+            "bytes": 3156,
+            "sha256": "9f99299c8a35975b7887d5e18ba055bf22eb86cb3e56f81162c58048ec08049a"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/PersonCensusProviderTests.cs",
+            "bytes": 2236,
+            "sha256": "dbdb41b7c1c33b8a3c2cf2824d7a5a94f6e6d97f9e27e2faa739c0255b7dad3b"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/PersonChronologyCoreTests.cs",
+            "bytes": 5476,
+            "sha256": "c0e10ef49c25f63f2577647e0b2eb2d9bfd486c454f044a7750df5af4797a2e2"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/PersonNaturalMortalityCoreTests.cs",
+            "bytes": 3319,
+            "sha256": "e0b5bfac9df788ad6e2728882ce6ad36e3c80aa54f1b9e4e9aa4b637adbaffe7"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/PersonRuntimeCoreTests.cs",
+            "bytes": 2671,
+            "sha256": "143f79e0672e5d09fd61dcda4b147f5a08efc42504ad08bf9d1451b9bc9595f4"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/PopulationOwnerContractTests.cs",
+            "bytes": 10456,
+            "sha256": "d931e1f962860bb8898c18d57dbb743751dafa0e971707bbe7b2425895226ad8"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/RuntimeIdAllocatorCoreTests.cs",
+            "bytes": 6729,
+            "sha256": "bc27b298c9d88f0001afcc4067671a931fa11acd3f599179f2986720dcf68940"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/ScheduledDirectiveStoreTests.cs",
+            "bytes": 8492,
+            "sha256": "33263f3fbb8c4533de3711055ad52d25e8401608287e6f55a0e7122b15c79e19"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj",
+            "bytes": 11187,
+            "sha256": "9b9cc053154aaa9f15f100092a92c92db8bf2bb4497caeba0d9f52964d456633"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/SimulationConfigurationResolverPrecedenceTests.cs",
+            "bytes": 2207,
+            "sha256": "19b17b0a47fde4fa580549c14980899fe80ea02dc9dc784cfe5a6a0446113b96"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/SimulationLoggerHostPortTests.cs",
+            "bytes": 6233,
+            "sha256": "627d060b9e0d5435abccc11a75e7b3b5953781d293ceab0fcb42433fd2b1f2aa"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/SimulationRecordSequenceCoreTests.cs",
+            "bytes": 3394,
+            "sha256": "0f2dc567db14cc472e4d49cf02cc955969b0b9accab7c962c88d684dbce0800a"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/SimulationRuntimeAdmissionContextTests.cs",
+            "bytes": 2521,
+            "sha256": "a6de37dde7cc12df29021ace757fef1eb9c300ff804a0f18c2074cc387bd848c"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/SimulationTimeCoreTests.cs",
+            "bytes": 3854,
+            "sha256": "ef6a292fe8998ca1de9d7a0ede548be1538b2f9bf99849c7f8f057f36d15ca92"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/SpatialKnowledgeRuntimeCoreTests.cs",
+            "bytes": 6915,
+            "sha256": "d962ffc667c7c8d254d69be880a4ec3709d1bfa4a186b45d5fdc36b858fa35d2"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/SpatialNetworkOwnerTests.cs",
+            "bytes": 5369,
+            "sha256": "ddaeb7ba93b2ba0206e6d888d0f32ab25edbadf4d158fd3c12d51561f90430b9"
+          },
+          {
+            "path": "Tools/CoreValidation/CoreValidation.psm1",
+            "bytes": 37621,
+            "sha256": "e2407e7439742ee6a27e0bc7531bb6fc29c7cdd206299058def4ada65ef57ac3"
+          },
+          {
+            "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+            "bytes": 21533,
+            "sha256": "3e9e9357111e50b74d836dff49fa52eb9d00251f33e2cf37835e5af5fd921f10"
+          },
+          {
+            "path": "Tools/CoreValidation/Invoke-LabValidation.ps1",
+            "bytes": 8850,
+            "sha256": "5aed0eb723cd2f6a10eedd5c43fb69488508ad8f5310449767b0c2ac581c23b0"
+          },
+          {
+            "path": "Tools/CoreValidation/README.md",
+            "bytes": 4638,
+            "sha256": "c5d78ae62f9537d2229ce293703283141ad86d1b694e347a76cfeeb5ca0f80e5"
+          },
+          {
+            "path": "Tools/CoreValidation/tests/Invoke-CoreValidationTests.ps1",
+            "bytes": 17259,
+            "sha256": "1c02e9215613fa11f89efc4fdd67e5091b967923630727afc36ffb103ff37b52"
+          },
+          {
+            "path": "Tools/generate_daily_v1_captured_content_fixture.py",
+            "bytes": 31093,
+            "sha256": "751799f37825205995fae8eecd255d6e8598261871fa5b7665d52aac7bca21ff"
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/packages.lock.json",
+            "bytes": 135,
+            "sha256": "58972589280c8f44d0ae37e89df30ae4febb2f61f31a6a74b21d2fbaeef8a118"
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/Program.cs",
+            "bytes": 1904,
+            "sha256": "73149c82b95c7d71c4cbfab6f0b91d8a03329cdde61428cb6f0f750487a9ce4f"
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj",
+            "bytes": 572,
+            "sha256": "91d0dca814e802cd6c34d73d1a31167090f8bb4f772e0371b56329ce78a73084"
+          },
+          {
+            "path": "tools/Simulation.Lab/packages.lock.json",
+            "bytes": 137,
+            "sha256": "02cded6696aa5b992e2e4fb4e8ac8d97bc4f5035ef9c0d2f0817ef6898f6cb56"
+          },
+          {
+            "path": "tools/Simulation.Lab/Program.cs",
+            "bytes": 2330,
+            "sha256": "f5a35da2fac3b69ab01b1424927958cf083efcc19bbdf8b2bcf4518f6c045bfa"
+          },
+          {
+            "path": "tools/Simulation.Lab/Simulation.Lab.csproj",
+            "bytes": 737,
+            "sha256": "a380f033e4428262ba64d468d280b2f417bb31daf958e59d4e8f62732a0a5487"
+          },
+          {
+            "path": "Tools/UnityValidation/UnityValidationEvidence.psm1",
+            "bytes": 76859,
+            "sha256": "1c68f0b5c931e90c9de4e025ec8e2d15806f99988fb4f51eff1d27149899a8c2"
+          }
+        ],
+        "generatedDependencies": [
+          {
+            "path": "src/Simulation.Core/obj/project.assets.json",
+            "bytes": 2803,
+            "sha256": "72115be0994b601e1eeff89d614ef42202986b529b0e0645a31b1d8d358de6cb"
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/obj/project.assets.json",
+            "bytes": 51327,
+            "sha256": "4b8b5496357f867146c51aa03afa3f29dc9522be0d22bc81da58fc8ac501a889"
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/obj/project.assets.json",
+            "bytes": 3792,
+            "sha256": "31b741e5e8d56d1e913888f98eb40e064c3b7496c695d0700f8d271e86c19ce2"
+          }
+        ],
+        "influencingChanges": []
+      },
+      "originalManifest": {
+        "bytes": 1028757,
+        "sha256": "f5e1f9ec94c6237ea4f5b0cb5818afa3b4ed8264b5bedf01455c896f6a704936"
+      },
+      "producer": {
+        "vstestVersion": "17.14.1",
+        "sdkVersion": "9.0.315",
+        "logger": {
+          "file": "Microsoft.VisualStudio.TestPlatform.Extensions.Trx.TestLogger.dll",
+          "fileVersion": "17.1400.125.42801",
+          "productVersion": "17.14.1-release-25428-01",
+          "bytes": 247632,
+          "sha256": "4a89511f6a3c00795e4119f4a3e192e58151c6f258e7c9b1f63aede73d76eec1"
+        },
+        "identityMode": "recovered-validated-output",
+        "provenance": [
+          {
+            "kind": "git-source",
+            "commit": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+            "blob": "116bfdd3f27420b137822cf7ef1eb2e17f5a52a9",
+            "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+            "bytes": 21533,
+            "sha256": "3e9e9357111e50b74d836dff49fa52eb9d00251f33e2cf37835e5af5fd921f10",
+            "field": "/runs/0/producer",
+            "mode": "captured"
+          },
+          {
+            "kind": "retained-command-log",
+            "path": "dotnet-info.log",
+            "bytes": 2557,
+            "sha256": "289fe1c8cd56799884b769f77e885e025dd590fca338db64dbcf326218b4b1f3",
+            "field": "/runs/0/producer",
+            "mode": "captured"
+          }
+        ]
+      },
+      "execution": {
+        "sdkVersion": "9.0.315",
+        "clrVersion": "8.0.28",
+        "targetFramework": "net8.0",
+        "configuration": "Release",
+        "osVersion": "Microsoft Windows NT 10.0.26200.0",
+        "osArchitecture": "X64",
+        "processArchitecture": "X64",
+        "cultures": [
+          "en-US",
+          "pt-BR"
+        ],
+        "packageLocks": [
+          {
+            "path": "tests/Simulation.Core.Tests/packages.lock.json",
+            "bytes": 3156,
+            "sha256": "9f99299c8a35975b7887d5e18ba055bf22eb86cb3e56f81162c58048ec08049a"
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/packages.lock.json",
+            "bytes": 135,
+            "sha256": "58972589280c8f44d0ae37e89df30ae4febb2f61f31a6a74b21d2fbaeef8a118"
+          },
+          {
+            "path": "tools/Simulation.Lab/packages.lock.json",
+            "bytes": 137,
+            "sha256": "02cded6696aa5b992e2e4fb4e8ac8d97bc4f5035ef9c0d2f0817ef6898f6cb56"
+          }
+        ],
+        "provenance": [
+          {
+            "kind": "git-source",
+            "commit": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+            "blob": "116bfdd3f27420b137822cf7ef1eb2e17f5a52a9",
+            "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+            "bytes": 21533,
+            "sha256": "3e9e9357111e50b74d836dff49fa52eb9d00251f33e2cf37835e5af5fd921f10",
+            "field": "/runs/0/execution",
+            "mode": "captured"
+          },
+          {
+            "kind": "git-source",
+            "commit": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+            "blob": "2fdf53183ba1768f38d7664c7aabcd359e417616",
+            "path": "tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj",
+            "bytes": 11187,
+            "sha256": "9b9cc053154aaa9f15f100092a92c92db8bf2bb4497caeba0d9f52964d456633",
+            "field": "/runs/0/execution/targetFramework",
+            "mode": "captured"
+          },
+          {
+            "kind": "retained-command-log",
+            "path": "dotnet-runtimes.log",
+            "bytes": 1278,
+            "sha256": "2a184ccf85dfae8925b716c0128847839e9d7c3984174a125d82db17295da92e",
+            "field": "/runs/0/execution/clrVersion",
+            "mode": "captured"
+          }
+        ]
+      },
+      "discovery": {
+        "count": 669,
+        "cases": [
+          "SharedActionContextPreservesRoleValidationAndStableTargetIdentity",
+          "AbsoluteDayToDateRoundTrips",
+          "AbsoluteDayZeroMapsToFirstCalendarDate",
+          "AfterFirstBirthdayAgeIsOne",
+          "AgeCalculationIsDeterministic",
+          "AgeCalculationIsPure",
+          "BeforeFirstBirthdayAgeIsZero",
+          "BirthDateAtCurrentDateHasAgeZero",
+          "CalendarDateEqualityIsValueBased",
+          "CalendarDefinitionRejectsNullCustomMonthLengths",
+          "CalendarDefinitionStableDuringRuntimeIsDocumented",
+          "CalendarParityVectorsAreCultureIndependent(\"en-US\")",
+          "CalendarParityVectorsAreCultureIndependent(\"pt-BR\")",
+          "CalendarRejectsNegativeConfiguration",
+          "CalendarRejectsZeroDaysPerMonth",
+          "CalendarRejectsZeroMonths",
+          "ConversionIsDeterministic",
+          "CustomCalendarSnapshotsMonthLengthsAtConstruction",
+          "CustomMonthLengthsMustBePositive",
+          "CustomMonthLengthsMustMatchMonthCount",
+          "DateToAbsoluteDayRoundTrips",
+          "DaysPerYearComesFromCalendar",
+          "FutureBirthDateRejected",
+          "InvalidDayOfMonthRejected",
+          "InvalidMonthRejected",
+          "LastDayOfMonthRollsToNextMonth",
+          "LastDayOfYearRollsToNextYear",
+          "LegacyResolverUsesSafeDefaultForNullAndInvalidDefinitions",
+          "LongAbsoluteDayDoesNotOverflowIntermediateMath",
+          "MultipleYearsCalculateCorrectAge",
+          "NonUniformCalendarDemoSequenceMatchesExpectedDatesAndAge",
+          "OneDayYearProducesBirthdayEveryAbsoluteDay",
+          "OnFirstBirthdayAgeIsOne",
+          "SemanticIdentityAndVersionReflectEffectiveCalendar",
+          "SimulationCalendarRejectsNullDefinition",
+          "SimulationDateValueSemanticsCoverEveryField",
+          "UnequalMonthLengthsConvertCorrectly",
+          "UnequalMonthYearBoundaryCorrect",
+          "UniformMonthLengthBeyondDayOfMonthRangeIsRejected",
+          "VeryLongYearDoesNotAssume365Days",
+          "VeryShortYearDoesNotAssume365Days",
+          "BirthdayVectorsMatchBeforeOnAndAfterBoundaries",
+          "ExactDateVectorsMatchExpectedFieldsAndSemanticIdentity",
+          "InvalidCalendarConfigurationIsRejected",
+          "InverseOverflowIsRejected",
+          "NegativeAbsoluteDayIsRejected",
+          "CodecMatchesCapturedBytesAndLegacyReaderOutcomes",
+          "NumericHelpersMatchEveryCapturedUnityVector",
+          "CapturesStableInputAndReturnsFifoForTheSamePerson",
+          "P12MutationBoundaryReceivesOneAdmissionAndCommitPerOwnerWrite",
+          "RecordsReturnedStatusesWithoutDependingOnUnityActionResult",
+          "SelectedCoreTurnClearsTheSlotBeforeRejectingUnavailableCurrentTruth",
+          "SelectedCoreTurnKeepsTheAttemptRecordWhenP12DeclinesTheSlotCommit",
+          "SelectedCoreTurnPlansInstallsAndClosesTheActorChoiceAgainstExactOwners",
+          "SelectedCoreTurnRejectsDisabledMerchantProfileWithoutAskingHostToClassifyAction",
+          "SelectedCoreTurnRejectsUnresolvedActionIdentityWithoutHostClassification",
+          "CoreBoundaryOwnsOrderedRosterAcrossAppendAndRemoval",
+          "CoreBoundaryRefreshesPersonBindingWithoutChangingActorRosterSlots",
+          "CoreBuildsExactActorRosterFromHostIdentityProjection",
+          "CoreExpeditionOwnerDefersActorChoiceWithoutUnityExpeditionQuery",
+          "CoreRejectsMismatchedMaterializedPersonBeforeActorTurnDispatch",
+          "CoreRejectsSelectedRosterPersonThatDiffersFromMaterializedStoreBinding",
+          "CoreRuntimeRosterRejectsDuplicateIdentityAndPartialSelectedGraphPublication",
+          "CoreSelectedActionStageOwnsDecisionSlotDispatchAndStatusOrder",
+          "IncompleteSelectedRosterIsRejectedBeforeAnyActorTurnCallback",
+          "OrderedActorTurnConsumesForcedEscapeInCoreWithoutDecisionOrRandomDraw",
+          "ProjectionRejectionLeavesDecisionOwnersAndActionSlotUnchanged",
+          "RejectedScheduledActionReleasesProjectionForNextActor",
+          "RejectedSelectedActionClearLeavesCoreOwnerAndRevisionUnchanged",
+          "SelectedActionClearCommitsCoreRevisionBetweenAdmissionAndProjection",
+          "SelectedActorChoiceDispatchUsesCoreActionExecutionPorts",
+          "SelectedActorChoiceEligibilityUsesAdmittedMerchantConfiguration",
+          "SelectedActorTurnRunsCoreActorChoiceStageWithoutUnityGameplayCallback",
+          "SelectedOwnerGraphDerivesCurrentCityLocationFromExactP8Owners",
+          "SelectedRosterPreservesNullHoleOrdinalAndCoreOwnsTurnPrecedence",
+          "SpatialTransitDeferralRunsDirectiveBeforeStatusAndRetainsRosterOrdinal",
+          "DotNetEnvironmentIdentityRejectsForeignHostKind",
+          "HostPortsAndDotNetIdentityAreCapturedWithoutPersistingTheStorageRoot",
+          "HostRequiresOneIdentityAndExplicitStoragePorts",
+          "ApplicationAndP12ScopesUseThePublishedRuntimeBoundaryState",
+          "CaptureAllowanceRequiresExactlyOneMatchingApplicationScope",
+          "DailyAdvanceScopeClosesAfterFailureBeforeCaptureCanResume",
+          "DisposingUncommittedExclusiveRestoreReservationReopensCurrentSession",
+          "ExclusiveRestoreReservationCannotPublishFromAnotherThread",
+          "ExclusiveRestoreReservationRejectsReentrantOperationsAndPublishesOnce",
+          "ExpectedSessionOperationRejectsStaleReferenceAndUnderflowIsRejected",
+          "InitialPublicationIsSingleAndCannotReplaceAnExistingSession",
+          "ReplacementRequiresIdleGateAndExactExpectedSession",
+          "SessionReportStateRetainsAndAdvancesEconomySnapshotDay",
+          "TaggedOperationScopeClosesAfterException",
+          "AccountBackedPopulationRejectsAnOpenMarketAndInvalidStartingBalance",
+          "AccountBackedPopulationUsesTheSharedMoneyAccountOwner",
+          "CityPresenceOwnerPreservesOrderedIdentityAndAdvancesOnlyForMembershipChanges",
+          "CityPresenceOwnerRejectsAliasedSnapshotIdentityAndSaturatedMutation",
+          "CoreGenesisBuilderConstructsTheCompleteSelectedCityNpcOwnerGraph",
+          "CoreGenesisBuilderOwnsSelectedCityAndNpcIdentityAllocationOrder",
+          "CoreGenesisBuilderRejectsIncompleteOrPostBuildMutation",
+          "CoreSelectedCityCompositionOwnsFiniteReserveStateByCanonicalItemIdentity",
+          "FailedCoreGenesisCityOwnerCreationRollsBackItsSpatialLocation",
+          "FreePopulationEconomyHasNoAccountAndPreservesDerivedIdentity",
+          "MarketCounterpartyOwnsTheAccountInstanceAndStableCityIdentity",
+          "RuntimeBoundaryOwnsOneExactSelectedOwnerGraphBinding",
+          "SelectedCityNoOpP18StepRecordsReceiptWithoutMarketInvalidation",
+          "SelectedCityOwnerJoinRejectsForeignOwnerGraphAndCounterpartyIdentity",
+          "SelectedCityOwnerJoinRetainsExactPopulationMarketAndEconomyInstances",
+          "SelectedCityP18AccountBackedConsumptionTransfersBothBalancesAtCommit",
+          "SelectedCityP18StepsUseCoreOwnersAndRetainReplayableReceipts",
+          "SelectedExogenousDailyFlowRejectsMissingSourceMarketRowBeforeMutation",
+          "SelectedExogenousDailyFlowUsesCoreOwnersAndPreservesMarketRevisionOrdering",
+          "SelectedFiniteReserveDailyFlowUsesCoreOwnersAndCanonicalItemIdentity",
+          "SelectedFiniteSourceP18CommitUsesTheValidatedScenarioAndRejectsStaleMarket",
+          "SelectedRuntimeOwnerGraphOwnsUniqueP8LocationBindingsAndChecksNpcCityJoins",
+          "SelectedRuntimeOwnerGraphRejectsDuplicateRuntimeIdentity",
+          "SelectedRuntimeOwnerGraphRequiresTheExactOrderedOwnerInstancesAtComposition",
+          "SelectedRuntimeOwnerGraphRetainsExactCityAndNpcOwnerCompositions",
+          "OwnerKeepsExactItemIdentityAndUsesExistingRevisionCallbacks",
+          "PreparedDirectBatchPreservesReplacementOrderAndAdvancesRevisionPerAppliedRow",
+          "ShareReceiptReplayKeepsExistingFingerprintAndReceiptIdentity",
+          "SnapshotHydrationRetainsExactTypedRowsAndRevision",
+          "LocalKnowledgeRefreshDiscoversLocationAndCapturesCurrentMerchantMarket",
+          "LocalKnowledgeRefreshUsesAdmittedMerchantPolicyWhenCapturingMarket",
+          "OddGroupRotationUsesAbsoluteDayAndStableRuntimeOrdering",
+          "SameDaySharedObservationCannotCascadeAcrossSubsequentSharingStage",
+          "SharesNewestSnapshotValueThroughExactOwnersAndRetainsPerWriteRevision",
+          "AcceptsLegacyListBeyondAssetCountWhenEncodedCatalogFitsByteLimit",
+          "CatalogAndFieldOrderAreCanonicalAndProjectionBytesAreCopied",
+          "PreflightsOversizedNestedListAgainstCatalogByteBudget",
+          "PreflightsOversizedStringBeforeCopyingEncoderGraph",
+          "PreservesNullVersusEmptyCollectionsAndRejectsUnreachableOrMissingReferences",
+          "ReencodesCapturedUnityCatalogByteForByte",
+          "RejectsUnknownMemberAndMismatchedDeclaredType",
+          "SelectedDecisionEligibilityUsesTheCoreGraphAndNotUnityProviderAvailability",
+          "SelectedDecisionStagePreparesCoreFleeWithoutUnityProjection",
+          "SelectedDecisionStagePreparesCoreStealWithoutUnityProjection",
+          "SelectedEscapePreparationMatchesSentenceUrgencyAndFailureMultiplier",
+          "SelectedEscapePreparationRejectsForeignActorAndActionNodes",
+          "SelectedEscapePreparationRetainsArrestAndSentenceEligibility(False,False,8)",
+          "SelectedEscapePreparationRetainsArrestAndSentenceEligibility(True,True,8)",
+          "SelectedEscapePreparationRetainsArrestAndSentenceEligibility(True,False,1)",
+          "SelectedFleePlansBestKnownAffordableCityWithoutMutatingTravelOwners",
+          "SelectedFleePreservesKnownRouteOrderingForApproximatelyEqualUtilities",
+          "SelectedFleeRejectsDestinationsWithHigherActiveBounty",
+          "SelectedFleeRejectsUnaffordableKnownDirectRoutes",
+          "SelectedFleeRejectsUnknownDestinationLocation",
+          "SelectedFleeRejectsUnknownRouteAndMissingCurrentWarrant",
+          "SelectedStealExcludesHiddenHighBalanceTargetBeforeWeightedDraw",
+          "SelectedStealFailsClosedWhenActorOrChosenVictimIdentityIsNotExact(False,True)",
+          "SelectedStealFailsClosedWhenActorOrChosenVictimIdentityIsNotExact(True,False)",
+          "SelectedStealProjectionFailureIsDetectedBeforeAuxiliaryTargetDraw",
+          "SelectedStealRejectsPositiveFractionalBalanceThatFloorsToZero",
+          "SelectedStealUsesCoreRosterOrderingAndExactPersonOccurrenceIdentity",
+          "SelectedStealUsesUnequalTargetWeights",
+          "CrimeKnowledgeAndReactionOperateOnTheExactSharedOutcomeOwner",
+          "TheftOutcomeStorePreservesSemanticIdentityAndP12RevisionBoundary",
+          "CoreDecisionRecordOperationPreservesIdThenSequenceThenConstructionOrder",
+          "CoreDecisionStorePreservesAppendOrderAndActorParticipantTargetIndexes",
+          "CoreDecisionStoreRejectsDuplicateIdentityWithoutChangingIndexes",
+          "ExistingTravelDecisionIdentityCommitsSlotWithoutAllocatingOrOverwritingRecord",
+          "SelectedActionDecisionIsRecordedBeforeExactSlotCommitAndOriginBinding",
+          "SelectedActionRecordUsesExactCorePayloadAndCityLocationOwners",
+          "CompatibilityFingerprintUsesOnlyTheTypedSelectedGraphAndSuppliedRoots",
+          "FixedCapturedTypedConstructorsReproduceEveryP9RecordAndFingerprint",
+          "P9IdentityMatchesCompleteUnityOrderedRecordVector",
+          "ProviderAndCalendarFingerprintsMatchUnityBaseline",
+          "WorldIdIsAUnityIndependentCanonicalIdentity",
+          "CapturesOnlyExplicitAssembliesAndPinsNet8CoreClrIdentity",
+          "RejectsMissingOrNonNet8HostEntryFramework",
+          "BeginAdvanceInvalidatesCaptureOnlyAfterLeaseAdmission",
+          "CompletedAdvanceIssuanceRequiresACompletedBoundaryInTheHeldLease",
+          "CompletedCoreSequencePreflightAndIncrementRejectOverflow",
+          "CompletedTokenRejectsIncompleteSelectedProfileCensus",
+          "CompletedTokenRetainsRuntimeAdmissionDefinitionCalendarWorldAndOwnerIdentity",
+          "CoreAdvanceLeaseIsReentrantGuardAndCanBeReleasedExactlyOnce",
+          "MaximumSequenceCanBeRestoredButCannotAdvanceFurther",
+          "OwnerSectionComparisonPreservesExactOwnerIdentityAndRevision",
+          "RestoredSequenceCanOnlyBeInstalledAtIdleEmptyBoundary",
+          "RestoredTokenKeepsRestoredBoundaryProvenanceAndSequenceAtomicity",
+          "RuntimeIdentityIsStableAndUniquePerBoundaryState",
+          "SelectedProfileCensusRejectsMissingDynamicOwnerAndBrokenAlias",
+          "SelectedProfileCensusRejectsNonemptyFixedEmptyWitness",
+          "SelectedRuntimeBoundaryStateOwnsExactClockAdmissionWorldAndConfigurationIdentities",
+          "SelectedGenesisPreservesStageCallbackExceptionBoundary",
+          "SelectedGenesisUsesSuppliedWorldIdentityAndReportsOwnedStagesInOrder",
+          "SelectedP9CompositionConsumesP8BeforeNpcAllocationAndRetainsCanonicalOwners",
+          "SelectedActionEligibilityUsesTheAdmittedEffectiveConfiguration",
+          "SelectedArrestDecisionStageDoesNotDrawWhenNoCoreTargetExists",
+          "SelectedArrestDecisionStagePlansExactCoreTargetWithoutHostProjection",
+          "SelectedArrestDoesNotRecheckGuardVisibilityAfterPlanning",
+          "SelectedArrestGraphPlanningChoosesHighestBountyThenOrdinalRuntimeId",
+          "SelectedArrestGraphPlanningFiltersInvalidTargetsButPreservesActiveSentenceSelection",
+          "SelectedArrestGraphPlanningRejectsNonExactGuardAndActionOwners",
+          "SelectedArrestPlanningMatchesPreviousOrderedTargetAndUtilityRule",
+          "SelectedArrestPlanningRejectsForeignActorOrActionNodes",
+          "SelectedArrestRejectsAlreadySentencedTargetInsideOperationWithoutWrites",
+          "SelectedGraphActionDoesNotFallBackToUnityProviderPlanning",
+          "InventoryInstallRevalidatesPreparedRowsAndLeavesOwnerUnchangedOnRejection",
+          "InventoryPreparedReplacementRejectsInvalidAmountsCostsAndOverflowWithoutMutation",
+          "InventoryRetainsExactGraphNodesAndPublishesSuccessfulMutations",
+          "MarketInitializationAndPreparedInstallRetainCanonicalItemIdentity",
+          "MarketPreparedSnapshotPreservesTypedRowsOrderAndExactGraphIdentity",
+          "MarketRejectsChangedPreparedRowsWithoutRevisionIncrement",
+          "MarketTypedPreparedOperationsRetainNodeIdentityAndRejectInvalidChangesAtomically",
+          "ActiveJusticeQueriesUseStableIdentityAndRetainOwnerOrder",
+          "BoundOwnerRejectsMutationsAfterRuntimeFault",
+          "FailedBoundaryBindingLeavesOwnerUnboundAndRowsUnchanged",
+          "JusticeRowsPreserveMutationValuesWhenUnbound",
+          "OrderedRowsAndSentenceWarrantIdentityRemainInOneCoreOwner",
+          "P12MutationAdmissionAndOwnerRevisionStayCoupled",
+          "SentenceRejectsWarrantWithDifferentTargetOrCityIdentity",
+          "UnboundCompatibilityRowsCanRepresentMissingReferencesButCannotEnterOwner",
+          "LocalSalePreservesSelectedItemIdentityAndExistingUtilityOrdering",
+          "LocalSaleRejectsForeignMerchantAndItemNodes",
+          "LocalSaleSkipsStaleEmptyAndBelowThresholdCandidates",
+          "LocalSaleUsesTypedBasePriceAndOrdinalTieBreak",
+          "SelectedActorDecisionStageDoesNotUseHostProjectionAsCoreEligibility",
+          "SelectedActorDecisionStageOwnsCandidatePreparationAndDrawBoundaryWithoutHostProjection",
+          "SelectedAutonomousSellCandidateUsesCorePlanAndRejectsMissingOpportunity",
+          "SelectedBuyPlanningUsesKnownDirectRouteAndExactOwnerObservations",
+          "SelectedCommercialFreshnessMatchesExistingPolicyBoundaries(20L,20L,1.0f)",
+          "SelectedCommercialFreshnessMatchesExistingPolicyBoundaries(20L,27L,1.0f)",
+          "SelectedCommercialFreshnessMatchesExistingPolicyBoundaries(20L,28L,0.95652175f)",
+          "SelectedCommercialFreshnessMatchesExistingPolicyBoundaries(20L,50L,0.0f)",
+          "SelectedCommercialFreshnessMatchesExistingPolicyBoundaries(20L,-1L,1.0f)",
+          "SelectedLocalSaleReadsExactOwnersAndReturnsExistingCommercialEvidence",
+          "SelectedLocalSaleRejectsStaleAndBelowThresholdOwnerFacts",
+          "SelectedPlannedMarketFallbackPreservesWaitThresholdAndExactCityPayload",
+          "SelectedPlannedSaleChoosesOrderedLocalBuyerAndUsesFreshnessReserveAndPlanOwners",
+          "TradeOpportunityAppliesTypedPreferenceAndExactProfitScoring",
+          "TradeOpportunityRejectsForeignNodesAndSkipsIneligibleCandidates",
+          "TradeOpportunityTieBreaksByDestinationBeforeItemIdentity",
+          "UnprojectableSelectedCandidateIsDisabledBeforeChoiceDraw",
+          "AcceptsOneOrderedExogenousAndFiniteSourceForTheSameItem",
+          "RejectsInvalidTypedSourceContractWithExistingReason(\"missing-profile\",\"MissingMixedSourcesCity\")",
+          "RejectsInvalidTypedSourceContractWithExistingReason(\"missing-identity\",\"MixedSourcesCityIdentityIncomplete\")",
+          "RejectsInvalidTypedSourceContractWithExistingReason(\"missing-source\",\"MixedSourcesProfileRequiresExactlyTwoSources\")",
+          "RejectsInvalidTypedSourceContractWithExistingReason(\"duplicate-source-id\",\"MixedSourcesSourceIdentityOrQuantityInvalid\")",
+          "RejectsInvalidTypedSourceContractWithExistingReason(\"different-items\",\"MixedSourcesItemMismatch\")",
+          "RejectsInvalidTypedSourceContractWithExistingReason(\"unspecified-kind\",\"MixedSourcesExplicitKindRequired\")",
+          "RejectsInvalidTypedSourceContractWithExistingReason(\"paid-consumption\",\"MixedSourcesRequiresMatchingSingleMarketItemAndFreeConsumption\")",
+          "FailedDestinationAdmissionCompensatesTheSourceBalance",
+          "InvalidAmountIsRejectedWithoutMutation(-1.0f,InvalidInput)",
+          "InvalidAmountIsRejectedWithoutMutation(float.NaN,InvalidInput)",
+          "InvalidAmountIsRejectedWithoutMutation(float.PositiveInfinity,InvalidInput)",
+          "SameAccountAndInsufficientFundsAreRejectedBeforeEitherWrite",
+          "SuccessfulTransferMutatesTheExactAccountsOnceAndReturnsExistingReceiptShape",
+          "DirectCommittedMutationAdvancesExactlyOnceAndNoOpReservationDoesNot",
+          "ReservationExcludesConcurrentReservationsAndDirectCommits",
+          "ReservationFromAnotherStateCannotAdvanceOrReleaseThisState",
+          "ReservedCommittedMutationCompletesOnceAndInvalidatesStaleHandles",
+          "SelectedActionPayloadRetainsExactDefinitionAndEvidenceOwners",
+          "SelectedActionSlotOwnsCommittedRevisionAndExactHydrationValue",
+          "SelectedActionSlotRejectsForeignDefinitionAndPreservesSaturatedRevision",
+          "SelectedNpcLifecycleOwnerOwnsLifeInjuryAndP12RevisionValues",
+          "SelectedNpcTravelOwnerPreservesRuntimeIdentitiesAndExactRevision",
+          "SelectedActionDecisionKeepsWeightedOrderingAndDrawBoundary",
+          "SelectedActionDecisionUsesEffectiveOverridesAndRejectsForeignGraphNodes",
+          "SelectedActionPolicyUsesCanonicalNodesAndResolvesStatusChangesInOrder",
+          "SelectedActionSlotRollUsesCommittedNodeAndRejectsStaleSlotWithoutDrawing",
+          "SelectedActionSuccessRejectsForeignNodeAndDoesNotDrawForNonFailingAction",
+          "SelectedActionSuccessUsesEffectiveDefinitionAndConsumesExactlyOneDraw",
+          "SelectedMerchantPolicyRejectsSameIdNodesFromAnotherDefinitionGraph",
+          "SelectedMerchantPolicyUsesEffectiveJobAndCanonicalItemValues",
+          "InitialOwnerUsesAdmittedTypedItemAndAdvancesLocalRevisionOnlyOnChange",
+          "RegisterSaleUsesCoreOwnerTransitionAndPreservesCompletionSemantics",
+          "RejectedSaleRegistrationLeavesPlanAndRevisionUntouched",
+          "RevisionOverflowRejectsChangedInstallWithoutChangingState",
+          "SnapshotHydrationPreservesExactRevisionAndRejectsForeignDefinitionIdentity",
+          "SelectedActionCompletionDoesNotEnterStatusOperationAfterFailedDispatch",
+          "SelectedActionCompletionRunsTheStatusPlanInsideItsSeparateOperation",
+          "SelectedActionStatusPlanAppliesActorThenTargetUsingExactOrderedOwnerWrites",
+          "SelectedActionStatusPlanPreservesActorFirstPartialFailureSemantics",
+          "SelectedActionStatusPlanRejectsForeignActorAndActionIdentity",
+          "SelectedNpcActionSlotPreservesExactAdmittedActionNodeIdentity",
+          "SelectedNpcHiddenStateOwnerPreservesExactNonNegativeCounterValues",
+          "SelectedNpcRuntimeOwnerCompositionConsumesExactGraphAndPreservesOwnerInstances",
+          "SelectedNpcRuntimeOwnerCompositionRejectsForeignGraphOwnerBindings",
+          "SelectedStatusOwnerAppliesOrderedRemovalThenAdditionAndNotifiesEachWrite",
+          "SelectedStatusOwnerDoesNotWriteWhenMutationAdmissionThrows",
+          "SelectedStatusOwnerPreservesIdentityOrderMultiplicityAndNoOpMutationSemantics",
+          "SelectedStatusOwnerRejectsForeignNodesDuringInitialInstallation",
+          "AccountMutationAdmissionRejectsBeforeAnyOwnerMutation",
+          "CounterpartyCreditCapacityRejectsBeforeAnyOwnerMutation",
+          "InvalidInputAndQuantityKeepTheExistingFailureCategories",
+          "InvalidSelectedPriceIsRejectedBeforeAnyOwnerMutation",
+          "MissingSelectedStockRowRejectsWithoutMutation",
+          "RejectedMarketInstallUsesExistingTransferRollbackAndAccountCallbacks",
+          "SelectedCityConsumptionCommitsThroughCoreOwnersAndPreservesOwnerCallbacks",
+          "ZeroBasePriceRetainsTheSelectedMarketMinimumAndUnaffordableRequestDoesNotMutate",
+          "AdmittedAdvanceUsesCoreOwnerThreadIdentityAndFaultsProtocolOnMismatch",
+          "BatchExceptionFaultsAdmittedRuntime",
+          "BatchRecordsEachCompletedBoundaryAndPublishesOnlyAfterAllDays",
+          "BatchRejectsNegativeCountAndLeavesZeroCountWithoutLeaseWork",
+          "BatchReportsPartialProgressWithoutPublishingAfterLaterAdvanceFailure",
+          "BatchRuntimeBoundaryMustBelongToTheCoreExecutionStateThatAdvancesIt",
+          "DailyCaptureAdvanceReadsCoreOwnedMutationGuardBeforeHostWork",
+          "LegacyIntradayAdvanceUsesTheTimelineBoundary",
+          "NonAdmittedSingleAdvanceKeepsIntradayTimelinePrecedence",
+          "RuntimeBoundaryMustBelongToTheCoreExecutionStateThatAdvancesIt",
+          "SingleAdvanceExceptionInvalidatesCaptureAndFaultsAdmission",
+          "SingleAdvanceFaultsWhenCoreCannotCloseTheOuterDailyScope",
+          "SingleAdvanceOwnsLeaseOperationCompletionAndCapturePublicationOrder",
+          "SingleAdvanceRejectsReentryBeforeAnyHostOperation",
+          "SingleCapturePreflightFailureDoesNotAcquireLeaseOrAdvance",
+          "SingleLegacyAdvanceDoesNotEnterDailyAdmissionOrPublishCaptureToken",
+          "UnadmittedBatchAdvanceKeepsIntradayTimelinePrecedence",
+          "GlobalIdentityCollisionAndRollbackPreserveExactCountsAndRevision",
+          "P12IdentityWitnessesShareTheCoreOwnerAndMutationRevision",
+          "StagedNoOpDoesNotChangeRevisionAndCommittedIdentityDoes",
+          "CoreHiddenOwnerWritesKeepNoOpsOutsideP12AdmissionAndCommitEachLeafOnce",
+          "FailedSelectedEscapeRegistersSentencePenaltyOnCoreJusticeOwner",
+          "ForcedEscapeUsesCoreOwnersWithoutRollAndAllowsSameDayArrestInsideOneOperation",
+          "OrdinaryEscapeStillRejectsSameDayArrest",
+          "SelectedCrimePlanningUsesOwnersAndDoesNotAskUnityProviderToPlan",
+          "SelectedEscapeWithoutLiveSentenceReleasesAndClearsHiddenState",
+          "SelectedHideUsesCoreWarrantAndKeepsHiddenTimerAndStatusWritesSeparate",
+          "SuccessfulSelectedEscapeCommitsPenaltySentenceAndStatusOwnersInOrder",
+          "ActiveSentenceRemainsArrestedAndAdvancesExactlyOneDay",
+          "AdvancePreservesFourScopesAndRunsHiddenAndSentenceTransitionsOnCoreOwners",
+          "ArrestedActorWithoutActiveSentenceIsReleased",
+          "CrimeOnlyJusticeOnlyAndDisabledSubsystemsKeepTheirOwnScopes",
+          "IncompleteSelectedRosterIsRejectedBeforeAnyDailyScope",
+          "NoOpDailyPassDoesNotAdvanceOwnerRevisions",
+          "ResolvedWarrantReleasesPrisonerAndRemovesSentence",
+          "SentenceForActorWhoIsNoLongerArrestedIsRemovedWithoutReleasingActor",
+          "UnresolvedJusticeLinksRejectCoreStageBeforeMutation",
+          "CompositeUsesPreparedPurchaseValuesAndPreservesDecisionIdentity",
+          "CoreRejectsCrossCityBuyForNonMerchantBeforeAdmissionOrWrites",
+          "PlanAdmissionRejectionPrecedesEveryPurchaseWrite(False,True,\"MerchantPlanAdmission\")",
+          "PlanAdmissionRejectionPrecedesEveryPurchaseWrite(True,False,\"TravelPlanAdmission\")",
+          "RevisionSaturationPreflightLeavesPurchaseOwnersUntouched(True,\"MerchantPlanPreflight\")",
+          "RevisionSaturationPreflightLeavesPurchaseOwnersUntouched(False,\"TravelPlanPreflight\")",
+          "SelectedCrossCityBuyDispatcherRejectsMismatchedActionBeforeRandomness",
+          "SelectedCrossCityBuyDispatcherRollsBeforePurchaseAndOwnerPlanWrites",
+          "SelectedCrossCityBuyFailedRollStopsBeforePurchaseAdmissionOrWrites",
+          "UnexpectedPostPurchaseTravelOwnerConflictIsReportedAsPartialCommit",
+          "ActorTurnContextFactoryRejectsUnboundStateBeforeHostBoundary",
+          "AdmittedActorTurnContextUsesOnlyCoreBoundRosterAndOwnerRoots",
+          "AdvanceDerivesUniformAndCustomCalendarIdentityFromAdmittedDefinitions",
+          "AdvanceDoesNotRequestDisabledDemographyWriterFromTheHost",
+          "AdvanceOmitsEconomyWhenTheSelectedConfigurationDisablesIt",
+          "AdvanceRejectsActorContextWithDifferentPersonStoreInstance",
+          "AdvanceRejectsASubstitutedScheduledDirectiveStore",
+          "AdvanceRejectsDayStartBoundaryBoundToAnotherJusticeOwner",
+          "AdvanceRejectsSelectedActorWithoutExactDecisionRecordRootsBeforeActorDispatch",
+          "AdvanceRequestsDemographyContextWhenNaturalMortalityIsEnabled",
+          "AdvanceRequiresTheAdmittedDefinitionGraph",
+          "AdvanceRunsSelectedCrimeJusticeScopesAndMerchantUrgencyInCoreDayStartPosition",
+          "AdvanceRunsSelectedDailyPhasesInTheEstablishedOrder",
+          "AdvanceStopsAtDayStartFailureAfterDisabledDemography",
+          "AdvanceStopsAtTheFirstFailingDomainPhase",
+          "AdvanceUsesAdmittedMerchantConfigurationForPlanUrgency",
+          "RuntimeAdvanceRootRejectionFaultsBeforeDailyWritesAndCapturePublication",
+          "RuntimeAdvanceStageInvokesSelectedDailyCoreBeforeCompletionAndTokenPublication",
+          "SelectedDailyContextFailureAfterClockAdvanceFaultsAndCannotPublishBoundary",
+          "StateBackedDayStartUsesCoreBoundRosterInsteadOfHostProjection",
+          "AggregatePopulationWritesUseExactSelectedCityOwnersInStableIdentityOrder",
+          "NamedMortalityUsesPersonStoreBeforeFloorSnapshotAndAggregatePolicy",
+          "CoreOwnerBindingRunsLocalKnowledgeStageInsideCallerOwnedOperation",
+          "FailedCreationReleasesEarlierOwnerBindingsBeforeCleanRetry",
+          "EveryApprovedSourceMemberHasATypedCoreValueProperty",
+          "ActorTurnStageRunsCoreMerchantPassInsideTheHostAdmissionBoundary",
+          "CompletedSoloArrivalObservesItsExactCurrentCityMarketInCore",
+          "CompletedTravelPartyArrivalObservesItsExactCurrentCityMarketInCore",
+          "MerchantDailyPassAdvancesUnprofitablePlanWaitOnTheCoreOwner",
+          "MerchantDailyPassClearsAPlanForLocalMerchantFromTheExactCoreOwner",
+          "MerchantDailyPassObservesTheCoreMarketAndSpatialOwners",
+          "MerchantDailyPassRedirectsFromKnownCoreRouteAndRecordsCoreEvidence",
+          "MissingTravelSectionUsesTheSameCostForPlanFeasibilityAndCommit",
+          "PendingTravelDayMaintenanceUsesExactPlanOwnerAndSkipsTravelingOrSaturatedPlans",
+          "BuyerDebitRejectionStopsBeforeAnyLaterOwnerWrite",
+          "BuyerInventoryRejectionRetainsEstablishedPartialCommitAndSectionReceipts",
+          "CoreTradeCommitsInEstablishedOrderAndNotifiesEachChangedOwner",
+          "P12AdmissionRejectionOccursBeforeAnyOwnerWrite",
+          "PlannedNpcSalePartialTradeDoesNotFallbackToMarketOrAdvancePlan",
+          "PlannedSaleAtMaxPlanRevisionRejectsBeforeAnyTradeOwnerMutation",
+          "PlannedSalePlanAdmissionRejectsBeforeAnyTradeOwnerMutation",
+          "SelectedPlannedBuyerPayloadExecutesTradeThenCompletesSameMerchantPlanOwner",
+          "SelectedPlannedMarketSaleCommitsMarketAndPlanOwnersFromExactSlot",
+          "SelectedPlannedMarketSaleMarksUnexpectedPostSalePlanRejectionAsPartialCommit",
+          "SelectedPlannedMarketSaleRejectsPlanAdmissionBeforeMarketBoundaryOrWrites",
+          "SelectedPlannedNpcSaleDispatcherRejectsMismatchedActionBeforeRandomness",
+          "SelectedPlannedNpcSaleDispatcherRollsBeforePlanAdmissionAndTradeWrites",
+          "SelectedPlannedNpcSaleFailedRollStopsBeforePlanAdmissionAndTradeWrites",
+          "SellerCreditRejectionRefundsBuyerAndPublishesBothBuyerAccountWrites",
+          "SellerInventoryRejectionRefundsBothAccountsAndPublishesCompensationWrites",
+          "DecisionRecordThenActionSlotThenSelectedSaleEffectUsesOnePayloadIdentity",
+          "SelectedActionDispatchExecutesNormalActionFromTheExactCoreSlot",
+          "SelectedActionDispatchReturnsHandledFailureAfterTheSingleFailedRoll",
+          "SelectedActionDispatchRoutesOneLocalMarketSaleAndHandlesItsSingleRoll",
+          "SelectedHideActionWithoutHostBoundaryRemainsUnhandledBeforeRandomness",
+          "SelectedLocalSalePayloadCommitsExactOwnersThroughCoreOperation",
+          "SelectedMarketDispatcherCompletesLocalPurchaseAfterTheSameActionRollBoundary",
+          "SelectedMarketDispatcherP12RefusalPrecedesSaleMutation",
+          "SelectedMarketDispatcherRejectsMismatchedActionBeforeRandomness",
+          "SelectedMarketDispatcherRollsExactSlotBeforeP12BoundaryAndSale",
+          "SelectedMarketDispatcherStopsAfterFailedRollBeforeP12OrOwnerMutation",
+          "SelectedMarketOperationRejectsPayloadForAnotherCityBeforeAdmission",
+          "SelectedMerchantDispatchHandlesMissingBoundaryWithoutProviderFallback",
+          "SelectedMerchantDispatchHandlesUnavailableMarketBoundaryWithoutProviderFallback",
+          "SelectedPlannedMarketSaleDispatcherRollsBeforePlanAdmissionAndMarketCommit",
+          "SelectedRemoteSellIsHandledFailureInsteadOfUnityProviderFallback",
+          "UnplannedSaleTradeProfitUsesRawPreSaleAverageCostEvenWhenEvidenceUsesBasePrice",
+          "CoreExecutionBuysAgainstSelectedOwnersAndCompletesBoundary",
+          "CoreExecutionPreservesRejectedAdmissionWithoutMutatingOwners",
+          "InventoryRejectionRefundsDebitAndRestoresMarketStock",
+          "AccountRevisionWithoutCompensationCapacityRejectsBeforeAnyWrite",
+          "CoreExecutionOwnsSelectedSaleAndCompletesP12BoundaryAfterOwnerCommit",
+          "CoreExecutionPreservesRejectedP12AdmissionAndCompletesWithoutOwnerMutation",
+          "CoreExecutionReportsRefundWritesBeforeDisposingP12Boundary",
+          "InventoryCommitRejectionRefundsAccountAndLeavesMarketUntouched",
+          "MarketCommitRejectionReportsPartialCommitAfterAccountAndInventoryWrites",
+          "PreparedSaleIsSideEffectFreeAndRejectedAdmissionCanRetry",
+          "AccountBackedDailyEconomyRunsThroughCoreOwnerGraph",
+          "AdmittedDefinitionsConstructAndOperatePairedCityNpcOwnersInCore",
+          "ConfiguredCityRoutesAreConstructedByCoreAgainstExactOwnersAndBindHostProjection",
+          "ConfiguredGenesisComposesDirectiveJusticeSpatialAndCommercialOwnersInCore",
+          "ConfiguredInitialJusticeStateUsesExactCoreOwnersAndPreservesDefaultsAndOrder",
+          "ConfiguredScheduledDirectivesUseCoreActorAndAdmittedActionIdentities",
+          "ConfiguredSelectedOwnersCanBeConstructedWithoutUnityProjectionCallbacks",
+          "CurrentActionSlotCommitUsesExactGraphAdmissionBeforeCoreOwnerMutation",
+          "ExactGraphCarriesSamePersonStoreAndRejectsMaterializedNpcOutsideRoster",
+          "GraphRejectsRuntimeIdentityCollisionsAcrossSelectedOwnerAndSpatialFamilies",
+          "InitialCommercialKnowledgeUsesExactSelectedMarketRowsWithoutAddingSiteOrTopologyFacts",
+          "InitialSpatialKnowledgeIsSeededFromCoreRouteOrderAndOwnerIdentities",
+          "MerchantTradePlanTransitionRequiresExactGraphMembersAndPreservesDecisionIdentity",
+          "MerchantTradeTravelPlanUsesCoreDirectRouteAndAdmissionBeforeOwnerCommit",
+          "RejectedCityRouteProjectionDoesNotPublishCoreIdentityOrSpatialMutation",
+          "SelectedDailyEconomyKeepsMaterialFlowResultOnTheCoreOwnerWithoutProjectionCallback",
+          "SelectedDailyEconomyPreflightsExactCityOwnersAndPreservesGlobalPassOrder",
+          "SelectedDailyExecutionRunsCorePartyThenSoloTravelAfterActorTurns",
+          "SelectedGraphTransitReadUsesItsExactCorePersonPositionOwner",
+          "SelectedSoloTravelDayUsesExactSortedOwnersAndPreservesAdmissionAndPartyRules",
+          "SelectedSoloTravelDispatcherClearsChangedCorePlanAfterTravelPublication",
+          "SelectedSoloTravelDispatcherP12RefusalPrecedesDebitAndTransition",
+          "SelectedSoloTravelDispatcherPreservesRepositionAndTravelCallbackOrder",
+          "SelectedSoloTravelDispatcherPublishesCommercialScoutBeforeClearingCorePlan",
+          "SelectedSoloTravelDispatcherRefusesMismatchedSlotBeforeRandomnessAndLetsCoreRejectMissingDestination",
+          "SelectedSoloTravelDispatcherRejectsImmediateP12AdmissionAndRefundsBeforePublishing",
+          "SelectedSoloTravelDispatcherStopsAfterFailedActionRoll",
+          "SelectedTravelPartyArrivalCommitsAllMembersAcrossSharedPresenceRevisionChanges",
+          "SelectedTravelPartyDayRunsCoreOwnerTransitionsInPartyMemberAndP12Order",
+          "SelectedTravelPlanClearRejectsForeignOwnerAndRevisionExhaustionWithoutAdmission",
+          "SelectedStealCompensatesRejectedSocialCommit",
+          "SelectedStealRejectsSocialPreflightBeforeTransferOrLogging",
+          "SelectedStealUsesCoreMoneySocialAndJusticeOwnersInLegacyOrder",
+          "SelectedStealUsesTheBoundaryTheftSinkForPreflightAndCommit",
+          "SelectedStealWarnsWhenCoreCompensationFails",
+          "PresenceTransitionIsSideEffectFreeUntilCommitAndPreservesNpcRevision",
+          "RejectedAdmissionLeavesPreparedCityAndNpcOwnersUntouchedAndCanRetry",
+          "RejectedOrSaturatedStartLeavesTravelAndCityOwnersUnchanged",
+          "SameCityPresenceTransitionRepairsMissingMembership",
+          "SaturatedDestinationPresenceRevisionBlocksOnlyTheArrivalWrite",
+          "SoloTravelExecutionChargesBeforeTransitionAndRefundsRejectedTransition",
+          "TravelCancellationRestoresOriginMembershipAndStableIdentity",
+          "TravelProgressAndArrivalAdvanceNpcRevisionOncePerCommittedDay",
+          "ExistingSelectedTravelCandidateDefersWhenNoPlanExists",
+          "ExistingSelectedTravelCandidateRejectsUnaffordableOrPartyManagedPlan",
+          "ExistingSelectedTravelCandidateUsesCoreRouteCostAndPreservesPlanIdentity",
+          "SelectedFleeCityFailsClosedWhenExactOwnerGraphHasNoTravelPartyStore",
+          "SelectedFleeCityRejectsArrestedPartyManagedAndUnaffordableActors",
+          "SelectedFleeCityRevalidatesCoreOwnersWithoutStartingTravelOrCharging",
+          "SelectedFleeDispatchHandlesMalformedPayloadWithoutProviderFallback",
+          "SelectedFleeDispatchRejectsMissingBoundaryWithoutProviderFallback",
+          "SelectedFleeDispatchUsesCorePlanAndOperationBoundary",
+          "SelectedFleeOwnerCommitNormalizesBlankOriginDecisionId",
+          "SelectedFleeOwnerCommitRejectsNonMemberActorOrDestinationBeforeAdmission",
+          "SelectedFleeOwnerCommitRejectsP12AdmissionWithoutChangingOwner",
+          "SelectedFleeOwnerCommitRejectsRevisionExhaustionBeforeP12Admission",
+          "SelectedFleeOwnerCommitTreatsExactExistingPlanAsNoOpWithoutP12Callbacks",
+          "SelectedTravelPlanUtilityMatchesTradeUrgencyAndClampRules",
+          "SelectedTravelPlanUtilityRejectsForeignActorAndActionNodes",
+          "DefinitionMapsAreReadOnlyAndDuplicateIdentityIsRejected",
+          "OptionalDefinitionFamiliesRejectDuplicateKeysAndKeepTheirOwnIdentitySpaces",
+          "OptionalDefinitionMapsFreezeCanonicalNodesAndPreserveThemWithContentProjection",
+          "OptionalLocalDescriptorsPreserveRawValuesWithoutOwningValidation",
+          "P9BuilderPreservesExplorableSiteIdentityAndKind",
+          "SelectedConfiguredActionsComeFromCanonicalGraphInConfigurationOrder",
+          "SelectedConfiguredActionsRejectAnUnresolvedIdentity",
+          "TraitAndCapabilityAttributeDisplayNamesUseExistingIdFallback",
+          "TypedGraphCopiesSelectedValuesAndP9BuilderUsesThem",
+          "AggregatePolicyDefersRateValidationUntilAfterTheCorrespondingSample",
+          "AggregatePolicyEvaluatesSamplesInBirthThenDeathOrderAndShortCircuits",
+          "AggregatePolicyPreservesThresholdRateValidationAndDeathCap",
+          "AggregatePolicyPropagatesInjectedSampleExceptionsAtTheOriginalCallSite",
+          "AggregatePolicyRejectsInvalidRatesSamplesAndCalendarInExistingOrder",
+          "AggregatePolicySaturatesLargeEventCountsAndDoesNotNormalizeMalformedContext",
+          "AggregatePolicyUsesStrictFractionalThresholdAndPreservesIntegerAndZeroRates",
+          "DefaultAndInjectedSamplesUseTheSamePolicyAndValueContractsRetainEquality",
+          "NonBirthOutcomeValuesRetainDeathFallbackAndSamplingHasNoCallOrderState",
+          "PersonIdRetainsConstructionTryCreateAndOrdinalValueSemantics",
+          "SamplesAreIndependentOfCallOrderAndCulture",
+          "SampleVectorsMatchRecordedProductionBits",
+          "ProviderAcceptsMaximumDrawIndexAndRejectsNegativeDrawIndex",
+          "SameSeedContextAndDrawProduceTheSameValue",
+          "StreamStateMakesDrawPositionExplicitAndIndependent",
+          "UnrelatedStreamConsumptionDoesNotShiftOperationStream",
+          "CaptureSnapshotRecordsSupportedMetadataAndExactSeed",
+          "SnapshotIsDetachedImmutableAndCaptureOrStagingDoesNotAdvanceSource",
+          "StagedSourcePreservesEveryBoundarySeed(int.MinValue)",
+          "StagedSourcePreservesEveryBoundarySeed(0)",
+          "StagedSourcePreservesEveryBoundarySeed(int.MaxValue)",
+          "StagedSourcePreservesSeedAndKeyedOutputs",
+          "UnsupportedMetadataFailsWithoutChangingActiveSource",
+          "CoreOwnerRevisionCensusAndP12SnapshotRoundTripRemainBoundToExactStore",
+          "AppliedOperationPreparesBothOwnersAndPreservesOrderedUnrelatedRows",
+          "DuplicateDefinitionIdsRejectAsAmbiguousWithoutMutatingInputs",
+          "EmptyReserveIsExhaustedWithoutPreparingMarketRowsOrAdvancingRevisions",
+          "MissingTargetOrStockOverflowRejectsWithoutMutation",
+          "RequestCopiesTheOrderedRowListAndExposesItAsReadOnly",
+          "SourceMarketDayAndRevisionBoundariesKeepTheirRejectionOrder",
+          "AppliedTransitionPreservesOrderedUnrelatedMarketRowsExactly",
+          "DefinitionRejectsInvalidIdentityAndAmbiguousTargetRows",
+          "FixedP14BScenarioAdvancesAndExhaustsWithExactSharedParityValues",
+          "InvalidCurrentOwnerStateAndRevisionOverflowAreRejectedAtomically",
+          "MarketRevisionExhaustionAndWrongSourceIdentityRejectBeforeAnyNextState",
+          "OrderedMarketRowsRemainStableAndStockOverflowDoesNotProduceANextSnapshot",
+          "PreparedAdvanceCannotCrossRuntimeAndSnapshotsAreDetachedAndReadOnly",
+          "RecreatedScenarioUsesCapturedRemainingReserveAsItsStockDeltaBaseline",
+          "StaleDuplicateAndOlderDaysRejectWithoutChangingTheSnapshot",
+          "AddRemoveAndGraphQueries_PreserveFailuresAndDeterministicOrdering",
+          "BirthRollbackMayRemoveAtSaturatedRevisionOnlyThroughNamedBridge",
+          "Export_DefensivelyCopiesRowsAndPersonIds",
+          "Export_IsDetachedAndSortedAndStagedOwnerPreservesRevisionGap",
+          "FaultedStatusBlocksMutationsButNullRecordFailurePrecedesGuard",
+          "MutationStatusBinding_IsOneWayIdentityBasedAndUnboundOwnersRemainUsable",
+          "OrdinaryWritesRejectSaturatedRevisionWithoutChangingOwner",
+          "ParentageRecord_PreservesPersonIdValueSemantics",
+          "Records_AreSortedByParentThenChildAndReadOnly",
+          "StagedOwner_CallbackRunsInsideEachEdgeStageAndExceptionsEscape",
+          "StagedOwner_RejectsNullDuplicateAndCyclicRowsAtomically",
+          "StagedOwner_RejectsUnsupportedSchemaAndInvalidRevision",
+          "CoreAnchorAuthorityPreservesOneToOneLocationBindingAndRevision",
+          "CoreAnchorAuthorityRetainsComposedOwnerValidation",
+          "CoreSpatialAuthorityComposesAuthoredLocationAndOwnsItsAnchorBinding",
+          "AdvanceRequiresSealedInputPrefixAndRejectsBackwardTargets",
+          "ContinuationBarrierRetainsFrozenProgressAndResumesSameStepAfterPartialCommit",
+          "ContinuationFactsArePublishedBeforeOrdinaryWorkAndSignalsWaitForOuterSuccess",
+          "CrossedDayBoundariesAreOrderedAndTypedInstanceIdentityHasNoActorCardinality",
+          "DayBoundaryOwnerCommitsAtomicallyBeforeOrdinaryWorkAndRetriesSameIdentity",
+          "DispatchLimitStopsAtFailureInstantAndStaleWorkIsDiscardedAsInert",
+          "FailedBoundaryCanBeReconstructedAsTheSamePendingOwnerOperation",
+          "FailedContinuationFactPublicationHasNoSequenceDriftAndRetryDoesNotRepeatSteps",
+          "FailedOwnerCommitRetainsWorkAndDoesNotAllocateCausalSequence",
+          "FrozenManifestValueComparisonRejectsDescriptorReorderingAndIdentityConflicts",
+          "IncompleteContinuationCanBeReconstructedWithoutChangingItsFrozenProgress",
+          "InitialInstantMayReceiveInputUntilItsFirstSeal",
+          "InputCommitPublishesTypedDueFactsOnlyWhenTheInputTransactionCommits",
+          "InputSequenceIsStableSealedAndLateOrDuplicateInputIsRejected",
+          "LengthPrefixedBoundaryIdentityKeepsDelimiterBearingWorldAndProfileDistinct",
+          "LengthPrefixedDueWorkIdentityKeepsDelimiterBearingComponentsDistinct",
+          "NextCausalInstantChoosesEarliestInputWorkBoundaryOrTarget",
+          "NextCausalInstantRetainsPendingBoundaryAndDoesNotChangeSameTickOrdering",
+          "NextCausalInstantYieldsCurrentForRestoredContinuationAndPendingHandoff",
+          "PendingContinuationReconstructionRejectsWrongWorldOrProfile(\"different-world\",\"profile:one\")",
+          "PendingContinuationReconstructionRejectsWrongWorldOrProfile(\"world|one\",\"different-profile\")",
+          "ProjectionRespectsCustomMonthLengths",
+          "ProjectionUsesLogicalDayAndCustomCalendarAtBoundariesAndMaximumDay",
+          "PublishedFactReconciliationRejectsIndexedIdentityWithDifferentDueOrCausalSequence(False)",
+          "PublishedFactReconciliationRejectsIndexedIdentityWithDifferentDueOrCausalSequence(True)",
+          "PublishedFactsAndUnhandedSignalsSurviveReconstructionAfterOuterFailure",
+          "QueriesArePureAndInputFailureRetainsUnappliedCommandForRetry",
+          "ReentrantAdvanceIsRejectedAndLegacyDailyRuntimeIsNotModifiedByThisCandidate",
+          "ReloadedContinuationRejectsChangedFrozenDescriptorContent",
+          "RestoredSignalHandoffRejectsWrongWorldOrProfile(\"different-world\",\"profile:one\")",
+          "RestoredSignalHandoffRejectsWrongWorldOrProfile(\"world|one\",\"different-profile\")",
+          "ResumableManifestPreservesZeroOneManyRosterAndInjectiveIdentities(0)",
+          "ResumableManifestPreservesZeroOneManyRosterAndInjectiveIdentities(1)",
+          "ResumableManifestPreservesZeroOneManyRosterAndInjectiveIdentities(3)",
+          "SameInstantDueWorkOrderingIsIndependentOfRegistrationOrderAndRejectsSequenceCollision",
+          "SameInstantGeneratedWorkUsesNextCausalWaveAfterCurrentWave",
+          "SealedBoundaryInputsRunBeforeAtomicDayOwnerAndOrdinaryDueWork",
+          "StaleReferenceDoesNotConsumeCommittedDispatchLimit",
+          "CoreCalculatorMatchesPinnedUnityBinary32Vectors",
+          "CreditAndDebitUseTheSharedOwnerAndAdvanceItsRevisionOnce",
+          "P12AdmissionRejectsBeforeMutationAndCommitCallbackRunsAfterSuccess",
+          "PreparedInstallAndSnapshotKeepExactRevisionSemantics",
+          "ThrowingCommitNotificationDoesNotUndoCommittedBalance",
+          "ZeroAndRejectedOperationsDoNotChangeStateOrRevision",
+          "ActivationRejectsAnEmptyDailyManifest",
+          "TimelineRetriesCommittedOwnerReceiptAndDefersSignalHandoffUntilSuccess",
+          "AtomicWriteFaultMatrixPreservesExactDestinationAndOwnTemporary(\"create-temporary\")",
+          "AtomicWriteFaultMatrixPreservesExactDestinationAndOwnTemporary(\"flush\")",
+          "AtomicWriteFaultMatrixPreservesExactDestinationAndOwnTemporary(\"short-read\")",
+          "AtomicWriteFaultMatrixPreservesExactDestinationAndOwnTemporary(\"long-read\")",
+          "AtomicWriteFaultMatrixPreservesExactDestinationAndOwnTemporary(\"changed-reread\")",
+          "AtomicWriteFaultMatrixPreservesExactDestinationAndOwnTemporary(\"validator-false\")",
+          "AtomicWriteFaultMatrixPreservesExactDestinationAndOwnTemporary(\"validator-throw\")",
+          "AtomicWriteFaultMatrixPreservesExactDestinationAndOwnTemporary(\"move\")",
+          "InspectAndBoundsKeepMissingInaccessibleAndInvalidDistinct",
+          "ReplaceAndCleanupFailuresPreserveSlotAndReportOnlyUnremovedOwnedTemporary",
+          "SuccessfulWriteCallsValidatorBetweenRereadAndReplacement",
+          "AtomicSlotUsesDefaultFilesystemAndValidatorRunsOnceBeforeReplacement",
+          "FailedCreateNewDoesNotDeleteForeignTemporaryCollision",
+          "HostAdmissionPrecedesProfilePolicyOnlyAfterFullCanonicalStructureValidation",
+          "InspectDistinguishesMissingWithoutCreatingDirectory",
+          "NumericProfileCoreClrHashMatchesIndependentCanonicalVector",
+          "StorageFaultsPreserveDestinationAndCleanOnlyOwnedTemporary(\"create-directory\")",
+          "StorageFaultsPreserveDestinationAndCleanOnlyOwnedTemporary(\"create-temporary\")",
+          "StorageFaultsPreserveDestinationAndCleanOnlyOwnedTemporary(\"write\")",
+          "StorageFaultsPreserveDestinationAndCleanOnlyOwnedTemporary(\"flush\")",
+          "StorageFaultsPreserveDestinationAndCleanOnlyOwnedTemporary(\"read\")",
+          "StorageFaultsPreserveDestinationAndCleanOnlyOwnedTemporary(\"replace\")",
+          "V1DescriptorMatchesIndependentPreExtractionCanonicalVector",
+          "V2AdmissionIsPinnedToTheApprovedNet8TargetFramework",
+          "V2DiscriminatorNeverFallsBackAndUnityRejectsRecognizedV2",
+          "V2ExactWireFieldOrderStrictUtf8BoundsAndCanonicality",
+          "V2MismatchTaxonomyChecksEveryRuntimeAndSemanticIdentityGroup",
+          "V2RoundTripsCanonicalBytesAndClassifiesContentAndRuntime",
+          "MembershipAndMaterializationWitnessesComeFromSameCoreStoreRevision",
+          "ResidenceWitnessUsesStableLengthPrefixedPersonIdentityAndLiveRevision",
+          "AgeCalculationPreservesUniformCalendarBirthdayBoundary",
+          "AgeCalculationRejectsUnknownFutureAndInvalidInputsWithoutResult",
+          "MaturityRejectsInvalidThresholdAndConfiguration",
+          "MaturityUsesEffectiveThresholdAndExactCompletedYearBoundary",
+          "CustomCalendarAndExplicitSamplePreserveDailyProbabilitySemantics",
+          "InvalidBirthProbabilityAndSampleRemainRejectedWithoutMutation",
+          "CaptureTracksRegistrationBindingCompensationAndPersonLocalCommitsExactly",
+          "EmptyOwnerRoundTripsAndRemainsDistinctFromMissingSnapshot",
+          "PopulatedOwnerPreservesExactValuesOrderAndDetachedIndexes",
+          "RejectsMalformedLocalValuesWithoutPublishingOrChangingSource",
+          "StagingRestoresGappedAndSaturatedRevisionsWithoutReplay",
+          "LifeAndResidenceWritesRetainAdmissionAndLocalRevisionSemantics",
+          "StagedOwnerBridgePreservesExactValuesAndSaturatedRevision",
+          "MutationStatusBindingRetainsIdentityAndBlocksFaultedOwnerWrites",
+          "P12AdmissionAndCommitCallbacksKeepOwnerIdentityFlagsAndOrdering",
+          "PairMigrationAcceptsUnboundOrIdenticallyBoundOwnersAndRejectsMismatchedBindingAtomically",
+          "ReceiptSnapshotIsSortedDetachedAndHydratesAnUnpublishedOwner",
+          "RollbackPointIsOwnerBoundAndPreservesReceiptPruningBehavior",
+          "CounterAllocationPreservesStableOwnerAndIndependentRevisions",
+          "P12CounterBoundariesRejectBeforeAllocationAndAdvanceOnlyOnCommit",
+          "StagedRestorePreservesNextIdsForEveryCounterFamily",
+          "AddAndTerminalTransitionAdvanceTheCoreOwnerRevisionOnce",
+          "DirectiveRejectsActionTypeOutsideItsBoundEscapeOperation",
+          "InitialInvalidScheduleIsOneCommittedSkippedOwnerRow",
+          "P12FDetachedCaptureAndStagePreserveIdentityTerminalStateAndExactRevision",
+          "PrepareAndConsumeUsesCoreTransientIndexWithoutOwnerRevision",
+          "PrepareMarksConflictingAndUnresolvedRowsThroughOwnerTransitions",
+          "SelectedDailyPreparationUsesCoreNpcIdentityKind",
+          "DefaultsAreResolvedBeforePresetWorldAndContentOverrides",
+          "InvalidResolvedOverridesReturnValidationErrorsWithoutConfiguration",
+          "HostLoggerRequiresAnExplicitRootAndOutputSink",
+          "HostOutputAndPersistentRootAreExplicitPorts",
+          "KeyedOccurrenceReplayDoesNotDeliverTheHostOutputTwice",
+          "SharedLoggerPreservesLegacyReportAndOutputText",
+          "ThrowingHostOutputDoesNotEscapeOrUndoCommittedReportAndReceipt",
+          "AllocationAndCensusRemainOwnedByTheSameSequence",
+          "NarrowBridgePreservesMutationAdmissionAndStagedRestore",
+          "Capture_daily_v1_retains_exact_current_thread_identity",
+          "Context_rejects_non_daily_profile_and_mismatched_owner_thread_identity",
+          "Restored_context_cannot_be_derived_twice",
+          "Restored_context_is_a_distinct_context_bound_to_the_original_thread",
+          "BoundFaultedRuntimeStatusRejectsWithoutMutation",
+          "MaximumAbsoluteDayRejectsWithoutMutation",
+          "ProjectionRequiresTheExistingBoundaryAndCannotBeRebound",
+          "PublicAdvanceUsesRuntimeDispatcherAndRuntimeClockPath",
+          "StandaloneClockAdvancesOneAbsoluteDay",
+          "TimelineProjectionOwnsTheClockAndRejectsIndependentAdvance",
+          "DiscoverUsesAdmissionBeforeMutationAndCommittedCallbackAfterMutation",
+          "DiscoveryPreservesOrderedIdentityRevisionAndNoOpSemantics",
+          "OwnerSnapshotHydrationPreservesExactOrderedRowsAndRevision",
+          "PreparedDiscoverInstallsOrderedChangesAtomicallyAndNotifiesOnce",
+          "SelectedNpcCompositionRetainsTheInjectedSpatialKnowledgeAuthority",
+          "DuplicateIdsAndNonmemberRouteEndpointsAreRejectedBeforeIdentityRegistration",
+          "FailedLocationPublicationRollsBackIdentityIndexesAndRevision",
+          "GenesisRollbackRequiresExactUnconnectedLocation",
+          "RegisteringLocationAndRouteOwnsTopologyAndLocalRevision",
+          "EncodePreservesOrderAndEscapesDelimiterBearingComponentsByLength",
+          "EncodeTreatsNullComponentsAsEmptyAndNullArrayAsNoComponents",
+          "EncodeUsesInvariantCultureForComponentLengths"
+        ]
+      },
+      "commands": [
+        {
+          "label": "cold-build",
+          "executable": "dotnet",
+          "workingDirectory": "<WORKTREE>",
+          "argv": [
+            "build",
+            "tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj",
+            "--no-restore",
+            "--configuration",
+            "Release"
+          ],
+          "exitCode": 0,
+          "elapsedMilliseconds": 2276.858,
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+              "blob": "116bfdd3f27420b137822cf7ef1eb2e17f5a52a9",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 21533,
+              "sha256": "3e9e9357111e50b74d836dff49fa52eb9d00251f33e2cf37835e5af5fd921f10",
+              "field": "/runs/0/commands/0",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "cold-build.log",
+              "bytes": 1526,
+              "sha256": "8bb1ff64570772661d8c1b2a842f4ac9c833a5dda57ef440e94773ad20cde510",
+              "field": "/runs/0/commands/0",
+              "mode": "captured"
+            }
+          ]
+        },
+        {
+          "label": "cold-test",
+          "executable": "dotnet",
+          "workingDirectory": "<WORKTREE>",
+          "argv": [
+            "test",
+            "tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj",
+            "--no-restore",
+            "--configuration",
+            "Release",
+            "--logger",
+            "trx;LogFileName=CoreTests-cold.trx",
+            "--results-directory",
+            "<EVIDENCE>/e5da8c26f23340419b7deb2fe5d251e5",
+            "--settings",
+            "<EVIDENCE>/e5da8c26f23340419b7deb2fe5d251e5/cold-testhost.runsettings"
+          ],
+          "exitCode": 0,
+          "elapsedMilliseconds": 5195.318,
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+              "blob": "116bfdd3f27420b137822cf7ef1eb2e17f5a52a9",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 21533,
+              "sha256": "3e9e9357111e50b74d836dff49fa52eb9d00251f33e2cf37835e5af5fd921f10",
+              "field": "/runs/0/commands/1",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "cold-test.log",
+              "bytes": 1209,
+              "sha256": "ba22d9c4b8b8aafe6bcb7a078c1dc49667c9e39c7ce69329513ada3d56cdfcb7",
+              "field": "/runs/0/commands/1",
+              "mode": "captured"
+            },
+            {
+              "kind": "original-trx",
+              "path": "CoreTests-cold.trx",
+              "bytes": 966355,
+              "sha256": "a2cc71b6e0523e9bb300cf2f7aec70235fd058ac62781ea31f71613efa325e06",
+              "field": "/runs/0/attempts/0/originalReport",
+              "mode": "captured"
+            }
+          ]
+        },
+        {
+          "label": "warm-test",
+          "executable": "dotnet",
+          "workingDirectory": "<WORKTREE>",
+          "argv": [
+            "test",
+            "tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj",
+            "--no-build",
+            "--no-restore",
+            "--configuration",
+            "Release",
+            "--logger",
+            "trx;LogFileName=CoreTests-warm.trx",
+            "--results-directory",
+            "<EVIDENCE>/e5da8c26f23340419b7deb2fe5d251e5",
+            "--settings",
+            "<EVIDENCE>/e5da8c26f23340419b7deb2fe5d251e5/warm-testhost.runsettings"
+          ],
+          "exitCode": 0,
+          "elapsedMilliseconds": 4128.782,
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+              "blob": "116bfdd3f27420b137822cf7ef1eb2e17f5a52a9",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 21533,
+              "sha256": "3e9e9357111e50b74d836dff49fa52eb9d00251f33e2cf37835e5af5fd921f10",
+              "field": "/runs/0/commands/2",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "warm-test.log",
+              "bytes": 587,
+              "sha256": "0927f967a8ef3fdf5de07cece557f0bc1981b8cbe2d2eca59365e3846e6e00ed",
+              "field": "/runs/0/commands/2",
+              "mode": "captured"
+            },
+            {
+              "kind": "original-trx",
+              "path": "CoreTests-warm.trx",
+              "bytes": 966355,
+              "sha256": "ab90f06bfa47559afe2661200bebe8892c1ec5e5ede6ea13b279527f43d4ab19",
+              "field": "/runs/0/attempts/1/originalReport",
+              "mode": "captured"
+            }
+          ]
+        },
+        {
+          "label": "cold-demo",
+          "executable": "dotnet",
+          "workingDirectory": "<WORKTREE>",
+          "argv": [
+            "run",
+            "--project",
+            "tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj",
+            "--no-restore",
+            "--configuration",
+            "Release"
+          ],
+          "exitCode": 0,
+          "elapsedMilliseconds": 1246.755,
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+              "blob": "116bfdd3f27420b137822cf7ef1eb2e17f5a52a9",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 21533,
+              "sha256": "3e9e9357111e50b74d836dff49fa52eb9d00251f33e2cf37835e5af5fd921f10",
+              "field": "/runs/0/commands/3",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "cold-demo.log",
+              "bytes": 432,
+              "sha256": "1ae98819d73f4bb27a060df204eadb3b2ac1de795de7ff1532033f38714a49db",
+              "field": "/runs/0/commands/3",
+              "mode": "captured"
+            }
+          ]
+        },
+        {
+          "label": "warm-demo",
+          "executable": "dotnet",
+          "workingDirectory": "<WORKTREE>",
+          "argv": [
+            "run",
+            "--project",
+            "tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj",
+            "--no-build",
+            "--no-restore",
+            "--configuration",
+            "Release"
+          ],
+          "exitCode": 0,
+          "elapsedMilliseconds": 511.052,
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+              "blob": "116bfdd3f27420b137822cf7ef1eb2e17f5a52a9",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 21533,
+              "sha256": "3e9e9357111e50b74d836dff49fa52eb9d00251f33e2cf37835e5af5fd921f10",
+              "field": "/runs/0/commands/4",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "warm-demo.log",
+              "bytes": 432,
+              "sha256": "1ae98819d73f4bb27a060df204eadb3b2ac1de795de7ff1532033f38714a49db",
+              "field": "/runs/0/commands/4",
+              "mode": "captured"
+            }
+          ]
+        }
+      ],
+      "assemblies": [
+        {
+          "path": "tests/Simulation.Core.Tests/bin/Release/net8.0/Simulation.Core.Tests.dll",
+          "fullName": "Simulation.Core.Tests, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+          "mvid": "5d4ed8c6-e871-4062-ad32-4a0326ba3b3e",
+          "bytes": 833536,
+          "sha256": "18eb786c93f469f2f13fac2bfa0a6aa7d78674b5d974347a8094918c0d90743c",
+          "identityMode": "recovered-validated-output",
+          "observedAtUtc": "2026-10-23T18:13:30.3313495+00:00",
+          "provenance": [
+            {
+              "kind": "retained-output",
+              "path": "Simulation.Core.Tests.dll",
+              "bytes": 833536,
+              "sha256": "18eb786c93f469f2f13fac2bfa0a6aa7d78674b5d974347a8094918c0d90743c",
+              "field": "/runs/0/assemblies/0",
+              "mode": "recovered-validated-output"
+            },
+            {
+              "kind": "git-source",
+              "commit": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+              "blob": "116bfdd3f27420b137822cf7ef1eb2e17f5a52a9",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 21533,
+              "sha256": "3e9e9357111e50b74d836dff49fa52eb9d00251f33e2cf37835e5af5fd921f10",
+              "field": "/runs/0/assemblies/0",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "cold-build.log",
+              "bytes": 1526,
+              "sha256": "8bb1ff64570772661d8c1b2a842f4ac9c833a5dda57ef440e94773ad20cde510",
+              "field": "/runs/0/assemblies/0",
+              "mode": "captured"
+            }
+          ]
+        },
+        {
+          "path": "tests/Simulation.Core.Tests/bin/Release/net8.0/Simulation.Core.dll",
+          "fullName": "Simulation.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+          "mvid": "7232b1ec-2b6d-46d3-8e13-610b8dc4c07f",
+          "bytes": 971776,
+          "sha256": "bace5a932e66ad2932877ba272759e003b95d62a737571c93174ce7d67e52f69",
+          "identityMode": "recovered-validated-output",
+          "observedAtUtc": "2026-10-23T18:13:30.3388648+00:00",
+          "provenance": [
+            {
+              "kind": "retained-output",
+              "path": "Simulation.Core.dll",
+              "bytes": 971776,
+              "sha256": "bace5a932e66ad2932877ba272759e003b95d62a737571c93174ce7d67e52f69",
+              "field": "/runs/0/assemblies/1",
+              "mode": "recovered-validated-output"
+            },
+            {
+              "kind": "git-source",
+              "commit": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+              "blob": "116bfdd3f27420b137822cf7ef1eb2e17f5a52a9",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 21533,
+              "sha256": "3e9e9357111e50b74d836dff49fa52eb9d00251f33e2cf37835e5af5fd921f10",
+              "field": "/runs/0/assemblies/1",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "cold-build.log",
+              "bytes": 1526,
+              "sha256": "8bb1ff64570772661d8c1b2a842f4ac9c833a5dda57ef440e94773ad20cde510",
+              "field": "/runs/0/assemblies/1",
+              "mode": "captured"
+            }
+          ]
+        }
+      ],
+      "attempts": [
+        {
+          "label": "cold",
+          "nativeRunId": "c8cd63cc-25ae-4c42-b42a-8215655fcc1a",
+          "nativeRunLabel": "run-c8cd63cc-25ae-4c42-b42a-8215655fcc1a",
+          "originalReport": {
+            "bytes": 966355,
+            "sha256": "a2cc71b6e0523e9bb300cf2f7aec70235fd058ac62781ea31f71613efa325e06"
+          },
+          "normalizedReport": {
+            "entry": "results/e5da8c26f23340419b7deb2fe5d251e5/cold.trx",
+            "bytes": 828335,
+            "sha256": "9aa0161467f355432e4c5e97e0c782ff28febf3a085d6f13d292e6ca255e7946",
+            "semanticSha256": "9aa0161467f355432e4c5e97e0c782ff28febf3a085d6f13d292e6ca255e7946"
+          },
+          "summaryOutcome": "Completed",
+          "nativeCounters": {
+            "total": "669",
+            "executed": "669",
+            "passed": "669",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          },
+          "caseOutcomeCounts": {
+            "Error": 0,
+            "Failed": 0,
+            "Timeout": 0,
+            "Aborted": 0,
+            "Inconclusive": 0,
+            "PassedButRunAborted": 0,
+            "NotRunnable": 0,
+            "NotExecuted": 0,
+            "Disconnected": 0,
+            "Warning": 0,
+            "Passed": 669,
+            "Completed": 0,
+            "InProgress": 0,
+            "Pending": 0
+          },
+          "resultCount": 669,
+          "gatePassed": true,
+          "exitCode": 0,
+          "elapsedMilliseconds": 5195.318,
+          "comparison": "source-projection-verified"
+        },
+        {
+          "label": "warm",
+          "nativeRunId": "97812fbf-b7cb-4ef0-b24c-a95075b057f9",
+          "nativeRunLabel": "run-97812fbf-b7cb-4ef0-b24c-a95075b057f9",
+          "originalReport": {
+            "bytes": 966355,
+            "sha256": "ab90f06bfa47559afe2661200bebe8892c1ec5e5ede6ea13b279527f43d4ab19"
+          },
+          "normalizedReport": {
+            "entry": "results/e5da8c26f23340419b7deb2fe5d251e5/warm.trx",
+            "bytes": 828335,
+            "sha256": "2fad7964fd817a19ae8ec74fba06cf3f5f366256b70d3a10a9aa53ae2109604b",
+            "semanticSha256": "2fad7964fd817a19ae8ec74fba06cf3f5f366256b70d3a10a9aa53ae2109604b"
+          },
+          "summaryOutcome": "Completed",
+          "nativeCounters": {
+            "total": "669",
+            "executed": "669",
+            "passed": "669",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          },
+          "caseOutcomeCounts": {
+            "Error": 0,
+            "Failed": 0,
+            "Timeout": 0,
+            "Aborted": 0,
+            "Inconclusive": 0,
+            "PassedButRunAborted": 0,
+            "NotRunnable": 0,
+            "NotExecuted": 0,
+            "Disconnected": 0,
+            "Warning": 0,
+            "Passed": 669,
+            "Completed": 0,
+            "InProgress": 0,
+            "Pending": 0
+          },
+          "resultCount": 669,
+          "gatePassed": true,
+          "exitCode": 0,
+          "elapsedMilliseconds": 4128.782,
+          "comparison": "source-projection-verified"
+        }
+      ],
+      "demonstrations": [
+        {
+          "label": "cold-demo",
+          "exitCode": 0,
+          "elapsedMilliseconds": 1246.755,
+          "output": [
+            "Simulation.Core calendar capability demo; not a world or AdvanceDay demo.",
+            "Semantic identity: simulation-calendar",
+            "Semantic version: 3/1/35/custom:10,20,5",
+            "Absolute day 0 => Year 0 / Month 1 / Day 1",
+            "Absolute day 10 => Year 0 / Month 2 / Day 1",
+            "Absolute day 30 => Year 0 / Month 3 / Day 1",
+            "Absolute day 35 => Year 1 / Month 1 / Day 1",
+            "Completed age before birthday: 0",
+            "Completed age on birthday: 1",
+            "Negative absolute day: rejected"
+          ],
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+              "blob": "116bfdd3f27420b137822cf7ef1eb2e17f5a52a9",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 21533,
+              "sha256": "3e9e9357111e50b74d836dff49fa52eb9d00251f33e2cf37835e5af5fd921f10",
+              "field": "/runs/0/demonstrations/0",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "cold-demo.log",
+              "bytes": 432,
+              "sha256": "1ae98819d73f4bb27a060df204eadb3b2ac1de795de7ff1532033f38714a49db",
+              "field": "/runs/0/demonstrations/0",
+              "mode": "captured"
+            }
+          ]
+        },
+        {
+          "label": "warm-demo",
+          "exitCode": 0,
+          "elapsedMilliseconds": 511.052,
+          "output": [
+            "Simulation.Core calendar capability demo; not a world or AdvanceDay demo.",
+            "Semantic identity: simulation-calendar",
+            "Semantic version: 3/1/35/custom:10,20,5",
+            "Absolute day 0 => Year 0 / Month 1 / Day 1",
+            "Absolute day 10 => Year 0 / Month 2 / Day 1",
+            "Absolute day 30 => Year 0 / Month 3 / Day 1",
+            "Absolute day 35 => Year 1 / Month 1 / Day 1",
+            "Completed age before birthday: 0",
+            "Completed age on birthday: 1",
+            "Negative absolute day: rejected"
+          ],
+          "derivation": "recovered-from-bound-runner",
+          "provenance": [
+            {
+              "kind": "git-source",
+              "commit": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+              "blob": "116bfdd3f27420b137822cf7ef1eb2e17f5a52a9",
+              "path": "Tools/CoreValidation/Invoke-CoreValidation.ps1",
+              "bytes": 21533,
+              "sha256": "3e9e9357111e50b74d836dff49fa52eb9d00251f33e2cf37835e5af5fd921f10",
+              "field": "/runs/0/demonstrations/1",
+              "mode": "captured"
+            },
+            {
+              "kind": "retained-command-log",
+              "path": "warm-demo.log",
+              "bytes": 432,
+              "sha256": "1ae98819d73f4bb27a060df204eadb3b2ac1de795de7ff1532033f38714a49db",
+              "field": "/runs/0/demonstrations/1",
+              "mode": "captured"
+            }
+          ]
+        }
+      ],
+      "measurements": {
+        "worktreeLibraryAbsent": true,
+        "projectBinObjBytes": [
+          {
+            "path": "src/Simulation.Core/bin",
+            "bytes": 1281403
+          },
+          {
+            "path": "src/Simulation.Core/obj",
+            "bytes": 1292454
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/bin",
+            "bytes": 7335261
+          },
+          {
+            "path": "tests/Simulation.Core.Tests/obj",
+            "bytes": 1429079
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/bin",
+            "bytes": 1453503
+          },
+          {
+            "path": "tools/Simulation.Core.CalendarDemo/obj",
+            "bytes": 202244
+          }
+        ],
+        "resultBytes": 1987694
+      },
+      "retention": {
+        "handle": "evidence-3fb0c727075e4b99bea5fd08889d1b6b",
+        "ownerRole": "GeneralOrchestrator",
+        "policy": "DOTNET_TRX_EVIDENCE_CONTRACT.md",
+        "plannedPostPromotionDays": 30,
+        "aclVerification": "verified-owner-only-known-copies",
+        "provenance": [
+          {
+            "kind": "original-manifest",
+            "path": "runner-manifest.json",
+            "bytes": 1028757,
+            "sha256": "f5e1f9ec94c6237ea4f5b0cb5818afa3b4ed8264b5bedf01455c896f6a704936",
+            "field": "/runs/0/originalManifest",
+            "mode": "captured"
+          },
+          {
+            "kind": "retained-output",
+            "path": "retention-receipt.json",
+            "bytes": 229,
+            "sha256": "15a50b2380220a0f9b6dbc7d958d60e587962cb85389ebe9a7a64ec9552ddcf7",
+            "field": "/runs/0/retention/aclVerification",
+            "mode": "captured"
+          }
+        ]
+      },
+      "existingReviews": {
+        "sourceImplementation": "dc1e81793a3805a36eb1dce0fa64984fec86adb2",
+        "toolImplementation": "6ff1fd4c262c4e05bb236aca29cf4373efb2d451"
+      }
+    }
+  ]
+}

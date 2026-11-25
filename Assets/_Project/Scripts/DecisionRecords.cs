@@ -1,818 +1,87 @@
 using System;
 using System.Collections.Generic;
 
-public sealed class SimulationRecordSequenceSnapshot
-{
-    public const string CurrentSchemaId = "simulation-record-sequence";
-    public const int CurrentSchemaVersion = 1;
-
-    public string SchemaId { get; }
-    public int SchemaVersion { get; }
-    public long NextSequence { get; }
-
-    public SimulationRecordSequenceSnapshot(string schemaId, int schemaVersion, long nextSequence)
-    {
-        SchemaId = schemaId;
-        SchemaVersion = schemaVersion;
-        NextSequence = nextSequence;
-    }
-}
-
-public sealed class SimulationRecordSequence
-{
-    private long nextSequence = 1L;
-    private readonly object censusOwnerIdentity = new object();
-    private Func<bool> p12MutationAdmission;
-    private Action p12MutationCommitted;
-
-    internal object CensusOwnerIdentity => censusOwnerIdentity;
-    internal long CensusRevision => nextSequence - 1L;
-
-    public SimulationRecordSequence()
-    {
-    }
-
-    public SimulationRecordSequenceSnapshot CaptureSnapshot()
-    {
-        return new SimulationRecordSequenceSnapshot(
-            SimulationRecordSequenceSnapshot.CurrentSchemaId,
-            SimulationRecordSequenceSnapshot.CurrentSchemaVersion,
-            nextSequence);
-    }
-
-    internal static bool TryCreateStagedFromSnapshot(
-        SimulationRecordSequenceSnapshot snapshot,
-        out SimulationRecordSequence sequence,
-        out string diagnostic)
-    {
-        sequence = null;
-        diagnostic = null;
-
-        if (snapshot == null)
-        {
-            diagnostic = "Simulation record sequence snapshot is null.";
-            return false;
-        }
-
-        if (string.Equals(snapshot.SchemaId, SimulationRecordSequenceSnapshot.CurrentSchemaId, StringComparison.Ordinal) == false
-            || snapshot.SchemaVersion != SimulationRecordSequenceSnapshot.CurrentSchemaVersion)
-        {
-            diagnostic = "Simulation record sequence snapshot schema is unsupported.";
-            return false;
-        }
-
-        if (snapshot.NextSequence < 1L || snapshot.NextSequence == long.MaxValue)
-        {
-            diagnostic = "Simulation record sequence snapshot contains an invalid or exhausted next sequence.";
-            return false;
-        }
-
-        sequence = new SimulationRecordSequence(snapshot.NextSequence);
-        return true;
-    }
-
-    private SimulationRecordSequence(long restoredNextSequence)
-    {
-        nextSequence = restoredNextSequence;
-    }
-
-    public long Allocate()
-    {
-        if (nextSequence == long.MaxValue)
-        {
-            throw new InvalidOperationException("Simulation record sequence is exhausted.");
-        }
-
-        if (p12MutationAdmission != null && !CanCommitP12Mutation())
-        {
-            throw new InvalidOperationException("The P12 record-sequence mutation was rejected before allocation.");
-        }
-
-        long allocated = nextSequence;
-        nextSequence++;
-        NotifyP12MutationCommitted();
-        return allocated;
-    }
-
-    internal void BindP12MutationBoundary(Func<bool> admission, Action committed)
-    {
-        if (admission == null) throw new ArgumentNullException(nameof(admission));
-        if (committed == null) throw new ArgumentNullException(nameof(committed));
-        if (p12MutationAdmission != null || p12MutationCommitted != null)
-            throw new InvalidOperationException("SimulationRecordSequence is already bound to a P12 mutation boundary.");
-        p12MutationAdmission = admission;
-        p12MutationCommitted = committed;
-    }
-
-    private bool CanCommitP12Mutation()
-    {
-        try { return p12MutationAdmission(); }
-        catch { return false; }
-    }
-
-    private void NotifyP12MutationCommitted()
-    {
-        p12MutationCommitted?.Invoke();
-    }
-}
-
-public enum NpcDecisionType
-{
-    Action,
-    TradePurchase,
-    TradeSale,
-    TradeReposition,
-    TradeRedirect,
-    Travel,
-    Arrest,
-    Escape,
-    CommercialScout,
-    ExpeditionStart,
-    ExpeditionExplore,
-    ExpeditionTraverse,
-    ExpeditionResolveOpposition,
-    ExpeditionRetrieve,
-    ExpeditionReturn
-}
-
-public enum NpcDecisionOrigin
-{
-    Autonomous,
-    ScheduledDirective,
-    ActorChoice
-}
-
-public enum NpcDecisionParticipantRole
-{
-    DecisionMaker,
-    Performer,
-    Contributor,
-    Support,
-    Participant
-}
-
-[Serializable]
-public sealed class NpcDecisionParticipant
-{
-    private readonly string runtimeId;
-    private readonly NpcDecisionParticipantRole role;
-
-    public string RuntimeId => runtimeId;
-    public NpcDecisionParticipantRole Role => role;
-
-    public NpcDecisionParticipant(string runtimeId, NpcDecisionParticipantRole role)
-    {
-        if (string.IsNullOrWhiteSpace(runtimeId) == true)
-        {
-            throw new ArgumentException("Decision participant requires a RuntimeId.", nameof(runtimeId));
-        }
-
-        this.runtimeId = runtimeId;
-        this.role = role;
-    }
-}
-
-[Serializable]
-public sealed class CommercialObservationEvidence
-{
-    private readonly string locationRuntimeId;
-    private readonly float knownPrice;
-    private readonly int knownStock;
-    private readonly long observedDay;
-    private readonly long receivedDay;
-    private readonly float freshness;
-    private readonly CommercialKnowledgeSource source;
-    private readonly string sourceRuntimeId;
-
-    public string LocationRuntimeId => locationRuntimeId;
-    public float KnownPrice => knownPrice;
-    public int KnownStock => knownStock;
-    public long ObservedDay => observedDay;
-    public long ReceivedDay => receivedDay;
-    public float Freshness => freshness;
-    public CommercialKnowledgeSource Source => source;
-    public string SourceRuntimeId => sourceRuntimeId;
-
-    public CommercialObservationEvidence(
-        string locationRuntimeId,
-        float knownPrice,
-        int knownStock,
-        long observedDay,
-        float freshness)
-        : this(
-            locationRuntimeId,
-            knownPrice,
-            knownStock,
-            observedDay,
-            observedDay,
-            freshness,
-            CommercialKnowledgeSource.DirectObservation,
-            null)
-    {
-    }
-
-    public CommercialObservationEvidence(
-        string locationRuntimeId,
-        float knownPrice,
-        int knownStock,
-        long observedDay,
-        long receivedDay,
-        float freshness,
-        CommercialKnowledgeSource source,
-        string sourceRuntimeId)
-    {
-        this.locationRuntimeId = RequireId(locationRuntimeId, nameof(locationRuntimeId));
-        this.knownPrice = Math.Max(0f, knownPrice);
-        this.knownStock = Math.Max(0, knownStock);
-        this.observedDay = Math.Max(0L, observedDay);
-        this.receivedDay = Math.Max(this.observedDay, receivedDay);
-        this.freshness = Math.Max(0f, Math.Min(1f, freshness));
-        this.source = source;
-        this.sourceRuntimeId = source == CommercialKnowledgeSource.SharedByNpc
-            ? RequireId(sourceRuntimeId, nameof(sourceRuntimeId))
-            : null;
-    }
-
-    public static CommercialObservationEvidence Capture(CommercialMarketObservation observation, float freshness)
-    {
-        if (observation == null)
-        {
-            return null;
-        }
-
-        return new CommercialObservationEvidence(
-            observation.LocationRuntimeId,
-            observation.ObservedPrice,
-            observation.ObservedStock,
-            observation.ObservedDay,
-            observation.ReceivedDay,
-            freshness,
-            observation.Source,
-            observation.SourceRuntimeId);
-    }
-
-    private static string RequireId(string value, string parameterName)
-    {
-        if (string.IsNullOrWhiteSpace(value) == true)
-        {
-            throw new ArgumentException("Commercial observation evidence requires stable IDs.", parameterName);
-        }
-
-        return value;
-    }
-}
-
-[Serializable]
-public sealed class CommercialLiquidityEvidence
-{
-    private readonly string locationRuntimeId;
-    private readonly MarketLiquidityMode liquidityMode;
-    private readonly float observedPurchasingPower;
-    private readonly long observedDay;
-    private readonly long receivedDay;
-    private readonly float freshness;
-    private readonly CommercialKnowledgeSource source;
-    private readonly string sourceRuntimeId;
-
-    public string LocationRuntimeId => locationRuntimeId;
-    public MarketLiquidityMode LiquidityMode => liquidityMode;
-    public float ObservedPurchasingPower => observedPurchasingPower;
-    public long ObservedDay => observedDay;
-    public long ReceivedDay => receivedDay;
-    public float Freshness => freshness;
-    public CommercialKnowledgeSource Source => source;
-    public string SourceRuntimeId => sourceRuntimeId;
-
-    private CommercialLiquidityEvidence(CommercialLiquidityObservation observation, float freshness)
-    {
-        locationRuntimeId = observation.LocationRuntimeId;
-        liquidityMode = observation.LiquidityMode;
-        observedPurchasingPower = observation.ObservedPurchasingPower;
-        observedDay = observation.ObservedDay;
-        receivedDay = observation.ReceivedDay;
-        this.freshness = Math.Max(0f, Math.Min(1f, freshness));
-        source = observation.Source;
-        sourceRuntimeId = observation.SourceRuntimeId;
-    }
-
-    public static CommercialLiquidityEvidence Capture(CommercialLiquidityObservation observation, float freshness)
-    {
-        return observation == null ? null : new CommercialLiquidityEvidence(observation, freshness);
-    }
-}
-
-[Serializable]
-public sealed class CommercialDecisionEvidence
-{
-    private readonly string itemDefinitionId;
-    private readonly string currentLocationRuntimeId;
-    private readonly string tradeOriginLocationRuntimeId;
-    private readonly string tradeDestinationLocationRuntimeId;
-    private readonly string previousDestinationLocationRuntimeId;
-    private readonly CommercialObservationEvidence originObservation;
-    private readonly CommercialObservationEvidence destinationObservation;
-    private readonly CommercialLiquidityEvidence destinationLiquidityObservation;
-    private readonly int expectedQuantity;
-    private readonly float expectedPurchaseUnitPrice;
-    private readonly float expectedSaleUnitPrice;
-    private readonly float expectedTravelCost;
-    private readonly float expectedGrossProfit;
-    private readonly float expectedNetProfit;
-    private readonly float expectedScore;
-
-    public string ItemDefinitionId => itemDefinitionId;
-    public string CurrentLocationRuntimeId => currentLocationRuntimeId;
-    public string TradeOriginLocationRuntimeId => tradeOriginLocationRuntimeId;
-    public string TradeDestinationLocationRuntimeId => tradeDestinationLocationRuntimeId;
-    public string PreviousDestinationLocationRuntimeId => previousDestinationLocationRuntimeId;
-    public CommercialObservationEvidence OriginObservation => originObservation;
-    public CommercialObservationEvidence DestinationObservation => destinationObservation;
-    public CommercialLiquidityEvidence DestinationLiquidityObservation => destinationLiquidityObservation;
-    public int ExpectedQuantity => expectedQuantity;
-    public float ExpectedPurchaseUnitPrice => expectedPurchaseUnitPrice;
-    public float ExpectedSaleUnitPrice => expectedSaleUnitPrice;
-    public float ExpectedTravelCost => expectedTravelCost;
-    public float ExpectedGrossProfit => expectedGrossProfit;
-    public float ExpectedNetProfit => expectedNetProfit;
-    public float ExpectedScore => expectedScore;
-
-    public CommercialDecisionEvidence(
-        string itemDefinitionId,
-        string currentLocationRuntimeId,
-        string tradeOriginLocationRuntimeId,
-        string tradeDestinationLocationRuntimeId,
-        string previousDestinationLocationRuntimeId,
-        CommercialObservationEvidence originObservation,
-        CommercialObservationEvidence destinationObservation,
-        int expectedQuantity,
-        float expectedPurchaseUnitPrice,
-        float expectedSaleUnitPrice,
-        float expectedTravelCost,
-        float expectedGrossProfit,
-        float expectedNetProfit,
-        float expectedScore,
-        CommercialLiquidityEvidence destinationLiquidityObservation = null)
-    {
-        this.itemDefinitionId = RequireId(itemDefinitionId, nameof(itemDefinitionId));
-        this.currentLocationRuntimeId = RequireId(currentLocationRuntimeId, nameof(currentLocationRuntimeId));
-        this.tradeOriginLocationRuntimeId = RequireId(tradeOriginLocationRuntimeId, nameof(tradeOriginLocationRuntimeId));
-        this.tradeDestinationLocationRuntimeId = RequireId(tradeDestinationLocationRuntimeId, nameof(tradeDestinationLocationRuntimeId));
-        this.previousDestinationLocationRuntimeId = NormalizeOptionalId(previousDestinationLocationRuntimeId);
-        this.originObservation = originObservation;
-        this.destinationObservation = destinationObservation;
-        this.destinationLiquidityObservation = destinationLiquidityObservation;
-        this.expectedQuantity = Math.Max(0, expectedQuantity);
-        this.expectedPurchaseUnitPrice = Math.Max(0f, expectedPurchaseUnitPrice);
-        this.expectedSaleUnitPrice = Math.Max(0f, expectedSaleUnitPrice);
-        this.expectedTravelCost = Math.Max(0f, expectedTravelCost);
-        this.expectedGrossProfit = expectedGrossProfit;
-        this.expectedNetProfit = expectedNetProfit;
-        this.expectedScore = expectedScore;
-    }
-
-    private static string RequireId(string value, string parameterName)
-    {
-        if (string.IsNullOrWhiteSpace(value) == true)
-        {
-            throw new ArgumentException("Commercial decision evidence requires stable IDs.", parameterName);
-        }
-
-        return value;
-    }
-
-    private static string NormalizeOptionalId(string value)
-    {
-        return string.IsNullOrWhiteSpace(value) == true ? null : value;
-    }
-}
-
-[Serializable]
-public sealed class CommercialScoutingEvidence
-{
-    private readonly string targetLocationRuntimeId;
-    private readonly string knownRouteRuntimeId;
-    private readonly int unknownObservationCount;
-    private readonly int staleObservationCount;
-    private readonly bool hasOldestObservation;
-    private readonly long oldestObservationDay;
-    private readonly float expectedTravelCost;
-    private readonly int expectedTravelDays;
-    private readonly float expectedScore;
-
-    public string TargetLocationRuntimeId => targetLocationRuntimeId;
-    public string KnownRouteRuntimeId => knownRouteRuntimeId;
-    public int UnknownObservationCount => unknownObservationCount;
-    public int StaleObservationCount => staleObservationCount;
-    public bool HasOldestObservation => hasOldestObservation;
-    public long OldestObservationDay => oldestObservationDay;
-    public float ExpectedTravelCost => expectedTravelCost;
-    public int ExpectedTravelDays => expectedTravelDays;
-    public float ExpectedScore => expectedScore;
-
-    public CommercialScoutingEvidence(
-        string targetLocationRuntimeId,
-        string knownRouteRuntimeId,
-        int unknownObservationCount,
-        int staleObservationCount,
-        bool hasOldestObservation,
-        long oldestObservationDay,
-        float expectedTravelCost,
-        int expectedTravelDays,
-        float expectedScore)
-    {
-        this.targetLocationRuntimeId = RequireId(targetLocationRuntimeId, nameof(targetLocationRuntimeId));
-        this.knownRouteRuntimeId = RequireId(knownRouteRuntimeId, nameof(knownRouteRuntimeId));
-        this.unknownObservationCount = Math.Max(0, unknownObservationCount);
-        this.staleObservationCount = Math.Max(0, staleObservationCount);
-        this.hasOldestObservation = hasOldestObservation;
-        this.oldestObservationDay = hasOldestObservation ? Math.Max(0L, oldestObservationDay) : 0L;
-        this.expectedTravelCost = Math.Max(0f, expectedTravelCost);
-        this.expectedTravelDays = Math.Max(1, expectedTravelDays);
-        this.expectedScore = Math.Max(0f, expectedScore);
-    }
-
-    private static string RequireId(string value, string parameterName)
-    {
-        if (string.IsNullOrWhiteSpace(value) == true)
-        {
-            throw new ArgumentException("Commercial scouting evidence requires stable IDs.", parameterName);
-        }
-
-        return value;
-    }
-}
-
-[Serializable]
-public sealed class NpcDecisionRecord
-{
-    private readonly string decisionId;
-    private readonly long absoluteDay;
-    private readonly long recordSequence;
-    private readonly string actorRuntimeId;
-    private readonly NpcDecisionType decisionType;
-    private readonly NpcDecisionOrigin origin;
-    private readonly string actionDefinitionId;
-    private readonly string targetRuntimeId;
-    private readonly string targetLocationRuntimeId;
-    private readonly CommercialDecisionEvidence commercialEvidence;
-    private readonly CommercialScoutingEvidence commercialScoutingEvidence;
-    private readonly IReadOnlyList<NpcDecisionParticipant> decisionParticipants;
-    private readonly IReadOnlyList<string> targetRuntimeIds;
-
-    public string DecisionId => decisionId;
-    public long AbsoluteDay => absoluteDay;
-    public long RecordSequence => recordSequence;
-    // Compatibility/convenience projection for the primary decision maker.
-    // Other decision participants are represented by DecisionParticipants.
-    public string ActorRuntimeId => actorRuntimeId;
-    public NpcDecisionType DecisionType => decisionType;
-    public NpcDecisionOrigin Origin => origin;
-    public string ActionDefinitionId => actionDefinitionId;
-    // Compatibility/convenience projection for the first intended target.
-    // Intended targets are not decision participants and the complete snapshot is in TargetRuntimeIds.
-    public string TargetRuntimeId => targetRuntimeId;
-    public string TargetLocationRuntimeId => targetLocationRuntimeId;
-    public CommercialDecisionEvidence CommercialEvidence => commercialEvidence;
-    public CommercialScoutingEvidence CommercialScoutingEvidence => commercialScoutingEvidence;
-    public IReadOnlyList<NpcDecisionParticipant> DecisionParticipants => decisionParticipants;
-    public IReadOnlyList<string> TargetRuntimeIds => targetRuntimeIds;
-
-    public NpcDecisionRecord(
-        string decisionId,
-        long absoluteDay,
-        long recordSequence,
-        string actorRuntimeId,
-        NpcDecisionType decisionType,
-        NpcDecisionOrigin origin,
-        string actionDefinitionId,
-        string targetRuntimeId,
-        string targetLocationRuntimeId,
-        CommercialDecisionEvidence commercialEvidence)
-        : this(
-            decisionId,
-            absoluteDay,
-            recordSequence,
-            actorRuntimeId,
-            decisionType,
-            origin,
-            actionDefinitionId,
-            null,
-            string.IsNullOrWhiteSpace(targetRuntimeId) == true ? null : new[] { targetRuntimeId },
-            targetLocationRuntimeId,
-            commercialEvidence,
-            null)
-    {
-    }
-
-    public NpcDecisionRecord(
-        string decisionId,
-        long absoluteDay,
-        long recordSequence,
-        string actorRuntimeId,
-        NpcDecisionType decisionType,
-        NpcDecisionOrigin origin,
-        string actionDefinitionId,
-        IEnumerable<NpcDecisionParticipant> decisionParticipants,
-        IEnumerable<string> targetRuntimeIds,
-        string targetLocationRuntimeId,
-        CommercialDecisionEvidence commercialEvidence)
-        : this(
-            decisionId,
-            absoluteDay,
-            recordSequence,
-            actorRuntimeId,
-            decisionType,
-            origin,
-            actionDefinitionId,
-            decisionParticipants,
-            targetRuntimeIds,
-            targetLocationRuntimeId,
-            commercialEvidence,
-            null)
-    {
-    }
-
-    public NpcDecisionRecord(
-        string decisionId,
-        long absoluteDay,
-        long recordSequence,
-        string actorRuntimeId,
-        NpcDecisionType decisionType,
-        NpcDecisionOrigin origin,
-        string actionDefinitionId,
-        IEnumerable<NpcDecisionParticipant> decisionParticipants,
-        IEnumerable<string> targetRuntimeIds,
-        string targetLocationRuntimeId,
-        CommercialDecisionEvidence commercialEvidence,
-        CommercialScoutingEvidence commercialScoutingEvidence)
-    {
-        this.decisionId = RequireId(decisionId, nameof(decisionId));
-        this.actorRuntimeId = RequireId(actorRuntimeId, nameof(actorRuntimeId));
-
-        if (absoluteDay < 0L)
-        {
-            throw new ArgumentOutOfRangeException(nameof(absoluteDay));
-        }
-
-        if (recordSequence <= 0L)
-        {
-            throw new ArgumentOutOfRangeException(nameof(recordSequence));
-        }
-
-        this.absoluteDay = absoluteDay;
-        this.recordSequence = recordSequence;
-        this.decisionType = decisionType;
-        this.origin = origin;
-        this.actionDefinitionId = NormalizeOptionalId(actionDefinitionId);
-        this.decisionParticipants = CaptureDecisionParticipants(actorRuntimeId, decisionParticipants);
-        this.targetRuntimeIds = CaptureTargetRuntimeIds(targetRuntimeIds);
-        this.targetRuntimeId = this.targetRuntimeIds.Count > 0 ? this.targetRuntimeIds[0] : null;
-        this.targetLocationRuntimeId = NormalizeOptionalId(targetLocationRuntimeId);
-        this.commercialEvidence = commercialEvidence;
-        this.commercialScoutingEvidence = commercialScoutingEvidence;
-    }
-
-    private static IReadOnlyList<NpcDecisionParticipant> CaptureDecisionParticipants(
-        string primaryActorRuntimeId,
-        IEnumerable<NpcDecisionParticipant> participants)
-    {
-        List<NpcDecisionParticipant> snapshot = new List<NpcDecisionParticipant>();
-        HashSet<string> participantRoles = new HashSet<string>(StringComparer.Ordinal);
-        AddDecisionParticipant(
-            snapshot,
-            participantRoles,
-            new NpcDecisionParticipant(primaryActorRuntimeId, NpcDecisionParticipantRole.DecisionMaker));
-
-        if (participants != null)
-        {
-            foreach (NpcDecisionParticipant participant in participants)
-            {
-                AddDecisionParticipant(snapshot, participantRoles, participant);
-            }
-        }
-
-        return snapshot.AsReadOnly();
-    }
-
-    private static void AddDecisionParticipant(
-        List<NpcDecisionParticipant> snapshot,
-        HashSet<string> participantRoles,
-        NpcDecisionParticipant participant)
-    {
-        if (participant == null || string.IsNullOrWhiteSpace(participant.RuntimeId) == true)
-        {
-            return;
-        }
-
-        string participantRoleKey = participant.RuntimeId + "\u001f" + (int)participant.Role;
-
-        if (participantRoles.Add(participantRoleKey) == true)
-        {
-            snapshot.Add(new NpcDecisionParticipant(participant.RuntimeId, participant.Role));
-        }
-    }
-
-    private static IReadOnlyList<string> CaptureTargetRuntimeIds(IEnumerable<string> targetIds)
-    {
-        List<string> snapshot = new List<string>();
-        HashSet<string> uniqueTargetIds = new HashSet<string>(StringComparer.Ordinal);
-
-        if (targetIds != null)
-        {
-            foreach (string targetId in targetIds)
-            {
-                string normalizedTargetId = NormalizeOptionalId(targetId);
-
-                if (normalizedTargetId != null && uniqueTargetIds.Add(normalizedTargetId) == true)
-                {
-                    snapshot.Add(normalizedTargetId);
-                }
-            }
-        }
-
-        return snapshot.AsReadOnly();
-    }
-
-    private static string RequireId(string value, string parameterName)
-    {
-        if (string.IsNullOrWhiteSpace(value) == true)
-        {
-            throw new ArgumentException("NpcDecisionRecord requires stable IDs.", parameterName);
-        }
-
-        return value;
-    }
-
-    private static string NormalizeOptionalId(string value)
-    {
-        return string.IsNullOrWhiteSpace(value) == true ? null : value;
-    }
-}
-
-public sealed class NpcDecisionStore
-{
-    private readonly List<NpcDecisionRecord> decisions = new List<NpcDecisionRecord>();
-    private readonly IReadOnlyList<NpcDecisionRecord> readOnlyDecisions;
-    private readonly Dictionary<string, NpcDecisionRecord> decisionsById = new Dictionary<string, NpcDecisionRecord>(StringComparer.Ordinal);
-    private readonly Dictionary<string, List<NpcDecisionRecord>> decisionsByActor = new Dictionary<string, List<NpcDecisionRecord>>(StringComparer.Ordinal);
-    private readonly Dictionary<string, List<NpcDecisionRecord>> decisionsByParticipant = new Dictionary<string, List<NpcDecisionRecord>>(StringComparer.Ordinal);
-    private readonly Dictionary<string, List<NpcDecisionRecord>> decisionsByTarget = new Dictionary<string, List<NpcDecisionRecord>>(StringComparer.Ordinal);
-    private readonly SimulationLogger logger;
-
-    public IReadOnlyList<NpcDecisionRecord> Decisions => readOnlyDecisions;
-
-    public NpcDecisionStore(SimulationLogger logger = null)
-    {
-        this.logger = logger ?? new SimulationLogger(null);
-        readOnlyDecisions = decisions.AsReadOnly();
-    }
-
-    public bool Record(NpcDecisionRecord decision)
-    {
-        if (decision == null || string.IsNullOrWhiteSpace(decision.DecisionId) == true)
-        {
-            logger.LogError("Cannot record NPC decision: record or DecisionId is null.");
-            return false;
-        }
-
-        if (decisionsById.ContainsKey(decision.DecisionId) == true)
-        {
-            logger.LogError($"Cannot record duplicate DecisionId '{decision.DecisionId}'.");
-            return false;
-        }
-
-        decisionsById.Add(decision.DecisionId, decision);
-        decisions.Add(decision);
-
-        if (decisionsByActor.TryGetValue(decision.ActorRuntimeId, out List<NpcDecisionRecord> actorDecisions) == false)
-        {
-            actorDecisions = new List<NpcDecisionRecord>();
-            decisionsByActor.Add(decision.ActorRuntimeId, actorDecisions);
-        }
-
-        actorDecisions.Add(decision);
-        IndexDecisionParticipants(decision);
-        IndexDecisionTargets(decision);
-        return true;
-    }
-
-    public bool TryGetDecision(string decisionId, out NpcDecisionRecord decision)
-    {
-        return decisionsById.TryGetValue(decisionId ?? string.Empty, out decision);
-    }
-
-    public IReadOnlyList<NpcDecisionRecord> GetDecisionsForActor(string actorRuntimeId)
-    {
-        return decisionsByActor.TryGetValue(actorRuntimeId ?? string.Empty, out List<NpcDecisionRecord> actorDecisions) == true
-            ? actorDecisions.AsReadOnly()
-            : Array.Empty<NpcDecisionRecord>();
-    }
-
-    public IReadOnlyList<NpcDecisionRecord> GetDecisionsForParticipant(string participantRuntimeId)
-    {
-        return decisionsByParticipant.TryGetValue(participantRuntimeId ?? string.Empty, out List<NpcDecisionRecord> participantDecisions) == true
-            ? participantDecisions.AsReadOnly()
-            : Array.Empty<NpcDecisionRecord>();
-    }
-
-    public IReadOnlyList<NpcDecisionRecord> GetDecisionsTargeting(string targetRuntimeId)
-    {
-        return decisionsByTarget.TryGetValue(targetRuntimeId ?? string.Empty, out List<NpcDecisionRecord> targetingDecisions) == true
-            ? targetingDecisions.AsReadOnly()
-            : Array.Empty<NpcDecisionRecord>();
-    }
-
-    private void IndexDecisionParticipants(NpcDecisionRecord decision)
-    {
-        HashSet<string> indexedRuntimeIds = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (NpcDecisionParticipant participant in decision.DecisionParticipants)
-        {
-            if (participant == null
-                || string.IsNullOrWhiteSpace(participant.RuntimeId) == true
-                || indexedRuntimeIds.Add(participant.RuntimeId) == false)
-            {
-                continue;
-            }
-
-            AddToIndex(decisionsByParticipant, participant.RuntimeId, decision);
-        }
-    }
-
-    private void IndexDecisionTargets(NpcDecisionRecord decision)
-    {
-        foreach (string targetRuntimeId in decision.TargetRuntimeIds)
-        {
-            AddToIndex(decisionsByTarget, targetRuntimeId, decision);
-        }
-    }
-
-    private static void AddToIndex(
-        Dictionary<string, List<NpcDecisionRecord>> index,
-        string runtimeId,
-        NpcDecisionRecord decision)
-    {
-        if (index.TryGetValue(runtimeId, out List<NpcDecisionRecord> indexedDecisions) == false)
-        {
-            indexedDecisions = new List<NpcDecisionRecord>();
-            index.Add(runtimeId, indexedDecisions);
-        }
-
-        indexedDecisions.Add(decision);
-    }
-}
-
-/// <summary>
-/// Ephemeral owner-issued cardinality evidence. This witness is not owner state
-/// export and its owner identity is valid only for the live runtime instance.
-/// Reading the owner is not synchronized; P12-B may consume this witness only
-/// on the bound simulation thread while the registered operation set is idle.
-/// </summary>
-public sealed class OwnerSectionCensusWitness
-{
-    internal OwnerSectionCensusWitness(
-        string sectionId,
-        int schemaVersion,
-        object ownerInstanceIdentity,
-        int cardinality,
-        long revision)
-    {
-        if (string.IsNullOrWhiteSpace(sectionId)) throw new ArgumentException("Section identity is required.", nameof(sectionId));
-        if (schemaVersion <= 0) throw new ArgumentOutOfRangeException(nameof(schemaVersion));
-        OwnerInstanceIdentity = ownerInstanceIdentity ?? throw new ArgumentNullException(nameof(ownerInstanceIdentity));
-        if (cardinality < 0) throw new ArgumentOutOfRangeException(nameof(cardinality));
-        if (revision < 0L) throw new ArgumentOutOfRangeException(nameof(revision));
-
-        SectionId = sectionId;
-        SchemaVersion = schemaVersion;
-        Cardinality = cardinality;
-        Revision = revision;
-    }
-
-    public string SectionId { get; }
-    public int SchemaVersion { get; }
-    /// <summary>Opaque reference-identity token; it is not serialized or persisted.</summary>
-    public object OwnerInstanceIdentity { get; }
-    public int Cardinality { get; }
-    public long Revision { get; }
-}
-
 public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
 {
-    public const string OccurrenceReceiptSectionId = "p12f.npc-decision-occurrence-receipts";
-    public const int OccurrenceReceiptSectionSchemaVersion = 1;
+    public const string OccurrenceReceiptSectionId = DailyV1DecisionOccurrenceReceiptAuthority.SectionId;
+    public const int OccurrenceReceiptSectionSchemaVersion = DailyV1DecisionOccurrenceReceiptAuthority.SectionSchemaVersion;
 
-    private readonly RuntimeIdAllocator idAllocator;
-    private readonly SimulationTime simulationTime;
-    private readonly SimulationRecordSequence recordSequence;
-    private readonly NpcDecisionStore decisionStore;
+    private readonly DailyV1DecisionOccurrenceReceiptAuthority receiptAuthority;
     private readonly SimulationLogger logger;
-    private readonly object occurrenceReceiptsOwnerIdentity = new object();
-    private readonly Dictionary<string, NpcDecisionOccurrenceReceipt> occurrenceReceipts =
-        new Dictionary<string, NpcDecisionOccurrenceReceipt>(StringComparer.Ordinal);
-    private long occurrenceReceiptsRevision;
 
+    private RuntimeIdAllocator idAllocator => receiptAuthority.RuntimeIdAllocator;
+    private SimulationTime simulationTime => receiptAuthority.SimulationTime;
+    private SimulationRecordSequence recordSequence => receiptAuthority.RecordSequence;
+    private NpcDecisionStore decisionStore => receiptAuthority.DecisionStore;
+
+    internal RuntimeIdAllocator DecisionIdAllocator => idAllocator;
     internal SimulationRecordSequence RecordSequence => recordSequence;
+    internal NpcDecisionStore DecisionStore => decisionStore;
+    internal bool TryRecordAndInstallSelectedAction(
+        NpcRuntime actor,
+        NpcActionRuntime actionRuntime,
+        NpcDecisionOrigin origin,
+        out NpcDecisionRecord decision,
+        out bool handled)
+    {
+        decision = null;
+        handled = false;
+        if (actor?.SelectedRuntimeOwners == null || actionRuntime == null
+            || actionRuntime.Action == null
+            || !actor.TryPrepareSelectedActionPayload(
+                actionRuntime, out DailyV1NpcActionPayloadOwner payload))
+            return false;
+
+        handled = true;
+        bool committed;
+        try
+        {
+            Func<DailyV1NpcActionPayloadOwner, bool> prepareProjection = candidate =>
+                actionRuntime.TryUseSelectedPayload(
+                    candidate, actor.SelectedDailyV1DefinitionGraph);
+            Func<bool> slotAdmission = () => actor.CanCommitP12LifecycleMutation(
+                false, false, true, actionRuntime);
+            if (actionRuntime.Action.actionType == NpcActionType.Travel
+                && !string.IsNullOrWhiteSpace(actionRuntime.OriginDecisionId))
+            {
+                committed = DailyV1DecisionRecordOperation.TryCommitSelectedActionSlotWithExistingIdentity(
+                    actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners, payload,
+                    prepareProjection, slotAdmission);
+            }
+            else
+            {
+                committed = DailyV1DecisionRecordOperation.TryRecordAndCommitSelectedActionSlot(
+                    idAllocator, recordSequence, decisionStore, simulationTime.AbsoluteDay,
+                    actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners, payload,
+                    GetDecisionType(actionRuntime), origin,
+                    prepareProjection, slotAdmission, out decision);
+            }
+        }
+        catch (ArgumentException exception)
+        {
+            logger.LogError("Cannot create NPC decision record: " + exception.Message);
+            committed = actionRuntime.TryUseSelectedPayload(
+                    payload, actor.SelectedDailyV1DefinitionGraph)
+                && actor.SelectedRuntimeOwnerGraph.TryCommitCurrentActionSlot(
+                    actor.SelectedRuntimeOwners, payload.Action, payload,
+                    () => actor.CanCommitP12LifecycleMutation(false, false, true, actionRuntime));
+        }
+        catch (InvalidOperationException exception)
+        {
+            logger.LogError("Cannot allocate NPC decision record identity: " + exception.Message);
+            committed = actionRuntime.TryUseSelectedPayload(
+                    payload, actor.SelectedDailyV1DefinitionGraph)
+                && actor.SelectedRuntimeOwnerGraph.TryCommitCurrentActionSlot(
+                    actor.SelectedRuntimeOwners, payload.Action, payload,
+                    () => actor.CanCommitP12LifecycleMutation(false, false, true, actionRuntime));
+        }
+        if (!committed) return true;
+
+        if (!actor.TryInstallPrecommittedCurrentActionRuntime(actionRuntime))
+            throw new InvalidOperationException(
+                "A committed selected action slot could not publish its Unity action projection.");
+        return true;
+    }
 
     public NpcDecisionRecorder(
         RuntimeIdAllocator idAllocator,
@@ -821,27 +90,27 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
         NpcDecisionStore decisionStore,
         SimulationLogger logger = null)
     {
-        this.idAllocator = idAllocator ?? throw new ArgumentNullException(nameof(idAllocator));
-        this.simulationTime = simulationTime ?? throw new ArgumentNullException(nameof(simulationTime));
-        this.recordSequence = recordSequence ?? throw new ArgumentNullException(nameof(recordSequence));
-        this.decisionStore = decisionStore ?? throw new ArgumentNullException(nameof(decisionStore));
-        this.logger = logger ?? new SimulationLogger(null);
+        this.logger = logger ?? UnitySimulationLoggerAdapter.Create(null);
+        receiptAuthority = DailyV1DecisionOccurrenceReceiptAuthority.Create(
+            idAllocator, simulationTime, recordSequence, decisionStore, this.logger);
     }
 
+    internal NpcDecisionRecorder(
+        DailyV1DecisionOccurrenceReceiptAuthority receiptAuthority,
+        SimulationLogger logger)
+    {
+        this.receiptAuthority = receiptAuthority
+            ?? throw new ArgumentNullException(nameof(receiptAuthority));
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
     /// <summary>
     /// Reports the exact live cardinality and revision of the recorder-owned
     /// idempotency receipt section. This is census evidence only, not an export.
     /// </summary>
     public OwnerSectionCensusWitness GetOccurrenceReceiptCensus()
     {
-        return new OwnerSectionCensusWitness(
-            OccurrenceReceiptSectionId,
-            OccurrenceReceiptSectionSchemaVersion,
-            occurrenceReceiptsOwnerIdentity,
-            occurrenceReceipts.Count,
-            occurrenceReceiptsRevision);
+        return receiptAuthority.GetCensus();
     }
-
     OwnerSectionCensusWitness IOwnerSectionCensusProvider.GetCurrentCensus()
     {
         return GetOccurrenceReceiptCensus();
@@ -868,15 +137,41 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
             return null;
         }
 
-        NpcDecisionRecord decision = Record(
-            actor.RuntimeId,
-            GetDecisionType(actionRuntime),
-            origin,
-            actionDefinitionId,
-            actionRuntime.TargetNpc?.RuntimeId,
-            actionRuntime.TargetCity?.Location?.RuntimeId,
-            actionRuntime.CommercialDecisionEvidence,
-            actionRuntime.CommercialScoutingEvidence);
+        NpcDecisionRecord decision;
+        if (actor.SelectedRuntimeOwners != null)
+        {
+            if (!actor.TryPrepareSelectedActionPayload(actionRuntime,
+                    out DailyV1NpcActionPayloadOwner selectedPayload)) return null;
+            try
+            {
+                decision = DailyV1DecisionRecordOperation.RecordSelectedAction(
+                    idAllocator, recordSequence, decisionStore, simulationTime.AbsoluteDay,
+                    actor.SelectedRuntimeOwnerGraph, actor.SelectedRuntimeOwners,
+                    selectedPayload, GetDecisionType(actionRuntime), origin);
+            }
+            catch (ArgumentException exception)
+            {
+                logger.LogError("Cannot create NPC decision record: " + exception.Message);
+                return null;
+            }
+            catch (InvalidOperationException exception)
+            {
+                logger.LogError("Cannot allocate NPC decision record identity: " + exception.Message);
+                return null;
+            }
+        }
+        else
+        {
+            decision = Record(
+                actor.RuntimeId,
+                GetDecisionType(actionRuntime),
+                origin,
+                actionDefinitionId,
+                actionRuntime.TargetNpc?.RuntimeId,
+                actionRuntime.TargetCity?.Location?.RuntimeId,
+                actionRuntime.CommercialDecisionEvidence,
+                actionRuntime.CommercialScoutingEvidence);
+        }
 
         if (decision != null)
         {
@@ -921,21 +216,11 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
     {
         try
         {
-            NpcDecisionRecord decision = new NpcDecisionRecord(
-                idAllocator.AllocateDecisionId(),
-                simulationTime.AbsoluteDay,
-                recordSequence.Allocate(),
-                primaryActorRuntimeId,
-                decisionType,
-                origin,
-                actionDefinitionId,
-                decisionParticipants,
-                targetRuntimeIds,
-                targetLocationRuntimeId,
-                commercialEvidence,
-                commercialScoutingEvidence);
-
-            return decisionStore.Record(decision) == true ? decision : null;
+            return DailyV1DecisionRecordOperation.Record(
+                idAllocator, recordSequence, decisionStore, simulationTime.AbsoluteDay,
+                primaryActorRuntimeId, decisionType, origin, actionDefinitionId,
+                decisionParticipants, targetRuntimeIds, targetLocationRuntimeId,
+                commercialEvidence, commercialScoutingEvidence);
         }
         catch (ArgumentException exception)
         {
@@ -963,54 +248,17 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
         string actionDefinitionId,
         string targetLocationRuntimeId,
         CommercialDecisionEvidence commercialEvidence,
-        out NpcDecisionRecord decision)
+        out NpcDecisionRecord decision) =>
+        receiptAuthority.TryRecordOccurrenceOnce(
+            operationIdentity, operationFingerprint, primaryActorRuntimeId,
+            decisionType, origin, actionDefinitionId, targetLocationRuntimeId,
+            commercialEvidence, out decision);
+    internal static NpcDecisionType GetDecisionType(NpcActionRuntime actionRuntime)
     {
-        decision = null;
-        if (string.IsNullOrWhiteSpace(operationIdentity)
-            || string.IsNullOrWhiteSpace(operationFingerprint)
-            || string.IsNullOrWhiteSpace(primaryActorRuntimeId)) return false;
+        if (actionRuntime?.SelectedOwner is DailyV1NpcActionPayloadOwner selectedPayload)
+            return DailyV1DecisionRecordOperation.GetDecisionType(
+                selectedPayload.Action, selectedPayload);
 
-        if (occurrenceReceipts.TryGetValue(operationIdentity,
-                out NpcDecisionOccurrenceReceipt existing))
-        {
-            if (existing.OperationFingerprint != operationFingerprint) return false;
-            decision = existing.Decision;
-            return true;
-        }
-
-        if (occurrenceReceiptsRevision == long.MaxValue) return false;
-        long nextReceiptRevision = occurrenceReceiptsRevision + 1L;
-
-        try
-        {
-            NpcDecisionRecord candidate = new NpcDecisionRecord(
-                idAllocator.AllocateDecisionId(), simulationTime.AbsoluteDay,
-                recordSequence.Allocate(), primaryActorRuntimeId, decisionType,
-                origin, actionDefinitionId, null, null, targetLocationRuntimeId,
-                commercialEvidence, null);
-            if (!decisionStore.Record(candidate)) return false;
-
-            NpcDecisionOccurrenceReceipt receipt = new NpcDecisionOccurrenceReceipt(
-                operationIdentity, operationFingerprint, candidate);
-            occurrenceReceipts.Add(operationIdentity, receipt);
-            occurrenceReceiptsRevision = nextReceiptRevision;
-            decision = candidate;
-            return true;
-        }
-        catch (ArgumentException exception)
-        {
-            logger.LogError("Cannot create NPC decision record: " + exception.Message);
-            return false;
-        }
-        catch (InvalidOperationException exception)
-        {
-            logger.LogError("Cannot allocate NPC decision record identity: " + exception.Message);
-            return false;
-        }
-    }
-
-    private static NpcDecisionType GetDecisionType(NpcActionRuntime actionRuntime)
-    {
         switch (actionRuntime.Action.actionType)
         {
             case NpcActionType.BuyGoods:
@@ -1035,20 +283,5 @@ public sealed class NpcDecisionRecorder : IOwnerSectionCensusProvider
             default:
                 return NpcDecisionType.Action;
         }
-    }
-}
-
-internal sealed class NpcDecisionOccurrenceReceipt
-{
-    public string OperationIdentity { get; }
-    public string OperationFingerprint { get; }
-    public NpcDecisionRecord Decision { get; }
-
-    public NpcDecisionOccurrenceReceipt(string operationIdentity,
-        string operationFingerprint, NpcDecisionRecord decision)
-    {
-        OperationIdentity = operationIdentity;
-        OperationFingerprint = operationFingerprint;
-        Decision = decision;
     }
 }

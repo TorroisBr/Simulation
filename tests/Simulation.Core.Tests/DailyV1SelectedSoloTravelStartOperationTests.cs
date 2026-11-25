@@ -1,0 +1,1481 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using NUnit.Framework;
+
+public sealed class DailyV1SelectedSoloTravelStartOperationTests
+{
+    [Test]
+    public void CoreTravelPartyPlanResolvesExactOwnersAndPreservesParticipantOrder()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        Assert.That(TryFindPartyStartFixture(graph, out SpatialRouteRuntime route,
+            out DailyV1CityRuntimeOwners originCity, out List<DailyV1NpcRuntimeOwners> members), Is.True);
+
+        ActionExecutionContext context = new ActionExecutionContext("travel/joint-civil",
+            new[]
+            {
+                new ActionExecutionParticipant(members[1].RuntimeId, ActionExecutionParticipantRole.Performer),
+                new ActionExecutionParticipant(members[0].RuntimeId, ActionExecutionParticipantRole.Support)
+            }, route.Destination.RuntimeId, route.RuntimeId, "decision/core-party-plan");
+
+        Assert.That(DailyV1SelectedTravelPartyStartPlan.TryCreate(
+            graph, context, out DailyV1SelectedTravelPartyStartPlan plan), Is.True);
+        Assert.That(plan, Is.Not.Null);
+        Assert.That(plan.Graph, Is.SameAs(graph));
+        Assert.That(plan.Members, Is.EqualTo(new[] { members[1], members[0] }));
+        Assert.That(plan.Travelers, Is.EqualTo(new[] { members[1] }));
+        Assert.That(plan.Escorts, Is.EqualTo(new[] { members[0] }));
+        Assert.That(plan.OriginLocation, Is.SameAs(route.Origin));
+        Assert.That(plan.OriginCity, Is.SameAs(originCity));
+        Assert.That(plan.DestinationLocation, Is.SameAs(route.Destination));
+        Assert.That(plan.Route, Is.SameAs(route));
+        Assert.That(plan.TravelDays, Is.EqualTo(route.TravelDays));
+        Assert.That(plan.OriginDecisionId, Is.EqualTo("decision/core-party-plan"));
+        Assert.That(plan.Costs.Select(cost => cost.RuntimeId),
+            Is.EqualTo(new[] { members[1].RuntimeId, members[0].RuntimeId }));
+        Assert.That(plan.Costs.All(cost => cost.Amount >= 0f), Is.True);
+    }
+
+    [Test]
+    public void CoreTravelPartyPlanRejectsDuplicateRolesAndUnsupportedTargets()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        Assert.That(TryFindPartyStartFixture(graph, out SpatialRouteRuntime route,
+            out _, out List<DailyV1NpcRuntimeOwners> members), Is.True);
+
+        ActionExecutionContext duplicateMember = new ActionExecutionContext("travel/joint-civil",
+            new[]
+            {
+                new ActionExecutionParticipant(members[0].RuntimeId, ActionExecutionParticipantRole.Performer),
+                new ActionExecutionParticipant(members[0].RuntimeId, ActionExecutionParticipantRole.Support)
+            }, route.Destination.RuntimeId, route.RuntimeId, "decision/duplicate-member");
+        Assert.That(DailyV1SelectedTravelPartyStartPlan.TryCreate(
+            graph, duplicateMember, out _), Is.False);
+
+        ActionExecutionContext targetParticipant = new ActionExecutionContext("travel/joint-civil",
+            new[]
+            {
+                new ActionExecutionParticipant(members[0].RuntimeId, ActionExecutionParticipantRole.Performer),
+                new ActionExecutionParticipant(members[1].RuntimeId, ActionExecutionParticipantRole.Target)
+            }, route.Destination.RuntimeId, route.RuntimeId, "decision/unsupported-target");
+        Assert.That(DailyV1SelectedTravelPartyStartPlan.TryCreate(
+            graph, targetParticipant, out _), Is.False);
+
+        ActionExecutionContext unknownOwner = new ActionExecutionContext("travel/joint-civil",
+            new[]
+            {
+                new ActionExecutionParticipant("npc:not-in-selected-graph", ActionExecutionParticipantRole.Performer)
+            }, route.Destination.RuntimeId, route.RuntimeId, "decision/unknown-owner");
+        Assert.That(DailyV1SelectedTravelPartyStartPlan.TryCreate(
+            graph, unknownOwner, out _), Is.False);
+    }
+    [Test]
+    public void CoreTravelPartyChargeReservesRevisionHeadroomForPossibleRefund()
+    {
+        Assert.That(MoneyAccountRuntime.TryCreateFromOwnerSnapshot(
+            10f, long.MaxValue - 2L, out MoneyAccountRuntime refundable), Is.True);
+        Assert.That(DailyV1SelectedTravelPartyStartExecution
+            .CanReserveChargeAndRefundRevisionCapacity(refundable, 1f), Is.True);
+
+        Assert.That(MoneyAccountRuntime.TryCreateFromOwnerSnapshot(
+            10f, long.MaxValue - 1L, out MoneyAccountRuntime noRefundCapacity), Is.True);
+        Assert.That(DailyV1SelectedTravelPartyStartExecution
+            .CanReserveChargeAndRefundRevisionCapacity(noRefundCapacity, 1f), Is.False);
+        Assert.That(DailyV1SelectedTravelPartyStartExecution
+            .CanReserveChargeAndRefundRevisionCapacity(noRefundCapacity, 0f), Is.True);
+    }
+
+    [Test]
+    public void CoreExecutesSelectedTravelPartyStartAgainstTheExactOwnerGraph()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        SpatialRouteRuntime selectedRoute = null;
+        DailyV1CityRuntimeOwners originCity = null;
+        List<DailyV1NpcRuntimeOwners> members = null;
+        foreach (SpatialRouteRuntime route in graph.SpatialNetwork.Routes)
+        {
+            DailyV1CityRuntimeOwners city = graph.Cities.SingleOrDefault(candidate =>
+                string.Equals(candidate.LocationRuntimeId, route.Origin.RuntimeId, StringComparison.Ordinal));
+            if (city == null) continue;
+            List<DailyV1NpcRuntimeOwners> atOrigin = graph.Npcs
+                .Where(member => city.NpcPresence.Contains(member.RuntimeId)
+                    && string.Equals(member.Travel.CurrentLocationRuntimeId,
+                        route.Origin.RuntimeId, StringComparison.Ordinal))
+                .Take(2).ToList();
+            float cost = route.TravelDays
+                * (graph.Definitions.EffectiveConfiguration?.Travel?.TravelCostPerDay ?? 0f);
+            if (atOrigin.Count == 2 && atOrigin.All(member => member.MoneyAccount.CanDebit(cost)))
+            {
+                selectedRoute = route;
+                originCity = city;
+                members = atOrigin;
+                break;
+            }
+        }
+
+        Assert.That(selectedRoute, Is.Not.Null, "The selected fixture requires a two-member eligible route.");
+        DailyV1CityRuntimeOwners destinationCity = graph.Cities.SingleOrDefault(candidate =>
+            string.Equals(candidate.LocationRuntimeId, selectedRoute.Destination.RuntimeId, StringComparison.Ordinal));
+        float costPerMember = selectedRoute.TravelDays
+            * (graph.Definitions.EffectiveConfiguration?.Travel?.TravelCostPerDay ?? 0f);
+        List<TravelPartyMemberCost> costs = members.Select(member =>
+            new TravelPartyMemberCost(member.RuntimeId, costPerMember)).ToList();
+        long initialStoreRevision = graph.TravelParties.Revision;
+        long initialCityRevision = originCity.NpcPresence.Revision;
+        long[] initialTravelRevisions = members.Select(member => member.Travel.Revision).ToArray();
+        float[] initialBalances = members.Select(member => member.MoneyAccount.Balance).ToArray();
+
+        Assert.That(DailyV1SelectedTravelPartyStartExecution.TryStart(
+            graph,
+            members,
+            members,
+            Array.Empty<DailyV1NpcRuntimeOwners>(),
+            selectedRoute.Origin.RuntimeId,
+            originCity,
+            selectedRoute.Destination.RuntimeId,
+            destinationCity,
+            selectedRoute.RuntimeId,
+            selectedRoute.TravelDays,
+            "decision/core-party-start",
+            costs,
+            null,
+            (_, _, _) => true,
+            (_, _, _) => { },
+            out TravelPartyRuntime party), Is.True);
+
+        Assert.That(party, Is.Not.Null);
+        Assert.That(graph.TravelParties.GetById(party.TravelPartyId), Is.SameAs(party));
+        Assert.That(party.MemberRuntimeIds, Is.EqualTo(members.Select(member => member.RuntimeId)));
+        Assert.That(graph.TravelParties.Revision, Is.EqualTo(initialStoreRevision + 1));
+        Assert.That(originCity.NpcPresence.Revision, Is.EqualTo(initialCityRevision + 2));
+        for (int index = 0; index < members.Count; index++)
+        {
+            Assert.That(members[index].Travel.Revision, Is.EqualTo(initialTravelRevisions[index] + 2));
+            Assert.That(members[index].Travel.ActiveTravelPartyId, Is.EqualTo(party.TravelPartyId));
+            Assert.That(members[index].Travel.DestinationLocationRuntimeId,
+                Is.EqualTo(selectedRoute.Destination.RuntimeId));
+            Assert.That(members[index].MoneyAccount.Balance, Is.EqualTo(initialBalances[index] - costPerMember));
+            Assert.That(members[index].SpatialKnowledge.KnowsLocation(selectedRoute.Origin.RuntimeId), Is.True);
+            Assert.That(members[index].SpatialKnowledge.KnowsRoute(selectedRoute.RuntimeId), Is.True);
+        }
+    }
+
+    [Test]
+    public void CoreRejectsStartWhenProjectionAdmissionRejectsWithoutStartingTravel()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        SpatialRouteRuntime selectedRoute = null;
+        DailyV1CityRuntimeOwners originCity = null;
+        List<DailyV1NpcRuntimeOwners> members = null;
+        foreach (SpatialRouteRuntime route in graph.SpatialNetwork.Routes)
+        {
+            DailyV1CityRuntimeOwners city = graph.Cities.SingleOrDefault(candidate =>
+                string.Equals(candidate.LocationRuntimeId, route.Origin.RuntimeId, StringComparison.Ordinal));
+            if (city == null) continue;
+            List<DailyV1NpcRuntimeOwners> atOrigin = graph.Npcs
+                .Where(member => city.NpcPresence.Contains(member.RuntimeId)
+                    && string.Equals(member.Travel.CurrentLocationRuntimeId,
+                        route.Origin.RuntimeId, StringComparison.Ordinal))
+                .Take(2).ToList();
+            if (atOrigin.Count == 2)
+            {
+                selectedRoute = route;
+                originCity = city;
+                members = atOrigin;
+                break;
+            }
+        }
+
+        Assert.That(selectedRoute, Is.Not.Null);
+        DailyV1CityRuntimeOwners destinationCity = graph.Cities.SingleOrDefault(candidate =>
+            string.Equals(candidate.LocationRuntimeId, selectedRoute.Destination.RuntimeId, StringComparison.Ordinal));
+        float costPerMember = selectedRoute.TravelDays
+            * (graph.Definitions.EffectiveConfiguration?.Travel?.TravelCostPerDay ?? 0f);
+        List<TravelPartyMemberCost> costs = members.Select(member =>
+            new TravelPartyMemberCost(member.RuntimeId, costPerMember)).ToList();
+        long initialStoreRevision = graph.TravelParties.Revision;
+        long initialCityRevision = originCity.NpcPresence.Revision;
+        string[] initialLocations = members.Select(member => member.Travel.CurrentLocationRuntimeId).ToArray();
+        long[] initialTravelRevisions = members.Select(member => member.Travel.Revision).ToArray();
+        float[] initialBalances = members.Select(member => member.MoneyAccount.Balance).ToArray();
+
+        Assert.That(DailyV1SelectedTravelPartyStartExecution.TryStart(
+            graph,
+            members,
+            members,
+            Array.Empty<DailyV1NpcRuntimeOwners>(),
+            selectedRoute.Origin.RuntimeId,
+            originCity,
+            selectedRoute.Destination.RuntimeId,
+            destinationCity,
+            selectedRoute.RuntimeId,
+            selectedRoute.TravelDays,
+            "decision/rejected-core-party-start",
+            costs,
+            null,
+            (_, _, _) => false,
+            (_, _, _) => { },
+            out TravelPartyRuntime party), Is.False);
+
+        Assert.That(party, Is.Null);
+        Assert.That(graph.TravelParties.Revision, Is.EqualTo(initialStoreRevision));
+        Assert.That(graph.TravelParties.ActiveParties, Is.Empty);
+        Assert.That(originCity.NpcPresence.Revision, Is.EqualTo(initialCityRevision));
+        for (int index = 0; index < members.Count; index++)
+        {
+            Assert.That(members[index].Travel.CurrentLocationRuntimeId, Is.EqualTo(initialLocations[index]));
+            Assert.That(members[index].Travel.IsTraveling, Is.False);
+            Assert.That(members[index].Travel.Revision, Is.EqualTo(initialTravelRevisions[index]));
+            Assert.That(members[index].MoneyAccount.Balance, Is.EqualTo(initialBalances[index]));
+        }
+    }
+
+    [Test]
+    public void CoreDerivesExactSoloTravelStartOwnerSectionsFromItsSelectedGraph()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        Assert.That(sectionIds, Does.Contain(
+            DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + actor.RuntimeId));
+        Assert.That(sectionIds, Does.Contain(
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix + actor.RuntimeId));
+        Assert.That(sectionIds, Does.Contain(
+            DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId)));
+        Assert.That(sectionIds, Does.Contain(
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + actor.RuntimeId));
+        Assert.That(sectionIds, Does.Contain(
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + actor.RuntimeId));
+        Assert.That(sectionIds, Does.Contain(RuntimeIdAllocatorCensusProvider.EventsSectionId));
+        Assert.That(sectionIds, Does.Contain(SimulationRecordSequenceCensusProvider.SectionId));
+        Assert.That(sectionIds.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(sectionIds.Count));
+        Assert.That(sectionIds, Is.Ordered.Using<string>(StringComparer.Ordinal));
+    }
+
+    [Test]
+    public void CoreDerivesTravelPartyStartFootprintForEveryExactSelectedMember()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1CityRuntimeOwners originCity = graph.Cities[0];
+        DailyV1NpcRuntimeOwners[] members = graph.Npcs
+            .Where(member => originCity.NpcPresence.Contains(member.RuntimeId))
+            .Take(2).ToArray();
+
+        Assert.That(members, Has.Length.EqualTo(2));
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        Assert.That(state.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, members, originCity, out IReadOnlyList<string> sectionIds), Is.True);
+        Assert.That(sectionIds, Does.Contain(TravelPartyCensusProvider.SectionId));
+        Assert.That(sectionIds, Does.Contain(RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId));
+        Assert.That(sectionIds, Does.Contain(RuntimeIdAllocatorCensusProvider.EventsSectionId));
+        Assert.That(sectionIds, Does.Contain(SimulationRecordSequenceCensusProvider.SectionId));
+        Assert.That(sectionIds, Does.Contain(DailyV1SelectedOwnerSectionCensusContract
+            .CityImportantNpcSectionIdFor(originCity.RuntimeId)));
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+        {
+            if (members.Any(member => city.NpcPresence.Contains(member.RuntimeId)))
+                Assert.That(sectionIds, Does.Contain(DailyV1SelectedOwnerSectionCensusContract
+                    .CityImportantNpcSectionIdFor(city.RuntimeId)));
+        }
+        foreach (DailyV1NpcRuntimeOwners member in members)
+        {
+            Assert.That(sectionIds, Does.Contain(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + member.RuntimeId));
+            Assert.That(sectionIds, Does.Contain(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix + member.RuntimeId));
+            Assert.That(sectionIds, Does.Contain(
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + member.RuntimeId));
+            Assert.That(sectionIds, Does.Contain(
+                DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + member.RuntimeId));
+        }
+        Assert.That(sectionIds.Distinct(StringComparer.Ordinal).Count(), Is.EqualTo(sectionIds.Count));
+        Assert.That(sectionIds, Is.Ordered.Using<string>(StringComparer.Ordinal));
+    }
+
+    [Test]
+    public void CoreRejectsDuplicateOrForeignTravelPartyMemberOwners()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1GenesisComposition foreign = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners first = graph.Npcs[0];
+        DailyV1NpcRuntimeOwners second = graph.Npcs[1];
+
+        Assert.That(composition.ExecutionBoundaryState.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, new[] { first, first }, graph.Cities[0], out _), Is.False);
+        Assert.That(composition.ExecutionBoundaryState.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, new[] { first, foreign.OwnerGraph.Npcs[1] }, graph.Cities[0], out _), Is.False);
+        Assert.That(composition.ExecutionBoundaryState.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, new[] { first, second }, foreign.OwnerGraph.Cities[0], out _), Is.False);
+    }
+
+    [Test]
+    public void CoreOwnsSelectedTravelPartyStartScopeAndCommittedTravelReceipt()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1CityRuntimeOwners originCity = graph.Cities[0];
+        DailyV1NpcRuntimeOwners[] members = graph.Npcs
+            .Where(member => originCity.NpcPresence.Contains(member.RuntimeId))
+            .Take(2).ToArray();
+        Assert.That(members, Has.Length.EqualTo(2));
+        Assert.That(state.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, members, originCity, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        TestProtocol protocol = new TestProtocol();
+        string changed = DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix
+            + members[0].RuntimeId;
+        string partyCounterSection = RuntimeIdAllocatorCensusProvider.TravelPartiesSectionId;
+
+        IDisposable scope = null;
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12TravelPartyStart(
+                graph, members, originCity, sectionIds, protocol, out scope), Is.True);
+            Assert.That(scope, Is.Not.Null);
+            Assert.That(protocol.ValidationCalls, Is.EqualTo(1));
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero,
+                "An admitted operation does not publish an epoch before a committed owner mutation.");
+            Assert.That(protocol.EnterCalls, Is.EqualTo(1));
+
+            Assert.That(state.TryCanCommitSelectedP12TravelPartyStartMutation(
+                new[] { changed }, out bool commitHandled), Is.True);
+            Assert.That(commitHandled, Is.True);
+            DailyV1NpcRuntimeOwners member = members[0];
+            Assert.That(member.Travel.TryCommitState(
+                member.Travel.CurrentLocationRuntimeId,
+                member.Travel.CurrentCityRuntimeId,
+                "location/party-start-scope", "city/party-start-scope",
+                3, 3, "route/party-start-scope", true,
+                "decision/party-start-scope", null, true), Is.True);
+            Assert.That(state.TryRecordSelectedP12TravelPartyStartMutation(
+                new[] { changed }, out bool recordHandled), Is.True);
+            Assert.That(recordHandled, Is.True);
+            Assert.That(state.TryCanCommitSelectedP12TravelPartyStartMutation(
+                new[] { changed }, out commitHandled), Is.True);
+            Assert.That(commitHandled, Is.True);
+
+            Assert.That(state.TryCanCommitSelectedP12TravelPartyStartMutation(
+                new[] { partyCounterSection }, out commitHandled), Is.True);
+            Assert.That(commitHandled, Is.True);
+            Assert.That(graph.RuntimeIdAllocator.AllocateTravelPartyId(), Is.Not.Empty);
+            Assert.That(state.TryRecordSelectedP12TravelPartyStartMutation(
+                new[] { partyCounterSection }, out recordHandled), Is.True);
+            Assert.That(recordHandled, Is.True);
+
+            scope.Dispose();
+            scope.Dispose();
+            string[] expectedNotified = { changed, partyCounterSection };
+            Array.Sort(expectedNotified, StringComparer.Ordinal);
+            Assert.That(protocol.RefreshedSections, Is.EqualTo(expectedNotified));
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L));
+            Assert.That(protocol.ScopeDisposed, Is.True);
+            Assert.That(protocol.Faulted, Is.False);
+        }
+        finally
+        {
+            scope?.Dispose();
+        }
+    }
+
+    [Test]
+    public void CoreAcceptsTravelPartyStoreRemovalThatCompensatesItsReceiptedStartAddition()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1CityRuntimeOwners originCity = graph.Cities[0];
+        DailyV1NpcRuntimeOwners[] members = graph.Npcs
+            .Where(member => originCity.NpcPresence.Contains(member.RuntimeId))
+            .Take(2).ToArray();
+        Assert.That(members, Has.Length.EqualTo(2));
+        Assert.That(state.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, members, originCity, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+
+        string storeSection = TravelPartyCensusProvider.SectionId;
+        int initialCardinality = graph.TravelParties.ActiveParties.Count;
+        long initialRevision = graph.TravelParties.Revision;
+        TravelPartyRuntime party = new TravelPartyRuntime(
+            "party/compensated-start",
+            "location/compensated-start-origin",
+            "location/compensated-start-destination",
+            "route/compensated-start",
+            members.Select(member => member.RuntimeId),
+            System.Array.Empty<string>(),
+            1,
+            "decision/compensated-start",
+            members.Select(member => new TravelPartyMemberCost(member.RuntimeId, 0f)));
+        TestProtocol protocol = new TestProtocol();
+        IDisposable scope = null;
+
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12TravelPartyStart(
+                graph, members, originCity, sectionIds, protocol, out scope), Is.True);
+
+            Assert.That(state.TryCanCommitSelectedP12TravelPartyStartMutation(
+                new[] { storeSection }, out bool addHandled), Is.True);
+            Assert.That(addHandled, Is.True);
+            Assert.That(graph.TravelParties.Add(party), Is.True);
+            Assert.That(state.TryRecordSelectedP12TravelPartyStartMutation(
+                new[] { storeSection }, out bool addRecorded), Is.True);
+            Assert.That(addRecorded, Is.True);
+
+            Assert.That(state.TryCanCommitSelectedP12TravelPartyStartMutation(
+                new[] { storeSection }, out bool removeHandled), Is.True);
+            Assert.That(removeHandled, Is.True);
+            Assert.That(graph.TravelParties.Remove(party.TravelPartyId), Is.True);
+            Assert.That(state.TryRecordSelectedP12TravelPartyStartMutation(
+                new[] { storeSection }, out bool removalRecorded), Is.True);
+            Assert.That(removalRecorded, Is.True);
+
+            scope.Dispose();
+            scope = null;
+            Assert.That(graph.TravelParties.ActiveParties.Count, Is.EqualTo(initialCardinality));
+            Assert.That(graph.TravelParties.Revision, Is.EqualTo(initialRevision + 2));
+            Assert.That(protocol.RefreshedSections, Is.EqualTo(new[] { storeSection }));
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L),
+                "A compensating remove/add sequence is one outer operation and publishes one epoch.");
+            Assert.That(protocol.ScopeDisposed, Is.True);
+            Assert.That(protocol.Faulted, Is.False);
+        }
+        finally
+        {
+            scope?.Dispose();
+        }
+    }
+
+    [Test]
+    public void CoreRejectsSelectedTravelPartyStartOwnerDriftWithoutACommitReceipt()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1CityRuntimeOwners originCity = graph.Cities[0];
+        DailyV1NpcRuntimeOwners[] members = graph.Npcs
+            .Where(member => originCity.NpcPresence.Contains(member.RuntimeId))
+            .Take(2).ToArray();
+        Assert.That(members, Has.Length.EqualTo(2));
+        Assert.That(state.TryCreateSelectedP12TravelPartyStartSectionIds(
+            graph, members, originCity, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        TestProtocol protocol = new TestProtocol();
+        IDisposable scope = null;
+        string changed = DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix
+            + members[0].RuntimeId;
+
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12TravelPartyStart(
+                graph, members, originCity, sectionIds, protocol, out scope), Is.True);
+            Assert.That(members[0].Travel.TryCommitState(
+                members[0].Travel.CurrentLocationRuntimeId,
+                members[0].Travel.CurrentCityRuntimeId,
+                "location/party-start-unreceipted", "city/party-start-unreceipted",
+                4, 4, "route/party-start-unreceipted", true,
+                "decision/party-start-unreceipted", null, true), Is.True);
+            Assert.That(state.TryCanCommitSelectedP12TravelPartyStartMutation(
+                new[] { changed }, out bool handled), Is.False);
+            Assert.That(handled, Is.True);
+            Assert.That(protocol.Faulted, Is.True);
+        }
+        finally
+        {
+            scope?.Dispose();
+        }
+    }
+
+    [Test]
+    public void CoreIncludesCityPresenceSectionOnlyWhenActorIsInThatOwner()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(
+            candidate => string.Equals(
+                candidate.RuntimeId, actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        string presenceSectionId = DailyV1SelectedOwnerSectionCensusContract
+            .CityImportantNpcSectionIdFor(city.RuntimeId);
+
+        Assert.That(city.NpcPresence.Contains(actor.RuntimeId), Is.True);
+        Assert.That(city.NpcPresence.TryRemove(actor.RuntimeId), Is.True);
+        Assert.That(composition.ExecutionBoundaryState.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> withoutPresence), Is.True);
+        Assert.That(withoutPresence, Does.Not.Contain(presenceSectionId));
+
+        Assert.That(city.NpcPresence.TryAdd(actor.RuntimeId), Is.True);
+        Assert.That(composition.ExecutionBoundaryState.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> withPresence), Is.True);
+        Assert.That(withPresence, Does.Contain(presenceSectionId));
+        Assert.That(withPresence.Count, Is.EqualTo(withoutPresence.Count + 1));
+    }
+
+    [Test]
+    public void CoreOwnsSoloTravelStartScopeAndNotifiesOnlyCommittedAllowedSections()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        string changed = DailyV1SelectedOwnerSectionCensusContract.NpcTravelStatePrefix + actor.RuntimeId;
+        TestProtocol protocol = new TestProtocol();
+        DailyV1CoreSelectedP12SoloTravelStartProtocol coreProtocol =
+            new DailyV1CoreSelectedP12SoloTravelStartProtocol(state, graph, protocol);
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(coreProtocol.TryBeginOperation(
+                graph, actor, out IDisposable scope), Is.True);
+            Assert.That(scope, Is.Not.Null);
+            Assert.That(protocol.ValidationCalls, Is.EqualTo(1));
+            Assert.That(protocol.ValidatedSections, Is.EqualTo(sectionIds),
+                "The Core wrapper derives and forwards the exact owner cut from its bound graph.");
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero);
+            Assert.That(protocol.EnterCalls, Is.EqualTo(1));
+
+            Assert.That(state.TryCanCommitSelectedP12SoloTravelStartMutation(
+                new[] { changed }, out bool commitHandled), Is.True);
+            Assert.That(commitHandled, Is.True);
+            Assert.That(protocol.ValidationCalls, Is.EqualTo(1),
+                "Core validates its exact TravelState witness directly; the host vector is validated once at operation entry.");
+
+            Assert.That(actor.Travel.TryCommitState(
+                actor.Travel.CurrentLocationRuntimeId,
+                actor.Travel.CurrentCityRuntimeId,
+                "location/solo-travel-scope", "city/solo-travel-scope",
+                1, 1, "route/solo-travel-scope", true,
+                "decision/solo-travel-scope", null, true), Is.True);
+            Assert.That(state.TryRecordSelectedP12SoloTravelStartMutation(
+                new[] { changed }, out bool recordHandled), Is.True);
+            Assert.That(recordHandled, Is.True);
+            Assert.That(state.TryCanCommitSelectedP12SoloTravelStartMutation(
+                new[] { changed }, out commitHandled), Is.True);
+            Assert.That(commitHandled, Is.True);
+            Assert.That(protocol.ValidationCalls, Is.EqualTo(1),
+                "Core checks the advanced exact TravelState baseline without asking the host to revalidate the old vector row.");
+
+            scope.Dispose();
+            scope.Dispose();
+            Assert.That(protocol.RefreshedSections, Is.EqualTo(new[] { changed }));
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L),
+                "Core publishes one shared epoch only after the host census witness refresh succeeds.");
+            Assert.That(protocol.ScopeDisposed, Is.True);
+            Assert.That(protocol.Faulted, Is.False);
+            Assert.That(state.TryCanCommitSelectedP12SoloTravelStartMutation(
+                new[] { changed }, out bool inactiveHandled), Is.True);
+            Assert.That(inactiveHandled, Is.False);
+        }
+        finally
+        {
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+    }
+
+    [Test]
+    public void CoreSoloTravelPreflightUsesTheExactGraphRouteAndOwnerPlan()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        Assert.That(TryCreateSoloTravelPreflightPlan(graph,
+            out DailyV1NpcRuntimeOwners actor,
+            out DailyV1SelectedTravelTransitionPlan plan,
+            out SpatialRouteRuntime route,
+            out float travelCost), Is.True);
+
+        long travelRevision = actor.Travel.Revision;
+        long moneyRevision = actor.MoneyAccount.Revision;
+        Assert.That(DailyV1SelectedActionExecutionStage.CanCommitPreparedSoloTravelTransition(
+            graph, actor, plan, route, travelCost), Is.True);
+
+        Assert.That(DailyV1SelectedActionExecutionStage.CanCommitPreparedSoloTravelTransition(
+            graph, actor, plan, route, travelCost + 1f), Is.False,
+            "The Core preflight must reject a cost that is not derived from the exact admitted route.");
+
+        DailyV1GenesisComposition foreignComposition = Compose();
+        SpatialRouteRuntime foreignRoute = foreignComposition.OwnerGraph.SpatialNetwork.Routes
+            .SingleOrDefault(candidate => string.Equals(
+                candidate.RuntimeId, route.RuntimeId, StringComparison.Ordinal));
+        Assert.That(foreignRoute, Is.Not.Null);
+        Assert.That(foreignRoute, Is.Not.SameAs(route));
+        Assert.That(DailyV1SelectedActionExecutionStage.CanCommitPreparedSoloTravelTransition(
+            graph, actor, plan, foreignRoute, travelCost), Is.False,
+            "A route with matching persisted identity from another graph is not the bound route object.");
+
+        Assert.That(actor.Travel.Revision, Is.EqualTo(travelRevision));
+        Assert.That(actor.MoneyAccount.Revision, Is.EqualTo(moneyRevision));
+        Assert.That(plan.IsCommitted, Is.False,
+            "Rejected preflights must not install the prepared transition or charge the owner.");
+    }
+
+    [Test]
+    public void CoreSoloTravelBoundaryUsesExactMutableSessionAndProjectionOnlyPreflight()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        Assert.That(TryCreateSoloTravelPreflightPlan(graph,
+            out DailyV1NpcRuntimeOwners actor,
+            out DailyV1SelectedTravelTransitionPlan plan,
+            out SpatialRouteRuntime route,
+            out float travelCost), Is.True);
+
+        DailyV1ActionDefinition travelAction = actor.Definitions.Actions.Values
+            .FirstOrDefault(candidate => candidate.Values.actionType?.Value
+                == DailyV1NpcDefinitionRules.TravelActionTypeValue);
+        Assert.That(travelAction, Is.Not.Null);
+        Assert.That(DailyV1NpcActionPayloadOwner.TryCreate(
+            graph.Definitions, travelAction, null, plan.DestinationCityRuntimeId,
+            null, 0, 0f, 1f, NpcTravelReason.None, 0f,
+            "decision/core-boundary-preflight", null, null, null,
+            out DailyV1NpcActionPayloadOwner payload), Is.True);
+        Assert.That(graph.TryCommitCurrentActionSlot(actor, travelAction, payload, null), Is.True);
+
+        RecordingSoloTravelProjectionBoundary projection =
+            new RecordingSoloTravelProjectionBoundary();
+        TestProtocol protocol = new TestProtocol();
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary;
+        try
+        {
+            Assert.That(state.CanMutate, Is.True);
+            Assert.That(DailyV1SelectedActionExecutionStage
+                .DailyV1CoreSelectedSoloTravelActionBoundary.TryCreate(
+                state, graph, actor, travelAction, protocol, projection,
+                out boundary), Is.True);
+
+            Assert.That(boundary.CanCommitPreparedTransition(plan, route, travelCost), Is.True);
+            Assert.That(projection.ProjectionPreflightCalls, Is.EqualTo(1),
+                "The Core boundary retains the host's projection-only revision-capacity check before charging.");
+            Assert.That(projection.LegacyDomainPreflightCalls, Is.Zero,
+                "Core owns route, cost, eligibility, and authoritative-owner validation.");
+        }
+        finally
+        {
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+
+        state.MutationGuard.MarkFaulted(AuthoritativeMutationFaultReason.RollbackRestoreFailed);
+        Assert.That(state.CanMutate, Is.False);
+        Assert.That(boundary.CanCommitPreparedTransition(plan, route, travelCost), Is.False,
+            "A faulted exact session must fail closed before asking the host to preflight its projection.");
+        Assert.That(projection.ProjectionPreflightCalls, Is.EqualTo(1));
+        Assert.That(projection.LegacyDomainPreflightCalls, Is.Zero);
+        Assert.That(plan.IsCommitted, Is.False);
+    }
+
+    [Test]
+    public void CoreRechecksTravelAndSpatialOwnerBaselinesAcrossTheHostVectorPreflight()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        TestProtocol protocol = new TestProtocol
+        {
+            DuringNextValidation = () =>
+                Assert.That(actor.SpatialKnowledge.DiscoverLocation(
+                    "solo-travel-preflight-drift"), Is.True)
+        };
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out IDisposable scope), Is.False);
+            Assert.That(scope, Is.Null);
+            Assert.That(protocol.ValidationCalls, Is.EqualTo(1));
+            Assert.That(protocol.EnterCalls, Is.Zero);
+            Assert.That(protocol.Faulted, Is.True);
+        }
+        finally
+        {
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+    }
+
+    [Test]
+    public void CoreRejectsUnreceiptedTravelStateDriftBeforeHostMutationAdmission()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        TestProtocol protocol = new TestProtocol();
+        string travelSection = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(
+            12, actor.RuntimeId);
+        IDisposable scope = null;
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out scope), Is.True);
+            Assert.That(actor.Travel.TryCommitState(
+                "location/unreceipted-start", "city/unreceipted-start",
+                "location/unreceipted-destination", "city/unreceipted-destination",
+                2, 2, "route/unreceipted-start", true,
+                "decision/unreceipted-start", null, true), Is.True);
+
+            Assert.That(state.TryCanCommitSelectedP12SoloTravelStartMutation(
+                new[] { travelSection }, out bool handled), Is.False);
+            Assert.That(handled, Is.True);
+            Assert.That(protocol.ValidationCalls, Is.EqualTo(1),
+                "Core must reject its own stale TravelState witness before delegating any remaining host rows.");
+            Assert.That(protocol.Faulted, Is.True);
+        }
+        finally
+        {
+            scope?.Dispose();
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+    }
+
+    [Test]
+    public void CoreRejectsUnreceiptedSpatialKnowledgeDriftBeforeHostMutationAdmission()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        TestProtocol protocol = new TestProtocol();
+        string locationsSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + actor.RuntimeId;
+        string routesSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + actor.RuntimeId;
+        IDisposable scope = null;
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out scope), Is.True);
+            Assert.That(actor.SpatialKnowledge.DiscoverRoute(
+                "solo-travel-unreceipted-route"), Is.True);
+
+            Assert.That(state.TryCanCommitSelectedP12SoloTravelStartMutation(
+                new[] { locationsSection, routesSection }, out bool handled), Is.False);
+            Assert.That(handled, Is.True);
+            Assert.That(protocol.ValidationCalls, Is.EqualTo(1),
+                "Core must reject its own stale paired SpatialKnowledge witness before host validation.");
+            Assert.That(protocol.Faulted, Is.True);
+        }
+        finally
+        {
+            scope?.Dispose();
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+    }
+
+    [Test]
+    public void CoreAdvancesExactTravelAndPairedSpatialBaselinesOnlyForCommittedReceipts()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        TestProtocol protocol = new TestProtocol();
+        string travelSection = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(
+            12, actor.RuntimeId);
+        string locationsSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + actor.RuntimeId;
+        string routesSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + actor.RuntimeId;
+        string[] spatialPair = { locationsSection, routesSection };
+        long travelRevisionBefore = actor.Travel.Revision;
+        long spatialRevisionBefore = actor.SpatialKnowledge.Revision;
+        int locationCountBefore = actor.SpatialKnowledge.KnownLocationRuntimeIds.Count;
+        int routeCountBefore = actor.SpatialKnowledge.KnownRouteRuntimeIds.Count;
+        IDisposable scope = null;
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out scope), Is.True);
+
+            Assert.That(state.TryCanCommitSelectedP12SoloTravelStartMutation(
+                new[] { travelSection }, out bool travelHandled), Is.True);
+            Assert.That(travelHandled, Is.True);
+            Assert.That(actor.Travel.TryCommitState(
+                actor.Travel.CurrentLocationRuntimeId,
+                actor.Travel.CurrentCityRuntimeId,
+                "location/solo-travel-start", "city/solo-travel-start",
+                2, 2, "route/solo-travel-start", true,
+                "decision/solo-travel-start", null, true), Is.True);
+            Assert.That(state.TryRecordSelectedP12SoloTravelStartMutation(
+                new[] { travelSection }, out bool travelRecorded), Is.True);
+            Assert.That(travelRecorded, Is.True);
+            Assert.That(state.TryCanCommitSelectedP12SoloTravelStartMutation(
+                new[] { travelSection }, out travelHandled), Is.True);
+            Assert.That(travelHandled, Is.True);
+
+            Assert.That(state.TryCanCommitSelectedP12SoloTravelStartMutation(
+                spatialPair, out bool spatialHandled), Is.True);
+            Assert.That(spatialHandled, Is.True);
+            Assert.That(actor.SpatialKnowledge.DiscoverLocation(
+                "solo-travel-start-location"), Is.True);
+            Assert.That(state.TryRecordSelectedP12SoloTravelStartMutation(
+                spatialPair, out bool spatialRecorded), Is.True);
+            Assert.That(spatialRecorded, Is.True);
+
+            Assert.That(state.TryCanCommitSelectedP12SoloTravelStartMutation(
+                spatialPair, out spatialHandled), Is.True);
+            Assert.That(spatialHandled, Is.True);
+            Assert.That(actor.SpatialKnowledge.DiscoverRoute(
+                "solo-travel-start-route"), Is.True);
+            Assert.That(state.TryRecordSelectedP12SoloTravelStartMutation(
+                spatialPair, out spatialRecorded), Is.True);
+            Assert.That(spatialRecorded, Is.True);
+        }
+        finally
+        {
+            scope?.Dispose();
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+
+        Assert.That(actor.Travel.Revision, Is.EqualTo(travelRevisionBefore + 1L));
+        Assert.That(actor.SpatialKnowledge.Revision, Is.EqualTo(spatialRevisionBefore + 2L));
+        Assert.That(actor.SpatialKnowledge.KnownLocationRuntimeIds.Count,
+            Is.EqualTo(locationCountBefore + 1));
+        Assert.That(actor.SpatialKnowledge.KnownRouteRuntimeIds.Count,
+            Is.EqualTo(routeCountBefore + 1));
+        Assert.That(protocol.RefreshedSections, Is.EquivalentTo(
+            new[] { travelSection, locationsSection, routesSection }));
+        Assert.That(protocol.RefreshCalls, Is.EqualTo(1),
+            "The complete changed owner set is refreshed atomically once at the outer operation boundary.");
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L),
+            "Multiple committed owner sections in one operation publish one Core mutation epoch.");
+        Assert.That(protocol.Faulted, Is.False);
+    }
+
+    [Test]
+    public void CoreLeavesMutationEpochUnchangedForAnAdmittedNoOpOperation()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        TestProtocol protocol = new TestProtocol();
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out IDisposable scope), Is.True);
+            scope.Dispose();
+            Assert.That(protocol.RefreshCalls, Is.Zero,
+                "An admitted no-op must not emit a host baseline refresh.");
+            Assert.That(state.MutationEpochState.CurrentEpoch, Is.Zero,
+                "An admitted no-op must not advance the Core-owned epoch.");
+            Assert.That(protocol.Faulted, Is.False);
+        }
+        finally
+        {
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+    }
+
+    [Test]
+    public void CoreReceiptsMoneyTravelPlanCityPresenceAndRealEventAllocations()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(candidate =>
+            string.Equals(candidate.RuntimeId, actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        Assert.That(actor.TravelPlan.TryCommit(
+            "location/solo-plan-target", "city/solo-plan-target", NpcTravelReason.Trade,
+            1f, 1f, "decision/solo-plan"), Is.True);
+
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        string moneyId = DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + actor.RuntimeId;
+        string planId = DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+            DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId);
+        string cityId = DailyV1SelectedOwnerSectionCensusContract.CityImportantNpcSectionIdFor(city.RuntimeId);
+        string eventsId = RuntimeIdAllocatorCensusProvider.EventsSectionId;
+        string sequenceId = SimulationRecordSequenceCensusProvider.SectionId;
+        TestProtocol protocol = new TestProtocol();
+        bool CanCommit(string sectionId) =>
+            state.TryCanCommitSelectedP12SoloTravelStartMutation(new[] { sectionId }, out bool handled)
+            && handled;
+        void Record(string sectionId)
+        {
+            if (!state.TryRecordSelectedP12SoloTravelStartMutation(
+                    new[] { sectionId }, out bool handled) || !handled)
+                throw new InvalidOperationException("Core rejected a committed selected travel-start receipt.");
+        }
+        RuntimeIdAllocatorOwnerBridge.BindP12EventIdMutationBoundary(
+            composition.RuntimeIdAllocator, () => CanCommit(eventsId), () => Record(eventsId));
+        SimulationRecordSequenceOwnerBridge.BindP12MutationBoundary(
+            composition.RecordSequence, () => CanCommit(sequenceId), () => Record(sequenceId));
+
+        long moneyRevision = actor.MoneyAccount.Revision;
+        long planRevision = actor.TravelPlan.Revision;
+        long cityRevision = city.NpcPresence.Revision;
+        int cityCardinality = city.NpcPresence.OrderedNpcRuntimeIds.Count;
+        long eventRevision = RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(
+            composition.RuntimeIdAllocator).GetCurrentCensus().Revision;
+        long sequenceRevision = new SimulationRecordSequenceCensusProvider(
+            composition.RecordSequence).GetCurrentCensus().Revision;
+        IDisposable scope = null;
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out scope), Is.True);
+
+            Assert.That(CanCommit(moneyId), Is.True);
+            Assert.That(actor.MoneyAccount.TryCredit(0.25f), Is.True);
+            Record(moneyId);
+
+            Assert.That(CanCommit(planId), Is.True);
+            Assert.That(actor.TravelPlan.TryCommit(
+                null, null, NpcTravelReason.None, 0f, 0f, null), Is.True);
+            Record(planId);
+
+            Assert.That(CanCommit(cityId), Is.True);
+            Assert.That(city.NpcPresence.TryRemove(actor.RuntimeId), Is.True);
+            Record(cityId);
+
+            Assert.That(composition.EventAuthority.Recorder.Record(
+                (eventId, absoluteDay, recordSequence) => new NpcTravelStartedEvent(
+                    eventId, absoluteDay, recordSequence, actor.RuntimeId,
+                    "location/solo-event-origin", "location/solo-event-destination",
+                    "route/solo-event-route", "decision/solo-event")), Is.True);
+
+            Assert.That(protocol.ValidationCalls, Is.EqualTo(1),
+                "The Core receipt cut owns all selected rows for this operation after the single host-vector preflight.");
+            scope.Dispose();
+            scope = null;
+        }
+        finally
+        {
+            scope?.Dispose();
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+
+        Assert.That(actor.MoneyAccount.Revision, Is.EqualTo(moneyRevision + 1L));
+        Assert.That(actor.TravelPlan.Revision, Is.EqualTo(planRevision + 1L));
+        Assert.That(city.NpcPresence.Revision, Is.EqualTo(cityRevision + 1L));
+        Assert.That(city.NpcPresence.OrderedNpcRuntimeIds.Count, Is.EqualTo(cityCardinality - 1));
+        Assert.That(city.NpcPresence.Contains(actor.RuntimeId), Is.False);
+        Assert.That(RuntimeIdAllocatorCensusProvider.CreateEventCounterProvider(
+            composition.RuntimeIdAllocator).GetCurrentCensus().Revision, Is.EqualTo(eventRevision + 1L));
+        Assert.That(new SimulationRecordSequenceCensusProvider(
+            composition.RecordSequence).GetCurrentCensus().Revision, Is.EqualTo(sequenceRevision + 1L));
+        Assert.That(protocol.RefreshedSections, Is.EquivalentTo(
+            new[] { moneyId, planId, cityId, eventsId, sequenceId }));
+        Assert.That(state.MutationEpochState.CurrentEpoch, Is.EqualTo(1L),
+            "The selected Core travel start publishes one epoch for its complete changed section union.");
+        Assert.That(protocol.Faulted, Is.False);
+    }
+
+    [TestCase("money")]
+    [TestCase("travel-plan")]
+    [TestCase("city-presence")]
+    [TestCase("event-counter")]
+    [TestCase("record-sequence")]
+    public void CoreRejectsUnreceiptedSelectedTravelStartOwnerDrift(string ownerKind)
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        DailyV1CityRuntimeOwners city = graph.Cities.Single(candidate =>
+            string.Equals(candidate.RuntimeId, actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal));
+        Assert.That(actor.TravelPlan.TryCommit(
+            "location/solo-plan-target", "city/solo-plan-target", NpcTravelReason.Trade,
+            1f, 1f, "decision/solo-plan"), Is.True);
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        string sectionId = ownerKind switch
+        {
+            "money" => DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + actor.RuntimeId,
+            "travel-plan" => DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId),
+            "city-presence" => DailyV1SelectedOwnerSectionCensusContract
+                .CityImportantNpcSectionIdFor(city.RuntimeId),
+            "event-counter" => RuntimeIdAllocatorCensusProvider.EventsSectionId,
+            "record-sequence" => SimulationRecordSequenceCensusProvider.SectionId,
+            _ => throw new ArgumentOutOfRangeException(nameof(ownerKind))
+        };
+        TestProtocol protocol = new TestProtocol();
+        IDisposable scope = null;
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out scope), Is.True);
+            switch (ownerKind)
+            {
+                case "money": Assert.That(actor.MoneyAccount.TryCredit(0.25f), Is.True); break;
+                case "travel-plan": Assert.That(actor.TravelPlan.TryCommit(
+                    null, null, NpcTravelReason.None, 0f, 0f, null), Is.True); break;
+                case "city-presence": Assert.That(city.NpcPresence.TryRemove(actor.RuntimeId), Is.True); break;
+                case "event-counter": composition.RuntimeIdAllocator.AllocateEventId(); break;
+                case "record-sequence": composition.RecordSequence.Allocate(); break;
+            }
+
+            Assert.That(state.TryCanCommitSelectedP12SoloTravelStartMutation(
+                new[] { sectionId }, out bool handled), Is.False);
+            Assert.That(handled, Is.True);
+            Assert.That(protocol.Faulted, Is.True);
+        }
+        finally
+        {
+            scope?.Dispose();
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+    }
+
+    [TestCase("money")]
+    [TestCase("travel-plan")]
+    [TestCase("event-counter")]
+    [TestCase("record-sequence")]
+    public void CoreRejectsMultiRevisionSelectedTravelStartReceipts(string ownerKind)
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        Assert.That(actor.TravelPlan.TryCommit(
+            "location/solo-plan-target", "city/solo-plan-target", NpcTravelReason.Trade,
+            1f, 1f, "decision/solo-plan"), Is.True);
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        string sectionId = ownerKind switch
+        {
+            "money" => DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix + actor.RuntimeId,
+            "travel-plan" => DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(
+                DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind, actor.RuntimeId),
+            "event-counter" => RuntimeIdAllocatorCensusProvider.EventsSectionId,
+            "record-sequence" => SimulationRecordSequenceCensusProvider.SectionId,
+            _ => throw new ArgumentOutOfRangeException(nameof(ownerKind))
+        };
+        TestProtocol protocol = new TestProtocol();
+        IDisposable scope = null;
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out scope), Is.True);
+            switch (ownerKind)
+            {
+                case "money":
+                    Assert.That(actor.MoneyAccount.TryCredit(0.25f), Is.True);
+                    Assert.That(actor.MoneyAccount.TryCredit(0.25f), Is.True);
+                    break;
+                case "travel-plan":
+                    Assert.That(actor.TravelPlan.TryCommit(
+                        null, null, NpcTravelReason.None, 0f, 0f, null), Is.True);
+                    Assert.That(actor.TravelPlan.TryCommit(
+                        "location/solo-plan-target-2", "city/solo-plan-target-2",
+                        NpcTravelReason.Trade, 1f, 1f, "decision/solo-plan-2"), Is.True);
+                    break;
+                case "event-counter":
+                    composition.RuntimeIdAllocator.AllocateEventId();
+                    composition.RuntimeIdAllocator.AllocateEventId();
+                    break;
+                case "record-sequence":
+                    composition.RecordSequence.Allocate();
+                    composition.RecordSequence.Allocate();
+                    break;
+            }
+
+            Assert.That(state.TryRecordSelectedP12SoloTravelStartMutation(
+                new[] { sectionId }, out bool handled), Is.False);
+            Assert.That(handled, Is.True);
+            Assert.That(protocol.Faulted, Is.True);
+        }
+        finally
+        {
+            scope?.Dispose();
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+    }
+
+    [Test]
+    public void CoreRejectsPartialOrMultiRevisionSpatialKnowledgeReceipts()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        TestProtocol protocol = new TestProtocol();
+        string locationsSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + actor.RuntimeId;
+        string routesSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + actor.RuntimeId;
+        IDisposable scope = null;
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out scope), Is.True);
+            Assert.That(actor.SpatialKnowledge.DiscoverLocation(
+                "solo-travel-receipt-first"), Is.True);
+            Assert.That(state.TryRecordSelectedP12SoloTravelStartMutation(
+                new[] { locationsSection }, out bool partialHandled), Is.False);
+            Assert.That(partialHandled, Is.True);
+            Assert.That(protocol.Faulted, Is.True);
+        }
+        finally
+        {
+            scope?.Dispose();
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+
+        composition = Compose();
+        state = composition.ExecutionBoundaryState;
+        graph = composition.OwnerGraph;
+        actor = graph.Npcs[0];
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out sectionIds), Is.True);
+        RegisterAndSealRequiredSections(state, sectionIds);
+        protocol = new TestProtocol();
+        locationsSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeLocationsPrefix + actor.RuntimeId;
+        routesSection =
+            DailyV1SelectedOwnerSectionCensusContract.NpcSpatialKnowledgeRoutesPrefix + actor.RuntimeId;
+        scope = null;
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, sectionIds, protocol, out scope), Is.True);
+            Assert.That(actor.SpatialKnowledge.DiscoverLocation(
+                "solo-travel-receipt-second-a"), Is.True);
+            Assert.That(actor.SpatialKnowledge.DiscoverLocation(
+                "solo-travel-receipt-second-b"), Is.True);
+            Assert.That(state.TryRecordSelectedP12SoloTravelStartMutation(
+                new[] { locationsSection, routesSection }, out bool batchedHandled), Is.False);
+            Assert.That(batchedHandled, Is.True);
+            Assert.That(protocol.Faulted, Is.True);
+        }
+        finally
+        {
+            scope?.Dispose();
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+    }
+
+    [Test]
+    public void CoreFaultsSoloTravelStartWhenHostSectionSetDiffersFromExactOwnerCut()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        List<string> incorrect = sectionIds.ToList();
+        incorrect[0] = "p12f.npc-travel-state/foreign-runtime";
+        TestProtocol protocol = new TestProtocol();
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, incorrect, protocol, out IDisposable scope), Is.False);
+            Assert.That(scope, Is.Null);
+            Assert.That(protocol.EnterCalls, Is.Zero);
+            Assert.That(protocol.Faulted, Is.True);
+        }
+        finally
+        {
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+    }
+
+    [Test]
+    public void CoreFaultsSoloTravelStartWhenHostSectionSetContainsAnExtraOwner()
+    {
+        DailyV1GenesisComposition composition = Compose();
+        DailyV1ExecutionBoundaryState state = composition.ExecutionBoundaryState;
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        DailyV1NpcRuntimeOwners actor = graph.Npcs[0];
+        Assert.That(state.TryCreateSelectedP12SoloTravelStartSectionIds(
+            graph, actor, out IReadOnlyList<string> sectionIds), Is.True);
+        string[] withExtraOwner = sectionIds
+            .Concat(new[] { "p12f.npc-travel-state/foreign-runtime" })
+            .ToArray();
+        TestProtocol protocol = new TestProtocol();
+
+        Assert.That(state.TryBeginOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        try
+        {
+            Assert.That(state.TryBeginSelectedP12SoloTravelStart(
+                graph, actor, withExtraOwner, protocol, out IDisposable scope), Is.False);
+            Assert.That(scope, Is.Null);
+            Assert.That(protocol.EnterCalls, Is.Zero);
+            Assert.That(protocol.Faulted, Is.True);
+        }
+        finally
+        {
+            Assert.That(state.TryEndOperation(DailyV1OperationScopeKind.DailyAdvance), Is.True);
+        }
+    }
+
+    private static bool TryFindPartyStartFixture(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out SpatialRouteRuntime selectedRoute,
+        out DailyV1CityRuntimeOwners originCity,
+        out List<DailyV1NpcRuntimeOwners> members)
+    {
+        selectedRoute = null;
+        originCity = null;
+        members = null;
+        foreach (SpatialRouteRuntime route in graph.SpatialNetwork.Routes)
+        {
+            if (!graph.SpatialNetwork.TryGetSingleDirectRoute(route.Origin,
+                    route.Destination, out SpatialRouteRuntime uniqueRoute, out _)
+                || !ReferenceEquals(route, uniqueRoute)
+                || !graph.TryGetUniqueCityOwnerForLocation(route.Origin.RuntimeId,
+                    out DailyV1CityRuntimeOwners city)
+                || city == null
+                || !graph.TryGetMerchantTradeTravelCost(route, out float cost))
+                continue;
+
+            List<DailyV1NpcRuntimeOwners> atOrigin = graph.Npcs
+                .Where(member => city.NpcPresence.Contains(member.RuntimeId)
+                    && member.Lifecycle?.LifeState == NpcLifeState.Alive
+                    && !member.Travel.IsTraveling
+                    && string.IsNullOrWhiteSpace(member.Travel.ActiveTravelPartyId)
+                    && string.Equals(member.Travel.CurrentLocationRuntimeId,
+                        route.Origin.RuntimeId, StringComparison.Ordinal)
+                    && string.Equals(member.Travel.CurrentCityRuntimeId,
+                        city.RuntimeId, StringComparison.Ordinal)
+                    && member.Travel.CanAdvanceRevision(4)
+                    && member.MoneyAccount.CanDebit(cost)
+                    && (graph.Expeditions == null
+                        || !graph.Expeditions.IsNpcOnActiveExpedition(member.RuntimeId)))
+                .Take(2).ToList();
+            if (atOrigin.Count != 2) continue;
+
+            selectedRoute = route;
+            originCity = city;
+            members = atOrigin;
+            return true;
+        }
+        return false;
+    }
+    private static bool TryCreateSoloTravelPreflightPlan(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        out DailyV1NpcRuntimeOwners actor,
+        out DailyV1SelectedTravelTransitionPlan plan,
+        out SpatialRouteRuntime route,
+        out float travelCost)
+    {
+        actor = null;
+        plan = null;
+        route = null;
+        travelCost = -1f;
+        if (graph?.SpatialNetwork == null) return false;
+
+        foreach (DailyV1NpcRuntimeOwners candidateActor in graph.Npcs)
+        {
+            if (candidateActor?.Lifecycle?.LifeState != NpcLifeState.Alive
+                || candidateActor.Travel == null || candidateActor.Travel.IsTraveling
+                || string.IsNullOrWhiteSpace(candidateActor.Travel.CurrentLocationRuntimeId)
+                || !string.IsNullOrWhiteSpace(candidateActor.Travel.ActiveTravelPartyId)
+                || graph.IsManagedByTravelParty(candidateActor, graph.TravelParties)
+                || !graph.TryGetUniqueCityOwnerForLocation(
+                    candidateActor.Travel.CurrentLocationRuntimeId,
+                    out DailyV1CityRuntimeOwners originCity)
+                || !string.Equals(originCity.RuntimeId,
+                    candidateActor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal))
+                continue;
+
+            foreach (SpatialRouteRuntime candidateRoute in graph.SpatialNetwork.Routes)
+            {
+                if (candidateRoute?.Origin == null || candidateRoute.Destination == null
+                    || candidateRoute.TravelDays <= 0
+                    || !string.Equals(candidateRoute.Origin.RuntimeId,
+                        candidateActor.Travel.CurrentLocationRuntimeId, StringComparison.Ordinal)
+                    || !graph.TryGetUniqueCityOwnerForLocation(
+                        candidateRoute.Destination.RuntimeId,
+                        out DailyV1CityRuntimeOwners destinationCity)
+                    || ReferenceEquals(originCity, destinationCity)
+                    || !graph.TryPlanSelectedSoloTravel(candidateActor,
+                        candidateRoute.Origin.RuntimeId, candidateRoute.Destination.RuntimeId,
+                        destinationCity.RuntimeId,
+                        out SpatialRouteRuntime exactRoute, out float exactCost)
+                    || !ReferenceEquals(exactRoute, candidateRoute)
+                    || !candidateActor.MoneyAccount.CanDebit(exactCost)
+                    || !DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+                        candidateActor, originCity, candidateRoute.Origin.RuntimeId,
+                        candidateRoute.Destination.RuntimeId, destinationCity,
+                        candidateRoute.TravelDays, "decision/core-preflight-test",
+                        candidateRoute.RuntimeId,
+                        out DailyV1SelectedTravelTransitionPlan prepared))
+                    continue;
+
+                actor = candidateActor;
+                plan = prepared;
+                route = candidateRoute;
+                travelCost = exactCost;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static DailyV1GenesisComposition Compose()
+    {
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1GenesisComposer.TryComposeSelectedOwners(
+            definitions,
+            SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
+            out DailyV1GenesisComposition composition,
+            out string diagnostic), Is.True, diagnostic);
+        return composition;
+    }
+
+    private static void RegisterAndSealRequiredSections(
+        DailyV1ExecutionBoundaryState state,
+        IReadOnlyList<string> sectionIds)
+    {
+        foreach (string sectionId in sectionIds)
+            Assert.That(state.TryRegisterExpectedOwnerSectionContract(
+                sectionId, 1, OwnerSectionRole.Required), Is.True, sectionId);
+        Assert.That(state.TrySealExpectedOwnerSectionContractInventory(), Is.True);
+    }
+
+    private sealed class TestProtocol :
+        IDailyV1SelectedP12SoloTravelStartProtocol,
+        IDailyV1SelectedP12SoloTravelStartCensusPort,
+        IDailyV1SelectedP12TravelPartyStartProtocol
+    {
+        private sealed class Scope : IDisposable
+        {
+            private readonly TestProtocol owner;
+            internal Scope(TestProtocol owner) => this.owner = owner;
+            public void Dispose() => owner.ScopeDisposed = true;
+        }
+
+        internal int ValidationCalls;
+        internal int EnterCalls;
+        internal int RefreshCalls;
+        internal bool Faulted;
+        internal bool ScopeDisposed;
+        internal Action DuringNextValidation;
+        internal IReadOnlyList<string> ValidatedSections;
+        internal IReadOnlyCollection<string> RefreshedSections;
+
+        public bool TryBeginOperation(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            out IDisposable operationScope)
+        {
+            operationScope = null;
+            return false;
+        }
+
+        public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds)
+        {
+            ValidationCalls++;
+            ValidatedSections = sectionIds?.ToArray();
+            Action callback = DuringNextValidation;
+            DuringNextValidation = null;
+            callback?.Invoke();
+            return sectionIds != null;
+        }
+
+        public bool TryEnterOperation(out IDisposable operationScope)
+        {
+            EnterCalls++;
+            operationScope = new Scope(this);
+            return true;
+        }
+
+        public bool TryRefreshCommittedMutationBaselines(IReadOnlyCollection<string> sectionIds)
+        {
+            RefreshCalls++;
+            RefreshedSections = sectionIds?.ToArray();
+            return sectionIds != null;
+        }
+
+        public void FaultClosed() => Faulted = true;
+    }
+
+    private sealed class RecordingSoloTravelProjectionBoundary :
+        DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionProjectionBoundary
+    {
+        internal int LegacyDomainPreflightCalls { get; private set; }
+        internal int ProjectionPreflightCalls { get; private set; }
+
+        public bool CanStartTradeReposition() => true;
+        public void LogTradeReposition() { }
+
+        public bool CanCommitPreparedTransition(
+            DailyV1SelectedTravelTransitionPlan plan,
+            SpatialRouteRuntime route,
+            float travelCost)
+        {
+            LegacyDomainPreflightCalls++;
+            return true;
+        }
+
+        public bool CanPreflightProjectionCommit(DailyV1SelectedTravelTransitionPlan plan)
+        {
+            ProjectionPreflightCalls++;
+            return true;
+        }
+
+        public bool TryPrepareTransitionProjection(DailyV1SelectedTravelTransitionPlan plan) => true;
+        public bool CanAdmitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan) => true;
+        public void PublishCommittedTransition(DailyV1SelectedTravelTransitionPlan plan) { }
+        public void PublishTravelStarted(
+            DailyV1SelectedActionExecutionStage.SoloTravelResult result) { }
+        public void LogCommercialScouting() { }
+        public bool CanProjectTravelPlanClear(DailyV1NpcRuntimeOwners actor) => true;
+        public bool CanAdmitTravelPlanClear(DailyV1NpcRuntimeOwners actor) => true;
+        public void PublishCommittedTravelPlanClear(DailyV1NpcRuntimeOwners actor) { }
+    }
+}

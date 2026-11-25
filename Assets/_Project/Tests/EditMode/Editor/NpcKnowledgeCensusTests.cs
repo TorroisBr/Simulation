@@ -34,6 +34,65 @@ public sealed class NpcKnowledgeCensusTests
     }
 
     [Test]
+    public void SelectedDailyV1LocalTopologySectionsShareCoreEmptyOwnerAndRejectProjectionDrift()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition definition = definitions.Npcs.Values.First();
+        NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+            "selected-empty-local-topology", definition, definitions, (CityRuntime)null, 0f);
+        DailyV1NpcLocalTopologyKnowledgeEmptyOwner owner =
+            npc.SelectedRuntimeOwners.LocalTopologyKnowledgeEmptyOwner;
+        IReadOnlyList<IOwnerSectionCensusProvider> providers =
+            NpcKnowledgeCensusProvider.CreateProviders(new[] { npc });
+
+        OwnerSectionCensusWitness places = providers[1].GetCurrentCensus();
+        OwnerSectionCensusWitness connections = providers[2].GetCurrentCensus();
+        Assert.That(places.OwnerInstanceIdentity, Is.SameAs(owner));
+        Assert.That(connections.OwnerInstanceIdentity, Is.SameAs(owner));
+        Assert.That(places.Cardinality, Is.Zero);
+        Assert.That(connections.Cardinality, Is.Zero);
+        Assert.That(places.Revision, Is.Zero);
+        Assert.That(connections.Revision, Is.Zero);
+        Assert.That(ReferenceEquals(places.OwnerInstanceIdentity, connections.OwnerInstanceIdentity), Is.True);
+
+        Assert.That(npc.LocalTopologyKnowledge.RecordPlaceObservation(Place(
+            "unsupported-place", 1, "Unsupported")), Is.True);
+        Assert.Throws<InvalidOperationException>(() => providers[1].GetCurrentCensus());
+        Assert.Throws<InvalidOperationException>(() =>
+            NpcKnowledgeCensusProvider.CreateProviders(new[] { npc }));
+    }
+
+    [Test]
+    public void SelectedDailyV1CommercialKnowledgeSectionsUseExactCoreOwnerIdentity()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1NpcDefinition definition = definitions.Npcs.Values.First();
+        NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+            "selected-commercial-knowledge-census", definition, definitions, (CityRuntime)null, 0f);
+        DailyV1CommercialKnowledgeOwner owner = npc.SelectedRuntimeOwners.CommercialKnowledge;
+
+        IReadOnlyList<IOwnerSectionCensusProvider> providers =
+            NpcKnowledgeCensusProvider.CreateProviders(new[] { npc });
+        OwnerSectionCensusWitness[] witnesses = providers.Skip(7)
+            .Select(provider => provider.GetCurrentCensus())
+            .ToArray();
+
+        Assert.That(witnesses.Select(witness => witness.SectionId), Is.EqualTo(new[]
+        {
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialMarketsPrefix + npc.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialLiquidityPrefix + npc.RuntimeId,
+            DailyV1SelectedOwnerSectionCensusContract.NpcCommercialShareReceiptsPrefix + npc.RuntimeId
+        }));
+        Assert.That(witnesses.All(witness =>
+            ReferenceEquals(witness.OwnerInstanceIdentity, owner)), Is.True,
+            "The selected census binds to the same Core CommercialKnowledge owner used by P12 and P18-D.");
+        Assert.That(witnesses.Select(witness => witness.Cardinality), Is.EqualTo(new[] { 0, 0, 0 }));
+        Assert.That(witnesses.Select(witness => witness.Revision), Is.EqualTo(new[] { 0L, 0L, 0L }));
+        Assert.That(witnesses.Select(witness => witness.SchemaVersion),
+            Is.All.EqualTo(DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion));
+    }
+
+    [Test]
     public void SimulationRuntimeReconcilesKnowledgeFamilyThroughNpcMembershipOperations()
     {
         SimulationRuntime runtime = new SimulationRuntime(
@@ -355,7 +414,7 @@ public sealed class NpcKnowledgeCensusTests
         RuntimeIdentityRegistry registry = new RuntimeIdentityRegistry();
         SpatialLocationRuntime location = new SpatialLocationRuntime("fanout-location");
         ExplorableSiteRuntime site = new ExplorableSiteRuntime(
-            "fanout-site", SimulationTestFactory.CreateExplorableSite("fanout-site-def"), location);
+            "fanout-site", SimulationTestFactory.CreateExplorableSiteDefinition("fanout-site-def"), location);
         Assert.That(registry.RegisterExplorableSite(site), Is.True);
         NpcRuntime npc = new NpcRuntime("fanout-npc", SimulationTestFactory.CreateNpc("fanout-npc-def"));
         npc.SetCurrentPresence(location);

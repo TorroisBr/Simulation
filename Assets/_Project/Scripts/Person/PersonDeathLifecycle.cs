@@ -551,7 +551,7 @@ public static class PersonDeathLifecycleSystem
         }
         else
         {
-            if (!transition.ExpectedPerson.RecordDeathAfterValidation(transition.DeathAbsoluteDay))
+            if (!PersonRuntimeOwnerBridge.RecordDeathAfterValidation(transition.ExpectedPerson, transition.DeathAbsoluteDay))
             {
                 failure = PersonDeathLifecycleFailure.RuntimeFaulted;
                 return false;
@@ -565,7 +565,7 @@ public static class PersonDeathLifecycleSystem
             }
             if (residentPopulation != null)
             {
-                if (!transition.ExpectedPerson.TrySetResidenceSettlementRuntimeId(null))
+                if (!PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(transition.ExpectedPerson, null))
                 {
                     failure = PersonDeathLifecycleFailure.RuntimeFaulted;
                     return false;

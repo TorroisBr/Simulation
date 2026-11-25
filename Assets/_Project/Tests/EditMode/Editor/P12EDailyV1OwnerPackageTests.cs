@@ -325,21 +325,74 @@ public sealed class P12EDailyV1OwnerPackageTests
         NpcStatusData wantedStatus = SimulationTestFactory.CreateStatus(prefix + "-wanted");
         NpcStatusData arrestedStatus = SimulationTestFactory.CreateStatus(prefix + "-arrested");
         NpcStatusData hiddenStatus = SimulationTestFactory.CreateStatus(prefix + "-hidden");
-        SimulationLogger logger = new SimulationLogger(null);
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(null);
         JusticeSystem justice = new JusticeSystem(
             freeStatus, wantedStatus, arrestedStatus, hiddenStatus, null, logger);
         ExplorableSiteStore sites = new ExplorableSiteStore();
-        SpatialAuthorityStore authority = CreateSpatialAuthority(prefix);
+        SimulationTime time = new SimulationTime();
+        RecordFixture records = SimulationTestFactory.CreateRecordFixtureWithTime(time);
+        EconomyTransactionService economyTransactions = new EconomyTransactionService();
+        TravelSystem travel = new TravelSystem(
+            network,
+            location => cities.FirstOrDefault(city => ReferenceEquals(city.Location, location)),
+            1f,
+            records.EventRecorder,
+            null,
+            economyTransactions);
+        CrimeSystem crime = new CrimeSystem(
+            justice,
+            travel,
+            null,
+            logger,
+            economyTransactions,
+            new EffectiveCrimeConfiguration(false, false),
+            simulationTime: time);
+        TravelPartyStore travelParties = new TravelPartyStore();
+        TravelPartySystem travelPartySystem = new TravelPartySystem(
+            travelParties,
+            records.Allocator,
+            identities,
+            travel,
+            time,
+            records.Sequence,
+            records.EventRecorder,
+            transactionService: economyTransactions);
+        ExplorableSiteKnowledgeSystem siteKnowledge = new ExplorableSiteKnowledgeSystem();
+        ExpeditionStore expeditions = new ExpeditionStore();
+        ExpeditionSystem expeditionSystem = new ExpeditionSystem(
+            expeditions,
+            records.Allocator,
+            identities,
+            sites,
+            travelPartySystem,
+            travelParties,
+            siteKnowledge,
+            time,
+            records.EventRecorder);
+        ScheduledDirectiveSystem directives = new ScheduledDirectiveSystem(
+            new ScheduledDirectiveStore(time), identities);
+        SpatialAuthorityStore authority = CreateSpatialAuthority(prefix, cities);
         SimulationRuntime runtime = new SimulationRuntime(
-            new SimulationTime(), cities, npcs,
+            time, cities, npcs,
             economyEnabled: false,
+            decisionRecorder: records.DecisionRecorder,
+            runtimeIdAllocator: records.Allocator,
+            recordSequence: records.Sequence,
             justiceSystem: justice,
+            crimeSystem: crime,
             logger: logger,
             explorableSiteStore: sites,
+            explorableSiteKnowledgeSystem: siteKnowledge,
+            travelSystem: travel,
+            travelPartySystem: travelPartySystem,
+            expeditionSystem: expeditionSystem,
             spatialAuthorityStore: authority,
+            scheduledDirectiveSystem: directives,
             runtimeAdmissionContext: SimulationRuntimeAdmissionContext.CaptureUnityBootstrapDailyV1(),
             runtimeIdentityRegistry: identities,
             spatialNetworkRuntime: network,
+            economyTransactionService: economyTransactions,
+            requireP12ReceiptCensusOwners: true,
             requireP12RuntimeIdentitySpatialCensusOwners: true,
             worldId: new WorldId(Guid.NewGuid()));
 
@@ -394,7 +447,7 @@ public sealed class P12EDailyV1OwnerPackageTests
                 Array.Empty<ItemData>(),
                 fixture.Npcs.Select(npc => npc.NpcData).ToArray(),
                 Array.Empty<NpcActionData>(), Array.Empty<NpcStatusData>(),
-                Array.Empty<ExplorableSiteData>(), Array.Empty<string>(),
+                Array.Empty<DailyV1ExplorableSiteDefinition>(), Array.Empty<string>(),
                 out P12DDailyV1OwnerPackage stagedD, out _))
             return false;
 
@@ -406,16 +459,20 @@ public sealed class P12EDailyV1OwnerPackageTests
         return true;
     }
 
-    private static SpatialAuthorityStore CreateSpatialAuthority(string prefix)
+    private static SpatialAuthorityStore CreateSpatialAuthority(string prefix, IReadOnlyList<CityRuntime> cities)
     {
+        if (cities == null || cities.Count == 0)
+            throw new ArgumentException("The selected P12-E profile requires its City locations.", nameof(cities));
+        HexId hexId = new HexId(prefix + "-hex");
         SpatialGeographyDefinition geography = new SpatialGeographyDefinition(
             new SpatialWorldScaleContext(prefix + "-scale", "fixture", "v1", 1m, "step"),
             new[]
             {
-                new HexRecord(new HexId(prefix + "-hex"), new HexCoordinate(0, 0),
+                new HexRecord(hexId, new HexCoordinate(0, 0),
                     new TerrainReference(new TerrainDefinitionId("terrain." + prefix), "v1"))
             },
-            new[] { new LocationRecord(new LocationId(prefix + "-p8-location"), new HexId(prefix + "-hex")) });
+            cities.Take(1).Select(city => new LocationRecord(
+                new LocationId(city.Location.RuntimeId), hexId)).ToArray());
         SpatialAuthorityStore authority = new SpatialAuthorityStore();
         if (!authority.TryComposeGeography(geography, out SpatialAuthorityFailure failure))
             throw new InvalidOperationException("Could not create the P12-E P8 fixture: " + failure);

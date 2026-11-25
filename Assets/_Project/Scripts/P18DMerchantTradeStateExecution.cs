@@ -229,7 +229,8 @@ public partial class MerchantSystem
         }
 
         if (!workflow.Actor.MerchantTradeStateRuntime.TryResolve(
-                workflow.OperationIdentity, workflow.WorkflowFingerprint, out receipt)) return false;
+                workflow.Actor, workflow.OperationIdentity,
+                workflow.WorkflowFingerprint, out receipt)) return false;
         failure = TimelineFailure.None;
         return true;
     }

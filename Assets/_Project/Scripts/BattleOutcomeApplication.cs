@@ -262,7 +262,7 @@ public sealed class BattleOutcomeApplicationService
                 battlePrepareFailure.ToString());
 
         if (!world.ContingentManpowerStateStore.TryPrepareBattleBatch(
-                plan,
+                ContingentManpowerBattleBatchInputAdapter.Create(plan),
                 out PreparedBattleManpowerBatch manpowerBatch,
                 out ContingentManpowerFailure manpowerFailure))
             return Reject(
@@ -711,4 +711,92 @@ public sealed class BattleOutcomeApplicationService
                 : BattleOutcomeApplicationStatus.Rejected,
             null,
             new BattleOutcomeApplicationFailure(code, message));
+}
+
+/// <summary>
+/// Projects the Unity-hosted Battle planner's completed result into the
+/// mutation-only input accepted by the Core-owned manpower authority.
+/// This adapter copies values only; it does not resolve or apply consequences.
+/// </summary>
+internal static class ContingentManpowerBattleBatchInputAdapter
+{
+    internal static ContingentManpowerBattleBatchInput Create(BattleDirectConsequencePlan plan)
+    {
+        if (plan == null) return null;
+
+        string battleId = plan.BattleId == null ? null : plan.BattleId.Value;
+        return new ContingentManpowerBattleBatchInput(
+            battleId,
+            plan.IsComplete,
+            CopyPartitions(plan.Partitions),
+            CopySourceGroups(plan.SourceGroups),
+            CopyProjections(plan.ContingentProjections));
+    }
+
+    private static IReadOnlyList<ContingentManpowerBattlePartitionInput> CopyPartitions(
+        IReadOnlyList<BattleCohortConsequencePartition> source)
+    {
+        if (source == null) return null;
+        List<ContingentManpowerBattlePartitionInput> copy = new List<ContingentManpowerBattlePartitionInput>(source.Count);
+        foreach (BattleCohortConsequencePartition partition in source)
+            copy.Add(partition == null
+                ? null
+                : new ContingentManpowerBattlePartitionInput(
+                    partition.InputIdentity?.ContingentId,
+                    partition.DeathAmount));
+        return copy;
+    }
+
+    private static IReadOnlyList<ContingentManpowerBattleSourceGroupInput> CopySourceGroups(
+        IReadOnlyList<BattleDirectConsequenceSourceGroup> source)
+    {
+        if (source == null) return null;
+        List<ContingentManpowerBattleSourceGroupInput> copy = new List<ContingentManpowerBattleSourceGroupInput>(source.Count);
+        foreach (BattleDirectConsequenceSourceGroup group in source)
+        {
+            ManpowerSourceEffect effect = group?.Proposal?.Effect;
+            copy.Add(group == null
+                ? null
+                : new ContingentManpowerBattleSourceGroupInput(
+                    group.SourceId,
+                    group.DeathAmount,
+                    effect != null,
+                    group.Proposal?.SourceId,
+                    effect != null && effect.Kind == ManpowerSourceEffectKind.Death,
+                    effect == null ? 0L : effect.Amount,
+                    CopyTraces(group.Traces)));
+        }
+        return copy;
+    }
+
+    private static IReadOnlyList<ContingentManpowerBattleTraceInput> CopyTraces(
+        IReadOnlyList<BattleDirectConsequenceDeathTrace> source)
+    {
+        if (source == null) return null;
+        List<ContingentManpowerBattleTraceInput> copy = new List<ContingentManpowerBattleTraceInput>(source.Count);
+        foreach (BattleDirectConsequenceDeathTrace trace in source)
+            copy.Add(trace == null
+                ? null
+                : new ContingentManpowerBattleTraceInput(
+                    trace.CohortIdentity?.ContingentId,
+                    trace.DeathAmount));
+        return copy;
+    }
+
+    private static IReadOnlyList<ContingentManpowerBattleProjectionInput> CopyProjections(
+        IReadOnlyList<BattleDirectConsequenceContingentProjection> source)
+    {
+        if (source == null) return null;
+        List<ContingentManpowerBattleProjectionInput> copy = new List<ContingentManpowerBattleProjectionInput>(source.Count);
+        foreach (BattleDirectConsequenceContingentProjection projection in source)
+            copy.Add(projection == null
+                ? null
+                : new ContingentManpowerBattleProjectionInput(
+                    projection.ContingentId,
+                    projection.SourceId,
+                    projection.Cohorts,
+                    projection.LivingRosterAmount,
+                    projection.AvailableAmount));
+        return copy;
+    }
 }

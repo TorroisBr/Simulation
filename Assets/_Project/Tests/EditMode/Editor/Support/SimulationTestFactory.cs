@@ -8,6 +8,53 @@ public static class SimulationTestFactory
     private static readonly List<UnityEngine.Object> createdDefinitions = new List<UnityEngine.Object>();
     private static int nextTestJobDefinitionId;
 
+    public static ScheduledDirectiveSystem CreateEmptyScheduledDirectiveSystem(
+        SimulationTime simulationTime,
+        IEnumerable<NpcRuntime> npcs)
+    {
+        if (simulationTime == null) throw new ArgumentNullException(nameof(simulationTime));
+        RuntimeIdentityRegistry identities = new RuntimeIdentityRegistry();
+        if (npcs != null)
+        {
+            foreach (NpcRuntime npc in npcs)
+            {
+                if (npc == null || !identities.RegisterNpc(npc))
+                    throw new InvalidOperationException("The empty scheduled-directive fixture requires unique registered NPC identities.");
+            }
+        }
+
+        return new ScheduledDirectiveSystem(new ScheduledDirectiveStore(simulationTime), identities);
+    }
+
+    public static long ReadContinuationMutationEpoch(ContinuationCensusProtocol protocol)
+    {
+        object state = GetContinuationMutationEpochState(protocol);
+        FieldInfo epochField = state.GetType().GetField("epoch", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (epochField == null || epochField.FieldType != typeof(long))
+            throw new InvalidOperationException("The Core mutation-epoch state no longer exposes the expected test boundary.");
+        return (long)epochField.GetValue(state);
+    }
+
+    public static void SetContinuationMutationEpoch(ContinuationCensusProtocol protocol, long epoch)
+    {
+        object state = GetContinuationMutationEpochState(protocol);
+        FieldInfo epochField = state.GetType().GetField("epoch", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (epochField == null || epochField.FieldType != typeof(long))
+            throw new InvalidOperationException("The Core mutation-epoch state no longer exposes the expected test boundary.");
+        epochField.SetValue(state, epoch);
+    }
+
+    private static object GetContinuationMutationEpochState(ContinuationCensusProtocol protocol)
+    {
+        if (protocol == null) throw new ArgumentNullException(nameof(protocol));
+        FieldInfo stateField = typeof(ContinuationCensusProtocol).GetField(
+            "mutationEpochState", BindingFlags.Instance | BindingFlags.NonPublic);
+        object state = stateField?.GetValue(protocol);
+        if (state == null)
+            throw new InvalidOperationException("ContinuationCensusProtocol has no Core mutation-epoch state.");
+        return state;
+    }
+
     public static ItemData CreateItem(string id, float basePrice = 10f)
     {
         ItemData item = Track(ScriptableObject.CreateInstance<ItemData>());
@@ -107,20 +154,38 @@ public static class SimulationTestFactory
         return site;
     }
 
+    public static DailyV1ExplorableSiteDefinition CreateExplorableSiteDefinition(
+        string id,
+        ExplorableSiteKind kind = ExplorableSiteKind.Generic,
+        string siteName = null)
+    {
+        string displayName = siteName ?? id + " display";
+        DailyV1ExplorableSiteData values = new DailyV1ExplorableSiteData(
+            id, displayName, new DailyV1EnumValue((int)kind, kind.ToString()));
+        ConstructorInfo constructor = typeof(DailyV1ExplorableSiteDefinition).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            null,
+            new[] { typeof(string), typeof(string), typeof(DailyV1ExplorableSiteData) },
+            null);
+        if (constructor == null)
+            throw new InvalidOperationException("DailyV1ExplorableSiteDefinition must retain its internal graph-node constructor.");
+        return (DailyV1ExplorableSiteDefinition)constructor.Invoke(new object[] { "ExplorableSiteData", id, values });
+    }
+
     public static LocalPlaceTypeData CreateLocalPlaceType(string id, string displayName = null)
     {
-        LocalPlaceTypeData type = Track(ScriptableObject.CreateInstance<LocalPlaceTypeData>());
-        type.id = id;
-        type.displayName = displayName ?? id + " display";
-        return type;
+        LocalPlaceTypeData value = Track(ScriptableObject.CreateInstance<LocalPlaceTypeData>());
+        value.id = id;
+        value.displayName = displayName ?? id + " display";
+        return value;
     }
 
     public static LocalConnectionTypeData CreateLocalConnectionType(string id, string displayName = null)
     {
-        LocalConnectionTypeData type = Track(ScriptableObject.CreateInstance<LocalConnectionTypeData>());
-        type.id = id;
-        type.displayName = displayName ?? id + " display";
-        return type;
+        LocalConnectionTypeData value = Track(ScriptableObject.CreateInstance<LocalConnectionTypeData>());
+        value.id = id;
+        value.displayName = displayName ?? id + " display";
+        return value;
     }
 
     public static SimulationConfigData CreateSimulationConfig()
@@ -250,24 +315,36 @@ public static class SimulationTestFactory
         return network;
     }
 
-    public static RecordFixture CreateRecordFixture(long absoluteDay = 0L)
+    public static RecordFixture CreateRecordFixture(
+        long absoluteDay = 0L,
+        SimulationLogger logger = null)
     {
+        return CreateRecordFixtureWithTime(new SimulationTime(absoluteDay), logger);
+    }
+
+    public static RecordFixture CreateRecordFixtureWithTime(
+        SimulationTime time,
+        SimulationLogger logger = null)
+    {
+        if (time == null) throw new ArgumentNullException(nameof(time));
         RuntimeIdAllocator allocator = new RuntimeIdAllocator();
-        SimulationTime time = new SimulationTime(absoluteDay);
         SimulationRecordSequence sequence = new SimulationRecordSequence();
-        NpcDecisionStore decisions = new NpcDecisionStore();
+        NpcDecisionStore decisions = new NpcDecisionStore(logger);
         NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(
             allocator,
             time,
             sequence,
-            decisions);
+            decisions,
+            logger);
         HistoryStore history = new HistoryStore();
-        DomainEventStore events = new DomainEventStore(history, new HistoryPolicy());
+        SimulationLogger eventLogger = logger ?? UnitySimulationLoggerAdapter.Create(null);
+        DomainEventStore events = new DomainEventStore(history, new HistoryPolicy(), eventLogger);
         DomainEventRecorder eventRecorder = new DomainEventRecorder(
             allocator,
             time,
             sequence,
-            events);
+            events,
+            eventLogger);
 
         return new RecordFixture(
             allocator,

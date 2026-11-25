@@ -94,6 +94,24 @@ public sealed class P12CPrivateRootCompositionTests
     }
 
     [Test]
+    public void RestoreStageNameMappingRejectsUndefinedNumericValues()
+    {
+        Assert.That(P12CContinuationRootStager.TryMapRestoreStageName(
+            nameof(P12GDailyV1RestoreStage.CSpatialAuthorityStaged),
+            out P12GDailyV1RestoreStage knownStage), Is.True);
+        Assert.That(knownStage, Is.EqualTo(P12GDailyV1RestoreStage.CSpatialAuthorityStaged));
+
+        Assert.That(P12CContinuationRootStager.TryMapRestoreStageName(
+            "999", out P12GDailyV1RestoreStage undefinedNumericStage), Is.False);
+        Assert.That(undefinedNumericStage, Is.EqualTo(default(P12GDailyV1RestoreStage)));
+
+        Assert.That(P12CContinuationRootStager.TryMapRestoreStageName(
+            "cSpatialAuthorityStaged", out _), Is.False);
+        Assert.That(P12CContinuationRootStager.TryMapRestoreStageName(
+            "NotAStage", out _), Is.False);
+    }
+
+    [Test]
     public void CoherentDailyV1OwnerSnapshotsStageTogetherWithoutLiveBootstrapOrAssetAccess()
     {
         Assert.That(manifestSnapshot.TryStageManifest(out SimulationGenesisManifest independentlyStagedManifest,
@@ -222,10 +240,13 @@ public sealed class P12CPrivateRootCompositionTests
             out P12CStagedContinuationRoot stagedC,
             out string cDiagnostic), Is.True, cDiagnostic);
 
-        RuntimeIdentityRegistry sourceIdentities = FindOwnerSection(
-            captureToken.OwnerSections, RuntimeIdentityRegistryCensusProvider.NpcsSectionId)
-            .OwnerInstanceIdentity as RuntimeIdentityRegistry;
+        RuntimeIdentityRegistry sourceIdentities = (RuntimeIdentityRegistry)typeof(SimulationRuntime)
+            .GetField("p12RuntimeIdentityRegistry", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(sourceRuntime);
         Assert.That(sourceIdentities, Is.Not.Null);
+        Assert.That(FindOwnerSection(
+            captureToken.OwnerSections, RuntimeIdentityRegistryCensusProvider.NpcsSectionId)
+            .OwnerInstanceIdentity, Is.SameAs(sourceIdentities.CoreIdentityIndex));
         List<ItemData> itemDefinitions = CollectCurrentItemDefinitions(sourceRuntime);
         List<CityData> cityDefinitions = new List<CityData>();
         foreach (CityRuntime city in sourceRuntime.Cities)
@@ -249,7 +270,7 @@ public sealed class P12CPrivateRootCompositionTests
             npcDefinitions,
             config.Actions,
             config.Statuses,
-            Array.Empty<ExplorableSiteData>(),
+            Array.Empty<DailyV1ExplorableSiteDefinition>(),
             capturedF.TravelPartyIds,
             out P12DDailyV1OwnerPackage stagedD,
             out P12DDailyV1OwnerPackageFailure dFailure), Is.True, dFailure.ToString());
@@ -266,7 +287,7 @@ public sealed class P12CPrivateRootCompositionTests
             config.arrestedStatus,
             config.hiddenStatus,
             null,
-            new SimulationLogger(null));
+            UnitySimulationLoggerAdapter.Create(null));
         Assert.That(P12EDailyV1OwnerPackage.TryCaptureAndStage(
             sourceRuntime,
             captureToken,
@@ -282,7 +303,7 @@ public sealed class P12CPrivateRootCompositionTests
             captureToken.OwnerSections,
             eContext,
             stagedE,
-            config.Actions,
+            sourceBootstrap.SelectedDefinitions,
             out P12FDailyV1OwnerPackage stagedF,
             out P12FDailyV1OwnerPackageFailure fFailure), Is.True, fFailure.ToString());
         Assert.That(stagedF, Is.Not.Null);
@@ -1291,7 +1312,8 @@ public sealed class P12CPrivateRootCompositionTests
 
     private static Type InnerType(string name)
     {
-        Type type = typeof(SimulationBootstrapComposition).Assembly.GetType(name);
+        Type type = typeof(P12CP9GenesisManifestCoreSnapshot).Assembly.GetType(name, false)
+            ?? typeof(SimulationBootstrapComposition).Assembly.GetType(name, false);
         Assert.That(type, Is.Not.Null, "Missing production type " + name);
         return type;
     }

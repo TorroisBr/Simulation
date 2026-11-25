@@ -326,16 +326,16 @@ public sealed class P12EFactionOwnerSnapshotTests
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken token,
             out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
         FactionStore owner = FindFactionOwner(token.OwnerSections);
-        Assert.That(P12EFactionOwnerSnapshot.TryCapture(runtime, owner, token, token.OwnerSections,
+        Assert.That(P12EFactionCaptureAdapter.TryCapture(runtime, owner, token, token.OwnerSections,
             out P12EFactionOwnerSnapshot snapshot, out P12EFactionSnapshotFailure captureFailure), Is.True, captureFailure.Message);
         Assert.That(snapshot.Factions.RecordCount, Is.Zero);
         Assert.That(snapshot.Affiliations.RecordCount, Is.Zero);
         Assert.That(snapshot.Factions.Revision, Is.EqualTo(snapshot.Affiliations.Revision));
 
-        Assert.That(P12EFactionOwnerSnapshot.TryCapture(runtime, owner, token,
+        Assert.That(P12EFactionCaptureAdapter.TryCapture(runtime, owner, token,
             new List<OwnerSectionCensusSnapshot>(token.OwnerSections), out _, out P12EFactionSnapshotFailure staleVector), Is.False);
         Assert.That(staleVector.Code, Is.EqualTo(P12EFactionSnapshotFailureCode.InvalidCaptureContext));
-        Assert.That(P12EFactionOwnerSnapshot.TryCapture(runtime, new FactionStore(new PersonStore()), token,
+        Assert.That(P12EFactionCaptureAdapter.TryCapture(runtime, new FactionStore(new PersonStore()), token,
             token.OwnerSections, out _, out P12EFactionSnapshotFailure wrongOwner), Is.False);
         Assert.That(wrongOwner.Code, Is.EqualTo(P12EFactionSnapshotFailureCode.InvalidOwnerSectionVector));
 
@@ -344,12 +344,12 @@ public sealed class P12EFactionOwnerSnapshotTests
             new OwnerSectionCensusSnapshot(factionWitness.SectionId, factionWitness.SchemaVersion,
                 factionWitness.Role, new object(), factionWitness.Cardinality, factionWitness.Revision));
         DailyCaptureEligibilityToken wrongWitnessToken = CopyToken(token, wrongWitnessVector);
-        Assert.That(P12EFactionOwnerSnapshot.TryCapture(runtime, owner, wrongWitnessToken, wrongWitnessVector,
+        Assert.That(P12EFactionCaptureAdapter.TryCapture(runtime, owner, wrongWitnessToken, wrongWitnessVector,
             out _, out P12EFactionSnapshotFailure wrongWitness), Is.False);
         Assert.That(wrongWitness.Code, Is.EqualTo(P12EFactionSnapshotFailureCode.InvalidOwnerSectionVector));
 
         Assert.That(runtime.TryRegisterFaction(new FactionRecord(new FactionId("changed-after-token"), "Late", runtime.CurrentDay), out _), Is.True);
-        Assert.That(P12EFactionOwnerSnapshot.TryCapture(runtime, owner, token, token.OwnerSections,
+        Assert.That(P12EFactionCaptureAdapter.TryCapture(runtime, owner, token, token.OwnerSections,
             out P12EFactionOwnerSnapshot staleSnapshot, out P12EFactionSnapshotFailure staleFailure), Is.False);
         Assert.That(staleSnapshot, Is.Null);
         Assert.That(staleFailure.Code, Is.EqualTo(P12EFactionSnapshotFailureCode.InvalidOwnerSectionVector));

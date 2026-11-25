@@ -52,8 +52,8 @@ try {
     if ($LASTEXITCODE -ne 0 -or $beforeStatus.Count -ne 0) { throw 'Lab validation requires the exact committed candidate in a clean worktree.' }
     $commit = (& git -C $root rev-parse HEAD).Trim()
     $tree = (& git -C $root rev-parse 'HEAD^{tree}').Trim()
-    $beforeInputs = @(Get-CoreInputSnapshot -ProjectRoot $root)
     $project = 'tools/Simulation.Lab/Simulation.Lab.csproj'
+    $beforeInputs = @(Get-CoreInputSnapshot -ProjectRoot $root -ProjectPaths @($project))
     $assetsPath = Join-Path $root 'tools/Simulation.Lab/obj/project.assets.json'
 
     $sdk = Invoke-LabDotnet -Name 'sdk-version' -Arguments @('--version')
@@ -95,7 +95,7 @@ try {
     if ([long]$assetsAfter.Length -ne [long]$assetsIdentity.bytes -or $assetsAfterHash -cne $assetsIdentity.sha256) {
         throw 'Generated Lab restore inputs changed after the locked restore.'
     }
-    $afterInputs = @(Get-CoreInputSnapshot -ProjectRoot $root)
+    $afterInputs = @(Get-CoreInputSnapshot -ProjectRoot $root -ProjectPaths @($project))
     $inputComparison = Compare-CoreInputSnapshots -Before $beforeInputs -After $afterInputs
     if (-not $inputComparison.stable) { throw "Source inputs changed during Lab validation: $($inputComparison.changedPaths -join ', ')" }
     $afterStatus = @(& git -C $root status --porcelain=v1)

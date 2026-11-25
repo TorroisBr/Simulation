@@ -4,9 +4,9 @@ using System.Collections.Generic;
 /// <summary>Exact per-rostered-NPC witnesses for embedded daily plan owners.</summary>
 public static class NpcPlanCensusProvider
 {
-    public const string MerchantTradePlanSectionPrefix = "p12b.merchant-trade-plan/";
-    public const string TravelPlanSectionPrefix = "p12b.npc-travel-plan/";
-    public const int SchemaVersion = 1;
+    public const string MerchantTradePlanSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradePlanPrefix;
+    public const string TravelPlanSectionPrefix = DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanPrefix;
+    public const int SchemaVersion = DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion;
 
     public const int MerchantTradePlanKind = 0;
     public const int TravelPlanKind = 1;
@@ -42,8 +42,12 @@ public static class NpcPlanCensusProvider
         public OwnerSectionCensusWitness GetCurrentCensus()
         {
             long revision = kind == MerchantTradePlanKind
-                ? ((MerchantTradePlanRuntime)planOwner).Revision
-                : ((NpcTravelPlanRuntime)planOwner).Revision;
+                ? planOwner is DailyV1NpcMerchantTradePlanOwner selectedPlan
+                    ? selectedPlan.Revision
+                    : ((MerchantTradePlanRuntime)planOwner).Revision
+                : planOwner is DailyV1NpcTravelPlanOwner selectedTravelPlan
+                    ? selectedTravelPlan.Revision
+                    : ((NpcTravelPlanRuntime)planOwner).Revision;
             return new OwnerSectionCensusWitness(sectionId, SchemaVersion, planOwner, 1, revision);
         }
     }
@@ -52,10 +56,7 @@ public static class NpcPlanCensusProvider
     {
         if (kind != MerchantTradePlanKind && kind != TravelPlanKind)
             throw new ArgumentOutOfRangeException(nameof(kind));
-        string prefix = kind == MerchantTradePlanKind
-            ? MerchantTradePlanSectionPrefix
-            : TravelPlanSectionPrefix;
-        return prefix + runtimeId;
+        return DailyV1SelectedOwnerSectionCensusContract.NpcPlanSectionIdFor(kind, runtimeId);
     }
 
     /// <summary>
@@ -78,12 +79,14 @@ public static class NpcPlanCensusProvider
                     "NPC plan census requires non-null roster actors with unique RuntimeIds.");
             }
 
-            MerchantTradePlanRuntime merchantPlan = npc.ExistingMerchantTradePlan;
-            NpcTravelPlanRuntime travelPlan = npc.ExistingTravelPlan;
-            if (merchantPlan == null || travelPlan == null)
+            object merchantPlan = npc.MerchantTradePlanAuthority;
+            NpcTravelPlanRuntime travelPlanProjection = npc.ExistingTravelPlan;
+            DailyV1NpcRuntimeOwners selectedOwners = npc.SelectedRuntimeOwners;
+            object travelPlanOwner = selectedOwners?.TravelPlan ?? (object)travelPlanProjection;
+            if (merchantPlan == null || travelPlanProjection == null || travelPlanOwner == null)
             {
                 throw new InvalidOperationException(
-                    "NPC plan census requires both embedded plan owners to be installed.");
+                    "NPC plan census requires both installed plan authorities and the travel-plan projection.");
             }
 
             ordered.Add(npc);
@@ -97,12 +100,12 @@ public static class NpcPlanCensusProvider
         {
             providers[index++] = new SectionProvider(
                 npc,
-                npc.ExistingMerchantTradePlan,
+                npc.MerchantTradePlanAuthority,
                 MerchantTradePlanKind,
                 SectionIdFor(MerchantTradePlanKind, npc.RuntimeId));
             providers[index++] = new SectionProvider(
                 npc,
-                npc.ExistingTravelPlan,
+                npc.SelectedRuntimeOwners?.TravelPlan ?? (object)npc.ExistingTravelPlan,
                 TravelPlanKind,
                 SectionIdFor(TravelPlanKind, npc.RuntimeId));
         }

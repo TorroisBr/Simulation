@@ -1,28 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-internal sealed class SimulationSessionReportState
-{
-    public long LastEconomySnapshotDay { get; private set; }
-
-    public SimulationSessionReportState(long lastEconomySnapshotDay)
-    {
-        LastEconomySnapshotDay = lastEconomySnapshotDay;
-    }
-
-    public void MarkEconomySnapshotDay(long day)
-    {
-        LastEconomySnapshotDay = day;
-    }
-}
-
 /// <summary>Immutable reference set for the currently published TesteSimulacao session.</summary>
-internal sealed class SimulationActiveSession
+internal sealed class SimulationActiveSession : IDailyV1ApplicationHostProjection
 {
     private readonly Dictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation;
 
@@ -36,7 +22,17 @@ internal sealed class SimulationActiveSession
     public SimulationConfigData Configuration { get; }
     public SimulationRuntimeAdmissionContext AdmissionContext { get; }
     public IAuthoritativeRandomSource RandomSource { get; }
-    public SimulationSessionReportState ReportState { get; }
+    public DailyV1SessionReportState ReportState { get; }
+    /// <summary>
+    /// Exact Core-owned selected runtime/session binding. Unity references in
+    /// this object are host projections; selected operation scopes resolve to
+    /// the Core execution boundary retained here.
+    /// </summary>
+    internal DailyV1ActiveRuntimeSession CoreRuntimeSession { get; }
+    DailyV1ActiveRuntimeSession IDailyV1ApplicationHostProjection.CoreRuntimeSession =>
+        CoreRuntimeSession;
+    internal DailyV1ExecutionBoundaryState ExecutionBoundaryState =>
+        CoreRuntimeSession?.ExecutionBoundaryState ?? Runtime.ExecutionBoundaryState;
 
     public SimulationActiveSession(
         SimulationBootstrapComposition composition,
@@ -48,7 +44,8 @@ internal sealed class SimulationActiveSession
         SimulationConfigData configuration,
         SimulationRuntimeAdmissionContext admissionContext,
         IAuthoritativeRandomSource randomSource,
-        SimulationSessionReportState reportState)
+        long lastEconomySnapshotDay,
+        DailyV1ActiveRuntimeSession coreRuntimeSession = null)
     {
         Composition = composition ?? throw new System.ArgumentNullException(nameof(composition));
         Logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
@@ -56,9 +53,40 @@ internal sealed class SimulationActiveSession
         IdentityRegistry = identityRegistry ?? throw new System.ArgumentNullException(nameof(identityRegistry));
         SpatialNetwork = spatialNetwork ?? throw new System.ArgumentNullException(nameof(spatialNetwork));
         Configuration = configuration;
-        AdmissionContext = admissionContext;
         RandomSource = randomSource ?? throw new System.ArgumentNullException(nameof(randomSource));
-        ReportState = reportState ?? throw new System.ArgumentNullException(nameof(reportState));
+        DailyV1ExecutionBoundaryState executionBoundaryState = Runtime.ExecutionBoundaryState;
+        if (coreRuntimeSession != null)
+        {
+            if (!executionBoundaryState.HasAdmittedSelectedDailyExecution
+                || !ReferenceEquals(coreRuntimeSession.ExecutionBoundaryState, executionBoundaryState)
+                || !ReferenceEquals(coreRuntimeSession.Definitions, Composition.SelectedDefinitions))
+                throw new System.ArgumentException(
+                    "The Unity session projection must retain the exact Core-prepared genesis session.",
+                    nameof(coreRuntimeSession));
+            CoreRuntimeSession = coreRuntimeSession;
+        }
+        else if (executionBoundaryState.HasAdmittedSelectedDailyExecution)
+        {
+            throw new System.ArgumentException(
+                "A selected Daily-v1 Unity projection must receive an explicit Core active-runtime session.",
+                nameof(coreRuntimeSession));
+        }
+        // Compatibility bootstrap paths may use selected definitions for
+        // fingerprinting while deliberately running without selected Daily-v1
+        // admission. They retain their existing host session behavior; only a
+        // fully admitted selected runtime receives the Core active-session binding.
+
+        ReportState = CoreRuntimeSession?.ReportState
+            ?? new DailyV1SessionReportState(lastEconomySnapshotDay);
+
+        AdmissionContext = CoreRuntimeSession?.AdmissionContext ?? admissionContext;
+
+        if (CoreRuntimeSession != null
+            && (!ReferenceEquals(CoreRuntimeSession.EventAuthority.EventStore, Composition.DomainEventStore)
+                || !ReferenceEquals(CoreRuntimeSession.EventAuthority.History, Composition.History)))
+            throw new System.ArgumentException(
+                "The Unity projection must retain the exact Core-owned event/history read model.",
+                nameof(coreRuntimeSession));
 
         if (!ReferenceEquals(Composition.SpatialNetwork, SpatialNetwork)
             || !ReferenceEquals(Composition.ExplorableSites, ExplorableSites)
@@ -91,6 +119,18 @@ internal sealed class SimulationActiveSession
         return cityRuntimeByLocation.TryGetValue(location, out city);
     }
 
+    public bool TryCreateSelectedTravelPartyStartHostOperation(
+        DailyV1SelectedTravelPartyStartPlan plan,
+        out IDailyV1SelectedTravelPartyStartHostOperation operation)
+    {
+        operation = null;
+        return CoreRuntimeSession != null
+            && plan != null
+            && ReferenceEquals(plan.Graph, CoreRuntimeSession.OwnerGraph)
+            && Composition.GroupTravel != null
+            && Composition.GroupTravel.TryCreateSelectedCoreTravelPartyStartHostOperation(
+                plan, out operation);
+    }
     public bool IsProfileCompatibleWith(SimulationActiveSession candidate)
     {
         return candidate != null
@@ -100,7 +140,10 @@ internal sealed class SimulationActiveSession
             && AdmissionContext != null
             && candidate.AdmissionContext != null
             && AdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
-            && candidate.AdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
+            && candidate.AdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            && (CoreRuntimeSession == null
+                ? candidate.CoreRuntimeSession == null
+                : CoreRuntimeSession.IsProfileCompatibleWith(candidate.CoreRuntimeSession));
     }
 }
 
@@ -122,7 +165,7 @@ public class TesteSimulacao : MonoBehaviour
     private readonly List<INpcActionProvider> actionProviders = new List<INpcActionProvider>();
     private Dictionary<CityData, List<CityRuntime>> cityRuntimesByDefinition = new Dictionary<CityData, List<CityRuntime>>();
     private Dictionary<NpcData, List<NpcRuntime>> npcRuntimesByDefinition = new Dictionary<NpcData, List<NpcRuntime>>();
-    private Dictionary<ExplorableSiteData, List<ExplorableSiteRuntime>> explorableSiteRuntimesByDefinition = new Dictionary<ExplorableSiteData, List<ExplorableSiteRuntime>>();
+    private Dictionary<string, List<ExplorableSiteRuntime>> explorableSiteRuntimesByDefinition = new Dictionary<string, List<ExplorableSiteRuntime>>(System.StringComparer.Ordinal);
     private ExplorableSiteKnowledgeSystem explorableSiteKnowledgeSystem;
     private ExpeditionStore expeditionStore;
     private Dictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation = new Dictionary<SpatialLocationRuntime, CityRuntime>();
@@ -157,15 +200,29 @@ public class TesteSimulacao : MonoBehaviour
     private CalendarDefinition calendarDefinition = CalendarDefinition.CreateDefault();
     private EffectiveSimulationConfiguration effectiveConfiguration;
     private IAuthoritativeRandomSource authoritativeRandomSource;
+    [System.NonSerialized] private DailyV1DefinitionAdapter.SelectedBindings selectedDefinitionBindings;
     private System.Func<WorldId> worldIdentityAllocator = CreateWorldIdentity;
     private WorldId unpublishedWorldId;
     private long lastEconomySnapshotDay;
     private SimulationBootstrapComposition draftComposition;
-    private SimulationActiveSession activeSession;
-    private readonly object activeSessionGate = new object();
-    private int activeSessionOperationCount;
-    private Thread bootstrapStartThread;
-    private int bootstrapStartThreadId;
+    private DailyV1EffectiveDefinitions selectedDefinitions;
+    [System.NonSerialized] private DailyV1SelectedRuntimeOwnerGraphBuilder selectedRuntimeOwnerGraphBuilder;
+    [System.NonSerialized] private DailyV1SelectedRuntimeOwnerGraph selectedInitialRuntimeOwnerGraph;
+    private bool UsesSelectedDefinitionBindings => selectedDefinitions != null && selectedDefinitionBindings != null;
+    // The selected runtime session reference is Core-owned. Unity wrappers are
+    // projections keyed by that exact session and are never the selected
+    // publication authority. The separate compatibility gate is used only for
+    // legacy, unadmitted bootstrap sessions; both paths are mutually exclusive.
+    private readonly DailyV1Application dailyV1Application = new DailyV1Application();
+    private DailyV1ApplicationStartAdmission dailyV1StartAdmission;
+    private DailyV1ApplicationStartPreparation dailyV1InitialStartPreparation;
+    private DailyV1ApplicationHost dailyV1InitialStartHost;
+    private bool buildInitialStartHostProjection;
+    private SimulationActiveSession pendingInitialStartHostProjection;
+    private readonly DailyV1ApplicationSessionGate<SimulationActiveSession> compatibilitySessionGate =
+        new DailyV1ApplicationSessionGate<SimulationActiveSession>(
+            session => session.ExecutionBoundaryState);
+    private SimulationActiveSession activeSession => CaptureActiveSession();
     private SimulationRuntimeAdmissionContext runtimeAdmissionContext;
     private SimulationOperationScope bootstrapPublicationScope;
     private bool bootstrapStartAttempted;
@@ -259,12 +316,13 @@ public class TesteSimulacao : MonoBehaviour
         if (runtimeAdmissionProfile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
         {
             bootstrapStartAttempted = true;
-            bootstrapStartThread = Thread.CurrentThread;
-            bootstrapStartThreadId = bootstrapStartThread.ManagedThreadId;
-            runtimeAdmissionContext = new SimulationRuntimeAdmissionContext(
-                runtimeAdmissionProfile,
-                bootstrapStartThread,
-                bootstrapStartThreadId);
+            if (!dailyV1Application.TryCaptureBootstrapAdmissionContext(
+                    out runtimeAdmissionContext))
+            {
+                bootstrapFailed = true;
+                throw new System.InvalidOperationException(
+                    "The Core Daily-v1 application could not capture its one-time bootstrap admission context.");
+            }
         }
 
         if (runtimeAdmissionProfile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
@@ -275,39 +333,163 @@ public class TesteSimulacao : MonoBehaviour
     }
 
     private bool TryLoadSavedDailyV1BeforeGenesis()
-        => TryLoadSavedDailyV1BeforeGenesis(UnityEngine.Application.persistentDataPath);
+        => TryLoadSavedDailyV1BeforeGenesis(
+            UnityEngine.Application.persistentDataPath,
+            SystemAtomicFileSlotOperations.Instance,
+            executeInitialStartTransaction: true);
 
     internal bool TryLoadSavedDailyV1ContinuationFromPathForTest(string persistentDataPath)
         => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath);
 
     internal bool TryLoadSavedDailyV1ContinuationFromPathForTest(string persistentDataPath,
-        IP12AContinuationFileOperations fileOperations)
+        IAtomicFileSlotOperations fileOperations)
         => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath, fileOperations);
 
+    internal bool TryLoadSavedDailyV1ContinuationFromPathForTest(string persistentDataPath,
+        IAtomicFileSlotOperations fileOperations,
+        bool executeInitialStartTransaction)
+        => TryLoadSavedDailyV1BeforeGenesis(
+            persistentDataPath, fileOperations, executeInitialStartTransaction);
+
     private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath)
-        => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath, P12AContinuationFileOperations.Instance);
+        => TryLoadSavedDailyV1BeforeGenesis(persistentDataPath, SystemAtomicFileSlotOperations.Instance);
 
     private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath,
-        IP12AContinuationFileOperations fileOperations)
-    {
-        if (!P12AContinuationStore.TryHasSlot(persistentDataPath, fileOperations, out bool exists, out _))
-        {
-            bootstrapFailed = true;
-            UnityEngine.Debug.LogError("P12-A continuation slot inspection failed; genesis was not started.");
-            return true;
-        }
-        if (!exists) return false;
+        IAtomicFileSlotOperations fileOperations)
+        => TryLoadSavedDailyV1BeforeGenesis(
+            persistentDataPath, fileOperations, executeInitialStartTransaction: false);
 
+    private bool TryLoadSavedDailyV1BeforeGenesis(string persistentDataPath,
+        IAtomicFileSlotOperations fileOperations,
+        bool executeInitialStartTransaction)
+    {
         if (!TryCreateCurrentDailyV1CompatibilityDescriptor(
-                out P12ACompatibilityDescriptor compatibility, out string compatibilityDiagnostic))
+                out P12ACompatibilityDescriptor compatibility,
+                out EffectiveSimulationConfiguration effective,
+                out CalendarDefinition calendar,
+                out DailyV1EffectiveDefinitions currentDefinitions,
+                out DailyV1DefinitionAdapter.SelectedBindings currentBindings,
+                out string compatibilityDiagnostic))
         {
+            bool inspected = dailyV1Application.TryInspectInitialContinuationSlotForStart(
+                persistentDataPath, fileOperations, out bool exists, out P12AResult slotResult);
+            if (inspected && !exists && slotResult?.Code == P12AResultCode.NoSave)
+            {
+                if (dailyV1Application.TryCreateInitialStartAdmissionFromNoSave(
+                        out dailyV1StartAdmission, out string fallbackAdmissionDiagnostic))
+                    return false;
+
+                bootstrapFailed = true;
+                UnityEngine.Debug.LogError("P12-A empty-slot admission could not be bound to the active Core application. "
+                    + fallbackAdmissionDiagnostic);
+                return true;
+            }
+
             bootstrapFailed = true;
-            UnityEngine.Debug.LogError("P12-A continuation is present but the current host profile cannot prove compatibility; genesis was not started. "
-                + compatibilityDiagnostic);
+            if (!inspected)
+            {
+                UnityEngine.Debug.LogError("P12-A continuation slot inspection failed; genesis was not started. "
+                    + (slotResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString()));
+            }
+            else
+            {
+                UnityEngine.Debug.LogError("P12-A current host profile cannot prove continuation compatibility; genesis was not started. "
+                    + (exists
+                        ? P12AResultCode.IncompatibleContentOrConfiguration.ToString()
+                        : (slotResult?.Code ?? P12AResultCode.StorageFailure).ToString())
+                    + " " + compatibilityDiagnostic);
+            }
             return true;
         }
-        if (!P12AContinuationStore.TryLoad(null, compatibility, persistentDataPath,
-                out P12AContinuationImage image, out P12AResult loadResult))
+
+        DailyV1ApplicationHost host = new DailyV1ApplicationHost(
+            persistentDataPath, fileOperations, stageCompleted: null,
+            logOutput: UnitySimulationLoggerAdapter.Write,
+            unityV1Identity: compatibility);
+
+        if (executeInitialStartTransaction)
+        {
+            bool started = dailyV1Application.TryStartOnExistingApplication(
+                currentDefinitions, host,
+                (DailyV1ApplicationStartPreparation preparation,
+                    out IDailyV1ApplicationHostProjection candidateProjection,
+                    out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+                    out string hostDiagnostic) => TryBuildInitialStartHostProjection(
+                        preparation, host, compatibility, effective, calendar,
+                        currentDefinitions, currentBindings,
+                        out candidateProjection,
+                        out candidateHostPorts, out hostDiagnostic),
+                out DailyV1ApplicationStartPreparation completedPreparation,
+                out P12AResult startResult,
+                out string startDiagnostic);
+            if (!started
+                || completedPreparation == null
+                || !ReferenceEquals(completedPreparation.Application, dailyV1Application)
+                || dailyV1Application.ActiveSession == null
+                || !dailyV1Application.TryGetPublishedHostProjection(
+                    dailyV1Application.ActiveSession,
+                    out IDailyV1ApplicationHostProjection publishedProjection)
+                || !(publishedProjection is SimulationActiveSession publishedSession)
+                || !ReferenceEquals(publishedSession.CoreRuntimeSession,
+                    dailyV1Application.ActiveSession))
+            {
+                bootstrapFailed = true;
+                pendingInitialStartHostProjection = null;
+                dailyV1InitialStartPreparation = null;
+                dailyV1InitialStartHost = null;
+                dailyV1StartAdmission = null;
+                UnityEngine.Debug.LogError("P12-A Core initial-start transaction failed before publishing its exact host session. "
+                    + (startResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString())
+                    + (string.IsNullOrWhiteSpace(startDiagnostic) ? string.Empty : ": " + startDiagnostic));
+                return true;
+            }
+
+            dailyV1InitialStartPreparation = null;
+            dailyV1InitialStartHost = null;
+            pendingInitialStartHostProjection = null;
+            ReleaseBootstrapAliases();
+            return true;
+        }
+
+        DailyV1ApplicationStartAdmission admission = null;
+        DailyV1ApplicationStartPreparation preparation = null;
+        P12AResult loadResult = null;
+        string admissionDiagnostic = null;
+        bool admitted = dailyV1Application.TryAdmitInitialStart(
+            currentDefinitions, host,
+            out admission, out loadResult, out admissionDiagnostic);
+
+        if (!admitted || admission == null)
+        {
+            bootstrapFailed = true;
+            if (executeInitialStartTransaction)
+            {
+                UnityEngine.Debug.LogError("P12-A initial start preparation failed; genesis was not started. "
+                    + (loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString())
+                    + (string.IsNullOrWhiteSpace(admissionDiagnostic) ? string.Empty : ": " + admissionDiagnostic));
+            }
+            else
+            {
+                UnityEngine.Debug.LogError("P12-A continuation load failed; genesis was not started. "
+                    + (loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString()));
+            }
+            return true;
+        }
+
+        dailyV1StartAdmission = admission;
+        selectedDefinitions = currentDefinitions;
+        selectedDefinitionBindings = currentBindings;
+        effectiveConfiguration = effective;
+        calendarDefinition = calendar;
+
+        if (admission.Kind == DailyV1ApplicationStartAdmissionKind.GenesisRequired)
+        {
+            dailyV1InitialStartHost = host;
+            return false;
+        }
+
+        if (admission.Kind != DailyV1ApplicationStartAdmissionKind.RestoreRequired
+            || admission.RestoreImage == null)
         {
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A continuation load failed; genesis was not started. "
@@ -315,44 +497,350 @@ public class TesteSimulacao : MonoBehaviour
             return true;
         }
 
-        EffectiveSimulationConfiguration effective;
-        CalendarDefinition calendar;
-        try
-        {
-            SimulationGenesisPipeline.ValidateProfile(simulationConfig);
-            ValidateP14SourceAdmission(simulationConfig, runtimeAdmissionContext);
-            effective = ResolveRuntimeConfiguration();
-            calendar = ResolveCalendarDefinition();
-        }
-        catch (Exception exception) when (exception is ArgumentException
-            || exception is InvalidOperationException || exception is OverflowException)
+        if (preparation == null
+            && !dailyV1Application.TryPrepareInitialRestoreStart(
+                admission, currentDefinitions, host,
+                out preparation, out admissionDiagnostic))
         {
             bootstrapFailed = true;
-            UnityEngine.Debug.LogError("P12-A continuation host profile failed validation; genesis was not started. "
-                + exception.Message);
+            UnityEngine.Debug.LogError("P12-A continuation load failed; genesis was not started. "
+                + (loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString()));
             return true;
         }
 
+        dailyV1InitialStartPreparation = preparation;
+        if (preparation.Kind != DailyV1ApplicationStartPreparationKind.RestoreRequired
+            || preparation.RestoreImage == null)
+        {
+            bootstrapFailed = true;
+            UnityEngine.Debug.LogError("P12-A continuation admission returned an invalid restore preparation; genesis was not started.");
+            return true;
+        }
+
+        P12AContinuationImage image = preparation.RestoreImage;
         if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
-                image, compatibility, simulationConfig, effective, calendar,
+                image, compatibility, simulationConfig, effective, calendar, currentDefinitions,
                 runtimeAdmissionContext, out SimulationActiveSession candidate,
-                out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic))
+                out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic,
+                application: dailyV1Application,
+                initialStartAdmission: dailyV1StartAdmission))
         {
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A detached continuation restoration failed; genesis was not started. "
                 + restoreFailure + ": " + restoreDiagnostic);
             return true;
         }
-        if (!TryPublishRestoredSession(null, candidate))
+        if (!TryPublishRestoredSession(
+                null, candidate, null, dailyV1StartAdmission, image))
         {
             bootstrapFailed = true;
             UnityEngine.Debug.LogError("P12-A detached continuation passed private validation but bootstrap publication failed; genesis was not started.");
             return true;
         }
 
+        dailyV1InitialStartPreparation = null;
         ReleaseBootstrapAliases();
-
         return true;
+    }
+
+    private bool TryBuildInitialStartHostProjection(
+        DailyV1ApplicationStartPreparation preparation,
+        DailyV1ApplicationHost host,
+        P12ACompatibilityDescriptor compatibility,
+        EffectiveSimulationConfiguration effective,
+        CalendarDefinition calendar,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings,
+        out IDailyV1ApplicationHostProjection candidateProjection,
+        out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+        out string diagnostic)
+    {
+        candidateProjection = null;
+        candidateHostPorts = null;
+        diagnostic = null;
+        if (preparation == null
+            || !ReferenceEquals(preparation.Application, dailyV1Application)
+            || !ReferenceEquals(preparation.StartAdmission?.Application, dailyV1Application)
+            || !ReferenceEquals(preparation.StartAdmission.PersistenceResult, preparation.PersistenceResult)
+            || host == null || compatibility == null || effective == null
+            || calendar == null || definitions == null || bindings == null)
+        {
+            diagnostic = "The Unity start adapter received an incomplete or foreign Core preparation.";
+            return false;
+        }
+
+        dailyV1StartAdmission = preparation.StartAdmission;
+        dailyV1InitialStartPreparation = preparation;
+        dailyV1InitialStartHost = host;
+        selectedDefinitions = definitions;
+        selectedDefinitionBindings = bindings;
+        effectiveConfiguration = effective;
+        calendarDefinition = calendar;
+        lastEconomySnapshotDay = 0L;
+
+        if (preparation.Kind == DailyV1ApplicationStartPreparationKind.GenesisPrepared)
+        {
+            if (preparation.StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.GenesisRequired
+                || preparation.PersistenceResult?.Code != P12AResultCode.NoSave
+                || preparation.GenesisComposition == null
+                || preparation.CoreSession == null
+                || !ReferenceEquals(preparation.GenesisComposition.Definitions, definitions)
+                || !ReferenceEquals(preparation.CoreSession.Definitions, definitions))
+            {
+                diagnostic = "The NoSave host projection does not match the exact prepared Core genesis.";
+                return false;
+            }
+
+            pendingInitialStartHostProjection = null;
+            if (!TryCreatePreparedCoreGenesisProjection(
+                    preparation, effective, calendar, definitions,
+                    out SimulationActiveSession genesisProjection, out diagnostic)
+                || genesisProjection == null
+                || !ReferenceEquals(genesisProjection.CoreRuntimeSession, preparation.CoreSession)
+                || !ReferenceEquals(genesisProjection.Configuration, simulationConfig)
+                || genesisProjection.Runtime == null)
+            {
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "Unity did not return the projection bound to the exact prepared Core genesis.";
+                return false;
+            }
+
+            candidateProjection = genesisProjection;
+            candidateHostPorts = genesisProjection.Runtime;
+            return true;
+        }
+
+        if (preparation.Kind != DailyV1ApplicationStartPreparationKind.RestoreRequired
+            || preparation.StartAdmission.Kind != DailyV1ApplicationStartAdmissionKind.RestoreRequired
+            || preparation.RestoreImage == null
+            || !ReferenceEquals(preparation.RestoreImage, preparation.StartAdmission.RestoreImage))
+        {
+            diagnostic = "The Core start preparation did not select an exact supported initial restore image.";
+            return false;
+        }
+
+        if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+                preparation.RestoreImage, compatibility, simulationConfig, effective, calendar,
+                definitions, runtimeAdmissionContext,
+                out SimulationActiveSession restoredProjection,
+                out P12GDailyV1RestoreFailure restoreFailure,
+                out string restoreDiagnostic,
+                application: dailyV1Application,
+                initialStartAdmission: preparation.StartAdmission)
+            || restoredProjection?.CoreRuntimeSession == null
+            || restoredProjection.Runtime == null)
+        {
+            diagnostic = "P12-A detached continuation restoration failed: "
+                + restoreFailure + ": " + (restoreDiagnostic ?? string.Empty);
+            return false;
+        }
+
+        candidateProjection = restoredProjection;
+        candidateHostPorts = restoredProjection.Runtime;
+        return true;
+    }
+
+    /// <summary>
+    /// Builds only the Unity-facing adapters for a genesis graph that Core has
+    /// already completed. This path deliberately does not re-enter the genesis
+    /// stage pipeline: it binds the exact Core roots to their Unity projections,
+    /// validates those bindings, and returns the private host projection for
+    /// Core's serialized publication transaction.
+    /// </summary>
+    private bool TryCreatePreparedCoreGenesisProjection(
+        DailyV1ApplicationStartPreparation preparation,
+        EffectiveSimulationConfiguration effective,
+        CalendarDefinition calendar,
+        DailyV1EffectiveDefinitions definitions,
+        out SimulationActiveSession projection,
+        out string diagnostic)
+    {
+        projection = null;
+        diagnostic = null;
+        DailyV1GenesisComposition genesis = preparation?.GenesisComposition;
+        DailyV1ActiveRuntimeSession coreSession = preparation?.CoreSession;
+        Thread initializeThread = Thread.CurrentThread;
+        int initializeThreadId = initializeThread.ManagedThreadId;
+        if (preparation == null
+            || preparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+            || genesis == null || coreSession == null || effective == null
+            || calendar == null || definitions == null
+            || simulationConfig == null
+            || runtimeAdmissionContext == null
+            || runtimeAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !runtimeAdmissionContext.IsOwnedByCurrentThread()
+            || preparation.Logger == null
+            || !ReferenceEquals(genesis.Definitions, definitions)
+            || !ReferenceEquals(coreSession.Definitions, definitions)
+            || !ReferenceEquals(genesis.WorldId, coreSession.WorldId)
+            || !ReferenceEquals(genesis.SimulationTime, coreSession.SimulationTime)
+            || !ReferenceEquals(genesis.Calendar, coreSession.Calendar)
+            || !ReferenceEquals(genesis.EventAuthority, coreSession.EventAuthority)
+            || !ReferenceEquals(genesis.EffectiveConfiguration, effective)
+            || !ReferenceEquals(genesis.ExecutionBoundaryState, coreSession.ExecutionBoundaryState)
+            || !ReferenceEquals(genesis.OwnerGraph, coreSession.OwnerGraph)
+            || !ReferenceEquals(genesis.AdmissionContext, runtimeAdmissionContext)
+            || !ReferenceEquals(effectiveConfiguration, effective)
+            || !ReferenceEquals(calendarDefinition, calendar)
+            || !ReferenceEquals(selectedDefinitions, definitions)
+            || SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig)
+            || P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig))
+        {
+            diagnostic = "The Unity projection requires the exact admitted Core genesis and its supported Daily-v1 inputs.";
+            return false;
+        }
+
+        if (bootstrapFailed || pendingInitialStartHostProjection != null
+            || CaptureActiveSession() != null || draftComposition != null
+            || simulationRuntime != null || bootstrapPublicationScope != null)
+        {
+            diagnostic = "The Core genesis projection cannot replace or reuse an existing Unity runtime projection.";
+            return false;
+        }
+
+        try
+        {
+            logger = preparation.Logger;
+            lastEconomySnapshotDay = 0L;
+            enabledModules = new SimulationModuleSet(definitions.Configuration.enabledModules);
+            AppendScenarioDiagnostics(effective);
+
+            unpublishedWorldId = genesis.WorldId;
+            if (!genesis.ExecutionBoundaryState.TryBindSelectedRuntimeOwnerGraph(genesis.OwnerGraph))
+                throw new System.InvalidOperationException(
+                    "Core Daily-v1 genesis did not retain its exact selected owner graph.");
+            ProjectSelectedCoreGenesis(genesis);
+
+            RebuildSystems(effective, genesis.OwnerGraph.JusticeRecordsOwner);
+            selectedInitialRuntimeOwnerGraph = genesis.OwnerGraph;
+            if (!selectedInitialRuntimeOwnerGraph.TryBindExpeditionStore(expeditionStore))
+                throw new System.InvalidOperationException(
+                    "The Core selected owner graph could not bind the exact empty P10 ExpeditionStore.");
+
+            simulationRuntime = new SimulationRuntime(
+                simulationTime: simulationTime, cities: CityRuntimeList, npcRuntimes: NpcRuntimeList,
+                configuredActions: ConfiguredActions, scheduledDirectiveSystem: scheduledDirectiveSystem,
+                justiceSystem: justiceSystem, crimeSystem: crimeSystem, npcDecisionSystem: npcDecisionSystem,
+                travelSystem: travelSystem, travelPartySystem: travelPartySystem, merchantSystem: merchantSystem,
+                commercialKnowledgeSharingSystem: commercialKnowledgeSharingSystem, decisionRecorder: decisionRecorder,
+                logger: logger, explorableSiteStore: explorableSiteStore,
+                explorableSiteKnowledgeSystem: explorableSiteKnowledgeSystem, expeditionSystem: expeditionSystem,
+                configuration: effectiveConfiguration, randomSource: authoritativeRandomSource,
+                personStore: genesis.PersonStore,
+                politicalKnowledgeStore: genesis.OwnerGraph.PoliticalKnowledgeStore,
+                genealogyStore: genesis.OwnerGraph.GenealogyStore,
+                p12CrimeSocialAppraisalWorldState: selectedInitialRuntimeOwnerGraph.P12EOwners?.CrimeSocialAppraisal,
+                institutionStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Institutions,
+                officeStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Offices,
+                propertyOwnershipStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.PropertyOwnership,
+                estateStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Estates,
+                politicalClaimStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.PoliticalClaims,
+                factionStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Factions,
+                politicalSupportStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.PoliticalSupport,
+                politicalDecisionStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.PoliticalDecisions,
+                armedForceStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.ArmedForces,
+                conflictStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Conflicts,
+                warStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Wars,
+                battleStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Battles,
+                armedForceSpatialStateStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Positions,
+                contingentManpowerStateStore: selectedInitialRuntimeOwnerGraph.P12EOwners?.Manpower,
+                actorChoiceStore: genesis.ActorChoiceStore,
+                calendarDefinition: calendarDefinition,
+                spatialAuthorityStore: genesisSpatialAuthority,
+                localTopologyStore: genesisLocalTopologyStore,
+                legacySpatialAnchorBindingStore: genesis.OwnerGraph.LegacySpatialAnchors,
+                personSpatialPositionStore: genesis.OwnerGraph.PersonSpatialPositionStore,
+                spatialRouteKnowledgeStore: genesis.OwnerGraph.SpatialRouteKnowledgeStore,
+                personRoutePlanStore: genesis.OwnerGraph.PersonRoutePlanStore,
+                runtimeAdmissionContext: runtimeAdmissionContext,
+                recordSequence: recordSequence,
+                worldId: unpublishedWorldId,
+                runtimeIdAllocator: runtimeIdAllocator,
+                economyTransactionService: economyTransactionService,
+                requireP12ReceiptCensusOwners: true,
+                runtimeIdentityRegistry: runtimeIdentityRegistry,
+                spatialNetworkRuntime: spatialNetwork,
+                requireP12RuntimeIdentitySpatialCensusOwners: true,
+                selectedExecutionBoundaryState: genesis.ExecutionBoundaryState,
+                selectedCalendar: genesis.Calendar);
+
+            if (!simulationRuntime.TryAdoptInitialSelectedRuntimeOwnerGraph(selectedInitialRuntimeOwnerGraph))
+                throw new System.InvalidOperationException(
+                    "The constructed runtime did not adopt the exact unpublished selected Core owner graph.");
+            if (!TryProjectInitialSelectedJusticeRows(selectedInitialRuntimeOwnerGraph))
+                throw new System.InvalidOperationException(
+                    "The selected Justice rows could not bind their exact Unity reference projections.");
+            simulationRuntime.BindP12EconomyTransactionService(economyTransactionService);
+            if (!simulationRuntime.TryBeginBootstrapPublicationScope(out bootstrapPublicationScope))
+                throw new System.InvalidOperationException(
+                    "The P12 bootstrap publication scope could not begin after the initial census baseline.");
+            ValidateCandidateProfile();
+
+            npcChronicleFormatter = DailyV1SelectedNpcChronicleFormatter.Create(genesis.OwnerGraph);
+            draftComposition = new SimulationBootstrapComposition(
+                unpublishedWorldId,
+                new SimulationGenesisManifest(
+                    simulationConfig, effectiveConfiguration, calendarDefinition,
+                    genesis.P9ProfileFingerprint, genesis.P9ProfileFingerprint,
+                    genesis.P9ProvenanceRecords,
+                    includeP10RuinLocalTopology: false,
+                    includeP10BGeneratedRuin: false,
+                    selectedDefinitions: definitions),
+                simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
+                historyStore, scheduledDirectiveStore, decisionStore, decisionRecorder,
+                recordSequence, economyTransactionService, npcChronicleService,
+                npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
+                runtimeIdentityRegistry, runtimeIdAllocator, explorableSiteStore,
+                expeditionStore, expeditionSystem, definitions);
+
+            if (draftComposition == null
+                || !ReferenceEquals(Thread.CurrentThread, initializeThread)
+                || Thread.CurrentThread.ManagedThreadId != initializeThreadId
+                || !IsBootstrapStartThreadCurrent())
+                throw new System.InvalidOperationException(
+                    "The Core genesis projection did not finish on its captured bootstrap thread.");
+
+            bootstrapPublicationScope.Dispose();
+            bootstrapPublicationScope = null;
+            if (!simulationRuntime.TryAssessNpcRosterCensus(out ContinuationCensusFailure closeFailure))
+                throw new System.InvalidOperationException(
+                    "The P12 bootstrap publication scope did not close with healthy registered-owner quiescence: "
+                    + closeFailure
+                    + (string.IsNullOrWhiteSpace(simulationRuntime.NpcRosterCensusFirstFaultDetail)
+                        ? string.Empty
+                        : " (" + simulationRuntime.NpcRosterCensusFirstFaultDetail + ")"));
+            if (!simulationRuntime.TryMarkWorldPublishedForFactualRead())
+                throw new System.InvalidOperationException(
+                    "The FR-B factual-read surface could not bind to a healthy completed world publication.");
+
+            projection = new SimulationActiveSession(
+                draftComposition, logger, justiceSystem, runtimeIdentityRegistry, spatialNetwork,
+                cityRuntimeByLocation, simulationConfig, runtimeAdmissionContext,
+                authoritativeRandomSource, lastEconomySnapshotDay, coreSession);
+            unpublishedWorldId = null;
+            draftComposition = null;
+            return true;
+        }
+        catch (System.Exception exception)
+        {
+            bootstrapFailed = true;
+            unpublishedWorldId = null;
+            draftComposition = null;
+            if (runtimeAdmissionContext != null)
+                simulationRuntime?.FaultRuntimeAdmission();
+            projection = null;
+            diagnostic = "Unity could not project the exact Core-prepared genesis: " + exception.Message;
+            return false;
+        }
+        finally
+        {
+            if (bootstrapPublicationScope != null)
+            {
+                simulationRuntime?.FaultRuntimeAdmission();
+                bootstrapPublicationScope.Dispose();
+                bootstrapPublicationScope = null;
+            }
+        }
     }
 
     /// <summary>Saves the current completed Daily-v1 boundary to the single local continuation slot.</summary>
@@ -365,27 +853,76 @@ public class TesteSimulacao : MonoBehaviour
     private bool TrySaveDailyV1ContinuationAtPath(string persistentDataPath, out string resultCode)
     {
         resultCode = P12AResultCode.Busy.ToString();
-        if (!TryBeginActiveSessionOperation(out SimulationActiveSession session))
+        SimulationActiveSession session = CaptureActiveSession();
+        if (session == null) return false;
+        bool saved = TrySaveContinuationForSession(
+            session, persistentDataPath, out P12AResult result);
+        resultCode = result?.Code.ToString() ?? (saved
+            ? P12AResultCode.Saved.ToString()
+            : P12AResultCode.CaptureRejected.ToString());
+        return saved;
+    }
+
+    private bool TrySaveContinuationForSession(
+        SimulationActiveSession expectedSession,
+        string persistentDataPath,
+        out P12AResult result)
+    {
+        result = new P12AResult(P12AResultCode.Busy);
+        if (expectedSession == null) return false;
+
+        DailyV1ActiveRuntimeSession coreSession = expectedSession.CoreRuntimeSession;
+        if (coreSession != null)
+        {
+            if (dailyV1Application == null
+                || !dailyV1Application.TryBeginContinuationSaveOperation(
+                    coreSession,
+                    out DailyV1P12GContinuationSaveOperation continuationSaveOperation,
+                    out _))
+                return false;
+
+            using (continuationSaveOperation)
+            {
+                if (!ReferenceEquals(CaptureActiveSession(), expectedSession)
+                    || !ReferenceEquals(dailyV1Application.ActiveSession, coreSession))
+                {
+                    result = new P12AResult(P12AResultCode.CaptureRejected);
+                    return false;
+                }
+                return TrySaveCompletedDailyV1Boundary(
+                    expectedSession, persistentDataPath, continuationSaveOperation, out result);
+            }
+        }
+
+        if (!TryBeginActiveSessionOperation(
+                expectedSession,
+                DailyV1OperationScopeKind.ContinuationSave,
+                out SimulationActiveSession admittedSession))
             return false;
         try
         {
-            bool saved = TrySaveCompletedDailyV1Boundary(session, persistentDataPath, out P12AResult result);
-            resultCode = result?.Code.ToString() ?? (saved
-                ? P12AResultCode.Saved.ToString()
-                : P12AResultCode.CaptureRejected.ToString());
-            return saved;
+            return TrySaveCompletedDailyV1Boundary(admittedSession, persistentDataPath, out result);
         }
         finally
         {
-            EndActiveSessionOperation();
+            EndActiveSessionOperation(DailyV1OperationScopeKind.ContinuationSave);
         }
     }
+
     private bool TrySaveCompletedDailyV1Boundary(SimulationActiveSession session, out P12AResult result)
-        => TrySaveCompletedDailyV1Boundary(session, UnityEngine.Application.persistentDataPath, out result);
+        => TrySaveCompletedDailyV1Boundary(
+            session, UnityEngine.Application.persistentDataPath, out result);
 
     private bool TrySaveCompletedDailyV1Boundary(
         SimulationActiveSession session,
         string persistentDataPath,
+        out P12AResult result) =>
+        TrySaveCompletedDailyV1Boundary(session, persistentDataPath, null, out result);
+
+    private bool TrySaveCompletedDailyV1Boundary(
+        SimulationActiveSession session,
+        string persistentDataPath,
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation,
         out P12AResult result)
     {
         result = new P12AResult(P12AResultCode.CaptureRejected);
@@ -397,20 +934,63 @@ public class TesteSimulacao : MonoBehaviour
             result = new P12AResult(P12AResultCode.WrongThread);
             return false;
         }
-        if (!session.Runtime.IsHealthyDailyOwnerThreadBoundary())
+        if (!session.Runtime.IsHealthyDailyOwnerThreadBoundary()
+            || (continuationSaveOperation != null
+                && (!continuationSaveOperation.IsActive
+                    || !ReferenceEquals(session.CoreRuntimeSession, continuationSaveOperation.Session)
+                    || !continuationSaveOperation.TryRevalidate(out _))))
         {
             result = new P12AResult(P12AResultCode.CaptureRejected);
             return false;
         }
 
-        if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+        P12AContinuationImage image;
+        P12GDailyV1RestoreFailure captureFailure;
+        string captureDiagnostic;
+        bool imageCaptured;
+        if (continuationSaveOperation != null)
+        {
+            imageCaptured = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
                 session,
                 runtimeAdmissionContext,
-                out P12AContinuationImage image,
+                continuationSaveOperation,
+                out image,
                 out _,
+                out captureFailure,
+                out captureDiagnostic);
+        }
+        else
+        {
+            imageCaptured = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                session,
+                runtimeAdmissionContext,
+                out image,
                 out _,
-                out _)
-            || image == null
+                out captureFailure,
+                out captureDiagnostic);
+        }
+        if (!imageCaptured)
+        {
+            result = new P12AResult(P12AResultCode.CaptureRejected);
+            session.Logger.LogError("P12-A continuation save failed: " + result.Code
+                + " (" + captureFailure + ": " + captureDiagnostic + ").");
+            return false;
+        }
+
+        if (continuationSaveOperation != null)
+        {
+            if (!continuationSaveOperation.TryPersistImage(
+                    image, persistentDataPath, SystemAtomicFileSlotOperations.Instance, out result))
+            {
+                if (result == null) result = new P12AResult(P12AResultCode.CaptureRejected);
+                session.Logger.LogError("P12-A continuation save failed: " + result.Code + ".");
+                return false;
+            }
+
+            return true;
+        }
+
+        if (image == null
             || !P12ADailyV1Census.TryCreateForImage(
                 image,
                 out P12ADailyV1Census census,
@@ -431,7 +1011,6 @@ public class TesteSimulacao : MonoBehaviour
             session.Logger.LogError("P12-A continuation save failed: " + result.Code + ".");
             return false;
         }
-
         return true;
     }
 
@@ -474,6 +1053,17 @@ public class TesteSimulacao : MonoBehaviour
         string profileFingerprint = null;
         string selectedP9ProfileFingerprint = null;
         System.Collections.Generic.IReadOnlyList<string> profileProvenanceRecords = null;
+        bool includeP10BGeneratedRuin = SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig);
+        bool includeP10RuinLocalTopology = P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig)
+            && !includeP10BGeneratedRuin;
+        bool includeAuthoredGeography = simulationConfig != null && simulationConfig.useAuthoredGeographyProfile;
+        EffectiveSimulationConfiguration stagedEffectiveConfiguration = null;
+        CalendarDefinition stagedCalendarDefinition = null;
+        DailyV1EffectiveDefinitions stagedSelectedDefinitions = null;
+        DailyV1DefinitionAdapter.SelectedBindings stagedSelectedDefinitionBindings = null;
+        DailyV1GenesisComposition selectedCoreGenesis = null;
+        DailyV1ActiveRuntimeSession selectedCoreRuntimeSession = null;
+        HashSet<string> coreGenesisCompletedStages = new HashSet<string>(System.StringComparer.Ordinal);
         Thread initializeThread = Thread.CurrentThread;
         int initializeThreadId = initializeThread.ManagedThreadId;
         try
@@ -486,32 +1076,199 @@ public class TesteSimulacao : MonoBehaviour
                         // This admission guard is intentionally the first profile operation. It must
                         // precede WorldId allocation, RuntimeIdAllocator creation, profile construction,
                         // and every owner or candidate draft so a rejected profile leaves no identity.
-                        if (SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig)
+                        if (includeP10BGeneratedRuin
                             && runtimeAdmissionContext != null
                             && runtimeAdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
                             throw new System.InvalidOperationException("P10-B generated Ruin topology is not admitted by the Unity bootstrap daily profile.");
-                        if (P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig)
-                            && !SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig)
+                        if (includeP10RuinLocalTopology
                             && runtimeAdmissionContext != null
                             && runtimeAdmissionContext.Profile == SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1)
                             throw new System.InvalidOperationException("P10-A Ruin/LocalTopology is not admitted by the Unity bootstrap daily profile.");
                         ValidateP14SourceAdmission(simulationConfig, runtimeAdmissionContext);
                         SimulationGenesisPipeline.ValidateProfile(simulationConfig);
+                        if (selectedAdmissionProfile)
+                        {
+                            DailyV1ApplicationStartPreparation coreStartPreparation =
+                                dailyV1InitialStartPreparation;
+                            bool reusePreparedStart = coreStartPreparation != null;
+                            bool reuseAdmittedGenesis = !reusePreparedStart
+                                && dailyV1StartAdmission != null
+                                && dailyV1StartAdmission.Kind == DailyV1ApplicationStartAdmissionKind.GenesisRequired
+                                && dailyV1InitialStartHost != null;
+                            if (reusePreparedStart)
+                            {
+                                if (coreStartPreparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                                    || !ReferenceEquals(coreStartPreparation.Application, dailyV1Application)
+                                    || !ReferenceEquals(coreStartPreparation.StartAdmission, dailyV1StartAdmission)
+                                    || coreStartPreparation.PersistenceResult?.Code != P12AResultCode.NoSave)
+                                    throw new System.InvalidOperationException(
+                                        "The prepared Core Daily-v1 genesis does not belong to this exact Unity application start.");
+                            }
+                            else if (reuseAdmittedGenesis)
+                            {
+                                if (!ReferenceEquals(dailyV1StartAdmission.Application, dailyV1Application)
+                                    || dailyV1StartAdmission.PersistenceResult?.Code != P12AResultCode.NoSave)
+                                    throw new System.InvalidOperationException(
+                                        "The admitted Core Daily-v1 genesis does not belong to this exact Unity application start.");
+                            }
+
+                            if (reusePreparedStart || reuseAdmittedGenesis)
+                            {
+                                stagedEffectiveConfiguration = effectiveConfiguration;
+                                stagedCalendarDefinition = calendarDefinition;
+                                stagedSelectedDefinitions = selectedDefinitions;
+                                stagedSelectedDefinitionBindings = selectedDefinitionBindings;
+                                if (stagedEffectiveConfiguration == null || stagedCalendarDefinition == null
+                                    || stagedSelectedDefinitions == null || stagedSelectedDefinitionBindings == null)
+                                    throw new System.InvalidOperationException(
+                                        "The admitted Core Daily-v1 start lost its effective configuration or binding graph.");
+                            }
+                            else
+                            {
+                                // The typed graph is the selected profile's immutable definition input.
+                                // Build and fingerprint it before allocating WorldId, runtime IDs, RNG, or
+                                // mutable owners so an invalid graph cannot leave a partially admitted world.
+                                ValidateP14SourceAdmission(simulationConfig, runtimeAdmissionContext);
+                                SimulationGenesisPipeline.ValidateProfile(simulationConfig);
+                                stagedEffectiveConfiguration = ResolveRuntimeConfiguration();
+                                stagedCalendarDefinition = ResolveCalendarDefinition();
+                                stagedSelectedDefinitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+                                    simulationConfig, stagedEffectiveConfiguration, stagedCalendarDefinition,
+                                    out stagedSelectedDefinitionBindings);
+                                if (!SimulationGenesisPipeline.TryValidateSelectedDefinitionBindings(
+                                        stagedSelectedDefinitions, out string definitionBindingDiagnostic))
+                                    throw new System.InvalidOperationException(
+                                        "The selected Daily-v1 definition graph is not closed: " + definitionBindingDiagnostic);
+                            }
+
+                            selectedDefinitions = stagedSelectedDefinitions;
+                            selectedDefinitionBindings = stagedSelectedDefinitionBindings;
+                            effectiveConfiguration = stagedEffectiveConfiguration;
+                            calendarDefinition = stagedCalendarDefinition;
+                            lastEconomySnapshotDay = 0L;
+                            profileFingerprint = DailyV1DefinitionIdentity.CreateP9Fingerprint(
+                                stagedSelectedDefinitions, out profileProvenanceRecords);
+                            selectedP9ProfileFingerprint = profileFingerprint;
+
+                            if (reusePreparedStart)
+                            {
+                                logger = coreStartPreparation.Logger;
+                            }
+                            else if (reuseAdmittedGenesis)
+                            {
+                                if (!dailyV1Application.TryCreateInitialGenesisLogger(
+                                        dailyV1StartAdmission, stagedSelectedDefinitions, dailyV1InitialStartHost,
+                                        out logger, out string loggerDiagnostic)
+                                    || logger == null)
+                                    throw new System.InvalidOperationException(
+                                        "The Core Daily-v1 application could not create its admitted genesis logger: "
+                                        + (loggerDiagnostic ?? string.Empty));
+                            }
+                            else
+                            {
+                                logger = UnitySimulationLoggerAdapter.CreateSelected(
+                                    stagedSelectedDefinitions.Configuration.logSettings);
+                                List<SimulationModule> selectedModules = new List<SimulationModule>();
+                                foreach (DailyV1EnumValue module in stagedSelectedDefinitions.Configuration.enabledModules
+                                    ?? System.Array.Empty<DailyV1EnumValue>())
+                                    if (module != null) selectedModules.Add((SimulationModule)module.Value);
+                                logger.BeginSimulation(stagedSelectedDefinitions.Configuration.simulationName,
+                                    selectedModules,
+                                    stagedSelectedDefinitions.Configuration.cities?.Count ?? 0,
+                                    stagedSelectedDefinitions.Configuration.npcs?.Count ?? 0);
+                            }
+                            enabledModules = new SimulationModuleSet(
+                                stagedSelectedDefinitions.Configuration.enabledModules);
+                            AppendScenarioDiagnostics(effectiveConfiguration);
+
+                            if (!reusePreparedStart)
+                            {
+                                string coreGenesisDiagnostic;
+                                if (!dailyV1Application.TryPrepareInitialGenesisStart(
+                                        dailyV1StartAdmission,
+                                        stagedSelectedDefinitions,
+                                        logger,
+                                        completedStage =>
+                                        {
+                                            if (!coreGenesisCompletedStages.Add(completedStage))
+                                                throw new System.InvalidOperationException(
+                                                    "Core Daily-v1 genesis completed a stage more than once.");
+                                            stageCompleted?.Invoke(completedStage);
+                                        },
+                                        out coreStartPreparation,
+                                        out coreGenesisDiagnostic)
+                                    || coreStartPreparation == null
+                                    || coreStartPreparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                                    || !ReferenceEquals(coreStartPreparation.StartAdmission, dailyV1StartAdmission)
+                                    || coreStartPreparation.PersistenceResult?.Code != P12AResultCode.NoSave)
+                                    throw new System.InvalidOperationException(
+                                        "The Core Daily-v1 application could not prepare its admitted genesis start: "
+                                        + (coreGenesisDiagnostic ?? string.Empty));
+                                dailyV1InitialStartPreparation = coreStartPreparation;
+                            }
+                            selectedCoreGenesis = coreStartPreparation.GenesisComposition;
+                            selectedCoreRuntimeSession = coreStartPreparation.CoreSession;
+                            if (!ReferenceEquals(selectedCoreGenesis.Definitions, stagedSelectedDefinitions)
+                                || !ReferenceEquals(selectedCoreGenesis.AdmissionContext, runtimeAdmissionContext)
+                                || !ReferenceEquals(selectedCoreRuntimeSession.Definitions,
+                                    stagedSelectedDefinitions)
+                                || !ReferenceEquals(coreStartPreparation.Logger, logger))
+                                throw new System.InvalidOperationException(
+                                    "The Core application prepared genesis under a different admission context, definition graph, or logger.");
+
+                            profileFingerprint = selectedCoreGenesis.P9ProfileFingerprint;
+                            selectedP9ProfileFingerprint = profileFingerprint;
+                            profileProvenanceRecords = selectedCoreGenesis.P9ProvenanceRecords;
+                            unpublishedWorldId = selectedCoreGenesis.WorldId;
+                            if (!selectedCoreGenesis.ExecutionBoundaryState.TryBindSelectedRuntimeOwnerGraph(
+                                    selectedCoreGenesis.OwnerGraph))
+                                throw new System.InvalidOperationException(
+                                    "Core Daily-v1 genesis did not retain its exact selected owner graph.");
+                            ProjectSelectedCoreGenesis(selectedCoreGenesis);
+                            break;
+                        }
                         unpublishedWorldId = worldIdentityAllocator?.Invoke();
                         if (unpublishedWorldId == null)
                             throw new System.InvalidOperationException("World identity allocation returned no identity.");
                         simulationTime = new SimulationTime();
-                        authoritativeRandomSource = new DeterministicRandomSource(simulationConfig.useFixedSimulationSeed ? simulationConfig.simulationSeed : 0);
+                        DailyV1SimulationConfigData selectedConfig = stagedSelectedDefinitions?.Configuration;
+                        bool useFixedSeed = selectedConfig != null
+                            ? selectedConfig.useFixedSimulationSeed
+                            : simulationConfig.useFixedSimulationSeed;
+                        int selectedSeed = selectedConfig != null
+                            ? selectedConfig.simulationSeed
+                            : simulationConfig.simulationSeed;
+                        authoritativeRandomSource = new DeterministicRandomSource(useFixedSeed ? selectedSeed : 0);
                         lastEconomySnapshotDay = 0;
-                        logger = new SimulationLogger(simulationConfig.LogSettings);
-                        logger.BeginSimulation(simulationConfig.simulationName, simulationConfig.EnabledModules, simulationConfig.Cities.Count, simulationConfig.Npcs.Count);
-                        calendarDefinition = ResolveCalendarDefinition();
-                        enabledModules = new SimulationModuleSet(simulationConfig, logger);
-                        effectiveConfiguration = ResolveRuntimeConfiguration();
+                        logger = selectedConfig != null
+                            ? UnitySimulationLoggerAdapter.CreateSelected(selectedConfig.logSettings)
+                            : UnitySimulationLoggerAdapter.Create(simulationConfig.LogSettings);
+                        if (selectedConfig != null)
+                        {
+                            List<SimulationModule> selectedModules = new List<SimulationModule>();
+                            foreach (DailyV1EnumValue module in selectedConfig.enabledModules ?? System.Array.Empty<DailyV1EnumValue>())
+                                if (module != null) selectedModules.Add((SimulationModule)module.Value);
+                            logger.BeginSimulation(selectedConfig.simulationName, selectedModules,
+                                selectedConfig.cities?.Count ?? 0, selectedConfig.npcs?.Count ?? 0);
+                        }
+                        else
+                        {
+                            logger.BeginSimulation(simulationConfig.simulationName, simulationConfig.EnabledModules,
+                                simulationConfig.Cities.Count, simulationConfig.Npcs.Count);
+                        }
+                        calendarDefinition = stagedCalendarDefinition ?? ResolveCalendarDefinition();
+                        enabledModules = stagedSelectedDefinitions != null
+                            ? new SimulationModuleSet(stagedSelectedDefinitions.Configuration.enabledModules)
+                            : new SimulationModuleSet(simulationConfig, logger);
+                        effectiveConfiguration = stagedEffectiveConfiguration ?? ResolveRuntimeConfiguration();
                         genesisSpatialAuthority = new SpatialAuthorityStore();
-                        profileFingerprint = SimulationGenesisPipeline.CreateFingerprint(
-                            simulationConfig, effectiveConfiguration, calendarDefinition, out profileProvenanceRecords);
-                        selectedP9ProfileFingerprint = profileFingerprint;
+                        if (stagedSelectedDefinitions == null)
+                        {
+                            profileFingerprint = SimulationGenesisPipeline.CreateFingerprint(
+                                simulationConfig, effectiveConfiguration, calendarDefinition,
+                                out profileProvenanceRecords, out selectedDefinitions);
+                            selectedP9ProfileFingerprint = profileFingerprint;
+                        }
                         AppendScenarioDiagnostics(effectiveConfiguration);
                         runtimeIdAllocator = new RuntimeIdAllocator();
                         explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
@@ -527,21 +1284,23 @@ public class TesteSimulacao : MonoBehaviour
                         spatialNetwork = new SpatialNetworkRuntime(runtimeIdentityRegistry, logger);
                         break;
                     case "p9.genesis.authored-world/v1":
+                        if (selectedCoreGenesis != null) break;
                         CityRuntimeList.Clear();
                         cityRuntimesByDefinition.Clear();
                         cityRuntimeByLocation.Clear();
-                        CreateCityRuntimes();
+                        CreateCityRuntimes(stagedSelectedDefinitions, stagedSelectedDefinitionBindings);
                         explorableSiteStore = new ExplorableSiteStore();
                         explorableSiteRuntimesByDefinition.Clear();
                         CreateExplorableSiteRuntimes();
                         CreateSpatialRoutes();
                         break;
                     case SimulationGenesisPipeline.GeographyStageId:
+                        if (selectedCoreGenesis != null) break;
                         ComposeAuthoredGeography();
                         break;
                     case SimulationGenesisPipeline.P10BGeneratedRuinStageId:
                         p10BPreparedRuin = P10BGeneratedRuinGenesis.Prepare(
-                            simulationConfig, selectedP9ProfileFingerprint, genesisSpatialAuthority,
+                            simulationConfig, selectedP9ProfileFingerprint, selectedDefinitions, genesisSpatialAuthority,
                             runtimeIdentityRegistry, out string p10BDiagnostic);
                         if (p10BPreparedRuin == null)
                             throw new System.InvalidOperationException("P10-B generated Ruin preparation failed: " + p10BDiagnostic);
@@ -553,9 +1312,10 @@ public class TesteSimulacao : MonoBehaviour
                         profileProvenanceRecords = p10BProvenanceRecords;
                         break;
                     case "p9.genesis.authored-actors/v1":
+                        if (selectedCoreGenesis != null) break;
                         NpcRuntimeList.Clear();
                         npcRuntimesByDefinition.Clear();
-                        CreateNpcRuntimes();
+                        CreateNpcRuntimes(stagedSelectedDefinitions, stagedSelectedDefinitionBindings);
                         CreateScheduledDirectives();
                         scheduledDirectiveSystem = new ScheduledDirectiveSystem(scheduledDirectiveStore, runtimeIdentityRegistry, logger);
                         economyTransactionService = new EconomyTransactionService();
@@ -571,11 +1331,29 @@ public class TesteSimulacao : MonoBehaviour
                         profileProvenanceRecords = combinedProvenanceRecords;
                         break;
                     case "p9.genesis.validate-profile/v1":
-                        RebuildSystems(effectiveConfiguration);
-                        BootstrapInitialSpatialKnowledge();
-                        BootstrapInitialExplorableSiteKnowledge();
-                        BootstrapInitialCommercialKnowledge();
-                        InitializeJusticeState();
+                        RebuildSystems(effectiveConfiguration,
+                            selectedCoreGenesis?.OwnerGraph?.JusticeRecordsOwner);
+                        if (selectedCoreGenesis == null)
+                        {
+                            BootstrapInitialSpatialKnowledge();
+                            BootstrapInitialExplorableSiteKnowledge();
+                            BootstrapInitialCommercialKnowledge();
+                            InitializeJusticeState();
+                        }
+                        if (selectedCoreGenesis == null
+                            && selectedRuntimeOwnerGraphBuilder != null
+                            && !selectedRuntimeOwnerGraphBuilder.TryBuild(
+                                justiceSystem?.CoreOwner, travelPartyStore, scheduledDirectiveStore,
+                                out selectedInitialRuntimeOwnerGraph))
+                            throw new System.InvalidOperationException(
+                                "The selected Core City/NPC/Justice owner graph does not exactly match the admitted Daily-v1 genesis composition.");
+                        if (selectedCoreGenesis != null)
+                        {
+                            selectedInitialRuntimeOwnerGraph = selectedCoreGenesis.OwnerGraph;
+                            if (!selectedInitialRuntimeOwnerGraph.TryBindExpeditionStore(expeditionStore))
+                                throw new System.InvalidOperationException(
+                                    "The Core selected owner graph could not bind the exact empty P10 ExpeditionStore.");
+                        }
                         simulationRuntime = new SimulationRuntime(
                             simulationTime: simulationTime, cities: CityRuntimeList, npcRuntimes: NpcRuntimeList,
                             configuredActions: ConfiguredActions, scheduledDirectiveSystem: scheduledDirectiveSystem,
@@ -585,10 +1363,32 @@ public class TesteSimulacao : MonoBehaviour
                             logger: logger, explorableSiteStore: explorableSiteStore,
                             explorableSiteKnowledgeSystem: explorableSiteKnowledgeSystem, expeditionSystem: expeditionSystem,
                             configuration: effectiveConfiguration, randomSource: authoritativeRandomSource,
+                            personStore: selectedCoreGenesis?.PersonStore,
+                            politicalKnowledgeStore: selectedCoreGenesis?.OwnerGraph?.PoliticalKnowledgeStore,
+                            genealogyStore: selectedCoreGenesis?.OwnerGraph?.GenealogyStore,
+                            p12CrimeSocialAppraisalWorldState: selectedInitialRuntimeOwnerGraph?.P12EOwners?.CrimeSocialAppraisal,
+                            institutionStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.Institutions,
+                            officeStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.Offices,
+                            propertyOwnershipStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.PropertyOwnership,
+                            estateStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.Estates,
+                            politicalClaimStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.PoliticalClaims,
+                            factionStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.Factions,
+                            politicalSupportStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.PoliticalSupport,
+                            politicalDecisionStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.PoliticalDecisions,
+                            armedForceStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.ArmedForces,
+                            conflictStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.Conflicts,
+                            warStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.Wars,
+                            battleStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.Battles,
+                            armedForceSpatialStateStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.Positions,
+                            contingentManpowerStateStore: selectedInitialRuntimeOwnerGraph?.P12EOwners?.Manpower,
+                            actorChoiceStore: selectedCoreGenesis?.ActorChoiceStore,
                             calendarDefinition: calendarDefinition,
                             spatialAuthorityStore: genesisSpatialAuthority,
                             localTopologyStore: genesisLocalTopologyStore,
                             legacySpatialAnchorBindingStore: genesisLegacySpatialAnchorBindingStore,
+                            personSpatialPositionStore: selectedInitialRuntimeOwnerGraph?.PersonSpatialPositionStore,
+                            spatialRouteKnowledgeStore: selectedInitialRuntimeOwnerGraph?.SpatialRouteKnowledgeStore,
+                            personRoutePlanStore: selectedInitialRuntimeOwnerGraph?.PersonRoutePlanStore,
                             runtimeAdmissionContext: runtimeAdmissionContext,
                             recordSequence: recordSequence,
                             worldId: unpublishedWorldId,
@@ -597,7 +1397,18 @@ public class TesteSimulacao : MonoBehaviour
                             requireP12ReceiptCensusOwners: runtimeAdmissionContext != null,
                             runtimeIdentityRegistry: runtimeIdentityRegistry,
                             spatialNetworkRuntime: spatialNetwork,
-                            requireP12RuntimeIdentitySpatialCensusOwners: runtimeAdmissionContext != null);
+                            requireP12RuntimeIdentitySpatialCensusOwners: runtimeAdmissionContext != null,
+                            selectedExecutionBoundaryState: selectedCoreGenesis?.ExecutionBoundaryState,
+                            selectedCalendar: selectedCoreGenesis?.Calendar);
+                        if (selectedInitialRuntimeOwnerGraph != null
+                            && !simulationRuntime.TryAdoptInitialSelectedRuntimeOwnerGraph(
+                                selectedInitialRuntimeOwnerGraph))
+                            throw new System.InvalidOperationException(
+                                "The constructed runtime did not adopt the exact unpublished selected Core owner graph.");
+                        if (selectedInitialRuntimeOwnerGraph != null
+                            && !TryProjectInitialSelectedJusticeRows(selectedInitialRuntimeOwnerGraph))
+                            throw new System.InvalidOperationException(
+                                "The selected Justice rows could not bind their exact Unity reference projections.");
                         simulationRuntime.BindP12EconomyTransactionService(economyTransactionService);
                         if (runtimeAdmissionContext != null
                             && !simulationRuntime.TryBeginBootstrapPublicationScope(out bootstrapPublicationScope))
@@ -615,36 +1426,39 @@ public class TesteSimulacao : MonoBehaviour
                                 simulationRuntime.LegacySpatialAnchorBindingStore, out string p10BCommitDiagnostic))
                             throw new System.InvalidOperationException("P10-B atomic topology publication failed: " + p10BCommitDiagnostic);
                         if (p10BPreparedRuin != null)
-                            AddExplorableSiteRuntimeByDefinition(p10BPreparedRuin.Site.Definition, p10BPreparedRuin.Site);
-                        npcChronicleFormatter = CreateNpcChronicleFormatter(
+                            AddExplorableSiteRuntimeByDefinition(p10BPreparedRuin.Site.DefinitionId, p10BPreparedRuin.Site);
+                        npcChronicleFormatter = selectedCoreGenesis != null
+                            && !includeP10RuinLocalTopology
+                            && !includeP10BGeneratedRuin
+                            ? DailyV1SelectedNpcChronicleFormatter.Create(selectedCoreGenesis.OwnerGraph)
+                            : CreateNpcChronicleFormatter(
                             runtimeIdentityRegistry,
                             spatialNetwork,
                             cityRuntimeByLocation,
                             explorableSiteStore,
                             CityRuntimeList,
-                            simulationConfig);
+                            simulationConfig,
+                            selectedDefinitions);
                         draftComposition = new SimulationBootstrapComposition(
                             unpublishedWorldId,
                             new SimulationGenesisManifest(
                                 simulationConfig, effectiveConfiguration, calendarDefinition,
                                 selectedP9ProfileFingerprint, profileFingerprint, profileProvenanceRecords,
-                                P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig)
-                                    && !SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig),
-                                SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig)), simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
+                                includeP10RuinLocalTopology,
+                                includeP10BGeneratedRuin,
+                                stagedSelectedDefinitions), simulationTime, calendarDefinition, spatialNetwork, domainEventStore,
                             historyStore, scheduledDirectiveStore, decisionStore, decisionRecorder, recordSequence, economyTransactionService, npcChronicleService,
                             npcChronicleFormatter, travelPartyStore, travelPartySystem, simulationRuntime,
                             runtimeIdentityRegistry,
                             runtimeIdAllocator,
-                            explorableSiteStore, expeditionStore, expeditionSystem);
+                            explorableSiteStore, expeditionStore, expeditionSystem, selectedDefinitions);
                         break;
                     default:
                         throw new System.InvalidOperationException("Undeclared authored genesis stage: " + stageId);
                 }
-                stageCompleted?.Invoke(stageId);
-            }, simulationConfig != null && simulationConfig.useAuthoredGeographyProfile,
-                P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig)
-                    && !SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig),
-                SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig));
+                if (!coreGenesisCompletedStages.Contains(stageId))
+                    stageCompleted?.Invoke(stageId);
+            }, includeAuthoredGeography, includeP10RuinLocalTopology, includeP10BGeneratedRuin);
 
             if (draftComposition == null)
                 throw new System.InvalidOperationException("Simulation genesis returned without creating its private composition draft.");
@@ -662,7 +1476,11 @@ public class TesteSimulacao : MonoBehaviour
                 if (simulationRuntime == null
                     || !simulationRuntime.TryAssessNpcRosterCensus(out closeFailure))
                     throw new System.InvalidOperationException(
-                        "The P12 bootstrap publication scope did not close with healthy registered-owner quiescence: " + closeFailure);
+                        "The P12 bootstrap publication scope did not close with healthy registered-owner quiescence: "
+                        + closeFailure
+                        + (string.IsNullOrWhiteSpace(simulationRuntime.NpcRosterCensusFirstFaultDetail)
+                            ? string.Empty
+                            : " (" + simulationRuntime.NpcRosterCensusFirstFaultDetail + ")"));
             }
 
             if (simulationRuntime == null || !simulationRuntime.TryMarkWorldPublishedForFactualRead())
@@ -679,12 +1497,21 @@ public class TesteSimulacao : MonoBehaviour
                 simulationConfig,
                 runtimeAdmissionContext,
                 authoritativeRandomSource,
-                new SimulationSessionReportState(lastEconomySnapshotDay));
+                lastEconomySnapshotDay,
+                selectedCoreRuntimeSession);
 
             unpublishedWorldId = null;
             draftComposition = null;
-            if (Interlocked.CompareExchange(ref activeSession, candidateSession, null) != null)
+            if (buildInitialStartHostProjection)
+            {
+                pendingInitialStartHostProjection = candidateSession;
+                return;
+            }
+
+            if (!TryPublishInitialActiveSession(candidateSession))
                 throw new System.InvalidOperationException("A simulation session was already published for this bootstrap owner.");
+            dailyV1InitialStartPreparation = null;
+            dailyV1InitialStartHost = null;
             ReleaseBootstrapAliases();
         }
         catch
@@ -709,46 +1536,118 @@ public class TesteSimulacao : MonoBehaviour
 
     private bool IsBootstrapStartThreadCurrent()
     {
-        return bootstrapStartThread != null
-            && ReferenceEquals(bootstrapStartThread, Thread.CurrentThread)
-            && bootstrapStartThreadId == Thread.CurrentThread.ManagedThreadId;
+        return runtimeAdmissionContext != null
+            && runtimeAdmissionContext.IsOwnedByCurrentThread();
     }
 
     private SimulationActiveSession CaptureActiveSession()
     {
-        return Volatile.Read(ref activeSession);
+        lock (dailyV1Application.ActiveSessionSyncRoot)
+        {
+            DailyV1ActiveRuntimeSession coreSession = dailyV1Application.ActiveSession;
+            if (coreSession != null)
+                return dailyV1Application.TryGetPublishedHostProjection(
+                        coreSession, out IDailyV1ApplicationHostProjection projection)
+                    ? projection as SimulationActiveSession
+                    : null;
+
+            return compatibilitySessionGate.Current;
+        }
     }
 
-    private bool TryBeginActiveSessionOperation(out SimulationActiveSession session)
-    {
-        return TryBeginActiveSessionOperation(expectedSession: null, out session);
-    }
+    private bool TryBeginActiveSessionOperation(out SimulationActiveSession session) =>
+        TryBeginActiveSessionOperation(
+            expectedSession: null,
+            DailyV1OperationScopeKind.Application,
+            out session);
+
+    private bool TryBeginActiveSessionOperation(
+        DailyV1OperationScopeKind scopeKind,
+        out SimulationActiveSession session) =>
+        TryBeginActiveSessionOperation(expectedSession: null, scopeKind, out session);
 
     private bool TryBeginActiveSessionOperation(
         SimulationActiveSession expectedSession,
+        out SimulationActiveSession session) =>
+        TryBeginActiveSessionOperation(
+            expectedSession,
+            DailyV1OperationScopeKind.Application,
+            out session);
+
+    private bool TryBeginActiveSessionOperation(
+        SimulationActiveSession expectedSession,
+        DailyV1OperationScopeKind scopeKind,
         out SimulationActiveSession session)
     {
-        lock (activeSessionGate)
+        lock (dailyV1Application.ActiveSessionSyncRoot)
         {
-            session = activeSession;
-            if (session == null || (expectedSession != null && !ReferenceEquals(session, expectedSession)))
+            session = null;
+            DailyV1ActiveRuntimeSession currentCoreSession = dailyV1Application.ActiveSession;
+            DailyV1ActiveRuntimeSession expectedCoreSession = expectedSession?.CoreRuntimeSession;
+            if (currentCoreSession != null || expectedCoreSession != null)
+            {
+                if (expectedSession != null && expectedCoreSession == null
+                    || currentCoreSession == null
+                    || !dailyV1Application.TryGetPublishedHostProjection(
+                        currentCoreSession, out IDailyV1ApplicationHostProjection projection)
+                    || (session = projection as SimulationActiveSession) == null
+                    || !dailyV1Application.TryBeginOperation(
+                        expectedCoreSession, scopeKind, out DailyV1ActiveRuntimeSession admittedCoreSession))
+                {
+                    session = null;
+                    return false;
+                }
+                if (!ReferenceEquals(admittedCoreSession, currentCoreSession))
+                {
+                    dailyV1Application.EndOperation(scopeKind);
+                    session = null;
+                    return false;
+                }
+                return true;
+            }
+
+            if (dailyV1Application.ActiveSession != null
+                || !compatibilitySessionGate.TryBeginOperation(expectedSession, scopeKind, out session))
             {
                 session = null;
                 return false;
             }
-
-            activeSessionOperationCount++;
             return true;
         }
     }
 
-    private void EndActiveSessionOperation()
+    private void EndActiveSessionOperation(
+        DailyV1OperationScopeKind scopeKind = DailyV1OperationScopeKind.Application)
     {
-        lock (activeSessionGate)
+        lock (dailyV1Application.ActiveSessionSyncRoot)
         {
-            if (activeSessionOperationCount <= 0)
-                throw new System.InvalidOperationException("Active-session operation scope underflow.");
-            activeSessionOperationCount--;
+            if (dailyV1Application.ActiveSession != null)
+                dailyV1Application.EndOperation(scopeKind);
+            else
+                compatibilitySessionGate.EndOperation(scopeKind);
+        }
+    }
+
+    private bool TryPublishInitialActiveSession(SimulationActiveSession candidateSession)
+    {
+        if (candidateSession == null) return false;
+        lock (dailyV1Application.ActiveSessionSyncRoot)
+        {
+            if (dailyV1Application.ActiveSession != null || compatibilitySessionGate.Current != null)
+                return false;
+
+            DailyV1ActiveRuntimeSession coreSession = candidateSession.CoreRuntimeSession;
+            if (coreSession == null)
+                return compatibilitySessionGate.TryPublishInitial(candidateSession);
+
+            DailyV1ApplicationStartPreparation startPreparation = dailyV1InitialStartPreparation;
+            if (startPreparation == null
+                || startPreparation.Kind != DailyV1ApplicationStartPreparationKind.GenesisPrepared
+                || !ReferenceEquals(startPreparation.CoreSession, coreSession))
+                return false;
+
+            return dailyV1Application.TryCommitInitialStartWithHostProjection(
+                startPreparation, coreSession, candidateSession, candidateSession.Runtime, out _);
         }
     }
 
@@ -757,42 +1656,135 @@ public class TesteSimulacao : MonoBehaviour
         SimulationActiveSession expectedSession,
         SimulationActiveSession candidateSession)
     {
+        return TryPublishRestoredSession(expectedSession, candidateSession, null);
+    }
+
+    private bool TryPublishRestoredSession(
+        SimulationActiveSession expectedSession,
+        SimulationActiveSession candidateSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation)
+    {
+        return TryPublishRestoredSession(
+            expectedSession, candidateSession, exclusiveOperation, null, null);
+    }
+
+    private bool TryPublishRestoredSession(
+        SimulationActiveSession expectedSession,
+        SimulationActiveSession candidateSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation,
+        DailyV1ApplicationStartAdmission initialStartAdmission,
+        P12AContinuationImage initialRestoreImage)
+    {
         if (candidateSession == null)
             return false;
+        if (!ReferenceEquals(candidateSession.Configuration, simulationConfig))
+            return false;
+        bool initialRestoreAdmissionSupplied = initialStartAdmission != null
+            || initialRestoreImage != null;
+        if ((initialStartAdmission == null) != (initialRestoreImage == null)
+            || (initialRestoreAdmissionSupplied
+                && (expectedSession != null || candidateSession.CoreRuntimeSession == null)))
+            return false;
 
-        lock (activeSessionGate)
+        lock (dailyV1Application.ActiveSessionSyncRoot)
         {
-            if (activeSessionOperationCount != 0
-                || candidateSession.AdmissionContext == null
-                || !candidateSession.AdmissionContext.IsOwnedByCurrentThread()
-                || !candidateSession.AdmissionContext.IsRestoredContinuation
-                || !ReferenceEquals(candidateSession.Configuration, simulationConfig)
-                || !candidateSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
-                || !candidateSession.Runtime.HasValidRestoredDailyBoundaryAdmission())
+            if (candidateSession.CoreRuntimeSession == null)
+            {
+                if (candidateSession.AdmissionContext == null
+                    || !candidateSession.AdmissionContext.IsOwnedByCurrentThread()
+                    || !candidateSession.AdmissionContext.IsRestoredContinuation
+                    || !candidateSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
+                    || !candidateSession.Runtime.HasValidRestoredDailyBoundaryAdmission())
+                    return false;
+
+                if (exclusiveOperation != null || dailyV1Application.ActiveSession != null
+                    || compatibilitySessionGate.ActiveOperationCount != 0)
+                    return false;
+
+                if (expectedSession == null)
+                {
+                    if (compatibilitySessionGate.Current != null || runtimeAdmissionContext == null
+                        || runtimeAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                        || runtimeAdmissionContext.IsRestoredContinuation
+                        || !runtimeAdmissionContext.IsOwnedByCurrentThread())
+                        return false;
+                    return compatibilitySessionGate.TryPublishInitial(candidateSession);
+                }
+
+                return ReferenceEquals(compatibilitySessionGate.Current, expectedSession)
+                    && expectedSession.AdmissionContext != null
+                    && expectedSession.AdmissionContext.IsOwnedByCurrentThread()
+                    && expectedSession.IsProfileCompatibleWith(candidateSession)
+                    && expectedSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
+                    && expectedSession.Runtime.HasValidCompletedDailyBoundaryAdmission()
+                    && compatibilitySessionGate.TryPublishReplacement(expectedSession, candidateSession);
+            }
+
+            DailyV1ActiveRuntimeSession candidateCoreSession = candidateSession.CoreRuntimeSession;
+            DailyV1ActiveRuntimeSession expectedCoreSession = expectedSession?.CoreRuntimeSession;
+            if (compatibilitySessionGate.Current != null)
+                return false;
+
+            if (exclusiveOperation != null
+                && !ReferenceEquals(exclusiveOperation.ExpectedSession, expectedCoreSession))
                 return false;
 
             if (expectedSession == null)
             {
-                if (activeSession != null || runtimeAdmissionContext == null
-                    || runtimeAdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
-                    || runtimeAdmissionContext.IsRestoredContinuation
-                    || !runtimeAdmissionContext.IsOwnedByCurrentThread())
+                if (dailyV1Application.ActiveSession != null) return false;
+                if ((initialStartAdmission == null) != (initialRestoreImage == null))
                     return false;
-                Interlocked.Exchange(ref activeSession, candidateSession);
-                return true;
+                return TryCommitCoreRestoredCandidateWithProjection(
+                    null, candidateCoreSession, null, candidateSession, exclusiveOperation,
+                    initialStartAdmission, initialRestoreImage);
             }
 
-            if (!ReferenceEquals(activeSession, expectedSession)
-                || expectedSession.AdmissionContext == null
-                || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
-                || !expectedSession.IsProfileCompatibleWith(candidateSession)
-                || !expectedSession.Runtime.IsHealthyDailyOwnerThreadBoundary()
-                || !expectedSession.Runtime.HasValidCompletedDailyBoundaryAdmission())
+            if (initialStartAdmission != null || initialRestoreImage != null)
                 return false;
 
-            Interlocked.Exchange(ref activeSession, candidateSession);
-            return true;
+            if (expectedCoreSession == null
+                || !expectedSession.IsProfileCompatibleWith(candidateSession)
+                || !ReferenceEquals(dailyV1Application.ActiveSession, expectedCoreSession))
+                return false;
+
+            return TryCommitCoreRestoredCandidateWithProjection(
+                expectedCoreSession, candidateCoreSession, expectedSession, candidateSession, exclusiveOperation);
         }
+    }
+
+    private bool TryCommitCoreRestoredCandidateWithProjection(
+        DailyV1ActiveRuntimeSession expectedCoreSession,
+        DailyV1ActiveRuntimeSession candidateCoreSession,
+        SimulationActiveSession expectedProjection,
+        SimulationActiveSession candidateProjection,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation,
+        DailyV1ApplicationStartAdmission initialStartAdmission = null,
+        P12AContinuationImage initialRestoreImage = null)
+    {
+        if (candidateCoreSession == null || candidateProjection == null)
+            return false;
+        if (initialStartAdmission != null || initialRestoreImage != null)
+        {
+            if (expectedCoreSession != null || expectedProjection != null
+                || exclusiveOperation != null || initialStartAdmission == null
+                || initialRestoreImage == null)
+                return false;
+            DailyV1ApplicationStartPreparation initialPreparation = dailyV1InitialStartPreparation;
+            if (initialPreparation != null
+                && ReferenceEquals(initialPreparation.StartAdmission, initialStartAdmission)
+                && ReferenceEquals(initialPreparation.RestoreImage, initialRestoreImage))
+                return dailyV1Application.TryCommitInitialStartWithHostProjection(
+                    initialPreparation, candidateCoreSession,
+                    candidateProjection, candidateProjection.Runtime, out _);
+
+            return dailyV1Application.TryCommitInitialRestoredCandidateWithHostProjection(
+                initialStartAdmission, initialRestoreImage, candidateCoreSession,
+                candidateProjection, candidateProjection.Runtime, out _);
+        }
+        return dailyV1Application.TryCommitRestoredCandidateWithHostProjection(
+            expectedCoreSession, candidateCoreSession, expectedProjection,
+            candidateProjection, candidateProjection.Runtime, exclusiveOperation,
+            out _);
     }
 
     /// <summary>
@@ -816,10 +1808,17 @@ public class TesteSimulacao : MonoBehaviour
     private bool TryLoadDailyV1ContinuationAtPath(string persistentDataPath, out string resultCode)
     {
         resultCode = P12AResultCode.Busy.ToString();
-        lock (activeSessionGate)
+        SimulationActiveSession expectedSession = CaptureActiveSession();
+        if (expectedSession == null
+            || expectedSession.CoreRuntimeSession == null
+            || !dailyV1Application.TryBeginExclusiveOperation(
+                expectedSession.CoreRuntimeSession,
+                out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation))
+            return false;
+
+        using (exclusiveOperation)
         {
-            SimulationActiveSession expectedSession = activeSession;
-            if (expectedSession == null || activeSessionOperationCount != 0
+            if (dailyV1Application.ActiveOperationCount != 0
                 || expectedSession.AdmissionContext == null
                 || expectedSession.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                 || runtimeAdmissionContext == null || runtimeAdmissionContext.IsRestoredContinuation
@@ -837,7 +1836,10 @@ public class TesteSimulacao : MonoBehaviour
                 resultCode = P12AResultCode.IncompatibleContentOrConfiguration.ToString();
                 return false;
             }
-            if (!P12AContinuationStore.TryLoad(null, compatibility, persistentDataPath,
+            if (!dailyV1Application.TryLoadContinuationImageForReplacement(
+                    expectedSession.CoreRuntimeSession, exclusiveOperation,
+                    compatibility, null, persistentDataPath,
+                    SystemAtomicFileSlotOperations.Instance,
                     out P12AContinuationImage image, out P12AResult loadResult))
             {
                 resultCode = loadResult?.Code.ToString() ?? P12AResultCode.StorageFailure.ToString();
@@ -847,15 +1849,18 @@ public class TesteSimulacao : MonoBehaviour
             if (!P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
                     image, compatibility, expectedSession.Configuration,
                     expectedSession.Runtime.Configuration, expectedSession.Composition.Calendar,
+                    expectedSession.Composition.SelectedDefinitions,
                     runtimeAdmissionContext, out SimulationActiveSession candidate,
-                    out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic))
+                    out P12GDailyV1RestoreFailure restoreFailure, out string restoreDiagnostic,
+                    application: dailyV1Application,
+                    replacementOperation: exclusiveOperation))
             {
                 resultCode = P12AResultCode.OwnerGraphRejected.ToString();
                 expectedSession.Logger.LogError("P12-A detached load failed: " + restoreFailure + ": " + restoreDiagnostic);
                 return false;
             }
 
-            if (!TryPublishRestoredSession(expectedSession, candidate))
+            if (!TryPublishRestoredSession(expectedSession, candidate, exclusiveOperation))
             {
                 resultCode = P12AResultCode.AdmissionRejected.ToString();
                 expectedSession.Logger.LogError("P12-A detached load passed private validation but publication failed.");
@@ -957,11 +1962,21 @@ public class TesteSimulacao : MonoBehaviour
         System.Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
         System.Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null)
     {
-        lock (activeSessionGate)
+        SimulationActiveSession expectedSession = CaptureActiveSession();
+        if (expectedSession == null
+            || expectedSession.CoreRuntimeSession == null
+            || !dailyV1Application.TryBeginExclusiveOperation(
+                expectedSession.CoreRuntimeSession,
+                out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation exclusiveOperation))
         {
-            SimulationActiveSession expectedSession = activeSession;
-            if (expectedSession == null
-                || activeSessionOperationCount != 0
+            failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
+            diagnostic = "Daily-v1 restore requires the current healthy completed-boundary session while idle on its owner thread.";
+            return false;
+        }
+
+        using (exclusiveOperation)
+        {
+            if (dailyV1Application.ActiveOperationCount != 0
                 || expectedSession.AdmissionContext == null
                 || expectedSession.AdmissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
                 || !expectedSession.AdmissionContext.IsOwnedByCurrentThread()
@@ -986,7 +2001,9 @@ public class TesteSimulacao : MonoBehaviour
                     politicalClaimSnapshotOverrideForTest,
                     politicalSupportSnapshotOverrideForTest,
                     factionSnapshotOverrideForTest,
-                    actorChoiceSnapshotOverrideForTest))
+                    actorChoiceSnapshotOverrideForTest,
+                    replacementOperation: exclusiveOperation,
+                    application: dailyV1Application))
                 return false;
 
             try
@@ -1002,7 +2019,7 @@ public class TesteSimulacao : MonoBehaviour
                 return false;
             }
 
-            if (!TryPublishRestoredSession(expectedSession, candidateSession))
+            if (!TryPublishRestoredSession(expectedSession, candidateSession, exclusiveOperation))
             {
                 failure = P12GDailyV1RestoreFailure.PublicationFailed;
                 diagnostic = "The restored session failed the existing single-reference publication gate.";
@@ -1074,8 +2091,10 @@ public class TesteSimulacao : MonoBehaviour
 
     private void ComposeP10RuinLocalTopology()
     {
-        p10RuinCandidate = P10RuinLocalTopologyGenesis.CreateCandidate(simulationConfig, genesisSpatialAuthority);
+        p10RuinCandidate = P10RuinLocalTopologyGenesis.CreateCandidate(simulationConfig, genesisSpatialAuthority, selectedDefinitions);
         genesisLocalTopologyStore = new LocalTopologyStore(runtimeIdentityRegistry);
+        if (genesisLegacySpatialAnchorBindingStore == null)
+            genesisLegacySpatialAnchorBindingStore = new LegacySpatialAnchorBindingStore(genesisSpatialAuthority);
         if (!P10RuinLocalTopologyGenesis.TryCompose(
                 p10RuinCandidate,
                 runtimeIdAllocator,
@@ -1084,24 +2103,37 @@ public class TesteSimulacao : MonoBehaviour
                 explorableSiteStore,
                 genesisSpatialAuthority,
                 genesisLocalTopologyStore,
+                genesisLegacySpatialAnchorBindingStore,
                 out p10RuinRuntime,
                 out _,
-                out genesisLegacySpatialAnchorBindingStore,
                 out string diagnostic))
             throw new System.InvalidOperationException("P10 Ruin topology genesis stage failed before publication: " + diagnostic);
-        AddExplorableSiteRuntimeByDefinition(p10RuinRuntime.Definition, p10RuinRuntime);
+        AddExplorableSiteRuntimeByDefinition(p10RuinRuntime.DefinitionId, p10RuinRuntime);
     }
 
     private void ComposeAuthoredGeography()
     {
-        SimulationConfigData input = simulationConfig;
-        decimal scale = decimal.Parse(input.authoredDistancePerNeighborStep, NumberStyles.Number, CultureInfo.InvariantCulture);
+        DailyV1SimulationConfigData selected = UsesSelectedDefinitionBindings
+            ? selectedDefinitions.Configuration
+            : null;
+        string scaleText = selected != null ? selected.authoredDistancePerNeighborStep : simulationConfig.authoredDistancePerNeighborStep;
+        string scaleConvention = selected != null ? selected.authoredScaleConventionId : simulationConfig.authoredScaleConventionId;
+        string scaleSource = selected != null ? selected.authoredScaleSourceIdentity : simulationConfig.authoredScaleSourceIdentity;
+        string scaleVersion = selected != null ? selected.authoredScaleSourceVersion : simulationConfig.authoredScaleSourceVersion;
+        string scaleUnit = selected != null ? selected.authoredScaleUnit : simulationConfig.authoredScaleUnit;
+        string hexId = selected != null ? selected.authoredHexId : simulationConfig.authoredHexId;
+        int hexQ = selected != null ? selected.authoredHexQ : simulationConfig.authoredHexQ;
+        int hexR = selected != null ? selected.authoredHexR : simulationConfig.authoredHexR;
+        string terrainId = selected != null ? selected.authoredTerrainDefinitionId : simulationConfig.authoredTerrainDefinitionId;
+        string terrainRevision = selected != null ? selected.authoredTerrainRevisionToken : simulationConfig.authoredTerrainRevisionToken;
+        string locationId = selected != null ? selected.authoredLocationId : simulationConfig.authoredLocationId;
+        decimal scale = decimal.Parse(scaleText, NumberStyles.Number, CultureInfo.InvariantCulture);
         var definition = new SpatialGeographyDefinition(
-            new SpatialWorldScaleContext(input.authoredScaleConventionId, input.authoredScaleSourceIdentity,
-                input.authoredScaleSourceVersion, scale, input.authoredScaleUnit),
-            new[] { new HexRecord(new HexId(input.authoredHexId), new HexCoordinate(input.authoredHexQ, input.authoredHexR),
-                new TerrainReference(new TerrainDefinitionId(input.authoredTerrainDefinitionId), input.authoredTerrainRevisionToken)) },
-            new[] { new LocationRecord(new LocationId(input.authoredLocationId), new HexId(input.authoredHexId)) });
+            new SpatialWorldScaleContext(scaleConvention, scaleSource,
+                scaleVersion, scale, scaleUnit),
+            new[] { new HexRecord(new HexId(hexId), new HexCoordinate(hexQ, hexR),
+                new TerrainReference(new TerrainDefinitionId(terrainId), terrainRevision)) },
+            new[] { new LocationRecord(new LocationId(locationId), new HexId(hexId)) });
         if (!genesisSpatialAuthority.TryComposeGeography(definition, out SpatialAuthorityFailure failure))
             throw new System.InvalidOperationException("Authored geography stage failed atomically: " + failure);
         BindAuthoredMaterialFlowCityAnchors();
@@ -1112,13 +2144,13 @@ public class TesteSimulacao : MonoBehaviour
         foreach (CityRuntime city in CityRuntimeList)
         {
             if (city == null || !city.HasLocalDailyMaterialFlow
-                || string.IsNullOrWhiteSpace(city.CityData?.materialFlowLocationId))
+                || string.IsNullOrWhiteSpace(city.MaterialFlowLocationId))
                 continue;
 
             if (genesisLegacySpatialAnchorBindingStore == null)
                 genesisLegacySpatialAnchorBindingStore = new LegacySpatialAnchorBindingStore(genesisSpatialAuthority);
 
-            LocationId locationId = new LocationId(city.CityData.materialFlowLocationId);
+            LocationId locationId = new LocationId(city.MaterialFlowLocationId);
             if (!genesisLegacySpatialAnchorBindingStore.TryBindCity(city.RuntimeId, locationId, out SpatialAnchorBindingFailure failure))
                 throw new System.InvalidOperationException(
                     "P14 local material-flow City anchor composition failed: " + failure);
@@ -1166,21 +2198,39 @@ public class TesteSimulacao : MonoBehaviour
                 "P14-A authored material-flow profile is not admitted by the Unity bootstrap daily profile.");
     }
 
+    private bool IsCanonicalP10RuinDefinition(ExplorableSiteRuntime site)
+    {
+        return site != null
+            && simulationConfig?.authoredP10RuinSite != null
+            && selectedDefinitions != null
+            && selectedDefinitions.ExplorableSites.TryGetValue(
+                simulationConfig.authoredP10RuinSite.DefinitionId,
+                out DailyV1ExplorableSiteDefinition expected)
+            && ReferenceEquals(site.Definition, expected);
+    }
+
     private void ValidateCandidateProfile()
     {
         bool p10b = SimulationGenesisPipeline.IsP10BGeneratedRuinEnabled(simulationConfig);
         int p10SiteCount = P10RuinLocalTopologyGenesis.IsEnabled(simulationConfig) && !p10b ? 1 : 0;
-        if (CityRuntimeList.Count != simulationConfig.Cities.Count
-            || NpcRuntimeList.Count != simulationConfig.Npcs.Count
-            || explorableSiteStore.Sites.Count != simulationConfig.ExplorableSites.Count + p10SiteCount
-            || scheduledDirectiveStore.Directives.Count != simulationConfig.ScheduledDirectives.Count)
+        DailyV1SimulationConfigData selectedConfiguration = UsesSelectedDefinitionBindings
+            ? selectedDefinitions.Configuration
+            : null;
+        int expectedCityCount = selectedConfiguration?.cities?.Count ?? simulationConfig.Cities.Count;
+        int expectedNpcCount = selectedConfiguration?.npcs?.Count ?? simulationConfig.Npcs.Count;
+        int expectedSiteCount = selectedConfiguration?.explorableSites?.Count ?? simulationConfig.ExplorableSites.Count;
+        int expectedDirectiveCount = selectedConfiguration?.scheduledDirectives?.Count ?? simulationConfig.ScheduledDirectives.Count;
+        if (CityRuntimeList.Count != expectedCityCount
+            || NpcRuntimeList.Count != expectedNpcCount
+            || explorableSiteStore.Sites.Count != expectedSiteCount + p10SiteCount
+            || scheduledDirectiveStore.Directives.Count != expectedDirectiveCount)
             throw new System.InvalidOperationException("Authored bootstrap output inventory does not match its selected profile.");
 
         if (p10SiteCount == 1)
         {
             if (p10RuinCandidate == null || p10RuinRuntime == null
-                || p10RuinRuntime.Definition != simulationConfig.authoredP10RuinSite
-                || p10RuinRuntime.Definition.kind != ExplorableSiteKind.Ruin
+                || !IsCanonicalP10RuinDefinition(p10RuinRuntime)
+                || p10RuinRuntime.Definition.Kind.Value != (int)ExplorableSiteKind.Ruin
                 || !simulationRuntime.SpatialAuthorityStore.TryGet(p10RuinCandidate.Location.Id, out LocationRecord selectedLocation)
                 || selectedLocation.AnchorHexId != p10RuinCandidate.Anchor.Id
                 || !simulationRuntime.LegacySpatialAnchorBindingStore.TryGet(
@@ -1211,95 +2261,289 @@ public class TesteSimulacao : MonoBehaviour
                 throw new System.InvalidOperationException("P10 entry point did not resolve through the selected P8 Location: " + resolutionFailure);
         }
 
+        List<CityData> selectedCityIdentityBridges = null;
         int expectedRouteCount = 0;
-        foreach (CityData city in simulationConfig.Cities)
+        if (selectedConfiguration != null)
         {
-            expectedRouteCount += city.connections.Count;
-            CityRuntime runtime = GetSingleCityRuntimeByDefinition(city);
-            if (runtime == null || runtime.CurrentPopulation != city.initialPopulation
-                || runtime.CityData != city || runtime.Market.Items.Count != city.marketItems.Count
-                || runtime.CityData.productionConfigs.Count != city.productionConfigs.Count
-                || runtime.MarketCounterparty.LiquidityMode != city.MarketLiquidity.liquidityMode
-                || runtime.PopulationEconomy.PaymentMode != city.PopulationConsumption.paymentMode
-                || runtime.MarketCounterparty.CounterpartyRuntimeId != runtime.RuntimeId
-                || (city.MarketLiquidity.liquidityMode == MarketLiquidityMode.AccountBacked
-                    && (runtime.MarketCounterparty.MoneyAccount == null
-                        || runtime.MarketCounterparty.MoneyAccount.Balance != city.MarketLiquidity.initialPurchasingPower))
-                || (city.PopulationConsumption.paymentMode == ConsumptionPaymentMode.AccountBacked
-                    && (runtime.PopulationEconomy.MoneyAccount == null
-                        || runtime.PopulationEconomy.MoneyAccount.Balance != city.PopulationConsumption.initialPurchasingPower)))
-                throw new System.InvalidOperationException("Authored city owner output is incomplete.");
-            for (int i = 0; i < city.marketItems.Count; i++)
+            selectedCityIdentityBridges = new List<CityData>();
+            foreach (string cityId in selectedConfiguration.cities ?? System.Array.Empty<string>())
             {
-                MarketItemConfig input = city.marketItems[i];
-                MarketItemRuntime output = runtime.Market.Items[i];
-                if (input.item != output.Item || input.initialAmount != output.Amount || input.desiredAmount != output.DesiredAmount)
-                    throw new System.InvalidOperationException("Authored city market output does not match its selected row.");
-            }
-            for (int i = 0; i < city.productionConfigs.Count; i++)
-            {
-                CityProductionConfig input = city.productionConfigs[i];
-                CityProductionConfig output = runtime.CityData.productionConfigs[i];
-                if (input.item != output.item || input.amountPerDay != output.amountPerDay)
-                    throw new System.InvalidOperationException("Authored city production inputs do not match their selected rows.");
+                if (!selectedDefinitions.Cities.TryGetValue(cityId, out DailyV1CityDefinition cityNode)
+                    || cityNode?.Values == null
+                    || selectedDefinitionBindings == null
+                    || !selectedDefinitionBindings.TryGetAsset(cityNode, out CityData identityBridge)
+                    || identityBridge == null
+                    || !string.Equals(identityBridge.DefinitionId, cityId, System.StringComparison.Ordinal))
+                    throw new System.InvalidOperationException("The selected City configuration references an unavailable effective definition.");
+                selectedCityIdentityBridges.Add(identityBridge);
+                expectedRouteCount += cityNode.Values.connections?.Count ?? 0;
             }
         }
-        expectedRouteCount += simulationConfig.ExplorableSites.Count * 2;
+        else
+        {
+            foreach (CityData city in simulationConfig.Cities)
+                expectedRouteCount += city.connections.Count;
+        }
+        int cityValidationCount = selectedCityIdentityBridges?.Count ?? simulationConfig.Cities.Count;
+        for (int cityIndex = 0; cityIndex < cityValidationCount; cityIndex++)
+        {
+            CityData city = selectedCityIdentityBridges == null
+                ? simulationConfig.Cities[cityIndex]
+                : null;
+            CityData cityIdentity = selectedCityIdentityBridges == null
+                ? city
+                : selectedCityIdentityBridges[cityIndex];
+            DailyV1CityDefinition selectedCityDefinition = null;
+            if (selectedConfiguration != null
+                && (!selectedDefinitions.Cities.TryGetValue(cityIdentity.DefinitionId, out selectedCityDefinition)
+                    || selectedCityDefinition?.Values == null))
+                throw new System.InvalidOperationException("A selected City owner is missing its admitted effective definition.");
+            int expectedInitialPopulation = selectedCityDefinition != null
+                ? selectedCityDefinition.Values.initialPopulation
+                : city.initialPopulation;
+            CityRuntime runtime = GetSingleCityRuntimeByDefinition(cityIdentity);
+            if (runtime == null)
+                throw new System.InvalidOperationException("Authored city owner output is incomplete.");
+            DailyV1CityData selectedCityValues = selectedCityDefinition?.Values;
+            int admittedMarketInputCount = selectedCityValues != null
+                ? selectedCityValues.marketItems?.Count ?? 0
+                : city.marketItems.Count;
+            int admittedProductionInputCount = selectedCityValues != null
+                ? selectedCityValues.productionConfigs?.Count ?? 0
+                : city.productionConfigs.Count;
+            MarketLiquidityMode expectedLiquidityMode = selectedCityValues != null
+                ? (MarketLiquidityMode)(selectedCityValues.marketLiquidity?.liquidityMode?.Value ?? (int)MarketLiquidityMode.Open)
+                : city.MarketLiquidity.liquidityMode;
+            float expectedMarketPurchasingPower = selectedCityValues?.marketLiquidity?.initialPurchasingPower
+                ?? city.MarketLiquidity.initialPurchasingPower;
+            ConsumptionPaymentMode expectedPopulationPaymentMode = selectedCityValues != null
+                ? (ConsumptionPaymentMode)(selectedCityValues.populationConsumption?.paymentMode?.Value ?? (int)ConsumptionPaymentMode.Free)
+                : city.PopulationConsumption.paymentMode;
+            float expectedPopulationPurchasingPower = selectedCityValues?.populationConsumption?.initialPurchasingPower
+                ?? city.PopulationConsumption.initialPurchasingPower;
+            if (runtime.CurrentPopulation != expectedInitialPopulation
+                || runtime.CityData != cityIdentity || runtime.Market.Items.Count != admittedMarketInputCount
+                || (selectedCityDefinition == null && runtime.CityData.productionConfigs.Count != city.productionConfigs.Count)
+                || runtime.MarketCounterparty.LiquidityMode != expectedLiquidityMode
+                || runtime.PopulationEconomy.PaymentMode != expectedPopulationPaymentMode
+                || runtime.MarketCounterparty.CounterpartyRuntimeId != runtime.RuntimeId
+                || (expectedLiquidityMode == MarketLiquidityMode.AccountBacked
+                    && (runtime.MarketCounterparty.MoneyAccount == null
+                        || runtime.MarketCounterparty.MoneyAccount.Balance != expectedMarketPurchasingPower))
+                || (expectedPopulationPaymentMode == ConsumptionPaymentMode.AccountBacked
+                    && (runtime.PopulationEconomy.MoneyAccount == null
+                        || runtime.PopulationEconomy.MoneyAccount.Balance != expectedPopulationPurchasingPower)))
+                throw new System.InvalidOperationException("Authored city owner output is incomplete.");
+            for (int i = 0; i < admittedMarketInputCount; i++)
+            {
+                MarketItemRuntime output = runtime.Market.Items[i];
+                if (selectedCityValues != null)
+                {
+                    DailyV1MarketItemConfig admittedInput = selectedCityValues.marketItems[i];
+                    bool bindingMatches = selectedDefinitionBindings != null
+                        && TryResolveSelectedItem(admittedInput?.item, out ItemData admittedItem)
+                        && ReferenceEquals(output.Item, admittedItem);
+                    if (admittedInput == null
+                        || !string.Equals(output.Item?.DefinitionId, admittedInput.item, System.StringComparison.Ordinal)
+                        || output.Amount != admittedInput.initialAmount
+                        || output.DesiredAmount != admittedInput.desiredAmount
+                        || (selectedDefinitionBindings != null && !bindingMatches))
+                        throw new System.InvalidOperationException("Selected City market inputs do not match the admitted effective definition.");
+                }
+                else
+                {
+                    MarketItemConfig input = city.marketItems[i];
+                    if (input.item != output.Item || input.initialAmount != output.Amount || input.desiredAmount != output.DesiredAmount)
+                        throw new System.InvalidOperationException("Authored city market output does not match its selected row.");
+                }
+            }
+            if (selectedCityDefinition != null
+                && (!ReferenceEquals(runtime.SelectedRuntimeOwners?.Definition, selectedCityDefinition)
+                    || !ReferenceEquals(runtime.SelectedRuntimeOwners?.Definitions, selectedDefinitions)
+                    || (selectedCityValues.productionConfigs ?? System.Array.Empty<DailyV1CityProductionConfig>())
+                        .Any(row => row != null && !string.IsNullOrWhiteSpace(row.item)
+                            && !selectedDefinitions.Items.ContainsKey(row.item))))
+                throw new System.InvalidOperationException("Selected City production inputs are not owned by the exact admitted definition graph.");
+        }
+        expectedRouteCount += expectedSiteCount * 2;
         if (spatialNetwork.Routes.Count != expectedRouteCount)
             throw new System.InvalidOperationException("Authored spatial route output inventory is incomplete.");
 
-        foreach (NpcSimulationConfig row in simulationConfig.Npcs)
+        List<NpcData> selectedNpcIdentityBridges = null;
+        if (selectedConfiguration != null)
         {
-            NpcRuntime runtime = GetSingleNpcRuntimeByDefinition(row.npc);
-            CityRuntime expectedCity = GetSingleCityRuntimeByDefinition(row.startingCity);
-            var expectedStatuses = new System.Collections.Generic.List<NpcStatusData>(row.npc.statusPadrao);
-            bool hasActiveWarrant = false;
-            foreach (InitialWantedRecordConfig warrant in simulationConfig.InitialWarrants)
-                if (warrant.target == row.npc) { hasActiveWarrant = true; break; }
-            if (hasActiveWarrant && simulationConfig.wantedStatus != null && !expectedStatuses.Contains(simulationConfig.wantedStatus))
-                expectedStatuses.Add(simulationConfig.wantedStatus);
-            if (runtime == null || runtime.NpcData != row.npc || runtime.Money != row.initialMoney
+            selectedNpcIdentityBridges = new List<NpcData>();
+            foreach (DailyV1NpcSimulationConfig selectedRow in
+                selectedConfiguration.npcs ?? System.Array.Empty<DailyV1NpcSimulationConfig>())
+            {
+                if (selectedRow == null || string.IsNullOrWhiteSpace(selectedRow.npc)
+                    || !selectedDefinitions.Npcs.TryGetValue(selectedRow.npc, out DailyV1NpcDefinition selectedNode)
+                    || selectedNode == null
+                    || selectedDefinitionBindings == null
+                    || !selectedDefinitionBindings.TryGetAsset(selectedNode, out NpcData identityBridge)
+                    || identityBridge == null
+                    || !string.Equals(identityBridge.DefinitionId, selectedRow.npc, System.StringComparison.Ordinal))
+                    throw new System.InvalidOperationException(
+                        "A selected NPC validation row did not resolve through its admitted definition and identity binding.");
+                selectedNpcIdentityBridges.Add(identityBridge);
+            }
+        }
+
+        int npcValidationCount = selectedNpcIdentityBridges?.Count ?? simulationConfig.Npcs.Count;
+        for (int npcIndex = 0; npcIndex < npcValidationCount; npcIndex++)
+        {
+            NpcSimulationConfig row = selectedNpcIdentityBridges == null
+                ? simulationConfig.Npcs[npcIndex]
+                : null;
+            NpcData npcIdentity = selectedNpcIdentityBridges == null
+                ? row.npc
+                : selectedNpcIdentityBridges[npcIndex];
+            NpcRuntime runtime = GetSingleNpcRuntimeByDefinition(npcIdentity);
+            DailyV1NpcSimulationConfig selectedNpcConfiguration = null;
+            DailyV1NpcDefinition selectedNpcDefinition = null;
+            if (selectedConfiguration != null)
+            {
+                foreach (DailyV1NpcSimulationConfig candidate in selectedConfiguration.npcs ?? System.Array.Empty<DailyV1NpcSimulationConfig>())
+                {
+                    if (candidate == null || !string.Equals(candidate.npc, npcIdentity.DefinitionId, System.StringComparison.Ordinal))
+                        continue;
+                    if (selectedNpcConfiguration != null)
+                        throw new System.InvalidOperationException("The selected NPC configuration is ambiguous by definition identity.");
+                    selectedNpcConfiguration = candidate;
+                }
+                if (selectedNpcConfiguration == null)
+                    throw new System.InvalidOperationException("A selected NPC owner is missing its admitted effective configuration.");
+                if (!selectedDefinitions.Npcs.TryGetValue(npcIdentity.DefinitionId, out selectedNpcDefinition)
+                    || selectedNpcDefinition?.Values == null)
+                    throw new System.InvalidOperationException("A selected NPC owner is missing its admitted effective definition.");
+            }
+            string expectedStartingCityId = selectedNpcConfiguration != null
+                ? selectedNpcConfiguration.startingCity
+                : row.startingCity?.DefinitionId;
+            float expectedInitialMoney = selectedNpcConfiguration != null
+                ? selectedNpcConfiguration.initialMoney
+                : row.initialMoney;
+            CityRuntime expectedCity = GetSingleCityRuntimeByDefinition(expectedStartingCityId);
+            var expectedStatuses = new System.Collections.Generic.List<NpcStatusData>();
+            if (selectedNpcDefinition != null)
+            {
+                foreach (string statusId in selectedNpcDefinition.Values.statusPadrao ?? System.Array.Empty<string>())
+                {
+                    if (!TryResolveSelectedStatus(statusId, out NpcStatusData statusAsset))
+                        throw new System.InvalidOperationException("A selected NPC status did not resolve through its admitted definition graph.");
+                    expectedStatuses.Add(statusAsset);
+                }
+            }
+            else
+            {
+                expectedStatuses.AddRange(row.npc.statusPadrao);
+            }
+            bool hasActiveWarrant = selectedConfiguration != null
+                ? (selectedConfiguration.initialWarrants ?? System.Array.Empty<DailyV1InitialWantedRecordConfig>())
+                    .Any(warrant => warrant != null
+                        && string.Equals(warrant.target, npcIdentity.DefinitionId, System.StringComparison.Ordinal))
+                : simulationConfig.InitialWarrants.Any(warrant => warrant != null && warrant.target == row.npc);
+            string wantedStatusId = selectedConfiguration != null
+                ? selectedConfiguration.wantedStatus
+                : simulationConfig.wantedStatus?.DefinitionId;
+            if (hasActiveWarrant && !string.IsNullOrWhiteSpace(wantedStatusId))
+            {
+                NpcStatusData wantedStatus = null;
+                if (selectedConfiguration != null)
+                {
+                    if (!TryResolveSelectedStatus(wantedStatusId, out wantedStatus))
+                        throw new System.InvalidOperationException("The selected wanted status did not resolve through its admitted definition graph.");
+                }
+                else
+                {
+                    wantedStatus = simulationConfig.wantedStatus;
+                }
+                if (wantedStatus != null && !expectedStatuses.Contains(wantedStatus))
+                    expectedStatuses.Add(wantedStatus);
+            }
+            if (runtime == null || runtime.NpcData != npcIdentity || runtime.Money != expectedInitialMoney
                 || runtime.CurrentCity != expectedCity || runtime.CurrentLocation != expectedCity.Location
                 || runtime.CurrentStatus.Count != expectedStatuses.Count)
                 throw new System.InvalidOperationException("Authored NPC owner output is incomplete.");
             for (int statusIndex = 0; statusIndex < expectedStatuses.Count; statusIndex++)
                 if (runtime.CurrentStatus[statusIndex] != expectedStatuses[statusIndex])
                     throw new System.InvalidOperationException("Authored NPC status output does not preserve authored/domain order.");
-            // Job, default actions, traits and capability values remain authored inputs on the
-            // preserved NpcData owner; P9-A does not copy them into a second runtime owner.
-            if (runtime.NpcData.job != row.npc.job
+            // The P12 bridge deliberately retains the exact authoring object identity.
+            // Selected behavior and content are validated against the admitted node, not
+            // reread from its mutable ScriptableObject fields after admission.
+            if (selectedNpcDefinition != null)
+            {
+                if (!ReferenceEquals(runtime.SelectedDailyV1Definition, selectedNpcDefinition))
+                    throw new System.InvalidOperationException("The selected NPC owner does not retain its exact admitted definition node.");
+            }
+            else if (runtime.NpcData.job != row.npc.job
                 || runtime.NpcData.acoesPadrao.Count != row.npc.acoesPadrao.Count
                 || runtime.NpcData.traits.Count != row.npc.traits.Count
                 || runtime.NpcData.capabilityValues.Count != row.npc.capabilityValues.Count)
+            {
                 throw new System.InvalidOperationException("Authored NPC definition inputs were not preserved by their owner.");
-            for (int actionIndex = 0; actionIndex < row.npc.acoesPadrao.Count; actionIndex++)
-                if (runtime.NpcData.acoesPadrao[actionIndex].action != row.npc.acoesPadrao[actionIndex].action
-                    || runtime.NpcData.acoesPadrao[actionIndex].baseUtility != row.npc.acoesPadrao[actionIndex].baseUtility)
-                    throw new System.InvalidOperationException("Authored NPC default actions were not preserved by their owner.");
+            }
+            if (selectedNpcDefinition == null)
+            {
+                for (int actionIndex = 0; actionIndex < row.npc.acoesPadrao.Count; actionIndex++)
+                    if (runtime.NpcData.acoesPadrao[actionIndex].action != row.npc.acoesPadrao[actionIndex].action
+                        || runtime.NpcData.acoesPadrao[actionIndex].baseUtility != row.npc.acoesPadrao[actionIndex].baseUtility)
+                        throw new System.InvalidOperationException("Authored NPC default actions were not preserved by their owner.");
+            }
             var expectedInventoryItems = new System.Collections.Generic.HashSet<ItemData>();
             var expectedInventory = new InventoryRuntime();
-            foreach (NpcInitialInventoryItemConfig item in row.InitialInventory)
+            var admittedInventoryItems = new System.Collections.Generic.List<ItemData>();
+            var admittedInventoryAmounts = new System.Collections.Generic.List<int>();
+            var admittedInventoryCosts = new System.Collections.Generic.List<float>();
+            if (selectedNpcConfiguration != null)
             {
-                if (item.amount > 0) expectedInventoryItems.Add(item.item);
-                expectedInventory.AddItem(item.item, item.amount, item.averageUnitCost);
+                foreach (DailyV1NpcInitialInventoryItemConfig item in
+                    selectedNpcConfiguration.initialInventory ?? System.Array.Empty<DailyV1NpcInitialInventoryItemConfig>())
+                {
+                    if (item == null) continue;
+                    ItemData itemAsset = null;
+                    if (!string.IsNullOrWhiteSpace(item.item) && !TryResolveSelectedItem(item.item, out itemAsset))
+                        throw new System.InvalidOperationException("A selected NPC inventory item did not resolve through its admitted definition graph.");
+                    admittedInventoryItems.Add(itemAsset);
+                    admittedInventoryAmounts.Add(item.amount);
+                    admittedInventoryCosts.Add(item.averageUnitCost);
+                }
+            }
+            else
+                foreach (NpcInitialInventoryItemConfig item in row.InitialInventory)
+                {
+                    admittedInventoryItems.Add(item.item);
+                    admittedInventoryAmounts.Add(item.amount);
+                    admittedInventoryCosts.Add(item.averageUnitCost);
+                }
+            for (int itemIndex = 0; itemIndex < admittedInventoryItems.Count; itemIndex++)
+            {
+                ItemData item = admittedInventoryItems[itemIndex];
+                int amount = admittedInventoryAmounts[itemIndex];
+                if (amount > 0) expectedInventoryItems.Add(item);
+                expectedInventory.AddItem(item, amount, admittedInventoryCosts[itemIndex]);
             }
             var validatedInventoryItems = new System.Collections.Generic.HashSet<ItemData>();
-            foreach (NpcInitialInventoryItemConfig item in row.InitialInventory)
+            foreach (ItemData item in admittedInventoryItems)
             {
-                if (!validatedInventoryItems.Add(item.item)) continue;
+                if (!validatedInventoryItems.Add(item)) continue;
                 int expectedAmount = 0;
-                foreach (NpcInitialInventoryItemConfig candidate in row.InitialInventory)
-                    if (candidate.item == item.item) expectedAmount = checked(expectedAmount + candidate.amount);
-                if (runtime.Inventory.GetAmount(item.item) != expectedAmount)
+                for (int candidateIndex = 0; candidateIndex < admittedInventoryItems.Count; candidateIndex++)
+                    if (admittedInventoryItems[candidateIndex] == item)
+                        expectedAmount = checked(expectedAmount + admittedInventoryAmounts[candidateIndex]);
+                if (runtime.Inventory.GetAmount(item) != expectedAmount)
                     throw new System.InvalidOperationException("Authored NPC inventory output does not match its selected rows.");
-                if (runtime.Inventory.GetAverageUnitCost(item.item) != expectedInventory.GetAverageUnitCost(item.item))
+                if (runtime.Inventory.GetAverageUnitCost(item) != expectedInventory.GetAverageUnitCost(item))
                     throw new System.InvalidOperationException("Authored NPC inventory costs do not match their ordered selected rows.");
             }
             if (runtime.Inventory.Items.Count != expectedInventoryItems.Count)
                 throw new System.InvalidOperationException("Authored NPC inventory contains unexpected output rows.");
-            foreach (ExplorableSiteData known in row.InitialKnownExplorableSites)
+            List<string> expectedKnownSiteIds = selectedNpcConfiguration != null
+                ? new List<string>(selectedNpcConfiguration.initialKnownExplorableSites ?? System.Array.Empty<string>())
+                : row.InitialKnownExplorableSites.Select(known => known?.DefinitionId).ToList();
+            foreach (string knownSiteId in expectedKnownSiteIds)
             {
-                if (!explorableSiteRuntimesByDefinition.TryGetValue(known, out List<ExplorableSiteRuntime> sites)
+                if (!explorableSiteRuntimesByDefinition.TryGetValue(knownSiteId, out List<ExplorableSiteRuntime> sites)
                     || sites.Count != 1 || !runtime.ExplorableSiteKnowledge.KnowsSite(sites[0].RuntimeId))
                     throw new System.InvalidOperationException("Authored initial Knowledge output is incomplete.");
                 if (!runtime.ExplorableSiteKnowledge.TryGetObservation(sites[0].RuntimeId, out ExplorableSiteKnowledgeObservation observation)
@@ -1308,33 +2552,65 @@ public class TesteSimulacao : MonoBehaviour
                     || observation.LocationRuntimeId != sites[0].Location.RuntimeId)
                     throw new System.InvalidOperationException("Authored initial Knowledge provenance does not match its selected site.");
             }
-            int expectedKnowledgeCount = new System.Collections.Generic.HashSet<ExplorableSiteData>(row.InitialKnownExplorableSites).Count;
-            if (runtime.ExplorableSiteKnowledge.Observations.Count != expectedKnowledgeCount)
+            System.Collections.Generic.HashSet<string> expectedKnowledgeIds =
+                new System.Collections.Generic.HashSet<string>(System.StringComparer.Ordinal);
+            foreach (string knownSiteId in expectedKnownSiteIds)
+                if (!string.IsNullOrWhiteSpace(knownSiteId)) expectedKnowledgeIds.Add(knownSiteId);
+            if (runtime.ExplorableSiteKnowledge.Observations.Count != expectedKnowledgeIds.Count)
                 throw new System.InvalidOperationException("Authored initial Knowledge contains unexpected observations.");
         }
 
-        foreach (InitialWantedRecordConfig row in simulationConfig.InitialWarrants)
+        if (selectedConfiguration != null)
         {
-            NpcRuntime target = GetSingleNpcRuntimeByDefinition(row.target);
-            List<WantedRecordRuntime> records = justiceSystem?.GetActiveWarrants(target);
-            CityRuntime city = GetSingleCityRuntimeByDefinition(row.city);
-            WantedRecordRuntime record = records?.Find(value => value.City == city);
-            float expectedBounty = 0f;
-            int expectedSentenceDays = 0;
-            foreach (InitialWantedRecordConfig candidate in simulationConfig.InitialWarrants)
-                if (candidate.target == row.target && candidate.city == row.city)
-                {
-                    expectedBounty += candidate.bounty;
-                    expectedSentenceDays += candidate.sentenceDays;
-                }
-            if (record == null || record.Bounty != expectedBounty || record.SentenceDays != expectedSentenceDays)
-                throw new System.InvalidOperationException("Authored warrant owner output is incomplete.");
+            IReadOnlyList<DailyV1InitialWantedRecordConfig> selectedWarrants =
+                selectedConfiguration.initialWarrants ?? System.Array.Empty<DailyV1InitialWantedRecordConfig>();
+            foreach (DailyV1InitialWantedRecordConfig row in selectedWarrants)
+            {
+                if (row == null || string.IsNullOrWhiteSpace(row.target) || string.IsNullOrWhiteSpace(row.city))
+                    continue;
+                NpcRuntime target = GetSingleNpcRuntimeByDefinition(row.target);
+                List<WantedRecordRuntime> records = justiceSystem?.GetActiveWarrants(target);
+                CityRuntime city = GetSingleCityRuntimeByDefinition(row.city);
+                WantedRecordRuntime record = records?.Find(value => value.City == city);
+                float expectedBounty = 0f;
+                int expectedSentenceDays = 0;
+                foreach (DailyV1InitialWantedRecordConfig candidate in selectedWarrants)
+                    if (candidate != null
+                        && string.Equals(candidate.target, row.target, System.StringComparison.Ordinal)
+                        && string.Equals(candidate.city, row.city, System.StringComparison.Ordinal))
+                    {
+                        expectedBounty += candidate.bounty;
+                        expectedSentenceDays += candidate.sentenceDays;
+                    }
+                if (record == null || record.Bounty != expectedBounty || record.SentenceDays != expectedSentenceDays)
+                    throw new System.InvalidOperationException("Authored warrant owner output is incomplete.");
+            }
+        }
+        else
+        {
+            foreach (InitialWantedRecordConfig row in simulationConfig.InitialWarrants)
+            {
+                NpcRuntime target = GetSingleNpcRuntimeByDefinition(row.target);
+                List<WantedRecordRuntime> records = justiceSystem?.GetActiveWarrants(target);
+                CityRuntime city = GetSingleCityRuntimeByDefinition(row.city);
+                WantedRecordRuntime record = records?.Find(value => value.City == city);
+                float expectedBounty = 0f;
+                int expectedSentenceDays = 0;
+                foreach (InitialWantedRecordConfig candidate in simulationConfig.InitialWarrants)
+                    if (candidate.target == row.target && candidate.city == row.city)
+                    {
+                        expectedBounty += candidate.bounty;
+                        expectedSentenceDays += candidate.sentenceDays;
+                    }
+                if (record == null || record.Bounty != expectedBounty || record.SentenceDays != expectedSentenceDays)
+                    throw new System.InvalidOperationException("Authored warrant owner output is incomplete.");
+            }
         }
         if (p10SiteCount == 1 && !p10b)
         {
             if (p10RuinCandidate == null || p10RuinRuntime == null
-                || p10RuinRuntime.Definition != simulationConfig.authoredP10RuinSite
-                || p10RuinRuntime.Definition.kind != ExplorableSiteKind.Ruin
+                || !IsCanonicalP10RuinDefinition(p10RuinRuntime)
+                || p10RuinRuntime.Definition.Kind.Value != (int)ExplorableSiteKind.Ruin
                 || !simulationRuntime.SpatialAuthorityStore.TryGet(p10RuinCandidate.Location.Id, out LocationRecord selectedLocation)
                 || selectedLocation.AnchorHexId != p10RuinCandidate.Anchor.Id
                 || !simulationRuntime.LegacySpatialAnchorBindingStore.TryGet(
@@ -1368,7 +2644,7 @@ public class TesteSimulacao : MonoBehaviour
                 foreach (RuinLocalTopologyGeneration.Place place in p10BPreparedRuin.GeneratedTopology.Places)
                     if (place.IsEntry) generatedEntryCount++;
             if (p10BPreparedRuin == null
-                || p10BPreparedRuin.Site.Definition != simulationConfig.authoredP10RuinSite
+                || !IsCanonicalP10RuinDefinition(p10BPreparedRuin.Site)
                 || p10BPreparedRuin.Site.SiteInstanceId != p10BPreparedRuin.Request.SiteInstanceId
                 || p10BPreparedRuin.GeneratedTopology.Places.Count < 6
                 || p10BPreparedRuin.GeneratedTopology.Places.Count > 10
@@ -1509,7 +2785,23 @@ public class TesteSimulacao : MonoBehaviour
     private bool TryCreateCurrentDailyV1CompatibilityDescriptor(
         out P12ACompatibilityDescriptor compatibility, out string diagnostic)
     {
+        return TryCreateCurrentDailyV1CompatibilityDescriptor(
+            out compatibility, out _, out _, out _, out _, out diagnostic);
+    }
+
+    private bool TryCreateCurrentDailyV1CompatibilityDescriptor(
+        out P12ACompatibilityDescriptor compatibility,
+        out EffectiveSimulationConfiguration effective,
+        out CalendarDefinition calendar,
+        out DailyV1EffectiveDefinitions selectedDefinitions,
+        out DailyV1DefinitionAdapter.SelectedBindings selectedBindings,
+        out string diagnostic)
+    {
         compatibility = null;
+        effective = null;
+        calendar = null;
+        selectedDefinitions = null;
+        selectedBindings = null;
         diagnostic = "The current host configuration is not an admitted Daily-v1 profile.";
         if (runtimeAdmissionProfile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
             || simulationConfig == null || !simulationConfig.useAuthoredGeographyProfile
@@ -1521,11 +2813,18 @@ public class TesteSimulacao : MonoBehaviour
         {
             SimulationGenesisPipeline.ValidateProfile(simulationConfig);
             ValidateP14SourceAdmission(simulationConfig, runtimeAdmissionContext);
-            CalendarDefinition calendar = ResolveCalendarDefinition();
-            EffectiveSimulationConfiguration effective = ResolveRuntimeConfiguration();
-            string profileFingerprint = SimulationGenesisPipeline.CreateFingerprint(
-                simulationConfig, effective, calendar,
-                out System.Collections.Generic.IReadOnlyList<string> provenance);
+            calendar = ResolveCalendarDefinition();
+            effective = ResolveRuntimeConfiguration();
+            selectedDefinitions = SimulationGenesisPipeline.CreateSelectedDefinitions(
+                simulationConfig, effective, calendar, out selectedBindings);
+            string profileFingerprint = DailyV1DefinitionIdentity.CreateP9Fingerprint(
+                selectedDefinitions, out System.Collections.Generic.IReadOnlyList<string> provenance);
+            if (!SimulationGenesisPipeline.TryValidateSelectedDefinitionBindings(
+                    selectedDefinitions, out string definitionBindingDiagnostic))
+            {
+                diagnostic = "The selected Daily-v1 definition graph is not closed: " + definitionBindingDiagnostic;
+                return false;
+            }
             SimulationGenesisManifest genesisManifest = new SimulationGenesisManifest(
                 simulationConfig, effective, calendar, profileFingerprint, profileFingerprint,
                 provenance, false, false);
@@ -1564,6 +2863,7 @@ public class TesteSimulacao : MonoBehaviour
                 return false;
             }
             if (!P12ACompatibilityDescriptorFactory.TryCreate(simulationConfig, effective, calendar,
+                    selectedDefinitions,
                     profileFingerprint, p9Manifest, p8Fingerprint, out compatibility))
             {
                 diagnostic = "The current runtime compatibility descriptor could not be formed.";
@@ -1578,36 +2878,67 @@ public class TesteSimulacao : MonoBehaviour
         {
             diagnostic = "The current Daily-v1 compatibility inputs are invalid.";
             compatibility = null;
+            effective = null;
+            calendar = null;
+            selectedDefinitions = null;
+            selectedBindings = null;
             return false;
         }
     }
-
     private void SimulateWithSession(SimulationActiveSession expectedSession, int daysToSimulate)
     {
-        if (!TryBeginActiveSessionOperation(expectedSession, out SimulationActiveSession session)) return;
-        try
+        for (int i = 0; i < daysToSimulate; i++)
         {
-            for (int i = 0; i < daysToSimulate; i++)
+            if (!ReferenceEquals(CaptureActiveSession(), expectedSession)) return;
+            DailyV1ActiveRuntimeSession coreSession = expectedSession.CoreRuntimeSession;
+            if (coreSession == null)
+                expectedSession.Runtime.AdvanceDay();
+            else
+                AdvanceCoreSessionThroughApplication(
+                    dailyV1Application, expectedSession.Runtime);
+
+            SimulationActiveSession session;
+            if (!TryBeginActiveSessionOperation(expectedSession, out session)) return;
+            try
             {
-                session.Runtime.AdvanceDay();
                 AppendNpcStateSummary(session);
                 AppendEconomySnapshotIfNeeded(session, false);
-                TrySaveCompletedDailyV1Boundary(session, out _);
             }
-
-            if (session.Configuration != null
-                && session.Configuration.includeEconomySnapshots == true
-                && daysToSimulate >= Mathf.Max(1, session.Configuration.economySnapshotIntervalDays))
+            finally
             {
-                AppendEconomySnapshotIfNeeded(session, true);
+                EndActiveSessionOperation();
             }
 
-            SaveSimulationLog(session);
+            if (!TrySaveContinuationForSession(
+                    expectedSession,
+                    UnityEngine.Application.persistentDataPath,
+                    out _)) return;
+        }
+
+        if (!TryBeginActiveSessionOperation(expectedSession, out SimulationActiveSession finalSession)) return;
+        try
+        {
+            if (finalSession.Configuration != null
+                && finalSession.Configuration.includeEconomySnapshots == true
+                && daysToSimulate >= Mathf.Max(1, finalSession.Configuration.economySnapshotIntervalDays))
+                AppendEconomySnapshotIfNeeded(finalSession, true);
+
+            SaveSimulationLog(finalSession);
         }
         finally
         {
             EndActiveSessionOperation();
         }
+    }
+
+    internal static void AdvanceCoreSessionThroughApplication(
+        DailyV1Application application,
+        SimulationRuntime runtime)
+    {
+        if (application == null) throw new System.ArgumentNullException(nameof(application));
+        if (runtime == null) throw new System.ArgumentNullException(nameof(runtime));
+        if (!application.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure))
+            throw runtime.CreateAdvanceFailureException(advanceFailure);
     }
 
     private void Simulate(int daysToSimulate)
@@ -1738,13 +3069,13 @@ public class TesteSimulacao : MonoBehaviour
         string status = CreateNpcStatusText(npcRuntime);
         string line = $"{npcRuntime.NpcName} | {location} | ${npcRuntime.Money:0.##} | {status}";
 
-        if (npcRuntime.NpcData != null && npcRuntime.NpcData.job != null && npcRuntime.NpcData.job.jobType == NpcJobType.Merchant)
+        if (npcRuntime.HasJobType(NpcJobType.Merchant))
         {
             if (npcRuntime.MerchantTradePlan.IsActive == true && npcRuntime.MerchantTradePlan.Item != null)
             {
                 line += $" | Trade: {npcRuntime.MerchantTradePlan.RemainingAmount} {npcRuntime.MerchantTradePlan.Item.itemName}";
             }
-            else if (npcRuntime.NpcData.job.merchantBehavior == MerchantBehavior.Local)
+            else if (npcRuntime.HasMerchantBehavior(MerchantBehavior.Local))
             {
                 line += $" | Estoque: {CreateLocalInventoryText(npcRuntime)}";
             }
@@ -1909,6 +3240,30 @@ public class TesteSimulacao : MonoBehaviour
     {
         get
         {
+            if (UsesSelectedDefinitionBindings)
+            {
+                if (selectedDefinitionBindings == null || selectedDefinitions.Configuration == null)
+                    throw new System.InvalidOperationException(
+                        "Selected action construction requires the graph's exact Unity compatibility bindings.");
+                List<NpcActionData> selectedActions = new List<NpcActionData>();
+                foreach (string actionId in selectedDefinitions.Configuration.actions ?? System.Array.Empty<string>())
+                {
+                    if (string.IsNullOrWhiteSpace(actionId))
+                    {
+                        selectedActions.Add(null);
+                        continue;
+                    }
+                    if (!selectedDefinitions.Actions.TryGetValue(actionId, out DailyV1ActionDefinition actionNode)
+                        || actionNode == null
+                        || !selectedDefinitionBindings.TryGetAsset(actionNode, out NpcActionData actionAsset)
+                        || actionAsset == null)
+                        throw new System.InvalidOperationException(
+                            "A configured action did not resolve through its exact admitted typed definition node.");
+                    selectedActions.Add(actionAsset);
+                }
+                return selectedActions;
+            }
+
             if (simulationConfig == null)
             {
                 return null;
@@ -1918,8 +3273,64 @@ public class TesteSimulacao : MonoBehaviour
         }
     }
 
-    private void CreateCityRuntimes()
+    private void CreateCityRuntimes(
+        DailyV1EffectiveDefinitions selectedDefinitions = null,
+        DailyV1DefinitionAdapter.SelectedBindings selectedBindings = null)
     {
+        if (selectedDefinitions != null || selectedBindings != null)
+        {
+            if (selectedDefinitions == null || selectedBindings == null
+                || selectedDefinitions.Configuration == null)
+                throw new System.InvalidOperationException(
+                    "Selected City construction requires the admitted typed graph and its captured configuration.");
+
+            selectedRuntimeOwnerGraphBuilder = new DailyV1SelectedRuntimeOwnerGraphBuilder(
+                selectedDefinitions, spatialNetwork.SelectedOwner,
+                runtimeIdentityRegistry.CoreIdentityIndex);
+            selectedInitialRuntimeOwnerGraph = null;
+            Dictionary<string, SpatialLocationRuntime> selectedLocationsByRuntimeId =
+                new Dictionary<string, SpatialLocationRuntime>(System.StringComparer.Ordinal);
+            if (!selectedRuntimeOwnerGraphBuilder.TryCreateConfiguredCities(
+                    runtimeIdAllocator,
+                    selectedLocation => runtimeIdentityRegistry.TryBindSelectedLocationProjection(
+                        selectedLocation, selectedLocationsByRuntimeId),
+                    selectedLocation => runtimeIdentityRegistry.RollbackSelectedLocationProjection(
+                        selectedLocation, selectedLocationsByRuntimeId)))
+                throw new System.InvalidOperationException(
+                    "The selected City owner graph could not construct the exact admitted Daily-v1 owner set.");
+
+            foreach (DailyV1CityRuntimeOwners selectedCityOwners in selectedRuntimeOwnerGraphBuilder.Cities)
+            {
+                if (!selectedRuntimeOwnerGraphBuilder.TryGetLocationRuntimeId(selectedCityOwners, out string locationRuntimeId)
+                    || !selectedLocationsByRuntimeId.TryGetValue(locationRuntimeId, out SpatialLocationRuntime selectedLocation))
+                    throw new System.InvalidOperationException(
+                        "A selected Core City owner has no matching registered Unity location projection.");
+                string cityId = selectedCityOwners.Definition.DefinitionId;
+                CityRuntime selectedCity = CityRuntime.CreateSelectedDailyV1(
+                    selectedCityOwners.RuntimeId, selectedCityOwners.Definition,
+                    selectedDefinitions, selectedBindings, selectedCityOwners, selectedLocation, logger);
+                if (!selectedCity.TryBindSelectedDailyV1Definition(
+                        selectedCityOwners.Definition, selectedDefinitions, selectedBindings))
+                    throw new System.InvalidOperationException(
+                        "The selected City Unity/P12 identity projection could not attach to its Core-owned runtime.");
+                if (!runtimeIdentityRegistry.BindSelectedCityProjection(selectedCity))
+                {
+                    selectedRuntimeOwnerGraphBuilder.TryRemoveInitialCity(selectedCityOwners);
+                    continue;
+                }
+
+                CityRuntimeList.Add(selectedCity);
+                CityData p12IdentityBridge = selectedCity.CityData;
+                if (p12IdentityBridge == null
+                    || !string.Equals(p12IdentityBridge.DefinitionId, cityId, System.StringComparison.Ordinal))
+                    throw new System.InvalidOperationException(
+                        "The selected City could not retain its exact P12 compatibility identity binding.");
+                AddCityRuntimeByDefinition(p12IdentityBridge, selectedCity);
+                cityRuntimeByLocation.Add(selectedLocation, selectedCity);
+            }
+            return;
+        }
+
         if (simulationConfig == null)
         {
             logger.LogWarning("Nenhum SimulationConfigData configurado. A simulacao iniciara sem cidades nem NPCs.");
@@ -1955,10 +3366,198 @@ public class TesteSimulacao : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Creates Unity-facing lookup/serialization views over the exact Core P9
+    /// owners already composed by DailyV1GenesisComposer. This method must not
+    /// allocate runtime identities or reconstruct authoritative owner state.
+    /// </summary>
+    private void ProjectSelectedCoreGenesis(DailyV1GenesisComposition composition)
+    {
+        if (composition == null || selectedDefinitionBindings == null
+            || !ReferenceEquals(selectedDefinitions, composition.Definitions))
+            throw new System.InvalidOperationException(
+                "The selected Unity bootstrap requires the exact admitted Core genesis composition.");
+
+        DailyV1SelectedRuntimeOwnerGraph graph = composition.OwnerGraph;
+        if (graph == null || !ReferenceEquals(graph.Definitions, selectedDefinitions)
+            || graph.PersonStore == null
+            || !ReferenceEquals(graph.PersonStore, composition.PersonStore)
+            || !ReferenceEquals(graph.ExplorableSites, composition.ExplorableSites)
+            || graph.ExplorableSites.Count != 0 || graph.ExplorableSites.Revision != 0L
+            || !ReferenceEquals(graph.ScheduledDirectives, composition.OwnerGraph.ScheduledDirectives)
+            || !ReferenceEquals(graph.TravelParties, composition.TravelPartyStore))
+            throw new System.InvalidOperationException(
+                "The Core genesis owner graph does not retain its exact admitted runtime roots.");
+
+        runtimeIdAllocator = composition.RuntimeIdAllocator;
+        simulationTime = composition.SimulationTime;
+        authoritativeRandomSource = composition.RandomSource;
+        recordSequence = composition.RecordSequence;
+        decisionStore = composition.DecisionStore;
+        scheduledDirectiveStore = graph.ScheduledDirectives;
+        travelPartyStore = composition.TravelPartyStore;
+        effectiveConfiguration = composition.EffectiveConfiguration;
+        genesisSpatialAuthority = composition.SpatialAuthority;
+        genesisLegacySpatialAnchorBindingStore = composition.LegacySpatialAnchorBindings;
+        selectedInitialRuntimeOwnerGraph = graph;
+        selectedRuntimeOwnerGraphBuilder = null;
+
+        DailyV1DomainEventAuthority eventAuthority = composition.EventAuthority;
+        if (eventAuthority == null
+            || !eventAuthority.IsFor(runtimeIdAllocator, simulationTime, recordSequence, decisionStore))
+            throw new System.InvalidOperationException(
+                "Core Daily-v1 genesis did not retain the exact event/history runtime authority.");
+        historyStore = eventAuthority.History;
+        domainEventStore = eventAuthority.EventStore;
+        domainEventRecorder = eventAuthority.Recorder;
+        decisionRecorder = new NpcDecisionRecorder(
+            eventAuthority.DecisionOccurrenceReceipts, logger);
+        npcChronicleService = new NpcChronicleService(decisionStore, domainEventStore);
+        explorableSiteStore = composition.ExplorableSites;
+        explorableSiteKnowledgeSystem = new ExplorableSiteKnowledgeSystem();
+        expeditionStore = composition.Expeditions;
+        economyTransactionService = new EconomyTransactionService();
+
+        runtimeIdentityRegistry = new RuntimeIdentityRegistry(logger, graph.RuntimeIdentityIndex);
+        spatialNetwork = new SpatialNetworkRuntime(runtimeIdentityRegistry, logger, graph.SpatialNetwork);
+        foreach (SpatialLocationRuntime location in graph.SpatialNetwork.Locations)
+            if (location == null || !runtimeIdentityRegistry.BindSelectedLocationProjection(location))
+                throw new System.InvalidOperationException(
+                    "A Core P9 Location could not bind its exact Unity identity projection.");
+        foreach (SpatialRouteRuntime route in graph.SpatialNetwork.Routes)
+            if (route == null || !runtimeIdentityRegistry.BindSelectedRouteProjection(route))
+                throw new System.InvalidOperationException(
+                    "A Core P9 Route could not bind its exact Unity identity projection.");
+
+        CityRuntimeList.Clear();
+        NpcRuntimeList.Clear();
+        cityRuntimesByDefinition.Clear();
+        npcRuntimesByDefinition.Clear();
+        cityRuntimeByLocation.Clear();
+        explorableSiteRuntimesByDefinition.Clear();
+
+        foreach (DailyV1CityRuntimeOwners owners in graph.Cities)
+        {
+            if (owners == null || owners.Definition == null
+                || !graph.SpatialNetwork.TryGetLocation(owners.LocationRuntimeId,
+                    out SpatialLocationRuntime location))
+                throw new System.InvalidOperationException(
+                    "A Core P9 City owner has no exact Core-owned Location.");
+            CityRuntime city = CityRuntime.CreateSelectedDailyV1(
+                owners.RuntimeId, owners.Definition, selectedDefinitions,
+                selectedDefinitionBindings, owners, location, logger);
+            if (!city.TryBindSelectedDailyV1Definition(
+                    owners.Definition, selectedDefinitions, selectedDefinitionBindings)
+                || !runtimeIdentityRegistry.BindSelectedCityProjection(city))
+                throw new System.InvalidOperationException(
+                    "A Core P9 City could not bind its exact Unity/P12 projection.");
+            CityData bridge = city.CityData;
+            if (bridge == null || !string.Equals(bridge.DefinitionId,
+                    owners.Definition.DefinitionId, System.StringComparison.Ordinal))
+                throw new System.InvalidOperationException(
+                    "A Core P9 City did not retain its exact P12 compatibility identity bridge.");
+            CityRuntimeList.Add(city);
+            AddCityRuntimeByDefinition(bridge, city);
+            cityRuntimeByLocation.Add(location, city);
+        }
+
+        Dictionary<string, CityRuntime> selectedCityProjections = new Dictionary<string, CityRuntime>(
+            System.StringComparer.Ordinal);
+        foreach (CityRuntime city in CityRuntimeList)
+            if (city == null || !selectedCityProjections.TryAdd(city.RuntimeId, city))
+                throw new System.InvalidOperationException(
+                    "Core P9 City projections must have unique runtime identities.");
+
+        foreach (DailyV1NpcRuntimeOwners owners in graph.Npcs)
+        {
+            if (owners == null || owners.Definition == null)
+                throw new System.InvalidOperationException("A Core P9 NPC owner is incomplete.");
+            CityRuntime startingCity = null;
+            if (!string.IsNullOrWhiteSpace(owners.Travel.CurrentCityRuntimeId)
+                && !selectedCityProjections.TryGetValue(owners.Travel.CurrentCityRuntimeId,
+                    out startingCity))
+                throw new System.InvalidOperationException(
+                    "A Core P9 NPC has no matching Unity City projection for its admitted presence.");
+
+            NpcRuntime npc = NpcRuntime.CreateSelectedDailyV1(
+                owners.RuntimeId, owners.Definition, selectedDefinitions,
+                selectedDefinitionBindings, owners, startingCity);
+            Func<string, CityRuntime> resolveCity = runtimeId =>
+                !string.IsNullOrWhiteSpace(runtimeId)
+                && selectedCityProjections.TryGetValue(runtimeId, out CityRuntime city)
+                    ? city : null;
+            if (!npc.TryBindSelectedDailyV1Definition(
+                    owners.Definition, selectedDefinitions, selectedDefinitionBindings, resolveCity)
+                || !runtimeIdentityRegistry.BindSelectedNpcProjection(npc))
+                throw new System.InvalidOperationException(
+                    "A Core P9 NPC could not bind its exact Unity/P12 projection.");
+            NpcData bridge = npc.NpcData;
+            if (bridge == null || !string.Equals(bridge.DefinitionId,
+                    owners.Definition.DefinitionId, System.StringComparison.Ordinal))
+                throw new System.InvalidOperationException(
+                    "A Core P9 NPC did not retain its exact P12 compatibility identity bridge.");
+            NpcRuntimeList.Add(npc);
+            AddNpcRuntimeByDefinition(bridge, npc);
+        }
+
+        scheduledDirectiveSystem = new ScheduledDirectiveSystem(
+            scheduledDirectiveStore, runtimeIdentityRegistry, logger);
+    }
+
     private void CreateSpatialRoutes()
     {
+        if (selectedRuntimeOwnerGraphBuilder != null)
+        {
+            if (!selectedRuntimeOwnerGraphBuilder.TryCreateConfiguredCityRoutes(
+                    runtimeIdAllocator,
+                    runtimeIdentityRegistry.BindSelectedRouteProjection,
+                    runtimeIdentityRegistry.RollbackSelectedRouteProjection,
+                    message => logger?.LogWarning(message),
+                    message => logger?.LogError(message)))
+                throw new System.InvalidOperationException(
+                    "The selected Core owner graph could not construct the exact admitted Daily-v1 City routes.");
+            return;
+        }
+
         foreach (CityRuntime originCity in CityRuntimeList)
         {
+            if (originCity != null && originCity.SelectedDailyV1Definition != null)
+            {
+                IReadOnlyList<DailyV1CityConnection> selectedConnections = originCity.SelectedDailyV1Connections;
+                if (selectedConnections == null)
+                    continue;
+
+                List<DailyV1CityConnection> orderedSelectedConnections = new List<DailyV1CityConnection>(selectedConnections);
+                orderedSelectedConnections.Sort((left, right) =>
+                {
+                    int destination = System.StringComparer.Ordinal.Compare(left?.destination, right?.destination);
+                    return destination != 0
+                        ? destination
+                        : System.Nullable.Compare(left != null ? (int?)left.travelDays : null,
+                            right != null ? (int?)right.travelDays : null);
+                });
+                foreach (DailyV1CityConnection connection in orderedSelectedConnections)
+                {
+                    if (connection == null)
+                    {
+                        logger.LogWarning($"Skipping invalid spatial route from city '{originCity.CityName}': connection is null.");
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(connection.destination))
+                    {
+                        logger.LogWarning($"Skipping invalid spatial route from city '{originCity.CityName}': destination definition is null.");
+                        continue;
+                    }
+
+                    CityRuntime destinationCity = GetSingleCityRuntimeByDefinition(connection.destination);
+                    if (destinationCity == null)
+                        continue;
+                    RegisterSpatialRoute(originCity, destinationCity, connection.travelDays);
+                }
+                continue;
+            }
+
             if (originCity == null || originCity.CityData == null || originCity.CityData.connections == null)
             {
                 continue;
@@ -1997,18 +3596,85 @@ public class TesteSimulacao : MonoBehaviour
                     continue;
                 }
 
-                SpatialRouteRuntime route = new SpatialRouteRuntime(
-                    runtimeIdAllocator.AllocateRouteId(),
-                    originCity.Location,
-                    destinationCity.Location,
-                    connection.travelDays);
-                spatialNetwork.RegisterRoute(route);
+                RegisterSpatialRoute(originCity, destinationCity, connection.travelDays);
             }
         }
     }
 
+    private void RegisterSpatialRoute(CityRuntime originCity, CityRuntime destinationCity, int travelDays)
+    {
+        if (destinationCity == originCity)
+        {
+            logger.LogWarning($"Skipping invalid self route for city '{originCity.CityName}'.");
+            return;
+        }
+        SpatialRouteRuntime route = new SpatialRouteRuntime(
+            runtimeIdAllocator.AllocateRouteId(), originCity.Location, destinationCity.Location, travelDays);
+        spatialNetwork.RegisterRoute(route);
+    }
+
     private void CreateExplorableSiteRuntimes()
     {
+        if (UsesSelectedDefinitionBindings)
+        {
+            DailyV1SimulationConfigData selectedConfiguration = selectedDefinitions.Configuration;
+            if (selectedConfiguration == null)
+                throw new System.InvalidOperationException(
+                    "Selected ExplorableSite construction requires the admitted configuration graph.");
+
+            List<DailyV1ExplorableSiteConfig> selectedSites = new List<DailyV1ExplorableSiteConfig>(
+                selectedConfiguration.explorableSites ?? System.Array.Empty<DailyV1ExplorableSiteConfig>());
+            selectedSites.Sort((left, right) => System.StringComparer.Ordinal.Compare(left?.site, right?.site));
+            foreach (DailyV1ExplorableSiteConfig selectedSite in selectedSites)
+            {
+                if (selectedSite == null || string.IsNullOrWhiteSpace(selectedSite.site))
+                {
+                    logger.LogWarning("Skipping selected explorable site configuration with no site identity.");
+                    continue;
+                }
+                if (!selectedDefinitions.ExplorableSites.TryGetValue(
+                        selectedSite.site, out DailyV1ExplorableSiteDefinition selectedSiteDefinition)
+                    || selectedSiteDefinition == null
+                    || !string.Equals(selectedSiteDefinition.DefinitionId, selectedSite.site, System.StringComparison.Ordinal))
+                    throw new System.InvalidOperationException(
+                        "The selected typed definition graph does not contain the exact configured ExplorableSite node.");
+
+                try
+                {
+                    SpatialLocationRuntime location = new SpatialLocationRuntime(runtimeIdAllocator.AllocateLocationId());
+                    ExplorableSiteRuntime siteRuntime = new ExplorableSiteRuntime(
+                        runtimeIdAllocator, selectedSiteDefinition, location);
+                    if (!runtimeIdentityRegistry.RegisterExplorableSite(siteRuntime))
+                    {
+                        logger.LogWarning($"Skipping explorable site '{selectedSite.site}': runtime identity registration failed.");
+                        continue;
+                    }
+                    if (!spatialNetwork.RegisterLocation(location))
+                    {
+                        logger.LogWarning($"Skipping explorable site '{selectedSite.site}': location registration failed.");
+                        continue;
+                    }
+                    if (!explorableSiteStore.Add(siteRuntime))
+                    {
+                        logger.LogWarning($"Skipping explorable site '{selectedSite.site}': site store registration failed.");
+                        continue;
+                    }
+                    AddExplorableSiteRuntimeByDefinition(selectedSiteDefinition.DefinitionId, siteRuntime);
+                    CreateExplorableSiteRoutes(selectedSite.anchorCity, selectedSite.travelDaysFromAnchor,
+                        selectedSite.site, siteRuntime);
+                }
+                catch (System.ArgumentException exception)
+                {
+                    logger.LogWarning($"Skipping explorable site '{selectedSite.site}': {exception.Message}");
+                }
+                catch (System.InvalidOperationException exception)
+                {
+                    logger.LogWarning($"Skipping explorable site '{selectedSite.site}': {exception.Message}");
+                }
+            }
+            return;
+        }
+
         if (simulationConfig == null)
         {
             return;
@@ -2036,6 +3702,11 @@ public class TesteSimulacao : MonoBehaviour
                 continue;
             }
 
+            if (selectedDefinitions == null
+                || !selectedDefinitions.ExplorableSites.TryGetValue(siteConfig.site.DefinitionId,
+                    out DailyV1ExplorableSiteDefinition siteDefinition))
+                throw new System.InvalidOperationException("The selected typed definition graph does not contain the authored ExplorableSite node.");
+
             ExplorableSiteRuntime siteRuntime;
 
             try
@@ -2043,7 +3714,7 @@ public class TesteSimulacao : MonoBehaviour
                 SpatialLocationRuntime location = new SpatialLocationRuntime(runtimeIdAllocator.AllocateLocationId());
                 siteRuntime = new ExplorableSiteRuntime(
                     runtimeIdAllocator,
-                    siteConfig.site,
+                    siteDefinition,
                     location);
 
                 if (runtimeIdentityRegistry.RegisterExplorableSite(siteRuntime) == false)
@@ -2064,7 +3735,7 @@ public class TesteSimulacao : MonoBehaviour
                     continue;
                 }
 
-                AddExplorableSiteRuntimeByDefinition(siteConfig.site, siteRuntime);
+                AddExplorableSiteRuntimeByDefinition(siteDefinition.DefinitionId, siteRuntime);
                 CreateExplorableSiteRoutes(siteConfig, siteRuntime);
             }
             catch (System.ArgumentException exception)
@@ -2080,12 +3751,24 @@ public class TesteSimulacao : MonoBehaviour
 
     private void CreateExplorableSiteRoutes(ExplorableSiteConfig siteConfig, ExplorableSiteRuntime siteRuntime)
     {
-        if (siteConfig == null || siteRuntime == null || siteConfig.anchorCity == null)
+        if (siteConfig == null)
+            return;
+        CreateExplorableSiteRoutes(siteConfig.anchorCity?.DefinitionId, siteConfig.travelDaysFromAnchor,
+            siteConfig.site?.DefinitionId, siteRuntime);
+    }
+
+    private void CreateExplorableSiteRoutes(
+        string anchorCityDefinitionId,
+        int travelDays,
+        string siteDefinitionId,
+        ExplorableSiteRuntime siteRuntime)
+    {
+        if (siteRuntime == null || string.IsNullOrWhiteSpace(anchorCityDefinitionId))
         {
             return;
         }
 
-        CityRuntime anchorCity = GetSingleCityRuntimeByDefinition(siteConfig.anchorCity);
+        CityRuntime anchorCity = GetSingleCityRuntimeByDefinition(anchorCityDefinitionId);
 
         if (anchorCity == null || anchorCity.Location == null || siteRuntime.Location == null)
         {
@@ -2093,7 +3776,6 @@ public class TesteSimulacao : MonoBehaviour
             return;
         }
 
-        int travelDays = siteConfig.travelDaysFromAnchor;
         SpatialRouteRuntime anchorToSite = new SpatialRouteRuntime(
             runtimeIdAllocator.AllocateRouteId(),
             anchorCity.Location,
@@ -2102,7 +3784,7 @@ public class TesteSimulacao : MonoBehaviour
 
         if (spatialNetwork.RegisterRoute(anchorToSite) == false)
         {
-            logger.LogWarning($"Could not register route from city '{anchorCity.CityName}' to explorable site '{siteRuntime.DefinitionId}'.");
+            logger.LogWarning($"Could not register route from city '{anchorCity.CityName}' to explorable site '{siteDefinitionId ?? siteRuntime.DefinitionId}'.");
             return;
         }
 
@@ -2114,12 +3796,88 @@ public class TesteSimulacao : MonoBehaviour
 
         if (spatialNetwork.RegisterRoute(siteToAnchor) == false)
         {
-            logger.LogWarning($"Could not register return route from explorable site '{siteRuntime.DefinitionId}' to city '{anchorCity.CityName}'.");
+            logger.LogWarning($"Could not register return route from explorable site '{siteDefinitionId ?? siteRuntime.DefinitionId}' to city '{anchorCity.CityName}'.");
         }
     }
 
-    private void CreateNpcRuntimes()
+    private void CreateNpcRuntimes(
+        DailyV1EffectiveDefinitions selectedDefinitions = null,
+        DailyV1DefinitionAdapter.SelectedBindings selectedBindings = null)
     {
+        if (selectedDefinitions != null || selectedBindings != null)
+        {
+            if (selectedDefinitions == null || selectedBindings == null
+                || selectedDefinitions.Configuration == null)
+                throw new System.InvalidOperationException(
+                    "Selected NPC construction requires the admitted typed graph and its captured configuration.");
+
+            // NpcRuntime retains this resolver for its Unity compatibility projection.
+            // Capture the exact published CityRuntime objects rather than closing over
+            // CityRuntimeList: ReleaseBootstrapAliases clears that temporary alias after
+            // publication, while selected NPC owners continue to need stable projections.
+            Dictionary<string, CityRuntime> selectedCityProjections =
+                new Dictionary<string, CityRuntime>(StringComparer.Ordinal);
+            foreach (CityRuntime city in CityRuntimeList)
+            {
+                if (city == null || string.IsNullOrWhiteSpace(city.RuntimeId)
+                    || selectedCityProjections.ContainsKey(city.RuntimeId))
+                    throw new System.InvalidOperationException(
+                        "Selected NPC projection binding requires unique published City runtime identities.");
+                selectedCityProjections.Add(city.RuntimeId, city);
+            }
+            Func<string, CityRuntime> resolveSelectedCityProjection = cityRuntimeId =>
+                !string.IsNullOrWhiteSpace(cityRuntimeId)
+                && selectedCityProjections.TryGetValue(cityRuntimeId, out CityRuntime city)
+                    ? city
+                    : null;
+
+            if (selectedRuntimeOwnerGraphBuilder == null
+                || !selectedRuntimeOwnerGraphBuilder.TryCreateConfiguredNpcs(
+                    runtimeIdAllocator,
+                    cityDefinitionId => GetSingleCityRuntimeByDefinition(cityDefinitionId)?.RuntimeId))
+                throw new System.InvalidOperationException(
+                    "The selected Core NPC owner graph could not construct the exact admitted Daily-v1 owner set.");
+
+            foreach (DailyV1NpcRuntimeOwners selectedNpcOwners in selectedRuntimeOwnerGraphBuilder.Npcs)
+            {
+                string npcId = selectedNpcOwners.Definition.DefinitionId;
+                CityRuntime startingCity = null;
+                if (!string.IsNullOrWhiteSpace(selectedNpcOwners.Travel.CurrentCityRuntimeId))
+                {
+                    startingCity = CityRuntimeList.Find(city => city != null
+                        && string.Equals(city.RuntimeId, selectedNpcOwners.Travel.CurrentCityRuntimeId,
+                            System.StringComparison.Ordinal));
+                    if (startingCity == null)
+                        throw new System.InvalidOperationException(
+                            "A Core-owned selected NPC City binding has no matching Unity City projection.");
+                }
+                NpcRuntime selectedNpc = NpcRuntime.CreateSelectedDailyV1(
+                    selectedNpcOwners.RuntimeId, selectedNpcOwners.Definition,
+                    selectedDefinitions, selectedBindings, selectedNpcOwners, startingCity);
+                if (!selectedNpc.TryBindSelectedDailyV1Definition(
+                        selectedNpcOwners.Definition, selectedDefinitions, selectedBindings,
+                        resolveSelectedCityProjection))
+                    throw new System.InvalidOperationException(
+                        "The selected NPC Unity/P12 identity projection could not attach to its Core-owned runtime.");
+                if (!runtimeIdentityRegistry.BindSelectedNpcProjection(selectedNpc))
+                {
+                    startingCity?.RemoveImportantNpc(selectedNpc);
+                    selectedRuntimeOwnerGraphBuilder.TryRemoveInitialNpc(selectedNpc.SelectedRuntimeOwners);
+                    continue;
+                }
+
+                NpcData p12IdentityBridge = selectedNpc.NpcData;
+                if (p12IdentityBridge == null
+                    || !string.Equals(p12IdentityBridge.DefinitionId, npcId, System.StringComparison.Ordinal))
+                    throw new System.InvalidOperationException(
+                        "The selected NPC could not retain its exact P12 compatibility identity binding.");
+                NpcRuntimeList.Add(selectedNpc);
+                AddNpcRuntimeByDefinition(p12IdentityBridge, selectedNpc);
+            }
+
+            return;
+        }
+
         if (simulationConfig == null)
         {
             return;
@@ -2135,17 +3893,39 @@ public class TesteSimulacao : MonoBehaviour
             }
 
             CityRuntime startingCity = GetSingleCityRuntimeByDefinition(npcConfig.startingCity);
-            NpcRuntime npcRuntime = new NpcRuntime(runtimeIdAllocator.AllocateNpcId(), npcConfig.npc, startingCity, npcConfig.initialMoney);
-
+            NpcRuntime npcRuntime = new NpcRuntime(
+                runtimeIdAllocator.AllocateNpcId(), npcConfig.npc, startingCity, npcConfig.initialMoney);
             if (runtimeIdentityRegistry.RegisterNpc(npcRuntime) == false)
             {
                 startingCity?.RemoveImportantNpc(npcRuntime);
                 continue;
             }
-
             ApplyInitialInventory(npcRuntime, npcConfig);
+
             NpcRuntimeList.Add(npcRuntime);
             AddNpcRuntimeByDefinition(npcConfig.npc, npcRuntime);
+        }
+    }
+
+    private static void ApplyInitialInventory(
+        NpcRuntime npcRuntime,
+        DailyV1NpcSimulationConfig npcConfig,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1DefinitionAdapter.SelectedBindings bindings)
+    {
+        if (npcRuntime == null || npcConfig == null || definitions == null || bindings == null)
+            return;
+        foreach (DailyV1NpcInitialInventoryItemConfig inventoryConfig in
+            npcConfig.initialInventory ?? System.Array.Empty<DailyV1NpcInitialInventoryItemConfig>())
+        {
+            if (inventoryConfig == null) continue;
+            if (string.IsNullOrWhiteSpace(inventoryConfig.item)) continue;
+            if (!definitions.Items.TryGetValue(inventoryConfig.item, out DailyV1ItemDefinition item))
+                throw new System.InvalidOperationException(
+                    "A selected NPC inventory item did not resolve through the exact admitted typed definition graph.");
+            if (!npcRuntime.TryAddSelectedDailyV1InventoryItem(item, inventoryConfig.amount, inventoryConfig.averageUnitCost))
+                throw new System.InvalidOperationException(
+                    "A selected NPC inventory row could not be installed through its canonical Daily-v1 item node.");
         }
     }
 
@@ -2174,6 +3954,16 @@ public class TesteSimulacao : MonoBehaviour
             return;
         }
 
+        if (selectedRuntimeOwnerGraphBuilder != null
+            && (explorableSiteStore == null || explorableSiteStore.Count == 0))
+        {
+            if (!selectedRuntimeOwnerGraphBuilder.TryBootstrapInitialCommercialKnowledge(
+                    simulationTime?.AbsoluteDay ?? 0L))
+                throw new System.InvalidOperationException(
+                    "The selected Core owner graph could not seed initial commercial knowledge.");
+            return;
+        }
+
         foreach (NpcRuntime npcRuntime in NpcRuntimeList)
         {
             merchantSystem.BootstrapInitialKnowledge(npcRuntime);
@@ -2184,6 +3974,15 @@ public class TesteSimulacao : MonoBehaviour
     {
         if (spatialNetwork == null)
         {
+            return;
+        }
+
+        if (selectedRuntimeOwnerGraphBuilder != null
+            && (explorableSiteStore == null || explorableSiteStore.Count == 0))
+        {
+            if (!selectedRuntimeOwnerGraphBuilder.TryBootstrapInitialSpatialKnowledge())
+                throw new System.InvalidOperationException(
+                    "The selected Core owner graph could not seed initial spatial knowledge.");
             return;
         }
 
@@ -2220,6 +4019,18 @@ public class TesteSimulacao : MonoBehaviour
 
     private void CreateScheduledDirectives()
     {
+        if (UsesSelectedDefinitionBindings)
+        {
+            if (selectedRuntimeOwnerGraphBuilder == null
+                || !selectedRuntimeOwnerGraphBuilder.TryCreateConfiguredScheduledDirectives(
+                    runtimeIdAllocator, scheduledDirectiveStore,
+                    message => logger?.LogWarning(message),
+                    message => logger?.LogError(message)))
+                throw new System.InvalidOperationException(
+                    "The selected Core owner graph could not construct its admitted scheduled directives.");
+            return;
+        }
+
         if (simulationConfig == null)
         {
             return;
@@ -2260,7 +4071,8 @@ public class TesteSimulacao : MonoBehaviour
                     directiveConfig.mode,
                     directiveConfig.operation,
                     actorRuntime.RuntimeId,
-                    directiveConfig.action);
+                    directiveConfig.action.DefinitionId,
+                    (int)directiveConfig.action.actionType);
                 scheduledDirectiveStore.Add(directive);
             }
             catch (System.ArgumentException exception)
@@ -2274,9 +4086,13 @@ public class TesteSimulacao : MonoBehaviour
         }
     }
 
-    private void RebuildSystems(EffectiveSimulationConfiguration configuration)
+    private void RebuildSystems(
+        EffectiveSimulationConfiguration configuration,
+        DailyV1JusticeRecordsOwner selectedJusticeOwner = null)
     {
-        logger = logger ?? new SimulationLogger(simulationConfig != null ? simulationConfig.LogSettings : null);
+        logger = logger ?? (UsesSelectedDefinitionBindings
+            ? UnitySimulationLoggerAdapter.CreateSelected(selectedDefinitions.Configuration?.logSettings)
+            : UnitySimulationLoggerAdapter.Create(simulationConfig != null ? simulationConfig.LogSettings : null));
         economyTransactionService = economyTransactionService ?? new EconomyTransactionService();
         travelSystem = new TravelSystem(
             spatialNetwork,
@@ -2285,7 +4101,9 @@ public class TesteSimulacao : MonoBehaviour
             domainEventRecorder,
             logger,
             economyTransactionService);
-        travelPartyStore = new TravelPartyStore();
+        travelPartyStore = selectedInitialRuntimeOwnerGraph?.TravelParties
+            ?? travelPartyStore
+            ?? new TravelPartyStore();
         travelPartySystem = new TravelPartySystem(
             travelPartyStore,
             runtimeIdAllocator,
@@ -2307,8 +4125,17 @@ public class TesteSimulacao : MonoBehaviour
             simulationTime,
             domainEventRecorder,
             logger);
-        justiceSystem = simulationConfig != null
-            ? new JusticeSystem(simulationConfig.freeStatus, simulationConfig.wantedStatus, simulationConfig.arrestedStatus, simulationConfig.hiddenStatus, domainEventRecorder, logger)
+        NpcStatusData freeStatus = ResolveSelectedStatus(selectedDefinitions?.Configuration?.freeStatus,
+            simulationConfig != null ? simulationConfig.freeStatus : null);
+        NpcStatusData wantedStatus = ResolveSelectedStatus(selectedDefinitions?.Configuration?.wantedStatus,
+            simulationConfig != null ? simulationConfig.wantedStatus : null);
+        NpcStatusData arrestedStatus = ResolveSelectedStatus(selectedDefinitions?.Configuration?.arrestedStatus,
+            simulationConfig != null ? simulationConfig.arrestedStatus : null);
+        NpcStatusData hiddenStatus = ResolveSelectedStatus(selectedDefinitions?.Configuration?.hiddenStatus,
+            simulationConfig != null ? simulationConfig.hiddenStatus : null);
+        justiceSystem = UsesSelectedDefinitionBindings || simulationConfig != null
+            ? new JusticeSystem(freeStatus, wantedStatus, arrestedStatus, hiddenStatus,
+                domainEventRecorder, logger, selectedJusticeOwner)
             : null;
         crimeSystem = null;
         merchantSystem = null;
@@ -2342,7 +4169,7 @@ public class TesteSimulacao : MonoBehaviour
             crimeSystem = new CrimeSystem(
                 justiceSystem,
                 travelSystem,
-                simulationConfig.hiddenStatus,
+                hiddenStatus,
                 logger,
                 economyTransactionService,
                 configuration.Crime,
@@ -2363,7 +4190,7 @@ public class TesteSimulacao : MonoBehaviour
         {
             actionProviders.Add(new GuardSystem(
                 justiceSystem,
-                simulationConfig.hiddenStatus,
+                hiddenStatus,
                 configuration.GuardCrime));
         }
 
@@ -2377,8 +4204,79 @@ public class TesteSimulacao : MonoBehaviour
             return;
         }
 
-        justiceSystem.CreateInitialWarrants(simulationConfig, GetSingleNpcRuntimeByDefinition, GetSingleCityRuntimeByDefinition);
+        if (UsesSelectedDefinitionBindings)
+        {
+            if (selectedRuntimeOwnerGraphBuilder == null
+                || !selectedRuntimeOwnerGraphBuilder.TryCreateConfiguredInitialJusticeState(
+                    justiceSystem.CoreOwner))
+                throw new System.InvalidOperationException(
+                    "The selected Core owner graph could not construct its admitted initial Justice state: "
+                    + (selectedRuntimeOwnerGraphBuilder?.LastInitialJusticeStateFailure ?? "builder unavailable") + ".");
+
+            foreach (NpcRuntime npc in NpcRuntimeList)
+                if (npc == null || !npc.TryRefreshSelectedStatusProjectionForGenesis(npc.SelectedRuntimeOwners))
+                    throw new System.InvalidOperationException(
+                        "The selected NPC status compatibility projection could not refresh after Core Justice genesis.");
+
+            return;
+        }
+
+        justiceSystem.CreateInitialWarrants(simulationConfig,
+            GetSingleNpcRuntimeByDefinition, GetSingleCityRuntimeByDefinition);
         justiceSystem.SyncWantedStatuses(NpcRuntimeList);
+    }
+
+    private bool TryProjectInitialSelectedJusticeRows(DailyV1SelectedRuntimeOwnerGraph graph)
+    {
+        if (graph == null || justiceSystem == null
+            || !ReferenceEquals(graph.JusticeRecordsOwner, justiceSystem.CoreOwner))
+            return false;
+
+        foreach (DailyV1JusticeWantedRecordOwner row in graph.JusticeRecordsOwner.WantedRecords)
+        {
+            if (row == null) return false;
+            NpcRuntime target = null;
+            int targetMatches = 0;
+            foreach (NpcRuntime candidate in NpcRuntimeList)
+            {
+                if (candidate == null || !string.Equals(candidate.RuntimeId,
+                    row.TargetRuntimeId, System.StringComparison.Ordinal)) continue;
+                target = candidate;
+                targetMatches++;
+            }
+
+            CityRuntime city = null;
+            int cityMatches = 0;
+            foreach (CityRuntime candidate in CityRuntimeList)
+            {
+                if (candidate == null || !string.Equals(candidate.RuntimeId,
+                    row.CityRuntimeId, System.StringComparison.Ordinal)) continue;
+                city = candidate;
+                cityMatches++;
+            }
+
+            if (targetMatches != 1 || cityMatches != 1
+                || !justiceSystem.TryProjectSelectedCoreWantedRecord(row, target, city))
+                return false;
+        }
+
+        return true;
+    }
+
+    private NpcStatusData ResolveSelectedStatus(string selectedStatusId, NpcStatusData legacyStatus)
+    {
+        if (!UsesSelectedDefinitionBindings)
+            return legacyStatus;
+        if (string.IsNullOrWhiteSpace(selectedStatusId))
+            return null;
+        if (selectedDefinitionBindings == null
+            || !selectedDefinitions.Statuses.TryGetValue(selectedStatusId, out DailyV1StatusDefinition statusNode)
+            || statusNode == null
+            || !selectedDefinitionBindings.TryGetAsset(statusNode, out NpcStatusData statusAsset)
+            || statusAsset == null)
+            throw new System.InvalidOperationException(
+                "A selected justice status did not resolve through its exact admitted typed definition.");
+        return statusAsset;
     }
 
     private void AddCityRuntimeByDefinition(CityData cityData, CityRuntime cityRuntime)
@@ -2405,10 +4303,53 @@ public class TesteSimulacao : MonoBehaviour
 
     private void BootstrapInitialExplorableSiteKnowledge()
     {
-        if (simulationConfig == null || explorableSiteKnowledgeSystem == null)
+        if (explorableSiteKnowledgeSystem == null)
         {
             return;
         }
+
+        if (selectedDefinitions != null && selectedDefinitions.Configuration != null)
+        {
+            foreach (DailyV1NpcSimulationConfig selectedNpc in
+                selectedDefinitions.Configuration.npcs ?? System.Array.Empty<DailyV1NpcSimulationConfig>())
+            {
+                if (selectedNpc == null || string.IsNullOrWhiteSpace(selectedNpc.npc))
+                    continue;
+
+                NpcRuntime selectedNpcRuntime = GetSingleNpcRuntimeByDefinition(selectedNpc.npc);
+                if (selectedNpcRuntime == null)
+                    continue;
+
+                foreach (string siteDefinitionId in
+                    selectedNpc.initialKnownExplorableSites ?? System.Array.Empty<string>())
+                {
+                    if (string.IsNullOrWhiteSpace(siteDefinitionId))
+                    {
+                        logger.LogWarning("Skipping initial selected explorable site knowledge: site definition is null.");
+                        continue;
+                    }
+                    if (!explorableSiteRuntimesByDefinition.TryGetValue(
+                            siteDefinitionId, out List<ExplorableSiteRuntime> selectedSiteRuntimes)
+                        || selectedSiteRuntimes.Count == 0)
+                    {
+                        logger.LogWarning($"Explorable site definition '{siteDefinitionId}' has no runtime instance.");
+                        continue;
+                    }
+                    if (selectedSiteRuntimes.Count > 1)
+                    {
+                        logger.LogError($"Explorable site definition '{siteDefinitionId}' is ambiguous: {selectedSiteRuntimes.Count} runtime instances exist. Resolve by RuntimeId instead.");
+                        continue;
+                    }
+
+                    explorableSiteKnowledgeSystem.RecordInitialScenarioKnowledge(
+                        selectedNpcRuntime, selectedSiteRuntimes[0], simulationTime.AbsoluteDay);
+                }
+            }
+            return;
+        }
+
+        if (simulationConfig == null)
+            return;
 
         foreach (NpcSimulationConfig npcConfig in simulationConfig.Npcs)
         {
@@ -2433,7 +4374,7 @@ public class TesteSimulacao : MonoBehaviour
                 }
 
                 if (explorableSiteRuntimesByDefinition.TryGetValue(
-                    siteDefinition,
+                    siteDefinition.DefinitionId,
                     out List<ExplorableSiteRuntime> siteRuntimes) == false
                     || siteRuntimes.Count == 0)
                 {
@@ -2456,13 +4397,14 @@ public class TesteSimulacao : MonoBehaviour
     }
 
     private void AddExplorableSiteRuntimeByDefinition(
-        ExplorableSiteData siteData,
+        string definitionId,
         ExplorableSiteRuntime siteRuntime)
     {
-        if (explorableSiteRuntimesByDefinition.TryGetValue(siteData, out List<ExplorableSiteRuntime> runtimes) == false)
+        if (string.IsNullOrWhiteSpace(definitionId)) return;
+        if (explorableSiteRuntimesByDefinition.TryGetValue(definitionId, out List<ExplorableSiteRuntime> runtimes) == false)
         {
             runtimes = new List<ExplorableSiteRuntime>();
-            explorableSiteRuntimesByDefinition.Add(siteData, runtimes);
+            explorableSiteRuntimesByDefinition.Add(definitionId, runtimes);
         }
 
         runtimes.Add(siteRuntime);
@@ -2507,6 +4449,35 @@ public class TesteSimulacao : MonoBehaviour
         return runtimes[0];
     }
 
+    private CityRuntime GetSingleCityRuntimeByDefinition(string definitionId)
+    {
+        if (string.IsNullOrWhiteSpace(definitionId))
+            return null;
+
+        CityRuntime match = null;
+        int count = 0;
+        foreach (CityRuntime city in CityRuntimeList)
+        {
+            if (city != null && string.Equals(city.DefinitionId, definitionId, System.StringComparison.Ordinal))
+            {
+                match = city;
+                count++;
+            }
+        }
+
+        if (count == 0)
+        {
+            logger.LogWarning($"City definition '{definitionId}' has no runtime instance.");
+            return null;
+        }
+        if (count > 1)
+        {
+            logger.LogError($"City definition '{definitionId}' is ambiguous: {count} runtime instances exist. Resolve by RuntimeId instead.");
+            return null;
+        }
+        return match;
+    }
+
     private NpcRuntime GetSingleNpcRuntimeByDefinition(NpcData npcData)
     {
         if (npcData == null)
@@ -2529,13 +4500,43 @@ public class TesteSimulacao : MonoBehaviour
         return runtimes[0];
     }
 
+    private NpcRuntime GetSingleNpcRuntimeByDefinition(string definitionId)
+    {
+        if (string.IsNullOrWhiteSpace(definitionId))
+            return null;
+
+        NpcRuntime match = null;
+        int count = 0;
+        foreach (NpcRuntime npc in NpcRuntimeList)
+        {
+            if (npc != null && string.Equals(npc.DefinitionId, definitionId, System.StringComparison.Ordinal))
+            {
+                match = npc;
+                count++;
+            }
+        }
+
+        if (count == 0)
+        {
+            logger.LogWarning($"NPC definition '{definitionId}' has no runtime instance.");
+            return null;
+        }
+        if (count > 1)
+        {
+            logger.LogError($"NPC definition '{definitionId}' is ambiguous: {count} runtime instances exist. Resolve by RuntimeId instead.");
+            return null;
+        }
+        return match;
+    }
+
     internal static NpcChronicleFormatter CreateNpcChronicleFormatter(
         RuntimeIdentityRegistry identityRegistry,
         SpatialNetworkRuntime spatialNetwork,
         IReadOnlyDictionary<SpatialLocationRuntime, CityRuntime> cityRuntimeByLocation,
         ExplorableSiteStore explorableSites,
         IReadOnlyList<CityRuntime> cities,
-        SimulationConfigData configuration)
+        SimulationConfigData configuration,
+        DailyV1EffectiveDefinitions selectedDefinitions = null)
     {
         Dictionary<SpatialLocationRuntime, CityRuntime> locationIndex =
             new Dictionary<SpatialLocationRuntime, CityRuntime>();
@@ -2552,8 +4553,12 @@ public class TesteSimulacao : MonoBehaviour
         return new NpcChronicleFormatter(
             runtimeId => ResolveNpcDisplayName(identityRegistry, runtimeId),
             runtimeId => ResolveLocationDisplayName(spatialNetwork, locationIndex, explorableSites, runtimeId),
-            definitionId => ResolveItemDisplayName(citySnapshot, definitionId),
-            definitionId => ResolveActionDisplayName(configuration, definitionId));
+            definitionId => selectedDefinitions != null
+                ? ResolveSelectedItemDisplayName(selectedDefinitions, definitionId)
+                : ResolveItemDisplayName(citySnapshot, definitionId),
+            definitionId => selectedDefinitions != null
+                ? ResolveSelectedActionDisplayName(selectedDefinitions, definitionId)
+                : ResolveActionDisplayName(configuration, definitionId));
     }
 
     private static string ResolveNpcDisplayName(RuntimeIdentityRegistry identityRegistry, string runtimeId)
@@ -2645,6 +4650,38 @@ public class TesteSimulacao : MonoBehaviour
         return null;
     }
 
+    private static string ResolveSelectedItemDisplayName(
+        DailyV1EffectiveDefinitions definitions,
+        string definitionId)
+    {
+        return definitions != null && !string.IsNullOrWhiteSpace(definitionId)
+            && definitions.Items.TryGetValue(definitionId, out DailyV1ItemDefinition item)
+            ? item.Values.itemName
+            : null;
+    }
+
+    private bool TryResolveSelectedItem(string definitionId, out ItemData item)
+    {
+        item = null;
+        return !string.IsNullOrWhiteSpace(definitionId)
+            && selectedDefinitions != null
+            && selectedDefinitionBindings != null
+            && selectedDefinitions.Items.TryGetValue(definitionId, out DailyV1ItemDefinition itemDefinition)
+            && selectedDefinitionBindings.TryGetAsset(itemDefinition, out item)
+            && item != null;
+    }
+
+    private bool TryResolveSelectedStatus(string definitionId, out NpcStatusData status)
+    {
+        status = null;
+        return !string.IsNullOrWhiteSpace(definitionId)
+            && selectedDefinitions != null
+            && selectedDefinitionBindings != null
+            && selectedDefinitions.Statuses.TryGetValue(definitionId, out DailyV1StatusDefinition statusDefinition)
+            && selectedDefinitionBindings.TryGetAsset(statusDefinition, out status)
+            && status != null;
+    }
+
     private static string ResolveActionDisplayName(SimulationConfigData configuration, string definitionId)
     {
         if (configuration == null) return null;
@@ -2653,6 +4690,16 @@ public class TesteSimulacao : MonoBehaviour
                 && string.Equals(action.DefinitionId, definitionId, System.StringComparison.Ordinal))
                 return action.actionName;
         return null;
+    }
+
+    private static string ResolveSelectedActionDisplayName(
+        DailyV1EffectiveDefinitions definitions,
+        string definitionId)
+    {
+        return definitions != null && !string.IsNullOrWhiteSpace(definitionId)
+            && definitions.Actions.TryGetValue(definitionId, out DailyV1ActionDefinition action)
+            ? action.Values.actionName
+            : null;
     }
 
     private static string FormatCityDefinition(CityData cityData)

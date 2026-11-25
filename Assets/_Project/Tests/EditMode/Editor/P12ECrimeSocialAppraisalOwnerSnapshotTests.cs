@@ -23,7 +23,7 @@ public sealed class P12ECrimeSocialAppraisalOwnerSnapshotTests
         SimulationRuntime runtime = CreateDailyRuntime();
         AdvanceAndGetToken(runtime, out DailyCaptureEligibilityToken token);
 
-        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12ECrimeSocialAppraisalOwnerSnapshot snapshot,
             out P12ECrimeSocialAppraisalSnapshotFailure failure), Is.True, failure?.Message);
         Assert.That(snapshot.CapturedAbsoluteDay, Is.EqualTo(token.AbsoluteDay));
@@ -65,7 +65,7 @@ public sealed class P12ECrimeSocialAppraisalOwnerSnapshotTests
         Assert.That(runtime.TryRegisterInstitution(new InstitutionRecord(investigator, "Investigator"),
             out InstitutionFoundationFailure institutionFailure), Is.True, institutionFailure.ToString());
         AdvanceAndGetToken(runtime, out DailyCaptureEligibilityToken emptyToken);
-        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(runtime, emptyToken,
+        Assert.That(P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(runtime, emptyToken,
             emptyToken.OwnerSections, out P12ECrimeSocialAppraisalOwnerSnapshot emptySnapshot,
             out P12ECrimeSocialAppraisalSnapshotFailure failure), Is.True, failure?.Message);
         Assert.That(emptySnapshot.Outcomes.RecordCount, Is.Zero);
@@ -140,15 +140,15 @@ public sealed class P12ECrimeSocialAppraisalOwnerSnapshotTests
         RegisterReaction(reactions, personTarget);
         RegisterReaction(reactions, institutionTarget);
 
-        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(runtime, emptyToken,
+        Assert.That(P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(runtime, emptyToken,
             emptyToken.OwnerSections, out P12ECrimeSocialAppraisalOwnerSnapshot stale,
             out failure), Is.False);
         Assert.That(stale, Is.Null);
         AdvanceAndGetToken(runtime, out DailyCaptureEligibilityToken token);
-        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12ECrimeSocialAppraisalOwnerSnapshot snapshot,
             out failure), Is.True, failure?.Message);
-        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12ECrimeSocialAppraisalOwnerSnapshot repeated, out failure), Is.True, failure?.Message);
         Assert.That(Signature(snapshot), Is.EqualTo(Signature(repeated)));
         Assert.That(snapshot.CapturedAbsoluteDay, Is.EqualTo(token.AbsoluteDay));
@@ -202,7 +202,7 @@ public sealed class P12ECrimeSocialAppraisalOwnerSnapshotTests
         AdvanceAndGetToken(runtime, out DailyCaptureEligibilityToken token);
 
         List<OwnerSectionCensusSnapshot> copied = new List<OwnerSectionCensusSnapshot>(token.OwnerSections);
-        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(runtime, token, copied,
+        Assert.That(P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(runtime, token, copied,
             out P12ECrimeSocialAppraisalOwnerSnapshot rejectedCopy,
             out P12ECrimeSocialAppraisalSnapshotFailure failure), Is.False);
         Assert.That(rejectedCopy, Is.Null);
@@ -210,7 +210,7 @@ public sealed class P12ECrimeSocialAppraisalOwnerSnapshotTests
         TheftOutcome outcome = CreateOutcome(perpetrator, victim, token.AbsoluteDay, "stale:after-token");
         Assert.That(runtime.CrimeSocialAppraisal.TheftOutcomes.TryRecord(outcome,
             out CrimeOutcomeStoreFailure outcomeFailure), Is.True, outcomeFailure.ToString());
-        Assert.That(P12ECrimeSocialAppraisalOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12ECrimeSocialAppraisalCaptureAdapter.TryCapture(runtime, token, token.OwnerSections,
             out P12ECrimeSocialAppraisalOwnerSnapshot rejectedStale, out failure), Is.False);
         Assert.That(rejectedStale, Is.Null);
     }

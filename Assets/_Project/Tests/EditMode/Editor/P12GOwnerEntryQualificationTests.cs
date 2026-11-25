@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using NUnit.Framework;
 using UnityEditor;
@@ -10,6 +11,44 @@ public sealed partial class P12GPoliticalBindingRestoreTests
     private const string QualificationSiteId = "p12g-qualification-unregistered-site";
     private const string QualificationLocationId = "p12g-qualification-unregistered-location";
     private const string QualificationLocalPlaceId = "p12g-qualification-unregistered-place";
+
+    private sealed class MemoryContinuationSlotOperations : IAtomicFileSlotOperations
+    {
+        private readonly byte[] bytes;
+
+        internal MemoryContinuationSlotOperations(byte[] bytes)
+        {
+            this.bytes = bytes ?? throw new System.ArgumentNullException(nameof(bytes));
+        }
+
+        public void CreateDirectory(string path) => throw new System.NotSupportedException();
+        public bool Exists(string path) => true;
+        public Stream CreateNewTemporary(string path) => throw new System.NotSupportedException();
+        public Stream OpenRead(string path) => new MemoryStream(bytes, writable: false);
+        public void FlushToDisk(Stream stream) => throw new System.NotSupportedException();
+        public void Replace(string source, string destination) => throw new System.NotSupportedException();
+        public void Move(string source, string destination) => throw new System.NotSupportedException();
+        public void Delete(string path) => throw new System.NotSupportedException();
+    }
+
+    private static DailyV1ApplicationStartAdmission AdmitInitialRestore(
+        DailyV1Application application,
+        byte[] imageBytes,
+        P12ACompatibilityDescriptor compatibility)
+    {
+        var host = new DailyV1ApplicationHost(
+            "memory-continuation-root",
+            new MemoryContinuationSlotOperations(imageBytes),
+            null, null, unityV1Identity: compatibility);
+        Assert.That(application.TryAdmitInitialStart(
+                null, host, out DailyV1ApplicationStartAdmission admission,
+                out P12AResult result, out string diagnostic),
+            Is.True, result?.Code + ":" + result?.SectionCode + " " + diagnostic);
+        Assert.That(admission.Kind,
+            Is.EqualTo(DailyV1ApplicationStartAdmissionKind.RestoreRequired));
+        Assert.That(admission.RestoreImage, Is.Not.Null);
+        return admission;
+    }
 
     [Test]
     public void IntegratedMilitaryAndSiteKnowledgeOwnersPersistRestoreAndContinueWithExactParity()
@@ -35,18 +74,168 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         P12AContinuationImage image = DecodeCompletedImage(sourceImageBytes, source.Session, anchor.NormalContext);
         AssertImageContainsIntegratedOwnerRows(image, source.Session.Runtime.NpcRuntimes.First().RuntimeId);
 
+        DailyV1Application restoreApplication = new DailyV1Application();
+        Assert.That(restoreApplication.TryCaptureBootstrapAdmissionContext(
+                out SimulationRuntimeAdmissionContext restoreBootstrapContext), Is.True);
+        Assert.That(restoreApplication.TryAdmitAndDecodeRestoredContinuationImage(
+                image, image.Header.Compatibility, null, restoreBootstrapContext,
+                out bool imageAdmissionPassed, out P12ADailyV1Census admittedImageCensus,
+                out P12ADailyV1ImageOwnerSnapshots decodedOwners, out P12AResult imageDecodeResult),
+            Is.True, imageDecodeResult?.SectionCode + ":" + imageDecodeResult?.Code);
+        Assert.That(imageAdmissionPassed, Is.True,
+            "Core must own selected-profile census admission and typed owner-image decoding.");
+        Assert.That(admittedImageCensus, Is.Not.Null);
+        Assert.That(decodedOwners, Is.Not.Null);
+        Assert.That(decodedOwners.C, Is.Not.Null);
+        Assert.That(decodedOwners.Cities, Is.Not.Empty);
+
+        DailyV1ApplicationStartAdmission initialStartAdmission = AdmitInitialRestore(
+            restoreApplication, sourceImageBytes, image.Header.Compatibility);
+        image = initialStartAdmission.RestoreImage;
+
+        DailyV1Application foreignApplication = new DailyV1Application();
+        Assert.That(foreignApplication.TryCaptureBootstrapAdmissionContext(
+                out SimulationRuntimeAdmissionContext foreignBootstrapContext), Is.True);
+        Assert.That(restoreApplication.TryAdmitAndDecodeRestoredContinuationImage(
+                image, image.Header.Compatibility, null, foreignBootstrapContext,
+                out bool foreignAdmissionPassed, out P12ADailyV1Census foreignCensus,
+                out P12ADailyV1ImageOwnerSnapshots foreignDecodedOwners, out P12AResult foreignImageResult),
+            Is.False);
+        Assert.That(foreignAdmissionPassed, Is.False,
+            "A foreign application's bootstrap identity must fail before owner-image decoding.");
+        Assert.That(foreignCensus, Is.Null);
+        Assert.That(foreignDecodedOwners, Is.Null);
+        Assert.That(foreignImageResult?.Code, Is.EqualTo(P12AResultCode.WrongThread));
+
+        List<P12GDailyV1RestoreStage> restoreStages = new List<P12GDailyV1RestoreStage>();
         Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
                 image,
                 image.Header.Compatibility,
                 anchor.Configuration,
                 anchor.Runtime.Configuration,
                 anchor.Composition.Calendar,
-                anchor.NormalContext,
+                anchor.Composition.SelectedDefinitions,
+                restoreBootstrapContext,
                 out SimulationActiveSession restored,
                 out P12GDailyV1RestoreFailure restoreFailure,
-                out string restoreDiagnostic),
+                out string restoreDiagnostic,
+                stageObserver: restoreStages.Add,
+                application: restoreApplication,
+                initialStartAdmission: initialStartAdmission),
             Is.True, restoreFailure + ": " + restoreDiagnostic);
+        int ownerVectorValidatedStageIndex = restoreStages.IndexOf(
+            P12GDailyV1RestoreStage.TargetOwnerVectorValidated);
+        Assert.That(restoreStages.Count(stage =>
+                stage == P12GDailyV1RestoreStage.TargetOwnerVectorValidated),
+            Is.EqualTo(1), "The target owner vector validation stage must be emitted once.");
+        Assert.That(ownerVectorValidatedStageIndex,
+            Is.GreaterThan(restoreStages.IndexOf(P12GDailyV1RestoreStage.CandidateComposed)));
+        Assert.That(ownerVectorValidatedStageIndex,
+            Is.LessThan(restoreStages.IndexOf(P12GDailyV1RestoreStage.TargetSpatialInvariantsValidated)));
+        Assert.That(restoreStages.Contains(P12GDailyV1RestoreStage.CandidateGuardBound), Is.False,
+            "Initial restore boundary finalization is held by the application until its atomic publication gate.");
+        Assert.That(restoreStages.Contains(P12GDailyV1RestoreStage.BoundaryAdmitted), Is.False,
+            "The completed restore token is not published on the private projection before application commit.");
         Assert.That(restored, Is.Not.Null);
+        Assert.That(restored.Runtime.SelectedRuntimeOwnerGraph.PoliticalKnowledgeStore,
+            Is.SameAs(restored.Runtime.PoliticalKnowledgeStoreForWorldBoundary),
+            "The restored Core owner graph and Unity runtime projection must retain the exact staged PoliticalKnowledge authority.");
+        Assert.That(restored.Composition.SelectedDefinitions,
+            Is.SameAs(anchor.Composition.SelectedDefinitions),
+            "Detached restore must consume the canonical typed graph selected by the admitted profile.");
+        Assert.That(restored.Runtime.TryGetCompletedDailyCaptureToken(
+                out DailyCaptureEligibilityToken unpublishedToken,
+                out DailyCaptureEligibilityFailure unpublishedTokenFailure),
+            Is.False,
+            "A restored Core session must not expose a completed capture token before atomic publication.");
+        Assert.That(unpublishedToken, Is.Null);
+        Assert.That(unpublishedTokenFailure, Is.EqualTo(DailyCaptureEligibilityFailure.WorldNotPublished),
+            "The detached candidate remains unpublished until the application commit gate completes.");
+        object candidateBoundaryBeforeAdmissionCommit =
+            restored.CoreRuntimeSession.RuntimeAdvanceBoundary;
+        Assert.That(restoreApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+                null, image, restored.CoreRuntimeSession, restored, restored.Runtime,
+                out string missingAdmissionDiagnostic),
+            Is.False, "Initial restore publication cannot omit its exact slot admission.");
+        Assert.That(missingAdmissionDiagnostic, Does.Contain("exact admitted image token"));
+
+        Assert.That(restoreApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+                initialStartAdmission, image, restored.CoreRuntimeSession, null,
+                restored.Runtime, out string missingProjectionDiagnostic),
+            Is.False, "Initial restore must reject a missing host projection before boundary finalization.");
+        Assert.That(missingProjectionDiagnostic, Does.Contain("host projection"));
+
+        Assert.That(restoreApplication.TryCommitRestoredCandidateWithHostProjection(
+                null, restored.CoreRuntimeSession, null, restored, restored.Runtime,
+                null, out string genericInitialDiagnostic),
+            Is.False,
+            "The generic Core restore publication route cannot bypass initial slot admission.");
+        Assert.That(genericInitialDiagnostic, Does.Contain("exact initial slot admission"));
+
+        DailyV1Application foreignStartApplication = new DailyV1Application();
+        DailyV1ApplicationStartAdmission foreignStartAdmission = AdmitInitialRestore(
+            foreignStartApplication, sourceImageBytes, image.Header.Compatibility);
+        Assert.That(restoreApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+                foreignStartAdmission, foreignStartAdmission.RestoreImage,
+                restored.CoreRuntimeSession, restored, restored.Runtime,
+                out string foreignStartDiagnostic),
+            Is.False,
+            "A different Core application cannot publish with its own initial restore admission.");
+        Assert.That(foreignStartDiagnostic, Does.Contain("exact admitted image token"));
+
+        P12AContinuationImage sameBytesDifferentImage = DecodeCompletedImage(
+            sourceImageBytes, source.Session, anchor.NormalContext);
+        Assert.That(sameBytesDifferentImage, Is.Not.SameAs(image));
+        Assert.That(restoreApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+                initialStartAdmission, sameBytesDifferentImage, restored.CoreRuntimeSession,
+                restored, restored.Runtime, out string substitutedImageDiagnostic),
+            Is.False, "An equivalent but separately decoded image cannot substitute for the admitted source object.");
+        Assert.That(substitutedImageDiagnostic, Does.Contain("exact admitted image token"));
+
+        Assert.That(restoreApplication.TryCommitInitialRestoredCoreCandidate(
+                null, image, restored.CoreRuntimeSession, restored.Runtime,
+                out string missingCoreAdmissionDiagnostic),
+            Is.False, "The projection-free Core route must require its exact initial-slot admission.");
+        Assert.That(missingCoreAdmissionDiagnostic, Does.Contain("exact admitted image token"));
+        Assert.That(restoreApplication.TryCommitInitialRestoredCoreCandidate(
+                foreignStartAdmission, foreignStartAdmission.RestoreImage,
+                restored.CoreRuntimeSession, restored.Runtime,
+                out string foreignCoreAdmissionDiagnostic),
+            Is.False, "A foreign application's admission cannot publish this Core candidate.");
+        Assert.That(foreignCoreAdmissionDiagnostic, Does.Contain("exact admitted image token"));
+        Assert.That(restoreApplication.TryCommitInitialRestoredCoreCandidate(
+                initialStartAdmission, sameBytesDifferentImage,
+                restored.CoreRuntimeSession, restored.Runtime,
+                out string substitutedCoreImageDiagnostic),
+            Is.False, "The projection-free route cannot substitute an equivalent separately decoded image.");
+        Assert.That(substitutedCoreImageDiagnostic, Does.Contain("exact admitted image token"));
+
+        Assert.That(restoreApplication.ActiveSession, Is.Null,
+            "Rejected initial admission must leave the Core session unpublished.");
+        Assert.That(restoreApplication.TryGetPublishedHostProjection(
+                restored.CoreRuntimeSession, out _), Is.False,
+            "Rejected initial admission must not register its host projection.");
+        Assert.That(restored.CoreRuntimeSession.RuntimeAdvanceBoundary,
+            Is.SameAs(candidateBoundaryBeforeAdmissionCommit),
+            "Rejected admission must not bind or replace the candidate's runtime boundary.");
+
+        Assert.That(restoreApplication.TryCommitInitialRestoredCoreCandidate(
+                initialStartAdmission, image, restored.CoreRuntimeSession,
+                restored.Runtime, out string publishDiagnostic),
+            Is.True, publishDiagnostic);
+        Assert.That(restoreApplication.ActiveSession,
+            Is.SameAs(restored.CoreRuntimeSession),
+            "The initial restore publishes the authoritative Core session directly.");
+        Assert.That(restoreApplication.TryGetPublishedHostProjection(
+                restored.CoreRuntimeSession, out _), Is.False,
+            "A Core-owned session does not require a Unity projection to become active.");
+        Assert.That(restoreStages.Count(stage =>
+                stage == P12GDailyV1RestoreStage.CandidateGuardBound), Is.EqualTo(1));
+        Assert.That(restoreStages.Count(stage =>
+                stage == P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured), Is.EqualTo(1));
+        Assert.That(restoreStages.Count(stage =>
+                stage == P12GDailyV1RestoreStage.BoundaryAdmitted), Is.EqualTo(1));
+
         DailyCaptureEligibilityToken restoredToken = GetCompletedToken(restored.Runtime);
         Assert.That(restoredToken.BoundaryProvenance,
             Is.EqualTo(DailyCaptureBoundaryProvenance.RestoredContinuation));
@@ -55,7 +244,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             "source/image-restored at the captured boundary");
         AssertDailyV1Parity(restored, restoredToken, control.Session, controlToken,
             "image-restored/control at the captured boundary");
-        Assert.That(EncodeCompletedImage(restored, anchor.NormalContext), Is.EqualTo(sourceImageBytes),
+        Assert.That(EncodeCompletedImage(restored, restoreBootstrapContext), Is.EqualTo(sourceImageBytes),
             "Every persisted owner payload, alias group, root and revision must be reproduced exactly after image restore.");
 
         for (int boundary = 1; boundary <= 2; boundary++)
@@ -76,12 +265,155 @@ public sealed partial class P12GPoliticalBindingRestoreTests
             AssertDailyV1Parity(source.Session, nextSourceToken, control.Session, nextControlToken,
                 "independent deterministic control T+" + boundary);
             Assert.That(EncodeCompletedImage(source.Session, anchor.NormalContext),
-                Is.EqualTo(EncodeCompletedImage(restored, anchor.NormalContext)),
+                Is.EqualTo(EncodeCompletedImage(restored, restoreBootstrapContext)),
                 "Complete Daily-v1 serialized images must remain byte-identical at T+" + boundary + ".");
             Assert.That(EncodeCompletedImage(source.Session, anchor.NormalContext),
                 Is.EqualTo(EncodeCompletedImage(control.Session, anchor.NormalContext)),
                 "Independent same-input executions must remain byte-identical at T+" + boundary + ".");
         }
+    }
+
+    [Test]
+    public void CoreImageRestoreRejectsPrivateTargetRosterMutationAfterOwnerVectorCaptureAtomically()
+    {
+        AnchorFixture anchor = CreateAnchorFixture("P12-G Core image owner-vector atomicity anchor");
+        SyntheticSession source = CreateSyntheticSession(anchor, "P12-G Core image owner-vector source");
+        Assert.That(source.Session.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+            Is.True, sourceAdvance.ToString());
+
+        byte[] sourceImageBytes = EncodeCompletedImage(source.Session, anchor.NormalContext);
+        P12AContinuationImage image = DecodeCompletedImage(
+            sourceImageBytes, source.Session, anchor.NormalContext);
+        DailyV1Application restoreApplication = new DailyV1Application();
+        Assert.That(restoreApplication.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext restoreBootstrapContext), Is.True);
+        DailyV1ApplicationStartAdmission initialStartAdmission = AdmitInitialRestore(
+            restoreApplication, sourceImageBytes, image.Header.Compatibility);
+        image = initialStartAdmission.RestoreImage;
+
+        SimulationActiveSession privateCandidate = null;
+        bool mutationInjected = false;
+        bool targetRosterMutationApplied = false;
+        List<P12GDailyV1RestoreStage> restoreStages = new List<P12GDailyV1RestoreStage>();
+        Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+            image,
+            image.Header.Compatibility,
+            anchor.Configuration,
+            anchor.Runtime.Configuration,
+            anchor.Composition.Calendar,
+            anchor.Composition.SelectedDefinitions,
+            restoreBootstrapContext,
+            out SimulationActiveSession restored,
+            out P12GDailyV1RestoreFailure failure,
+            out string diagnostic,
+            stageObserver: stage =>
+            {
+                restoreStages.Add(stage);
+                if (stage != P12GDailyV1RestoreStage.TargetOwnerVectorCaptured) return;
+
+                mutationInjected = true;
+                Assert.That(privateCandidate, Is.Not.Null,
+                    "The image candidate must exist before its first target owner-vector capture.");
+                Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.False,
+                    "The candidate remains private while the persisted image vector is being checked.");
+                string lateNpcId = privateCandidate.Composition.RuntimeIdAllocator.AllocateNpcId();
+                NpcRuntime lateNpc = new NpcRuntime(
+                    lateNpcId,
+                    SimulationTestFactory.CreateNpc("p12g-private-image-target-late-npc"));
+                Assert.That(privateCandidate.Runtime.TryRegisterNpc(
+                    lateNpc, out WorldNpcRegistryFailure registerFailure),
+                    Is.True, registerFailure.ToString());
+                targetRosterMutationApplied = true;
+            },
+            application: restoreApplication,
+            initialStartAdmission: initialStartAdmission,
+            privateCandidateObserverForTest: candidate => privateCandidate = candidate),
+            Is.True);
+
+        Assert.That(mutationInjected, Is.True);
+        Assert.That(targetRosterMutationApplied, Is.True);
+        Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.None), diagnostic);
+        Assert.That(restored, Is.Not.Null);
+        Assert.That(restoreStages.Count(stage =>
+                stage == P12GDailyV1RestoreStage.TargetOwnerVectorValidated),
+            Is.EqualTo(1), "The persisted image owner vector must be validated exactly once.");
+
+        Assert.That(restoreApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+                initialStartAdmission, image, restored.CoreRuntimeSession, restored,
+                restored.Runtime, out string commitDiagnostic),
+            Is.False,
+            "The application commit must reject a target roster changed after the staged image owner-vector capture.");
+        Assert.That(commitDiagnostic, Does.Contain("missing or has changed cardinality"));
+        Assert.That(restoreStages.Count(stage => stage == P12GDailyV1RestoreStage.CandidateGuardBound),
+            Is.EqualTo(1), "The application commit binds the guard before the final owner-vector recapture.");
+        Assert.That(restoreStages.Contains(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured), Is.False);
+        Assert.That(restoreStages.Contains(P12GDailyV1RestoreStage.BoundaryAdmitted), Is.False);
+        Assert.That(privateCandidate, Is.Not.Null);
+        Assert.That(privateCandidate.Runtime.AreCoreMutationGuardAuthoritiesBound, Is.True,
+            "The rejected candidate may have a bound private guard, but it remains unpublished and is discarded.");
+        Assert.That(restoreApplication.ActiveSession, Is.Null,
+            "A failed private image candidate must not replace or initialize the application's active session.");
+        Assert.That(EncodeCompletedImage(source.Session, anchor.NormalContext), Is.EqualTo(sourceImageBytes),
+            "Rejecting a private target mutation must preserve the source image exactly.");
+    }
+
+    [Test]
+    public void CoreImageRestoreRejectsDanglingGenealogyBeforeTargetOwnerVectorCapture()
+    {
+        AnchorFixture anchor = CreateAnchorFixture("P12-G Core graph binding anchor");
+        SyntheticSession source = CreateSyntheticSession(anchor, "P12-G Core graph binding source");
+        Assert.That(source.Session.Runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure sourceAdvance),
+            Is.True, sourceAdvance.ToString());
+
+        byte[] sourceImageBytes = EncodeCompletedImage(source.Session, anchor.NormalContext);
+        P12AContinuationImage image = DecodeCompletedImage(
+            sourceImageBytes, source.Session, anchor.NormalContext);
+        DailyV1Application restoreApplication = new DailyV1Application();
+        Assert.That(restoreApplication.TryCaptureBootstrapAdmissionContext(
+            out SimulationRuntimeAdmissionContext restoreBootstrapContext), Is.True);
+        DailyV1ApplicationStartAdmission initialStartAdmission = AdmitInitialRestore(
+            restoreApplication, sourceImageBytes, image.Header.Compatibility);
+        image = initialStartAdmission.RestoreImage;
+
+        SimulationActiveSession privateCandidate = null;
+        bool corruptionApplied = false;
+        List<P12GDailyV1RestoreStage> stages = new List<P12GDailyV1RestoreStage>();
+        bool restored = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+            image,
+            image.Header.Compatibility,
+            anchor.Configuration,
+            anchor.Runtime.Configuration,
+            anchor.Composition.Calendar,
+            anchor.Composition.SelectedDefinitions,
+            restoreBootstrapContext,
+            out SimulationActiveSession rejected,
+            out P12GDailyV1RestoreFailure failure,
+            out string diagnostic,
+            stageObserver: stages.Add,
+            application: restoreApplication,
+            initialStartAdmission: initialStartAdmission,
+            privateCandidateObserverForTest: candidate =>
+            {
+                privateCandidate = candidate;
+                Assert.That(candidate.CoreRuntimeSession, Is.Not.Null);
+                Assert.That(candidate.CoreRuntimeSession.OwnerGraph.GenealogyStore.TryAddParentage(
+                    new PersonId("unresolved-parent"), new PersonId("unresolved-child"),
+                    out GenealogyFailure addFailure), Is.True, addFailure.ToString());
+                corruptionApplied = true;
+            });
+
+        Assert.That(corruptionApplied, Is.True);
+        Assert.That(restored, Is.False);
+        Assert.That(rejected, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12GDailyV1RestoreFailure.BindingValidationFailed));
+        Assert.That(diagnostic, Does.Contain("Genealogy"));
+        Assert.That(stages, Does.Contain(P12GDailyV1RestoreStage.CandidateComposed));
+        Assert.That(stages.Contains(P12GDailyV1RestoreStage.TargetOwnerVectorCaptured), Is.False,
+            "A rejected Core binding must stop before the host target census is requested.");
+        Assert.That(restoreApplication.ActiveSession, Is.Null,
+            "The invalid private target must not be published into the application.");
+        Assert.That(EncodeCompletedImage(source.Session, anchor.NormalContext), Is.EqualTo(sourceImageBytes),
+            "Rejecting the private Core target must leave the source image unchanged.");
     }
 
     [TestCase(QualificationImageCorruption.MissingForceReference)]
@@ -108,20 +440,71 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     out _, out P12AResult aliasResult), Is.False,
                 "A changed shared ArmedForce alias must fail the authoritative image census before encoding.");
             Assert.That(aliasResult?.Code, Is.EqualTo(P12AResultCode.OwnerGraphRejected));
+            DailyV1Application coreAdmissionApplication = new DailyV1Application();
+            Assert.That(coreAdmissionApplication.TryCaptureBootstrapAdmissionContext(
+                out SimulationRuntimeAdmissionContext coreBootstrapContext), Is.True);
+            DailyV1ApplicationStartAdmission initialStartAdmission = AdmitInitialRestore(
+                coreAdmissionApplication, validBytes, validImage.Header.Compatibility);
+            validImage = initialStartAdmission.RestoreImage;
+            rejectedImage = ReplaceForceAlias(validImage);
+            P12ACompatibilityDescriptor imageIdentity = validImage.Header.Compatibility;
+            P12ACompatibilityDescriptor incompatibleIdentity = new P12ACompatibilityDescriptor(
+                imageIdentity.ProfileId, imageIdentity.ProfileVersion,
+                imageIdentity.ConfigurationFingerprint, imageIdentity.UnityVersion,
+                imageIdentity.RuntimePlatform, imageIdentity.ScriptingBackend, imageIdentity.BuildGuid,
+                imageIdentity.AssemblyMvids, imageIdentity.NumericProfileId,
+                imageIdentity.NumericProfileVersion, "different-content",
+                imageIdentity.ProviderFingerprint, imageIdentity.CalendarId,
+                imageIdentity.CalendarVersion, imageIdentity.CalendarFingerprint,
+                imageIdentity.P9Fingerprint, imageIdentity.P8Fingerprint);
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+                    validImage,
+                    incompatibleIdentity,
+                    anchor.Configuration,
+                    anchor.Runtime.Configuration,
+                    anchor.Composition.Calendar,
+                    anchor.Composition.SelectedDefinitions,
+                    coreBootstrapContext,
+                    out SimulationActiveSession identityRejected,
+                    out P12GDailyV1RestoreFailure identityFailure,
+                    out _,
+                    application: coreAdmissionApplication,
+                    initialStartAdmission: initialStartAdmission),
+                Is.False, "Core must reject a valid image with the wrong admitted content identity.");
+            Assert.That(identityRejected, Is.Null);
+            Assert.That(identityFailure, Is.EqualTo(P12GDailyV1RestoreFailure.InvalidSourceSession));
             Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
                     rejectedImage,
                     rejectedImage.Header.Compatibility,
                     anchor.Configuration,
                     anchor.Runtime.Configuration,
                     anchor.Composition.Calendar,
-                    anchor.NormalContext,
+                    anchor.Composition.SelectedDefinitions,
+                    coreBootstrapContext,
                     out SimulationActiveSession aliasRejected,
                     out P12GDailyV1RestoreFailure aliasFailure,
-                    out string aliasDiagnostic),
-                Is.False, "The integrated G restore boundary must reject a split shared ArmedForce alias.");
+                    out string aliasDiagnostic,
+                    application: coreAdmissionApplication,
+                    initialStartAdmission: initialStartAdmission),
+                Is.False, "The initial admission token must reject substitution of a split-alias image.");
             Assert.That(aliasRejected, Is.Null);
             Assert.That(aliasFailure, Is.EqualTo(P12GDailyV1RestoreFailure.SourceCaptureFailed));
-            Assert.That(aliasDiagnostic, Does.Contain("owner manifest"));
+            Assert.That(aliasDiagnostic, Does.Contain("initial-start-admission"));
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
+                    rejectedImage,
+                    rejectedImage.Header.Compatibility,
+                    anchor.Configuration,
+                    anchor.Runtime.Configuration,
+                    anchor.Composition.Calendar,
+                    anchor.Composition.SelectedDefinitions,
+                    coreBootstrapContext,
+                    out SimulationActiveSession aliasCensusRejected,
+                    out P12GDailyV1RestoreFailure aliasCensusFailure,
+                    out string aliasCensusDiagnostic),
+                Is.False, "The detached owner census must independently reject a split shared ArmedForce alias.");
+            Assert.That(aliasCensusRejected, Is.Null);
+            Assert.That(aliasCensusFailure, Is.EqualTo(P12GDailyV1RestoreFailure.SourceCaptureFailed));
+            Assert.That(aliasCensusDiagnostic, Does.Contain("owner manifest"));
             Assert.That(source.Session.Runtime.TryValidateCompletedDailyCaptureToken(sourceToken, out _), Is.True);
             Assert.That(CaptureTypedParitySignature(source.Session, sourceToken), Is.EqualTo(sourceSignature));
             Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionFromImage(
@@ -130,11 +513,18 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                     anchor.Configuration,
                     anchor.Runtime.Configuration,
                     anchor.Composition.Calendar,
-                    anchor.NormalContext,
+                    anchor.Composition.SelectedDefinitions,
+                    coreBootstrapContext,
                     out SimulationActiveSession aliasRetry,
                     out P12GDailyV1RestoreFailure aliasRetryFailure,
-                    out string aliasRetryDiagnostic),
+                    out string aliasRetryDiagnostic,
+                    application: coreAdmissionApplication,
+                    initialStartAdmission: initialStartAdmission),
                 Is.True, aliasRetryFailure + ": " + aliasRetryDiagnostic);
+            Assert.That(coreAdmissionApplication.TryCommitInitialRestoredCandidateWithHostProjection(
+                    initialStartAdmission, validImage, aliasRetry.CoreRuntimeSession,
+                    aliasRetry, aliasRetry.Runtime, out string aliasRetryCommitDiagnostic),
+                Is.True, aliasRetryCommitDiagnostic);
             Assert.That(EncodeCompletedImage(aliasRetry, anchor.NormalContext), Is.EqualTo(validBytes));
             return;
         }
@@ -145,6 +535,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 anchor.Configuration,
                 anchor.Runtime.Configuration,
                 anchor.Composition.Calendar,
+                anchor.Composition.SelectedDefinitions,
                 anchor.NormalContext,
                 out SimulationActiveSession rejected,
                 out P12GDailyV1RestoreFailure rejectionFailure,
@@ -164,6 +555,7 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 anchor.Configuration,
                 anchor.Runtime.Configuration,
                 anchor.Composition.Calendar,
+                anchor.Composition.SelectedDefinitions,
                 anchor.NormalContext,
                 out SimulationActiveSession retried,
                 out P12GDailyV1RestoreFailure retryFailure,
@@ -206,8 +598,9 @@ public sealed partial class P12GPoliticalBindingRestoreTests
                 (int)SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1;
             serializedBootstrap.ApplyModifiedPropertiesWithoutUndo();
             InvalidOperationException admissionFailure = Assert.Throws<InvalidOperationException>(() => bootstrap.Start());
-            Assert.That(admissionFailure.Message, Does.Contain("P12 runtime-admission adapter"),
-                "The accepted Daily-v1 owner inventory must reject publication when the generic site introduces an excluded root.");
+            Assert.That(admissionFailure.Message,
+                Does.Contain("requires the admitted exact-empty ExplorableSite/P10 topology profile"),
+                "The Core genesis composer must reject the excluded site root before publishing the selected Daily-v1 owner graph.");
 
             Assert.That(bootstrap.Bootstrap, Is.Null,
                 "A non-empty generic site profile cannot publish through the selected Daily-v1 admission.");
@@ -342,13 +735,20 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         string notable = NpcKnowledgeCensusProvider.SectionIdFor(4, npc.RuntimeId);
         string resources = NpcKnowledgeCensusProvider.SectionIdFor(5, npc.RuntimeId);
         string access = NpcKnowledgeCensusProvider.SectionIdFor(6, npc.RuntimeId);
-        AssertSection(rows, site, npc.ExistingExplorableSiteKnowledge, 1, 1L);
-        AssertSection(rows, places, npc.ExistingLocalTopologyKnowledge, 0, 0L);
-        AssertSection(rows, connections, npc.ExistingLocalTopologyKnowledge, 0, 0L);
-        AssertSection(rows, opposition, npc.ExistingAdventureSiteIntelKnowledge, 1, 4L);
-        AssertSection(rows, notable, npc.ExistingAdventureSiteIntelKnowledge, 1, 4L);
-        AssertSection(rows, resources, npc.ExistingAdventureSiteIntelKnowledge, 1, 4L);
-        AssertSection(rows, access, npc.ExistingAdventureSiteIntelKnowledge, 1, 4L);
+        DailyV1NpcRuntimeOwners selectedOwners = npc.SelectedRuntimeOwners;
+        Assert.That(selectedOwners, Is.Not.Null,
+            "The selected Daily-v1 restore fixture must publish its exact Core NPC owner graph.");
+        Assert.That(npc.ExistingExplorableSiteKnowledge.SelectedOwner,
+            Is.SameAs(selectedOwners.ExplorableSiteKnowledge));
+        Assert.That(npc.ExistingAdventureSiteIntelKnowledge.SelectedOwner,
+            Is.SameAs(selectedOwners.AdventureSiteIntelKnowledge));
+        AssertSection(rows, site, selectedOwners.ExplorableSiteKnowledge, 1, 1L);
+        AssertSection(rows, places, selectedOwners.LocalTopologyKnowledgeEmptyOwner, 0, 0L);
+        AssertSection(rows, connections, selectedOwners.LocalTopologyKnowledgeEmptyOwner, 0, 0L);
+        AssertSection(rows, opposition, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
+        AssertSection(rows, notable, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
+        AssertSection(rows, resources, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
+        AssertSection(rows, access, selectedOwners.AdventureSiteIntelKnowledge, 1, 4L);
         Assert.That(rows.Single(row => row.SectionId == places).OwnerInstanceIdentity,
             Is.SameAs(rows.Single(row => row.SectionId == connections).OwnerInstanceIdentity));
         Assert.That(rows.Single(row => row.SectionId == places).Role, Is.EqualTo(OwnerSectionRole.Required));
@@ -410,13 +810,26 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         SimulationActiveSession session,
         SimulationRuntimeAdmissionContext normalContext)
     {
-        Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+        DailyV1ExecutionBoundaryState executionState = session.Runtime.ExecutionBoundaryState;
+        Assert.That(executionState.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        bool captured;
+        P12AContinuationImage image;
+        P12GDailyV1RestoreFailure failure;
+        string diagnostic;
+        try
+        {
+            captured = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
                 session, normalContext,
-                out P12AContinuationImage image,
+                out image,
                 out _,
-                out P12GDailyV1RestoreFailure failure,
-                out string diagnostic),
-            Is.True, failure + ": " + diagnostic);
+                out failure,
+                out diagnostic);
+        }
+        finally
+        {
+            Assert.That(executionState.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        }
+        Assert.That(captured, Is.True, failure + ": " + diagnostic);
         Assert.That(P12ADailyV1Census.TryCreateForImage(image,
             out P12ADailyV1Census census, out P12AResult censusResult),
             Is.True, censusResult?.Code.ToString());
@@ -430,10 +843,23 @@ public sealed partial class P12GPoliticalBindingRestoreTests
         SimulationActiveSession session,
         SimulationRuntimeAdmissionContext normalContext)
     {
-        Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
-                session, normalContext, out P12AContinuationImage sourceImage, out _,
-                out P12GDailyV1RestoreFailure sourceFailure, out string sourceDiagnostic),
-            Is.True, sourceFailure + ": " + sourceDiagnostic);
+        DailyV1ExecutionBoundaryState executionState = session.Runtime.ExecutionBoundaryState;
+        Assert.That(executionState.TryBeginOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        bool captured;
+        P12AContinuationImage sourceImage;
+        P12GDailyV1RestoreFailure sourceFailure;
+        string sourceDiagnostic;
+        try
+        {
+            captured = P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                session, normalContext, out sourceImage, out _,
+                out sourceFailure, out sourceDiagnostic);
+        }
+        finally
+        {
+            Assert.That(executionState.TryEndOperation(DailyV1OperationScopeKind.ContinuationSave), Is.True);
+        }
+        Assert.That(captured, Is.True, sourceFailure + ": " + sourceDiagnostic);
         Assert.That(P12ADailyV1Census.TryCreateForImage(sourceImage,
             out P12ADailyV1Census census, out P12AResult censusResult), Is.True, censusResult?.Code.ToString());
         Assert.That(P12AContinuationCodec.TryDecode(bytes, census.Manifest,

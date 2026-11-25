@@ -100,16 +100,49 @@ public sealed class FiniteSourceProductionService
         long expectedSourceRevision,
         long expectedMarketRevision)
     {
+        return TryProduceDailyCore(sourceStore, market, settlementSemanticId, marketStoreSemanticId,
+            locationId, item, null, absoluteDay, expectedSourceRevision, expectedMarketRevision);
+    }
+
+    internal FiniteSourceProductionResult TryProduceDaily(
+        FiniteProductionSourceStore sourceStore,
+        MarketRuntime market,
+        string settlementSemanticId,
+        string marketStoreSemanticId,
+        string locationId,
+        DailyV1ItemDefinition item,
+        long absoluteDay,
+        long expectedSourceRevision,
+        long expectedMarketRevision)
+    {
+        return TryProduceDailyCore(sourceStore, market, settlementSemanticId, marketStoreSemanticId,
+            locationId, null, item, absoluteDay, expectedSourceRevision, expectedMarketRevision);
+    }
+
+    private FiniteSourceProductionResult TryProduceDailyCore(
+        FiniteProductionSourceStore sourceStore,
+        MarketRuntime market,
+        string settlementSemanticId,
+        string marketStoreSemanticId,
+        string locationId,
+        ItemData legacyItem,
+        DailyV1ItemDefinition selectedItem,
+        long absoluteDay,
+        long expectedSourceRevision,
+        long expectedMarketRevision)
+    {
         FiniteProductionSourceState expectedSource = sourceStore != null ? sourceStore.Source : null;
-        if (!TryPrepareDaily(sourceStore, market, settlementSemanticId, marketStoreSemanticId,
+        if (!TryPrepareDailyCore(sourceStore, market, settlementSemanticId, marketStoreSemanticId,
                 locationId,
                 expectedSource != null ? expectedSource.ProductionSourceId : null,
                 expectedSource != null ? expectedSource.ContentRevision : null,
-                item, absoluteDay, expectedSourceRevision, expectedMarketRevision,
+                legacyItem, selectedItem, absoluteDay, expectedSourceRevision, expectedMarketRevision,
                 out FiniteSourceProductionPreparation preparation, out string rejection))
-            return Rejected(rejection, sourceStore != null ? sourceStore.Source : null, market, item);
+            return Rejected(rejection, sourceStore != null ? sourceStore.Source : null,
+                market, legacyItem, selectedItem);
 
         FiniteProductionSourceState source = sourceStore.Source;
+        int stock = selectedItem != null ? market.GetSelectedAmount(selectedItem) : market.GetAmount(legacyItem);
         if (preparation.Quantity == 0)
         {
             return new FiniteSourceProductionResult(
@@ -118,8 +151,8 @@ public sealed class FiniteSourceProductionService
                 0,
                 source.RemainingReserve,
                 source.RemainingReserve,
-                market.GetAmount(item),
-                market.GetAmount(item),
+                stock,
+                stock,
                 source.Revision,
                 market.Revision);
         }
@@ -127,7 +160,8 @@ public sealed class FiniteSourceProductionService
         if (!preparation.Install())
             return Rejected(source.Revision != expectedSourceRevision
                 ? "StaleSourceRevision" : market.Revision != expectedMarketRevision
-                    ? "StaleMarketRevision" : "MarketMutationRejected", source, market, item);
+                    ? "StaleMarketRevision" : "MarketMutationRejected", source,
+                market, legacyItem, selectedItem);
 
         return new FiniteSourceProductionResult(
             FiniteSourceProductionStatus.Applied,
@@ -156,15 +190,58 @@ public sealed class FiniteSourceProductionService
         out FiniteSourceProductionPreparation preparation,
         out string rejectionReason)
     {
+        return TryPrepareDailyCore(sourceStore, market, settlementSemanticId, marketStoreSemanticId,
+            locationId, productionSourceId, contentRevision, item, null, absoluteDay,
+            expectedSourceRevision, expectedMarketRevision, out preparation, out rejectionReason);
+    }
+
+    internal bool TryPrepareDaily(
+        FiniteProductionSourceStore sourceStore,
+        MarketRuntime market,
+        string settlementSemanticId,
+        string marketStoreSemanticId,
+        string locationId,
+        string productionSourceId,
+        string contentRevision,
+        DailyV1ItemDefinition item,
+        long absoluteDay,
+        long expectedSourceRevision,
+        long expectedMarketRevision,
+        out FiniteSourceProductionPreparation preparation,
+        out string rejectionReason)
+    {
+        return TryPrepareDailyCore(sourceStore, market, settlementSemanticId, marketStoreSemanticId,
+            locationId, productionSourceId, contentRevision, null, item, absoluteDay,
+            expectedSourceRevision, expectedMarketRevision, out preparation, out rejectionReason);
+    }
+
+    private bool TryPrepareDailyCore(
+        FiniteProductionSourceStore sourceStore,
+        MarketRuntime market,
+        string settlementSemanticId,
+        string marketStoreSemanticId,
+        string locationId,
+        string productionSourceId,
+        string contentRevision,
+        ItemData legacyItem,
+        DailyV1ItemDefinition selectedItem,
+        long absoluteDay,
+        long expectedSourceRevision,
+        long expectedMarketRevision,
+        out FiniteSourceProductionPreparation preparation,
+        out string rejectionReason)
+    {
         preparation = null;
         rejectionReason = "IdentityMismatch";
         FiniteProductionSourceState source = sourceStore != null ? sourceStore.Source : null;
-        if (source == null || market == null || item == null
+        string itemDefinitionId = selectedItem != null ? selectedItem.DefinitionId : legacyItem?.DefinitionId;
+        if (source == null || market == null || string.IsNullOrWhiteSpace(itemDefinitionId)
+            || (selectedItem != null && market.GetSelectedItem(selectedItem) == null)
             || !string.Equals(source.SettlementSemanticId, settlementSemanticId, StringComparison.Ordinal)
             || !string.Equals(source.MarketStoreSemanticId, marketStoreSemanticId, StringComparison.Ordinal)
             || !string.Equals(source.ProductionSourceId, productionSourceId, StringComparison.Ordinal)
             || !string.Equals(source.ContentRevision, contentRevision, StringComparison.Ordinal)
-            || !string.Equals(source.ItemDefinitionId, item.DefinitionId, StringComparison.Ordinal)
+            || !string.Equals(source.ItemDefinitionId, itemDefinitionId, StringComparison.Ordinal)
             || string.IsNullOrWhiteSpace(locationId))
             return false;
 
@@ -191,7 +268,8 @@ public sealed class FiniteSourceProductionService
         {
             preparation = new FiniteSourceProductionPreparation(sourceStore, market, null,
                 expectedSourceRevision, expectedMarketRevision, absoluteDay, 0,
-                source.RemainingReserve, market.GetAmount(item));
+                source.RemainingReserve, selectedItem != null
+                    ? market.GetSelectedAmount(selectedItem) : market.GetAmount(legacyItem));
             rejectionReason = string.Empty;
             return true;
         }
@@ -226,10 +304,13 @@ public sealed class FiniteSourceProductionService
         string reason,
         FiniteProductionSourceState source,
         MarketRuntime market,
-        ItemData item)
+        ItemData legacyItem,
+        DailyV1ItemDefinition selectedItem)
     {
         int reserve = source != null ? source.RemainingReserve : 0;
-        int stock = market != null && item != null ? market.GetAmount(item) : 0;
+        int stock = market == null ? 0 : selectedItem != null
+            ? market.GetSelectedAmount(selectedItem)
+            : legacyItem != null ? market.GetAmount(legacyItem) : 0;
         return new FiniteSourceProductionResult(
             FiniteSourceProductionStatus.Rejected,
             reason,

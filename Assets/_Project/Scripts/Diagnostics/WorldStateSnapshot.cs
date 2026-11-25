@@ -2379,8 +2379,8 @@ public static class WorldStateSnapshotBuilder
             BuildNotableItemSnapshots(context.PlaceContentStore),
             BuildLocalTopologySnapshots(
                 context.LocalTopologyStore
-                    ?? context.ArmedForceSpatialStateStore?.LocalTopologyStore
-                    ?? context.BattleStore?.LocalTopologyStore),
+                    ?? (context.ArmedForceSpatialStateStore?.SubLocationResolver as LocalTopologyArmedForceSubLocationResolver)?.LocalTopologyStore
+                    ?? (context.BattleStore?.SubLocationResolver as LocalTopologyArmedForceSubLocationResolver)?.LocalTopologyStore),
             calendarDate,
             persons,
             parentages,
@@ -3391,9 +3391,9 @@ public static class WorldStateSnapshotBuilder
 
         return new WorldStateActionSnapshot(
             action.DefinitionId,
-            action.actionName,
-            action.actionCategory,
-            action.actionType,
+            npc.GetConfiguredActionName(action),
+            (NpcActionCategory)npc.GetConfiguredActionCategoryOrder(action),
+            npc.GetConfiguredActionType(action),
             actionRuntime?.TargetNpc?.RuntimeId,
             actionRuntime?.TargetCity?.RuntimeId,
             actionRuntime?.TargetItem?.DefinitionId,
@@ -3849,7 +3849,7 @@ public static class WorldStateSnapshotBuilder
                 site.RuntimeId,
                 site.DefinitionId,
                 site.Location?.RuntimeId,
-                site.Definition != null ? site.Definition.kind : ExplorableSiteKind.Generic));
+                site.Definition != null ? (ExplorableSiteKind)site.Definition.Kind.Value : ExplorableSiteKind.Generic));
         }
 
         return result;

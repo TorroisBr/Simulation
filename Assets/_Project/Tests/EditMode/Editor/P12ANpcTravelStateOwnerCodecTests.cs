@@ -158,7 +158,7 @@ public sealed class P12ANpcTravelStateOwnerCodecTests
             Array.Empty<AdventureOppositionObservation>(), Array.Empty<AdventureNotableItemObservation>(),
             Array.Empty<AdventureCommonResourceObservation>(), Array.Empty<AdventureAccessObservation>(), 0L,
             Array.Empty<P12DNpcCommercialMarketValue>(), Array.Empty<P12DNpcCommercialLiquidityValue>(),
-            Array.Empty<CommercialKnowledgeShareReceipt>(), 0L);
+            Array.Empty<P12DNpcCommercialShareReceiptValue>(), 0L);
 
     private static P12AOwnerSection Encode(P12ANpcTravelStateOwnerValue value)
     {

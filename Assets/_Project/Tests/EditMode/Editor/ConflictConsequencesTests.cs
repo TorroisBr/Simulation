@@ -891,7 +891,7 @@ public sealed class ConflictConsequencesTests
             network.RegisterRoute(route);
             Site = new ExplorableSiteRuntime(
                 "expedition-guard-site",
-                SimulationTestFactory.CreateExplorableSite("expedition-guard-site-definition"),
+                SimulationTestFactory.CreateExplorableSiteDefinition("expedition-guard-site-definition"),
                 siteLocation);
             ExplorableSiteStore sites = new ExplorableSiteStore();
             sites.Add(Site);

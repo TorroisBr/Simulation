@@ -1,0 +1,2804 @@
+using System;
+using System.Collections.Generic;
+
+/// <summary>Core-owned dispatch for selected actions already admitted to the
+/// exact graph-owned current-action slot. P12 scopes are supplied only to the
+/// existing owner operations; this stage never accepts a projected payload.</summary>
+internal static class DailyV1SelectedActionExecutionStage
+{
+    /// <summary>
+    /// Existing host obligations around a Core-owned selected NPC owner write.
+    /// The host admits the P12 write and keeps Unity projections coherent; the
+    /// Core stage performs the authoritative owner mutation itself.
+    /// </summary>
+    internal interface ISelectedNpcOwnerMutationBoundary
+    {
+        bool CanProjectStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd);
+
+        void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner);
+        void NotifyStatusMutationCommitted(
+            DailyV1NpcRuntimeOwners owner,
+            DailyV1StatusDefinition status,
+            bool added);
+        void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner);
+    }
+
+    internal interface ISelectedActionStatusOperationBoundary : ISelectedNpcOwnerMutationBoundary
+    {
+        DailyV1SelectedActionStatusPlanResult ExecuteWithinOperation(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            Func<DailyV1SelectedActionStatusPlanResult> operation);
+    }
+
+    /// <summary>
+    /// Unity projection work that remains after Core has selected the exact
+    /// status owners. The adapter validates and refreshes its compatibility
+    /// view; the admitted Core session owns P12 admission, revisions and epoch
+    /// publication.
+    /// </summary>
+    internal interface ISelectedActionStatusProjectionBoundary
+    {
+        bool CanProjectStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd);
+        void RefreshStatusProjection(DailyV1NpcRuntimeOwners owner);
+        void SyncHiddenStateProjection(DailyV1NpcRuntimeOwners owner);
+    }
+
+    /// <summary>
+    /// Owns the ordinary selected actor/target action-status operation for an
+    /// admitted Daily-v1 session. Unity supplies only the existing projection
+    /// checks and mirrors. Forced Escape deliberately retains its wider
+    /// Crime/Justice receipt operation in the host adapter.
+    /// </summary>
+    internal sealed class CoreSelectedActionStatusOperationBoundary
+        : ISelectedActionStatusOperationBoundary
+    {
+        private readonly DailyV1ExecutionBoundaryState executionState;
+        private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+        private readonly IDailyV1P12CrimeJusticeMutationProtocol protocol;
+        private readonly DailyV1P12CrimeJusticeMutationCoordinator coordinator;
+        private readonly DailyV1NpcRuntimeOwners actor;
+        private readonly DailyV1NpcRuntimeOwners target;
+        private readonly ISelectedActionStatusProjectionBoundary projection;
+        private readonly DailyV1SelectedCrimeJusticeDailyMutationHostBinding reusedCrimeOperationBinding;
+        private readonly DailyV1ActionDefinition expectedForcedEscapeAction;
+        private readonly DailyV1NpcActionPayloadOwner expectedForcedEscapePayload;
+
+        private CoreSelectedActionStatusOperationBoundary(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            IDailyV1P12CrimeJusticeMutationProtocol protocol,
+            DailyV1P12CrimeJusticeMutationCoordinator coordinator,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            ISelectedActionStatusProjectionBoundary projection,
+            DailyV1SelectedCrimeJusticeDailyMutationHostBinding reusedCrimeOperationBinding = null,
+            DailyV1ActionDefinition expectedForcedEscapeAction = null,
+            DailyV1NpcActionPayloadOwner expectedForcedEscapePayload = null)
+        {
+            this.executionState = executionState;
+            this.graph = graph;
+            this.protocol = protocol;
+            this.coordinator = coordinator;
+            this.actor = actor;
+            this.target = target;
+            this.projection = projection;
+            this.reusedCrimeOperationBinding = reusedCrimeOperationBinding;
+            this.expectedForcedEscapeAction = expectedForcedEscapeAction;
+            this.expectedForcedEscapePayload = expectedForcedEscapePayload;
+        }
+
+        internal static bool TryCreate(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            IDailyV1P12CrimeJusticeMutationProtocol protocol,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            ISelectedActionStatusProjectionBoundary projection,
+            out ISelectedActionStatusOperationBoundary boundary) =>
+            TryCreate(executionState, graph, protocol, actor, target, projection,
+                out boundary, out _);
+
+        internal static bool TryCreate(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            IDailyV1P12CrimeJusticeMutationProtocol protocol,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            ISelectedActionStatusProjectionBoundary projection,
+            out ISelectedActionStatusOperationBoundary boundary,
+            out string rejection)
+        {
+            boundary = null;
+            rejection = null;
+            if (executionState == null || graph == null
+                || ((protocol == null) != (projection == null))
+                || actor == null
+                || !executionState.HasAdmittedSelectedDailyExecution
+                || executionState.AdmissionContext?.Profile
+                    != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+                || executionState.AdmissionContext == null
+                || !executionState.AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                || !IsExactOwner(graph, actor)
+                || (target != null && !IsExactOwner(graph, target))
+                || actor.Status == null
+                || (target != null && target.Status == null))
+            {
+                rejection = "ExactOwnerOrAdmittedSession";
+                return false;
+            }
+
+            DailyV1P12CrimeJusticeMutationCoordinator coordinator;
+            if (protocol == null)
+            {
+                if (!executionState.TryGetCoreSelectedP12CrimeJusticeMutationBoundary(
+                        graph, out protocol, out coordinator))
+                {
+                    rejection = executionState.LastCoreSelectedP12CrimeJusticeBoundaryRejection
+                        ?? "CoreP12MutationBoundaryUnavailable";
+                    return false;
+                }
+            }
+            else if (!executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    protocol, graph, out coordinator))
+            {
+                rejection = "P12MutationProtocolBindingRejected";
+                return false;
+            }
+            if (coordinator == null)
+            {
+                rejection = "P12MutationCoordinatorUnavailable";
+                return false;
+            }
+
+            boundary = new CoreSelectedActionStatusOperationBoundary(
+                executionState, graph, protocol, coordinator,
+                actor, target, projection);
+            return true;
+        }
+
+        internal static bool TryCreateForForcedEscapeScopeReuse(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1NpcRuntimeOwners target,
+            out ISelectedActionStatusOperationBoundary boundary)
+        {
+            boundary = null;
+            DailyV1ActionDefinition action = actor?.ActionSlot?.CurrentAction;
+            DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
+            // A request to reuse the enclosing operation is not applicable to
+            // ordinary actions or targeted status changes. Reject those
+            // probes without faulting the selected census; only the exact
+            // targetless Escape path below can own this nested boundary.
+            if (target != null || executionState == null || graph?.Definitions == null
+                || actor == null || action == null || payload == null
+                || action.Values.actionType?.Value
+                    != DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)
+                return false;
+
+            if (!graph.Definitions.Actions.TryGetValue(
+                    action.DefinitionId, out DailyV1ActionDefinition admittedAction)
+                || !ReferenceEquals(action, admittedAction)
+                || !DailyV1NpcDefinitionRules.IsAdmittedAction(graph.Definitions, action)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentAction, action)
+                || !ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)
+                || !ReferenceEquals(payload.Action, action)
+                || payload.TargetNpcRuntimeId != null
+                || payload.TargetCityRuntimeId != null
+                || payload.TargetItem != null
+                || payload.Amount != 0
+                || payload.ExpectedUnitPrice != 0f
+                || payload.TravelReason != NpcTravelReason.None
+                || payload.ExpectedNetValue != 0f
+                || payload.CommercialDecisionEvidence != null
+                || payload.CommercialScoutingEvidence != null
+                || payload.OriginDecisionId != null
+                || !executionState.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(graph)
+                || !executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding binding)
+                || binding == null || !binding.AdmissionEnabled
+                || binding.JusticeOwnerIdentity == null
+                || !ReferenceEquals(binding.JusticeRecordsOwner, graph.JusticeRecordsOwner)
+                || !binding.HasExactCoreOwnerRelationships(graph)
+                || !ReferenceEquals(binding.CrimeOwnerIdentity, binding.CrimeReceiptCensusOwnerIdentity)
+                || !ReferenceEquals(binding.JusticeOwnerIdentity, binding.JusticeReceiptCensusOwnerIdentity)
+                || !executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    binding.Protocol, graph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator coordinator)
+                || coordinator == null)
+            {
+                if (executionState != null && graph != null)
+                    executionState.MarkSelectedRuntimeCensusProtocolFaulted();
+                return false;
+            }
+
+            boundary = new CoreSelectedActionStatusOperationBoundary(
+                executionState, graph, binding.Protocol, coordinator,
+                actor, target, null, binding, action, payload);
+            return true;
+        }
+
+        public DailyV1SelectedActionStatusPlanResult ExecuteWithinOperation(
+            DailyV1NpcRuntimeOwners operationActor,
+            DailyV1NpcRuntimeOwners operationTarget,
+            Func<DailyV1SelectedActionStatusPlanResult> operation)
+        {
+            if (operation == null) throw new ArgumentNullException(nameof(operation));
+            if (!ReferenceEquals(operationActor, actor))
+                return DailyV1SelectedActionStatusPlanResult.ActorRejected;
+            if (!ReferenceEquals(operationTarget, target))
+                return DailyV1SelectedActionStatusPlanResult.TargetRejected;
+            if (!IsCurrentSession())
+                throw new InvalidOperationException(
+                    "The selected action-status operation lost its exact admitted Core session.");
+
+            if (reusedCrimeOperationBinding != null)
+            {
+                if (!coordinator.CanReuseSelectedCrimeActionMutation(
+                        graph, actor,
+                        reusedCrimeOperationBinding.JusticeOwnerIdentity,
+                        includeCrimeReceiptSection:
+                            reusedCrimeOperationBinding.CrimeOwnerIdentity != null))
+                    throw new InvalidOperationException(
+                        "P12 forced Escape status effects lost their exact admitted Crime/Justice operation scope.");
+                return operation();
+            }
+
+            IReadOnlyList<DailyV1NpcRuntimeOwners> participants = target == null
+                ? new[] { actor }
+                : new[] { actor, target };
+            if (!coordinator.TryBeginSelectedNpcStatusMutation(
+                    graph, participants, out IDisposable scope)
+                || scope == null)
+                throw new InvalidOperationException(
+                    "P12 action status effects could not be admitted by the exact Core owner graph.");
+
+            using (scope)
+                return operation();
+        }
+
+        public bool CanProjectStatusChanges(
+            DailyV1NpcRuntimeOwners owner,
+            IReadOnlyList<DailyV1StatusDefinition> statusToAdd)
+        {
+            if (!IsParticipant(owner)) return false;
+            if (projection != null)
+                return projection.CanProjectStatusChanges(owner, statusToAdd);
+            if (statusToAdd == null) return false;
+            foreach (DailyV1StatusDefinition status in statusToAdd)
+                if (status == null
+                    || !graph.Definitions.Statuses.TryGetValue(
+                        status.DefinitionId, out DailyV1StatusDefinition admitted)
+                    || !ReferenceEquals(admitted, status))
+                    return false;
+            return true;
+        }
+
+        public void EnsureMutationAllowed(DailyV1NpcRuntimeOwners owner)
+        {
+            if (!IsParticipant(owner) || !IsCurrentSession())
+                throw new InvalidOperationException(
+                    "The selected status owner is outside its exact admitted Core operation.");
+            executionState.EnsureSelectedP12CrimeJusticeOwnerMutationAllowed(owner);
+        }
+
+        public void NotifyStatusMutationCommitted(
+            DailyV1NpcRuntimeOwners owner,
+            DailyV1StatusDefinition status,
+            bool added)
+        {
+            if (!IsParticipant(owner) || !IsCurrentSession())
+                throw new InvalidOperationException(
+                    "The selected status owner changed outside its exact admitted Core operation.");
+            projection?.RefreshStatusProjection(owner);
+            executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
+        }
+
+        public void NotifyHiddenMutationCommitted(DailyV1NpcRuntimeOwners owner)
+        {
+            if (!IsParticipant(owner) || !IsCurrentSession())
+                throw new InvalidOperationException(
+                    "The selected hidden-state owner changed outside its exact admitted Core operation.");
+            projection?.SyncHiddenStateProjection(owner);
+            executionState.NotifySelectedP12CrimeJusticeOwnerMutationCommitted(owner);
+        }
+
+        private bool IsParticipant(DailyV1NpcRuntimeOwners owner) =>
+            (ReferenceEquals(owner, actor) || (target != null && ReferenceEquals(owner, target)))
+            && IsExactOwner(graph, owner);
+
+        private bool IsCurrentSession()
+        {
+            bool current = executionState.HasAdmittedSelectedDailyExecution
+                && executionState.AdmissionContext != null
+                && executionState.AdmissionContext.IsOwnedByCurrentThread()
+                && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                && IsExactOwner(graph, actor)
+                && (target == null || IsExactOwner(graph, target))
+                && executionState.TryBindSelectedP12CrimeJusticeMutationProtocol(
+                    protocol, graph,
+                    out DailyV1P12CrimeJusticeMutationCoordinator currentCoordinator)
+                && ReferenceEquals(currentCoordinator, coordinator);
+            if (!current || reusedCrimeOperationBinding == null) return current;
+
+            return ReferenceEquals(actor.ActionSlot?.CurrentAction, expectedForcedEscapeAction)
+                && ReferenceEquals(actor.ActionSlot?.CurrentPayload, expectedForcedEscapePayload)
+                && executionState.TryGetSelectedCrimeJusticeDailyMutationHostBinding(
+                    graph, out DailyV1SelectedCrimeJusticeDailyMutationHostBinding currentBinding)
+                && ReferenceEquals(currentBinding, reusedCrimeOperationBinding)
+                && currentBinding.HasExactCoreOwnerRelationships(graph);
+        }
+
+        private static bool IsExactOwner(
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners owner) =>
+            graph != null && owner != null
+            && graph.ContainsExactNpcOwner(owner)
+            && ReferenceEquals(owner.Definitions, graph.Definitions);
+    }
+
+    internal static bool TryApplySelectedStatusChanges(
+        DailyV1NpcRuntimeOwners owner,
+        IReadOnlyList<DailyV1StatusDefinition> statusToRemove,
+        IReadOnlyList<DailyV1StatusDefinition> statusToAdd,
+        ISelectedNpcOwnerMutationBoundary boundary)
+    {
+        if (owner?.Status == null || boundary == null
+            || !boundary.CanProjectStatusChanges(owner, statusToAdd))
+            return false;
+
+        return owner.Status.TryApplyOrderedChanges(
+            statusToRemove,
+            statusToAdd,
+            () => boundary.EnsureMutationAllowed(owner),
+            (status, added) => boundary.NotifyStatusMutationCommitted(owner, status, added));
+    }
+
+    internal static bool TryHideSelectedNpcForDays(
+        DailyV1NpcRuntimeOwners owner,
+        int days,
+        ISelectedNpcOwnerMutationBoundary boundary)
+    {
+        if (owner?.HiddenState == null || boundary == null) return false;
+
+        int followingFullDays = UnityMathfCompatibility.Max(1, days);
+        int durationIncludingCurrentDay = followingFullDays + 1;
+        int current = owner.HiddenState.RemainingDays;
+        int next = UnityMathfCompatibility.Max(current, durationIncludingCurrentDay);
+        if (next == current) return true;
+
+        boundary.EnsureMutationAllowed(owner);
+        if (!owner.HiddenState.TrySetRemainingDays(next))
+            throw new InvalidOperationException("The selected NPC hidden-day owner rejected a valid hidden duration.");
+        boundary.NotifyHiddenMutationCommitted(owner);
+        return true;
+    }
+
+    internal static bool TryClearSelectedNpcHiddenState(
+        DailyV1NpcRuntimeOwners owner,
+        ISelectedNpcOwnerMutationBoundary boundary)
+    {
+        if (owner?.HiddenState == null || boundary == null) return false;
+        if (owner.HiddenState.RemainingDays == 0) return true;
+
+        boundary.EnsureMutationAllowed(owner);
+        if (!owner.HiddenState.TrySetRemainingDays(0))
+            throw new InvalidOperationException("The selected NPC hidden-day owner rejected clearing hidden state.");
+        boundary.NotifyHiddenMutationCommitted(owner);
+        return true;
+    }
+
+    internal static bool TryApplyActionStatusPlanAfterDispatch(
+        bool actionSucceeded,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        bool targetExpected,
+        DailyV1NpcRuntimeOwners target,
+        ISelectedActionStatusOperationBoundary boundary,
+        out DailyV1SelectedActionStatusPlanResult result)
+    {
+        result = DailyV1SelectedActionStatusPlanResult.ActionDidNotSucceed;
+        if (!actionSucceeded) return true;
+
+        if (boundary == null
+            || graph == null
+            || !graph.TryCreateActionStatusPlan(
+                actor, action, targetExpected, target,
+                out DailyV1SelectedActionStatusPlan plan))
+            return false;
+
+        result = boundary.ExecuteWithinOperation(actor, target,
+            () => plan.Apply(
+                (owner, remove, add) => TryApplySelectedStatusChanges(owner, remove, add, boundary),
+                (owner, remove, add) => TryApplySelectedStatusChanges(owner, remove, add, boundary)));
+        return true;
+    }
+
+    internal static bool TryApplyActionStatusPlan(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        bool targetExpected,
+        DailyV1NpcRuntimeOwners target,
+        DailyV1SelectedActionStatusPlan.ApplyOwnerStatusChanges applyActor,
+        DailyV1SelectedActionStatusPlan.ApplyOwnerStatusChanges applyTarget,
+        out DailyV1SelectedActionStatusPlanResult result)
+    {
+        result = DailyV1SelectedActionStatusPlanResult.ActorRejected;
+        if (graph == null
+            || !graph.TryCreateActionStatusPlan(
+                actor, action, targetExpected, target,
+                out DailyV1SelectedActionStatusPlan plan))
+            return false;
+
+        result = plan.Apply(applyActor, applyTarget);
+        return true;
+    }
+
+    internal interface ISelectedSoloTravelActionProjectionBoundary
+    {
+        bool CanStartTradeReposition();
+        void LogTradeReposition();
+        /// <summary>Retains the host-side preflight used only by the legacy non-Core boundary.</summary>
+        bool CanCommitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan,
+            SpatialRouteRuntime route, float travelCost);
+        /// <summary>
+        /// Checks only host-projection revision capacity required before Core charges.
+        /// Domain eligibility and route/cost authority remain in Core.
+        /// </summary>
+        bool CanPreflightProjectionCommit(DailyV1SelectedTravelTransitionPlan plan);
+        /// <summary>Runs the existing exact Unity projection preflight after Core's charge, as before.</summary>
+        bool TryPrepareTransitionProjection(DailyV1SelectedTravelTransitionPlan plan);
+        /// <summary>Supplies the existing immediate P12 admission before Core writes transition owners.</summary>
+        bool CanAdmitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan);
+        /// <summary>Mirrors the already-committed Core transition, then publishes its P12 notification.</summary>
+        void PublishCommittedTransition(DailyV1SelectedTravelTransitionPlan plan);
+        /// <summary>Publishes the event and travel/cost logs after Core discoveries.</summary>
+        void PublishTravelStarted(SoloTravelResult result);
+        void LogCommercialScouting();
+        /// <summary>Preflights the existing Unity projection for Core's later exact TravelPlan clear.</summary>
+        bool CanProjectTravelPlanClear(DailyV1NpcRuntimeOwners actor);
+        /// <summary>Supplies the existing immediate P12 admission for a changed TravelPlan leaf.</summary>
+        bool CanAdmitTravelPlanClear(DailyV1NpcRuntimeOwners actor);
+        /// <summary>Projects Core's committed clear and then publishes exactly one P12 notification.</summary>
+        void PublishCommittedTravelPlanClear(DailyV1NpcRuntimeOwners actor);
+    }
+
+    internal interface ISelectedSoloTravelActionBoundary
+        : ISelectedSoloTravelActionProjectionBoundary
+    {
+        /// <summary>Runs the complete travel operation inside the Core-owned P12 scope.</summary>
+        bool ExecuteWithinOperation(Func<bool> operation);
+    }
+
+    /// <summary>
+    /// Binds selected solo travel to the exact Core session and makes Core own
+    /// the P12 operation lifetime. The host contributes only the prepared
+    /// census projection and Unity-facing callbacks.
+    /// </summary>
+    internal static class DailyV1CoreSelectedSoloTravelActionBoundary
+    {
+        internal static bool TryCreate(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition expectedAction,
+            IDailyV1SelectedP12SoloTravelStartProtocol protocol,
+            ISelectedSoloTravelActionProjectionBoundary hostProjection,
+            out ISelectedSoloTravelActionBoundary boundary)
+        {
+            boundary = null;
+            if (executionState == null || graph == null || actor == null
+                || expectedAction == null || protocol == null || hostProjection == null
+                || !executionState.HasAdmittedSelectedDailyExecution
+                || executionState.AdmissionContext == null
+                || !executionState.AdmissionContext.IsOwnedByCurrentThread()
+                || !ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                || !graph.ContainsExactNpcOwner(actor)
+                || !ReferenceEquals(actor.Definitions, graph.Definitions)
+                || graph.TravelParties == null
+                || !ReferenceEquals(actor.ActionSlot?.CurrentAction, expectedAction)
+                || expectedAction.Values.actionType?.Value
+                    != DailyV1NpcDefinitionRules.TravelActionTypeValue
+                || !ReferenceEquals(actor.ActionSlot?.CurrentPayload?.Action, expectedAction))
+                return false;
+
+            boundary = new CoreBoundary(
+                executionState, graph, actor, expectedAction, protocol, hostProjection);
+            return true;
+        }
+
+        /// <summary>
+        /// Creates an ordinary or exact active Merchant-plan Travel boundary
+        /// entirely from the admitted Core owner graph and its complete P12
+        /// census. Trade-reason travel is accepted only when its current Travel
+        /// and Merchant plan identities match; other host-specific travel
+        /// projections remain on the existing adapter path.
+        /// </summary>
+        internal static bool TryCreateCoreOnly(
+            DailyV1ExecutionBoundaryState executionState,
+            DailyV1SelectedRuntimeOwnerGraph graph,
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1ActionDefinition expectedAction,
+            out ISelectedSoloTravelActionBoundary boundary)
+        {
+            boundary = null;
+            if (executionState == null || graph == null || actor == null
+                || expectedAction == null
+                || !DailyV1CoreSelectedActorTurnExecutionBoundary
+                    .IsExactCoreOnlySoloTravelActionSlot(
+                        graph, actor, expectedAction, actor.ActionSlot?.CurrentPayload,
+                        requireInstalledSlot: true)
+                || MoneyAccountOwnerBridge.HasP12MutationBoundary(actor.MoneyAccount)
+                || !executionState.TryCreateSelectedP12SoloTravelStartSectionIds(
+                    graph, actor, out IReadOnlyList<string> sectionIds))
+                return false;
+
+            CoreOnlyCensusPort censusPort = new CoreOnlyCensusPort(
+                executionState, graph, actor, sectionIds);
+            DailyV1CoreSelectedP12SoloTravelStartProtocol protocol =
+                new DailyV1CoreSelectedP12SoloTravelStartProtocol(
+                    executionState, graph, censusPort);
+            CoreOnlyProjectionBoundary projection = new CoreOnlyProjectionBoundary(
+                executionState, graph, actor, expectedAction, protocol, sectionIds);
+            return TryCreate(executionState, graph, actor, expectedAction,
+                    protocol, projection, out boundary)
+                && boundary != null;
+        }
+
+        private sealed class CoreOnlyCensusPort
+            : IDailyV1SelectedP12SoloTravelStartCensusPort
+        {
+            private sealed class RuntimeProtocolScope : IDisposable
+            {
+                private readonly DailyV1ExecutionBoundaryState state;
+                private readonly CoreOnlyCensusPort owner;
+                private bool disposed;
+
+                internal RuntimeProtocolScope(
+                    DailyV1ExecutionBoundaryState state,
+                    CoreOnlyCensusPort owner)
+                {
+                    this.state = state;
+                    this.owner = owner;
+                }
+
+                public void Dispose()
+                {
+                    if (disposed) return;
+                    disposed = true;
+                    if (!state.TryEndRuntimeProtocolOperation()) owner.FaultClosed();
+                }
+            }
+
+            private readonly DailyV1ExecutionBoundaryState state;
+            private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+            private readonly DailyV1NpcRuntimeOwners actor;
+            private readonly HashSet<string> allowedSectionIds;
+            private readonly IReadOnlyList<string> exactSectionIds;
+
+            internal CoreOnlyCensusPort(
+                DailyV1ExecutionBoundaryState state,
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                DailyV1NpcRuntimeOwners actor,
+                IReadOnlyList<string> exactSectionIds)
+            {
+                this.state = state ?? throw new ArgumentNullException(nameof(state));
+                this.graph = graph ?? throw new ArgumentNullException(nameof(graph));
+                this.actor = actor ?? throw new ArgumentNullException(nameof(actor));
+                this.exactSectionIds = exactSectionIds
+                    ?? throw new ArgumentNullException(nameof(exactSectionIds));
+                allowedSectionIds = new HashSet<string>(exactSectionIds, StringComparer.Ordinal);
+                if (allowedSectionIds.Count != exactSectionIds.Count)
+                    throw new ArgumentException("The Core Travel P12 cut contains duplicate sections.", nameof(exactSectionIds));
+            }
+
+            public bool TryValidateUnchangedSections(IReadOnlyList<string> sectionIds) =>
+                IsExactAllowedSectionSet(sectionIds)
+                && state.TryValidateCoreSelectedOwnerSectionCensusRows(
+                    graph, sectionIds, null);
+
+            public bool TryEnterOperation(out IDisposable operationScope)
+            {
+                operationScope = null;
+                if (!IsCurrent()
+                    || !state.TryBeginRuntimeProtocolOperation(
+                        DailyV1RuntimeProtocolOperationContracts.SoloTravelStart,
+                        requireNoActiveRuntimeProtocolOperations: false))
+                    return false;
+                operationScope = new RuntimeProtocolScope(state, this);
+                return true;
+            }
+
+            public bool TryRefreshCommittedMutationBaselines(
+                IReadOnlyCollection<string> sectionIds) =>
+                IsAllowedSubset(sectionIds)
+                && state.TryRefreshCoreSelectedOwnerSectionCensusRows(
+                    graph, sectionIds, null);
+
+            public void FaultClosed()
+            {
+                state.MarkSelectedRuntimeCensusProtocolFaulted();
+                state.InvalidateCurrentCaptureToken();
+            }
+
+            private bool IsExactAllowedSectionSet(IEnumerable<string> sectionIds)
+            {
+                if (!IsCurrent() || sectionIds == null) return false;
+                HashSet<string> supplied = new HashSet<string>(StringComparer.Ordinal);
+                try
+                {
+                    foreach (string sectionId in sectionIds)
+                        if (string.IsNullOrWhiteSpace(sectionId)
+                            || !supplied.Add(sectionId)
+                            || !allowedSectionIds.Contains(sectionId)) return false;
+                }
+                catch { return false; }
+                return supplied.Count == allowedSectionIds.Count;
+            }
+
+            private bool IsAllowedSubset(IEnumerable<string> sectionIds)
+            {
+                if (!IsCurrent() || sectionIds == null) return false;
+                int count = 0;
+                HashSet<string> supplied = new HashSet<string>(StringComparer.Ordinal);
+                try
+                {
+                    foreach (string sectionId in sectionIds)
+                    {
+                        if (string.IsNullOrWhiteSpace(sectionId)
+                            || !supplied.Add(sectionId)
+                            || !allowedSectionIds.Contains(sectionId)) return false;
+                        count++;
+                    }
+                }
+                catch { return false; }
+                return count != 0;
+            }
+
+            private bool IsCurrent() =>
+                state.HasAdmittedSelectedDailyExecution
+                && state.AdmissionContext?.IsOwnedByCurrentThread() == true
+                && ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph)
+                && graph.ContainsExactNpcOwner(actor)
+                && ReferenceEquals(actor.Definitions, graph.Definitions);
+        }
+
+        private sealed class CoreOnlyProjectionBoundary
+            : ISelectedSoloTravelActionProjectionBoundary
+        {
+            private readonly DailyV1ExecutionBoundaryState state;
+            private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+            private readonly DailyV1NpcRuntimeOwners actor;
+            private readonly DailyV1ActionDefinition action;
+            private readonly DailyV1NpcActionPayloadOwner payload;
+            private readonly IDailyV1SelectedP12SoloTravelStartProtocol protocol;
+            private readonly IReadOnlyList<string> operationSectionIds;
+            private readonly string moneySectionId;
+            private readonly string travelSectionId;
+            private readonly string planSectionId;
+            private readonly string[] transitionSectionIds;
+            private DailyV1CityNpcPresenceOwner originPresenceOwner;
+            private long originPresenceRevision;
+            private int originPresenceCardinality;
+            private long lastAccountRevision;
+            private readonly float openingBalance;
+
+            internal CoreOnlyProjectionBoundary(
+                DailyV1ExecutionBoundaryState state,
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1ActionDefinition action,
+                IDailyV1SelectedP12SoloTravelStartProtocol protocol,
+                IReadOnlyList<string> operationSectionIds)
+            {
+                this.state = state;
+                this.graph = graph;
+                this.actor = actor;
+                this.action = action;
+                payload = actor.ActionSlot.CurrentPayload;
+                this.protocol = protocol;
+                this.operationSectionIds = operationSectionIds;
+                moneySectionId = DailyV1SelectedOwnerSectionCensusContract
+                    .NpcMoneyAccountPrefix + actor.RuntimeId;
+                travelSectionId = DailyV1SelectedOwnerSectionCensusContract
+                    .NpcSectionIdFor(12, actor.RuntimeId);
+                planSectionId = DailyV1SelectedOwnerSectionCensusContract
+                    .NpcPlanSectionIdFor(
+                        DailyV1SelectedOwnerSectionCensusContract.NpcTravelPlanKind,
+                        actor.RuntimeId);
+                List<string> transitionSections = new List<string> { travelSectionId };
+                foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+                    if (city != null
+                        && graph.ContainsExactCityOwner(city)
+                        && string.Equals(city.RuntimeId,
+                            actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+                        && city.NpcPresence.Contains(actor.RuntimeId))
+                    {
+                        transitionSections.Add(
+                            DailyV1SelectedOwnerSectionCensusContract
+                                .CityImportantNpcSectionIdFor(city.RuntimeId));
+                        originPresenceOwner = city.NpcPresence;
+                        originPresenceRevision = city.NpcPresence.Revision;
+                        originPresenceCardinality = city.NpcPresence.OrderedNpcRuntimeIds.Count;
+                        break;
+                    }
+                transitionSectionIds = transitionSections.ToArray();
+                lastAccountRevision = actor.MoneyAccount.Revision;
+                openingBalance = actor.MoneyAccount.Balance;
+            }
+
+            public bool ExecuteWithinOperation(Func<bool> operation)
+            {
+                if (operation == null) throw new ArgumentNullException(nameof(operation));
+                if (!IsCurrent())
+                {
+                    protocol.FaultClosed();
+                    throw new InvalidOperationException(
+                        "The Core-only solo Travel action lost its exact admitted session.");
+                }
+                if (!protocol.TryBeginOperation(graph, actor, out IDisposable scope)
+                    || scope == null)
+                    throw new InvalidOperationException(
+                        "The Core-only solo Travel action could not begin its exact P12 operation.");
+
+                using (scope)
+                {
+                    try
+                    {
+                        bool succeeded = operation();
+                        if (succeeded && originPresenceOwner != null
+                            && (originPresenceOwner.Contains(actor.RuntimeId)
+                                || originPresenceRevision == long.MaxValue
+                                || originPresenceOwner.Revision != originPresenceRevision + 1L
+                                || originPresenceOwner.OrderedNpcRuntimeIds.Count
+                                    != originPresenceCardinality - 1))
+                        {
+                            protocol.FaultClosed();
+                            throw new InvalidOperationException(
+                                "The committed Core Travel action did not retain its exact origin-presence removal.");
+                        }
+                        if (!TryRecordAccountRevision()
+                            || (!succeeded && actor.MoneyAccount.Balance != openingBalance))
+                        {
+                            protocol.FaultClosed();
+                            return false;
+                        }
+                        return succeeded;
+                    }
+                    catch
+                    {
+                        protocol.FaultClosed();
+                        throw;
+                    }
+                }
+            }
+
+            public bool CanStartTradeReposition() => false;
+            public void LogTradeReposition() { }
+
+            public bool CanPreflightProjectionCommit(
+                DailyV1SelectedTravelTransitionPlan plan) =>
+                IsExactPreparedPlan(plan)
+                && TryCanCommit(operationSectionIds);
+
+            public bool CanCommitPreparedTransition(
+                DailyV1SelectedTravelTransitionPlan plan,
+                SpatialRouteRuntime route,
+                float travelCost) =>
+                IsExactPreparedPlan(plan)
+                && DailyV1SelectedActionExecutionStage
+                    .CanCommitPreparedSoloTravelTransition(
+                        graph, actor, plan, route, travelCost)
+                && TryCanCommit(operationSectionIds);
+
+            public bool TryPrepareTransitionProjection(
+                DailyV1SelectedTravelTransitionPlan plan) => IsExactPreparedPlan(plan);
+
+            public bool CanAdmitPreparedTransition(
+                DailyV1SelectedTravelTransitionPlan plan) =>
+                IsExactPreparedPlan(plan)
+                && TryRecordAccountRevision()
+                && TryCanCommit(transitionSectionIds);
+
+            public void PublishCommittedTransition(
+                DailyV1SelectedTravelTransitionPlan plan)
+            {
+                if (!IsCurrent() || plan == null
+                    || !plan.IsPreparedFor(actor, graph) || !plan.IsCommitted
+                    || !TryRecord(transitionSectionIds))
+                    FaultAndThrow("The Core Travel and City-presence commit did not match its P12 owner receipt.");
+            }
+
+            public void PublishTravelStarted(
+                DailyV1SelectedActionExecutionStage.SoloTravelResult result)
+            {
+                if (!IsCurrent() || result?.Succeeded != true)
+                    FaultAndThrow("The Core-only Travel completion is not the exact committed operation.");
+                if (!state.TryRecordSelectedSoloTravelStartedEvent(
+                        graph, actor, result, out bool eventRecorded)
+                    || !eventRecorded)
+                    FaultAndThrow(
+                        "The Core-only Travel start did not publish its exact authoritative domain event. P12: "
+                        + state.LastSelectedP12SoloTravelStartRejection);
+            }
+
+            public void LogCommercialScouting() { }
+
+            public bool CanProjectTravelPlanClear(DailyV1NpcRuntimeOwners candidate) =>
+                ReferenceEquals(candidate, actor) && IsCurrent();
+
+            public bool CanAdmitTravelPlanClear(DailyV1NpcRuntimeOwners candidate) =>
+                ReferenceEquals(candidate, actor)
+                && IsCurrent()
+                && TryCanCommit(new[] { planSectionId });
+
+            public void PublishCommittedTravelPlanClear(
+                DailyV1NpcRuntimeOwners candidate)
+            {
+                if (!ReferenceEquals(candidate, actor)
+                    || !IsCurrent()
+                    || !TryRecord(new[] { planSectionId }))
+                    FaultAndThrow("The Core TravelPlan clear did not match its P12 owner receipt.");
+            }
+
+            private bool TryRecordAccountRevision()
+            {
+                long current = actor.MoneyAccount.Revision;
+                if (current == lastAccountRevision) return true;
+                if (lastAccountRevision == long.MaxValue
+                    || current != lastAccountRevision + 1L
+                    || !TryRecord(new[] { moneySectionId })) return false;
+                lastAccountRevision = current;
+                return true;
+            }
+
+            private bool TryCanCommit(IReadOnlyList<string> sectionIds) =>
+                IsCurrent()
+                && state.TryCanCommitSelectedP12SoloTravelStartMutation(
+                    sectionIds, out bool handled)
+                && handled;
+
+            private bool TryRecord(IReadOnlyList<string> sectionIds) =>
+                IsCurrent()
+                && state.TryRecordSelectedP12SoloTravelStartMutation(
+                    sectionIds, out bool handled)
+                && handled;
+
+            private bool IsExactPreparedPlan(DailyV1SelectedTravelTransitionPlan plan) =>
+                IsCurrent()
+                && plan != null && plan.IsPreparedFor(actor, graph)
+                && !plan.IsCommitted && !plan.IsNoOp;
+
+            private bool IsCurrent() =>
+                state.HasAdmittedSelectedDailyExecution
+                && state.AdmissionContext?.IsOwnedByCurrentThread() == true
+                && ReferenceEquals(state.SelectedRuntimeOwnerGraph, graph)
+                && graph.ContainsExactNpcOwner(actor)
+                && ReferenceEquals(actor.ActionSlot?.CurrentAction, action)
+                && ReferenceEquals(actor.ActionSlot?.CurrentPayload, payload)
+                && ReferenceEquals(payload?.Action, action);
+
+            private void FaultAndThrow(string message)
+            {
+                protocol.FaultClosed();
+                throw new InvalidOperationException(message);
+            }
+        }
+
+        private sealed class CoreBoundary : ISelectedSoloTravelActionBoundary
+        {
+            private readonly DailyV1ExecutionBoundaryState executionState;
+            private readonly DailyV1SelectedRuntimeOwnerGraph graph;
+            private readonly DailyV1NpcRuntimeOwners actor;
+            private readonly DailyV1ActionDefinition expectedAction;
+            private readonly DailyV1NpcActionPayloadOwner expectedPayload;
+            private readonly IDailyV1SelectedP12SoloTravelStartProtocol protocol;
+            private readonly ISelectedSoloTravelActionProjectionBoundary hostProjection;
+
+            internal CoreBoundary(
+                DailyV1ExecutionBoundaryState executionState,
+                DailyV1SelectedRuntimeOwnerGraph graph,
+                DailyV1NpcRuntimeOwners actor,
+                DailyV1ActionDefinition expectedAction,
+                IDailyV1SelectedP12SoloTravelStartProtocol protocol,
+                ISelectedSoloTravelActionProjectionBoundary hostProjection)
+            {
+                this.executionState = executionState;
+                this.graph = graph;
+                this.actor = actor;
+                this.expectedAction = expectedAction;
+                expectedPayload = actor.ActionSlot.CurrentPayload;
+                this.protocol = protocol;
+                this.hostProjection = hostProjection;
+            }
+
+            public bool ExecuteWithinOperation(Func<bool> operation)
+            {
+                if (operation == null) throw new ArgumentNullException(nameof(operation));
+                if (!IsCurrentSession())
+                {
+                    protocol.FaultClosed();
+                    throw new InvalidOperationException(
+                        "The selected solo-travel action lost its exact admitted Core session.");
+                }
+
+                if (!protocol.TryBeginOperation(
+                        graph, actor, out IDisposable operationScope)
+                    || operationScope == null)
+                    throw new InvalidOperationException(
+                        "P12 solo travel-start could not be admitted by the exact Core session.");
+
+                using (operationScope)
+                    return operation();
+            }
+
+            public bool CanStartTradeReposition() => hostProjection.CanStartTradeReposition();
+            public void LogTradeReposition() => hostProjection.LogTradeReposition();
+            public bool CanCommitPreparedTransition(
+                DailyV1SelectedTravelTransitionPlan plan, SpatialRouteRuntime route, float travelCost) =>
+                IsCurrentSession()
+                && executionState.CanMutate
+                && DailyV1SelectedActionExecutionStage.CanCommitPreparedSoloTravelTransition(
+                    graph, actor, plan, route, travelCost)
+                && CanPreflightProjectionCommit(plan);
+            public bool CanPreflightProjectionCommit(DailyV1SelectedTravelTransitionPlan plan) =>
+                hostProjection.CanPreflightProjectionCommit(plan);
+            public bool TryPrepareTransitionProjection(DailyV1SelectedTravelTransitionPlan plan) =>
+                hostProjection.TryPrepareTransitionProjection(plan);
+            public bool CanAdmitPreparedTransition(DailyV1SelectedTravelTransitionPlan plan) =>
+                hostProjection.CanAdmitPreparedTransition(plan);
+            public void PublishCommittedTransition(DailyV1SelectedTravelTransitionPlan plan) =>
+                hostProjection.PublishCommittedTransition(plan);
+            public void PublishTravelStarted(DailyV1SelectedActionExecutionStage.SoloTravelResult result) =>
+                hostProjection.PublishTravelStarted(result);
+            public void LogCommercialScouting() => hostProjection.LogCommercialScouting();
+            public bool CanProjectTravelPlanClear(DailyV1NpcRuntimeOwners currentActor) =>
+                ReferenceEquals(currentActor, actor)
+                && hostProjection.CanProjectTravelPlanClear(currentActor);
+            public bool CanAdmitTravelPlanClear(DailyV1NpcRuntimeOwners currentActor) =>
+                ReferenceEquals(currentActor, actor)
+                && IsCurrentSession()
+                && hostProjection.CanAdmitTravelPlanClear(currentActor);
+            public void PublishCommittedTravelPlanClear(DailyV1NpcRuntimeOwners currentActor)
+            {
+                if (!ReferenceEquals(currentActor, actor) || !IsCurrentSession())
+                    throw new InvalidOperationException(
+                        "The selected TravelPlan clear is outside its exact Core owner operation.");
+                hostProjection.PublishCommittedTravelPlanClear(currentActor);
+            }
+
+            private bool IsCurrentSession() =>
+                executionState.HasAdmittedSelectedDailyExecution
+                && executionState.AdmissionContext != null
+                && executionState.AdmissionContext.IsOwnedByCurrentThread()
+                && ReferenceEquals(executionState.SelectedRuntimeOwnerGraph, graph)
+                && graph.ContainsExactNpcOwner(actor)
+                && ReferenceEquals(actor.Definitions, graph.Definitions)
+                && ReferenceEquals(actor.ActionSlot?.CurrentAction, expectedAction)
+                && ReferenceEquals(actor.ActionSlot?.CurrentPayload, expectedPayload)
+                && ReferenceEquals(expectedPayload?.Action, expectedAction);
+        }
+    }
+
+    internal interface ISelectedFleeCityActionProjectionBoundary
+    {
+        /// <summary>Preflights exact Unity projections without admitting or mutating Core owners.</summary>
+        bool CanPrepareTravelPlanProjection(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination,
+            float travelCost,
+            string originDecisionId);
+        /// <summary>Preserves the selected TravelPlan owner's immediate P12 leaf admission.</summary>
+        bool CanAdmitTravelPlanMutation();
+        /// <summary>Refreshes the Unity projection, then publishes the exact owner's P12 leaf notification.</summary>
+        void PublishCommittedTravelPlan(
+            DailyV1NpcRuntimeOwners actor,
+            DailyV1CityRuntimeOwners destination,
+            float travelCost,
+            string originDecisionId);
+    }
+
+    internal interface ISelectedFleeCityActionBoundary
+        : ISelectedFleeCityActionProjectionBoundary
+    {
+        bool ExecuteWithinOperation(Func<bool> operation);
+    }
+
+    internal interface ISelectedGuardArrestActionProjectionBoundary : ISelectedNpcOwnerMutationBoundary
+    {
+        bool TryPrepareSentenceProjection(
+            DailyV1NpcRuntimeOwners target,
+            DailyV1CityRuntimeOwners city,
+            DailyV1JusticeWantedRecordOwner warrant,
+            DailyV1JusticeSentenceOwner sentence);
+        void DiscardPreparedSentenceProjection(DailyV1JusticeSentenceOwner sentence);
+        bool CommitPreparedSentenceProjection(DailyV1JusticeSentenceOwner sentence);
+        void PublishArrest(
+            DailyV1NpcRuntimeOwners guard,
+            DailyV1NpcRuntimeOwners target,
+            DailyV1CityRuntimeOwners city,
+            string originDecisionId);
+    }
+
+    internal interface ISelectedGuardArrestActionBoundary
+        : ISelectedGuardArrestActionProjectionBoundary
+    {
+        DailyV1JusticeRecordsOwner JusticeRecordsOwner { get; }
+        bool ExecuteWithinOperation(Func<bool> operation);
+    }
+
+    internal sealed class SelectedGuardArrestActionResult
+    {
+        internal bool Succeeded { get; }
+        internal string TargetRuntimeId { get; }
+        internal string CityRuntimeId { get; }
+        internal string OriginDecisionId { get; }
+
+        internal SelectedGuardArrestActionResult(
+            bool succeeded,
+            string targetRuntimeId,
+            string cityRuntimeId,
+            string originDecisionId)
+        {
+            Succeeded = succeeded;
+            TargetRuntimeId = targetRuntimeId;
+            CityRuntimeId = cityRuntimeId;
+            OriginDecisionId = originDecisionId;
+        }
+    }
+
+    /// <summary>
+    /// Applies the selected arrest transition to the existing Core Justice
+    /// owner and exact NPC owners. The host boundary supplies only the P12
+    /// scope and the compatibility projections for status/hidden writes and
+    /// post-commit event/log publication.
+    /// </summary>
+    internal static bool TryExecuteSelectedGuardArrestActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners guard,
+        DailyV1ActionDefinition action,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        ISelectedGuardArrestActionBoundary boundary,
+        out bool actionRollSucceeded,
+        out SelectedGuardArrestActionResult result)
+    {
+        actionRollSucceeded = false;
+        result = null;
+        if (graph == null || guard == null || action == null
+            || randomSource == null || boundary == null
+            || currentAbsoluteDay < 0L
+            || !graph.ContainsExactNpcOwner(guard)
+            || !ReferenceEquals(graph.Definitions, guard.Definitions)
+            || !ReferenceEquals(guard.ActionSlot?.CurrentAction, action)
+            || !ReferenceEquals(guard.ActionSlot?.CurrentPayload?.Action, action)
+            || action.Values.actionType?.Value != DailyV1NpcDefinitionRules.ArrestActionTypeValue)
+            return false;
+
+        if (!TryRollCurrentActionSlot(
+                graph, guard, randomSource, currentAbsoluteDay, out actionRollSucceeded))
+            return false;
+        if (!actionRollSucceeded)
+        {
+            // The pre-migration provider path entered the P12 Crime/Justice
+            // action boundary even when the ordinary action roll failed. Keep
+            // that validation boundary while committing no world state.
+            boundary.ExecuteWithinOperation(() => false);
+            result = new SelectedGuardArrestActionResult(false,
+                guard.ActionSlot.CurrentPayload.TargetNpcRuntimeId,
+                guard.Travel?.CurrentCityRuntimeId,
+                guard.ActionSlot.CurrentPayload.OriginDecisionId);
+            return true;
+        }
+
+        DailyV1NpcActionPayloadOwner payload = guard.ActionSlot.CurrentPayload;
+        if (string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+            || payload.TargetItem != null
+            || !TryFindExactNpc(graph, payload.TargetNpcRuntimeId,
+                out DailyV1NpcRuntimeOwners target)
+            || !TryFindExactCity(graph, guard.Travel?.CurrentCityRuntimeId,
+                out DailyV1CityRuntimeOwners city))
+        {
+            boundary.ExecuteWithinOperation(() => false);
+            result = new SelectedGuardArrestActionResult(false,
+                payload.TargetNpcRuntimeId,
+                guard.Travel?.CurrentCityRuntimeId,
+                payload.OriginDecisionId);
+            return true;
+        }
+
+        bool succeeded = boundary.ExecuteWithinOperation(() =>
+            TryApplySelectedGuardArrest(
+                graph, guard, target, city, action, payload, boundary));
+        result = new SelectedGuardArrestActionResult(succeeded,
+            target.RuntimeId, city.RuntimeId, payload.OriginDecisionId);
+        return true;
+    }
+
+    private static bool TryApplySelectedGuardArrest(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners guard,
+        DailyV1NpcRuntimeOwners target,
+        DailyV1CityRuntimeOwners city,
+        DailyV1ActionDefinition action,
+        DailyV1NpcActionPayloadOwner payload,
+        ISelectedGuardArrestActionBoundary boundary)
+    {
+        DailyV1JusticeRecordsOwner justice = graph.JusticeRecordsOwner;
+        DailyV1EffectiveDefinitions definitions = graph.Definitions;
+        string hiddenStatusId = definitions.Configuration?.hiddenStatus;
+        string arrestedStatusId = definitions.Configuration?.arrestedStatus;
+        DailyV1StatusDefinition hiddenStatus = ResolveOptionalStatus(definitions, hiddenStatusId);
+        if (justice == null
+            || !ReferenceEquals(justice, boundary.JusticeRecordsOwner)
+            || !ReferenceEquals(city.Definitions, definitions)
+            || !ReferenceEquals(target.Definitions, definitions)
+            || !DailyV1NpcDefinitionRules.IsAdmittedAction(definitions, action)
+            || !DailyV1NpcDefinitionRules.HasJobType(
+                guard.Definition, definitions, DailyV1NpcDefinitionRules.GuardJobTypeValue)
+            || guard.Lifecycle?.LifeState != NpcLifeState.Alive
+            || guard.Status == null
+            || target.Lifecycle?.LifeState != NpcLifeState.Alive
+            || ReferenceEquals(guard, target)
+            || guard.Travel == null || target.Travel == null
+            || !string.Equals(guard.Travel.CurrentCityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(target.Travel.CurrentCityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+            || target.Travel.IsTraveling
+            || target.HiddenState == null
+            || target.HiddenState.RemainingDays > 0
+            || (hiddenStatus != null && target.Status?.Contains(hiddenStatus) == true)
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                definitions, action, guard.Status.Statuses)
+            || string.IsNullOrWhiteSpace(arrestedStatusId)
+            || !definitions.Statuses.TryGetValue(arrestedStatusId, out DailyV1StatusDefinition arrestedStatus)
+            || target.Status == null
+            || target.Status.Contains(arrestedStatus)
+            || !city.NpcPresence.Contains(guard.RuntimeId)
+            || !city.NpcPresence.Contains(target.RuntimeId))
+            return false;
+
+        string freeStatusId = definitions.Configuration?.freeStatus;
+        string wantedStatusId = definitions.Configuration?.wantedStatus;
+        DailyV1StatusDefinition freeStatus = ResolveOptionalStatus(definitions, freeStatusId);
+        DailyV1StatusDefinition wantedStatus = ResolveOptionalStatus(definitions, wantedStatusId);
+        if ((!string.IsNullOrWhiteSpace(hiddenStatusId) && hiddenStatus == null)
+            || (!string.IsNullOrWhiteSpace(freeStatusId) && freeStatus == null)
+            || (!string.IsNullOrWhiteSpace(wantedStatusId) && wantedStatus == null))
+            return false;
+
+        DailyV1JusticeWantedRecordOwner warrant = justice.FindActiveWantedRecord(
+            target.RuntimeId, city.RuntimeId);
+        if (warrant == null || justice.FindActiveSentence(target.RuntimeId) != null)
+            return false;
+
+        DailyV1JusticeSentenceOwner sentence = new DailyV1JusticeSentenceOwner(
+            target.RuntimeId, city.RuntimeId, warrant, warrant.SentenceDays);
+        if (!boundary.TryPrepareSentenceProjection(target, city, warrant, sentence))
+            return false;
+
+        if (!justice.CanCommitMutation())
+        {
+            boundary.DiscardPreparedSentenceProjection(sentence);
+            throw new InvalidOperationException(
+                "Justice records are outside an admitted P12 Crime/Justice boundary.");
+        }
+        if (!justice.TryAddSentence(sentence))
+        {
+            boundary.DiscardPreparedSentenceProjection(sentence);
+            return false;
+        }
+        if (!boundary.CommitPreparedSentenceProjection(sentence))
+        {
+            boundary.DiscardPreparedSentenceProjection(sentence);
+            throw new InvalidOperationException(
+                "The selected Guard Arrest could not attach its prepared Unity sentence view after the Core owner commit.");
+        }
+        if (!justice.NotifyMutationCommitted())
+            throw new InvalidOperationException(
+                "The selected Justice owner rejected its committed Arrest sentence.");
+
+        if (target.HiddenState.RemainingDays > 0
+            && !TryClearSelectedNpcHiddenState(target, boundary))
+            return false;
+        if (hiddenStatus != null && !TryApplySelectedStatusChanges(
+                target, new[] { hiddenStatus }, Array.Empty<DailyV1StatusDefinition>(), boundary))
+            return false;
+        if (freeStatus != null && !TryApplySelectedStatusChanges(
+                target, new[] { freeStatus }, Array.Empty<DailyV1StatusDefinition>(), boundary))
+            return false;
+        if (!TryApplySelectedStatusChanges(
+                target, Array.Empty<DailyV1StatusDefinition>(), new[] { arrestedStatus }, boundary))
+            return false;
+
+        bool hasAnyActiveWarrant = justice.FindActiveWantedRecords(target.RuntimeId).Count > 0;
+        if (wantedStatus != null
+            && !TryApplySelectedStatusChanges(
+                target,
+                hasAnyActiveWarrant ? Array.Empty<DailyV1StatusDefinition>() : new[] { wantedStatus },
+                hasAnyActiveWarrant ? new[] { wantedStatus } : Array.Empty<DailyV1StatusDefinition>(),
+                boundary))
+            return false;
+
+        boundary.PublishArrest(guard, target, city, payload.OriginDecisionId);
+        return true;
+    }
+
+    private static DailyV1StatusDefinition ResolveOptionalStatus(
+        DailyV1EffectiveDefinitions definitions,
+        string statusId)
+    {
+        if (string.IsNullOrWhiteSpace(statusId)) return null;
+        return definitions.Statuses.TryGetValue(statusId, out DailyV1StatusDefinition status)
+            ? status
+            : null;
+    }
+
+    private static bool TryFindExactNpc(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string runtimeId,
+        out DailyV1NpcRuntimeOwners owner)
+    {
+        owner = null;
+        if (graph == null || string.IsNullOrWhiteSpace(runtimeId)) return false;
+        foreach (DailyV1NpcRuntimeOwners candidate in graph.Npcs)
+            if (candidate != null
+                && string.Equals(candidate.RuntimeId, runtimeId, StringComparison.Ordinal)
+                && graph.ContainsExactNpcOwner(candidate))
+            {
+                owner = candidate;
+                return true;
+            }
+        return false;
+    }
+
+    private static bool TryFindExactCity(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string runtimeId,
+        out DailyV1CityRuntimeOwners owner)
+    {
+        owner = null;
+        if (graph == null || string.IsNullOrWhiteSpace(runtimeId)) return false;
+        foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+            if (candidate != null
+                && string.Equals(candidate.RuntimeId, runtimeId, StringComparison.Ordinal)
+                && graph.ContainsExactCityOwner(candidate))
+            {
+                owner = candidate;
+                return true;
+            }
+        return false;
+    }
+
+    internal sealed class SelectedFleeCityPlan
+    {
+        internal DailyV1CityRuntimeOwners Destination { get; }
+        internal SpatialRouteRuntime Route { get; }
+        internal float TravelCost { get; }
+
+        internal SelectedFleeCityPlan(
+            DailyV1CityRuntimeOwners destination,
+            SpatialRouteRuntime route,
+            float travelCost)
+        {
+            Destination = destination;
+            Route = route;
+            TravelCost = travelCost;
+        }
+    }
+
+    internal sealed class SelectedFleeCityActionResult
+    {
+        internal bool Succeeded { get; }
+        internal string DestinationCityRuntimeId { get; }
+        internal float TravelCost { get; }
+
+        internal SelectedFleeCityActionResult(
+            bool succeeded,
+            string destinationCityRuntimeId,
+            float travelCost)
+        {
+            Succeeded = succeeded;
+            DestinationCityRuntimeId = destinationCityRuntimeId;
+            TravelCost = travelCost;
+        }
+    }
+
+    /// <summary>Revalidates the exact selected FleeCity payload using Core
+    /// location, travel, status, identity, and account owners. The returned
+    /// plan is still pending travel; this operation does not charge or move the
+    /// actor.</summary>
+    internal static bool TryPrepareSelectedFleeCityPlan(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition expectedAction,
+        out SelectedFleeCityPlan plan)
+    {
+        plan = null;
+        DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        if (graph == null || graph.TravelParties == null
+            || actor == null || expectedAction == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(graph.Definitions, actor.Definitions)
+            || !ReferenceEquals(slot?.CurrentAction, expectedAction)
+            || payload == null || !ReferenceEquals(payload.Action, expectedAction)
+            || expectedAction.Values.actionType?.Value != DailyV1NpcDefinitionRules.FleeCityActionTypeValue
+            || payload.TargetNpcRuntimeId != null || payload.TargetItem != null
+            || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, expectedAction, actor.Status?.Statuses)
+            || actor.Lifecycle?.LifeState != NpcLifeState.Alive
+            || actor.Travel == null || actor.Travel.IsTraveling
+            || string.IsNullOrWhiteSpace(actor.Travel.CurrentCityRuntimeId)
+            || string.IsNullOrWhiteSpace(actor.Travel.CurrentLocationRuntimeId)
+            || graph.IsManagedByTravelParty(actor, graph.TravelParties))
+            return false;
+
+        string arrestedStatusId = graph.Definitions.Configuration?.arrestedStatus;
+        if (string.IsNullOrWhiteSpace(arrestedStatusId)
+            || !graph.Definitions.Statuses.TryGetValue(
+                arrestedStatusId, out DailyV1StatusDefinition arrestedStatus)
+            || actor.Status == null || actor.Status.Contains(arrestedStatus))
+            return false;
+
+        DailyV1CityRuntimeOwners origin = FindExactCity(
+            graph, actor.Travel.CurrentCityRuntimeId);
+        DailyV1CityRuntimeOwners destination = FindExactCity(
+            graph, payload.TargetCityRuntimeId);
+        if (origin == null || destination == null
+            || ReferenceEquals(origin, destination)
+            || !string.Equals(origin.LocationRuntimeId,
+                actor.Travel.CurrentLocationRuntimeId, StringComparison.Ordinal)
+            || (origin.NpcPresence.Contains(actor.RuntimeId)
+                && !origin.NpcPresence.CanApplyRevisionIncrements(1L))
+            || !graph.TryPlanSelectedSoloTravel(actor,
+                actor.Travel.CurrentLocationRuntimeId,
+                destination.LocationRuntimeId,
+                destination.RuntimeId,
+                out SpatialRouteRuntime route,
+                out float travelCost)
+            || route == null || actor.MoneyAccount == null
+            || !actor.MoneyAccount.CanDebit(travelCost)
+            || actor.TravelPlan == null
+            || !actor.TravelPlan.CanCommit(
+                destination.LocationRuntimeId,
+                destination.RuntimeId,
+                NpcTravelReason.Flee,
+                80f,
+                travelCost,
+                payload.OriginDecisionId))
+            return false;
+
+        plan = new SelectedFleeCityPlan(destination, route, travelCost);
+        return true;
+    }
+
+    private static DailyV1CityRuntimeOwners FindExactCity(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string runtimeId)
+    {
+        if (graph == null || string.IsNullOrWhiteSpace(runtimeId)) return null;
+        foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+            if (city != null && graph.ContainsExactCityOwner(city)
+                && string.Equals(city.RuntimeId, runtimeId, StringComparison.Ordinal))
+                return city;
+        return null;
+    }
+
+    internal sealed class SelectedSoloTravelActionResult
+    {
+        internal bool Succeeded { get; }
+        internal bool ActionRollSucceeded { get; }
+        internal SoloTravelResult Travel { get; }
+
+        internal SelectedSoloTravelActionResult(bool succeeded, bool actionRollSucceeded,
+            SoloTravelResult travel)
+        { Succeeded = succeeded; ActionRollSucceeded = actionRollSucceeded; Travel = travel; }
+    }
+
+    internal sealed class SelectedOpenMarketActionResult
+    {
+        internal bool Succeeded { get; }
+        internal bool ActionRollSucceeded { get; }
+        internal DailyV1SelectedOpenMarketSaleExecution Sale { get; }
+        internal DailyV1SelectedOpenMarketPurchaseExecution Purchase { get; }
+
+        internal SelectedOpenMarketActionResult(bool succeeded, bool actionRollSucceeded,
+            DailyV1SelectedOpenMarketSaleExecution sale,
+            DailyV1SelectedOpenMarketPurchaseExecution purchase)
+        {
+            Succeeded = succeeded;
+            ActionRollSucceeded = actionRollSucceeded;
+            Sale = sale;
+            Purchase = purchase;
+        }
+    }
+
+    internal sealed class SelectedPlannedMarketSaleActionResult
+    {
+        internal bool Succeeded { get; }
+        internal bool ActionRollSucceeded { get; }
+        internal PlannedMarketSaleResult Sale { get; }
+
+        internal SelectedPlannedMarketSaleActionResult(bool succeeded,
+            bool actionRollSucceeded, PlannedMarketSaleResult sale)
+        {
+            Succeeded = succeeded;
+            ActionRollSucceeded = actionRollSucceeded;
+            Sale = sale;
+        }
+    }
+
+    internal sealed class SelectedPlannedNpcSaleActionResult
+    {
+        internal bool Succeeded { get; }
+        internal bool ActionRollSucceeded { get; }
+        internal PlannedNpcSaleResult Sale { get; }
+
+        internal SelectedPlannedNpcSaleActionResult(bool succeeded,
+            bool actionRollSucceeded, PlannedNpcSaleResult sale)
+        {
+            Succeeded = succeeded;
+            ActionRollSucceeded = actionRollSucceeded;
+            Sale = sale;
+        }
+    }
+
+    internal sealed class SelectedCrossCityBuyActionResult
+    {
+        internal bool ActionRollSucceeded { get; }
+        internal DailyV1SelectedCrossCityBuyResult Purchase { get; }
+
+        internal SelectedCrossCityBuyActionResult(bool actionRollSucceeded,
+            DailyV1SelectedCrossCityBuyResult purchase)
+        {
+            ActionRollSucceeded = actionRollSucceeded;
+            Purchase = purchase;
+        }
+    }
+
+    internal sealed class PlannedNpcSaleResult
+    {
+        internal bool Succeeded { get; }
+        internal bool SoldToNpc { get; }
+        internal int Quantity { get; }
+        internal float UnitPrice { get; }
+        internal bool PlanCompleted { get; }
+        internal bool PlanTransitioned { get; }
+        internal DailyV1SelectedNpcTradeCommitResult NpcTrade { get; }
+        internal DailyV1SelectedOpenMarketSaleExecution MarketSale { get; }
+
+        internal PlannedNpcSaleResult(bool succeeded, bool soldToNpc, int quantity, float unitPrice,
+            bool planCompleted, bool planTransitioned, DailyV1SelectedNpcTradeCommitResult npcTrade,
+            DailyV1SelectedOpenMarketSaleExecution marketSale)
+        { Succeeded = succeeded; SoldToNpc = soldToNpc; Quantity = quantity; UnitPrice = unitPrice;
+          PlanCompleted = planCompleted; PlanTransitioned = planTransitioned;
+          NpcTrade = npcTrade; MarketSale = marketSale; }
+    }
+
+    internal sealed class PlannedMarketSaleResult
+    {
+        internal bool Succeeded { get; }
+        internal bool PartialCommit { get; }
+        internal int Quantity { get; }
+        internal float UnitPrice { get; }
+        internal bool PlanCompleted { get; }
+        internal bool PlanTransitioned { get; }
+        internal DailyV1SelectedOpenMarketSaleExecution MarketSale { get; }
+
+        internal PlannedMarketSaleResult(bool succeeded, bool partialCommit, int quantity,
+            float unitPrice, bool planCompleted, bool planTransitioned,
+            DailyV1SelectedOpenMarketSaleExecution marketSale)
+        {
+            Succeeded = succeeded;
+            PartialCommit = partialCommit;
+            Quantity = quantity;
+            UnitPrice = unitPrice;
+            PlanCompleted = planCompleted;
+            PlanTransitioned = planTransitioned;
+            MarketSale = marketSale;
+        }
+    }
+
+    internal sealed class SoloTravelResult
+    {
+        internal DailyV1SelectedTravelTransitionPlan Transition { get; }
+        internal SpatialRouteRuntime Route { get; }
+        internal float TravelCost { get; }
+        internal DailyV1SelectedSoloTravelResult Execution { get; }
+        internal bool Succeeded => Execution?.Succeeded == true;
+
+        internal SoloTravelResult(DailyV1SelectedTravelTransitionPlan transition,
+            SpatialRouteRuntime route, float travelCost, DailyV1SelectedSoloTravelResult execution)
+        { Transition = transition; Route = route; TravelCost = travelCost; Execution = execution; }
+    }
+
+    internal static bool TryRollCurrentActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        out bool succeeded) =>
+        DailyV1NpcActionDecision.TryRollCurrentActionSlot(
+            graph, actor, randomSource, currentAbsoluteDay, out succeeded);
+
+    /// <summary>
+    /// Validates a prepared solo-travel start against the exact Core graph,
+    /// route, owner revisions, and charge before any effect is committed.
+    /// </summary>
+    internal static bool CanCommitPreparedSoloTravelTransition(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1SelectedTravelTransitionPlan plan,
+        SpatialRouteRuntime route,
+        float travelCost)
+    {
+        if (graph == null || actor == null || plan == null || route == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !plan.IsPreparedFor(actor, graph)
+            || plan.IsCommitted || plan.IsNoOp || !plan.TravelRevisionChanges
+            || actor.Lifecycle?.LifeState != NpcLifeState.Alive
+            || actor.Travel == null || actor.Travel.IsTraveling
+            || graph.TravelParties == null
+            || graph.IsManagedByTravelParty(actor, graph.TravelParties)
+            || actor.MoneyAccount == null
+            || float.IsNaN(travelCost) || float.IsInfinity(travelCost) || travelCost < 0f
+            || !actor.MoneyAccount.CanDebit(travelCost)
+            || route.Origin == null || route.Destination == null || route.TravelDays <= 0
+            || !string.Equals(actor.Travel.CurrentLocationRuntimeId,
+                route.Origin.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(plan.RouteRuntimeId, route.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(plan.DestinationLocationRuntimeId,
+                route.Destination.RuntimeId, StringComparison.Ordinal)
+            || plan.TravelDaysTotal != route.TravelDays
+            || !graph.TryGetUniqueCityOwnerForLocation(
+                actor.Travel.CurrentLocationRuntimeId, out DailyV1CityRuntimeOwners originCity)
+            || !string.Equals(originCity.RuntimeId, actor.Travel.CurrentCityRuntimeId,
+                StringComparison.Ordinal)
+            || !graph.TryGetUniqueCityOwnerForLocation(
+                route.Destination.RuntimeId, out DailyV1CityRuntimeOwners destinationCity)
+            || !string.Equals(plan.DestinationCityRuntimeId, destinationCity.RuntimeId,
+                StringComparison.Ordinal)
+            || !graph.TryPlanSelectedSoloTravel(actor,
+                route.Origin.RuntimeId, route.Destination.RuntimeId,
+                destinationCity.RuntimeId,
+                out SpatialRouteRuntime exactRoute, out float exactTravelCost)
+            || !ReferenceEquals(exactRoute, route)
+            || exactTravelCost != travelCost)
+            return false;
+
+        // Recheck stale state and revision capacity immediately before the
+        // projection/P12 gates. The owner install checks the same baseline
+        // again after those gates.
+        return plan.CanCommit();
+    }
+
+    /// <summary>Prepares and charges the exact selected Travel slot using Core
+    /// route/cost/travel owners, then commits through the existing P12 and
+    /// Unity projection boundaries.</summary>
+    internal static bool TryExecuteSoloTravelSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        string destinationCityRuntimeId,
+        TravelPartyStore partyStore,
+        Func<DailyV1SelectedTravelTransitionPlan, bool> commitTransition,
+        out SoloTravelResult result)
+        => TryExecuteSoloTravelSlot(graph, actor, destinationCityRuntimeId, partyStore,
+            null, commitTransition, out result);
+
+    private static bool TryExecuteSoloTravelSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        string destinationCityRuntimeId,
+        TravelPartyStore partyStore,
+        Func<DailyV1SelectedTravelTransitionPlan, SpatialRouteRuntime, float, bool> validatePreparedTransition,
+        Func<DailyV1SelectedTravelTransitionPlan, bool> commitTransition,
+        out SoloTravelResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        if (graph == null || graph.TravelParties == null
+            || !ReferenceEquals(graph.TravelParties, partyStore)
+            || actor == null || !graph.ContainsExactNpcOwner(actor)
+            || slot?.CurrentAction == null || payload == null
+            || !ReferenceEquals(payload.Action, slot.CurrentAction)
+            || slot.CurrentAction.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.TravelActionTypeValue
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, slot.CurrentAction, actor.Status?.Statuses)
+            || string.IsNullOrWhiteSpace(destinationCityRuntimeId)
+            || !string.Equals(payload.TargetCityRuntimeId, destinationCityRuntimeId, StringComparison.Ordinal)
+            || actor.Lifecycle?.LifeState != NpcLifeState.Alive
+            || actor.Travel == null || actor.Travel.IsTraveling
+            || graph.IsManagedByTravelParty(actor, partyStore)
+            || commitTransition == null)
+            return false;
+
+        DailyV1CityRuntimeOwners originCity = null;
+        DailyV1CityRuntimeOwners destinationCity = null;
+        foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+        {
+            if (string.Equals(candidate.RuntimeId, actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal))
+                originCity = candidate;
+            if (string.Equals(candidate.RuntimeId, destinationCityRuntimeId, StringComparison.Ordinal))
+                destinationCity = candidate;
+        }
+        if (originCity == null || destinationCity == null
+            || !graph.ContainsExactCityOwner(originCity)
+            || !graph.ContainsExactCityOwner(destinationCity)
+            || !graph.TryGetCityLocationRuntimeId(destinationCity.RuntimeId, out string destinationLocationRuntimeId)
+            || !graph.TryPlanSelectedSoloTravel(actor, actor.Travel.CurrentLocationRuntimeId,
+                destinationLocationRuntimeId, destinationCity.RuntimeId,
+                out SpatialRouteRuntime route, out float travelCost)
+            || !DailyV1SelectedTravelTransitionPlan.TryStartTravel(
+                actor, originCity, actor.Travel.CurrentLocationRuntimeId,
+                destinationLocationRuntimeId, destinationCity, route.TravelDays,
+                payload.OriginDecisionId, route.RuntimeId,
+                out DailyV1SelectedTravelTransitionPlan transition))
+            return false;
+
+        if (validatePreparedTransition != null
+            && !validatePreparedTransition(transition, route, travelCost))
+            return false;
+
+        DailyV1SelectedSoloTravelResult execution = DailyV1SelectedSoloTravelExecution.TryExecute(
+            actor, transition, travelCost, () => commitTransition(transition));
+        result = new SoloTravelResult(transition, route, travelCost, execution);
+        return true;
+    }
+
+    /// <summary>
+    /// Dispatches the exact selected Travel action slot through Core travel owners.
+    /// The host supplies only the existing P12 operation wrapper and projection,
+    /// event, and notification callbacks.
+    /// </summary>
+    internal static bool TryExecuteSelectedSoloTravelActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        ISelectedSoloTravelActionBoundary boundary,
+        out SelectedSoloTravelActionResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
+        if (graph == null || graph.TravelParties == null
+            || actor == null || expectedAction == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(slot?.CurrentAction, expectedAction)
+            || expectedAction.Values.actionType?.Value != DailyV1NpcDefinitionRules.TravelActionTypeValue)
+            return false;
+
+        DailyV1NpcActionPayloadOwner payload = slot.CurrentPayload;
+        if (payload == null || !ReferenceEquals(payload.Action, expectedAction)
+            || payload.TargetNpcRuntimeId != null
+            || payload.TargetItem != null
+            || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+            || !Enum.IsDefined(typeof(NpcTravelReason), payload.TravelReason)
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, expectedAction, actor.Status?.Statuses)
+            || boundary == null)
+            return false;
+
+        // From this point the action is an exact supported selected slot. Its
+        // existing deterministic roll must precede the host P12 wrapper and all
+        // travel callbacks, just as it did before selected Travel dispatch.
+        if (!TryRollCurrentActionSlot(graph, actor, randomSource, currentAbsoluteDay,
+                out bool actionSucceeded))
+        {
+            result = new SelectedSoloTravelActionResult(false, false, null);
+            return true;
+        }
+        if (!actionSucceeded)
+        {
+            result = new SelectedSoloTravelActionResult(false, false, null);
+            return true;
+        }
+
+        SoloTravelResult completedTravel = null;
+        bool succeeded = boundary.ExecuteWithinOperation(() =>
+        {
+            if (payload.TravelReason == NpcTravelReason.TradeReposition)
+            {
+                if (!boundary.CanStartTradeReposition()) return false;
+                boundary.LogTradeReposition();
+            }
+
+            string destinationCityRuntimeId = payload.TargetCityRuntimeId;
+            if (string.IsNullOrWhiteSpace(destinationCityRuntimeId)
+                || !TryExecuteSoloTravelSlot(graph, actor, destinationCityRuntimeId,
+                    graph.TravelParties,
+                    (plan, route, cost) => boundary.CanCommitPreparedTransition(plan, route, cost),
+                    plan =>
+                    {
+                        if (!boundary.TryPrepareTransitionProjection(plan)) return false;
+                        if (!graph.TryCommitTravelTransition(actor, plan,
+                                () => boundary.CanAdmitPreparedTransition(plan)))
+                            return false;
+                        boundary.PublishCommittedTransition(plan);
+                        return true;
+                    },
+                    out SoloTravelResult travel)
+                || travel == null || !travel.Succeeded)
+                return false;
+
+            // Discoveries are authoritative Core owner mutations and retain
+            // their existing P12-bound owner callbacks.
+            actor.SpatialKnowledge?.DiscoverLocation(travel.Route.Origin.RuntimeId);
+            actor.SpatialKnowledge?.DiscoverRoute(travel.Route.RuntimeId);
+            boundary.PublishTravelStarted(travel);
+            if (payload.TravelReason == NpcTravelReason.CommercialScout)
+                boundary.LogCommercialScouting();
+            if (boundary.CanProjectTravelPlanClear(actor))
+                graph.TryClearSelectedTravelPlan(actor,
+                    () => boundary.CanAdmitTravelPlanClear(actor),
+                    () => boundary.PublishCommittedTravelPlanClear(actor),
+                    out _);
+            completedTravel = travel;
+            return true;
+        });
+
+        result = new SelectedSoloTravelActionResult(succeeded, true, completedTravel);
+        return true;
+    }
+
+    internal static bool TryExecuteOpenMarketSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
+        IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary,
+        out DailyV1SelectedOpenMarketSaleExecution sale,
+        out DailyV1SelectedOpenMarketPurchaseExecution purchase)
+    {
+        sale = null;
+        purchase = null;
+        if (graph == null || actor == null || !graph.ContainsExactNpcOwner(actor)
+            || actor.ActionSlot?.CurrentAction == null
+            || actor.ActionSlot.CurrentPayload == null
+            || !ReferenceEquals(actor.ActionSlot.CurrentPayload.Action, actor.ActionSlot.CurrentAction))
+            return false;
+
+        int actionType = actor.ActionSlot.CurrentAction.Values.actionType?.Value ?? int.MinValue;
+        if (actionType != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            && actionType != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue)
+            return false;
+
+        return DailyV1SelectedOpenMarketActionExecution.TryExecute(
+            graph, actor, actor.ActionSlot.CurrentPayload, saleBoundary, purchaseBoundary,
+            out sale, out purchase);
+    }
+
+    /// <summary>Rolls and executes an exact selected local BuyGoods/SellGoods slot.
+    /// The host supplies only the existing P12 transaction boundaries.</summary>
+    internal static bool TryExecuteSelectedOpenMarketActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
+        IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary,
+        out SelectedOpenMarketActionResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        int actionType = slot?.CurrentAction?.Values.actionType?.Value ?? int.MinValue;
+        if (graph == null || actor == null || expectedAction == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(actor.Definitions, graph.Definitions)
+            || !ReferenceEquals(slot?.CurrentAction, expectedAction)
+            || payload == null || !ReferenceEquals(payload.Action, expectedAction)
+            || (actionType != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                && actionType != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue)
+            || payload.TargetNpcRuntimeId != null
+            || string.IsNullOrWhiteSpace(actor.Travel?.CurrentCityRuntimeId)
+            || !string.Equals(payload.TargetCityRuntimeId,
+                actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+            || actor.Travel.IsTraveling
+            || (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                && actor.MerchantTradePlan?.IsActive == true))
+            return false;
+
+        if (!TryRollCurrentActionSlot(graph, actor, randomSource, currentAbsoluteDay,
+            out bool actionRollSucceeded))
+            return false;
+
+        if (!actionRollSucceeded)
+        {
+            result = new SelectedOpenMarketActionResult(false, false, null, null);
+            return true;
+        }
+
+        bool succeeded = TryExecuteOpenMarketSlot(graph, actor, saleBoundary,
+            purchaseBoundary, out DailyV1SelectedOpenMarketSaleExecution sale,
+            out DailyV1SelectedOpenMarketPurchaseExecution purchase);
+        result = new SelectedOpenMarketActionResult(succeeded, true, sale, purchase);
+        return true;
+    }
+
+    /// <summary>Rolls and executes the exact selected active-plan local sale.
+    /// Existing P12 plan admission, market transaction, and plan publication
+    /// callbacks retain their established ordering.</summary>
+    internal static bool TryExecuteSelectedPlannedMarketSaleActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners seller,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        IDailyV1SelectedOpenMarketSaleBoundary marketBoundary,
+        Func<bool> planAdmission,
+        Action planCommitted,
+        out SelectedPlannedMarketSaleActionResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = seller?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        if (graph == null || seller == null || expectedAction == null
+            || !graph.ContainsExactNpcOwner(seller)
+            || !ReferenceEquals(seller.Definitions, graph.Definitions)
+            || !ReferenceEquals(slot?.CurrentAction, expectedAction)
+            || payload == null || !ReferenceEquals(payload.Action, expectedAction)
+            || expectedAction.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            || payload.TargetNpcRuntimeId != null
+            || string.IsNullOrWhiteSpace(seller.Travel?.CurrentCityRuntimeId)
+            || !string.Equals(payload.TargetCityRuntimeId,
+                seller.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+            || seller.Travel.IsTraveling
+            || seller.MerchantTradePlan?.IsActive != true)
+            return false;
+
+        if (!TryRollCurrentActionSlot(graph, seller, randomSource, currentAbsoluteDay,
+            out bool actionRollSucceeded))
+            return false;
+
+        if (!actionRollSucceeded)
+        {
+            result = new SelectedPlannedMarketSaleActionResult(false, false, null);
+            return true;
+        }
+
+        bool succeeded = TryExecutePlannedMarketSaleSlot(graph, seller, marketBoundary,
+            planAdmission, planCommitted, out PlannedMarketSaleResult sale);
+        result = new SelectedPlannedMarketSaleActionResult(succeeded && sale?.Succeeded == true,
+            true, sale);
+        return true;
+    }
+
+    /// <summary>Executes the selected active-plan SellGoods payload against its
+    /// exact buyer/seller owners, falls back to the same local market sale on
+    /// transaction rejection, and advances the Core plan after a committed
+    /// sale. The callbacks are limited to existing P12 plan admission and receipt.</summary>
+    internal static bool TryExecutePlannedNpcSaleSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners seller,
+        DailyV1NpcRuntimeOwners buyer,
+        IDailyV1SelectedNpcTradeBoundary tradeBoundary,
+        IDailyV1SelectedOpenMarketSaleBoundary marketBoundary,
+        Func<bool> planAdmission,
+        Action planCommitted,
+        out PlannedNpcSaleResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = seller?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        DailyV1CityRuntimeOwners city = null;
+        if (graph != null && !string.IsNullOrWhiteSpace(seller?.Travel?.CurrentCityRuntimeId))
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+                if (string.Equals(candidate.RuntimeId, seller.Travel.CurrentCityRuntimeId, StringComparison.Ordinal))
+                { city = candidate; break; }
+        if (graph == null || seller == null || buyer == null
+            || !graph.ContainsExactNpcOwner(seller) || !graph.ContainsExactNpcOwner(buyer)
+            || !ReferenceEquals(seller.Definitions, graph.Definitions)
+            || !ReferenceEquals(buyer.Definitions, graph.Definitions)
+            || slot?.CurrentAction == null || payload == null
+            || !ReferenceEquals(payload.Action, slot.CurrentAction)
+            || slot.CurrentAction.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, slot.CurrentAction, seller.Status?.Statuses)
+            || !string.Equals(payload.TargetNpcRuntimeId, buyer.RuntimeId, StringComparison.Ordinal)
+            || payload.TargetItem == null || payload.Amount <= 0
+            || !seller.MerchantTradePlan.IsActive
+            || !ReferenceEquals(payload.TargetItem, seller.MerchantTradePlan.ItemDefinition)
+            || seller.Lifecycle?.LifeState != NpcLifeState.Alive
+            || buyer.Lifecycle?.LifeState != NpcLifeState.Alive
+            || seller.Travel == null || buyer.Travel == null
+            || seller.Travel.IsTraveling || buyer.Travel.IsTraveling
+            || string.IsNullOrWhiteSpace(seller.Travel.CurrentCityRuntimeId)
+            || (payload.TargetCityRuntimeId != null
+                && !string.Equals(payload.TargetCityRuntimeId, seller.Travel.CurrentCityRuntimeId, StringComparison.Ordinal))
+            || !string.Equals(seller.Travel.CurrentCityRuntimeId, buyer.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+            || city == null || !graph.ContainsExactCityOwner(city)
+            || !DailyV1NpcDefinitionRules.HasJobType(buyer.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+            || !DailyV1NpcDefinitionRules.HasMerchantBehavior(buyer.Definition, graph.Definitions, 1))
+            return false;
+
+        EffectiveMerchantTradeConfiguration tradeConfig = graph.Definitions.EffectiveConfiguration?.MerchantTrade
+            ?? new EffectiveMerchantTradeConfiguration(enabled: true);
+        float retailPrice = city.Market.GetPrice(payload.TargetItem);
+        float preference = DailyV1NpcDefinitionRules.TryGetPreferredTradeItemMultiplier(
+            buyer.Definition, graph.Definitions, payload.TargetItem, out float configuredPreference)
+            ? UnityMathfCompatibility.Max(0.01f, configuredPreference) : 1f;
+        float expectedUnitPrice = UnityMathfCompatibility.Max(0.01f, retailPrice)
+            * UnityMathfCompatibility.Clamp(
+                tradeConfig.LocalWholesalePriceMultiplier
+                + UnityMathfCompatibility.Min(0.15f,
+                    UnityMathfCompatibility.Max(0f, preference - 1f) * 0.1f), 0.5f, 0.85f);
+        float spendable = UnityMathfCompatibility.Max(0f,
+            buyer.MoneyAccount.Balance * (1f - tradeConfig.LocalReserveRatio));
+        if (!expectedUnitPrice.Equals(payload.ExpectedUnitPrice)
+            || spendable < payload.ExpectedUnitPrice * payload.Amount)
+            return false;
+
+        if (!seller.MerchantTradePlan.CanRegisterSale(payload.Amount))
+        {
+            result = new PlannedNpcSaleResult(false, false, 0, 0f,
+                false, false, null, null);
+            return true;
+        }
+
+        // The merchant-plan P12 mutation is the second owner transition after
+        // the trade. Reserve its existing admission before any counterparty
+        // writes so a rejected plan mutation cannot strand a completed sale.
+        bool planAdmitted;
+        try { planAdmitted = planAdmission == null || planAdmission(); }
+        catch { planAdmitted = false; }
+        if (!planAdmitted)
+        {
+            result = new PlannedNpcSaleResult(false, false, 0, 0f,
+                false, false, null, null);
+            return true;
+        }
+
+        DailyV1SelectedNpcTradeCommitResult trade = DailyV1SelectedNpcTradeExecution.TryExecute(
+            graph, buyer, seller, payload.TargetItem, payload.Amount,
+            payload.ExpectedUnitPrice, tradeBoundary);
+        if (trade.Succeeded)
+        {
+            bool transitioned = seller.MerchantTradePlan.TryRegisterSale(
+                payload.Amount, null, planCommitted, out bool completed);
+            result = new PlannedNpcSaleResult(true, true, payload.Amount,
+                payload.ExpectedUnitPrice, transitioned && completed, transitioned, trade, null);
+            return true;
+        }
+
+        // A rejected trade can still report that earlier owner writes committed.
+        // Preserve those legacy partial-commit semantics and do not start a
+        // second sale against the market after the first operation was partial.
+        if (trade.PartialCommit)
+        {
+            result = new PlannedNpcSaleResult(false, false, 0, 0f,
+                false, false, trade, null);
+            return true;
+        }
+
+        DailyV1SelectedOpenMarketSaleExecution market =
+            DailyV1SelectedOpenMarketSaleExecution.TryExecute(
+                graph, seller, city.Market, payload.TargetItem, payload.Amount, marketBoundary);
+        if (!market.Prepared || market.Commit?.Succeeded != true || market.Plan.Quantity <= 0)
+        {
+            result = new PlannedNpcSaleResult(false, false, 0, 0f,
+                false, false, trade, market);
+            return true;
+        }
+        bool marketTransitioned = seller.MerchantTradePlan.TryRegisterSale(
+            market.Plan.Quantity, null, planCommitted, out bool marketCompleted);
+        result = new PlannedNpcSaleResult(true, false, market.Plan.Quantity,
+            market.Plan.UnitPrice, marketTransitioned && marketCompleted,
+            marketTransitioned, trade, market);
+        return true;
+    }
+
+    internal static bool TryExecuteSelectedPlannedNpcSaleActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners seller,
+        DailyV1NpcRuntimeOwners buyer,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        IDailyV1SelectedNpcTradeBoundary tradeBoundary,
+        IDailyV1SelectedOpenMarketSaleBoundary marketBoundary,
+        Func<bool> planAdmission,
+        Action planCommitted,
+        out SelectedPlannedNpcSaleActionResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = seller?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        DailyV1NpcMerchantTradePlanOwner plan = seller?.MerchantTradePlan;
+        DailyV1CityRuntimeOwners city = null;
+        if (graph != null && !string.IsNullOrWhiteSpace(seller?.Travel?.CurrentCityRuntimeId))
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+                if (string.Equals(candidate.RuntimeId, seller.Travel.CurrentCityRuntimeId,
+                    StringComparison.Ordinal))
+                { city = candidate; break; }
+
+        if (graph == null || seller == null || buyer == null || expectedAction == null
+            || !graph.ContainsExactNpcOwner(seller) || !graph.ContainsExactNpcOwner(buyer)
+            || !ReferenceEquals(seller.Definitions, graph.Definitions)
+            || !ReferenceEquals(buyer.Definitions, graph.Definitions)
+            || !graph.Definitions.Actions.TryGetValue(expectedAction.DefinitionId,
+                out DailyV1ActionDefinition admittedAction)
+            || !ReferenceEquals(admittedAction, expectedAction)
+            || !ReferenceEquals(slot?.CurrentAction, expectedAction)
+            || payload == null || !ReferenceEquals(payload.Action, expectedAction)
+            || expectedAction.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            || !string.Equals(payload.TargetNpcRuntimeId, buyer.RuntimeId, StringComparison.Ordinal)
+            || payload.TargetItem == null || payload.Amount <= 0
+            || !graph.Definitions.Items.TryGetValue(payload.TargetItem.DefinitionId,
+                out DailyV1ItemDefinition admittedItem)
+            || !ReferenceEquals(admittedItem, payload.TargetItem)
+            || plan == null || !plan.IsActive
+            || !ReferenceEquals(payload.TargetItem, plan.ItemDefinition)
+            || (payload.TargetCityRuntimeId != null
+                && !string.Equals(payload.TargetCityRuntimeId,
+                    seller.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal))
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, expectedAction, seller.Status?.Statuses)
+            || seller.Lifecycle?.LifeState != NpcLifeState.Alive
+            || buyer.Lifecycle?.LifeState != NpcLifeState.Alive
+            || seller.Travel == null || buyer.Travel == null
+            || seller.Travel.IsTraveling || buyer.Travel.IsTraveling
+            || string.IsNullOrWhiteSpace(seller.Travel.CurrentCityRuntimeId)
+            || !string.Equals(seller.Travel.CurrentCityRuntimeId,
+                buyer.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+            || city == null || !graph.ContainsExactCityOwner(city)
+            || !DailyV1NpcDefinitionRules.HasJobType(buyer.Definition, graph.Definitions,
+                DailyV1NpcDefinitionRules.MerchantJobTypeValue)
+            || !DailyV1NpcDefinitionRules.HasMerchantBehavior(buyer.Definition,
+                graph.Definitions, DailyV1NpcDefinitionRules.LocalMerchantBehaviorValue))
+            return false;
+
+        if (!TryRollCurrentActionSlot(graph, seller, randomSource, currentAbsoluteDay,
+            out bool actionRollSucceeded))
+        {
+            result = new SelectedPlannedNpcSaleActionResult(false, false, null);
+            return true;
+        }
+
+        if (!actionRollSucceeded)
+        {
+            result = new SelectedPlannedNpcSaleActionResult(false, false, null);
+            return true;
+        }
+
+        bool executed = TryExecutePlannedNpcSaleSlot(graph, seller, buyer,
+            tradeBoundary, marketBoundary, planAdmission, planCommitted,
+            out PlannedNpcSaleResult sale);
+        result = new SelectedPlannedNpcSaleActionResult(
+            executed && sale?.Succeeded == true, true, sale);
+        return true;
+    }
+
+    /// <summary>Rolls and executes an exact selected cross-city BuyGoods slot in
+    /// Core. The existing purchase boundary and owner admission callbacks retain
+    /// their established P12 and publication order.</summary>
+    internal static bool TryExecuteSelectedCrossCityBuyActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary,
+        Func<bool> merchantPlanAdmission,
+        Action merchantPlanCommitted,
+        Func<bool> travelPlanAdmission,
+        Action travelPlanCommitted,
+        out SelectedCrossCityBuyActionResult result) =>
+        TryExecuteSelectedCrossCityBuyActionSlot(
+            graph, actor, expectedAction, randomSource, currentAbsoluteDay,
+            purchaseBoundary, merchantPlanAdmission, merchantPlanCommitted,
+            travelPlanAdmission, travelPlanCommitted, null, out result);
+
+    internal static bool TryExecuteSelectedCrossCityBuyActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition expectedAction,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary,
+        Func<bool> merchantPlanAdmission,
+        Action merchantPlanCommitted,
+        Func<bool> travelPlanAdmission,
+        Action travelPlanCommitted,
+        Func<Func<bool>, bool> executeWithinP12Operation,
+        out SelectedCrossCityBuyActionResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = actor?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        if (graph == null || actor == null || expectedAction == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(actor.Definitions, graph.Definitions)
+            || !graph.Definitions.Actions.TryGetValue(expectedAction.DefinitionId,
+                out DailyV1ActionDefinition admittedAction)
+            || !ReferenceEquals(admittedAction, expectedAction)
+            || !ReferenceEquals(slot?.CurrentAction, expectedAction)
+            || payload == null || !ReferenceEquals(payload.Action, expectedAction)
+            || expectedAction.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+            || payload.TargetItem == null
+            || !graph.Definitions.Items.TryGetValue(payload.TargetItem.DefinitionId,
+                out DailyV1ItemDefinition admittedItem)
+            || !ReferenceEquals(admittedItem, payload.TargetItem)
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, expectedAction, actor.Status?.Statuses)
+            || !DailyV1SelectedCrossCityBuyExecution.IsValidSelectedBuy(
+                graph, actor, payload, out _, out _, out _))
+            return false;
+
+        if (!TryRollCurrentActionSlot(graph, actor, randomSource, currentAbsoluteDay,
+            out bool actionRollSucceeded))
+            return false;
+        if (!actionRollSucceeded)
+        {
+            result = new SelectedCrossCityBuyActionResult(false, null);
+            return true;
+        }
+
+        DailyV1SelectedCrossCityBuyResult purchase =
+            DailyV1SelectedCrossCityBuyExecution.TryExecute(
+                graph, actor, payload, purchaseBoundary, merchantPlanAdmission,
+                merchantPlanCommitted, travelPlanAdmission, travelPlanCommitted,
+                executeWithinP12Operation);
+        if (purchase == null) return false;
+
+        result = new SelectedCrossCityBuyActionResult(true, purchase);
+        return true;
+    }
+
+    /// <summary>Executes an active selected merchant plan's market liquidation
+    /// from its exact action slot. Plan revision/admission is checked before the
+    /// sale; a post-sale plan rejection is reported as a partial commit for the
+    /// host admission adapter to fault.</summary>
+    internal static bool TryExecutePlannedMarketSaleSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners seller,
+        IDailyV1SelectedOpenMarketSaleBoundary marketBoundary,
+        Func<bool> planAdmission,
+        Action planCommitted,
+        out PlannedMarketSaleResult result)
+    {
+        result = null;
+        DailyV1NpcActionSlotOwner slot = seller?.ActionSlot;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        DailyV1NpcMerchantTradePlanOwner plan = seller?.MerchantTradePlan;
+        DailyV1CityRuntimeOwners city = null;
+        if (graph != null && !string.IsNullOrWhiteSpace(seller?.Travel?.CurrentCityRuntimeId))
+            foreach (DailyV1CityRuntimeOwners candidate in graph.Cities)
+                if (string.Equals(candidate.RuntimeId, seller.Travel.CurrentCityRuntimeId,
+                    StringComparison.Ordinal))
+                { city = candidate; break; }
+
+        if (graph == null || seller == null || !graph.ContainsExactNpcOwner(seller)
+            || !ReferenceEquals(seller.Definitions, graph.Definitions)
+            || slot?.CurrentAction == null || payload == null
+            || !ReferenceEquals(payload.Action, slot.CurrentAction)
+            || slot.CurrentAction.Values.actionType?.Value
+                != DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, slot.CurrentAction, seller.Status?.Statuses)
+            || payload.TargetNpcRuntimeId != null
+            || payload.TargetItem == null
+            || payload.Amount <= 0
+            || plan == null || !plan.IsActive
+            || !ReferenceEquals(payload.TargetItem, plan.ItemDefinition)
+            || payload.Amount > plan.RemainingAmount
+            || seller.Lifecycle?.LifeState != NpcLifeState.Alive
+            || seller.Travel == null || seller.Travel.IsTraveling
+            || city == null || !graph.ContainsExactCityOwner(city)
+            || !string.Equals(payload.TargetCityRuntimeId, city.RuntimeId, StringComparison.Ordinal)
+            || !string.Equals(plan.TargetCityRuntimeId, city.RuntimeId, StringComparison.Ordinal))
+            return false;
+
+        if (!plan.CanRegisterSale(payload.Amount))
+        {
+            result = new PlannedMarketSaleResult(false, false, 0, 0f,
+                false, false, null);
+            return true;
+        }
+
+        bool admitted;
+        try { admitted = planAdmission == null || planAdmission(); }
+        catch { admitted = false; }
+        if (!admitted)
+        {
+            result = new PlannedMarketSaleResult(false, false, 0, 0f,
+                false, false, null);
+            return true;
+        }
+
+        DailyV1SelectedOpenMarketSaleExecution marketSale =
+            DailyV1SelectedOpenMarketSaleExecution.TryExecute(
+                graph, seller, city.Market, payload.TargetItem, payload.Amount,
+                marketBoundary);
+        if (!marketSale.Prepared || marketSale.Commit?.Succeeded != true
+            || marketSale.Plan.Quantity <= 0)
+        {
+            result = new PlannedMarketSaleResult(false,
+                marketSale.Commit?.PartialCommit == true, 0, 0f,
+                false, false, marketSale);
+            return true;
+        }
+
+        bool transitioned = plan.TryRegisterSale(
+            marketSale.Plan.Quantity, planAdmission, planCommitted,
+            out bool completed);
+        result = new PlannedMarketSaleResult(transitioned, !transitioned,
+            marketSale.Plan.Quantity, marketSale.Plan.UnitPrice,
+            transitioned && completed, transitioned, marketSale);
+        return true;
+    }
+}
+
+/// <summary>
+    /// Host-owned ports needed to project selected-action operations.
+    /// The host resolves exact Unity projections; Simulation.Core owns action
+    /// routing, domain execution, and selected P12 operation lifetime.
+/// </summary>
+internal interface IDailyV1SelectedActionDispatchBoundary
+{
+    bool TryGetSoloTravelBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary boundary);
+
+    bool TryGetMarketBoundaries(
+        DailyV1NpcRuntimeOwners actor,
+        out IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
+        out IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary);
+
+    bool TryGetNpcTradeBoundary(
+        DailyV1NpcRuntimeOwners seller,
+        DailyV1NpcRuntimeOwners buyer,
+        out IDailyV1SelectedNpcTradeBoundary boundary);
+
+    bool TryGetFleeCityActionBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary boundary);
+
+    bool TryGetGuardArrestActionBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary boundary);
+
+    bool TryGetStealActionBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary boundary);
+
+    bool TryGetCrimeActionBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary);
+
+    bool TryGetForcedEscapeBoundary(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary boundary);
+
+    bool CanAdmitMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
+    void PublishMerchantPlanMutation(DailyV1NpcRuntimeOwners actor);
+    bool CanAdmitTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor);
+    void PublishTradeTravelPlanMutation(DailyV1NpcRuntimeOwners actor);
+
+    /// <summary>Completes the existing host projection after Core commits a cross-city buy.</summary>
+    void CompleteCrossCityBuy(
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1SelectedCrossCityBuyResult result);
+}
+
+internal interface IDailyV1SelectedCrossCityBuyP12OperationBoundary
+{
+    bool ExecutePlanMutationsWithinCrossCityBuyP12Operation(
+        DailyV1NpcRuntimeOwners actor,
+        Func<bool> operation);
+}
+
+internal enum DailyV1SelectedActionDispatchKind
+{
+    PlannedNpcSale,
+    PlannedMarketSale,
+    OpenMarket,
+    CrossCityBuy,
+    SoloTravel,
+    FleeCity,
+    GuardArrest,
+    Steal,
+    Crime,
+    Normal
+}
+
+/// <summary>Result of routing one exact selected owner action slot.</summary>
+internal sealed class DailyV1SelectedActionDispatchResult
+{
+    internal DailyV1SelectedActionDispatchKind Kind { get; }
+    internal bool ActionRollSucceeded { get; }
+    internal bool Succeeded { get; }
+    internal float ReferencePrice { get; }
+    internal float ReferenceUnitCost { get; }
+    internal string NormalActionName { get; }
+    internal string NormalActionLogText { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult PlannedNpcSale { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedPlannedMarketSaleActionResult PlannedMarketSale { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedOpenMarketActionResult OpenMarket { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult CrossCityBuy { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult SoloTravel { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult FleeCity { get; }
+    internal DailyV1SelectedActionExecutionStage.SelectedGuardArrestActionResult GuardArrest { get; }
+    internal DailyV1SelectedStealActionExecutionStage.Result Steal { get; }
+    internal DailyV1SelectedCrimeActionExecutionStage.Result Crime { get; }
+
+    internal DailyV1SelectedActionDispatchResult(
+        DailyV1SelectedActionDispatchKind kind,
+        bool actionRollSucceeded,
+        bool succeeded,
+        float referencePrice = 0f,
+        float referenceUnitCost = 0f,
+        DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult plannedNpcSale = null,
+        DailyV1SelectedActionExecutionStage.SelectedPlannedMarketSaleActionResult plannedMarketSale = null,
+        DailyV1SelectedActionExecutionStage.SelectedOpenMarketActionResult openMarket = null,
+        DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult crossCityBuy = null,
+        DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult soloTravel = null,
+        DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult fleeCity = null,
+        DailyV1SelectedActionExecutionStage.SelectedGuardArrestActionResult guardArrest = null,
+        DailyV1SelectedStealActionExecutionStage.Result steal = null,
+        DailyV1SelectedCrimeActionExecutionStage.Result crime = null,
+        string normalActionName = null,
+        string normalActionLogText = null)
+    {
+        Kind = kind;
+        ActionRollSucceeded = actionRollSucceeded;
+        Succeeded = succeeded;
+        ReferencePrice = referencePrice;
+        ReferenceUnitCost = referenceUnitCost;
+        NormalActionName = normalActionName;
+        NormalActionLogText = normalActionLogText;
+        PlannedNpcSale = plannedNpcSale;
+        PlannedMarketSale = plannedMarketSale;
+        OpenMarket = openMarket;
+        CrossCityBuy = crossCityBuy;
+        SoloTravel = soloTravel;
+        FleeCity = fleeCity;
+        GuardArrest = guardArrest;
+        Steal = steal;
+        Crime = crime;
+    }
+}
+
+/// <summary>
+/// Owns dispatch for selected Daily-v1 Normal, Travel and Merchant action
+/// slots already supported by Core. Unmigrated provider families remain
+/// explicitly unhandled for the existing host-provider path.
+/// </summary>
+internal static class DailyV1SelectedActionDispatchStage
+{
+    internal static bool TryDispatch(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        IAuthoritativeRandomSource randomSource,
+        long currentAbsoluteDay,
+        IDailyV1SelectedActionDispatchBoundary boundary,
+        out DailyV1SelectedActionDispatchResult result)
+    {
+        result = null;
+        if (graph == null || actor == null || currentAbsoluteDay < 0L
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(graph.Definitions, actor.Definitions))
+            return false;
+
+        DailyV1NpcActionSlotOwner slot = actor.ActionSlot;
+        DailyV1ActionDefinition action = slot?.CurrentAction;
+        DailyV1NpcActionPayloadOwner payload = slot?.CurrentPayload;
+        int actionType = action?.Values.actionType?.Value ?? int.MinValue;
+        if (action == null)
+            return false;
+
+        if (payload == null || !ReferenceEquals(payload.Action, action))
+        {
+            if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue)
+            {
+                result = RejectedSelectedFleeCity(payload?.TargetCityRuntimeId);
+                return true;
+            }
+            if (IsSelectedMerchantAction(actionType))
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
+            return false;
+        }
+
+        if (actionType == DailyV1NpcDefinitionRules.NormalActionTypeValue)
+        {
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.Normal,
+                true,
+                true,
+                normalActionName: DailyV1NpcDefinitionRules.GetActionName(graph.Definitions, action),
+                normalActionLogText: DailyV1NpcDefinitionRules.GetNormalActionLogText(graph.Definitions, action));
+            return true;
+        }
+
+        if (randomSource == null || boundary == null)
+        {
+            if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue)
+            {
+                result = RejectedSelectedFleeCity(payload.TargetCityRuntimeId);
+                return true;
+            }
+            if (IsSelectedMerchantAction(actionType))
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
+            return false;
+        }
+
+        if (actionType == DailyV1NpcDefinitionRules.TravelActionTypeValue)
+        {
+            if (payload.TargetNpcRuntimeId != null || payload.TargetItem != null
+                || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+                || !boundary.TryGetSoloTravelBoundary(actor, action,
+                    out DailyV1SelectedActionExecutionStage.ISelectedSoloTravelActionBoundary travelBoundary)
+                || travelBoundary == null)
+                return false;
+
+            if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedSoloTravelActionSlot(
+                    graph, actor, action, randomSource, currentAbsoluteDay,
+                    travelBoundary,
+                    out DailyV1SelectedActionExecutionStage.SelectedSoloTravelActionResult travel))
+                return false;
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.SoloTravel,
+                travel?.ActionRollSucceeded == true,
+                travel?.Succeeded == true,
+                soloTravel: travel);
+            return true;
+        }
+
+        if (actionType == DailyV1NpcDefinitionRules.FleeCityActionTypeValue)
+        {
+            if (payload.TargetNpcRuntimeId != null || payload.TargetItem != null
+                || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+                || !boundary.TryGetFleeCityActionBoundary(actor, action,
+                    out DailyV1SelectedActionExecutionStage.ISelectedFleeCityActionBoundary fleeBoundary)
+                || fleeBoundary == null)
+            {
+                result = RejectedSelectedFleeCity(payload.TargetCityRuntimeId);
+                return true;
+            }
+
+            if (!DailyV1SelectedActionExecutionStage.TryRollCurrentActionSlot(
+                    graph, actor, randomSource, currentAbsoluteDay, out bool actionRollSucceeded))
+            {
+                result = RejectedSelectedFleeCity(payload.TargetCityRuntimeId);
+                return true;
+            }
+            if (!actionRollSucceeded)
+            {
+                result = new DailyV1SelectedActionDispatchResult(
+                    DailyV1SelectedActionDispatchKind.FleeCity, false, false,
+                    fleeCity: new DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult(
+                        false, payload.TargetCityRuntimeId, 0f));
+                return true;
+            }
+
+            DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult fleeResult = null;
+            bool fleeSucceeded = fleeBoundary.ExecuteWithinOperation(() =>
+            {
+                if (!DailyV1SelectedActionExecutionStage.TryPrepareSelectedFleeCityPlan(
+                        graph, actor, action,
+                        out DailyV1SelectedActionExecutionStage.SelectedFleeCityPlan plan)
+                    || plan == null
+                    || !fleeBoundary.CanPrepareTravelPlanProjection(
+                        actor, plan.Destination, plan.TravelCost, payload.OriginDecisionId)
+                    || !graph.TryCommitSelectedFleeCityTravelPlan(
+                        actor, plan.Destination, plan.TravelCost, payload.OriginDecisionId,
+                        fleeBoundary.CanAdmitTravelPlanMutation,
+                        () => fleeBoundary.PublishCommittedTravelPlan(
+                            actor, plan.Destination, plan.TravelCost, payload.OriginDecisionId),
+                        out _))
+                    return false;
+
+                fleeResult = new DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult(
+                    true, plan.Destination.RuntimeId, plan.TravelCost);
+                return true;
+            });
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.FleeCity,
+                true,
+                fleeSucceeded,
+                fleeCity: fleeResult ?? new DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult(
+                    false, payload.TargetCityRuntimeId, 0f));
+            return true;
+        }
+
+        if (actionType == DailyV1NpcDefinitionRules.ArrestActionTypeValue)
+        {
+            if (payload.TargetItem != null || payload.TargetCityRuntimeId != null
+                || !boundary.TryGetGuardArrestActionBoundary(actor, action,
+                    out DailyV1SelectedActionExecutionStage.ISelectedGuardArrestActionBoundary arrestBoundary)
+                || arrestBoundary == null)
+                return false;
+
+            if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedGuardArrestActionSlot(
+                    graph, actor, action, randomSource, currentAbsoluteDay, arrestBoundary,
+                    out bool actionRollSucceeded,
+                    out DailyV1SelectedActionExecutionStage.SelectedGuardArrestActionResult arrest))
+                return false;
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.GuardArrest,
+                actionRollSucceeded,
+                actionRollSucceeded && arrest?.Succeeded == true,
+                guardArrest: arrest);
+            return true;
+        }
+
+        if (actionType == DailyV1NpcDefinitionRules.StealActionTypeValue)
+        {
+            if (payload.TargetNpcRuntimeId == null || payload.TargetItem != null
+                || payload.TargetCityRuntimeId != null
+                || !boundary.TryGetStealActionBoundary(actor, action,
+                    out DailyV1SelectedStealActionExecutionStage.ISelectedStealActionBoundary stealBoundary)
+                || stealBoundary == null)
+                return false;
+
+            if (!DailyV1SelectedStealActionExecutionStage.TryExecuteSelectedStealActionSlot(
+                    graph, actor, action, randomSource, currentAbsoluteDay, stealBoundary,
+                    out bool actionRollSucceeded,
+                    out DailyV1SelectedStealActionExecutionStage.Result steal))
+                return false;
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.Steal,
+                actionRollSucceeded,
+                actionRollSucceeded && steal?.Succeeded == true,
+                steal: steal);
+            return true;
+        }
+
+        if (actionType == DailyV1NpcDefinitionRules.HideActionTypeValue
+            || actionType == DailyV1NpcDefinitionRules.EscapePrisonActionTypeValue)
+        {
+            if (payload.TargetNpcRuntimeId != null || payload.TargetItem != null
+                || payload.TargetCityRuntimeId != null || payload.Amount != 0
+                || !boundary.TryGetCrimeActionBoundary(actor, action,
+                    out DailyV1SelectedCrimeActionExecutionStage.ISelectedCrimeActionBoundary crimeBoundary)
+                || crimeBoundary == null
+                || !DailyV1SelectedCrimeActionExecutionStage.TryExecuteSelectedActionSlot(
+                    graph, actor, action, randomSource, currentAbsoluteDay,
+                    crimeBoundary, out DailyV1SelectedCrimeActionExecutionStage.Result crime))
+                return false;
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.Crime,
+                crime.ActionRollSucceeded,
+                crime.Succeeded,
+                crime: crime);
+            return true;
+        }
+
+        if (!IsSelectedMerchantAction(actionType))
+            return false;
+
+        bool activeMerchantPlan = actor.MerchantTradePlan?.IsActive == true;
+        bool plannedNpcSaleWithoutCityTarget =
+            actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            && activeMerchantPlan
+            && !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+            && payload.TargetCityRuntimeId == null;
+        if (payload.TargetItem == null || payload.Amount <= 0
+            || (string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+                && !plannedNpcSaleWithoutCityTarget)
+            || actor.Travel == null || actor.Travel.IsTraveling
+            || string.IsNullOrWhiteSpace(actor.Travel.CurrentCityRuntimeId))
+        {
+            result = RejectedSelectedMerchantAction(actor, actionType, payload);
+            return true;
+        }
+        if (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            && activeMerchantPlan && payload.TargetNpcRuntimeId != null)
+        {
+            DailyV1NpcRuntimeOwners buyer = FindExactNpc(graph, payload.TargetNpcRuntimeId);
+            if (buyer == null
+                || !boundary.TryGetNpcTradeBoundary(actor, buyer,
+                    out IDailyV1SelectedNpcTradeBoundary tradeBoundary)
+                || !boundary.TryGetMarketBoundaries(actor,
+                    out IDailyV1SelectedOpenMarketSaleBoundary marketBoundary, out _))
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
+
+            float referencePrice = actor.MerchantTradePlan.PurchasePricePerItem;
+            if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedPlannedNpcSaleActionSlot(
+                    graph, actor, buyer, action, randomSource, currentAbsoluteDay,
+                    tradeBoundary, marketBoundary,
+                    () => boundary.CanAdmitMerchantPlanMutation(actor),
+                    () => boundary.PublishMerchantPlanMutation(actor),
+                    out DailyV1SelectedActionExecutionStage.SelectedPlannedNpcSaleActionResult sale))
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.PlannedNpcSale,
+                sale?.ActionRollSucceeded == true,
+                sale?.ActionRollSucceeded == true && sale.Succeeded,
+                referencePrice: referencePrice,
+                plannedNpcSale: sale);
+            return true;
+        }
+
+        if (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            && activeMerchantPlan)
+        {
+            if (payload.TargetNpcRuntimeId != null
+                || !string.Equals(payload.TargetCityRuntimeId,
+                    actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+                || !boundary.TryGetMarketBoundaries(actor,
+                    out IDailyV1SelectedOpenMarketSaleBoundary marketBoundary, out _))
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
+
+            float referencePrice = actor.MerchantTradePlan.PurchasePricePerItem;
+            if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedPlannedMarketSaleActionSlot(
+                    graph, actor, action, randomSource, currentAbsoluteDay,
+                    marketBoundary,
+                    () => boundary.CanAdmitMerchantPlanMutation(actor),
+                    () => boundary.PublishMerchantPlanMutation(actor),
+                    out DailyV1SelectedActionExecutionStage.SelectedPlannedMarketSaleActionResult sale))
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.PlannedMarketSale,
+                sale?.ActionRollSucceeded == true,
+                sale?.ActionRollSucceeded == true && sale.Succeeded,
+                referencePrice: referencePrice,
+                plannedMarketSale: sale);
+            return true;
+        }
+
+        if (payload.TargetNpcRuntimeId != null)
+        {
+            result = RejectedSelectedMerchantAction(actor, actionType, payload);
+            return true;
+        }
+        if (!boundary.TryGetMarketBoundaries(actor,
+            out IDailyV1SelectedOpenMarketSaleBoundary saleBoundary,
+            out IDailyV1SelectedOpenMarketPurchaseBoundary purchaseBoundary))
+        {
+            result = RejectedSelectedMerchantAction(actor, actionType, payload);
+            return true;
+        }
+
+        if (string.Equals(payload.TargetCityRuntimeId,
+                actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal))
+        {
+            float referenceUnitCost = actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+                ? actor.Inventory?.GetAverageUnitCost(payload.TargetItem) ?? 0f
+                : 0f;
+            if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedOpenMarketActionSlot(
+                    graph, actor, action, randomSource, currentAbsoluteDay,
+                    saleBoundary, purchaseBoundary,
+                    out DailyV1SelectedActionExecutionStage.SelectedOpenMarketActionResult market))
+            {
+                result = RejectedSelectedMerchantAction(actor, actionType, payload);
+                return true;
+            }
+
+            result = new DailyV1SelectedActionDispatchResult(
+                DailyV1SelectedActionDispatchKind.OpenMarket,
+                market?.ActionRollSucceeded == true,
+                market?.ActionRollSucceeded == true && market.Succeeded,
+                referenceUnitCost: referenceUnitCost,
+                openMarket: market);
+            return true;
+        }
+
+        if (actionType != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue)
+        {
+            result = RejectedSelectedMerchantAction(actor, actionType, payload);
+            return true;
+        }
+
+        Func<Func<bool>, bool> executeWithinP12Operation = null;
+        if (boundary is IDailyV1SelectedCrossCityBuyP12OperationBoundary coreOperationBoundary)
+            executeWithinP12Operation = operation =>
+                coreOperationBoundary.ExecutePlanMutationsWithinCrossCityBuyP12Operation(actor, operation);
+
+        if (!DailyV1SelectedActionExecutionStage.TryExecuteSelectedCrossCityBuyActionSlot(
+                graph, actor, action, randomSource, currentAbsoluteDay,
+                purchaseBoundary,
+                () => boundary.CanAdmitMerchantPlanMutation(actor),
+                () => boundary.PublishMerchantPlanMutation(actor),
+                () => boundary.CanAdmitTradeTravelPlanMutation(actor),
+                () => boundary.PublishTradeTravelPlanMutation(actor),
+                executeWithinP12Operation,
+                out DailyV1SelectedActionExecutionStage.SelectedCrossCityBuyActionResult crossCityBuy))
+        {
+            result = RejectedSelectedMerchantAction(actor, actionType, payload);
+            return true;
+        }
+
+        result = new DailyV1SelectedActionDispatchResult(
+            DailyV1SelectedActionDispatchKind.CrossCityBuy,
+            crossCityBuy?.ActionRollSucceeded == true,
+            crossCityBuy?.ActionRollSucceeded == true && crossCityBuy.Purchase?.Succeeded == true,
+            crossCityBuy: crossCityBuy);
+        boundary.CompleteCrossCityBuy(actor, crossCityBuy?.Purchase);
+        return true;
+    }
+
+    private static DailyV1SelectedActionDispatchResult RejectedSelectedFleeCity(
+        string destinationCityRuntimeId) => new DailyV1SelectedActionDispatchResult(
+            DailyV1SelectedActionDispatchKind.FleeCity,
+            false,
+            false,
+            fleeCity: new DailyV1SelectedActionExecutionStage.SelectedFleeCityActionResult(
+                false, destinationCityRuntimeId, 0f));
+
+    private static bool IsSelectedMerchantAction(int actionType) =>
+        actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+        || actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue;
+
+    private static DailyV1SelectedActionDispatchResult RejectedSelectedMerchantAction(
+        DailyV1NpcRuntimeOwners actor,
+        int actionType,
+        DailyV1NpcActionPayloadOwner payload)
+    {
+        DailyV1SelectedActionDispatchKind kind = DailyV1SelectedActionDispatchKind.OpenMarket;
+        if (actionType == DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
+            && !string.IsNullOrWhiteSpace(payload?.TargetCityRuntimeId)
+            && !string.Equals(payload.TargetCityRuntimeId,
+                actor?.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal))
+        {
+            kind = DailyV1SelectedActionDispatchKind.CrossCityBuy;
+        }
+        else if (actionType == DailyV1NpcDefinitionRules.SellGoodsActionTypeValue
+            && actor?.MerchantTradePlan?.IsActive == true)
+        {
+            kind = payload?.TargetNpcRuntimeId != null
+                ? DailyV1SelectedActionDispatchKind.PlannedNpcSale
+                : DailyV1SelectedActionDispatchKind.PlannedMarketSale;
+        }
+
+        return new DailyV1SelectedActionDispatchResult(kind, false, false);
+    }
+
+    private static DailyV1NpcRuntimeOwners FindExactNpc(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        string runtimeId)
+    {
+        foreach (DailyV1NpcRuntimeOwners candidate in graph.Npcs)
+            if (candidate != null
+                && string.Equals(candidate.RuntimeId, runtimeId, StringComparison.Ordinal))
+                return graph.ContainsExactNpcOwner(candidate) ? candidate : null;
+        return null;
+    }
+}

@@ -48,6 +48,23 @@ public sealed class NpcMerchantTradeStateRuntime
         return false;
     }
 
+    internal bool TryResolve(NpcRuntime actor, string operationIdentity,
+        string descriptorFingerprint, out NpcMerchantTradeStateReceipt receipt)
+    {
+        receipt = null;
+        DailyV1NpcRuntimeOwners selectedOwner = actor?.SelectedRuntimeOwners;
+        if (selectedOwner == null)
+            return TryResolve(operationIdentity, descriptorFingerprint, out receipt);
+        if (!selectedOwner.MerchantTradeStateReceipts.TryResolve(
+                operationIdentity, descriptorFingerprint,
+                out DailyV1NpcMerchantTradeStateReceipt coreReceipt)) return false;
+        receipt = new NpcMerchantTradeStateReceipt(coreReceipt.OperationIdentity,
+            coreReceipt.DescriptorFingerprint, coreReceipt.ActorRuntimeId,
+            coreReceipt.PersonId, coreReceipt.OwnerRevisionBefore,
+            coreReceipt.OwnerRevisionAfter);
+        return true;
+    }
+
     internal bool TryPrepareInstall(NpcRuntime actor, string operationIdentity,
         string descriptorFingerprint, MerchantTradePlanState expectedPlan,
         NpcTravelPlanState expectedTravelPlan, MerchantTradePlanState nextPlan,
@@ -55,6 +72,37 @@ public sealed class NpcMerchantTradeStateRuntime
         out IBoundaryContinuationStepCommit prepared)
     {
         prepared = null;
+        DailyV1NpcRuntimeOwners selectedOwner = actor?.SelectedRuntimeOwners;
+        if (selectedOwner != null)
+        {
+            DailyV1SelectedRuntimeOwnerGraph graph = actor.SelectedRuntimeOwnerGraph;
+            if (graph == null
+                || !actor.MerchantTradePlan.TryCreateCoreReceiptState(expectedPlan,
+                    out DailyV1MerchantTradePlanReceiptState coreExpectedPlan)
+                || !actor.MerchantTradePlan.TryCreateCoreReceiptState(nextPlan,
+                    out DailyV1MerchantTradePlanReceiptState coreNextPlan)
+                || !actor.TravelPlan.TryCreateCoreReceiptState(graph, expectedTravelPlan,
+                    out DailyV1NpcTravelPlanReceiptState coreExpectedTravelPlan)
+                || !actor.TravelPlan.TryCreateCoreReceiptState(graph, nextTravelPlan,
+                    out DailyV1NpcTravelPlanReceiptState coreNextTravelPlan)) return false;
+
+            Func<bool> canAdmit = () => actor.MerchantTradePlan.CanInstallOwnerState(nextPlan)
+                && actor.TravelPlan.CanInstallOwnerState(nextTravelPlan);
+            Action<bool, bool> publishCommitted = (planChanged, travelPlanChanged) =>
+            {
+                if (planChanged) actor.MerchantTradePlan.PublishSelectedPlanOwnerMutation();
+                if (travelPlanChanged) actor.TravelPlan.PublishCommittedOwnerState(nextTravelPlan);
+            };
+            if (!selectedOwner.MerchantTradeStateReceipts.TryPrepareInstall(graph,
+                    selectedOwner, actor.PersonId != null ? actor.PersonId.Value : string.Empty,
+                    operationIdentity, descriptorFingerprint, coreExpectedPlan,
+                    coreExpectedTravelPlan, coreNextPlan, coreNextTravelPlan,
+                    canAdmit, publishCommitted,
+                    out DailyV1NpcMerchantTradeStateReceiptCommit corePrepared)) return false;
+            prepared = corePrepared;
+            return true;
+        }
+
         if (actor == null || string.IsNullOrWhiteSpace(actor.RuntimeId)
             || string.IsNullOrWhiteSpace(operationIdentity)
             || string.IsNullOrWhiteSpace(descriptorFingerprint)) return false;

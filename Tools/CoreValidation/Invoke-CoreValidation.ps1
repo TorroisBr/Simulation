@@ -33,9 +33,14 @@ $projectAssets = @(
 )
 if (-not $SkipLab) { $projectAssets += 'tools/Simulation.Lab/obj/project.assets.json' }
 $records = [System.Collections.Generic.List[object]]::new()
+$inputProjects = @(
+    'tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj',
+    'tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj'
+)
+if (-not $SkipLab) { $inputProjects += 'tools/Simulation.Lab/Simulation.Lab.csproj' }
 
 function Invoke-Dotnet {
-    param([string]$Name, [string[]]$Arguments, [string]$RuntimeTraceDirectory)
+    param([string]$Name, [string[]]$Arguments)
     $logPath = Join-Path $runDirectory ($Name + '.log')
     $watch = [Diagnostics.Stopwatch]::StartNew()
     # Keep CLI headings stable across host locales. Test cases still exercise
@@ -55,12 +60,6 @@ function Invoke-Dotnet {
         [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACE', $null, 'Process')
         [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACEFILE', $null, 'Process')
         [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACE_VERBOSITY', $null, 'Process')
-        if ($RuntimeTraceDirectory) {
-            if (-not (Test-Path -LiteralPath $RuntimeTraceDirectory -PathType Container)) { throw 'Runtime trace output directory must exist before the test gate starts.' }
-            [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACE', '1', 'Process')
-            [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACEFILE', $RuntimeTraceDirectory, 'Process')
-            [Environment]::SetEnvironmentVariable('DOTNET_HOST_TRACE_VERBOSITY', '4', 'Process')
-        }
         $output = @(& dotnet @Arguments 2>&1 | ForEach-Object { $_.ToString() })
         $exitCode = $LASTEXITCODE
     } finally {
@@ -102,7 +101,7 @@ function Get-GeneratedInputSnapshot {
 }
 
 try {
-    $beforeInputs = Get-CoreInputSnapshot -ProjectRoot $root
+    $beforeInputs = Get-CoreInputSnapshot -ProjectRoot $root -ProjectPaths $inputProjects
     $sdkRecord = Invoke-Dotnet -Name 'sdk-version' -Arguments @('--version')
     Assert-CommandPassed $sdkRecord
     $sdkVersion = ($sdkRecord.output | Select-Object -Last 1).Trim()
@@ -141,7 +140,11 @@ try {
     $testAssemblyPath = Join-Path $root 'tests/Simulation.Core.Tests/bin/Release/net8.0/Simulation.Core.Tests.dll'
     $coldRuntimeTraceDirectory = Join-Path $runDirectory 'cold-runtime-selection'
     $null = Set-ProtectedEvidenceDirectory -Path $coldRuntimeTraceDirectory
-    $coldTest = Invoke-Dotnet -Name 'cold-test' -Arguments @('test', $testProject, '--no-restore', '--configuration', 'Release', '--logger', 'trx;LogFileName=CoreTests-cold.trx', '--results-directory', $runDirectory) -RuntimeTraceDirectory $coldRuntimeTraceDirectory
+    $coldTraceSettingsPath = Join-Path $runDirectory 'cold-testhost.runsettings'
+    $coldTraceFilePath = Join-Path $coldRuntimeTraceDirectory 'testhost-runtime-selection.log'
+    $coldTraceSettings = New-CoreHostTraceRunSettings -Path $coldTraceSettingsPath -TraceFilePath $coldTraceFilePath -SdkVersion $sdkVersion
+    $null = Assert-ProtectedEvidenceFile -Path $coldTraceSettingsPath -ProtectedRoot $runDirectory
+    $coldTest = Invoke-Dotnet -Name 'cold-test' -Arguments @('test', $testProject, '--no-restore', '--configuration', 'Release', '--logger', 'trx;LogFileName=CoreTests-cold.trx', '--results-directory', $runDirectory, '--settings', $coldTraceSettingsPath)
     $coldRuntimeSelection = Get-CoreRuntimeSelectionTrace -TraceDirectory $coldRuntimeTraceDirectory -TestAssemblyPath $testAssemblyPath
     $coldTrxPath = Join-Path $runDirectory 'CoreTests-cold.trx'
     $coldAssessment = Get-CoreTrxAssessment -Path $coldTrxPath -ExpectedTests $expectedTests.ToArray()
@@ -149,7 +152,11 @@ try {
 
     $warmRuntimeTraceDirectory = Join-Path $runDirectory 'warm-runtime-selection'
     $null = Set-ProtectedEvidenceDirectory -Path $warmRuntimeTraceDirectory
-    $warmTest = Invoke-Dotnet -Name 'warm-test' -Arguments @('test', $testProject, '--no-build', '--no-restore', '--configuration', 'Release', '--logger', 'trx;LogFileName=CoreTests-warm.trx', '--results-directory', $runDirectory) -RuntimeTraceDirectory $warmRuntimeTraceDirectory
+    $warmTraceSettingsPath = Join-Path $runDirectory 'warm-testhost.runsettings'
+    $warmTraceFilePath = Join-Path $warmRuntimeTraceDirectory 'testhost-runtime-selection.log'
+    $warmTraceSettings = New-CoreHostTraceRunSettings -Path $warmTraceSettingsPath -TraceFilePath $warmTraceFilePath -SdkVersion $sdkVersion
+    $null = Assert-ProtectedEvidenceFile -Path $warmTraceSettingsPath -ProtectedRoot $runDirectory
+    $warmTest = Invoke-Dotnet -Name 'warm-test' -Arguments @('test', $testProject, '--no-build', '--no-restore', '--configuration', 'Release', '--logger', 'trx;LogFileName=CoreTests-warm.trx', '--results-directory', $runDirectory, '--settings', $warmTraceSettingsPath)
     $warmRuntimeSelection = Get-CoreRuntimeSelectionTrace -TraceDirectory $warmRuntimeTraceDirectory -TestAssemblyPath $testAssemblyPath
     $warmTrxPath = Join-Path $runDirectory 'CoreTests-warm.trx'
     $warmAssessment = Get-CoreTrxAssessment -Path $warmTrxPath -ExpectedTests $expectedTests.ToArray()
@@ -201,7 +208,7 @@ try {
     $generatedAfter = Get-GeneratedInputSnapshot -Paths $projectAssets
     $generatedComparison = Compare-CoreInputSnapshots -Before $generatedBefore -After $generatedAfter
     if (-not $generatedComparison.stable) { throw "Generated dependency inputs changed during validation: $($generatedComparison.changedPaths -join ', ')" }
-    $afterInputs = Get-CoreInputSnapshot -ProjectRoot $root
+    $afterInputs = Get-CoreInputSnapshot -ProjectRoot $root -ProjectPaths $inputProjects
     $inputComparison = Compare-CoreInputSnapshots -Before $beforeInputs -After $afterInputs
     if (-not $inputComparison.stable) { throw "Validation inputs changed during execution: $($inputComparison.changedPaths -join ', ')" }
 
@@ -246,8 +253,8 @@ try {
         inputs = [ordered]@{ digest = $inputComparison.afterDigest; stable = $inputComparison.stable; files = $afterInputs; generatedDependencies = $generatedAfter; generatedDependenciesStable = $generatedComparison.stable }
         testDiscovery = [ordered]@{ count = $expectedTests.Count; cases = $expectedTests.ToArray() }
         runtimeSelectionTraces = @(
-            [ordered]@{ gateLabel = 'cold'; runnerRunId = $runId; path = $coldRuntimeSelection.path; bytes = $coldRuntimeSelection.bytes; sha256 = $coldRuntimeSelection.sha256; selectedClr = $coldRuntimeSelection.selectedClr },
-            [ordered]@{ gateLabel = 'warm'; runnerRunId = $runId; path = $warmRuntimeSelection.path; bytes = $warmRuntimeSelection.bytes; sha256 = $warmRuntimeSelection.sha256; selectedClr = $warmRuntimeSelection.selectedClr }
+            [ordered]@{ gateLabel = 'cold'; runnerRunId = $runId; path = $coldRuntimeSelection.path; bytes = $coldRuntimeSelection.bytes; sha256 = $coldRuntimeSelection.sha256; selectedClr = $coldRuntimeSelection.selectedClr; runSettings = 'cold-testhost.runsettings'; runSettingsBytes = $coldTraceSettings.bytes; runSettingsSha256 = $coldTraceSettings.sha256 },
+            [ordered]@{ gateLabel = 'warm'; runnerRunId = $runId; path = $warmRuntimeSelection.path; bytes = $warmRuntimeSelection.bytes; sha256 = $warmRuntimeSelection.sha256; selectedClr = $warmRuntimeSelection.selectedClr; runSettings = 'warm-testhost.runsettings'; runSettingsBytes = $warmTraceSettings.bytes; runSettingsSha256 = $warmTraceSettings.sha256 }
         )
         gates = $gates
         storage = [ordered]@{ worktreeLibraryAbsent = $libraryAbsent; projectBinObjBytes = $storage; resultBytes = [long]((Get-ChildItem -LiteralPath $runDirectory -File | Measure-Object -Property Length -Sum).Sum) }

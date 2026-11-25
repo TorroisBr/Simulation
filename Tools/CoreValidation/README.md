@@ -50,13 +50,30 @@ explicit private evidence directory supplied by the operator). Review their
 actual contents before publication. This tool does not strip or normalize TRX.
 The manifest records relative source identities, hashes, command arguments,
 test cases, outcomes, available durations, toolchain, elapsed times, build
-storage and generated dependency-input hashes. Keep the private source copy and
-the exact input-identifying manifest together during review.
+storage and generated dependency-input hashes. Before each run, the runner asks
+the pinned MSBuild SDK to evaluate the `Compile` and `ProjectReference` items
+for every project it builds, recursively hashes the repository-contained source
+inputs, and verifies the same snapshot afterward. This binds linked Core files
+and transitive project source that are not present in a hand-maintained source
+list. Generated `bin`/`obj` compile outputs are excluded; project files,
+tracked build configuration, locked dependencies and generated asset snapshots
+remain bound separately. A compile input that resolves outside the repository,
+traverses a reparse point below the repository root, or is missing causes the
+run to stop rather than produce incomplete source
+evidence. Keep the private source copy and the exact input-identifying manifest
+together during review.
+
+The self-test evaluates a synthetic SDK project whose compile item reaches an
+external source through an in-repository `bin` junction. This verifies that
+generated-output exclusion cannot bypass source-path containment checks.
 
 The cold and warm test gates also retain separate private .NET host-trace files.
-Per-process `DOTNET_HOST_TRACE` output isolates the testhost trace so the selected CLR
-is bound to each test assembly runtime configuration.
-Trace paths stay inside the protected run directory and are never published.
+The runner writes SDK-specific host-trace settings into each isolated VSTest
+testhost through a per-gate runsettings file. TRACEFILE names a file inside the
+protected run directory. The runner binds the unique trace containing the exact
+test assembly runtime-configuration paths; process filenames vary by SDK launch
+mode. The settings file and selected trace hashes are retained in the private
+manifest. Neither is published.
 
 For the final .NET-only proof, invoke the Core runner from a sparse isolated
 worktree that contains the explicitly listed package/project/test/demo/tool

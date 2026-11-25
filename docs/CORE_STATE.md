@@ -1028,3 +1028,28 @@ No profile or P12 scope is expanded. Full CORE-F remains
 `WAIT_DEPENDENCY` until this implementation, its detached .NET continuation,
 and all required validation are promoted; P13 and CORE-X readiness are not
 inferred.
+
+## CORE-F Daily-v1 host and continuation — promoted 2026-11-25
+
+CORE-F is **PROMOTED / DELIVERED within its accepted Daily-v1 scope**. The final implementation-and-evidence candidate `d5cee3655a280414e8187485d6f9597521c4df68` (tree `4c1ce38bd4992781eda265e1681e5ee48ae565da`) was fast-forwarded into `codex/core/canonical` from `a07402faa4739d0bb276d3bc4aa24e6ed7bd6cea`. The reviewed implementation is `a5d5504ab4c5fb1e8b26b61a6d3c6ca1ef533e4f` (tree `44ae90057f501fd154d7cf3d86cf20361e2a3191`); the later candidate changes are evidence and acceptance documentation only.
+
+The final exact-tip review of candidate `d5cee3655a280414e8187485d6f9597521c4df68` / tree `4c1ce38bd4992781eda265e1681e5ee48ae565da` passed with no findings. It verified the reviewed implementation remained unchanged, package hashes and report result counts, source-snapshot applicability, process-separated continuation parity, and the recorded test assertions.
+
+Acceptance evidence is recorded in [`CORE-F Final Acceptance Evidence Reconciliation`](validation/CORE_F_FinalAcceptance_20261125_HostParityFinal/VALIDATION.md):
+
+- Official pinned .NET CoreValidation cold and warm: **1,212/1,212 PASS** each, bound to source `a5d5504` / tree `44ae900`; the worktree had no Unity Library. The verified package manifest SHA-256 is `a5b960dc6fc5fbb477bd152b5910ed99d07eea581075483708491896c8d0c5e8`, and its archive SHA-256 is `9fbbd73acf197aa3aea4987d60765076b890702b41cff3228f91b60d5dbbc0e0`.
+- Unity 6000.3.9f1 ALL EditMode: **3,327/3,327 PASS**; LongRun **7/7 PASS** within that run. The final report manifest SHA-256 is `dc17c05b69e1ab69374f06e8a93431a9966cb07d115eeb68ba466bc9cdbe9c2f`, and its archive SHA-256 is `63376e575dfddbf7ba71effa9b9ed9c797396273b2235d819b0e612763bccc53`.
+- Official Smoke: **5/5 PASS**. The original filtered Smoke XML and log remain unchanged in protected storage. The filtered XML aggregate-count packaging anomaly is explicitly recorded as reconciled under the accepted CORE-B/CORE-C treatment; all five identified Smoke cases have individual passing results in the final ALL EditMode report. No synthetic or rewritten original report was used.
+- The separately process-launched P12 continuation restores and advances T+1/T+2 consistently with the uninterrupted control. Restored mutation-epoch parity is `87 + 92 + 80 = 259`.
+
+The promotion delivers the accepted selected Daily-v1 application, persistence/restoration, and deterministic continuation contract only. It does not establish P13 historical-fork readiness, CORE-X compatibility, broader profiles, or readiness of the separately gated Simulation Lab observation workstream. Existing numbered-phase State and canonical branches are unchanged.
+
+### Post-promotion LAB-OBS-A reassessment — WAIT_DEPENDENCY (2026-11-25)
+
+The reviewed LAB-OBS-A design remains implementation-gated after CORE-F promotion. Its current architecture/source handoff is recorded on `codex/architecture/world-identity-projection` at `1ad2835524fe135c87eeca13f15cd16d4d9cb303`; the technical design requires a promoted suitable Core host, approved official selected-content inputs, and reader-admission/writer-isolation revalidation on that host.
+
+CORE-F now supplies a real Core-owned .NET application and a process-separated verification host. The promoted `Tools/Simulation.Core.DailyV1ProcessHost` is not the official Lab observation path: its project links `DailyV1CapturedSelectedContentFixture` from the test tree, and it exercises genesis/restore, advance, and persistence rather than publishing factual observation cuts. The existing `tools/Simulation.Lab` remains the bounded finite-source scenario and does not hold a published Daily-v1 session. No `observe-daily` command, `DailyV1LabObservationRun`, or `DailyV1AtlasObservationReader` exists in promoted Core.
+
+Remaining LAB-OBS-A dependencies are: a production-owned, promoted reference input provider for the admitted selected definitions; an official Lab adapter using the Core application and exact session; and a revalidated coherent read boundary that binds actual P8 geography/Hex-to-Location facts, the City roster/identity and anchor census, and the scoped Market stock rows/revisions to the same completed cut. The design also requires proving callback-free capture and exclusion of unscoped writers under the held runtime-advance reservation, plus the prescribed adjacent successful observations and a real nonzero stock delta. The current process-continuation/fingerprint evidence does not prove those observation-specific claims.
+
+Therefore LAB-OBS-A remains `WAIT_DEPENDENCY`; CORE-F promotion does not make it implementation-ready. No P8/City/Market contract or CORE-F scope is changed. ATLAS-B is not started and remains dependent on its own ATLAS-A promotion and actual LAB-OBS-A observations.

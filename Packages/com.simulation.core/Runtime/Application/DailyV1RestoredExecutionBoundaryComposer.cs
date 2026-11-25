@@ -1,0 +1,213 @@
+using System;
+using System.Collections.Generic;
+
+/// <summary>
+/// Builds the Core execution boundary for one already staged Daily-v1
+/// restoration. The Unity host supplies exact, unpublished owner instances;
+/// Core verifies their graph and binds the shared execution roots before the
+/// host constructs its runtime projection.
+/// </summary>
+internal static class DailyV1RestoredExecutionBoundaryComposer
+{
+    /// <summary>
+    /// Admits the exact staged P12-D owner instances and composes their shared
+    /// execution boundary as one Core-owned operation. The host may decode
+    /// persisted values and create compatibility projections, but it does not
+    /// choose owner order, validate cross-owner restore relationships, or
+    /// assemble the authoritative restored graph.
+    /// </summary>
+    internal static bool TryCreate(
+        DailyV1EffectiveDefinitions definitions,
+        EffectiveSimulationConfiguration effectiveConfiguration,
+        CalendarDefinition calendarDefinition,
+        SimulationTime simulationTime,
+        SimulationRuntimeAdmissionContext admissionContext,
+        WorldId worldId,
+        IReadOnlyList<DailyV1CityRuntimeOwners> cityOwners,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcOwners,
+        SpatialNetworkOwner spatialNetwork,
+        DailyV1JusticeRecordsOwner justiceRecords,
+        TravelPartyStore travelParties,
+        DailyV1RuntimeIdentityIndex runtimeIdentityIndex,
+        PersonStore personStore,
+        GenealogyStore genealogyStore,
+        ScheduledDirectiveStore directives,
+        ExpeditionStore expeditions,
+        RuntimeIdAllocator runtimeIdAllocator,
+        IAuthoritativeRandomSource randomSource,
+        SimulationRecordSequence recordSequence,
+        NpcDecisionStore decisionStore,
+        ActorChoiceStore actorChoiceStore,
+        out DailyV1ExecutionBoundaryState executionBoundaryState,
+        out SimulationCalendar calendar,
+        out string diagnostic,
+        PoliticalDecisionStore politicalDecisions = null,
+        P12ECoreOwnerRestoreStage p12EOwners = null)
+    {
+        executionBoundaryState = null;
+        calendar = null;
+        diagnostic = null;
+        if (calendarDefinition == null)
+        {
+            diagnostic = "The restored Core boundary requires the selected calendar definition.";
+            return false;
+        }
+
+        if (!DailyV1P12DSelectedOwnerGraphStager.TryCreate(
+                definitions,
+                cityOwners,
+                npcOwners,
+                spatialNetwork,
+                justiceRecords,
+                travelParties,
+                runtimeIdentityIndex,
+                personStore,
+                directives,
+                expeditions,
+                out DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+                out DailyV1P12DSelectedOwnerGraphFailure graphFailure)
+            || ownerGraph == null
+            || graphFailure != DailyV1P12DSelectedOwnerGraphFailure.None)
+        {
+            diagnostic = "Core rejected the exact staged P12 City/NPC owners or their cross-owner relationships.";
+            return false;
+        }
+
+        if (genealogyStore != null && !ownerGraph.TryBindGenealogyStore(genealogyStore))
+        {
+            diagnostic = "Core rejected the exact staged P12-D Genealogy owner.";
+            return false;
+        }
+
+        if (politicalDecisions == null
+            || (p12EOwners != null
+                && (!ReferenceEquals(politicalDecisions, p12EOwners.PoliticalDecisions)
+                    || !ownerGraph.TryBindP12EOwners(p12EOwners)))
+            || (p12EOwners == null
+                && !ownerGraph.TryBindPoliticalDecisionStore(politicalDecisions))
+            || !politicalDecisions.IsBoundToPersonStore(ownerGraph.PersonStore))
+        {
+            diagnostic = p12EOwners == null
+                ? "Core rejected the exact staged P12-E PoliticalDecision owner."
+                : "Core rejected the complete exact P12-E owner stage or its cross-owner bindings.";
+            return false;
+        }
+
+        SimulationCalendar candidateCalendar = new SimulationCalendar(calendarDefinition);
+        if (!TryCreate(
+                definitions,
+                effectiveConfiguration,
+                candidateCalendar,
+                simulationTime,
+                admissionContext,
+                worldId,
+                ownerGraph,
+                runtimeIdAllocator,
+                randomSource,
+                recordSequence,
+                decisionStore,
+                actorChoiceStore,
+                out DailyV1ExecutionBoundaryState candidateBoundary,
+                out diagnostic))
+            return false;
+
+        executionBoundaryState = candidateBoundary;
+        calendar = candidateCalendar;
+        return true;
+    }
+
+    internal static bool TryCreate(
+        DailyV1EffectiveDefinitions definitions,
+        EffectiveSimulationConfiguration effectiveConfiguration,
+        SimulationCalendar calendar,
+        SimulationTime simulationTime,
+        SimulationRuntimeAdmissionContext admissionContext,
+        WorldId worldId,
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+        RuntimeIdAllocator runtimeIdAllocator,
+        IAuthoritativeRandomSource randomSource,
+        SimulationRecordSequence recordSequence,
+        NpcDecisionStore decisionStore,
+        ActorChoiceStore actorChoiceStore,
+        out DailyV1ExecutionBoundaryState executionBoundaryState,
+        out string diagnostic)
+    {
+        executionBoundaryState = null;
+        diagnostic = null;
+        if (ownerGraph != null
+            && (ownerGraph.PoliticalDecisionStore == null
+                || ownerGraph.PersonStore == null
+                || !ownerGraph.PoliticalDecisionStore.IsBoundToPersonStore(ownerGraph.PersonStore)))
+        {
+            diagnostic = "Core rejected the restored graph without its exact P12-E PoliticalDecision owner.";
+            return false;
+        }
+
+        if (definitions == null
+            || effectiveConfiguration == null
+            || !ReferenceEquals(definitions.EffectiveConfiguration, effectiveConfiguration)
+            || calendar == null
+            || simulationTime == null
+            || admissionContext == null
+            || admissionContext.Profile != SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1
+            || !admissionContext.IsRestoredContinuation
+            || !admissionContext.IsOwnedByCurrentThread()
+            || worldId == null
+            || ownerGraph == null
+            || !ReferenceEquals(ownerGraph.Definitions, definitions)
+            || ownerGraph.Cities == null || ownerGraph.Cities.Count == 0
+            || ownerGraph.Npcs == null || ownerGraph.Npcs.Count == 0
+            || ownerGraph.SpatialNetwork == null
+            || ownerGraph.JusticeRecordsOwner == null
+            || ownerGraph.TravelParties == null
+            || ownerGraph.RuntimeIdentityIndex == null
+            || ownerGraph.PersonStore == null
+            || ownerGraph.ScheduledDirectives == null
+            || ownerGraph.Expeditions == null
+            || runtimeIdAllocator == null
+            || randomSource == null
+            || recordSequence == null
+            || decisionStore == null
+            || actorChoiceStore == null
+            || !ReferenceEquals(actorChoiceStore.PersonStore, ownerGraph.PersonStore))
+        {
+            diagnostic = "The restored Core boundary requires exact admitted definitions, selected owners, P12 roots, and owner-thread admission.";
+            return false;
+        }
+
+        DailyV1ExecutionBoundaryState candidate = new DailyV1ExecutionBoundaryState(
+            simulationTime,
+            admissionContext,
+            SimulationRuntimeCompositionProfile.Standard,
+            worldId);
+        if (!candidate.TryBindRuntimeConfiguration(effectiveConfiguration, calendar))
+        {
+            diagnostic = "Core rejected the restored configuration or calendar identity.";
+            return false;
+        }
+        if (!candidate.TryBindSelectedRuntimeOwnerGraph(ownerGraph))
+        {
+            diagnostic = "Core rejected the restored selected owner graph identity.";
+            return false;
+        }
+        if (!candidate.TryBindInitialSelectedRuntimeActorRosterFromOwnerGraph())
+        {
+            diagnostic = "Core rejected the restored owner graph actor roster.";
+            return false;
+        }
+        if (!candidate.TryBindSelectedRuntimeExecutionRoots(
+                runtimeIdAllocator, randomSource, recordSequence, decisionStore, actorChoiceStore))
+        {
+            diagnostic = "Core rejected the restored runtime execution roots.";
+            return false;
+        }
+        if (!candidate.HasAdmittedSelectedDailyExecution)
+        {
+            diagnostic = "Core rejected the restored selected daily execution admission.";
+            return false;
+        }
+
+        executionBoundaryState = candidate;
+        return true;
+    }
+}

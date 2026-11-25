@@ -1,0 +1,567 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using NUnit.Framework;
+
+public sealed class P12ECoreOwnerRestoreStagerTests
+{
+    [Test]
+    public void StagesCoreOwnerRootsInDependencyOrderAndPreservesExactReferences()
+    {
+        PersonStore persons = new PersonStore();
+        SpatialAuthorityStore spatialAuthority = new SpatialAuthorityStore();
+        SimulationTime stagedTime = new SimulationTime(4L);
+        RootFixture roots = CreateRoots("p12e-core-city", "p12e-core-person-backed", "p12e-core-legacy");
+        List<P12ECoreOwnerRestoreStep> order = new List<P12ECoreOwnerRestoreStep>();
+        Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
+            EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
+            EmptyPoliticalSupport(), EmptyPoliticalDecisions(), EmptyJustice(4L), EmptyMilitary(), EmptyConflict(), EmptyWar(),
+            EmptyBattle(), EmptyCrimeSocial(4L), stagedTime, false,
+            persons, spatialAuthority,
+            roots.Cities, roots.Npcs, 4L, order.Add,
+            out P12ECoreOwnerRestoreStage staged,
+            out P12ECoreOwnerRestoreFailure failure), Is.True, failure.ToString());
+
+        Assert.That(staged.Persons, Is.SameAs(persons));
+        Assert.That(staged.CrimeSocialAppraisal, Is.Not.Null);
+        Assert.That(staged.CrimeSocialAppraisal.PersonStore, Is.SameAs(persons));
+        Assert.That(staged.CrimeSocialAppraisal.InstitutionStore, Is.SameAs(staged.Institutions));
+        Assert.That(staged.CrimeSocialAppraisal.SimulationTime, Is.SameAs(stagedTime));
+        Assert.That(staged.CrimeSocialAppraisal.TheftOutcomes.Count, Is.Zero);
+        Assert.That(staged.CrimeSocialAppraisal.CrimeKnowledge.P12CensusRevision, Is.Zero);
+        Assert.That(staged.CrimeSocialAppraisal.SocialReactions.P12CensusRevision, Is.Zero);
+        Assert.That(staged.Offices.InstitutionStoreForWorldBoundary, Is.SameAs(staged.Institutions));
+        Assert.That(staged.PropertyOwnership.PersonStoreForWorldBoundary, Is.SameAs(persons));
+        Assert.That(staged.Institutions.Revision, Is.Zero);
+        Assert.That(staged.Offices.Revision, Is.Zero);
+        Assert.That(staged.PropertyOwnership.Revision, Is.Zero);
+        Assert.That(staged.Factions.Revision, Is.Zero);
+        Assert.That(staged.PoliticalClaims.Revision, Is.Zero);
+        Assert.That(staged.PoliticalSupport.Count, Is.Zero);
+        Assert.That(staged.PoliticalSupport.Revision, Is.Zero);
+        Assert.That(staged.PoliticalDecisions.Count, Is.Zero);
+        Assert.That(staged.PoliticalDecisions.Revision, Is.Zero);
+        Assert.That(staged.JusticeRecords, Is.Not.Null);
+        Assert.That(staged.JusticeRecords.WantedRecords, Is.Empty);
+        Assert.That(staged.JusticeRecords.Sentences, Is.Empty);
+        Assert.That(staged.JusticeRecords.Revision, Is.Zero);
+        Assert.That(staged.ArmedForces, Is.Not.Null);
+        Assert.That(staged.Manpower.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Positions.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Positions.SpatialAuthorityStore, Is.SameAs(spatialAuthority));
+        Assert.That(staged.ArmedForces.Revision, Is.Zero);
+        Assert.That(staged.Conflicts.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Wars.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Wars.ConflictStore, Is.SameAs(staged.Conflicts));
+        Assert.That(staged.Battles.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Battles.ConflictStore, Is.SameAs(staged.Conflicts));
+        Assert.That(staged.Battles.WarStore, Is.SameAs(staged.Wars));
+        Assert.That(staged.Battles.Count, Is.Zero);
+        Assert.That(staged.Battles.Revision, Is.Zero);
+        Assert.That(staged.Conflicts.Revision, Is.Zero);
+        Assert.That(staged.Wars.Revision, Is.Zero);
+        Assert.That(staged.Manpower.Revision, Is.Zero);
+        Assert.That(staged.Positions.Revision, Is.Zero);
+        Assert.That(order, Is.EqualTo(new[]
+        {
+            P12ECoreOwnerRestoreStep.InstitutionOffice,
+            P12ECoreOwnerRestoreStep.PropertyEstate,
+            P12ECoreOwnerRestoreStep.Faction,
+            P12ECoreOwnerRestoreStep.PoliticalClaim,
+            P12ECoreOwnerRestoreStep.PoliticalSupport,
+            P12ECoreOwnerRestoreStep.PoliticalDecision,
+            P12ECoreOwnerRestoreStep.JusticeRecords,
+            P12ECoreOwnerRestoreStep.Military,
+            P12ECoreOwnerRestoreStep.Conflict,
+            P12ECoreOwnerRestoreStep.War,
+            P12ECoreOwnerRestoreStep.Battle,
+            P12ECoreOwnerRestoreStep.CrimeSocialAppraisal
+        }));
+    }
+
+    [Test]
+    public void SelectedRuntimeGraphBindsTheCompleteP12EOwnerStageOnlyForExactRoots()
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraphBuilder.TryBuildConfigured(
+            definitions, new RuntimeIdAllocator(), out DailyV1SelectedRuntimeOwnerGraph seedGraph), Is.True);
+
+        PersonStore persons = new PersonStore();
+        int personIndex = 0;
+        foreach (DailyV1NpcRuntimeOwners npc in seedGraph.Npcs)
+        {
+            PersonId personId = new PersonId("p12e-owner-graph-person-" + personIndex++);
+            Assert.That(persons.TryRegister(new PersonRuntime(personId, 0L), out _), Is.True);
+            Assert.That(persons.TryBindMaterializedNpc(personId, npc.RuntimeId, out _), Is.True);
+        }
+        Assert.That(seedGraph.TryBindPersonStore(persons), Is.True);
+
+        Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
+            EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
+            EmptyPoliticalSupport(), EmptyPoliticalDecisions(), EmptyJustice(0L), EmptyMilitary(), EmptyConflict(),
+            EmptyWar(), EmptyBattle(), EmptyCrimeSocial(0L), new SimulationTime(0L),
+            false, persons, new SpatialAuthorityStore(), seedGraph.Cities,
+            seedGraph.Npcs, 0L, null, out P12ECoreOwnerRestoreStage staged,
+            out P12ECoreOwnerRestoreFailure failure), Is.True, failure.ToString());
+
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateFromExactOwners(
+            seedGraph.Cities, seedGraph.Npcs, seedGraph.SpatialNetwork, staged.JusticeRecords,
+            seedGraph.TravelParties, seedGraph.RuntimeIdentityIndex, persons,
+            out DailyV1SelectedRuntimeOwnerGraph graph), Is.True);
+
+        P12ECoreOwnerRestoreStage wrongRoot = new P12ECoreOwnerRestoreStage(
+            new PersonStore(), staged.Institutions, staged.Offices, staged.PropertyOwnership,
+            staged.Estates, staged.Factions, staged.PoliticalClaims, staged.PoliticalSupport,
+            staged.PoliticalDecisions, staged.JusticeRecords, staged.ArmedForces, staged.Manpower,
+            staged.Positions, staged.Conflicts, staged.Wars, staged.Battles);
+        Assert.That(graph.TryBindP12EOwners(wrongRoot), Is.False);
+        Assert.That(graph.P12EOwners, Is.Null);
+        Assert.That(graph.PoliticalDecisionStore, Is.Null,
+            "Rejecting a mismatched complete set must not partially bind PoliticalDecision.");
+
+        Assert.That(graph.TryBindP12EOwners(staged), Is.True);
+        Assert.That(graph.P12EOwners, Is.SameAs(staged));
+        Assert.That(graph.PersonStore, Is.SameAs(staged.Persons));
+        Assert.That(graph.JusticeRecordsOwner, Is.SameAs(staged.JusticeRecords));
+        Assert.That(graph.PoliticalDecisionStore, Is.SameAs(staged.PoliticalDecisions));
+        Assert.That(staged.CrimeSocialAppraisal.PersonStore, Is.SameAs(graph.PersonStore));
+        Assert.That(staged.CrimeSocialAppraisal.InstitutionStore, Is.SameAs(staged.Institutions));
+        Assert.That(staged.Offices.InstitutionStoreForWorldBoundary, Is.SameAs(staged.Institutions));
+        Assert.That(staged.PropertyOwnership.PersonStoreForWorldBoundary, Is.SameAs(persons));
+        Assert.That(staged.Estates.PersonStoreForWorldBoundary, Is.SameAs(persons));
+        Assert.That(staged.Manpower.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Positions.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Positions.SpatialAuthorityStore, Is.Not.Null);
+        Assert.That(staged.Conflicts.ArmedForceStore, Is.SameAs(staged.ArmedForces));
+        Assert.That(staged.Wars.ConflictStore, Is.SameAs(staged.Conflicts));
+        Assert.That(staged.Battles.WarStore, Is.SameAs(staged.Wars));
+
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12EOwnerSections(
+            graph, Array.Empty<OwnerSectionCensusSnapshot>(),
+            out IReadOnlyList<OwnerSectionCensusSnapshot> coreRows,
+            out string censusDiagnostic), Is.True, censusDiagnostic);
+        Assert.That(coreRows, Has.Count.EqualTo(23));
+        Assert.That(coreRows.All(row => row.Role == OwnerSectionRole.Required), Is.True);
+        Assert.That(coreRows.Single(row => row.SectionId == P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId)
+            .OwnerInstanceIdentity, Is.SameAs(staged.CrimeSocialAppraisal.TheftOutcomes));
+        Assert.That(coreRows.Single(row => row.SectionId == P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId)
+            .OwnerInstanceIdentity, Is.SameAs(staged.CrimeSocialAppraisal.CrimeKnowledge));
+        Assert.That(coreRows.Single(row => row.SectionId == P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId)
+            .OwnerInstanceIdentity, Is.SameAs(staged.CrimeSocialAppraisal.SocialReactions));
+
+        List<OwnerSectionCensusSnapshot> partialRows = new List<OwnerSectionCensusSnapshot>(coreRows);
+        partialRows.RemoveAt(0);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12EOwnerSections(
+            graph, partialRows, out _, out _), Is.False,
+            "A host cannot omit only part of the Core-owned P12-E row set.");
+
+        List<OwnerSectionCensusSnapshot> staleRows = new List<OwnerSectionCensusSnapshot>(coreRows);
+        OwnerSectionCensusSnapshot firstRow = staleRows[0];
+        staleRows[0] = new OwnerSectionCensusSnapshot(
+            firstRow.SectionId, firstRow.SchemaVersion, firstRow.Role,
+            firstRow.OwnerInstanceIdentity, firstRow.Cardinality, firstRow.Revision + 1L);
+        Assert.That(DailyV1SelectedRuntimeOwnerCensusSource.TryRebindCoreOwnedP12EOwnerSections(
+            graph, staleRows, out _, out _), Is.False,
+            "A stale owner revision cannot be accepted as the current Core P12-E census.");
+
+        P12ECoreOwnerRestoreStage replacementWrapper = new P12ECoreOwnerRestoreStage(
+            staged.Persons, staged.Institutions, staged.Offices, staged.PropertyOwnership,
+            staged.Estates, staged.Factions, staged.PoliticalClaims, staged.PoliticalSupport,
+            staged.PoliticalDecisions, staged.JusticeRecords, staged.ArmedForces, staged.Manpower,
+            staged.Positions, staged.Conflicts, staged.Wars, staged.Battles);
+        Assert.That(graph.TryBindP12EOwners(replacementWrapper), Is.False,
+            "After publication of the owner set, the graph must retain its exact aggregate identity.");
+        Assert.That(graph.P12EOwners, Is.SameAs(staged));
+    }
+
+    [Test]
+    public void JusticeSnapshotStagesOneExactCoreOwnerWithOrderedRowsAndReciprocalPersonBindings()
+    {
+        RootFixture roots = CreateRoots("p12e-core-justice-city",
+            "p12e-core-justice-person", "p12e-core-justice-legacy");
+        PersonStore persons = new PersonStore();
+        PersonId personId = new PersonId("p12e-core-justice-person-id");
+        PersonRuntime person = new PersonRuntime(personId, 0L);
+        Assert.That(persons.TryRegister(person, out _), Is.True);
+        Assert.That(persons.TryBindMaterializedNpc(personId,
+            "p12e-core-justice-person", out _), Is.True);
+
+        P12EJusticeRecordsOwnerSnapshot snapshot = JusticeSnapshot(9L,
+            new[]
+            {
+                new P12EJusticeWantedSnapshotRow(0, "p12e-core-justice-person",
+                    personId.Value, "p12e-core-justice-city", 12.5f, 7, true),
+                new P12EJusticeWantedSnapshotRow(1, "p12e-core-justice-legacy",
+                    null, "p12e-core-justice-city", 4f, 3, false)
+            },
+            new[]
+            {
+                new P12EJusticeSentenceSnapshotRow(0, "p12e-core-justice-person",
+                    personId.Value, "p12e-core-justice-city", 0, 0, 2, false),
+                new P12EJusticeSentenceSnapshotRow(1, "p12e-core-justice-legacy",
+                    null, "p12e-core-justice-city", 1, 5, 0, true)
+            }, 9L);
+
+        Assert.That(snapshot.TryStageCoreOwner(persons, roots.Cities, roots.Npcs,
+            out DailyV1JusticeRecordsOwner staged, out P12EJusticeSnapshotFailure failure),
+            Is.True, failure?.Message);
+        Assert.That(staged.Revision, Is.EqualTo(9L));
+        Assert.That(staged.WantedRecords, Has.Count.EqualTo(2));
+        Assert.That(staged.Sentences, Has.Count.EqualTo(2));
+        Assert.That(staged.WantedRecords[0].TargetRuntimeId, Is.EqualTo("p12e-core-justice-person"));
+        Assert.That(staged.WantedRecords[0].Bounty, Is.EqualTo(12.5f));
+        Assert.That(staged.WantedRecords[0].SentenceDays, Is.EqualTo(7));
+        Assert.That(staged.WantedRecords[0].IsResolved, Is.True);
+        Assert.That(staged.WantedRecords[1].TargetRuntimeId, Is.EqualTo("p12e-core-justice-legacy"));
+        Assert.That(staged.Sentences[0].Warrant, Is.SameAs(staged.WantedRecords[0]));
+        Assert.That(staged.Sentences[1].Warrant, Is.SameAs(staged.WantedRecords[1]));
+        Assert.That(staged.Sentences[0].RemainingDays, Is.Zero);
+        Assert.That(staged.Sentences[0].FailedEscapeAttempts, Is.EqualTo(2));
+        Assert.That(staged.Sentences[0].WasArrestedToday, Is.False);
+        Assert.That(staged.Sentences[1].WasArrestedToday, Is.True);
+        Assert.That(person.MaterializedNpcRuntimeId, Is.EqualTo("p12e-core-justice-person"));
+        Assert.That(persons.TryGetByMaterializedNpcRuntimeId("p12e-core-justice-person",
+            out PersonRuntime indexed), Is.True);
+        Assert.That(indexed, Is.SameAs(person));
+        Assert.That(staged.HasP12MutationBoundary, Is.False);
+    }
+
+    [Test]
+    public void JusticeSnapshotRejectsMissingAmbiguousRootsAndOneSidedBindingsAtomically()
+    {
+        RootFixture roots = CreateRoots("p12e-core-reject-city",
+            "p12e-core-reject-person", "p12e-core-reject-legacy");
+        PersonStore persons = new PersonStore();
+        PersonId personId = new PersonId("p12e-core-reject-person-id");
+        PersonRuntime person = new PersonRuntime(personId, 0L);
+        Assert.That(persons.TryRegister(person, out _), Is.True);
+        Assert.That(persons.TryBindMaterializedNpc(personId,
+            "p12e-core-reject-person", out _), Is.True);
+        P12EJusticeRecordsOwnerSnapshot personBacked = JusticeSnapshot(3L,
+            new[] { new P12EJusticeWantedSnapshotRow(0, "p12e-core-reject-person",
+                personId.Value, "p12e-core-reject-city", 1f, 1, false) },
+            Array.Empty<P12EJusticeSentenceSnapshotRow>());
+
+        AssertJusticeStageRejected(personBacked, persons, roots.Cities,
+            Array.Empty<DailyV1NpcRuntimeOwners>());
+        AssertJusticeStageRejected(personBacked, persons,
+            new[] { roots.Cities[0], roots.Cities[0] }, roots.Npcs);
+        AssertJusticeStageRejected(personBacked, new PersonStore(), roots.Cities, roots.Npcs);
+
+        P12EJusticeRecordsOwnerSnapshot legacyWithBinding = JusticeSnapshot(0L,
+            new[] { new P12EJusticeWantedSnapshotRow(0, "p12e-core-reject-person",
+                null, "p12e-core-reject-city", 1f, 1, false) },
+            Array.Empty<P12EJusticeSentenceSnapshotRow>());
+        AssertJusticeStageRejected(legacyWithBinding, persons, roots.Cities, roots.Npcs);
+
+        PersonStore npcOnly = new PersonStore();
+        Assert.That(npcOnly.TryRegister(new PersonRuntime(personId, 0L), out _), Is.True);
+        AssertJusticeStageRejected(personBacked, npcOnly, roots.Cities, roots.Npcs);
+    }
+
+    [Test]
+    public void JusticeSnapshotRejectsWrongTargetCityAndPersonRuntimeBinding()
+    {
+        RootFixture roots = CreateRoots("p12e-core-link-city",
+            "p12e-core-link-person", "p12e-core-link-legacy");
+        PersonId firstId = new PersonId("p12e-core-link-person-id");
+        PersonStore wrongTargetStore = new PersonStore();
+        PersonRuntime wrongTargetPerson = new PersonRuntime(firstId, 0L);
+        Assert.That(wrongTargetStore.TryRegister(wrongTargetPerson, out _), Is.True);
+        Assert.That(wrongTargetStore.TryBindMaterializedNpc(firstId,
+            "p12e-core-link-legacy", out _), Is.True);
+        P12EJusticeRecordsOwnerSnapshot wrongTarget = JusticeSnapshot(0L,
+            new[] { new P12EJusticeWantedSnapshotRow(0, "p12e-core-link-person",
+                firstId.Value, "p12e-core-link-city", 1f, 1, false) },
+            Array.Empty<P12EJusticeSentenceSnapshotRow>());
+        AssertJusticeStageRejected(wrongTarget, wrongTargetStore, roots.Cities, roots.Npcs);
+
+        P12EJusticeRecordsOwnerSnapshot wrongCity = JusticeSnapshot(0L,
+            new[] { new P12EJusticeWantedSnapshotRow(0, "p12e-core-link-person",
+                null, "missing-city", 1f, 1, false) },
+            Array.Empty<P12EJusticeSentenceSnapshotRow>());
+        AssertJusticeStageRejected(wrongCity, new PersonStore(), roots.Cities, roots.Npcs);
+    }
+
+    [Test]
+    public void InvalidClaimSnapshotRejectsWholePrivateCoreStage()
+    {
+        PersonStore persons = new PersonStore();
+        P12EPoliticalClaimOwnerSnapshot invalidClaims = new P12EPoliticalClaimOwnerSnapshot(
+            null,
+            ClaimSection(PoliticalClaimStoreCensusProvider.RecognitionsSectionId, 0, 0,
+                Array.Empty<P12EPoliticalClaimRecognitionRow>(), row => row.Copy()));
+
+        Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
+            EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), invalidClaims,
+            EmptyPoliticalSupport(), EmptyPoliticalDecisions(), EmptyJustice(4L), EmptyMilitary(), EmptyConflict(), EmptyWar(),
+            EmptyBattle(), EmptyCrimeSocial(4L), new SimulationTime(4L), false,
+            persons, new SpatialAuthorityStore(),
+            Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(), 4L, null,
+            out P12ECoreOwnerRestoreStage staged,
+            out P12ECoreOwnerRestoreFailure failure), Is.False);
+        Assert.That(staged, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12ECoreOwnerRestoreFailure.StageFailed));
+    }
+
+    [Test]
+    public void InvalidPoliticalSupportSnapshotRejectsWholePrivateCoreStage()
+    {
+        PersonStore persons = new PersonStore();
+        P12EPoliticalSupportOwnerSnapshot invalidSupport =
+            new P12EPoliticalSupportOwnerSnapshot(4L, null);
+
+        Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
+            EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
+            invalidSupport, EmptyPoliticalDecisions(), EmptyJustice(4L), EmptyMilitary(), EmptyConflict(), EmptyWar(),
+            EmptyBattle(), EmptyCrimeSocial(4L), new SimulationTime(4L), false, persons,
+            new SpatialAuthorityStore(),
+            Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(), 4L, null,
+            out P12ECoreOwnerRestoreStage staged,
+            out P12ECoreOwnerRestoreFailure failure), Is.False);
+        Assert.That(staged, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12ECoreOwnerRestoreFailure.StageFailed));
+    }
+
+    [Test]
+    public void InvalidPoliticalDecisionSnapshotRejectsWholePrivateCoreStage()
+    {
+        PersonStore persons = new PersonStore();
+        P12EPoliticalDecisionOwnerSnapshot invalidDecisions =
+            new P12EPoliticalDecisionOwnerSnapshot(4L, null);
+
+        Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
+            EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
+            EmptyPoliticalSupport(), invalidDecisions, EmptyJustice(4L), EmptyMilitary(), EmptyConflict(), EmptyWar(),
+            EmptyBattle(), EmptyCrimeSocial(4L), new SimulationTime(4L), false, persons,
+            new SpatialAuthorityStore(),
+            Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(), 4L, null,
+            out P12ECoreOwnerRestoreStage staged,
+            out P12ECoreOwnerRestoreFailure failure), Is.False);
+        Assert.That(staged, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12ECoreOwnerRestoreFailure.StageFailed));
+    }
+
+    [Test]
+    public void InvalidMilitarySnapshotRejectsWholePrivateCoreStage()
+    {
+        P12EMilitaryOwnerSnapshot invalidMilitary = new P12EMilitaryOwnerSnapshot(
+            P12EMilitaryOwnerSnapshot.CurrentSchemaVersion + 1,
+            0L, 0L, 0L,
+            0, 0, 0, 0, 0,
+            Array.Empty<P12EMilitaryForceSnapshotRecord>(),
+            Array.Empty<P12EMilitaryContingentSnapshotRecord>(),
+            Array.Empty<P12EMilitaryRelevantPersonSnapshotRecord>(),
+            Array.Empty<P12EManpowerStateSnapshotRecord>(),
+            Array.Empty<P12EForcePositionSnapshotRecord>());
+
+        Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
+            EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(), EmptyPoliticalClaims(),
+            EmptyPoliticalSupport(), EmptyPoliticalDecisions(), EmptyJustice(4L), invalidMilitary, EmptyConflict(), EmptyWar(),
+            EmptyBattle(), EmptyCrimeSocial(4L), new SimulationTime(4L), false,
+            new PersonStore(), new SpatialAuthorityStore(),
+            Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(),
+            4L, null, out P12ECoreOwnerRestoreStage staged,
+            out P12ECoreOwnerRestoreFailure failure), Is.False);
+        Assert.That(staged, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12ECoreOwnerRestoreFailure.StageFailed));
+    }
+
+    [Test]
+    public void InvalidConflictOrWarSnapshotRejectsWholePrivateCoreStage()
+    {
+        PersistentConflictOwnerSnapshot invalidConflict = new PersistentConflictOwnerSnapshot(
+            PersistentConflictOwnerSnapshot.CurrentSchemaVersion + 1, 0, 0L,
+            Array.Empty<PersistentConflictOwnerSnapshotRecord>());
+        AssertCoreStageRejected(invalidConflict, EmptyWar());
+
+        PersistentWarOwnerSnapshot invalidWar = new PersistentWarOwnerSnapshot(
+            PersistentWarOwnerSnapshot.CurrentSchemaVersion + 1, 0, 0L,
+            Array.Empty<PersistentWarOwnerSnapshotRecord>());
+        AssertCoreStageRejected(EmptyConflict(), invalidWar);
+    }
+
+    private static void AssertCoreStageRejected(
+        PersistentConflictOwnerSnapshot conflicts,
+        PersistentWarOwnerSnapshot wars)
+    {
+        Assert.That(DailyV1P12ECoreOwnerRestoreStager.TryStage(
+            EmptyInstitutionOffice(), EmptyPropertyEstate(), EmptyFaction(),
+            EmptyPoliticalClaims(), EmptyPoliticalSupport(), EmptyPoliticalDecisions(),
+            EmptyJustice(4L), EmptyMilitary(), conflicts, wars, EmptyBattle(),
+            EmptyCrimeSocial(4L), new SimulationTime(4L), false,
+            new PersonStore(), new SpatialAuthorityStore(),
+            Array.Empty<DailyV1CityRuntimeOwners>(), Array.Empty<DailyV1NpcRuntimeOwners>(),
+            4L, null, out P12ECoreOwnerRestoreStage staged,
+            out P12ECoreOwnerRestoreFailure failure), Is.False);
+        Assert.That(staged, Is.Null);
+        Assert.That(failure, Is.EqualTo(P12ECoreOwnerRestoreFailure.StageFailed));
+    }
+
+    private static P12ECrimeSocialAppraisalOwnerSnapshot EmptyCrimeSocial(long day) =>
+        new P12ECrimeSocialAppraisalOwnerSnapshot(day,
+            new P12ECrimeOwnerSnapshotSection<P12ECrimeOutcomeSnapshotRow>(
+                P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId,
+                P12CrimeSocialAppraisalOwnerContract.SchemaVersion, 0, 0L,
+                Array.Empty<P12ECrimeOutcomeSnapshotRow>()),
+            new P12ECrimeOwnerSnapshotSection<P12ECrimeKnowledgeSnapshotRow>(
+                P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId,
+                P12CrimeSocialAppraisalOwnerContract.SchemaVersion, 0, 0L,
+                Array.Empty<P12ECrimeKnowledgeSnapshotRow>()),
+            new P12ECrimeOwnerSnapshotSection<P12ESocialReactionSnapshotRow>(
+                P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId,
+                P12CrimeSocialAppraisalOwnerContract.SchemaVersion, 0, 0L,
+                Array.Empty<P12ESocialReactionSnapshotRow>()));
+
+    private static PersistentConflictOwnerSnapshot EmptyConflict() =>
+        new PersistentConflictOwnerSnapshot(
+            PersistentConflictOwnerSnapshot.CurrentSchemaVersion, 0, 0L,
+            Array.Empty<PersistentConflictOwnerSnapshotRecord>());
+
+    private static PersistentWarOwnerSnapshot EmptyWar() =>
+        new PersistentWarOwnerSnapshot(
+            PersistentWarOwnerSnapshot.CurrentSchemaVersion, 0, 0L,
+            Array.Empty<PersistentWarOwnerSnapshotRecord>());
+
+    private static PersistentBattleOwnerSnapshot EmptyBattle() =>
+        new PersistentBattleOwnerSnapshot(
+            PersistentBattleOwnerSnapshot.CurrentSchemaVersion, 0, 0L,
+            Array.Empty<PersistentBattleOwnerSnapshotRecord>());
+    private static P12EInstitutionOfficeOwnerSnapshot EmptyInstitutionOffice() =>
+        new P12EInstitutionOfficeOwnerSnapshot(
+            InstitutionSection(InstitutionOfficeCensusProvider.InstitutionsSectionId, 0, 0,
+                Array.Empty<P12EInstitutionSnapshotRecord>(), row => row.Copy()),
+            InstitutionSection(InstitutionOfficeCensusProvider.OfficesSectionId, 0, 0,
+                Array.Empty<P12EOfficeSnapshotRecord>(), row => row.Copy()),
+            InstitutionSection(InstitutionOfficeCensusProvider.IncumbenciesSectionId, 0, 0,
+                Array.Empty<P12EOfficeIncumbencySnapshotRecord>(), row => row.Copy()),
+            InstitutionSection(InstitutionOfficeCensusProvider.TenuresSectionId, 0, 0,
+                Array.Empty<P12EOfficeTenureSnapshotRecord>(), row => row.Copy()));
+
+    private static PropertyEstateOwnerSnapshot EmptyPropertyEstate() =>
+        new PropertyEstateOwnerSnapshot(
+            1, 0, 0L, Array.Empty<PropertyEstateOwnershipRow>(),
+            1, 0, 0L, Array.Empty<PropertyEstateTransferHistoryRow>(),
+            1, 0, 0L, Array.Empty<PropertyEstateEstateRow>());
+
+    private static P12EFactionOwnerSnapshot EmptyFaction() =>
+        new P12EFactionOwnerSnapshot(
+            FactionSection(FactionStoreCensusProvider.FactionsSectionId, 0, 0,
+                Array.Empty<P12EFactionSnapshotRecord>(), row => row.Copy()),
+            FactionSection(FactionStoreCensusProvider.AffiliationsSectionId, 0, 0,
+                Array.Empty<P12EFactionAffiliationSnapshotRecord>(), row => row.Copy()));
+
+    private static P12EPoliticalSupportOwnerSnapshot EmptyPoliticalSupport() =>
+        new P12EPoliticalSupportOwnerSnapshot(4L,
+            new P12EPoliticalSupportSnapshotSection(
+                PoliticalSupportStoreCensusProvider.RelationsSectionId,
+                P12EPoliticalSupportOwnerSnapshot.CurrentSchemaVersion,
+                0, 0L, Array.Empty<P12EPoliticalSupportSnapshotRow>()));
+
+    private static P12EPoliticalDecisionOwnerSnapshot EmptyPoliticalDecisions() =>
+        new P12EPoliticalDecisionOwnerSnapshot(4L,
+            new P12EPoliticalDecisionSnapshotSection(
+                PoliticalDecisionStoreCensusProvider.SectionId,
+                P12EPoliticalDecisionOwnerSnapshot.CurrentSchemaVersion,
+                0, 0L, Array.Empty<P12EPoliticalDecisionSnapshotRow>()));
+
+    private static P12EPoliticalClaimOwnerSnapshot EmptyPoliticalClaims() =>
+        new P12EPoliticalClaimOwnerSnapshot(
+            ClaimSection(PoliticalClaimStoreCensusProvider.ClaimsSectionId, 0, 0,
+                Array.Empty<P12EPoliticalClaimRow>(), row => row.Copy()),
+            ClaimSection(PoliticalClaimStoreCensusProvider.RecognitionsSectionId, 0, 0,
+                Array.Empty<P12EPoliticalClaimRecognitionRow>(), row => row.Copy()));
+
+    private static P12EJusticeRecordsOwnerSnapshot EmptyJustice(long day) =>
+        JusticeSnapshot(day, Array.Empty<P12EJusticeWantedSnapshotRow>(),
+            Array.Empty<P12EJusticeSentenceSnapshotRow>());
+
+    private static P12EMilitaryOwnerSnapshot EmptyMilitary() =>
+        new P12EMilitaryOwnerSnapshot(
+            P12EMilitaryOwnerSnapshot.CurrentSchemaVersion,
+            0L, 0L, 0L,
+            0, 0, 0, 0, 0,
+            Array.Empty<P12EMilitaryForceSnapshotRecord>(),
+            Array.Empty<P12EMilitaryContingentSnapshotRecord>(),
+            Array.Empty<P12EMilitaryRelevantPersonSnapshotRecord>(),
+            Array.Empty<P12EManpowerStateSnapshotRecord>(),
+            Array.Empty<P12EForcePositionSnapshotRecord>());
+
+    private static P12EJusticeRecordsOwnerSnapshot JusticeSnapshot(
+        long day,
+        IReadOnlyList<P12EJusticeWantedSnapshotRow> wanted,
+        IReadOnlyList<P12EJusticeSentenceSnapshotRow> sentences,
+        long revision = 0L) =>
+        new P12EJusticeRecordsOwnerSnapshot(day,
+            new P12EJusticeRecordsSnapshotSection(
+                P12EJusticeRecordsSnapshotSection.CurrentSectionId,
+                P12EJusticeRecordsSnapshotSection.CurrentSchemaVersion,
+                checked(wanted.Count + sentences.Count), revision, wanted, sentences));
+
+    private static RootFixture CreateRoots(string cityId, params string[] npcIds)
+    {
+        DailyV1EffectiveDefinitions definitions = DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1CityDefinition cityDefinition = definitions.Cities.Values.First();
+        DailyV1NpcDefinition npcDefinition = definitions.Npcs.Values.First();
+        Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialCityOwner(
+            cityId, "location/" + cityId, definitions, cityDefinition, null,
+            out DailyV1CityRuntimeOwners city), Is.True);
+        List<DailyV1NpcRuntimeOwners> npcs = new List<DailyV1NpcRuntimeOwners>(npcIds.Length);
+        foreach (string npcId in npcIds)
+        {
+            Assert.That(DailyV1SelectedRuntimeOwnerGraph.TryCreateInitialNpcOwner(
+                npcId, definitions, npcDefinition, 0f,
+                out DailyV1NpcRuntimeOwners npc), Is.True);
+            npcs.Add(npc);
+        }
+        return new RootFixture(new[] { city }, npcs);
+    }
+
+    private static void AssertJusticeStageRejected(
+        P12EJusticeRecordsOwnerSnapshot snapshot,
+        PersonStore persons,
+        IReadOnlyList<DailyV1CityRuntimeOwners> cities,
+        IReadOnlyList<DailyV1NpcRuntimeOwners> npcs)
+    {
+        int personCount = persons.Persons.Count;
+        long personRevision = persons.Revision;
+        Assert.That(snapshot.TryStageCoreOwner(persons, cities, npcs,
+            out DailyV1JusticeRecordsOwner staged, out P12EJusticeSnapshotFailure failure), Is.False);
+        Assert.That(staged, Is.Null);
+        Assert.That(failure.Code, Is.EqualTo(P12EJusticeSnapshotFailureCode.InvalidReference));
+        Assert.That(persons.Persons.Count, Is.EqualTo(personCount));
+        Assert.That(persons.Revision, Is.EqualTo(personRevision));
+    }
+
+    private sealed class RootFixture
+    {
+        internal IReadOnlyList<DailyV1CityRuntimeOwners> Cities { get; }
+        internal IReadOnlyList<DailyV1NpcRuntimeOwners> Npcs { get; }
+
+        internal RootFixture(
+            IReadOnlyList<DailyV1CityRuntimeOwners> cities,
+            IReadOnlyList<DailyV1NpcRuntimeOwners> npcs)
+        {
+            Cities = cities;
+            Npcs = npcs;
+        }
+    }
+
+    private static P12EInstitutionOfficeSnapshotSection<T> InstitutionSection<T>(
+        string id, int count, long revision, IReadOnlyList<T> rows, Func<T, T> copy) =>
+        new P12EInstitutionOfficeSnapshotSection<T>(
+            id, P12EInstitutionOfficeOwnerSnapshot.CurrentSchemaVersion,
+            count, revision, rows, copy);
+
+    private static P12EFactionSnapshotSection<T> FactionSection<T>(
+        string id, int count, long revision, IReadOnlyList<T> rows, Func<T, T> copy) =>
+        new P12EFactionSnapshotSection<T>(
+            id, P12EFactionOwnerSnapshot.CurrentSchemaVersion,
+            count, revision, rows, copy);
+
+    private static P12EPoliticalClaimSnapshotSection<T> ClaimSection<T>(
+        string id, int count, long revision, IReadOnlyList<T> rows, Func<T, T> copy) =>
+        new P12EPoliticalClaimSnapshotSection<T>(
+            id, P12EPoliticalClaimOwnerSnapshot.CurrentSchemaVersion,
+            count, revision, rows, copy);
+}

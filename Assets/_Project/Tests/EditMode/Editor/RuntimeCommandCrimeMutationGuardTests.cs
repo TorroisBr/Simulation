@@ -135,7 +135,8 @@ public sealed class RuntimeGuardSystemEntryPointTests
             ScheduledDirectiveMode.RequestAction,
             ScheduledDirectiveOperation.EscapePrison,
             "guard-directive-actor",
-            escape);
+            escape.DefinitionId,
+            (int)escape.actionType);
         Assert.That(store.Add(existing), Is.True);
         ScheduledDirectiveSystem system = new ScheduledDirectiveSystem(store, new RuntimeIdentityRegistry());
         object faultedGuard = CreateGuard(true);
@@ -147,7 +148,8 @@ public sealed class RuntimeGuardSystemEntryPointTests
             ScheduledDirectiveMode.ForceOutcome,
             ScheduledDirectiveOperation.EscapePrison,
             "guard-directive-actor",
-            escape);
+            escape.DefinitionId,
+            (int)escape.actionType);
         Assert.That(store.Add(rejected), Is.False);
         Assert.That(existing.MarkSucceeded(1L), Is.False);
         Assert.Throws<InvalidOperationException>(() => system.PrepareDay(1L));
@@ -228,7 +230,7 @@ public sealed class RuntimeGuardSystemEntryPointTests
 
     private static object CreateGuard(bool faulted)
     {
-        Type guardType = typeof(SimulationRuntime).Assembly.GetType("AuthoritativeMutationGuard", true);
+        Type guardType = typeof(PersonRuntime).Assembly.GetType("AuthoritativeMutationGuard", true);
         object guard = Activator.CreateInstance(guardType, true);
         if (faulted)
         {
@@ -260,7 +262,7 @@ public sealed class RuntimeGuardSystemEntryPointTests
 
     private static void MarkRuntimeFaulted(SimulationRuntime world)
     {
-        Type reasonType = typeof(SimulationRuntime).Assembly.GetType("AuthoritativeMutationFaultReason", true);
+        Type reasonType = typeof(PersonRuntime).Assembly.GetType("AuthoritativeMutationFaultReason", true);
         object reason = Enum.Parse(reasonType, "RollbackRestoreFailed");
         typeof(SimulationRuntime).GetMethod("MarkAuthoritativeMutationFaulted", BindingFlags.Instance | BindingFlags.NonPublic)
             .Invoke(world, new[] { reason });
@@ -591,7 +593,7 @@ public sealed class JusticeAdvanceSentencesBoundaryOwnerTests
         Assert.That(justice.TryPrepareAdvanceSentencesStep(
             manifest, step, roster, out IBoundaryContinuationStepCommit prepared, out _), Is.True);
 
-        List<PrisonSentenceRuntime> sentences = (List<PrisonSentenceRuntime>)typeof(JusticeSystem)
+        IList<PrisonSentenceRuntime> sentences = (IList<PrisonSentenceRuntime>)typeof(JusticeSystem)
             .GetField("prisonSentences", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(justice);
         sentences[0].RegisterFailedEscape(1);
@@ -611,7 +613,7 @@ public sealed class JusticeAdvanceSentencesBoundaryOwnerTests
         WantedRecordRuntime warrant = justice.CreateOrIncreaseWarrant(target, city, 12f, 1);
         Assert.That(justice.Arrest(guard, target, city), Is.True);
 
-        List<PrisonSentenceRuntime> sentences = (List<PrisonSentenceRuntime>)typeof(JusticeSystem)
+        IList<PrisonSentenceRuntime> sentences = (IList<PrisonSentenceRuntime>)typeof(JusticeSystem)
             .GetField("prisonSentences", BindingFlags.Instance | BindingFlags.NonPublic)
             .GetValue(justice);
         Assert.That(sentences, Has.Count.EqualTo(1));
@@ -631,9 +633,7 @@ public sealed class JusticeAdvanceSentencesBoundaryOwnerTests
         Assert.That(failure, Is.EqualTo(TimelineFailure.ContinuationFailed));
         Assert.That(warrant.IsActive, Is.True);
         Assert.That(justice.IsArrested(target), Is.True);
-        Assert.That((int)typeof(PrisonSentenceRuntime)
-            .GetField("remainingDays", BindingFlags.Instance | BindingFlags.NonPublic)
-            .GetValue(sentences[0]), Is.EqualTo(1));
+        Assert.That(sentences[0].RemainingDays, Is.EqualTo(1));
         Assert.That(justice.TryResolveAdvanceSentencesReceipt(manifest, step, out _, out _), Is.False);
     }
 
@@ -1107,7 +1107,7 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
     public void HiddenStatusBoundaryStepPreservesRepeatedRosterOccurrencesAndSingleMarkerRemoval()
     {
         NpcStatusData hidden = SimulationTestFactory.CreateStatus("crime-boundary-duplicate-hidden");
-        SimulationLogger logger = new SimulationLogger(null);
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(null);
         CrimeSystem crime = new CrimeSystem(null, null, hidden, logger: logger);
         NpcRuntime hiddenNpc = CreateActor("crime-boundary-duplicate-roster");
         hiddenNpc.HideForDays(1);
@@ -1150,7 +1150,7 @@ public sealed class CrimeHiddenStatusBoundaryOwnerTests
 
     private static object CreateFaultedGuard()
     {
-        Type guardType = typeof(SimulationRuntime).Assembly.GetType("AuthoritativeMutationGuard", true);
+        Type guardType = typeof(PersonRuntime).Assembly.GetType("AuthoritativeMutationGuard", true);
         object guard = Activator.CreateInstance(guardType, true);
         Type reasonType = guardType.Assembly.GetType("AuthoritativeMutationFaultReason", true);
         object reason = Enum.Parse(reasonType, "RollbackRestoreFailed");

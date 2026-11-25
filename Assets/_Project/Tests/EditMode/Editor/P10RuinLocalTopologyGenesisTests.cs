@@ -73,7 +73,7 @@ public sealed class P10RuinLocalTopologyGenesisTests
     [Test]
     public void SemanticSiteOwnerAndTopologyIdsIgnoreRuntimeHandlesAndRejectDuplicateDefinitionOwners()
     {
-        ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("p10-semantic-site", ExplorableSiteKind.Ruin);
+        DailyV1ExplorableSiteDefinition definition = SimulationTestFactory.CreateExplorableSiteDefinition("p10-semantic-site", ExplorableSiteKind.Ruin);
         ExplorableSiteRuntime firstSite = new ExplorableSiteRuntime(
             "site-runtime-first", definition, new SpatialLocationRuntime("location-runtime-first"), P10RuinLocalTopologyGenesis.CreateLegacySiteInstanceId(definition.DefinitionId));
         ExplorableSiteRuntime secondSite = new ExplorableSiteRuntime(
@@ -107,7 +107,7 @@ public sealed class P10RuinLocalTopologyGenesisTests
     [Test]
     public void SemanticTopologyRejectsMissingOrDuplicateStableMemberIdsBeforeStorePublication()
     {
-        ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("p10-invalid-semantic-site", ExplorableSiteKind.Ruin);
+        DailyV1ExplorableSiteDefinition definition = SimulationTestFactory.CreateExplorableSiteDefinition("p10-invalid-semantic-site", ExplorableSiteKind.Ruin);
         ExplorableSiteRuntime site = new ExplorableSiteRuntime(
             "site-runtime-invalid", definition, new SpatialLocationRuntime("location-runtime-invalid"), P10RuinLocalTopologyGenesis.CreateLegacySiteInstanceId(definition.DefinitionId));
         var identity = new RuntimeIdentityRegistry();
@@ -153,7 +153,7 @@ public sealed class P10RuinLocalTopologyGenesisTests
     [Test]
     public void PublishedSemanticTopologyRejectsMissingAndGloballyDuplicateMemberIds()
     {
-        ExplorableSiteData definition = SimulationTestFactory.CreateExplorableSite("p10-published-site", ExplorableSiteKind.Ruin);
+        DailyV1ExplorableSiteDefinition definition = SimulationTestFactory.CreateExplorableSiteDefinition("p10-published-site", ExplorableSiteKind.Ruin);
         ExplorableSiteRuntime site = new ExplorableSiteRuntime(
             "site-runtime-published", definition, new SpatialLocationRuntime("location-runtime-published"), P10RuinLocalTopologyGenesis.CreateLegacySiteInstanceId(definition.DefinitionId));
         var identity = new RuntimeIdentityRegistry();
@@ -213,6 +213,43 @@ public sealed class P10RuinLocalTopologyGenesisTests
         LocalPlaceRuntime place = new LocalPlaceRuntime(placeRuntimeId, "Entrance", semanticId: stableId);
         Assert.That(topology.AddPlace(place, isEntryPoint: true), Is.True);
         return topology;
+    }
+
+    [Test]
+    public void ComposeAddsRuinAnchorToTheSuppliedP8OwnerInstance()
+    {
+        SimulationConfigData config = CreateP10Config(ExplorableSiteKind.Ruin);
+        var spatialAuthority = new SpatialAuthorityStore();
+        Assert.That(spatialAuthority.TryComposeGeography(
+            new SpatialGeographyDefinition(
+                new SpatialWorldScaleContext("scale/v1", "profile/test", "1", 1m, "km"),
+                new[]
+                {
+                    new HexRecord(new HexId(config.authoredHexId), new HexCoordinate(config.authoredHexQ, config.authoredHexR),
+                        new TerrainReference(new TerrainDefinitionId(config.authoredTerrainDefinitionId), config.authoredTerrainRevisionToken))
+                },
+                new[] { new LocationRecord(new LocationId(config.authoredLocationId), new HexId(config.authoredHexId)) }),
+            out SpatialAuthorityFailure geographyFailure), Is.True, geographyFailure.ToString());
+
+        P10RuinLocalTopologyCandidate candidate = P10RuinLocalTopologyGenesis.CreateCandidate(config, spatialAuthority);
+        var identity = new RuntimeIdentityRegistry();
+        var allocator = new RuntimeIdAllocator();
+        var spatialNetwork = new SpatialNetworkRuntime(identity);
+        var siteStore = new ExplorableSiteStore();
+        var topologyStore = new LocalTopologyStore(identity);
+        var selectedAnchors = new LegacySpatialAnchorBindingStore(spatialAuthority);
+
+        Assert.That(P10RuinLocalTopologyGenesis.TryCompose(
+            candidate, allocator, identity, spatialNetwork, siteStore, spatialAuthority,
+            topologyStore, selectedAnchors, out ExplorableSiteRuntime site,
+            out LocalTopologyRuntime topology, out string diagnostic), Is.True, diagnostic);
+        Assert.That(site, Is.Not.Null);
+        Assert.That(topology, Is.Not.Null);
+        Assert.That(selectedAnchors.TryGet(
+            new SpatialAnchorOwnerId(SpatialAnchorOwnerKind.ExplorableSite, site.RuntimeId),
+            out LocationId boundLocation), Is.True);
+        Assert.That(boundLocation, Is.EqualTo(candidate.Location.Id));
+        Assert.That(selectedAnchors.Count, Is.EqualTo(1));
     }
 
     private static (ExplorableSiteRuntime Site, LocalTopologyRuntime Topology) ComposeCandidate(

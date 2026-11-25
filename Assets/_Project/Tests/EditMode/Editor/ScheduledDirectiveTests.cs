@@ -26,8 +26,9 @@ public sealed class ScheduledDirectiveTests
         registry.RegisterNpc(actor);
         NpcActionData escape = SimulationTestFactory.CreateAction("escape", NpcActionType.EscapePrison, NpcActionCategory.Justice);
         ScheduledDirective directive = new ScheduledDirective(
-            "directive-1", 1L, ScheduledDirectiveMode.RequestAction, ScheduledDirectiveOperation.EscapePrison, actor.RuntimeId, escape);
-        ScheduledDirectiveStore store = new ScheduledDirectiveStore(time);
+            "directive-1", 1L, ScheduledDirectiveMode.RequestAction, ScheduledDirectiveOperation.EscapePrison,
+            actor.RuntimeId, escape.DefinitionId, (int)escape.actionType);
+        ScheduledDirectiveStore store = new ScheduledDirectiveStore(time, UnitySimulationLoggerAdapter.Create(null));
         ScheduledDirectiveSystem system = new ScheduledDirectiveSystem(store, registry);
 
         Assert.That(store.Add(directive), Is.True);
@@ -41,12 +42,14 @@ public sealed class ScheduledDirectiveTests
     public void ScheduledDirectiveStore_RejectsDuplicateDirectiveId()
     {
         SimulationTime time = new SimulationTime();
-        ScheduledDirectiveStore store = new ScheduledDirectiveStore(time);
+        ScheduledDirectiveStore store = new ScheduledDirectiveStore(time, UnitySimulationLoggerAdapter.Create(null));
         NpcActionData escape = SimulationTestFactory.CreateAction("escape", NpcActionType.EscapePrison, NpcActionCategory.Justice);
         ScheduledDirective first = new ScheduledDirective(
-            "directive-1", 1L, ScheduledDirectiveMode.ForceOutcome, ScheduledDirectiveOperation.EscapePrison, "npc-actor", escape);
+            "directive-1", 1L, ScheduledDirectiveMode.ForceOutcome, ScheduledDirectiveOperation.EscapePrison,
+            "npc-actor", escape.DefinitionId, (int)escape.actionType);
         ScheduledDirective duplicate = new ScheduledDirective(
-            "directive-1", 2L, ScheduledDirectiveMode.ForceOutcome, ScheduledDirectiveOperation.EscapePrison, "npc-actor", escape);
+            "directive-1", 2L, ScheduledDirectiveMode.ForceOutcome, ScheduledDirectiveOperation.EscapePrison,
+            "npc-actor", escape.DefinitionId, (int)escape.actionType);
 
         Assert.That(store.Add(first), Is.True);
         LogAssert.Expect(LogType.Error, "Cannot add duplicate DirectiveId 'directive-1'.");
@@ -79,7 +82,8 @@ public sealed class ScheduledDirectiveTests
 
         NpcActionData escape = SimulationTestFactory.CreateAction("escape", NpcActionType.EscapePrison, NpcActionCategory.Justice);
         ScheduledDirective directive = new ScheduledDirective(
-            "directive-request", 1L, ScheduledDirectiveMode.RequestAction, ScheduledDirectiveOperation.EscapePrison, actor.RuntimeId, escape);
+            "directive-request", 1L, ScheduledDirectiveMode.RequestAction, ScheduledDirectiveOperation.EscapePrison,
+            actor.RuntimeId, escape.DefinitionId, (int)escape.actionType);
         ScheduledDirectiveStore directiveStore = new ScheduledDirectiveStore(fixture.Time);
         ScheduledDirectiveSystem directiveSystem = new ScheduledDirectiveSystem(directiveStore, registry);
         Assert.That(directiveStore.Add(directive), Is.True);
@@ -88,7 +92,7 @@ public sealed class ScheduledDirectiveTests
 
         CrimeSystem crime = new CrimeSystem(justice, null, hiddenStatus);
         NpcDecisionSystem npcDecisionSystem = new NpcDecisionSystem(new List<INpcActionProvider> { crime });
-        NpcActionRuntime requestedAction = npcDecisionSystem.CreateRequestedAction(actor, taken.Action);
+        NpcActionRuntime requestedAction = npcDecisionSystem.CreateRequestedAction(actor, escape);
         Assert.That(requestedAction, Is.Not.Null);
 
         NpcDecisionRecord decision = fixture.DecisionRecorder.RecordChosenAction(
@@ -143,11 +147,12 @@ public sealed class ScheduledDirectiveTests
 
         NpcActionData escape = SimulationTestFactory.CreateAction("escape", NpcActionType.EscapePrison, NpcActionCategory.Justice);
         ScheduledDirective directive = new ScheduledDirective(
-            "directive-force", 1L, ScheduledDirectiveMode.ForceOutcome, ScheduledDirectiveOperation.EscapePrison, "npc-actor", escape);
+            "directive-force", 1L, ScheduledDirectiveMode.ForceOutcome, ScheduledDirectiveOperation.EscapePrison,
+            "npc-actor", escape.DefinitionId, (int)escape.actionType);
 
         Assert.That(directive.Mode, Is.EqualTo(ScheduledDirectiveMode.ForceOutcome));
         Assert.That(directive.IsPending, Is.True);
-        actor.SetCurrentActionRuntime(new NpcActionRuntime(directive.Action));
+        actor.SetCurrentActionRuntime(new NpcActionRuntime(escape));
 
         Assert.That(justice.ApplyEscapeSuccess(actor, escape.crimeSettings.escapeBountyPenalty), Is.True);
         Assert.That(directive.MarkSucceeded(fixture.Time.AbsoluteDay), Is.True);

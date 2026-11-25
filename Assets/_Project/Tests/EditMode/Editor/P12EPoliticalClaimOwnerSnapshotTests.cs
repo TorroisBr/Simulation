@@ -182,7 +182,7 @@ public sealed class P12EPoliticalClaimOwnerSnapshotTests
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(out DailyCaptureEligibilityToken token,
             out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
 
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(runtime, out P12EPoliticalClaimOwnerSnapshot snapshot,
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(runtime, out P12EPoliticalClaimOwnerSnapshot snapshot,
             out P12EPoliticalClaimSnapshotFailure failure), Is.True, failure?.Message);
         Assert.That(snapshot.Claims.SectionId, Is.EqualTo(PoliticalClaimStoreCensusProvider.ClaimsSectionId));
         Assert.That(snapshot.Recognitions.SectionId, Is.EqualTo(PoliticalClaimStoreCensusProvider.RecognitionsSectionId));
@@ -208,13 +208,13 @@ public sealed class P12EPoliticalClaimOwnerSnapshotTests
         int claimIndex = altered.IndexOf(claimWitness);
         altered[claimIndex] = new OwnerSectionCensusSnapshot(claimWitness.SectionId, claimWitness.SchemaVersion,
             claimWitness.Role, claimWitness.OwnerInstanceIdentity, claimWitness.Cardinality + 1, claimWitness.Revision);
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(runtime, token, altered,
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(runtime, token, altered,
             out P12EPoliticalClaimOwnerSnapshot rejected, out failure), Is.False);
         Assert.That(rejected, Is.Null);
         Assert.That(runtime.TryValidateCompletedDailyCaptureToken(token, out _), Is.True);
 
         Assert.That(runtime.TryRegisterPerson(new PersonRuntime(new PersonId("capture-stale"), 0L), out _), Is.True);
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(runtime, token, token.OwnerSections,
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(runtime, token, token.OwnerSections,
             out rejected, out failure), Is.False);
         Assert.That(rejected, Is.Null);
     }
@@ -228,9 +228,9 @@ public sealed class P12EPoliticalClaimOwnerSnapshotTests
         PopulateCaptureRuntime(secondRuntime, reverseInsertion: true);
         Assert.That(firstRuntime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure firstAdvance), Is.True, firstAdvance.ToString());
         Assert.That(secondRuntime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure secondAdvance), Is.True, secondAdvance.ToString());
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(firstRuntime, out P12EPoliticalClaimOwnerSnapshot first,
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(firstRuntime, out P12EPoliticalClaimOwnerSnapshot first,
             out P12EPoliticalClaimSnapshotFailure firstFailure), Is.True, firstFailure?.Message);
-        Assert.That(P12EPoliticalClaimOwnerSnapshot.TryCapture(secondRuntime, out P12EPoliticalClaimOwnerSnapshot second,
+        Assert.That(P12EPoliticalClaimCaptureAdapter.TryCapture(secondRuntime, out P12EPoliticalClaimOwnerSnapshot second,
             out P12EPoliticalClaimSnapshotFailure secondFailure), Is.True, secondFailure?.Message);
         Assert.That(Signature(first), Is.EqualTo(Signature(second)));
         Assert.That(first.Claims.Records[0].ClaimId, Is.EqualTo("claim.institution"));

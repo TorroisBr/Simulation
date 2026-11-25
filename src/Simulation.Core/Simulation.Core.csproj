@@ -11,32 +11,236 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../Packages/com.simulation.core/Runtime/IAuthoritativeMutationStatus.cs" Link="IAuthoritativeMutationStatus.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ActionExecution.cs" Link="ActionExecution.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/DomainEvents.cs" Link="DomainEvents.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/NpcChronicle.cs" Link="NpcChronicle.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/WorldCommandValues.cs" Link="WorldCommandValues.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/DailyV1DecisionRecords.cs" Link="DailyV1DecisionRecords.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/DailyV1DecisionRecordOperation.cs" Link="DailyV1DecisionRecordOperation.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/IOwnerSectionCensusProvider.cs" Link="IOwnerSectionCensusProvider.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/MutationStatusBinding.cs" Link="MutationStatusBinding.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Mutation/AuthoritativeMutationGuard.cs" Link="Mutation/AuthoritativeMutationGuard.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionContracts.cs" Link="Institution/InstitutionContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionStores.cs" Link="Institution/InstitutionStores.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionalVacancyRecognition.cs" Link="Institution/InstitutionalVacancyRecognition.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionOfficeOwnerBridge.cs" Link="Institution/InstitutionOfficeOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Institution/InstitutionOfficeCensusProviders.cs" Link="Institution/InstitutionOfficeCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EInstitutionOfficeOwnerSnapshot.cs" Link="Persistence/P12EInstitutionOfficeOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EMilitaryOwnerSnapshot.cs" Link="Persistence/P12EMilitaryOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EMilitaryOwnerCodec.cs" Link="Persistence/P12EMilitaryOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EMilitaryOwnerCensusProviders.cs" Link="Persistence/P12EMilitaryOwnerCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Conflict/PersistentBattleContracts.cs" Link="Conflict/PersistentBattleContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Conflict/PersistentBattleStore.cs" Link="Conflict/PersistentBattleStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Conflict/PersistentConflictWarContracts.cs" Link="Conflict/PersistentConflictWarContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Conflict/PersistentConflictWarStores.cs" Link="Conflict/PersistentConflictWarStores.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PersistentConflictCensusProvider.cs" Link="Persistence/PersistentConflictCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PersistentWarCensusProvider.cs" Link="Persistence/PersistentWarCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PersistentBattleCensusProvider.cs" Link="Persistence/PersistentBattleCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PersistentConflictOwnerSnapshot.cs" Link="Persistence/PersistentConflictOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PersistentWarOwnerSnapshot.cs" Link="Persistence/PersistentWarOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PersistentBattleOwnerSnapshot.cs" Link="Persistence/PersistentBattleOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPersistentConflictWarBattleOwnerCodec.cs" Link="Persistence/P12EPersistentConflictWarBattleOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EFactionCaptureSource.cs" Link="Persistence/IP12EFactionCaptureSource.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EPoliticalClaimCaptureSource.cs" Link="Persistence/IP12EPoliticalClaimCaptureSource.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EPoliticalSupportCaptureSource.cs" Link="Persistence/IP12EPoliticalSupportCaptureSource.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12EPoliticalDecisionCaptureSource.cs" Link="Persistence/IP12EPoliticalDecisionCaptureSource.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/IP12ECrimeSocialAppraisalCaptureSource.cs" Link="Persistence/IP12ECrimeSocialAppraisalCaptureSource.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CrimeSocialAppraisalOwnerContract.cs" Link="Persistence/P12CrimeSocialAppraisalOwnerContract.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ECrimeSocialAppraisalOwnerSnapshot.cs" Link="Persistence/P12ECrimeSocialAppraisalOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EJusticeRecordsOwnerSnapshot.cs" Link="Persistence/P12EJusticeRecordsOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalClaimOwnerSnapshot.cs" Link="Persistence/P12EPoliticalClaimOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalClaimOwnerCodec.cs" Link="Persistence/P12EPoliticalClaimOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalSupportOwnerSnapshot.cs" Link="Persistence/P12EPoliticalSupportOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalSupportOwnerCodec.cs" Link="Persistence/P12EPoliticalSupportOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalDecisionOwnerSnapshot.cs" Link="Persistence/P12EPoliticalDecisionOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPoliticalDecisionOwnerCodec.cs" Link="Persistence/P12EPoliticalDecisionOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12ECoreOwnerRestoreStager.cs" Link="Persistence/DailyV1P12ECoreOwnerRestoreStager.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EFactionOwnerSnapshot.cs" Link="Persistence/P12EFactionOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EFactionOwnerCodec.cs" Link="Persistence/P12EFactionOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionStoreCensusProviders.cs" Link="Political/FactionStoreCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EInstitutionOfficeOwnerCodec.cs" Link="Persistence/P12EInstitutionOfficeOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimContracts.cs" Link="Political/PoliticalClaimContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimStore.cs" Link="Political/PoliticalClaimStore.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimTransitions.cs" Link="Political/PoliticalClaimTransitions.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimOwnerBridge.cs" Link="Political/PoliticalClaimOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalClaimStoreCensusProviders.cs" Link="Political/PoliticalClaimStoreCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalSupportContracts.cs" Link="Political/PoliticalSupportContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalSupportTransitions.cs" Link="Political/PoliticalSupportTransitions.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalSupportStore.cs" Link="Political/PoliticalSupportStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalSupportStoreCensusProviders.cs" Link="Political/PoliticalSupportStoreCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalDecision.cs" Link="Political/PoliticalDecision.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalDecisionStoreCensusProvider.cs" Link="Political/PoliticalDecisionStoreCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionContracts.cs" Link="Political/FactionContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionStore.cs" Link="Political/FactionStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/FactionTransitions.cs" Link="Political/FactionTransitions.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/FactualReadAdmission.cs" Link="Application/FactualReadAdmission.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalKnowledge.cs" Link="Political/PoliticalKnowledge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalKnowledgeStore.cs" Link="Political/PoliticalKnowledgeStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Political/PoliticalKnowledgeStoreCensusProvider.cs" Link="Political/PoliticalKnowledgeStoreCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/EstateContracts.cs" Link="Property/EstateContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/EstateStore.cs" Link="Property/EstateStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/EstateCensusProvider.cs" Link="Property/EstateCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/PropertyEstateOwnerSnapshot.cs" Link="Persistence/PropertyEstateOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EPropertyEstateOwnerCodec.cs" Link="Persistence/P12EPropertyEstateOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyContracts.cs" Link="Property/PropertyContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyOwnershipStore.cs" Link="Property/PropertyOwnershipStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyOwnershipCensusProvider.cs" Link="Property/PropertyOwnershipCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyTransferContracts.cs" Link="Property/PropertyTransferContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Property/PropertyTransferSystem.cs" Link="Property/PropertyTransferSystem.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationTypes.cs" Link="Configuration/SimulationConfigurationTypes.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationDefaults.cs" Link="Configuration/SimulationConfigurationDefaults.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationResolver.cs" Link="Configuration/SimulationConfigurationResolver.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationValidator.cs" Link="Configuration/SimulationConfigurationValidator.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationConfigurationValidationResult.cs" Link="Configuration/SimulationConfigurationValidationResult.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Configuration/SimulationCompositionValidator.cs" Link="Configuration/SimulationCompositionValidator.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1EffectiveDefinitions.cs" Link="Definitions/DailyV1EffectiveDefinitions.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1ContentProjection.cs" Link="Definitions/DailyV1ContentProjection.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1TypedDefinitionValues.cs" Link="Definitions/DailyV1TypedDefinitionValues.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1DefinitionIdentity.cs" Link="Definitions/DailyV1DefinitionIdentity.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1NpcDefinitionRules.cs" Link="Definitions/DailyV1NpcDefinitionRules.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1NpcActionDecision.cs" Link="Definitions/DailyV1NpcActionDecision.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1GuardActionPlanning.cs" Link="Definitions/DailyV1GuardActionPlanning.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1CrimeActionPlanning.cs" Link="Definitions/DailyV1CrimeActionPlanning.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1TravelActionPlanning.cs" Link="Definitions/DailyV1TravelActionPlanning.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1MerchantActionPlanning.cs" Link="Definitions/DailyV1MerchantActionPlanning.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Definitions/DailyV1NpcStatusOwner.cs" Link="Definitions/DailyV1NpcStatusOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/GeographyRecords.cs" Link="Geography/GeographyRecords.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialPassageIdentity.cs" Link="Geography/SpatialPassageIdentity.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialRuntimeValues.cs" Link="Geography/SpatialRuntimeValues.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ExplorableSiteRuntime.cs" Link="Geography/ExplorableSiteRuntime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ExplorableSiteStore.cs" Link="Geography/ExplorableSiteStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialNetworkOwner.cs" Link="Geography/SpatialNetworkOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialGeography.cs" Link="Geography/SpatialGeography.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialAuthority.cs" Link="Geography/SpatialAuthority.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialPassageAuthority.cs" Link="Geography/SpatialPassageAuthority.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/LegacySpatialAnchorBindingStore.cs" Link="Geography/LegacySpatialAnchorBindingStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/PersonSpatialPositionStore.cs" Link="Geography/PersonSpatialPositionStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialPassageTraversalOptionResolver.cs" Link="Geography/SpatialPassageTraversalOptionResolver.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/P12P8CCensusProviders.cs" Link="Geography/P12P8CCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialRouteKnowledge.cs" Link="Geography/SpatialRouteKnowledge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialRoutePlanningSystem.cs" Link="Geography/SpatialRoutePlanningSystem.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/SpatialRouteKnowledgeStore.cs" Link="Geography/SpatialRouteKnowledgeStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/PersonRoutePlanStore.cs" Link="Geography/PersonRoutePlanStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/P12P8DCensusProviders.cs" Link="Geography/P12P8DCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Geography/P8ETravelTransactionCoordinator.cs" Link="Geography/P8ETravelTransactionCoordinator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationHost.cs" Link="Application/DailyV1ApplicationHost.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1Application.cs" Link="Application/DailyV1Application.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12GContinuationSourceWitness.cs" Link="Persistence/DailyV1P12GContinuationSourceWitness.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AReceiptOwnerCodec.cs" Link="Persistence/P12AReceiptOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1P18ReceiptOwners.cs" Link="Application/DailyV1P18ReceiptOwners.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12EJusticeRecordsOwnerCodec.cs" Link="Persistence/P12EJusticeRecordsOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ECrimeSocialAppraisalOwnerCodec.cs" Link="Persistence/P12ECrimeSocialAppraisalOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ADailyV1ImageOwnerDecoder.cs" Link="Persistence/P12ADailyV1ImageOwnerDecoder.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12ECoreOwnerSourceCapture.cs" Link="Persistence/DailyV1P12ECoreOwnerSourceCapture.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12GCoreBoundOwnerSources.cs" Link="Persistence/DailyV1P12GCoreBoundOwnerSources.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12GCoreBoundCityOwnerSources.cs" Link="Persistence/DailyV1P12GCoreBoundCityOwnerSources.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ApplicationSessionGate.cs" Link="Application/DailyV1ApplicationSessionGate.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1P12CrimeJusticeMutationCoordinator.cs" Link="Application/DailyV1P12CrimeJusticeMutationCoordinator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1GenesisComposer.cs" Link="Application/DailyV1GenesisComposer.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1RestoredExecutionBoundaryComposer.cs" Link="Application/DailyV1RestoredExecutionBoundaryComposer.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedOwnerSectionCensusContract.cs" Link="Application/DailyV1SelectedOwnerSectionCensusContract.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ActorChoiceContracts.cs" Link="Application/ActorChoiceContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ActorChoiceStore.cs" Link="Application/ActorChoiceStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/ScheduledDirectiveStore.cs" Link="Application/ScheduledDirectiveStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ActorTurnExecutionStage.cs" Link="Application/DailyV1ActorTurnExecutionStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedActorActionExecutionStage.cs" Link="Application/DailyV1SelectedActorActionExecutionStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedDailyExecutionStage.cs" Link="Application/DailyV1SelectedDailyExecutionStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedCrimeJusticeDailyStage.cs" Link="Application/DailyV1SelectedCrimeJusticeDailyStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedDemographyStage.cs" Link="Application/DailyV1SelectedDemographyStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedNpcPersonBindingOperation.cs" Link="Application/DailyV1SelectedNpcPersonBindingOperation.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedMerchantTradeStateOperation.cs" Link="Application/DailyV1SelectedMerchantTradeStateOperation.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1CommercialKnowledgeSharingStage.cs" Link="Application/DailyV1CommercialKnowledgeSharingStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedLocalKnowledgeRefreshStage.cs" Link="Application/DailyV1SelectedLocalKnowledgeRefreshStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1RuntimeAdvanceStage.cs" Link="Application/DailyV1RuntimeAdvanceStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/SimulationRuntimeAdvanceFailure.cs" Link="Application/SimulationRuntimeAdvanceFailure.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyCaptureEligibilityToken.cs" Link="Application/DailyCaptureEligibilityToken.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DomainEventAuthority.cs" Link="Application/DomainEventAuthority.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1DecisionOccurrenceReceiptAuthority.cs" Link="Application/DailyV1DecisionOccurrenceReceiptAuthority.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1DomainEventAuthority.cs" Link="Application/DailyV1DomainEventAuthority.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1ExecutionBoundaryState.cs" Link="Application/DailyV1ExecutionBoundaryState.cs" />
+
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1MutationEpochState.cs" Link="Application/DailyV1MutationEpochState.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/SimulationRuntimeAdmissionContext.cs" Link="Application/SimulationRuntimeAdmissionContext.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/SimulationLogger.cs" Link="Application/SimulationLogger.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/SimulationRecordSequence.cs" Link="Persistence/SimulationRecordSequence.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/SimulationRecordSequenceOwnerBridge.cs" Link="Persistence/SimulationRecordSequenceOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/CalendarDefinition.cs" Link="Calendar/CalendarDefinition.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationCalendar.cs" Link="Calendar/SimulationCalendar.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationDate.cs" Link="Calendar/SimulationDate.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationTime.cs" Link="Calendar/SimulationTime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Calendar/SimulationTimeOwnerBridge.cs" Link="Calendar/SimulationTimeOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Determinism/DeterministicRandom.cs" Link="Determinism/DeterministicRandom.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/StableKeyEncoding.cs" Link="Identity/StableKeyEncoding.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/PersonId.cs" Link="Identity/PersonId.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/WorldIdentity.cs" Link="Identity/WorldIdentity.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocator.cs" Link="Identity/RuntimeIdAllocator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/DailyV1RuntimeIdentityIndex.cs" Link="Identity/DailyV1RuntimeIdentityIndex.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocatorCensusCounter.cs" Link="Identity/RuntimeIdAllocatorCensusCounter.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocatorOwnerBridge.cs" Link="Identity/RuntimeIdAllocatorOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonRuntime.cs" Link="Person/PersonRuntime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1NpcRuntimeOwners.cs" Link="Person/DailyV1NpcRuntimeOwners.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1NpcMerchantTradeStateReceiptOwner.cs" Link="Person/DailyV1NpcMerchantTradeStateReceiptOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1NpcOwnerCensusProviders.cs" Link="Person/DailyV1NpcOwnerCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Military/ArmedForceContracts.cs" Link="Military/ArmedForceContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Military/ArmedForceStore.cs" Link="Military/ArmedForceStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Military/ArmedForceStoreCensusProviders.cs" Link="Military/ArmedForceStoreCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Military/ArmedForceSpatialPosition.cs" Link="Military/ArmedForceSpatialPosition.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Military/MilitaryManpowerFoundation.cs" Link="Military/MilitaryManpowerFoundation.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/DailyV1NpcLocalTopologyKnowledgeEmptyOwner.cs" Link="Knowledge/DailyV1NpcLocalTopologyKnowledgeEmptyOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1JusticeRecordsOwner.cs" Link="Person/DailyV1JusticeRecordsOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Social/CrimeSocialAppraisal.cs" Link="Social/CrimeSocialAppraisal.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Social/SocialAppraisalContracts.cs" Link="Social/SocialAppraisalContracts.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Social/P12CrimeSocialAppraisalBoundaries.cs" Link="Social/P12CrimeSocialAppraisalBoundaries.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/DailyV1NpcMerchantTradePlanOwner.cs" Link="Person/DailyV1NpcMerchantTradePlanOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/NpcLifeState.cs" Link="Person/NpcLifeState.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/DailyV1CommercialKnowledgeOwner.cs" Link="Knowledge/DailyV1CommercialKnowledgeOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/DailyV1ExplorableSiteKnowledgeOwner.cs" Link="Knowledge/DailyV1ExplorableSiteKnowledgeOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/DailyV1AdventureSiteIntelKnowledgeOwner.cs" Link="Knowledge/DailyV1AdventureSiteIntelKnowledgeOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/SpatialKnowledgeRuntime.cs" Link="Knowledge/SpatialKnowledgeRuntime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/CommercialActionEvidence.cs" Link="Knowledge/CommercialActionEvidence.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/ExplorableSiteKnowledgeValues.cs" Link="Knowledge/ExplorableSiteKnowledgeValues.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/AdventureSiteIntelValues.cs" Link="Knowledge/AdventureSiteIntelValues.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Knowledge/PlaceAccessState.cs" Link="Knowledge/PlaceAccessState.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1CityRuntimeOwners.cs" Link="City/DailyV1CityRuntimeOwners.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1CityEconomyContinuation.cs" Link="City/DailyV1CityEconomyContinuation.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1PopulationConsumptionOperation.cs" Link="Economy/DailyV1PopulationConsumptionOperation.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/EconomyTransactionResult.cs" Link="Economy/EconomyTransactionResult.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1MoneyTransferOperation.cs" Link="Economy/DailyV1MoneyTransferOperation.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1FiniteProductionSourceOwner.cs" Link="City/DailyV1FiniteProductionSourceOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelTransitionPlan.cs" Link="City/DailyV1SelectedTravelTransitionPlan.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedSoloTravelExecution.cs" Link="City/DailyV1SelectedSoloTravelExecution.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelPartyChargeExecution.cs" Link="City/DailyV1SelectedTravelPartyChargeExecution.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/City/DailyV1SelectedTravelPartyStartExecution.cs" Link="City/DailyV1SelectedTravelPartyStartExecution.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedRuntimeOwnerGraph.cs" Link="Application/DailyV1SelectedRuntimeOwnerGraph.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1CorePersonStoreCensusComposition.cs" Link="Application/DailyV1CorePersonStoreCensusComposition.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1CoreSelectedOwnerCensusProviderComposition.cs" Link="Application/DailyV1CoreSelectedOwnerCensusProviderComposition.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedLocalKnowledgeOwnerBinding.cs" Link="Application/DailyV1SelectedLocalKnowledgeOwnerBinding.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedActionExecutionStage.cs" Link="Application/DailyV1SelectedActionExecutionStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedCrimeActionExecutionStage.cs" Link="Application/DailyV1SelectedCrimeActionExecutionStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedStealActionExecutionStage.cs" Link="Application/DailyV1SelectedStealActionExecutionStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Application/DailyV1SelectedTravelDayStage.cs" Link="Application/DailyV1SelectedTravelDayStage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Travel/TravelPartyOwners.cs" Link="Travel/TravelPartyOwners.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonStore.cs" Link="Person/PersonStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonStoreCensusProviders.cs" Link="Person/PersonStoreCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonRuntimeOwnerBridge.cs" Link="Person/PersonRuntimeOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonAgeCalculator.cs" Link="Person/PersonAgeCalculator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonMaturityCalculator.cs" Link="Person/PersonMaturityCalculator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonChronologyOwnerBridge.cs" Link="Person/PersonChronologyOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonChronologyResults.cs" Link="Person/PersonChronologyResults.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Person/PersonNaturalMortalityQuery.cs" Link="Person/PersonNaturalMortalityQuery.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Temporal/LogicalTimeline.cs" Link="Temporal/LogicalTimeline.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Temporal/P18DDailyBoundaryOwner.cs" Link="Temporal/P18DDailyBoundaryOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ExpeditionRuntime.cs" Link="Expedition/ExpeditionRuntime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ExpeditionStore.cs" Link="Expedition/ExpeditionStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ScheduledDirectiveCensusProvider.cs" Link="Persistence/ScheduledDirectiveCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12FScheduledDirectiveOwnerSnapshot.cs" Link="Persistence/P12FScheduledDirectiveOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12FStandaloneOwnerSnapshots.cs" Link="Persistence/P12FStandaloneOwnerSnapshots.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AFPoliticalKnowledgeCodec.cs" Link="Persistence/P12AFPoliticalKnowledgeCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AFScheduledDirectiveCodec.cs" Link="Persistence/P12AFScheduledDirectiveCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/ExpeditionCensusProvider.cs" Link="Expedition/ExpeditionCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/P12FExpeditionOwnerSnapshot.cs" Link="Expedition/P12FExpeditionOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ExplorableSiteOwnerSnapshot.cs" Link="Persistence/ExplorableSiteOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12FExpeditionOwnerSnapshotStager.cs" Link="Persistence/P12FExpeditionOwnerSnapshotStager.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/AggregateDemographyPolicyContracts.cs" Link="Population/AggregateDemographyPolicyContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/DemographicSampling.cs" Link="Population/DemographicSampling.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Population/DeterministicAggregateDemographyProvider.cs" Link="Population/DeterministicAggregateDemographyProvider.cs" />
@@ -52,15 +256,96 @@
     <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyContracts.cs" Link="Genealogy/GenealogyContracts.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyOwnerBridge.cs" Link="Genealogy/GenealogyOwnerBridge.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyStore.cs" Link="Genealogy/GenealogyStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Genealogy/GenealogyCensusProvider.cs" Link="Genealogy/GenealogyCensusProvider.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/GenealogyOwnerSnapshot.cs" Link="Persistence/GenealogyOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AGenealogyOwnerCodec.cs" Link="Persistence/P12AGenealogyOwnerCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketItemDefinition.cs" Link="Economy/MarketItemDefinition.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1InventoryMarketOwners.cs" Link="Economy/DailyV1InventoryMarketOwners.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedOpenMarketSale.cs" Link="Economy/DailyV1SelectedOpenMarketSale.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1KeyedSaleReceiptOwner.cs" Link="Economy/DailyV1KeyedSaleReceiptOwner.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedOpenMarketActionExecution.cs" Link="Economy/DailyV1SelectedOpenMarketActionExecution.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedNpcTradeExecution.cs" Link="Economy/DailyV1SelectedNpcTradeExecution.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedMarketSaleProfit.cs" Link="Economy/DailyV1SelectedMarketSaleProfit.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedOpenMarketPurchase.cs" Link="Economy/DailyV1SelectedOpenMarketPurchase.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1SelectedCrossCityBuyExecution.cs" Link="Economy/DailyV1SelectedCrossCityBuyExecution.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MoneyAccountRuntime.cs" Link="Economy/MoneyAccountRuntime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketCounterpartyRuntime.cs" Link="Economy/MarketCounterpartyRuntime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/PopulationEconomyRuntime.cs" Link="Economy/PopulationEconomyRuntime.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MoneyAccountOwnerBridge.cs" Link="Economy/MoneyAccountOwnerBridge.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/CityMaterialFlowProfiles.cs" Link="Economy/CityMaterialFlowProfiles.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/DailyV1MixedSourceProfileAdmission.cs" Link="Economy/DailyV1MixedSourceProfileAdmission.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/MarketPriceCalculator.cs" Link="Economy/MarketPriceCalculator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/CityProductionResult.cs" Link="Economy/CityProductionResult.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/CityConsumptionResult.cs" Link="Economy/CityConsumptionResult.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/LocalDailyMaterialFlow.cs" Link="Economy/LocalDailyMaterialFlow.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/FiniteSourceProductionKernel.cs" Link="Economy/FiniteSourceProductionKernel.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Economy/FiniteSourceScenarioRuntime.cs" Link="Economy/FiniteSourceScenarioRuntime.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ContinuationWire.cs" Link="Persistence/ContinuationWire.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACompatibilityDescriptor.cs" Link="Persistence/P12ACompatibilityDescriptor.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CP9GenesisManifestCoreSnapshot.cs" Link="Persistence/P12CP9GenesisManifestCoreSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AContinuationImage.cs" Link="Persistence/P12AContinuationImage.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AContinuationCodec.cs" Link="Persistence/P12AContinuationCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACausalRootOwnerCodec.cs" Link="Persistence/P12ACausalRootOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACausalRootImageCodec.cs" Link="Persistence/P12ACausalRootImageCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACSpatialAuthorityCodec.cs" Link="Persistence/P12ACSpatialAuthorityCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12P8AImageSectionContract.cs" Link="Persistence/P12P8AImageSectionContract.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ACP9ManifestCodec.cs" Link="Persistence/P12ACP9ManifestCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Identity/RuntimeIdAllocatorCensusProviders.cs" Link="Identity/RuntimeIdAllocatorCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/SimulationRecordSequenceCensus.cs" Link="Persistence/SimulationRecordSequenceCensus.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AContinuationStore.cs" Link="Persistence/P12AContinuationStore.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AExactEmptyOwnerCodec.cs" Link="Persistence/P12AExactEmptyOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ADailyV1ImageComposer.cs" Link="Persistence/P12ADailyV1ImageComposer.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/SpatialAuthorityContinuationSnapshot.cs" Link="Persistence/SpatialAuthorityContinuationSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CWorldIdentitySnapshot.cs" Link="Persistence/P12CWorldIdentitySnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CRuntimeIdentityOwnerSnapshot.cs" Link="Persistence/P12CRuntimeIdentityOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CRuntimeIdentitySectionContract.cs" Link="Persistence/P12CRuntimeIdentitySectionContract.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ARuntimeIdentityOwnerCodec.cs" Link="Persistence/P12ARuntimeIdentityOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ASpatialNetworkOwnerCodec.cs" Link="Persistence/P12ASpatialNetworkOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/SpatialNetworkOwnerSnapshot.cs" Link="Persistence/SpatialNetworkOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12DSpatialNetworkOwnerHydrator.cs" Link="Persistence/P12DSpatialNetworkOwnerHydrator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12CSelectedCoreRootStager.cs" Link="Persistence/P12CSelectedCoreRootStager.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1RestoredOwnerVectorContract.cs" Link="Persistence/DailyV1RestoredOwnerVectorContract.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DRelationshipValidator.cs" Link="Persistence/DailyV1P12DRelationshipValidator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DSelectedOwnerGraphStager.cs" Link="Persistence/DailyV1P12DSelectedOwnerGraphStager.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DSelectedCoreOwnerStager.cs" Link="Persistence/DailyV1P12DSelectedCoreOwnerStager.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12DSelectedOwnerRows.cs" Link="Persistence/P12DSelectedOwnerRows.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DCityCoreOwnerHydrator.cs" Link="Persistence/DailyV1P12DCityCoreOwnerHydrator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12DCityOwnerImageDecoder.cs" Link="Persistence/P12DCityOwnerImageDecoder.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12DNpcCoreOwnerHydrator.cs" Link="Persistence/DailyV1P12DNpcCoreOwnerHydrator.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12DNpcFRow.cs" Link="Persistence/P12DNpcFRow.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12DNpcCommercialShareReceiptValue.cs" Link="Persistence/P12DNpcCommercialShareReceiptValue.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ADailyV1NpcOwnerBatchDecoder.cs" Link="Persistence/P12ADailyV1NpcOwnerBatchDecoder.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcAdventureIntelOwnerCodec.cs" Link="Persistence/P12ANpcAdventureIntelOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcCommercialKnowledgeOwnerCodec.cs" Link="Persistence/P12ANpcCommercialKnowledgeOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcCurrentActionOwnerCodec.cs" Link="Persistence/P12ANpcCurrentActionOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcExplorableSiteKnowledgeOwnerCodec.cs" Link="Persistence/P12ANpcExplorableSiteKnowledgeOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcInventoryOwnerCodec.cs" Link="Persistence/P12ANpcInventoryOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcLifeStateOwnerCodec.cs" Link="Persistence/P12ANpcLifeStateOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcLocalTopologyKnowledgeEmptyOwnerCodec.cs" Link="Persistence/P12ANpcLocalTopologyKnowledgeEmptyOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcMerchantTradePlanOwnerCodec.cs" Link="Persistence/P12ANpcMerchantTradePlanOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcMoneyAccountOwnerCodec.cs" Link="Persistence/P12ANpcMoneyAccountOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcOwnerCodec.cs" Link="Persistence/P12ANpcOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcOwnerDecoder.cs" Link="Persistence/P12ANpcOwnerDecoder.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcReceiptEmptyOwnerCodec.cs" Link="Persistence/P12ANpcReceiptEmptyOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcResidenceOwnerCodec.cs" Link="Persistence/P12ANpcResidenceOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcSpatialKnowledgeOwnerCodec.cs" Link="Persistence/P12ANpcSpatialKnowledgeOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcStatusCrimeOwnerCodec.cs" Link="Persistence/P12ANpcStatusCrimeOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcTravelPlanOwnerCodec.cs" Link="Persistence/P12ANpcTravelPlanOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12ANpcTravelStateOwnerCodec.cs" Link="Persistence/P12ANpcTravelStateOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12APersonStoreOwnerCodec.cs" Link="Persistence/P12APersonStoreOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12APersonLifeResidenceOwnerCodec.cs" Link="Persistence/P12APersonLifeResidenceOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ActorChoiceCensusProviders.cs" Link="Persistence/ActorChoiceCensusProviders.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12FActorChoiceSnapshot.cs" Link="Persistence/P12FActorChoiceSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AActorChoiceCodec.cs" Link="Persistence/P12AActorChoiceCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12FTravelPartyOwnerSnapshot.cs" Link="Persistence/P12FTravelPartyOwnerSnapshot.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1P12FTravelPartyOwnerStager.cs" Link="Persistence/DailyV1P12FTravelPartyOwnerStager.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P12AFCommitmentOwnerCodec.cs" Link="Persistence/P12AFCommitmentOwnerCodec.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/TravelPartyCensusProvider.cs" Link="Persistence/TravelPartyCensusProvider.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/ContinuationDescriptorV2.cs" Link="Persistence/ContinuationDescriptorV2.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/AtomicFileSlot.cs" Link="Persistence/AtomicFileSlot.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/NumericProfileIdentity.cs" Link="Persistence/NumericProfileIdentity.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1CompatibilityFingerprint.cs" Link="Persistence/DailyV1CompatibilityFingerprint.cs" />
+    <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/DailyV1CompatibilityDescriptorFactory.cs" Link="Persistence/DailyV1CompatibilityDescriptorFactory.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Persistence/P18DCommercialSharingCodec.cs" Link="Persistence/P18DCommercialSharingCodec.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/Numerics/UnityMathfCompatibility.cs" Link="Numerics/UnityMathfCompatibility.cs" />
   </ItemGroup>

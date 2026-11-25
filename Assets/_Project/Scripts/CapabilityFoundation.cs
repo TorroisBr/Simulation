@@ -342,7 +342,7 @@ public sealed class GenericCapabilityModel : ICapabilityModel
             throw new ArgumentNullException(nameof(participant));
         }
 
-        CapabilityAuthoringValidator.ThrowIfInvalidNpc(participant.NpcData);
+        CapabilityAuthoringValidator.ThrowIfInvalidNpc(participant);
         List<CapabilityBreakdownEntry> breakdown = new List<CapabilityBreakdownEntry>();
         float total = 0f;
 
@@ -351,7 +351,7 @@ public sealed class GenericCapabilityModel : ICapabilityModel
 
         foreach (GenericTraitCapabilityModifier traitModifier in configuration.TraitModifiers)
         {
-            if (traitModifier == null || participant.NpcData.traits.Contains(traitModifier.Trait) == false)
+            if (traitModifier == null || participant.HasTrait(traitModifier.Trait) == false)
             {
                 continue;
             }
@@ -374,21 +374,39 @@ public sealed class GenericCapabilityModel : ICapabilityModel
                 continue;
             }
 
-            CapabilityAuthoringValidator.ThrowIfInvalidItem(inventoryItem.Item);
-            foreach (CapabilityAttributeModifier itemModifier in inventoryItem.Item.CapabilityModifiers)
+            if (participant.SelectedDailyV1Definition != null)
             {
-                if (itemModifier == null)
+                if (!participant.TryGetSelectedDailyV1Item(inventoryItem.Item, out DailyV1ItemDefinition itemNode))
+                    throw new InvalidOperationException("An inventory item is not the exact item admitted by the selected Daily-v1 graph.");
+                CapabilityAuthoringValidator.ThrowIfInvalidItem(itemNode, participant.SelectedDailyV1DefinitionGraph);
+                foreach (DailyV1CapabilityAttributeModifier itemModifier in itemNode.Values.capabilityModifiers)
                 {
-                    continue;
+                    if (!participant.TryGetSelectedDailyV1CapabilityAttribute(itemModifier.attribute, out CapabilityAttributeData attribute))
+                        throw new InvalidOperationException("A selected Daily-v1 item capability modifier has no exact admitted attribute asset.");
+                    total += AddAttributeContribution(
+                        CapabilityContributionSource.Item,
+                        itemNode.DefinitionId,
+                        attribute,
+                        itemModifier.additiveValue,
+                        GetAttributeWeight(attribute),
+                        breakdown);
                 }
-
-                total += AddAttributeContribution(
-                    CapabilityContributionSource.Item,
-                    inventoryItem.Item.DefinitionId,
-                    itemModifier.Attribute,
-                    itemModifier.AdditiveValue,
-                    GetAttributeWeight(itemModifier.Attribute),
-                    breakdown);
+            }
+            else
+            {
+                CapabilityAuthoringValidator.ThrowIfInvalidItem(inventoryItem.Item);
+                foreach (CapabilityAttributeModifier itemModifier in inventoryItem.Item.CapabilityModifiers)
+                {
+                    if (itemModifier == null)
+                        continue;
+                    total += AddAttributeContribution(
+                        CapabilityContributionSource.Item,
+                        inventoryItem.Item.DefinitionId,
+                        itemModifier.Attribute,
+                        itemModifier.AdditiveValue,
+                        GetAttributeWeight(itemModifier.Attribute),
+                        breakdown);
+                }
             }
         }
 
@@ -435,7 +453,7 @@ public sealed class GenericCapabilityModel : ICapabilityModel
         float weight,
         List<CapabilityBreakdownEntry> breakdown)
     {
-        float value = GetAttributeValue(participant.NpcData.capabilityValues, attribute);
+        float value = participant.GetCapabilityAttributeValue(attribute);
         return AddAttributeContribution(
             CapabilityContributionSource.BaseAttribute,
             attribute.DefinitionId,
@@ -567,6 +585,136 @@ public sealed class GenericCapabilityModel : ICapabilityModel
 
 public static class CapabilityAuthoringValidator
 {
+    public static bool ValidateItem(
+        DailyV1ItemDefinition itemDefinition,
+        DailyV1EffectiveDefinitions definitions,
+        out string diagnostic)
+    {
+        if (itemDefinition == null)
+        {
+            diagnostic = "Daily-v1 item definition is null.";
+            return false;
+        }
+        if (definitions == null
+            || !definitions.Items.TryGetValue(itemDefinition.DefinitionId, out DailyV1ItemDefinition admittedItem)
+            || !ReferenceEquals(admittedItem, itemDefinition))
+        {
+            diagnostic = "Daily-v1 item definition is not the exact node admitted by its graph.";
+            return false;
+        }
+        IReadOnlyList<DailyV1CapabilityAttributeModifier> modifiers = itemDefinition.Values.capabilityModifiers;
+        if (modifiers == null)
+        {
+            diagnostic = "Daily-v1 item capability modifiers collection is null.";
+            return false;
+        }
+        for (int i = 0; i < modifiers.Count; i++)
+        {
+            DailyV1CapabilityAttributeModifier modifier = modifiers[i];
+            if (modifier == null)
+            {
+                diagnostic = "Daily-v1 item capability modifier at index " + i.ToString(CultureInfo.InvariantCulture) + " is null.";
+                return false;
+            }
+            if (string.IsNullOrWhiteSpace(modifier.attribute)
+                || !definitions.CapabilityAttributes.ContainsKey(modifier.attribute))
+            {
+                diagnostic = "Daily-v1 item capability modifier at index " + i.ToString(CultureInfo.InvariantCulture)
+                    + " has an attribute outside the admitted graph.";
+                return false;
+            }
+            if (float.IsNaN(modifier.additiveValue) || float.IsInfinity(modifier.additiveValue) || modifier.additiveValue < 0f)
+            {
+                diagnostic = "Daily-v1 item capability modifier for attribute '" + modifier.attribute + "' must be finite and non-negative.";
+                return false;
+            }
+        }
+        diagnostic = null;
+        return true;
+    }
+
+    public static bool ValidateNpc(
+        DailyV1NpcDefinition npcDefinition,
+        DailyV1EffectiveDefinitions definitions,
+        out string diagnostic)
+    {
+        if (npcDefinition == null)
+        {
+            diagnostic = "Daily-v1 NPC definition is null.";
+            return false;
+        }
+        if (definitions == null
+            || !definitions.Npcs.TryGetValue(npcDefinition.DefinitionId, out DailyV1NpcDefinition admittedNpc)
+            || !ReferenceEquals(admittedNpc, npcDefinition))
+        {
+            diagnostic = "Daily-v1 NPC definition is not the exact node admitted by its graph.";
+            return false;
+        }
+
+        DailyV1NpcData values = npcDefinition.Values;
+        if (values.capabilityValues == null)
+        {
+            diagnostic = "Daily-v1 NPC capability values collection is null.";
+            return false;
+        }
+
+        HashSet<string> attributeIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < values.capabilityValues.Count; i++)
+        {
+            DailyV1CapabilityAttributeValue value = values.capabilityValues[i];
+            if (value == null)
+            {
+                diagnostic = "Daily-v1 NPC capability value at index " + i.ToString(CultureInfo.InvariantCulture) + " is null.";
+                return false;
+            }
+            if (string.IsNullOrWhiteSpace(value.attribute))
+            {
+                diagnostic = "Daily-v1 NPC capability value at index " + i.ToString(CultureInfo.InvariantCulture) + " has a null attribute.";
+                return false;
+            }
+            if (!definitions.CapabilityAttributes.ContainsKey(value.attribute))
+            {
+                diagnostic = "Daily-v1 NPC capability value references an attribute outside the admitted graph: '" + value.attribute + "'.";
+                return false;
+            }
+            if (!attributeIds.Add(value.attribute))
+            {
+                diagnostic = "Daily-v1 NPC contains duplicate capability attribute DefinitionId '" + value.attribute + "'.";
+                return false;
+            }
+            if (float.IsNaN(value.value) || float.IsInfinity(value.value) || value.value < 0f)
+            {
+                diagnostic = "Daily-v1 NPC capability value for attribute '" + value.attribute + "' must be finite and non-negative.";
+                return false;
+            }
+        }
+
+        if (values.traits == null)
+        {
+            diagnostic = "Daily-v1 NPC traits collection is null.";
+            return false;
+        }
+        HashSet<string> traitIds = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < values.traits.Count; i++)
+        {
+            string traitId = values.traits[i];
+            if (string.IsNullOrWhiteSpace(traitId) || !definitions.Traits.ContainsKey(traitId))
+            {
+                diagnostic = "Daily-v1 NPC trait at index " + i.ToString(CultureInfo.InvariantCulture)
+                    + " is missing or outside the admitted graph.";
+                return false;
+            }
+            if (!traitIds.Add(traitId))
+            {
+                diagnostic = "Daily-v1 NPC contains duplicate trait DefinitionId '" + traitId + "'.";
+                return false;
+            }
+        }
+
+        diagnostic = null;
+        return true;
+    }
+
     public static bool ValidateNpc(NpcData npcData, out string diagnostic)
     {
         if (npcData == null)
@@ -766,12 +914,32 @@ public static class CapabilityAuthoringValidator
         }
     }
 
+    public static void ThrowIfInvalidNpc(NpcRuntime npcRuntime)
+    {
+        if (npcRuntime == null)
+            throw new ArgumentNullException(nameof(npcRuntime));
+        if (npcRuntime.SelectedDailyV1Definition == null)
+        {
+            ThrowIfInvalidNpc(npcRuntime.NpcData);
+            return;
+        }
+        if (!ValidateNpc(npcRuntime.SelectedDailyV1Definition, npcRuntime.SelectedDailyV1DefinitionGraph,
+            out string diagnostic))
+            throw new InvalidOperationException("Invalid selected Daily-v1 NPC capability definition: " + diagnostic);
+    }
+
     public static void ThrowIfInvalidItem(ItemData itemData)
     {
         if (ValidateItem(itemData, out string diagnostic) == false)
         {
             throw new InvalidOperationException("Invalid item capability authoring: " + diagnostic);
         }
+    }
+
+    public static void ThrowIfInvalidItem(DailyV1ItemDefinition itemDefinition, DailyV1EffectiveDefinitions definitions)
+    {
+        if (!ValidateItem(itemDefinition, definitions, out string diagnostic))
+            throw new InvalidOperationException("Invalid selected Daily-v1 item capability definition: " + diagnostic);
     }
 
     public static void ThrowIfInvalidConfiguration(GenericCapabilityModelConfiguration configuration)

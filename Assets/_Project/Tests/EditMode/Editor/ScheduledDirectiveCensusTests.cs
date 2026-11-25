@@ -53,7 +53,7 @@ public sealed class ScheduledDirectiveCensusTests
     public void AddWithInitialSkipIsOneCommitAndPrepareSkipIsOneOwnerTransition()
     {
         SimulationTime time = new SimulationTime();
-        ScheduledDirectiveStore store = new ScheduledDirectiveStore(time);
+        ScheduledDirectiveStore store = new ScheduledDirectiveStore(time, UnitySimulationLoggerAdapter.Create(null));
         ScheduledDirectiveCensusProvider provider = new ScheduledDirectiveCensusProvider(store);
 
         ScheduledDirective zeroDay = CreateDirective("zero", 0L);
@@ -118,7 +118,7 @@ public sealed class ScheduledDirectiveCensusTests
     [Test]
     public void DuplicateAddAndInvalidTransitionDoNotAdvanceRevision()
     {
-        ScheduledDirectiveStore store = new ScheduledDirectiveStore(new SimulationTime());
+        ScheduledDirectiveStore store = new ScheduledDirectiveStore(new SimulationTime(), UnitySimulationLoggerAdapter.Create(null));
         ScheduledDirectiveCensusProvider provider = new ScheduledDirectiveCensusProvider(store);
         Assert.That(store.Add(CreateDirective("duplicate", 1L)), Is.True);
         long revision = store.Revision;
@@ -127,7 +127,7 @@ public sealed class ScheduledDirectiveCensusTests
         Assert.That(store.Directives[0].MarkFailed(-1L, "invalid"), Is.False);
         AssertCensus(provider, store, 1, revision);
 
-        ScheduledDirectiveStore otherStore = new ScheduledDirectiveStore(new SimulationTime());
+        ScheduledDirectiveStore otherStore = new ScheduledDirectiveStore(new SimulationTime(), UnitySimulationLoggerAdapter.Create(null));
         ScheduledDirectiveCensusProvider otherProvider = new ScheduledDirectiveCensusProvider(otherStore);
         LogAssert.Expect(LogType.Error, "Cannot add scheduled directive: directive is owned by another runtime.");
         Assert.That(otherStore.Add(store.Directives[0]), Is.False);
@@ -401,7 +401,8 @@ public sealed class ScheduledDirectiveCensusTests
         Assert.That(original, Is.Not.Null);
         callbackField.SetValue(fixture.Store, new Action(() =>
         {
-            SetPrivateField(protocol, "mutationEpoch", long.MaxValue);
+            SimulationTestFactory.SetContinuationMutationEpoch(
+                (ContinuationCensusProtocol)protocol, long.MaxValue);
             original();
         }));
 
@@ -507,7 +508,8 @@ public sealed class ScheduledDirectiveCensusTests
             mode,
             ScheduledDirectiveOperation.EscapePrison,
             actorId,
-            action);
+            action.DefinitionId,
+            (int)action.actionType);
     }
 
     private static void AssertCensus(
@@ -557,7 +559,8 @@ public sealed class ScheduledDirectiveCensusTests
     private static long ReadMutationEpoch(SimulationRuntime runtime)
     {
         object protocol = ReadPrivateField<object>(runtime, "npcRosterCensusProtocol");
-        return ReadPrivateField<long>(protocol, "mutationEpoch");
+        return SimulationTestFactory.ReadContinuationMutationEpoch(
+            (ContinuationCensusProtocol)protocol);
     }
 
     private static void AssertMutationEpoch(SimulationRuntime runtime, long expected, string message)
@@ -571,7 +574,8 @@ public sealed class ScheduledDirectiveCensusTests
     private static void SetMutationEpoch(SimulationRuntime runtime, long epoch)
     {
         object protocol = ReadPrivateField<object>(runtime, "npcRosterCensusProtocol");
-        SetPrivateField(protocol, "mutationEpoch", epoch);
+        SimulationTestFactory.SetContinuationMutationEpoch(
+            (ContinuationCensusProtocol)protocol, epoch);
     }
 
     private static void AssertDirectiveRemainsUnbound(ScheduledDirective directive)

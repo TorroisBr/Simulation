@@ -1,13 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
-
-public enum OwnerSectionRole
-{
-    Required,
-    ExplicitlyEmpty,
-    Excluded
-}
 
 public enum ContinuationCensusFailure
 {
@@ -38,52 +32,22 @@ public sealed class OwnerSectionContract
     public OwnerSectionRole Role { get; }
 }
 
-/// <summary>Copied live owner evidence captured only at a quiescent boundary.</summary>
-internal sealed class OwnerSectionCensusSnapshot
-{
-    internal OwnerSectionCensusSnapshot(
-        string sectionId,
-        int schemaVersion,
-        OwnerSectionRole role,
-        object ownerInstanceIdentity,
-        int cardinality,
-        long revision)
-    {
-        SectionId = sectionId ?? throw new ArgumentNullException(nameof(sectionId));
-        SchemaVersion = schemaVersion;
-        Role = role;
-        OwnerInstanceIdentity = ownerInstanceIdentity ?? throw new ArgumentNullException(nameof(ownerInstanceIdentity));
-        Cardinality = cardinality;
-        Revision = revision;
-    }
-
-    internal string SectionId { get; }
-    internal int SchemaVersion { get; }
-    internal OwnerSectionRole Role { get; }
-    internal object OwnerInstanceIdentity { get; }
-    internal int Cardinality { get; }
-    internal long Revision { get; }
-}
-
-/// <summary>Reads a live witness from one concrete owner instance.</summary>
-public interface IOwnerSectionCensusProvider
-{
-    OwnerSectionCensusWitness GetCurrentCensus();
-}
-
 internal sealed class ContinuationMutationEpochReservation
 {
     internal readonly ContinuationCensusProtocol Owner;
-    internal readonly object Token;
+    internal readonly DailyV1MutationEpochReservation EpochReservation;
+    internal object Token => EpochReservation.Token;
     internal readonly Thread OwnerThread;
+
+    internal bool CoreFinalized;
 
     internal ContinuationMutationEpochReservation(
         ContinuationCensusProtocol owner,
-        object token,
+        DailyV1MutationEpochReservation epochReservation,
         Thread ownerThread)
     {
         Owner = owner;
-        Token = token;
+        EpochReservation = epochReservation ?? throw new ArgumentNullException(nameof(epochReservation));
         OwnerThread = ownerThread;
     }
 }
@@ -135,6 +99,41 @@ public sealed class ContinuationCensusProtocol
         {
             Section = section;
             Witness = witness;
+        }
+    }
+
+    internal sealed class CompatibilityMirrorBaselineSnapshot
+    {
+        internal readonly ContinuationCensusProtocol Owner;
+        internal readonly object Registry;
+
+        internal CompatibilityMirrorBaselineSnapshot(
+            ContinuationCensusProtocol owner,
+            object registry)
+        {
+            Owner = owner;
+            Registry = registry;
+        }
+
+    }
+
+    internal sealed class CompatibilityMirrorBaselineUpdate
+    {
+        internal readonly ContinuationCensusProtocol Owner;
+        internal readonly DailyV1MutationEpochReservation Reservation;
+        internal readonly object PriorRegistry;
+        internal readonly object StagedRegistry;
+
+        internal CompatibilityMirrorBaselineUpdate(
+            ContinuationCensusProtocol owner,
+            DailyV1MutationEpochReservation reservation,
+            object priorRegistry,
+            object stagedRegistry)
+        {
+            Owner = owner;
+            Reservation = reservation;
+            PriorRegistry = priorRegistry;
+            StagedRegistry = stagedRegistry;
         }
     }
 
@@ -215,6 +214,15 @@ public sealed class ContinuationCensusProtocol
         new Dictionary<string, OwnerSectionContract>(StringComparer.Ordinal);
     private Dictionary<string, RegisteredSection> registeredSections =
         new Dictionary<string, RegisteredSection>(StringComparer.Ordinal);
+    private bool coreOwnedPersonStoreCensusProvidersBound;
+    private PersonStore coreOwnedPersonStoreCensusOwner;
+    private Dictionary<string, IOwnerSectionCensusProvider> coreOwnedPersonStoreCensusProvidersBySection =
+        new Dictionary<string, IOwnerSectionCensusProvider>(StringComparer.Ordinal);
+    private bool coreOwnedCityCensusProvidersBound;
+    private bool coreOwnedIdentitySpatialCensusProvidersBound;
+    private Dictionary<string, IOwnerSectionCensusProvider>
+        coreOwnedSelectedNpcCensusProvidersBySection =
+            new Dictionary<string, IOwnerSectionCensusProvider>(StringComparer.Ordinal);
     private readonly HashSet<string> expectedOperations = new HashSet<string>(StringComparer.Ordinal);
     private HashSet<string> spatialKnowledgeSectionIds = new HashSet<string>(StringComparer.Ordinal);
     private Dictionary<string, NpcRuntime> spatialKnowledgeNpcOwnersBySection =
@@ -261,10 +269,190 @@ public sealed class ContinuationCensusProtocol
     private bool providersSealed;
     private bool operationsSealed;
     private OwnerThreadBinding ownerThreadBinding;
-    private int activeOperationCount;
-    private long mutationEpoch;
-    private object activeMutationEpochReservation;
+    private readonly DailyV1ExecutionBoundaryState sharedExecutionState;
+    private readonly bool requiresSelectedCoreOwnerCensus;
+    private int standaloneActiveOperationCount;
+    private int activeOperationCount => sharedExecutionState != null
+        ? sharedExecutionState.ActiveRuntimeOperationCount
+        : standaloneActiveOperationCount;
+    internal int ActiveOperationCount => activeOperationCount;
+    private List<DailyV1OwnerSectionCensusProviderRegistration> CreateCoreOwnerSectionCensusRegistrations(
+        Dictionary<string, RegisteredSection> sections,
+        Dictionary<string, IOwnerSectionCensusProvider> coreNpcProviders = null)
+    {
+        if (sections == null) return null;
+        coreNpcProviders ??= coreOwnedSelectedNpcCensusProvidersBySection;
+        List<string> orderedIds = new List<string>(sections.Keys);
+        orderedIds.Sort(StringComparer.Ordinal);
+        List<DailyV1OwnerSectionCensusProviderRegistration> registrations =
+            new List<DailyV1OwnerSectionCensusProviderRegistration>(orderedIds.Count);
+        foreach (string sectionId in orderedIds)
+        {
+            RegisteredSection section = sections[sectionId];
+            if (section == null || section.Contract == null || section.Provider == null) return null;
+            IOwnerSectionCensusProvider provider = section.Provider;
+            if (coreNpcProviders != null
+                && coreNpcProviders.TryGetValue(sectionId, out IOwnerSectionCensusProvider coreProvider))
+                provider = coreProvider;
+            registrations.Add(new DailyV1OwnerSectionCensusProviderRegistration(
+                section.Contract.SectionId,
+                section.Contract.SchemaVersion,
+                section.Contract.Role,
+                provider,
+                section.OwnerInstanceIdentity,
+                section.LastCardinality,
+                section.LastRevision,
+                section.HasBaseline));
+        }
+        return registrations;
+    }
+    private bool TryCommitExpectedSectionInventory(
+        Dictionary<string, OwnerSectionContract> stagedExpected,
+        Dictionary<string, RegisteredSection> stagedRegistered,
+        bool runtimeProtocolTransition = false,
+        DailyV1MutationEpochReservation reservation = null,
+        IEnumerable<string> changedFixedSectionIds = null,
+        bool committedMutation = false,
+        ContinuationMutationEpochReservation reservationContext = null)
+    {
+        if (stagedExpected == null || stagedRegistered == null) return false;
+        if (sharedExecutionState != null)
+        {
+            List<DailyV1OwnerSectionContractIdentity> identities =
+                new List<DailyV1OwnerSectionContractIdentity>(stagedExpected.Count);
+            foreach (OwnerSectionContract contract in stagedExpected.Values)
+            {
+                if (contract == null) return false;
+                identities.Add(new DailyV1OwnerSectionContractIdentity(
+                    contract.SectionId, contract.SchemaVersion, contract.Role));
+            }
+
+            bool committed;
+            Dictionary<string, IOwnerSectionCensusProvider> stagedCoreNpcProviders = null;
+            if (requiresSelectedCoreOwnerCensus)
+            {
+                if (runtimeProtocolTransition
+                    && !TryCreateCoreOwnedSelectedNpcCensusProviderMap(
+                        stagedExpected,
+                        stagedRegistered,
+                        null,
+                        out stagedCoreNpcProviders,
+                        out string diagnostic))
+                {
+                    RecordFirstFaultDetail("CoreSelectedNpcOwnerRegistryCompositionRejected:"
+                        + (diagnostic ?? "Unspecified"));
+                    return false;
+                }
+                if (!runtimeProtocolTransition)
+                    stagedCoreNpcProviders = coreOwnedSelectedNpcCensusProvidersBySection;
+
+                List<DailyV1OwnerSectionCensusProviderRegistration> providers =
+                    CreateCoreOwnerSectionCensusRegistrations(stagedRegistered, stagedCoreNpcProviders);
+                if (providers == null) return false;
+
+                committed = runtimeProtocolTransition
+                    ? sharedExecutionState.TryReplaceSelectedOwnerSectionCensusRegistryDuringRuntimeOperation(
+                        identities, providers, changedFixedSectionIds, reservation, committedMutation)
+                    : sharedExecutionState.TryReplaceSelectedOwnerSectionCensusRegistryBeforeSeal(
+                        identities, providers);
+                if (committed && runtimeProtocolTransition && reservationContext != null)
+                    reservationContext.CoreFinalized = true;
+            }
+            else
+                committed = runtimeProtocolTransition
+                    ? sharedExecutionState.TryReplaceExpectedOwnerSectionContractInventoryDuringRuntimeOperation(
+                        identities)
+                    : sharedExecutionState.TryReplaceExpectedOwnerSectionContractInventoryBeforeSeal(
+                        identities);
+            if (!committed) return false;
+            if (requiresSelectedCoreOwnerCensus)
+                coreOwnedSelectedNpcCensusProvidersBySection = stagedCoreNpcProviders;
+            expectedSectionsSealed = sharedExecutionState.ExpectedOwnerSectionContractInventorySealed;
+        }
+        // In shared mode these are projections for compatibility operations;
+        // Core has already atomically committed the owner/provider baseline.
+        expectedSections = stagedExpected;
+        return true;
+    }
+
+    private void RefreshExpectedSectionProjectionFromCore()
+    {
+        IReadOnlyList<DailyV1OwnerSectionContractIdentity> contracts =
+            sharedExecutionState.GetExpectedOwnerSectionContractInventory(out _);
+        Dictionary<string, OwnerSectionContract> projection =
+            new Dictionary<string, OwnerSectionContract>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionContractIdentity contract in contracts)
+            projection.Add(contract.SectionId,
+                new OwnerSectionContract(contract.SectionId, contract.SchemaVersion, contract.Role));
+        expectedSections = projection;
+        expectedSectionsSealed = sharedExecutionState.ExpectedOwnerSectionContractInventorySealed;
+    }
+    private bool hasRegisteredOperationInventory => sharedExecutionState != null
+        ? sharedExecutionState.HasRegisteredRuntimeProtocolOperationContracts
+        : expectedOperations.Count > 0;
+    private bool hasExpectedOperationInventory => sharedExecutionState != null
+        ? sharedExecutionState.HasRuntimeProtocolOperationInventory
+        : expectedOperations.Count > 0;
+    internal IReadOnlyCollection<string> RegisteredOperationContractIds
+    {
+        get
+        {
+            if (sharedExecutionState != null)
+                return sharedExecutionState.GetRuntimeProtocolOperationContractIds();
+            List<string> operationContractIds = new List<string>(expectedOperations);
+            operationContractIds.Sort(StringComparer.Ordinal);
+            return operationContractIds.AsReadOnly();
+        }
+    }
+    private readonly DailyV1MutationEpochState mutationEpochState;
+    internal DailyV1MutationEpochState MutationEpochState => mutationEpochState;
+    private DailyV1MutationEpochReservation activeMutationEpochReservation =>
+        mutationEpochState.ActiveReservation;
     private int protocolFaulted;
+    private string firstFaultSource;
+    private string firstFaultDetail;
+    internal string FirstFaultSource => Volatile.Read(ref firstFaultSource);
+    internal string FirstFaultDetail => Volatile.Read(ref firstFaultDetail);
+
+    public ContinuationCensusProtocol()
+        : this(null, requireSelectedCoreOwnerCensus: false)
+    {
+    }
+
+    /// <summary>
+    /// Uses the active runtime's Core operation registry for P12 operation
+    /// scopes. Standalone protocol instances keep their local test/kernel
+    /// accounting, while an admitted runtime shares one registry with its
+    /// active-session gate and completed-boundary state.
+    /// </summary>
+    internal ContinuationCensusProtocol(DailyV1ExecutionBoundaryState sharedExecutionState)
+        : this(sharedExecutionState, requireSelectedCoreOwnerCensus: sharedExecutionState != null)
+    {
+    }
+
+    /// <summary>
+    /// Selects whether this adapter composes the canonical Core owner census
+    /// or retains identity-only inventory behavior for a compatibility runtime
+    /// that has not admitted the complete selected owner graph. Shared-state
+    /// callers are strict by default; the runtime may opt into compatibility
+    /// only when its exact Core graph and execution roots are not admitted.
+    /// </summary>
+    internal ContinuationCensusProtocol(
+        DailyV1ExecutionBoundaryState sharedExecutionState,
+        bool requireSelectedCoreOwnerCensus)
+    {
+        if (requireSelectedCoreOwnerCensus && sharedExecutionState == null)
+            throw new ArgumentNullException(nameof(sharedExecutionState));
+        this.sharedExecutionState = sharedExecutionState;
+        requiresSelectedCoreOwnerCensus = requireSelectedCoreOwnerCensus;
+        mutationEpochState = sharedExecutionState?.MutationEpochState
+            ?? new DailyV1MutationEpochState();
+        if (sharedExecutionState != null)
+            RefreshExpectedSectionProjectionFromCore();
+    }
+
+    internal bool IsBoundTo(DailyV1ExecutionBoundaryState executionState) =>
+        executionState != null && ReferenceEquals(sharedExecutionState, executionState);
 
     /// <summary>
     /// Declares one logical section requirement. This is generic protocol input;
@@ -295,7 +483,19 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
         }
-        expectedSections.Add(contract.SectionId, contract);
+
+        Dictionary<string, OwnerSectionContract> staged =
+            new Dictionary<string, OwnerSectionContract>(expectedSections, StringComparer.Ordinal);
+        staged.Add(contract.SectionId, contract);
+        if (sharedExecutionState != null
+            && !sharedExecutionState.TryRegisterExpectedOwnerSectionContract(
+                contract.SectionId, contract.SchemaVersion, contract.Role))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        expectedSections = staged;
         failure = ContinuationCensusFailure.None;
         return true;
     }
@@ -318,11 +518,22 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
         }
-        expectedSectionsSealed = true;
+        if (sharedExecutionState != null)
+        {
+            if (!sharedExecutionState.TrySealExpectedOwnerSectionContractInventory())
+            {
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+            expectedSectionsSealed = sharedExecutionState.ExpectedOwnerSectionContractInventorySealed;
+        }
+        else
+        {
+            expectedSectionsSealed = true;
+        }
         failure = ContinuationCensusFailure.None;
         return true;
     }
-
     /// <summary>Registers an owner-backed census provider for an expected section.</summary>
     public bool RegisterCensusProvider(
         string sectionId,
@@ -419,7 +630,12 @@ public sealed class ContinuationCensusProtocol
             stagedProviders[i] = candidate.Provider;
         }
 
-        expectedSections = stagedExpected;
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
         registeredSections = stagedRegistered;
         spatialKnowledgeSectionIds = stagedIds;
         spatialKnowledgeNpcOwnersBySection = stagedNpcOwners;
@@ -466,7 +682,12 @@ public sealed class ContinuationCensusProtocol
             providers[i] = candidate.Provider;
         }
 
-        expectedSections = stagedExpected;
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
         registeredSections = stagedRegistered;
         npcTravelStateSectionIds = ids;
         npcTravelStateNpcOwnersBySection = owners;
@@ -502,7 +723,13 @@ public sealed class ContinuationCensusProtocol
             owners.Add(c.SectionId, c.NpcOwner);
             providers[i] = c.Provider;
         }
-        expectedSections = stagedExpected; registeredSections = stagedRegistered;
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        registeredSections = stagedRegistered;
         inventorySectionIds = ids; inventoryNpcOwnersBySection = owners; inventoryRoster = roster;
         inventoryFamilyProviders = Array.AsReadOnly(providers);
         failure = ContinuationCensusFailure.None; return true;
@@ -541,7 +768,12 @@ public sealed class ContinuationCensusProtocol
             providers[i] = candidate.Provider;
         }
 
-        expectedSections = stagedExpected;
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
         registeredSections = stagedRegistered;
         moneyAccountSectionIds = ids;
         moneyAccountNpcOwnersBySection = owners;
@@ -574,7 +806,13 @@ public sealed class ContinuationCensusProtocol
             stagedRegistered.Add(c.SectionId, section); owners.Add(c.SectionId, c.NpcOwner);
             providers[i] = c.Provider;
         }
-        expectedSections = stagedExpected; registeredSections = stagedRegistered;
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        registeredSections = stagedRegistered;
         npcKnowledgeSectionIds = ids; npcKnowledgeNpcOwnersBySection = owners; npcKnowledgeRoster = roster;
         npcKnowledgeFamilyProviders = Array.AsReadOnly(providers);
         failure = ContinuationCensusFailure.None; return true;
@@ -618,7 +856,12 @@ public sealed class ContinuationCensusProtocol
             providers[i] = candidate.Provider;
         }
 
-        expectedSections = stagedExpected;
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
         registeredSections = stagedRegistered;
         npcPlanSectionIds = ids;
         npcPlanNpcOwnersBySection = owners;
@@ -631,8 +874,9 @@ public sealed class ContinuationCensusProtocol
     public IReadOnlyList<IOwnerSectionCensusProvider> NpcPlanFamilyProviders => npcPlanFamilyProviders;
 
     /// <summary>
-    /// Registers the selected Daily-v1 exact-zero witnesses for the two
-    /// excluded P18 receipt owners on each current NPC.
+    /// Registers exact-zero census witnesses for LocalObservation and Merchant
+    /// trade receipts on each current NPC. The selected Merchant witness binds
+    /// to its Core receipt owner; neither receipt family is part of P12 data.
     /// </summary>
     public bool RegisterNpcReceiptOwnerRosterFamily(
         IReadOnlyList<NpcRuntime> roster,
@@ -675,7 +919,12 @@ public sealed class ContinuationCensusProtocol
             stagedProviders[i] = candidate.Provider;
         }
 
-        expectedSections = stagedExpected;
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
         registeredSections = stagedRegistered;
         npcReceiptOwnerSectionIds = stagedIds;
         npcReceiptOwnerNpcOwnersBySection = stagedNpcOwners;
@@ -722,7 +971,12 @@ public sealed class ContinuationCensusProtocol
             stagedProviders[i] = candidate.Provider;
         }
 
-        expectedSections = stagedExpected;
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
         registeredSections = stagedRegistered;
         lifecycleSectionIds = stagedIds;
         lifecycleOwnersBySection = stagedOwners;
@@ -800,7 +1054,7 @@ public sealed class ContinuationCensusProtocol
                 }
                 else if (provider is NpcLifecycleCensusProvider npcProvider)
                 {
-                    ownerIdentity = npcProvider.NpcOwner;
+                    ownerIdentity = npcProvider.NpcOwner.SelectedCensusOwnerIdentity;
                     sectionId = NpcLifecycleCensusProvider.SectionIdFor(
                         npcProvider.NpcOwner.RuntimeId,
                         npcProvider.IsResidence);
@@ -808,14 +1062,14 @@ public sealed class ContinuationCensusProtocol
                 }
                 else if (provider is P12CrimeJusticeCensusProvider.NpcStatusSectionProvider crimeJusticeProvider)
                 {
-                    ownerIdentity = crimeJusticeProvider.NpcOwner;
+                    ownerIdentity = crimeJusticeProvider.NpcOwner.SelectedCensusOwnerIdentity;
                     sectionId = P12CrimeJusticeCensusProvider.NpcStatusSectionIdFor(
                         crimeJusticeProvider.RuntimeId);
                     schemaVersion = P12CrimeJusticeCensusProvider.SchemaVersion;
                 }
                 else if (provider is NpcCurrentActionCensusProvider currentActionProvider)
                 {
-                    ownerIdentity = currentActionProvider.NpcOwner;
+                    ownerIdentity = currentActionProvider.NpcOwner.SelectedCensusOwnerIdentity;
                     sectionId = NpcCurrentActionCensusProvider.SectionIdFor(
                         currentActionProvider.NpcOwner.RuntimeId);
                     schemaVersion = NpcCurrentActionCensusProvider.SchemaVersion;
@@ -878,8 +1132,9 @@ public sealed class ContinuationCensusProtocol
                 OwnerSectionContract contract = new OwnerSectionContract(
                     sectionId, NpcPlanCensusProvider.SchemaVersion, OwnerSectionRole.Required);
                 object expectedOwner = planProvider.Kind == NpcPlanCensusProvider.MerchantTradePlanKind
-                    ? (object)planProvider.NpcOwner.ExistingMerchantTradePlan
-                    : planProvider.NpcOwner.ExistingTravelPlan;
+                    ? planProvider.NpcOwner.MerchantTradePlanAuthority
+                    : planProvider.NpcOwner.SelectedRuntimeOwners?.TravelPlan
+                        ?? (object)planProvider.NpcOwner.ExistingTravelPlan;
                 if (string.IsNullOrWhiteSpace(planProvider.RuntimeId)
                     || planProvider.NpcOwner == null
                     || planProvider.PlanOwner == null
@@ -983,7 +1238,7 @@ public sealed class ContinuationCensusProtocol
     private sealed class InventoryCandidate
     {
         public string SectionId; public OwnerSectionContract Contract; public IOwnerSectionCensusProvider Provider;
-        public NpcRuntime NpcOwner; public InventoryRuntime InventoryOwner; public OwnerSectionCensusWitness Witness;
+        public NpcRuntime NpcOwner; public object InventoryOwnerIdentity; public OwnerSectionCensusWitness Witness;
     }
 
     private static bool TryBuildInventoryFamily(IReadOnlyList<NpcRuntime> roster, out List<InventoryCandidate> candidates, out ContinuationCensusFailure failure)
@@ -997,10 +1252,28 @@ public sealed class ContinuationCensusProtocol
                 OwnerSectionCensusWitness w = provider.GetCurrentCensus();
                 string id = NpcInventoryCensusProvider.SectionPrefix + p.RuntimeId;
                 var contract = new OwnerSectionContract(id, NpcInventoryCensusProvider.SchemaVersion, OwnerSectionRole.Required);
+                DailyV1NpcRuntimeOwners selectedOwners = p.NpcOwner?.SelectedRuntimeOwners;
+                object inventoryOwnerIdentity = p.UsesSelectedCoreOwner
+                    ? (object)selectedOwners?.Inventory
+                    : p.InventoryOwner;
                 if (string.IsNullOrWhiteSpace(p.RuntimeId) || p.NpcOwner == null || p.InventoryOwner == null
                     || !ReferenceEquals(p.NpcOwner.ExistingInventory, p.InventoryOwner)
-                    || !ReferenceEquals(w.OwnerInstanceIdentity, p.InventoryOwner) || !IsWitnessValidForContract(contract, w)) return false;
-                candidates.Add(new InventoryCandidate { SectionId=id, Contract=contract, Provider=provider, NpcOwner=p.NpcOwner, InventoryOwner=p.InventoryOwner, Witness=w });
+                    || (selectedOwners != null
+                        && !ReferenceEquals(p.InventoryOwner.SelectedDailyV1Owner, selectedOwners.Inventory))
+                    || (selectedOwners == null
+                        && p.InventoryOwner.SelectedDailyV1Owner != null)
+                    || (p.UsesSelectedCoreOwner && selectedOwners == null)
+                    || !ReferenceEquals(w.OwnerInstanceIdentity, inventoryOwnerIdentity)
+                    || !IsWitnessValidForContract(contract, w)) return false;
+                candidates.Add(new InventoryCandidate
+                {
+                    SectionId = id,
+                    Contract = contract,
+                    Provider = provider,
+                    NpcOwner = p.NpcOwner,
+                    InventoryOwnerIdentity = inventoryOwnerIdentity,
+                    Witness = w
+                });
             }
         }
         catch { return false; }
@@ -1054,7 +1327,10 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
         }
-        if (!expectedOperations.Add(operationContractId))
+        bool registered = sharedExecutionState != null
+            ? sharedExecutionState.TryRegisterRuntimeProtocolOperationContract(operationContractId)
+            : expectedOperations.Add(operationContractId);
+        if (!registered)
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -1078,7 +1354,13 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
         }
-        if (operationsSealed || expectedOperations.Count == 0)
+        if (operationsSealed || !hasRegisteredOperationInventory)
+        {
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        if (sharedExecutionState != null
+            && !sharedExecutionState.TrySealRuntimeProtocolOperationInventory())
         {
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1109,7 +1391,7 @@ public sealed class ContinuationCensusProtocol
         }
 
         if (!expectedSectionsSealed || !providersSealed || !operationsSealed
-            || expectedSections.Count == 0 || expectedOperations.Count == 0)
+            || expectedSections.Count == 0 || !hasExpectedOperationInventory)
         {
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1126,6 +1408,16 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
+        if (sharedExecutionState != null
+            && (sharedExecutionState.AdmissionContext == null
+                || !ReferenceEquals(sharedExecutionState.AdmissionContext.ExpectedOwnerThread, expectedOwnerThread)
+                || sharedExecutionState.AdmissionContext.ExpectedOwnerThreadId != expectedOwnerThreadId))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.WrongOwnerThread;
+            return false;
+        }
+
         OwnerThreadBinding binding = new OwnerThreadBinding(
             expectedOwnerThread,
             expectedOwnerThreadId);
@@ -1135,6 +1427,8 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
         }
+        // Core census readiness is published only after TryAssessOwnerSectionInventory
+        // has read and sealed the exact selected-profile owner registry.
         return true;
     }
 
@@ -1153,6 +1447,8 @@ public sealed class ContinuationCensusProtocol
 
         if (!expectedSectionsSealed || !providersSealed || expectedSections.Count == 0)
         {
+            RecordFirstFaultDetail("OwnerSectionRegistryNotSealed:expected=" + expectedSections.Count
+                + ":expectedSealed=" + expectedSectionsSealed + ":providersSealed=" + providersSealed);
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
         }
@@ -1164,21 +1460,97 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        if (registeredSections.Count != expectedSections.Count
-            || (spatialKnowledgeRoster != null
-                && !TryValidateSpatialKnowledgeFamilyMatchesRoster(out failure))
-            || (npcTravelStateRoster != null
-                && !TryValidateNpcTravelStateFamilyMatchesRoster(out failure))
-            || (inventoryRoster != null && !TryValidateInventoryFamilyMatchesRoster(out failure))
-            || (moneyAccountRoster != null && !TryValidateMoneyAccountFamilyMatchesRoster(out failure))
-            || (npcKnowledgeRoster != null && !TryValidateNpcKnowledgeFamilyMatchesRoster(out failure))
-            || (npcPlanRoster != null && !TryValidateNpcPlanFamilyMatchesRoster(out failure))
-            || (npcReceiptOwnerRoster != null
-                && !TryValidateNpcReceiptOwnerFamilyMatchesRoster(out failure)))
+        if (registeredSections.Count != expectedSections.Count)
         {
+            RecordFirstFaultDetail("OwnerSectionCountMismatch:expected=" + expectedSections.Count
+                + ":registered=" + registeredSections.Count);
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
+        }
+
+        if (spatialKnowledgeRoster != null
+            && !TryValidateSpatialKnowledgeFamilyMatchesRoster(out failure))
+            return FailOwnerCoverage("SpatialKnowledgeRosterMismatch", out failure);
+        if (npcTravelStateRoster != null
+            && !TryValidateNpcTravelStateFamilyMatchesRoster(out failure))
+            return FailOwnerCoverage("NpcTravelStateRosterMismatch", out failure);
+        if (inventoryRoster != null && !TryValidateInventoryFamilyMatchesRoster(out failure))
+            return FailOwnerCoverage("InventoryRosterMismatch", out failure);
+        if (moneyAccountRoster != null && !TryValidateMoneyAccountFamilyMatchesRoster(out failure))
+            return FailOwnerCoverage("MoneyAccountRosterMismatch", out failure);
+        if (npcKnowledgeRoster != null && !TryValidateNpcKnowledgeFamilyMatchesRoster(out failure))
+            return FailOwnerCoverage("NpcKnowledgeRosterMismatch", out failure);
+        if (npcPlanRoster != null && !TryValidateNpcPlanFamilyMatchesRoster(out failure))
+            return FailOwnerCoverage("NpcPlanRosterMismatch", out failure);
+        if (npcReceiptOwnerRoster != null
+            && !TryValidateNpcReceiptOwnerFamilyMatchesRoster(out failure))
+            return FailOwnerCoverage("NpcReceiptOwnerRosterMismatch", out failure);
+
+        DailyV1CoreSelectedOwnerCensusProviderComposition coreCensusComposition = null;
+        DailyV1SelectedRuntimeOwnerGraph selectedCoreOwnerGraph =
+            sharedExecutionState?.SelectedRuntimeOwnerGraph;
+        if (requiresSelectedCoreOwnerCensus && selectedCoreOwnerGraph != null
+            && !DailyV1CoreSelectedOwnerCensusProviderComposition.TryCreate(
+                selectedCoreOwnerGraph,
+                out coreCensusComposition,
+                out string coreCensusDiagnostic))
+        {
+            RecordFirstFaultDetail("CoreSelectedOwnerProviderCompositionRejected:"
+                + (coreCensusDiagnostic ?? "Unspecified"));
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        if (requiresSelectedCoreOwnerCensus
+            && !TryBindCoreOwnedPersonStoreCensusProviders(coreCensusComposition, out failure))
+        {
+            RecordFirstFaultDetail("CoreOwnedPersonStoreProviderBindingRejected");
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        if (requiresSelectedCoreOwnerCensus
+            && !TryBindCoreOwnedCityCensusProviders(coreCensusComposition, out failure))
+        {
+            RecordFirstFaultDetail("CoreOwnedCityProviderBindingRejected");
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        if (requiresSelectedCoreOwnerCensus
+            && !TryBindCoreOwnedIdentitySpatialCensusProviders(coreCensusComposition, out failure))
+        {
+            RecordFirstFaultDetail("CoreOwnedIdentitySpatialProviderBindingRejected");
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        if (requiresSelectedCoreOwnerCensus
+            && !TryBindCoreOwnedSelectedNpcCensusProviders(coreCensusComposition, out failure))
+        {
+            RecordFirstFaultDetail("CoreOwnedSelectedNpcProviderBindingRejected");
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        if (requiresSelectedCoreOwnerCensus)
+        {
+            if (!sharedExecutionState.TrySealSelectedOwnerSectionCensusRegistryFromLiveProviders(
+                    CreateCoreOwnerSectionCensusRegistrations(registeredSections),
+                    out IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> sealedProviders)
+                || !TryApplyCoreSealedCensusBaselines(sealedProviders, out failure))
+            {
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+
+            return true;
         }
 
         List<PendingSectionBaseline> observedSections = new List<PendingSectionBaseline>(expectedSections.Count);
@@ -1207,6 +1579,806 @@ public sealed class ContinuationCensusProtocol
         return true;
     }
 
+    private bool TryApplyCoreSealedCensusBaselines(
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> sealedProviders,
+        out ContinuationCensusFailure failure)
+    {
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        if (sealedProviders == null || sealedProviders.Count != expectedSections.Count
+            || sealedProviders.Count != registeredSections.Count)
+            return false;
+
+        HashSet<string> applied = new HashSet<string>(StringComparer.Ordinal);
+        List<PendingSectionBaseline> pendingBaselines = new List<PendingSectionBaseline>(sealedProviders.Count);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in sealedProviders)
+        {
+            if (registration == null || !registration.HasBaseline
+                || registration.BaselineOwnerInstanceIdentity == null
+                || registration.BaselineCardinality < 0 || registration.BaselineRevision < 0L
+                || !applied.Add(registration.SectionId)
+                || !expectedSections.TryGetValue(registration.SectionId, out OwnerSectionContract contract)
+                || contract.SchemaVersion != registration.SchemaVersion
+                || contract.Role != registration.Role
+                || !registeredSections.TryGetValue(registration.SectionId, out RegisteredSection section)
+                || section == null || section.Contract == null
+                || section.Contract.SchemaVersion != registration.SchemaVersion
+                || section.Contract.Role != registration.Role)
+                return false;
+
+            bool isBoundCoreNpcProvider =
+                coreOwnedSelectedNpcCensusProvidersBySection.TryGetValue(
+                    registration.SectionId, out IOwnerSectionCensusProvider coreNpcProvider)
+                && ReferenceEquals(coreNpcProvider, registration.Provider);
+            if (!ReferenceEquals(section.Provider, registration.Provider)
+                && !isBoundCoreNpcProvider)
+                return false;
+
+            pendingBaselines.Add(new PendingSectionBaseline(section, new OwnerSectionCensusWitness(
+                registration.SectionId,
+                registration.SchemaVersion,
+                registration.BaselineOwnerInstanceIdentity,
+                registration.BaselineCardinality,
+                registration.BaselineRevision)));
+        }
+
+        if (!applied.SetEquals(expectedSections.Keys)
+            || !applied.SetEquals(registeredSections.Keys))
+            return false;
+
+        foreach (PendingSectionBaseline baseline in pendingBaselines)
+            SetBaseline(baseline.Section, baseline.Witness);
+
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+    private bool FailOwnerCoverage(string detail, out ContinuationCensusFailure failure)
+    {
+        RecordFirstFaultDetail(detail);
+        Fault();
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        return false;
+    }
+
+    /// <summary>
+    /// Replaces the selected profile's four City census rows per City with
+    /// providers over the exact Core owner graph. The Unity providers remain
+    /// a compatibility projection check at this boundary; they are not
+    /// retained as the authoritative source for the sealed Core registry.
+    /// </summary>
+    private bool TryBindCoreOwnedPersonStoreCensusProviders(
+        DailyV1CoreSelectedOwnerCensusProviderComposition composition,
+        out ContinuationCensusFailure failure)
+    {
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        if (!requiresSelectedCoreOwnerCensus || sharedExecutionState == null)
+        {
+            RecordFirstFaultDetail("CorePersonStoreBindingUnavailable");
+            return false;
+        }
+
+        DailyV1SelectedRuntimeOwnerGraph graph = sharedExecutionState.SelectedRuntimeOwnerGraph;
+        if (graph == null)
+        {
+            if (coreOwnedPersonStoreCensusProvidersBound)
+            {
+                RecordFirstFaultDetail("CorePersonStoreOwnerGraphMissingAfterBinding");
+                return false;
+            }
+
+            failure = ContinuationCensusFailure.None;
+            return true;
+        }
+
+        if (graph.PersonStore == null
+            || (coreOwnedPersonStoreCensusProvidersBound
+                && !ReferenceEquals(coreOwnedPersonStoreCensusOwner, graph.PersonStore)))
+        {
+            RecordFirstFaultDetail("CorePersonStoreOwnerIdentityChanged");
+            return false;
+        }
+
+        if (composition == null || !ReferenceEquals(composition.OwnerGraph, graph))
+        {
+            RecordFirstFaultDetail("CorePersonStoreProviderCompositionMissingOrStale");
+            return false;
+        }
+
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> coreProviders =
+            composition.PersonStoreRegistrations;
+
+        HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in expectedSections.Keys)
+            if (IsSelectedCorePersonStoreCensusSection(sectionId))
+                expectedIds.Add(sectionId);
+
+        HashSet<string> registeredIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in registeredSections.Keys)
+            if (IsSelectedCorePersonStoreCensusSection(sectionId))
+                registeredIds.Add(sectionId);
+
+        HashSet<string> coreIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in coreProviders)
+        {
+            if (registration == null
+                || registration.Role != OwnerSectionRole.Required
+                || !coreIds.Add(registration.SectionId))
+            {
+                RecordFirstFaultDetail("CorePersonStoreProviderRegistrationInvalid");
+                return false;
+            }
+        }
+
+        if (expectedIds.Count != 2
+            || !expectedIds.SetEquals(registeredIds)
+            || !expectedIds.SetEquals(coreIds))
+        {
+            RecordFirstFaultDetail("CorePersonStoreSectionSetMismatch:expected="
+                + expectedIds.Count + ":registered=" + registeredIds.Count + ":core=" + coreIds.Count);
+            return false;
+        }
+
+        Dictionary<string, RegisteredSection> stagedSections =
+            new Dictionary<string, RegisteredSection>(registeredSections, StringComparer.Ordinal);
+        Dictionary<string, IOwnerSectionCensusProvider> stagedCoreProviders =
+            coreOwnedPersonStoreCensusProvidersBound
+                ? coreOwnedPersonStoreCensusProvidersBySection
+                : new Dictionary<string, IOwnerSectionCensusProvider>(StringComparer.Ordinal);
+
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in coreProviders)
+        {
+            if (!expectedSections.TryGetValue(registration.SectionId, out OwnerSectionContract contract)
+                || contract.SchemaVersion != registration.SchemaVersion
+                || contract.Role != registration.Role
+                || !registeredSections.TryGetValue(registration.SectionId, out RegisteredSection prior)
+                || prior == null || prior.Contract == null || prior.Provider == null
+                || !registration.HasBaseline
+                || registration.BaselineOwnerInstanceIdentity == null)
+            {
+                RecordFirstFaultDetail("CorePersonStoreSectionContractMismatch:" + registration.SectionId);
+                return false;
+            }
+
+            OwnerSectionCensusWitness projection;
+            OwnerSectionCensusWitness core;
+            try
+            {
+                projection = prior.Provider.GetCurrentCensus();
+                core = registration.Provider.GetCurrentCensus();
+            }
+            catch (Exception exception)
+            {
+                RecordFirstFaultDetail("CorePersonStoreProviderReadFailed:"
+                    + registration.SectionId + ":" + exception.GetType().Name);
+                return false;
+            }
+
+            if (projection == null || core == null
+                || !string.Equals(projection.SectionId, core.SectionId, StringComparison.Ordinal)
+                || projection.SchemaVersion != core.SchemaVersion
+                || !ReferenceEquals(projection.OwnerInstanceIdentity, core.OwnerInstanceIdentity)
+                || projection.Cardinality != core.Cardinality
+                || projection.Revision != core.Revision
+                || !string.Equals(core.SectionId, registration.SectionId, StringComparison.Ordinal)
+                || core.SchemaVersion != registration.SchemaVersion
+                || !ReferenceEquals(core.OwnerInstanceIdentity,
+                    registration.BaselineOwnerInstanceIdentity)
+                || core.Cardinality != registration.BaselineCardinality
+                || core.Revision != registration.BaselineRevision)
+            {
+                RecordFirstFaultDetail("CorePersonStoreProjectionMismatch:" + registration.SectionId);
+                return false;
+            }
+
+            if (coreOwnedPersonStoreCensusProvidersBound)
+            {
+                if (!coreOwnedPersonStoreCensusProvidersBySection.TryGetValue(
+                        registration.SectionId, out IOwnerSectionCensusProvider boundProvider)
+                    || !ReferenceEquals(prior.Provider, boundProvider))
+                {
+                    RecordFirstFaultDetail("CorePersonStoreProviderBindingChanged:"
+                        + registration.SectionId);
+                    return false;
+                }
+            }
+            else
+            {
+                RegisteredSection replacement = new RegisteredSection(contract, registration.Provider);
+                SetBaseline(replacement, core);
+                stagedSections[registration.SectionId] = replacement;
+                stagedCoreProviders.Add(registration.SectionId, registration.Provider);
+            }
+        }
+
+        if (!coreOwnedPersonStoreCensusProvidersBound)
+        {
+            if (stagedCoreProviders.Count != expectedIds.Count)
+            {
+                RecordFirstFaultDetail("CorePersonStoreProviderBindingIncomplete");
+                return false;
+            }
+
+            registeredSections = stagedSections;
+            coreOwnedPersonStoreCensusProvidersBySection = stagedCoreProviders;
+            coreOwnedPersonStoreCensusOwner = graph.PersonStore;
+            coreOwnedPersonStoreCensusProvidersBound = true;
+        }
+
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    private static bool IsSelectedCorePersonStoreCensusSection(string sectionId) =>
+        string.Equals(sectionId,
+            DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId,
+            StringComparison.Ordinal)
+        || string.Equals(sectionId,
+            DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId,
+            StringComparison.Ordinal);
+
+    private bool TryBindCoreOwnedCityCensusProviders(
+        DailyV1CoreSelectedOwnerCensusProviderComposition composition,
+        out ContinuationCensusFailure failure)
+    {
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        if (!requiresSelectedCoreOwnerCensus || sharedExecutionState == null)
+        {
+            RecordFirstFaultDetail("CoreCityBindingUnavailable");
+            return false;
+        }
+
+        // A census protocol can be assembled before its runtime owner graph is
+        // available. Keep its host registrations until the graph is published;
+        // selected-session closure binds these City rows from Core once present.
+        DailyV1SelectedRuntimeOwnerGraph graph = sharedExecutionState.SelectedRuntimeOwnerGraph;
+        if (graph == null)
+        {
+            if (coreOwnedCityCensusProvidersBound)
+            {
+                RecordFirstFaultDetail("CoreCityOwnerGraphMissingAfterBinding");
+                return false;
+            }
+
+            failure = ContinuationCensusFailure.None;
+            return true;
+        }
+
+        if (composition == null || !ReferenceEquals(composition.OwnerGraph, graph))
+        {
+            RecordFirstFaultDetail("CoreCityProviderCompositionMissingOrStale");
+            return false;
+        }
+
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> coreProviders =
+            composition.CityRegistrations;
+        if (coreProviders == null || coreProviders.Count == 0)
+        {
+            RecordFirstFaultDetail("CoreCityProviderCompositionIncomplete");
+            return false;
+        }
+
+        HashSet<string> expectedCityIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in expectedSections.Keys)
+            if (IsSelectedCoreCityCensusSection(sectionId))
+                expectedCityIds.Add(sectionId);
+
+        HashSet<string> registeredCityIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in registeredSections.Keys)
+            if (IsSelectedCoreCityCensusSection(sectionId))
+                registeredCityIds.Add(sectionId);
+
+        HashSet<string> coreCityIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in coreProviders)
+            if (registration == null || !coreCityIds.Add(registration.SectionId))
+            {
+                RecordFirstFaultDetail("CoreCityProviderDuplicateSection");
+                return false;
+            }
+
+        if (expectedCityIds.Count == 0
+            || !expectedCityIds.SetEquals(coreCityIds)
+            || !registeredCityIds.SetEquals(coreCityIds))
+        {
+            RecordFirstFaultDetail("CoreCitySectionSetMismatch:expected=" + expectedCityIds.Count
+                + ":registered=" + registeredCityIds.Count
+                + ":core=" + coreCityIds.Count);
+            return false;
+        }
+
+        Dictionary<string, RegisteredSection> staged =
+            new Dictionary<string, RegisteredSection>(registeredSections, StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in coreProviders)
+        {
+            if (!expectedSections.TryGetValue(registration.SectionId, out OwnerSectionContract contract)
+                || contract.SchemaVersion != registration.SchemaVersion
+                || contract.Role != registration.Role
+                || !registeredSections.TryGetValue(registration.SectionId, out RegisteredSection prior)
+                || prior == null || prior.Contract == null || prior.Provider == null)
+            {
+                RecordFirstFaultDetail("CoreCitySectionContractMismatch:" + registration.SectionId);
+                return false;
+            }
+
+            OwnerSectionCensusWitness projection;
+            OwnerSectionCensusWitness core;
+            try
+            {
+                projection = prior.Provider.GetCurrentCensus();
+                core = registration.Provider.GetCurrentCensus();
+            }
+            catch (Exception exception)
+            {
+                RecordFirstFaultDetail("CoreCityProviderReadFailed:" + registration.SectionId
+                    + ":" + exception.GetType().Name);
+                return false;
+            }
+
+            if (!HasExactSelectedCoreCityWitness(projection, core))
+            {
+                string mismatch = projection == null ? "ProjectionMissing"
+                    : core == null ? "CoreMissing"
+                    : !string.Equals(projection.SectionId, core.SectionId, StringComparison.Ordinal) ? "SectionId"
+                    : projection.SchemaVersion != core.SchemaVersion ? "Schema"
+                    : !ReferenceEquals(projection.OwnerInstanceIdentity, core.OwnerInstanceIdentity) ? "OwnerIdentity"
+                    : projection.Cardinality != core.Cardinality ? "Cardinality"
+                    : "Revision";
+                RecordFirstFaultDetail("CoreCityProjectionMismatch:" + registration.SectionId + ":" + mismatch);
+                return false;
+            }
+
+            if (!HasSelectedCoreCityWitness(core, registration))
+            {
+                RecordFirstFaultDetail("CoreCityWitnessInvalid:" + registration.SectionId);
+                return false;
+            }
+
+            if (!coreOwnedCityCensusProvidersBound)
+            {
+                RegisteredSection replacement = new RegisteredSection(contract, registration.Provider);
+                SetBaseline(replacement, core);
+                staged[registration.SectionId] = replacement;
+            }
+        }
+
+        if (!coreOwnedCityCensusProvidersBound)
+            registeredSections = staged;
+        coreOwnedCityCensusProvidersBound = true;
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    /// <summary>
+    /// Replaces the selected-profile runtime identity and spatial rows with
+    /// live providers from the exact Core graph. Unity's registered providers
+    /// are checked as compatibility projections, then excluded from the
+    /// sealed registry used by Core capture.
+    /// </summary>
+    private bool TryBindCoreOwnedIdentitySpatialCensusProviders(
+        DailyV1CoreSelectedOwnerCensusProviderComposition composition,
+        out ContinuationCensusFailure failure)
+    {
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        if (!requiresSelectedCoreOwnerCensus || sharedExecutionState == null)
+        {
+            RecordFirstFaultDetail("CoreIdentitySpatialBindingUnavailable");
+            return false;
+        }
+
+        DailyV1SelectedRuntimeOwnerGraph graph = sharedExecutionState.SelectedRuntimeOwnerGraph;
+        if (graph == null)
+        {
+            if (coreOwnedIdentitySpatialCensusProvidersBound)
+            {
+                RecordFirstFaultDetail("CoreIdentitySpatialOwnerGraphMissingAfterBinding");
+                return false;
+            }
+
+            failure = ContinuationCensusFailure.None;
+            return true;
+        }
+
+        if (composition == null || !ReferenceEquals(composition.OwnerGraph, graph))
+        {
+            RecordFirstFaultDetail("CoreIdentitySpatialProviderCompositionMissingOrStale");
+            return false;
+        }
+
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> coreProviders =
+            composition.IdentitySpatialRegistrations;
+        if (coreProviders == null || coreProviders.Count == 0)
+        {
+            RecordFirstFaultDetail("CoreIdentitySpatialProviderCompositionIncomplete");
+            return false;
+        }
+
+        HashSet<string> coreIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in coreProviders)
+        {
+            if (registration == null || !coreIds.Add(registration.SectionId))
+            {
+                RecordFirstFaultDetail("CoreIdentitySpatialProviderDuplicateSection");
+                return false;
+            }
+        }
+
+        HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in expectedSections.Keys)
+            if (DailyV1SelectedRuntimeOwnerCensusSource
+                    .IsCoreOwnedIdentitySpatialSection(sectionId))
+                expectedIds.Add(sectionId);
+
+        HashSet<string> registeredIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in registeredSections.Keys)
+            if (DailyV1SelectedRuntimeOwnerCensusSource
+                    .IsCoreOwnedIdentitySpatialSection(sectionId))
+                registeredIds.Add(sectionId);
+
+        if (expectedIds.Count == 0 || !expectedIds.SetEquals(coreIds)
+            || !registeredIds.SetEquals(coreIds))
+        {
+            RecordFirstFaultDetail("CoreIdentitySpatialSectionSetMismatch:expected="
+                + expectedIds.Count + ":registered=" + registeredIds.Count
+                + ":core=" + coreIds.Count);
+            return false;
+        }
+
+        Dictionary<string, RegisteredSection> staged =
+            new Dictionary<string, RegisteredSection>(registeredSections, StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in coreProviders)
+        {
+            if (!expectedSections.TryGetValue(registration.SectionId,
+                    out OwnerSectionContract contract)
+                || contract.SchemaVersion != registration.SchemaVersion
+                || contract.Role != registration.Role
+                || !registeredSections.TryGetValue(registration.SectionId,
+                    out RegisteredSection prior)
+                || prior?.Contract == null || prior.Provider == null)
+            {
+                RecordFirstFaultDetail("CoreIdentitySpatialSectionContractMismatch:"
+                    + registration.SectionId);
+                return false;
+            }
+
+            OwnerSectionCensusWitness projection;
+            OwnerSectionCensusWitness core;
+            try
+            {
+                projection = prior.Provider.GetCurrentCensus();
+                core = registration.Provider.GetCurrentCensus();
+            }
+            catch (Exception exception)
+            {
+                RecordFirstFaultDetail("CoreIdentitySpatialProviderReadFailed:"
+                    + registration.SectionId + ":" + exception.GetType().Name);
+                return false;
+            }
+
+            if (!HasExactSelectedCoreIdentitySpatialWitness(projection, core))
+            {
+                string mismatch = projection == null ? "ProjectionMissing"
+                    : core == null ? "CoreMissing"
+                    : !string.Equals(projection.SectionId, core.SectionId,
+                        StringComparison.Ordinal) ? "SectionId"
+                    : projection.SchemaVersion != core.SchemaVersion ? "Schema"
+                    : !ReferenceEquals(projection.OwnerInstanceIdentity,
+                        core.OwnerInstanceIdentity) ? "OwnerIdentity"
+                    : projection.Cardinality != core.Cardinality ? "Cardinality"
+                    : "Revision";
+                RecordFirstFaultDetail("CoreIdentitySpatialProjectionMismatch:"
+                    + registration.SectionId + ":" + mismatch);
+                return false;
+            }
+
+            if (!HasSelectedCoreIdentitySpatialWitness(core, registration))
+            {
+                RecordFirstFaultDetail("CoreIdentitySpatialWitnessInvalid:"
+                    + registration.SectionId);
+                return false;
+            }
+
+            if (!coreOwnedIdentitySpatialCensusProvidersBound)
+            {
+                RegisteredSection replacement = new RegisteredSection(
+                    contract, registration.Provider);
+                SetBaseline(replacement, core);
+                staged[registration.SectionId] = replacement;
+            }
+        }
+
+        if (!coreOwnedIdentitySpatialCensusProvidersBound)
+            registeredSections = staged;
+        coreOwnedIdentitySpatialCensusProvidersBound = true;
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    /// <summary>
+    /// Binds every census row owned by the selected Core NPC graph to the
+    /// exact Core owner graph. A mixed Unity roster keeps its complete host
+    /// census projection; exact selected rows use the live Core providers.
+    /// </summary>
+    private bool TryBindCoreOwnedSelectedNpcCensusProviders(
+        DailyV1CoreSelectedOwnerCensusProviderComposition composition,
+        out ContinuationCensusFailure failure)
+    {
+        failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+        if (!requiresSelectedCoreOwnerCensus || sharedExecutionState == null)
+        {
+            RecordFirstFaultDetail("CoreSelectedNpcOwnerBindingUnavailable");
+            return false;
+        }
+
+        if (composition != null
+            && !ReferenceEquals(composition.OwnerGraph, sharedExecutionState.SelectedRuntimeOwnerGraph))
+        {
+            RecordFirstFaultDetail("CoreSelectedNpcProviderCompositionMissingOrStale");
+            return false;
+        }
+
+        if (!TryCreateCoreOwnedSelectedNpcCensusProviderMap(
+                expectedSections,
+                registeredSections,
+                composition?.SelectedNpcRegistrations,
+                out Dictionary<string, IOwnerSectionCensusProvider> stagedProviders,
+                out string diagnostic))
+        {
+            RecordFirstFaultDetail("CoreSelectedNpcOwnerBindingRejected:"
+                + (diagnostic ?? "Unspecified"));
+            return false;
+        }
+
+        coreOwnedSelectedNpcCensusProvidersBySection = stagedProviders;
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    private bool TryCreateCoreOwnedSelectedNpcCensusProviderMap(
+        Dictionary<string, OwnerSectionContract> contracts,
+        Dictionary<string, RegisteredSection> sections,
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> composedRegistrations,
+        out Dictionary<string, IOwnerSectionCensusProvider> coreProvidersBySection,
+        out string diagnostic)
+    {
+        coreProvidersBySection = null;
+        diagnostic = null;
+        if (!requiresSelectedCoreOwnerCensus || sharedExecutionState == null
+            || contracts == null || sections == null)
+        {
+            diagnostic = "Core census composition inputs are unavailable.";
+            return false;
+        }
+
+        DailyV1SelectedRuntimeOwnerGraph graph = sharedExecutionState.SelectedRuntimeOwnerGraph;
+        if (graph == null)
+        {
+            if (coreOwnedSelectedNpcCensusProvidersBySection.Count != 0)
+            {
+                diagnostic = "The previously bound Core NPC owner graph is no longer available.";
+                return false;
+            }
+
+            coreProvidersBySection = new Dictionary<string, IOwnerSectionCensusProvider>(
+                StringComparer.Ordinal);
+            return true;
+        }
+
+        IReadOnlyList<DailyV1OwnerSectionCensusProviderRegistration> registrations =
+            composedRegistrations;
+        if (registrations == null)
+        {
+            if (!DailyV1SelectedRuntimeOwnerCensusSource
+                    .TryCreateCoreOwnedSelectedNpcCensusProviderRegistrations(
+                        graph,
+                        out registrations,
+                        out diagnostic)
+                || registrations == null)
+                return false;
+        }
+
+        HashSet<string> expectedIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in contracts.Keys)
+            if (IsCoreOwnedSelectedNpcCensusSection(sectionId))
+                expectedIds.Add(sectionId);
+
+        HashSet<string> registeredIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string sectionId in sections.Keys)
+            if (IsCoreOwnedSelectedNpcCensusSection(sectionId))
+                registeredIds.Add(sectionId);
+
+        if (!registeredIds.SetEquals(expectedIds))
+        {
+            diagnostic = "The compatibility projection does not match the exact expected NPC owner rows.";
+            return false;
+        }
+
+        HashSet<string> coreIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in registrations)
+        {
+            if (registration == null || registration.Role != OwnerSectionRole.Required
+                || !coreIds.Add(registration.SectionId))
+            {
+                diagnostic = "Core NPC census provider registrations are invalid or duplicated.";
+                return false;
+            }
+        }
+
+        if (!coreIds.IsSubsetOf(expectedIds))
+        {
+            diagnostic = "The Core NPC owner graph is outside the registered owner section inventory.";
+            return false;
+        }
+
+        // A mixed Unity roster may contain host NPCs outside the selected Core
+        // graph. Keep those rows on their existing compatibility providers,
+        // while binding each exact Core owner row independently.
+        foreach (string previouslyBoundId
+            in coreOwnedSelectedNpcCensusProvidersBySection.Keys)
+        {
+            if (expectedIds.Contains(previouslyBoundId) && !coreIds.Contains(previouslyBoundId))
+            {
+                diagnostic = "A still-registered Core-owned NPC census row disappeared from the Core owner graph.";
+                return false;
+            }
+        }
+
+        Dictionary<string, IOwnerSectionCensusProvider> staged =
+            new Dictionary<string, IOwnerSectionCensusProvider>(StringComparer.Ordinal);
+        foreach (DailyV1OwnerSectionCensusProviderRegistration registration in registrations)
+        {
+            if (!contracts.TryGetValue(registration.SectionId,
+                    out OwnerSectionContract contract)
+                || contract.SchemaVersion != registration.SchemaVersion
+                || contract.Role != registration.Role
+                || !sections.TryGetValue(registration.SectionId,
+                    out RegisteredSection prior)
+                || prior?.Contract == null || prior.Provider == null)
+            {
+                diagnostic = "The Core NPC owner contract differs from its Unity projection at "
+                    + registration.SectionId + ".";
+                return false;
+            }
+
+            OwnerSectionCensusWitness projectionWitness;
+            OwnerSectionCensusWitness candidateWitness;
+            try
+            {
+                projectionWitness = prior.Provider.GetCurrentCensus();
+                candidateWitness = registration.Provider.GetCurrentCensus();
+            }
+            catch (Exception exception)
+            {
+                diagnostic = "A Core NPC census source failed to read " + registration.SectionId
+                    + " (" + exception.GetType().Name + ").";
+                return false;
+            }
+
+            if (!HasExactSelectedCoreOwnerWitness(projectionWitness, candidateWitness))
+            {
+                string mismatch = projectionWitness == null ? "ProjectionMissing"
+                    : candidateWitness == null ? "CoreMissing"
+                    : !string.Equals(projectionWitness.SectionId, candidateWitness.SectionId,
+                        StringComparison.Ordinal) ? "SectionId"
+                    : projectionWitness.SchemaVersion != candidateWitness.SchemaVersion ? "Schema"
+                    : !ReferenceEquals(projectionWitness.OwnerInstanceIdentity,
+                        candidateWitness.OwnerInstanceIdentity) ? "OwnerIdentity"
+                    : projectionWitness.Cardinality != candidateWitness.Cardinality ? "Cardinality"
+                    : "Revision";
+                diagnostic = "The Core provider differs from the Unity projection at "
+                    + registration.SectionId + ":" + mismatch + ".";
+                return false;
+            }
+
+            if (!HasCoreOwnedSelectedNpcWitness(candidateWitness, registration))
+            {
+                diagnostic = "The Core NPC provider returned an invalid owner witness at "
+                    + registration.SectionId + ".";
+                return false;
+            }
+
+            IOwnerSectionCensusProvider provider = registration.Provider;
+            if (coreOwnedSelectedNpcCensusProvidersBySection.TryGetValue(
+                    registration.SectionId, out IOwnerSectionCensusProvider priorCoreProvider))
+            {
+                OwnerSectionCensusWitness priorCoreWitness;
+                try { priorCoreWitness = priorCoreProvider?.GetCurrentCensus(); }
+                catch (Exception exception)
+                {
+                    diagnostic = "The prior Core NPC provider failed to read "
+                        + registration.SectionId + " (" + exception.GetType().Name + ").";
+                    return false;
+                }
+                if (!HasExactSelectedCoreOwnerWitness(priorCoreWitness, candidateWitness))
+                {
+                    diagnostic = "The Core NPC provider identity changed without a roster transition at "
+                        + registration.SectionId + ".";
+                    return false;
+                }
+                provider = priorCoreProvider;
+            }
+            staged.Add(registration.SectionId, provider);
+        }
+
+        coreProvidersBySection = staged;
+        return true;
+    }
+
+    private static bool IsCoreOwnedSelectedNpcCensusSection(string sectionId) =>
+        DailyV1SelectedRuntimeOwnerCensusSource.IsCoreOwnedSelectedNpcCensusSectionId(sectionId);
+
+    private static bool HasCoreOwnedSelectedNpcWitness(
+        OwnerSectionCensusWitness witness,
+        DailyV1OwnerSectionCensusProviderRegistration registration) =>
+        witness != null && registration != null
+        && IsCoreOwnedSelectedNpcCensusSection(witness.SectionId)
+        && registration.Role == OwnerSectionRole.Required
+        && string.Equals(witness.SectionId, registration.SectionId, StringComparison.Ordinal)
+        && witness.SchemaVersion == registration.SchemaVersion
+        && witness.OwnerInstanceIdentity != null
+        && witness.Cardinality >= 0 && witness.Revision >= 0L
+        && (!registration.HasBaseline
+            || (ReferenceEquals(witness.OwnerInstanceIdentity,
+                    registration.BaselineOwnerInstanceIdentity)
+                && witness.Cardinality == registration.BaselineCardinality
+                && witness.Revision == registration.BaselineRevision))
+        && (!witness.SectionId.StartsWith(
+                DailyV1SelectedOwnerSectionCensusContract.NpcMoneyAccountPrefix,
+                StringComparison.Ordinal)
+            || witness.Cardinality == 1);
+    private static bool HasExactSelectedCoreOwnerWitness(
+        OwnerSectionCensusWitness projection,
+        OwnerSectionCensusWitness core) =>
+        projection != null && core != null
+        && string.Equals(projection.SectionId, core.SectionId, StringComparison.Ordinal)
+        && projection.SchemaVersion == core.SchemaVersion
+        && ReferenceEquals(projection.OwnerInstanceIdentity, core.OwnerInstanceIdentity)
+        && projection.Cardinality == core.Cardinality
+        && projection.Revision == core.Revision;
+
+    private static bool HasExactSelectedCoreIdentitySpatialWitness(
+        OwnerSectionCensusWitness projection,
+        OwnerSectionCensusWitness core) =>
+        projection != null && core != null
+        && string.Equals(projection.SectionId, core.SectionId, StringComparison.Ordinal)
+        && projection.SchemaVersion == core.SchemaVersion
+        && ReferenceEquals(projection.OwnerInstanceIdentity, core.OwnerInstanceIdentity)
+        && projection.Cardinality == core.Cardinality
+        && projection.Revision == core.Revision;
+
+    private static bool HasSelectedCoreIdentitySpatialWitness(
+        OwnerSectionCensusWitness witness,
+        DailyV1OwnerSectionCensusProviderRegistration registration) =>
+        witness != null && registration != null
+        && string.Equals(witness.SectionId, registration.SectionId, StringComparison.Ordinal)
+        && witness.SchemaVersion == registration.SchemaVersion
+        && witness.OwnerInstanceIdentity != null
+        && witness.Cardinality >= 0 && witness.Revision >= 0L;
+
+    private static bool HasExactSelectedCoreCityWitness(
+        OwnerSectionCensusWitness projection,
+        OwnerSectionCensusWitness core) =>
+        projection != null && core != null
+        && string.Equals(projection.SectionId, core.SectionId, StringComparison.Ordinal)
+        && projection.SchemaVersion == core.SchemaVersion
+        && ReferenceEquals(projection.OwnerInstanceIdentity, core.OwnerInstanceIdentity)
+        && projection.Cardinality == core.Cardinality
+        && projection.Revision == core.Revision;
+
+    private static bool HasSelectedCoreCityWitness(
+        OwnerSectionCensusWitness witness,
+        DailyV1OwnerSectionCensusProviderRegistration registration) =>
+        witness != null && registration != null
+        && string.Equals(witness.SectionId, registration.SectionId, StringComparison.Ordinal)
+        && witness.SchemaVersion == registration.SchemaVersion
+        && witness.OwnerInstanceIdentity != null
+        && witness.Cardinality >= 0 && witness.Revision >= 0L;
+
+    private static bool IsSelectedCoreCityCensusSection(string sectionId)
+    {
+        if (string.IsNullOrEmpty(sectionId)) return false;
+        foreach (string prefix in DailyV1SelectedOwnerSectionCensusContract.CityPrefixes)
+            if (sectionId.StartsWith(prefix, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
     /// <summary>
     /// Records one successful authoritative commit notification. The owning
     /// code calls this only after its complete commit; it does not perform or
@@ -1230,6 +2402,7 @@ public sealed class ContinuationCensusProtocol
         if (!TryRequireOwnerThread(out failure)) return false;
         if (sectionIds == null)
         {
+            RecordFirstFaultDetail("UnchangedSectionIdsNull");
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1247,6 +2420,8 @@ public sealed class ContinuationCensusProtocol
                     || !section.HasBaseline
                     || !TryReadAndValidate(section, allowRevisionAdvance: false, out _, out failure))
                 {
+                    RecordFirstFaultDetail("UnchangedSectionRejected:"
+                        + (sectionId ?? "<null>") + ":" + failure);
                     Fault();
                     if (failure == ContinuationCensusFailure.None)
                         failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -1258,6 +2433,7 @@ public sealed class ContinuationCensusProtocol
         }
         catch
         {
+            RecordFirstFaultDetail("UnchangedSectionEnumerationFailed");
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1265,6 +2441,7 @@ public sealed class ContinuationCensusProtocol
 
         if (validatedCount == 0)
         {
+            RecordFirstFaultDetail("UnchangedSectionSetEmpty");
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1292,13 +2469,242 @@ public sealed class ContinuationCensusProtocol
         return NotifyCommittedMutationsCore(sectionIds, out failure);
     }
 
-    private bool NotifyCommittedMutationsCore(
+    /// <summary>
+    /// Validates one selected Core operation's changed witnesses and refreshes
+    /// their provider baselines without publishing the shared mutation epoch.
+    /// The Core execution boundary publishes that epoch after this all-rows
+    /// validation succeeds. Legacy and mixed-roster callers continue to use
+    /// <see cref="NotifyCommittedMutations(IEnumerable{string}, out ContinuationCensusFailure)"/>.
+    /// </summary>
+    internal bool TryRefreshCommittedMutationBaselines(
+        IEnumerable<string> sectionIds,
+        out ContinuationCensusFailure failure)
+    {
+        if (activeMutationEpochReservation != null)
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        return NotifyCommittedMutationsCore(sectionIds, out failure, advanceEpoch: false);
+    }
+
+    /// <summary>
+    /// Synchronizes the legacy Unity census mirror after the Core execution
+    /// state has already accepted the exact owner baseline and advanced its
+    /// shared epoch. This method never republishes or changes Core authority.
+    /// </summary>
+    internal bool TryRefreshCompatibilityMirrorBaselines(
+        IEnumerable<string> sectionIds,
+        out ContinuationCensusFailure failure)
+    {
+        if (activeMutationEpochReservation != null)
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        return NotifyCommittedMutationsCore(
+            sectionIds,
+            out failure,
+            advanceEpoch: false,
+            refreshCoreOwnerSectionRegistry: false);
+    }
+
+    /// <summary>
+    /// Captures the current immutable registry reference so a surrounding
+    /// Core-owned operation can restore the compatibility baseline if its
+    /// reserved Core census/epoch commit is rejected after mirror validation.
+    /// The registry is replaced, never edited in place, on bound operations.
+    /// </summary>
+    internal CompatibilityMirrorBaselineSnapshot CaptureCompatibilityMirrorBaselineSnapshot()
+    {
+        if (!TryRequireOwnerThread(out _)) return null;
+        return new CompatibilityMirrorBaselineSnapshot(this, registeredSections);
+    }
+
+    internal bool TryRestoreCompatibilityMirrorBaselineSnapshot(
+        CompatibilityMirrorBaselineSnapshot snapshot)
+    {
+        if (snapshot == null
+            || !ReferenceEquals(snapshot.Owner, this)
+            || !TryRequireOwnerThread(out _))
+            return false;
+
+        if (!(snapshot.Registry is Dictionary<string, RegisteredSection> priorRegistry))
+            return false;
+
+        registeredSections = priorRegistry;
+        return true;
+    }
+
+    /// <summary>
+    /// Builds a complete replacement compatibility registry without publishing
+    /// it or faulting the Core protocol when a provider read rejects. This is
+    /// used by a Core-reserved transaction that must still be able to roll back
+    /// its owners before the one authoritative epoch is committed.
+    /// </summary>
+    internal bool TryPrepareCompatibilityMirrorBaselineUpdate(
+        IEnumerable<string> sectionIds,
+        DailyV1MutationEpochReservation reservation,
+        out CompatibilityMirrorBaselineUpdate update,
+        out string rejection)
+    {
+        update = null;
+        rejection = null;
+        if (!TryRequireOwnerThread(out ContinuationCensusFailure ownerFailure))
+        {
+            rejection = "OwnerThread:" + ownerFailure;
+            return false;
+        }
+        if (reservation == null
+            || !ReferenceEquals(activeMutationEpochReservation, reservation)
+            || !mutationEpochState.Owns(reservation))
+        {
+            rejection = "CoreMutationEpochReservationMismatch";
+            return false;
+        }
+        if (sectionIds == null)
+        {
+            rejection = "ChangedSectionIdsMissing";
+            return false;
+        }
+
+        HashSet<string> changedIds = new HashSet<string>(StringComparer.Ordinal);
+        List<PendingSectionBaseline> observed = new List<PendingSectionBaseline>();
+        try
+        {
+            foreach (string sectionId in sectionIds)
+            {
+                if (string.IsNullOrWhiteSpace(sectionId)
+                    || !changedIds.Add(sectionId)
+                    || !registeredSections.TryGetValue(sectionId, out RegisteredSection section)
+                    || section == null || section.Provider == null || section.Contract == null
+                    )
+                {
+                    rejection = "ChangedSectionInvalidOrUnregistered";
+                    return false;
+                }
+                if (!TryReadAndValidate(
+                        section, allowRevisionAdvance: true,
+                        out OwnerSectionCensusWitness witness,
+                        out ContinuationCensusFailure readFailure))
+                {
+                    rejection = "ChangedSectionWitness:" + readFailure;
+                    return false;
+                }
+                if (section.HasBaseline && witness.Revision == section.LastRevision)
+                {
+                    rejection = "ChangedOwnerRevisionNotAdvanced";
+                    return false;
+                }
+                observed.Add(new PendingSectionBaseline(section, witness));
+            }
+        }
+        catch (Exception exception)
+        {
+            rejection = "ChangedSectionEnumeration:" + exception.GetType().Name;
+            return false;
+        }
+        if (changedIds.Count == 0)
+        {
+            rejection = "ChangedSectionIdsEmpty";
+            return false;
+        }
+
+        Dictionary<string, RegisteredSection> staged;
+        try
+        {
+            staged = new Dictionary<string, RegisteredSection>(
+                registeredSections.Count, StringComparer.Ordinal);
+            foreach (KeyValuePair<string, RegisteredSection> pair in registeredSections)
+            {
+                if (pair.Value == null || pair.Value.Contract == null || pair.Value.Provider == null)
+                {
+                    rejection = "RegisteredSectionInvalid";
+                    return false;
+                }
+                staged.Add(pair.Key, CloneRegisteredSection(pair.Value));
+            }
+            foreach (PendingSectionBaseline pending in observed)
+            {
+                if (!staged.TryGetValue(
+                        pending.Section.Contract.SectionId, out RegisteredSection target))
+                {
+                    rejection = "StagedChangedSectionMissing";
+                    return false;
+                }
+                SetBaseline(target, pending.Witness);
+            }
+        }
+        catch (Exception exception)
+        {
+            rejection = "BaselineClone:" + exception.GetType().Name;
+            return false;
+        }
+
+        update = new CompatibilityMirrorBaselineUpdate(
+            this, reservation, registeredSections, staged);
+        return true;
+    }
+
+    /// <summary>
+    /// Publishes a prepared mirror registry by replacing one reference only.
+    /// Under the bound owner thread, no provider read or epoch mutation occurs.
+    /// </summary>
+    internal bool TryPublishCompatibilityMirrorBaselineUpdate(
+        CompatibilityMirrorBaselineUpdate update,
+        DailyV1MutationEpochReservation reservation)
+    {
+        if (update == null
+            || !ReferenceEquals(update.Owner, this)
+            || !ReferenceEquals(update.Reservation, reservation)
+            || !ReferenceEquals(activeMutationEpochReservation, reservation)
+            || !mutationEpochState.Owns(reservation)
+            || !ReferenceEquals(registeredSections, update.PriorRegistry)
+            || !TryRequireOwnerThread(out _)
+            || !(update.StagedRegistry is Dictionary<string, RegisteredSection> staged))
+            return false;
+
+        registeredSections = staged;
+        return true;
+    }
+
+    /// <summary>
+    /// Refreshes provider baselines for the exact Core-owned daily mutation
+    /// reservation. The reservation remains owned by Core, which publishes
+    /// its epoch only after every changed section has refreshed successfully.
+    /// Unreserved and legacy callers must continue to use the ordinary path.
+    /// </summary>
+    internal bool TryRefreshCommittedMutationBaselinesForReservation(
+        object reservationToken,
         IEnumerable<string> sectionIds,
         out ContinuationCensusFailure failure)
     {
         if (!TryRequireOwnerThread(out failure)) return false;
-        if (mutationEpoch == long.MaxValue)
+        DailyV1MutationEpochReservation reservation = activeMutationEpochReservation;
+        if (reservationToken == null
+            || reservation == null
+            || !ReferenceEquals(reservationToken, reservation.Token))
         {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        return NotifyCommittedMutationsCore(sectionIds, out failure, advanceEpoch: false, reservation: reservation);
+    }
+
+    private bool NotifyCommittedMutationsCore(
+        IEnumerable<string> sectionIds,
+        out ContinuationCensusFailure failure,
+        bool advanceEpoch = true,
+        DailyV1MutationEpochReservation reservation = null,
+        bool refreshCoreOwnerSectionRegistry = true)
+    {
+        if (!TryRequireOwnerThread(out failure)) return false;
+        if (advanceEpoch && !mutationEpochState.CanAdvance)
+        {
+            RecordFirstFaultDetail("MutationEpochCapacity");
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
@@ -1306,6 +2712,7 @@ public sealed class ContinuationCensusProtocol
 
         if (sectionIds == null)
         {
+            RecordFirstFaultDetail("ChangedSectionsMissing");
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1321,6 +2728,7 @@ public sealed class ContinuationCensusProtocol
                     || !changedSectionIds.Add(sectionId)
                     || !registeredSections.TryGetValue(sectionId, out RegisteredSection section))
                 {
+                    RecordFirstFaultDetail("ChangedSectionInvalidOrUnregistered");
                     Fault();
                     failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
                     return false;
@@ -1331,6 +2739,7 @@ public sealed class ContinuationCensusProtocol
         }
         catch
         {
+            RecordFirstFaultDetail("ChangedSectionEnumerationFailed");
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1338,6 +2747,7 @@ public sealed class ContinuationCensusProtocol
 
         if (changedSections.Count == 0)
         {
+            RecordFirstFaultDetail("ChangedSectionsEmpty");
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -1351,12 +2761,14 @@ public sealed class ContinuationCensusProtocol
             if (!TryReadAndValidate(section, allowRevisionAdvance: true,
                     out OwnerSectionCensusWitness witness, out failure))
             {
+                RecordFirstFaultDetail("ChangedSectionWitness:" + failure);
                 Fault();
                 return false;
             }
 
             if (hadBaseline && witness.Revision == priorRevision)
             {
+                RecordFirstFaultDetail("ChangedOwnerRevisionNotAdvanced");
                 Fault();
                 failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
                 return false;
@@ -1365,10 +2777,67 @@ public sealed class ContinuationCensusProtocol
             observedSections.Add(new PendingSectionBaseline(section, witness));
         }
 
+        Dictionary<string, RegisteredSection> stagedRegistered =
+            new Dictionary<string, RegisteredSection>(registeredSections.Count, StringComparer.Ordinal);
+        foreach (KeyValuePair<string, RegisteredSection> pair in registeredSections)
+        {
+            RegisteredSection prior = pair.Value;
+            if (prior == null || prior.Contract == null || prior.Provider == null)
+            {
+                RecordFirstFaultDetail("RegisteredSectionStructureInvalid");
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+            RegisteredSection staged = new RegisteredSection(prior.Contract, prior.Provider);
+            if (prior.HasBaseline)
+                SetBaseline(staged, new OwnerSectionCensusWitness(
+                    prior.Contract.SectionId,
+                    prior.Contract.SchemaVersion,
+                    prior.OwnerInstanceIdentity,
+                    prior.LastCardinality,
+                    prior.LastRevision));
+            stagedRegistered.Add(pair.Key, staged);
+        }
         foreach (PendingSectionBaseline observed in observedSections)
-            SetBaseline(observed.Section, observed.Witness);
+        {
+            if (!stagedRegistered.TryGetValue(observed.Section.Contract.SectionId,
+                    out RegisteredSection staged))
+            {
+                RecordFirstFaultDetail("StagedSectionMissing");
+                Fault();
+                failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+                return false;
+            }
+            SetBaseline(staged, observed.Witness);
+        }
 
-        mutationEpoch++;
+        if (requiresSelectedCoreOwnerCensus && refreshCoreOwnerSectionRegistry
+            && !sharedExecutionState.TryRefreshSelectedOwnerSectionCensusBaselines(
+                CreateCoreOwnerSectionCensusRegistrations(stagedRegistered),
+                changedSectionIds,
+                reservation))
+        {
+            RecordFirstFaultDetail("CoreOwnerSectionBaselineRefreshRejected:"
+                + (sharedExecutionState.LastSelectedOwnerSectionCensusRefreshRejection
+                    ?? "Unspecified"));
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+
+        // Publish the compatibility registry only after Core has accepted the
+        // complete staged 89-family baseline vector. On rejection, the caller
+        // faults closed and the host projection remains at its prior commit.
+        registeredSections = stagedRegistered;
+
+        if (advanceEpoch && !mutationEpochState.TryAdvanceCommittedMutation())
+        {
+            RecordFirstFaultDetail("MutationEpochCommitRejected");
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
         failure = ContinuationCensusFailure.None;
         return true;
     }
@@ -1410,12 +2879,17 @@ public sealed class ContinuationCensusProtocol
         }
         if (epochReservation != null
             && (!ReferenceEquals(epochReservation.Owner, this)
-                || !ReferenceEquals(epochReservation.Token, activeMutationEpochReservation)
+                || !ReferenceEquals(epochReservation.EpochReservation, activeMutationEpochReservation)
                 || !ReferenceEquals(epochReservation.OwnerThread, Thread.CurrentThread)
                 || epochReservation.OwnerThread.ManagedThreadId != Thread.CurrentThread.ManagedThreadId))
         {
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+        if (epochReservation == null && activeMutationEpochReservation != null)
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
             return false;
         }
 
@@ -1662,7 +3136,7 @@ public sealed class ContinuationCensusProtocol
             bool sameNpc = existed
                 && npcTravelStateNpcOwnersBySection.TryGetValue(candidate.SectionId, out NpcRuntime oldNpc)
                 && ReferenceEquals(oldNpc, candidate.NpcOwner);
-            bool sameOwner = existed && ReferenceEquals(prior.OwnerInstanceIdentity, candidate.NpcOwner);
+            bool sameOwner = existed && ReferenceEquals(prior.OwnerInstanceIdentity, candidate.Witness.OwnerInstanceIdentity);
             if (sameNpc && sameOwner)
             {
                 if (!TryReadAndValidate(prior, allowRevisionAdvance: false, out _, out failure))
@@ -1697,20 +3171,23 @@ public sealed class ContinuationCensusProtocol
             { Fault(); failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
             bool existed = registeredSections.TryGetValue(c.SectionId, out RegisteredSection prior);
             bool sameNpc = existed && inventoryNpcOwnersBySection.TryGetValue(c.SectionId, out NpcRuntime oldNpc) && ReferenceEquals(oldNpc, c.NpcOwner);
-            bool sameOwner = existed && ReferenceEquals(prior.OwnerInstanceIdentity, c.InventoryOwner);
-            if (existed && (!sameNpc || !sameOwner))
+            bool sameOwnerIdentity = existed && ReferenceEquals(prior.OwnerInstanceIdentity, c.InventoryOwnerIdentity);
+            bool sameOwnerState = existed && HasSameInventoryOwnerState(prior.OwnerInstanceIdentity, c);
+            if (existed && (!sameNpc || !sameOwnerState))
             {
                 Fault();
                 failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
                 return false;
             }
-            if (sameNpc && sameOwner)
+            if (sameNpc && sameOwnerIdentity)
             {
                 if (!TryReadAndValidate(prior, false, out _, out failure)) { Fault(); return false; }
                 stagedRegistered.Add(c.SectionId, prior); stagedExpected.Add(c.SectionId, prior.Contract); stagedInventoryProviders[i] = prior.Provider;
             }
             else
             {
+                if (existed && !TryReadAndValidate(prior, false, out _, out failure))
+                { Fault(); return false; }
                 inventoryChanged = true;
                 RegisteredSection replacement = new RegisteredSection(c.Contract, c.Provider); SetBaseline(replacement, c.Witness);
                 stagedRegistered.Add(c.SectionId, replacement); stagedExpected.Add(c.SectionId, c.Contract); stagedInventoryProviders[i] = c.Provider;
@@ -2008,14 +3485,29 @@ public sealed class ContinuationCensusProtocol
             || inventoryChanged || moneyAccountChanged || knowledgeChanged || plansChanged
             || npcReceiptOwnersChanged || lifecycleChanged;
         if (anySectionChanged
-            && mutationEpoch == long.MaxValue)
+            && !mutationEpochState.CanAdvance)
         {
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
         }
 
-        expectedSections = stagedExpected;
+        HashSet<string> stagedChangedFixedSectionIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string changedId in changedIds)
+            if (!DailyV1ExecutionBoundaryState.IsSelectedDynamicOwnerSectionId(changedId))
+                stagedChangedFixedSectionIds.Add(changedId);
+
+        if (!TryCommitExpectedSectionInventory(stagedExpected, stagedRegistered,
+                runtimeProtocolTransition: true,
+                reservation: epochReservation?.EpochReservation,
+                changedFixedSectionIds: stagedChangedFixedSectionIds,
+                committedMutation: anySectionChanged,
+                reservationContext: epochReservation))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
         registeredSections = stagedRegistered;
         spatialKnowledgeSectionIds = stagedDynamicIds;
         spatialKnowledgeNpcOwnersBySection = stagedDynamicNpcOwners;
@@ -2046,14 +3538,18 @@ public sealed class ContinuationCensusProtocol
             npcReceiptOwnerFamilyProviders = Array.AsReadOnly(stagedNpcReceiptOwnerProviders);
         if (lifecycleChanged)
             lifecycleFamilyProviders = Array.AsReadOnly(stagedLifecycleProviders);
-        if (epochReservation != null)
+        if (epochReservation != null && !epochReservation.CoreFinalized)
         {
             if (!TryCompleteMutationEpochReservation(epochReservation, anySectionChanged, out failure))
                 return false;
         }
-        else if (anySectionChanged)
+        else if (epochReservation == null
+            && anySectionChanged
+            && !mutationEpochState.TryAdvanceCommittedMutation())
         {
-            mutationEpoch++;
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
         }
         failure = ContinuationCensusFailure.None;
         return true;
@@ -2063,7 +3559,7 @@ public sealed class ContinuationCensusProtocol
     {
         epoch = 0L;
         if (!TryRequireOwnerThread(out failure)) return false;
-        epoch = mutationEpoch;
+        epoch = mutationEpochState.CurrentEpoch;
         return true;
     }
 
@@ -2075,7 +3571,7 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.OperationInProgress;
             return false;
         }
-        if (mutationEpoch == long.MaxValue)
+        if (!mutationEpochState.CanAdvance)
         {
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
@@ -2097,17 +3593,20 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.OperationInProgress;
             return false;
         }
-        if (mutationEpoch == long.MaxValue)
+        if (!mutationEpochState.CanAdvance)
         {
             Fault();
             failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
         }
 
-        object token = new object();
-        activeMutationEpochReservation = token;
+        if (!mutationEpochState.TryReserve(out DailyV1MutationEpochReservation epochReservation))
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
         OwnerThreadBinding binding = Volatile.Read(ref ownerThreadBinding);
-        reservation = new ContinuationMutationEpochReservation(this, token, binding.Thread);
+        reservation = new ContinuationMutationEpochReservation(this, epochReservation, binding.Thread);
         failure = ContinuationCensusFailure.None;
         return true;
     }
@@ -2119,7 +3618,7 @@ public sealed class ContinuationCensusProtocol
     {
         if (reservation == null
             || !ReferenceEquals(reservation.Owner, this)
-            || !ReferenceEquals(reservation.Token, activeMutationEpochReservation)
+            || !ReferenceEquals(reservation.EpochReservation, activeMutationEpochReservation)
             || !ReferenceEquals(reservation.OwnerThread, Thread.CurrentThread)
             || reservation.OwnerThread.ManagedThreadId != Thread.CurrentThread.ManagedThreadId)
         {
@@ -2128,8 +3627,17 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        bool notified = NotifyCommittedMutationsCore(sectionIds, out failure);
-        activeMutationEpochReservation = null;
+        bool notified = NotifyCommittedMutationsCore(
+            sectionIds,
+            out failure,
+            advanceEpoch: false,
+            reservation: reservation.EpochReservation);
+        if (!mutationEpochState.TryComplete(reservation.EpochReservation, notified))
+        {
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
         return notified;
     }
 
@@ -2145,12 +3653,12 @@ public sealed class ContinuationCensusProtocol
         }
         if (activeMutationEpochReservation == null)
             return;
-        if (!ReferenceEquals(reservation.Token, activeMutationEpochReservation))
+        if (!ReferenceEquals(reservation.EpochReservation, activeMutationEpochReservation)
+            || !mutationEpochState.TryRelease(reservation.EpochReservation))
         {
             Fault();
             return;
         }
-        activeMutationEpochReservation = null;
     }
 
     internal bool TryCompleteMutationEpochReservation(
@@ -2160,7 +3668,7 @@ public sealed class ContinuationCensusProtocol
     {
         if (reservation == null
             || !ReferenceEquals(reservation.Owner, this)
-            || !ReferenceEquals(reservation.Token, activeMutationEpochReservation)
+            || !ReferenceEquals(reservation.EpochReservation, activeMutationEpochReservation)
             || !ReferenceEquals(reservation.OwnerThread, Thread.CurrentThread)
             || reservation.OwnerThread.ManagedThreadId != Thread.CurrentThread.ManagedThreadId)
         {
@@ -2168,18 +3676,12 @@ public sealed class ContinuationCensusProtocol
             failure = ContinuationCensusFailure.ProtocolFaulted;
             return false;
         }
-        if (committedMutation)
+        if (!mutationEpochState.TryComplete(reservation.EpochReservation, committedMutation))
         {
-            if (mutationEpoch == long.MaxValue)
-            {
-                Fault();
-                activeMutationEpochReservation = null;
-                failure = ContinuationCensusFailure.ProtocolFaulted;
-                return false;
-            }
-            mutationEpoch++;
+            Fault();
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
         }
-        activeMutationEpochReservation = null;
         failure = ContinuationCensusFailure.None;
         return true;
     }
@@ -2203,7 +3705,11 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        if (!expectedOperations.Contains(operationContractId ?? string.Empty))
+        string requestedOperationContractId = operationContractId ?? string.Empty;
+        bool operationRegistered = sharedExecutionState != null
+            ? sharedExecutionState.HasRuntimeProtocolOperationContract(requestedOperationContractId)
+            : expectedOperations.Contains(requestedOperationContractId);
+        if (!operationRegistered)
         {
             Fault();
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
@@ -2217,7 +3723,19 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        activeOperationCount++;
+        if (sharedExecutionState != null)
+        {
+            if (!sharedExecutionState.TryBeginRuntimeProtocolOperation(requestedOperationContractId))
+            {
+                Fault();
+                failure = ContinuationCensusFailure.ProtocolFaulted;
+                return false;
+            }
+        }
+        else
+        {
+            standaloneActiveOperationCount++;
+        }
         OwnerThreadBinding binding = Volatile.Read(ref ownerThreadBinding);
         scope = new SimulationOperationScope(this, binding.Thread, binding.ManagedThreadId);
         failure = ContinuationCensusFailure.None;
@@ -2227,7 +3745,7 @@ public sealed class ContinuationCensusProtocol
     public bool TryReadActiveOperationCount(out int count, out ContinuationCensusFailure failure)
     {
         count = 0;
-        if (!operationsSealed || expectedOperations.Count == 0)
+        if (!operationsSealed || !hasExpectedOperationInventory)
         {
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -2244,7 +3762,7 @@ public sealed class ContinuationCensusProtocol
     /// </summary>
     public bool TryAssessRegisteredOperationQuiescence(out ContinuationCensusFailure failure)
     {
-        if (!operationsSealed || expectedOperations.Count == 0)
+        if (!operationsSealed || !hasExpectedOperationInventory)
         {
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
@@ -2262,12 +3780,76 @@ public sealed class ContinuationCensusProtocol
     }
 
     /// <summary>
-    /// Reads a copied, ordinally ordered census only when every registered
-    /// section is current and the sealed operation tracker has no active scope
-    /// or pending mutation-epoch reservation. This is a read-only boundary
-    /// witness; it does not grant profile admission or make the protocol a lock.
+    /// Captures with no enclosing application operation. This strict overload
+    /// remains the default for token queries and detached restore candidates.
     /// </summary>
     internal bool TryCaptureQuiescentOwnerSectionSnapshot(
+        out IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
+        out long observedMutationEpoch,
+        out ContinuationCensusFailure failure) =>
+        TryCaptureQuiescentOwnerSectionSnapshot(
+            DailyV1CaptureScopeAllowance.None,
+            out snapshots,
+            out observedMutationEpoch,
+            out failure);
+
+    private bool TryPrepareQuiescentOwnerSectionCapture(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
+        out ContinuationCensusFailure failure)
+    {
+        if (IsFaulted())
+        {
+            failure = ContinuationCensusFailure.ProtocolFaulted;
+            return false;
+        }
+        if (!Enum.IsDefined(typeof(DailyV1CaptureScopeAllowance), allowedOuterScope)
+            || !expectedSectionsSealed
+            || !providersSealed
+            || expectedSections.Count == 0
+            || !operationsSealed
+            || !hasExpectedOperationInventory)
+        {
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+        if (!TryRequireOwnerThread(out failure)) return false;
+        if (!HasExpectedProtocolOperationCount(allowedOuterScope)
+            || activeMutationEpochReservation != null
+            || (sharedExecutionState != null
+                && !sharedExecutionState.TryAssessCaptureScope(allowedOuterScope))
+            || (sharedExecutionState == null
+                && allowedOuterScope != DailyV1CaptureScopeAllowance.None))
+        {
+            failure = ContinuationCensusFailure.OperationInProgress;
+            return false;
+        }
+
+        bool dynamicFamiliesMatch =
+            (spatialKnowledgeRoster == null || TryValidateSpatialKnowledgeFamilyMatchesRoster(out failure))
+            && (npcTravelStateRoster == null || TryValidateNpcTravelStateFamilyMatchesRoster(out failure))
+            && (inventoryRoster == null || TryValidateInventoryFamilyMatchesRoster(out failure))
+            && (moneyAccountRoster == null || TryValidateMoneyAccountFamilyMatchesRoster(out failure))
+            && (npcKnowledgeRoster == null || TryValidateNpcKnowledgeFamilyMatchesRoster(out failure))
+            && (npcPlanRoster == null || TryValidateNpcPlanFamilyMatchesRoster(out failure))
+            && (npcReceiptOwnerRoster == null
+                || TryValidateNpcReceiptOwnerFamilyMatchesRoster(out failure));
+        if (!dynamicFamiliesMatch || registeredSections.Count != expectedSections.Count)
+        {
+            Fault();
+            failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
+            return false;
+        }
+
+        failure = ContinuationCensusFailure.None;
+        return true;
+    }
+
+    /// <summary>
+    /// Reads a copied, ordinal census with protocol operations idle and only
+    /// the explicitly authorized outer application scope, if any.
+    /// </summary>
+    internal bool TryCaptureQuiescentOwnerSectionSnapshot(
+        DailyV1CaptureScopeAllowance allowedOuterScope,
         out IReadOnlyList<OwnerSectionCensusSnapshot> snapshots,
         out long observedMutationEpoch,
         out ContinuationCensusFailure failure)
@@ -2284,14 +3866,18 @@ public sealed class ContinuationCensusProtocol
             || !providersSealed
             || expectedSections.Count == 0
             || !operationsSealed
-            || expectedOperations.Count == 0)
+            || !hasExpectedOperationInventory)
         {
             failure = ContinuationCensusFailure.OwnerCoverageIncomplete;
             return false;
         }
 
         if (!TryRequireOwnerThread(out failure)) return false;
-        if (activeOperationCount != 0 || activeMutationEpochReservation != null)
+        if (!HasExpectedProtocolOperationCount(allowedOuterScope)
+            || activeMutationEpochReservation != null
+            || (sharedExecutionState != null
+                && !sharedExecutionState.TryAssessCaptureScope(allowedOuterScope))
+            || (sharedExecutionState == null && allowedOuterScope != DailyV1CaptureScopeAllowance.None))
         {
             failure = ContinuationCensusFailure.OperationInProgress;
             return false;
@@ -2314,7 +3900,7 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
 
-        long startingEpoch = mutationEpoch;
+        long startingEpoch = mutationEpochState.CurrentEpoch;
         List<OwnerSectionContract> orderedContracts = new List<OwnerSectionContract>(expectedSections.Values);
         orderedContracts.Sort((left, right) => StringComparer.Ordinal.Compare(left.SectionId, right.SectionId));
         List<OwnerSectionCensusSnapshot> observed =
@@ -2350,9 +3936,12 @@ public sealed class ContinuationCensusProtocol
             return false;
         }
         if (!TryRequireOwnerThread(out failure)) return false;
-        if (activeOperationCount != 0
+        if (!HasExpectedProtocolOperationCount(allowedOuterScope)
             || activeMutationEpochReservation != null
-            || mutationEpoch != startingEpoch)
+            || (sharedExecutionState != null
+                && !sharedExecutionState.TryAssessCaptureScope(allowedOuterScope))
+            || (sharedExecutionState == null && allowedOuterScope != DailyV1CaptureScopeAllowance.None)
+            || mutationEpochState.CurrentEpoch != startingEpoch)
         {
             failure = ContinuationCensusFailure.OperationInProgress;
             return false;
@@ -2362,6 +3951,14 @@ public sealed class ContinuationCensusProtocol
         observedMutationEpoch = startingEpoch;
         failure = ContinuationCensusFailure.None;
         return true;
+    }
+
+    private bool HasExpectedProtocolOperationCount(DailyV1CaptureScopeAllowance allowance)
+    {
+        // The allowed DailyAdvance scope is the outer runtime scope. Any
+        // registered RuntimeProtocol operation has already closed before the
+        // held-lease token-finalization capture begins.
+        return activeOperationCount == 0;
     }
 
     internal void ExitOperation(Thread scopeOwnerThread, int scopeOwnerThreadId)
@@ -2378,7 +3975,14 @@ public sealed class ContinuationCensusProtocol
             return;
         }
 
-        activeOperationCount--;
+        if (sharedExecutionState != null)
+        {
+            if (!sharedExecutionState.TryEndRuntimeProtocolOperation()) Fault();
+        }
+        else
+        {
+            standaloneActiveOperationCount--;
+        }
     }
 
     private bool TryBuildSpatialKnowledgeFamily(
@@ -2575,7 +4179,7 @@ public sealed class ContinuationCensusProtocol
 
             if (string.IsNullOrWhiteSpace(provider.RuntimeId)
                 || provider.NpcOwner == null
-                || !ReferenceEquals(provider.NpcOwner, witness.OwnerInstanceIdentity)
+                || !ReferenceEquals(provider.NpcOwner.SelectedCensusOwnerIdentity, witness.OwnerInstanceIdentity)
                 || !string.Equals(witness.SectionId, sectionId, StringComparison.Ordinal)
                 || witness.Cardinality != 1
                 || witness.Revision != provider.NpcOwner.TravelStateRevision
@@ -2624,9 +4228,13 @@ public sealed class ContinuationCensusProtocol
                         ? P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(provider.RuntimeId)
                         : null;
                 object expectedOwner = provider.Kind == P12DNpcReceiptOwnerCensusProvider.ReceiptOwnerKind.LocalObservation
-                    ? (object)provider.NpcOwner.ExistingLocalKnowledgeObservationRuntime
+                    ? provider.NpcOwner.SelectedRuntimeOwners != null
+                        ? (object)provider.NpcOwner.SelectedRuntimeOwners.LocalObservationReceipts
+                        : provider.NpcOwner.ExistingLocalKnowledgeObservationRuntime
                     : provider.Kind == P12DNpcReceiptOwnerCensusProvider.ReceiptOwnerKind.MerchantTradeState
-                        ? provider.NpcOwner.ExistingMerchantTradeStateRuntime
+                        ? provider.NpcOwner.SelectedRuntimeOwners != null
+                            ? (object)provider.NpcOwner.SelectedRuntimeOwners.MerchantTradeStateReceipts
+                            : provider.NpcOwner.ExistingMerchantTradeStateRuntime
                         : null;
                 if (string.IsNullOrWhiteSpace(sectionId)
                     || provider.NpcOwner == null
@@ -2727,7 +4335,7 @@ public sealed class ContinuationCensusProtocol
                 || !registeredSections.TryGetValue(candidate.SectionId, out RegisteredSection section)
                 || !npcTravelStateNpcOwnersBySection.TryGetValue(candidate.SectionId, out NpcRuntime npc)
                 || !ReferenceEquals(npc, candidate.NpcOwner)
-                || (section.HasBaseline && !ReferenceEquals(section.OwnerInstanceIdentity, candidate.NpcOwner)))
+                || (section.HasBaseline && !ReferenceEquals(section.OwnerInstanceIdentity, candidate.Witness.OwnerInstanceIdentity)))
             { failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
         }
         failure = ContinuationCensusFailure.None;
@@ -2744,10 +4352,25 @@ public sealed class ContinuationCensusProtocol
                 || !registeredSections.TryGetValue(c.SectionId, out RegisteredSection section)
                 || !inventoryNpcOwnersBySection.TryGetValue(c.SectionId, out NpcRuntime npc)
                 || !ReferenceEquals(npc, c.NpcOwner)
-                || (section.HasBaseline && !ReferenceEquals(section.OwnerInstanceIdentity, c.InventoryOwner)))
+                || (section.HasBaseline && !ReferenceEquals(section.OwnerInstanceIdentity, c.InventoryOwnerIdentity)))
             { failure = ContinuationCensusFailure.OwnerCoverageIncomplete; return false; }
         }
         failure = ContinuationCensusFailure.None; return true;
+    }
+
+    private static bool HasSameInventoryOwnerState(object priorIdentity, InventoryCandidate candidate)
+    {
+        if (ReferenceEquals(priorIdentity, candidate.InventoryOwnerIdentity)) return true;
+        DailyV1InventoryOwner selectedOwner = candidate.NpcOwner?.SelectedRuntimeOwners?.Inventory;
+        InventoryRuntime projection = candidate.NpcOwner?.ExistingInventory;
+        if (selectedOwner == null || projection == null
+            || !ReferenceEquals(projection.SelectedDailyV1Owner, selectedOwner))
+            return false;
+
+        return (ReferenceEquals(priorIdentity, selectedOwner)
+                && ReferenceEquals(candidate.InventoryOwnerIdentity, projection))
+            || (ReferenceEquals(priorIdentity, projection)
+                && ReferenceEquals(candidate.InventoryOwnerIdentity, selectedOwner));
     }
 
     private static bool TryBuildMoneyAccountFamily(
@@ -2774,6 +4397,9 @@ public sealed class ContinuationCensusProtocol
                 if (string.IsNullOrWhiteSpace(accountProvider.RuntimeId)
                     || accountProvider.NpcOwner == null
                     || accountProvider.MoneyAccountOwner == null
+                    || (accountProvider.NpcOwner.SelectedRuntimeOwners != null
+                        && !ReferenceEquals(accountProvider.NpcOwner.SelectedRuntimeOwners.MoneyAccount,
+                            accountProvider.MoneyAccountOwner))
                     || !ReferenceEquals(accountProvider.NpcOwner.MoneyAccount, accountProvider.MoneyAccountOwner)
                     || !ReferenceEquals(witness.OwnerInstanceIdentity, accountProvider.MoneyAccountOwner)
                     || !IsWitnessValidForContract(contract, witness))
@@ -2969,13 +4595,29 @@ public sealed class ContinuationCensusProtocol
         return true;
     }
 
-    private bool IsFaulted() => Volatile.Read(ref protocolFaulted) != 0;
+    private bool IsFaulted() => sharedExecutionState != null
+        ? sharedExecutionState.IsSelectedRuntimeCensusProtocolFaulted
+        : Volatile.Read(ref protocolFaulted) != 0;
 
     private bool IsOwnerThreadBound() => Volatile.Read(ref ownerThreadBinding) != null;
 
-    internal void FaultClosed() => Fault();
+    internal void FaultClosed([CallerMemberName] string sourceMember = null) => Fault(sourceMember);
 
-    private void Fault() => Interlocked.Exchange(ref protocolFaulted, 1);
+    private void RecordFirstFaultDetail(string detail)
+    {
+        if (!string.IsNullOrWhiteSpace(detail))
+            Interlocked.CompareExchange(ref firstFaultDetail, detail, null);
+    }
+
+    private void Fault([CallerMemberName] string sourceMember = null)
+    {
+        if (!string.IsNullOrWhiteSpace(sourceMember))
+            Interlocked.CompareExchange(ref firstFaultSource, sourceMember, null);
+        if (sharedExecutionState != null)
+            sharedExecutionState.MarkSelectedRuntimeCensusProtocolFaulted();
+        else
+            Interlocked.Exchange(ref protocolFaulted, 1);
+    }
 }
 
 /// <summary>

@@ -2,32 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 
-internal enum P12CrimeSocialAppraisalOperation
-{
-    TheftAcceptance,
-    KnowledgeAndAppraisal
-}
-
-internal interface IP12CrimeSocialAppraisalOwnerMutationBoundary
-{
-    bool CanCommit(object owner);
-    void Committed(object owner);
-    void Fault();
-}
-
-internal interface IP12CrimeSocialAppraisalOperationBoundary
-{
-    bool TryBeginOperation(P12CrimeSocialAppraisalOperation operation);
-    bool EndOperation(P12CrimeSocialAppraisalOperation operation);
-}
-
 /// <summary>Exact selected-profile witnesses for the three CrimeSocialAppraisal stores.</summary>
 public static class P12CrimeSocialAppraisalCensusProvider
 {
-    public const string OutcomesSectionId = "p12.crime-social-appraisal.outcomes";
-    public const string KnowledgeSectionId = "p12.crime-social-appraisal.knowledge";
-    public const string ReactionsSectionId = "p12.crime-social-appraisal.reactions";
-    public const int SchemaVersion = 1;
+    public const string OutcomesSectionId = P12CrimeSocialAppraisalOwnerContract.OutcomesSectionId;
+    public const string KnowledgeSectionId = P12CrimeSocialAppraisalOwnerContract.KnowledgeSectionId;
+    public const string ReactionsSectionId = P12CrimeSocialAppraisalOwnerContract.ReactionsSectionId;
+    public const int SchemaVersion = P12CrimeSocialAppraisalOwnerContract.SchemaVersion;
 
     private sealed class SectionProvider<TOwner> : IOwnerSectionCensusProvider where TOwner : class
     {

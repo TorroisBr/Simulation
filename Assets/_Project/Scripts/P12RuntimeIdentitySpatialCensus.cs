@@ -110,7 +110,7 @@ public sealed partial class SimulationRuntime
                     P12RuntimeIdentitySectionIds[i],
                     RuntimeIdentityRegistryCensusProvider.SchemaVersion,
                     identityRoles[i],
-                    p12RuntimeIdentityRegistry,
+                    p12RuntimeIdentityRegistry.CoreIdentityIndex,
                     expectedInitialCardinality: identityInitialCardinalities[i]))
                 return false;
         }
@@ -121,7 +121,7 @@ public sealed partial class SimulationRuntime
                 SpatialNetworkCensusProvider.LocationsSectionId,
                 SpatialNetworkCensusProvider.SchemaVersion,
                 OwnerSectionRole.Required,
-                p12SpatialNetworkRuntime,
+                p12SpatialNetworkRuntime.SelectedOwner,
                 expectedInitialCardinality: 2)
             || !TryRegisterP12FixedOwnerSection(
                 protocol,
@@ -129,7 +129,7 @@ public sealed partial class SimulationRuntime
                 SpatialNetworkCensusProvider.RoutesSectionId,
                 SpatialNetworkCensusProvider.SchemaVersion,
                 OwnerSectionRole.Required,
-                p12SpatialNetworkRuntime,
+                p12SpatialNetworkRuntime.SelectedOwner,
                 expectedInitialCardinality: 2)
             || !TryRegisterP12FixedOwnerSection(
                 protocol,
@@ -387,6 +387,16 @@ public sealed partial class SimulationRuntime
             && ReferenceEquals(identityRegistry, p12RuntimeIdentityRegistry)
             && ReferenceEquals(spatialNetwork, p12SpatialNetworkRuntime)
             && ReferenceEquals(siteStore, explorableSiteStore)
+            && spatialNetwork != null
+            && siteStore != null
+            && identityRegistry.HasConsistentCoreIdentityProjections(
+                npcRuntimeSnapshot,
+                cityRuntimeSnapshot,
+                spatialNetwork.Locations,
+                spatialNetwork.Routes,
+                siteStore.Sites,
+                localTopologyStore?.Topologies ?? Array.Empty<LocalTopologyRuntime>(),
+                placeContentStore?.NotableItems ?? Array.Empty<NotableItemRuntime>())
             && p12RuntimeIdentityCensusProviders != null
             && p12RuntimeIdentityCensusProviders.Count == P12RuntimeIdentitySectionIds.Length
             && p12SpatialNetworkCensusProviders != null

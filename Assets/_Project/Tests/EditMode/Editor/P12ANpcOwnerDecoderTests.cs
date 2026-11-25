@@ -64,7 +64,7 @@ public sealed class P12ANpcOwnerDecoderTests
         P12AContinuationImage image = EncodeImage(sourceD, sourceF, person);
 
         Assert.That(image.Sections.Any(section => section.Id ==
-            NpcLifecycleCensusProvider.SectionIdFor(runtimeId, residence: true)), Is.False);
+            DailyV1SelectedOwnerSectionCensusContract.NpcResidenceSectionIdFor(runtimeId)), Is.False);
         Assert.That(P12ANpcOwnerDecoder.TryDecode(image, runtimeId,
             out P12DNpcDRow decodedD, out P12DNpcFRow decodedF, out P12AResult error),
             Is.True, error?.SectionCode + ":" + error?.Code);
@@ -80,7 +80,7 @@ public sealed class P12ANpcOwnerDecoderTests
     {
         const string runtimeId = "npc-decoder-invalid";
         P12AContinuationImage valid = EncodeImage(DRow(runtimeId, null, 1L), FRow(runtimeId), null);
-        string requiredId = NpcCurrentActionCensusProvider.SectionIdFor(runtimeId);
+        string requiredId = DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(20, runtimeId);
         P12AOwnerSection action = valid.Sections.Single(section => section.Id == requiredId);
 
         List<P12AOwnerSection> missing = valid.Sections.Where(section => section.Id != requiredId).ToList();
@@ -103,6 +103,56 @@ public sealed class P12ANpcOwnerDecoderTests
             section.Id == requiredId ? crossRuntime : section).ToList();
         Assert.That(P12ANpcOwnerDecoder.TryDecode(Image(mismatched), runtimeId,
             out _, out _, out _), Is.False);
+    }
+
+    [Test]
+    public void BatchDecoderReturnsAllNpcsInOrdinalIdentityOrderAndPublishesNoPartialRows()
+    {
+        P12AContinuationImage first = EncodeImage(DRow("npc-z", null, 1L), FRow("npc-z"), null);
+        P12AContinuationImage second = EncodeImage(DRow("npc-a", null, 1L), FRow("npc-a"), null);
+        P12CRuntimeIdentityOwnerSnapshot identities = new P12CRuntimeIdentityOwnerSnapshot(
+            P12CRuntimeIdentityOwnerSnapshot.CurrentSchemaVersion, 8L,
+            new[]
+            {
+                new KeyValuePair<string, string>("npc", "npc-z"),
+                new KeyValuePair<string, string>("npc", "npc-a"),
+                new KeyValuePair<string, string>("city", "city-home"),
+                new KeyValuePair<string, string>("city", "city-target"),
+                new KeyValuePair<string, string>("location", "location-home"),
+                new KeyValuePair<string, string>("location", "location-target"),
+                new KeyValuePair<string, string>("location", "location-site"),
+                new KeyValuePair<string, string>("location", "location-plan")
+            });
+        Assert.That(P12ARuntimeIdentityOwnerCodec.TryEncode(identities,
+            out IReadOnlyList<P12AOwnerSection> identitySections, out P12AResult identityError),
+            Is.True, identityError?.SectionCode + ":" + identityError?.Code);
+
+        List<P12AOwnerSection> sections = identitySections.ToList();
+        sections.AddRange(first.Sections.Where(section =>
+            section.Id == DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId
+            || section.Id == DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId));
+        sections.AddRange(first.Sections.Where(section =>
+            section.Id != DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId
+            && section.Id != DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId));
+        sections.AddRange(second.Sections.Where(section =>
+            section.Id != DailyV1SelectedOwnerSectionCensusContract.PersonMembershipSectionId
+            && section.Id != DailyV1SelectedOwnerSectionCensusContract.PersonMaterializationBindingSectionId));
+        P12AContinuationImage image = Image(sections);
+
+        Assert.That(P12ADailyV1NpcOwnerBatchDecoder.TryDecode(image,
+            out IReadOnlyList<P12DNpcDRow> dRows, out IReadOnlyList<P12DNpcFRow> fRows,
+            out P12AResult error), Is.True, error?.SectionCode + ":" + error?.Code);
+        Assert.That(dRows.Select(row => row.RuntimeId), Is.EqualTo(new[] { "npc-a", "npc-z" }));
+        Assert.That(fRows.Select(row => row.RuntimeId), Is.EqualTo(new[] { "npc-a", "npc-z" }));
+
+        string missingId = DailyV1SelectedOwnerSectionCensusContract.NpcInventoryPrefix + "npc-z";
+        P12AContinuationImage incomplete = Image(sections.Where(section => section.Id != missingId));
+        Assert.That(P12ADailyV1NpcOwnerBatchDecoder.TryDecode(incomplete,
+            out IReadOnlyList<P12DNpcDRow> rejectedD, out IReadOnlyList<P12DNpcFRow> rejectedF,
+            out P12AResult rejection), Is.False);
+        Assert.That(rejection, Is.Not.Null);
+        Assert.That(rejectedD, Is.Null);
+        Assert.That(rejectedF, Is.Null);
     }
 
     private static P12AContinuationImage EncodeImage(P12DNpcDRow dRow,
@@ -147,14 +197,14 @@ public sealed class P12ANpcOwnerDecoderTests
         object local = new object(), trade = new object(), topology = new object();
         return new[]
         {
-            new OwnerSectionCensusSnapshot(P12DNpcReceiptOwnerCensusProvider.LocalObservationSectionIdFor(runtimeId),
-                P12DNpcReceiptOwnerCensusProvider.SchemaVersion, OwnerSectionRole.Required, local, 0, 0L),
-            new OwnerSectionCensusSnapshot(P12DNpcReceiptOwnerCensusProvider.MerchantTradeStateSectionIdFor(runtimeId),
-                P12DNpcReceiptOwnerCensusProvider.SchemaVersion, OwnerSectionRole.Required, trade, 0, 0L),
-            new OwnerSectionCensusSnapshot(NpcKnowledgeCensusProvider.SectionIdFor(1, runtimeId),
-                NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required, topology, 0, 0L),
-            new OwnerSectionCensusSnapshot(NpcKnowledgeCensusProvider.SectionIdFor(2, runtimeId),
-                NpcKnowledgeCensusProvider.SchemaVersion, OwnerSectionRole.Required, topology, 0, 0L)
+            new OwnerSectionCensusSnapshot(DailyV1SelectedOwnerSectionCensusContract.NpcLocalObservationReceiptsSectionIdFor(runtimeId),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, OwnerSectionRole.Required, local, 0, 0L),
+            new OwnerSectionCensusSnapshot(DailyV1SelectedOwnerSectionCensusContract.NpcMerchantTradeStateReceiptsSectionIdFor(runtimeId),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, OwnerSectionRole.Required, trade, 0, 0L),
+            new OwnerSectionCensusSnapshot(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(1, runtimeId),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, OwnerSectionRole.Required, topology, 0, 0L),
+            new OwnerSectionCensusSnapshot(DailyV1SelectedOwnerSectionCensusContract.NpcSectionIdFor(2, runtimeId),
+                DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion, OwnerSectionRole.Required, topology, 0, 0L)
         };
     }
 
@@ -186,5 +236,5 @@ public sealed class P12ANpcOwnerDecoderTests
             Array.Empty<AdventureAccessObservation>(), 0L,
             Array.Empty<P12DNpcCommercialMarketValue>(),
             Array.Empty<P12DNpcCommercialLiquidityValue>(),
-            Array.Empty<CommercialKnowledgeShareReceipt>(), 0L);
+            Array.Empty<P12DNpcCommercialShareReceiptValue>(), 0L);
 }

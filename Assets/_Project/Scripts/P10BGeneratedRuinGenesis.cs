@@ -41,13 +41,26 @@ public static class P10BGeneratedRuinGenesis
     public static PreparedRuin Prepare(SimulationConfigData config, string selectedP9Fingerprint,
         SpatialAuthorityStore spatialAuthority, RuntimeIdentityRegistry identityRegistry, out string diagnostic)
     {
+        DailyV1EffectiveDefinitions definitions = config == null
+            ? null
+            : SimulationGenesisPipeline.CreateSelectedDefinitions(config);
+        return Prepare(config, selectedP9Fingerprint, definitions, spatialAuthority, identityRegistry, out diagnostic);
+    }
+
+    public static PreparedRuin Prepare(SimulationConfigData config, string selectedP9Fingerprint,
+        DailyV1EffectiveDefinitions selectedDefinitions,
+        SpatialAuthorityStore spatialAuthority, RuntimeIdentityRegistry identityRegistry, out string diagnostic)
+    {
         diagnostic = null;
         if (config == null || spatialAuthority == null || identityRegistry == null)
         { diagnostic = "P10-B preparation requires selected config, P8/P9 spatial authority, and runtime identity registry."; return null; }
         if (!string.Equals(config.GenesisProfileContractIdentity, SimulationGenesisPipeline.P10BGeneratedRuinProfileContractIdentity, StringComparison.Ordinal))
         { diagnostic = "The selected genesis profile is not P10-B."; return null; }
-        ExplorableSiteData definition = config.authoredP10RuinSite;
-        if (definition == null || definition.kind != ExplorableSiteKind.Ruin || string.IsNullOrWhiteSpace(definition.DefinitionId))
+        ExplorableSiteData authoredDefinition = config.authoredP10RuinSite;
+        if (authoredDefinition == null || selectedDefinitions == null
+            || !selectedDefinitions.ExplorableSites.TryGetValue(authoredDefinition.DefinitionId,
+                out DailyV1ExplorableSiteDefinition definition)
+            || definition.Kind.Value != (int)ExplorableSiteKind.Ruin || string.IsNullOrWhiteSpace(definition.DefinitionId))
         { diagnostic = "P10-B requires exactly one Ruin definition with a stable DefinitionId."; return null; }
         if (string.IsNullOrWhiteSpace(config.P10BStableSiteKey))
         { diagnostic = "P10-B requires an explicit non-empty StableSiteKey."; return null; }

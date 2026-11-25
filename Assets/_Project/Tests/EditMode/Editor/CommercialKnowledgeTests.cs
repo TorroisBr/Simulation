@@ -263,7 +263,10 @@ public sealed class CommercialKnowledgeTests
         CommercialMarketObservation observation = SimulationTestFactory.CreateObservation(
             "location-a", item, 51f, 8, 10, 20, CommercialKnowledgeSource.SharedByNpc, "npc-bruno");
 
-        CommercialObservationEvidence evidence = CommercialObservationEvidence.Capture(observation, 0.5f);
+        CommercialObservationEvidence evidence = CommercialObservationEvidence.Capture(
+            observation.LocationRuntimeId, observation.ObservedPrice, observation.ObservedStock,
+            observation.ObservedDay, observation.ReceivedDay, 0.5f, observation.Source,
+            observation.SourceRuntimeId);
 
         Assert.That(evidence.LocationRuntimeId, Is.EqualTo("location-a"));
         Assert.That(evidence.KnownPrice, Is.EqualTo(51f));

@@ -94,7 +94,7 @@ public static class PersonResidenceMembershipSystem
             return false;
         }
 
-        if (!person.TrySetResidenceSettlementRuntimeId(settlement.RuntimeId))
+        if (!PersonRuntimeOwnerBridge.TrySetResidenceSettlementRuntimeId(person, settlement.RuntimeId))
         {
             failure = PersonResidenceMembershipFailure.RuntimeFaulted;
             return false;

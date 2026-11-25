@@ -87,6 +87,30 @@ internal enum P12GDailyV1RestoreStage
 /// </summary>
 internal static partial class P12GDailyV1RestoreCoordinator
 {
+    private static bool IsSourceTokenCurrent(
+        SimulationRuntime sourceRuntime,
+        DailyCaptureEligibilityToken sourceToken,
+        bool captureContinuationImage,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation = null)
+    {
+        if (sourceToken == null) return false;
+        if (continuationSaveOperation != null)
+            return captureContinuationImage
+                && replacementOperation == null
+                && continuationSaveOperation.IsActive
+                && ReferenceEquals(continuationSaveOperation.SourceWitness.Token, sourceToken)
+                && continuationSaveOperation.TryRevalidate(out _);
+        if (sourceRuntime == null) return false;
+        if (replacementOperation != null)
+            return !captureContinuationImage
+                && sourceRuntime.TryValidateCompletedDailyCaptureTokenForSessionReplacement(
+                    sourceToken, replacementOperation, out _);
+        return captureContinuationImage
+            ? sourceRuntime.TryValidateCompletedDailyCaptureTokenForContinuationSave(sourceToken, out _)
+            : sourceRuntime.TryValidateCompletedDailyCaptureToken(sourceToken, out _);
+    }
+
     internal static bool TryCreateRestoredSession(
         SimulationActiveSession sourceSession,
         out SimulationActiveSession restoredSession,
@@ -100,7 +124,9 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null,
         Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null,
-        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null)
+        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
+        DailyV1Application application = null)
     {
         return TryCreateRestoredSession(
             sourceSession,
@@ -116,7 +142,9 @@ internal static partial class P12GDailyV1RestoreCoordinator
             politicalSupportSnapshotOverrideForTest,
             factionSnapshotOverrideForTest,
             actorChoiceSnapshotOverrideForTest,
-            restoredAdmissionContextFactoryForTest);
+            restoredAdmissionContextFactoryForTest,
+            replacementOperation,
+            application);
     }
 
     internal static bool TryCreateRestoredSession(
@@ -133,14 +161,44 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest = null,
         Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest = null,
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest = null,
-        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null)
+        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest = null,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
+        DailyV1Application application = null)
     {
-        return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, false, out _, out restoredSession,
+        return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, false, null, out _, out restoredSession,
             out failure, out diagnostic, stageObserver, privateCandidateObserver,
             genealogySnapshotOverrideForTest, propertyEstateSnapshotOverrideForTest,
             politicalClaimSnapshotOverrideForTest, politicalSupportSnapshotOverrideForTest,
             factionSnapshotOverrideForTest, actorChoiceSnapshotOverrideForTest,
-            restoredAdmissionContextFactoryForTest);
+            restoredAdmissionContextFactoryForTest,
+            replacementOperation,
+            application);
+    }
+
+    internal static bool TryCreateRestoredSessionAndCaptureImage(
+        SimulationActiveSession sourceSession,
+        SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation,
+        out P12AContinuationImage image,
+        out SimulationActiveSession restoredSession,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic,
+        Action<P12GDailyV1RestoreStage> stageObserver = null)
+    {
+        if (continuationSaveOperation == null)
+        {
+            image = null;
+            restoredSession = null;
+            failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
+            diagnostic = "A Core-owned continuation-save operation is required for this capture path.";
+            return false;
+        }
+
+        return TryCreateRestoredSessionCore(
+            sourceSession, bootstrapAdmissionContext, true, null,
+            out image, out restoredSession, out failure, out diagnostic,
+            stageObserver, null, null, null, null, null, null, null, null,
+            null, null, continuationSaveOperation);
     }
 
     internal static bool TryCreateRestoredSessionAndCaptureImage(
@@ -167,14 +225,37 @@ internal static partial class P12GDailyV1RestoreCoordinator
         out P12GDailyV1RestoreFailure failure,
         out string diagnostic)
     {
-        return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, true, out image, out restoredSession,
+        return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, true, null, out image, out restoredSession,
             out failure, out diagnostic, null, null, null, null, null, null, null, null, null);
+    }
+
+    internal static bool TryCreateRestoredSessionAndCaptureDotNetV2Image(
+        SimulationActiveSession sourceSession,
+        SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
+        DailyV1HostEnvironmentIdentity hostIdentity,
+        out P12AContinuationImage image,
+        out SimulationActiveSession restoredSession,
+        out P12GDailyV1RestoreFailure failure,
+        out string diagnostic)
+    {
+        if (hostIdentity == null)
+        {
+            image = null;
+            restoredSession = null;
+            failure = P12GDailyV1RestoreFailure.InvalidSourceSession;
+            diagnostic = "A fixed .NET-v2 host identity is required for this capture path.";
+            return false;
+        }
+        return TryCreateRestoredSessionCore(sourceSession, bootstrapAdmissionContext, true,
+            hostIdentity, out image, out restoredSession, out failure, out diagnostic,
+            null, null, null, null, null, null, null, null, null);
     }
 
     private static bool TryCreateRestoredSessionCore(
         SimulationActiveSession sourceSession,
         SimulationRuntimeAdmissionContext bootstrapAdmissionContext,
         bool captureContinuationImage,
+        DailyV1HostEnvironmentIdentity dotNetIdentity,
         out P12AContinuationImage continuationImage,
         out SimulationActiveSession restoredSession,
         out P12GDailyV1RestoreFailure failure,
@@ -187,7 +268,10 @@ internal static partial class P12GDailyV1RestoreCoordinator
         Func<P12EPoliticalSupportOwnerSnapshot, P12EPoliticalSupportOwnerSnapshot> politicalSupportSnapshotOverrideForTest,
         Func<P12EFactionOwnerSnapshot, P12EFactionOwnerSnapshot> factionSnapshotOverrideForTest,
         Func<P12FActorChoiceSnapshot, P12FActorChoiceSnapshot> actorChoiceSnapshotOverrideForTest,
-        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest)
+        Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation = null,
+        DailyV1Application application = null,
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation = null)
     {
         continuationImage = null;
         restoredSession = null;
@@ -198,11 +282,37 @@ internal static partial class P12GDailyV1RestoreCoordinator
 
         SimulationRuntime sourceRuntime = sourceSession.Runtime;
         SimulationBootstrapComposition sourceComposition = sourceSession.Composition;
-        if (!sourceRuntime.TryGetCompletedDailyCaptureToken(
-                out DailyCaptureEligibilityToken sourceToken,
-                out DailyCaptureEligibilityFailure tokenFailure)
-            || sourceToken == null
-            || !sourceRuntime.TryValidateCompletedDailyCaptureToken(sourceToken, out _))
+        DailyCaptureEligibilityToken sourceToken;
+        DailyCaptureEligibilityFailure tokenFailure = DailyCaptureEligibilityFailure.OperationInProgress;
+        sourceToken = null;
+        bool sourceTokenAvailable;
+        if (continuationSaveOperation != null)
+        {
+            sourceToken = continuationSaveOperation.SourceWitness?.Token;
+            sourceTokenAvailable = captureContinuationImage
+                && replacementOperation == null
+                && ReferenceEquals(sourceSession.CoreRuntimeSession, continuationSaveOperation.Session)
+                && continuationSaveOperation.IsActive
+                && continuationSaveOperation.TryRevalidate(out tokenFailure);
+        }
+        else
+        {
+            sourceTokenAvailable = replacementOperation != null
+                ? (!captureContinuationImage
+                    && sourceRuntime.TryGetCompletedDailyCaptureTokenForSessionReplacement(
+                        replacementOperation, out sourceToken, out tokenFailure))
+                : captureContinuationImage
+                    ? sourceRuntime.TryGetCompletedDailyCaptureTokenForContinuationSave(
+                        out sourceToken, out tokenFailure)
+                    : sourceRuntime.TryGetCompletedDailyCaptureToken(
+                        out sourceToken, out tokenFailure);
+        }
+        bool sourceTokenCurrent = sourceTokenAvailable
+            && sourceToken != null
+            && IsSourceTokenCurrent(
+                sourceRuntime, sourceToken, captureContinuationImage, replacementOperation,
+                continuationSaveOperation);
+        if (!sourceTokenCurrent)
         {
             failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
             diagnostic = "The active source has no current successful completed Daily-v1 boundary: "
@@ -224,7 +334,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 sourceRuntime,
                 sourceToken,
                 sourceOwnerSections,
-                out DailyCaptureStagingAttempt stagingAttempt))
+                out DailyCaptureStagingAttempt stagingAttempt,
+                replacementOperation))
         {
             failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
             diagnostic = "The exact source completed-boundary owner vector could not begin a staging attempt.";
@@ -236,14 +347,21 @@ internal static partial class P12GDailyV1RestoreCoordinator
             // F checks the source ActorChoice temporal section before C allocates
             // any candidate root. Keep this capture for staging later in the
             // same attempt.
-            if (!P12FDailyV1OwnerCapture.TryCapture(
-                    sourceRuntime,
-                    sourceComposition,
-                    sourceToken,
-                    sourceOwnerSections,
-                    out P12FDailyV1OwnerCapture capturedF,
-                    out P12FDailyV1OwnerPackageFailure fCaptureFailure,
-                    stageObserver))
+            bool capturedOwnerSources;
+            P12FDailyV1OwnerCapture capturedF;
+            P12FDailyV1OwnerPackageFailure fCaptureFailure;
+            if (continuationSaveOperation != null)
+            {
+                capturedOwnerSources = P12FDailyV1OwnerCapture.TryCapture(
+                    continuationSaveOperation, out capturedF, out fCaptureFailure, stageObserver);
+            }
+            else
+            {
+                capturedOwnerSources = P12FDailyV1OwnerCapture.TryCapture(
+                    sourceRuntime, sourceComposition, sourceToken, sourceOwnerSections,
+                    out capturedF, out fCaptureFailure, stageObserver, replacementOperation);
+            }
+            if (!capturedOwnerSources)
             {
                 failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
                 diagnostic = "P12-F source capture rejected the completed boundary: " + fCaptureFailure + ".";
@@ -251,52 +369,106 @@ internal static partial class P12GDailyV1RestoreCoordinator
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.SourceCaptured);
 
-            if (!(sourceSession.RandomSource is DeterministicRandomSource sourceRandom)
-                || sourceComposition.RuntimeIdAllocator == null
-                || sourceComposition.RecordSequence == null)
+            P12CWorldIdentitySnapshot worldIdentitySnapshot;
+            P12CP9GenesisManifestSnapshot manifestSnapshot;
+            P12CSpatialAuthoritySnapshot spatialSnapshot;
+            RuntimeIdAllocatorSnapshot allocatorSnapshot;
+            SimulationRecordSequenceSnapshot recordSequenceSnapshot;
+            DeterministicRandomRootSnapshot randomSnapshot;
+            if (continuationSaveOperation != null)
             {
-                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
-                diagnostic = "The deterministic random source or P12-C identity roots are unsupported.";
-                return false;
+                DailyV1P12CRuntimeRoots retainedRoots = continuationSaveOperation.Session.P12CRoots;
+                string coreRootMismatch = retainedRoots == null ? "missing-p12c-runtime-roots"
+                    : !retainedRoots.IsFor(continuationSaveOperation.Session) ? "p12c-roots-session-binding"
+                    : !(sourceSession.RandomSource is DeterministicRandomSource) ? "random-source-kind"
+                    : !ReferenceEquals(sourceSession.RandomSource,
+                        continuationSaveOperation.Session.ExecutionBoundaryState.SelectedRandomSource) ? "random-source-instance"
+                    : !ReferenceEquals(sourceComposition.RuntimeIdAllocator,
+                        continuationSaveOperation.Session.ExecutionBoundaryState.SelectedRuntimeIdAllocator) ? "runtime-id-allocator-instance"
+                    : !ReferenceEquals(sourceComposition.RecordSequence,
+                        continuationSaveOperation.Session.ExecutionBoundaryState.SelectedRecordSequence) ? "record-sequence-instance"
+                    : !ReferenceEquals(sourceComposition.SpatialAuthority, retainedRoots.SpatialAuthority) ? "spatial-authority-instance"
+                    : !string.Equals(sourceComposition.Manifest?.Fingerprint,
+                        retainedRoots.Manifest?.Fingerprint, StringComparison.Ordinal) ? "p9-manifest-fingerprint"
+                    : null;
+                if (coreRootMismatch != null)
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "The Unity projection does not retain the exact P12-C Core root: "
+                        + coreRootMismatch + ".";
+                    return false;
+                }
+
+                if (!continuationSaveOperation.TryCaptureCoreCausalRootSources(
+                        out DailyV1P12GCoreBoundCausalRootSources coreRoots,
+                        out DailyV1P12GCoreBoundCausalRootCaptureFailure coreRootFailure,
+                        out string coreRootDiagnostic)
+                    || coreRoots == null || !coreRoots.IsFor(continuationSaveOperation))
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "P12-C Core-bound root capture rejected the completed boundary: "
+                        + coreRootFailure + ": " + coreRootDiagnostic;
+                    return false;
+                }
+
+                worldIdentitySnapshot = coreRoots.Snapshots.WorldIdentity;
+                manifestSnapshot = P12CP9GenesisManifestSnapshot.FromCore(
+                    coreRoots.Snapshots.P9Manifest);
+                spatialSnapshot = coreRoots.Snapshots.SpatialAuthority;
+                allocatorSnapshot = coreRoots.Snapshots.Allocator;
+                recordSequenceSnapshot = coreRoots.Snapshots.RecordSequence;
+                randomSnapshot = coreRoots.Snapshots.RandomRoot;
+            }
+            else
+            {
+                if (!(sourceSession.RandomSource is DeterministicRandomSource sourceRandom)
+                    || sourceComposition.RuntimeIdAllocator == null
+                    || sourceComposition.RecordSequence == null)
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "The deterministic random source or P12-C identity roots are unsupported.";
+                    return false;
+                }
+
+                if (!P12CWorldIdentitySnapshot.TryCapture(
+                        sourceComposition.WorldId,
+                        out worldIdentitySnapshot,
+                        out string worldIdentityDiagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "P12-C WorldId capture failed: " + worldIdentityDiagnostic;
+                    return false;
+                }
+
+                if (!P12CP9GenesisManifestSnapshot.TryCapture(
+                        SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+                        sourceComposition.Manifest,
+                        out manifestSnapshot,
+                        out string manifestDiagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "P12-C P9 manifest capture failed: " + manifestDiagnostic;
+                    return false;
+                }
+
+                if (!P12CSpatialAuthoritySnapshot.TryCapture(
+                        SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
+                        sourceComposition.Manifest.SelectedP9ContractIdentity,
+                        sourceComposition.Manifest.SelectedP9SchemaVersion,
+                        sourceComposition.SpatialAuthority,
+                        out spatialSnapshot,
+                        out P12CSpatialAuthoritySnapshotFailure spatialFailure))
+                {
+                    failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                    diagnostic = "P12-C spatial authority capture failed: " + spatialFailure?.Message;
+                    return false;
+                }
+
+                allocatorSnapshot = sourceComposition.RuntimeIdAllocator.CaptureSnapshot();
+                recordSequenceSnapshot = sourceComposition.RecordSequence.CaptureSnapshot();
+                randomSnapshot = sourceRandom.CaptureSnapshot();
             }
 
-            if (!P12CWorldIdentitySnapshot.TryCapture(
-                    sourceComposition.WorldId,
-                    out P12CWorldIdentitySnapshot worldIdentitySnapshot,
-                    out string worldIdentityDiagnostic))
-            {
-                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
-                diagnostic = "P12-C WorldId capture failed: " + worldIdentityDiagnostic;
-                return false;
-            }
-
-            if (!P12CP9GenesisManifestSnapshot.TryCapture(
-                    SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
-                    sourceComposition.Manifest,
-                    out P12CP9GenesisManifestSnapshot manifestSnapshot,
-                    out string manifestDiagnostic))
-            {
-                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
-                diagnostic = "P12-C P9 manifest capture failed: " + manifestDiagnostic;
-                return false;
-            }
-
-            if (!P12CSpatialAuthoritySnapshot.TryCapture(
-                    SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1,
-                    sourceComposition.Manifest.SelectedP9ContractIdentity,
-                    sourceComposition.Manifest.SelectedP9SchemaVersion,
-                    sourceComposition.SpatialAuthority,
-                    out P12CSpatialAuthoritySnapshot spatialSnapshot,
-                    out P12CSpatialAuthoritySnapshotFailure spatialFailure))
-            {
-                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
-                diagnostic = "P12-C spatial authority capture failed: " + spatialFailure?.Message;
-                return false;
-            }
-
-            RuntimeIdAllocatorSnapshot allocatorSnapshot = sourceComposition.RuntimeIdAllocator.CaptureSnapshot();
-            SimulationRecordSequenceSnapshot recordSequenceSnapshot = sourceComposition.RecordSequence.CaptureSnapshot();
-            DeterministicRandomRootSnapshot randomSnapshot = sourceRandom.CaptureSnapshot();
             if (!P12CContinuationRootStager.TryStageForRestore(
                     stagingAttempt,
                     worldIdentitySnapshot,
@@ -328,6 +500,17 @@ internal static partial class P12GDailyV1RestoreCoordinator
 
             RuntimeIdentityRegistry sourceIdentityRegistry = sourceSession.IdentityRegistry;
             ExplorableSiteStore sourceSites = sourceComposition.ExplorableSites;
+            P12DNpcRootOwnerSnapshotFailure npcStageFailure = P12DNpcRootOwnerSnapshotFailure.None;
+            DailyV1P12GCoreBoundCityOwnerSources coreCityOwnerSources =
+                continuationSaveOperation?.CoreCityOwnerSources;
+            if (continuationSaveOperation != null
+                && (coreCityOwnerSources == null
+                    || !coreCityOwnerSources.IsFor(continuationSaveOperation)))
+            {
+                failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
+                diagnostic = "The Core continuation-save operation has no matching selected City owner sources.";
+                return false;
+            }
             if (!P12DDailyV1OwnerPackage.TryCaptureAndStage(
                     sourceRuntime,
                     sourceToken,
@@ -343,7 +526,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     npcDefinitions,
                     sourceSession.Configuration.Actions,
                     sourceSession.Configuration.Statuses,
-                    Array.Empty<ExplorableSiteData>(),
+                    Array.Empty<DailyV1ExplorableSiteDefinition>(),
                     capturedF.TravelPartyIds,
                     out P12DDailyV1OwnerPackage stagedD,
                     out P12DDailyV1OwnerPackageFailure dFailure,
@@ -351,23 +534,31 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     stageObserver == null
                         ? null
                         : (Action)(() => stageObserver(P12GDailyV1RestoreStage.DGenealogyEdgeStaged)),
-                    genealogySnapshotOverrideForTest))
+                    genealogySnapshotOverrideForTest,
+                    selectedDefinitions: sourceComposition.SelectedDefinitions,
+                    npcStageFailureObserver: stageFailure => npcStageFailure = stageFailure,
+                    coreBoundCityOwnerSources: coreCityOwnerSources,
+                    continuationSaveOperation: continuationSaveOperation))
             {
                 failure = P12GDailyV1RestoreFailure.OwnerStageFailed;
-                diagnostic = "P12-D could not stage the factual roots: " + dFailure + ".";
+                diagnostic = "P12-D could not stage the factual roots: " + dFailure
+                    + (npcStageFailure == P12DNpcRootOwnerSnapshotFailure.None
+                        ? "."
+                        : " (NPC root staging: " + npcStageFailure + ").");
                 return false;
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.DStaged);
 
             SimulationTime stagedTime = new SimulationTime(sourceToken.AbsoluteDay);
-            SimulationLogger logger = new SimulationLogger(sourceSession.Configuration.LogSettings);
-            HistoryStore history = new HistoryStore();
-            DomainEventStore eventStore = new DomainEventStore(history, new HistoryPolicy(), logger);
+            SimulationLogger logger = UnitySimulationLoggerAdapter.Create(sourceSession.Configuration.LogSettings);
             NpcDecisionStore decisions = new NpcDecisionStore();
-            DomainEventRecorder eventRecorder = new DomainEventRecorder(
-                stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, eventStore, logger);
-            NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(
+            DailyV1DomainEventAuthority eventAuthority = DailyV1DomainEventAuthority.Create(
                 stagedC.RuntimeIdAllocator, stagedTime, stagedC.RecordSequence, decisions, logger);
+            HistoryStore history = eventAuthority.History;
+            DomainEventStore eventStore = eventAuthority.EventStore;
+            DomainEventRecorder eventRecorder = eventAuthority.Recorder;
+            NpcDecisionRecorder decisionRecorder = new NpcDecisionRecorder(
+                eventAuthority.DecisionOccurrenceReceipts, logger);
             EconomyTransactionService economyTransactions = new EconomyTransactionService();
 
             P12EDailyV1OwnerStagingContext eContext = new P12EDailyV1OwnerStagingContext(
@@ -380,7 +571,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 sourceSession.Configuration.arrestedStatus,
                 sourceSession.Configuration.hiddenStatus,
                 eventRecorder,
-                logger);
+                logger,
+                continuationSaveOperation: continuationSaveOperation);
             if (!P12EDailyV1OwnerPackage.TryCaptureAndStage(
                     sourceRuntime,
                     sourceToken,
@@ -406,7 +598,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     sourceOwnerSections,
                     eContext,
                     stagedE,
-                    sourceSession.Configuration.Actions,
+                    sourceComposition.SelectedDefinitions,
                     out P12FDailyV1OwnerPackage stagedF,
                     out P12FDailyV1OwnerPackageFailure fStageFailure,
                     stageObserver,
@@ -420,7 +612,9 @@ internal static partial class P12GDailyV1RestoreCoordinator
             stageObserver?.Invoke(P12GDailyV1RestoreStage.OwnersStaged);
 
             if (!stagingAttempt.IsCurrentFor(sourceRuntime, sourceToken, sourceOwnerSections)
-                || !sourceRuntime.TryValidateCompletedDailyCaptureToken(sourceToken, out _))
+                || !IsSourceTokenCurrent(
+                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation,
+                    continuationSaveOperation))
             {
                 failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
                 diagnostic = "The source completed boundary changed during private staging.";
@@ -431,6 +625,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     sourceSession.Configuration,
                     sourceRuntime.Configuration,
                     sourceComposition.Calendar,
+                    sourceComposition.SelectedDefinitions,
                     bootstrapAdmissionContext,
                     sourceRuntime.PoliticalWorldRevision,
                     sourceSession.ReportState.LastEconomySnapshotDay,
@@ -439,14 +634,16 @@ internal static partial class P12GDailyV1RestoreCoordinator
                     stagedE,
                     stagedF,
                     stagedTime,
-                    eventStore,
-                    history,
+                    eventAuthority,
                     decisions,
                     decisionRecorder,
-                    eventRecorder,
                     economyTransactions,
                     logger,
                     restoredAdmissionContextFactoryForTest,
+                    application,
+                    replacementOperation,
+                    null,
+                    null,
                     out SimulationActiveSession candidate,
                     out diagnostic))
             {
@@ -459,6 +656,23 @@ internal static partial class P12GDailyV1RestoreCoordinator
             privateCandidateObserver?.Invoke(candidate);
 
             SimulationRuntime targetRuntime = candidate.Runtime;
+            if (candidate.IdentityRegistry == null
+                || !candidate.IdentityRegistry.HasMatchingCoreIdentityProjectionCardinalities())
+            {
+                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                diagnostic = "The private target identity lookup projection cardinalities do not match the Core identity census.";
+                return false;
+            }
+            if (!targetRuntime.HasSameP12RuntimeIdentitySpatialOwners(
+                    candidate.IdentityRegistry,
+                    candidate.SpatialNetwork,
+                    candidate.ExplorableSites))
+            {
+                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                diagnostic = "The private target identity, spatial-network, or explorable-site owner binding is inconsistent.";
+                return false;
+            }
+
             if (!TryValidatePersonNpcGenealogyBindings(targetRuntime, out string personBindingDiagnostic))
             {
                 failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
@@ -552,67 +766,119 @@ internal static partial class P12GDailyV1RestoreCoordinator
             stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetTravelPartyBindingsValidated);
 
             if (!stagingAttempt.IsCurrentFor(sourceRuntime, sourceToken, sourceOwnerSections)
-                || !sourceRuntime.TryValidateCompletedDailyCaptureToken(sourceToken, out _))
+                || !IsSourceTokenCurrent(
+                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation,
+                    continuationSaveOperation))
             {
                 failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
                 diagnostic = "The source completed boundary changed during final target graph validation.";
                 return false;
             }
             stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetChecksCompleted);
-
-            if (!targetRuntime.TryBindRestoredCandidateMutationGuard(out string mutationGuardDiagnostic))
+            if (!IsSourceTokenCurrent(
+                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation,
+                    continuationSaveOperation))
             {
-                failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
-                diagnostic = mutationGuardDiagnostic;
-                return false;
-            }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.CandidateGuardBound);
-
-            if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
-                    out IReadOnlyList<OwnerSectionCensusSnapshot> postBindingOwnerSections,
-                    out long postBindingMutationEpoch,
-                    out ContinuationCensusFailure postBindingCensusFailure))
-            {
-                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
-                diagnostic = "The private target could not recapture its owner vector after mutation-guard binding: "
-                    + postBindingCensusFailure + ".";
+                failure = P12GDailyV1RestoreFailure.SourceBoundaryUnavailable;
+                diagnostic = "The Core continuation-save operation or source boundary changed after target checks.";
                 return false;
             }
 
-            if (!P12GDailyV1OwnerVector.TryMatchCurrentTargetSnapshot(
-                    targetOwnerSections,
-                    targetMutationEpoch,
-                    postBindingOwnerSections,
-                    postBindingMutationEpoch,
-                    out P12GDailyV1OwnerVectorFailure postBindingVectorFailure,
-                    out string postBindingVectorDiagnostic))
+            if (application != null)
             {
-                failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
-                diagnostic = "The private target owner vector changed during mutation-guard binding: "
-                    + (postBindingVectorDiagnostic ?? postBindingVectorFailure.ToString());
-                return false;
-            }
-            targetOwnerSections = postBindingOwnerSections;
-            targetMutationEpoch = postBindingMutationEpoch;
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured);
+                if (candidate.CoreRuntimeSession == null)
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
+                    diagnostic = "The Core application restore composition returned no candidate session to finalize.";
+                    return false;
+                }
 
-            if (!targetRuntime.TryAdmitRestoredDailyBoundary(
-                    stagedC.WorldIdentity,
-                    sourceToken.AbsoluteDay,
-                    sourceToken.CompletedCoreSequence,
-                    targetOwnerSections,
-                    targetMutationEpoch,
-                    out DailyCaptureEligibilityFailure admissionFailure))
-            {
-                failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
-                diagnostic = "The target-bound completed-boundary admission failed: " + admissionFailure + ".";
-                return false;
+                if (!application.TryFinalizeRestoredCandidateBoundary(
+                        candidate.CoreRuntimeSession,
+                        targetRuntime,
+                        stagedC.WorldIdentity,
+                        sourceToken.AbsoluteDay,
+                        sourceToken.CompletedCoreSequence,
+                        targetOwnerSections,
+                        targetMutationEpoch,
+                        replacementOperation?.ExpectedSession,
+                        replacementOperation,
+                        stageObserver == null
+                            ? null
+                            : stage => stageObserver(MapRestoreFinalizationStage(stage)),
+                        out IReadOnlyList<OwnerSectionCensusSnapshot> recapturedOwnerSections,
+                        out long recapturedMutationEpoch,
+                        out DailyV1RestoredBoundaryFinalizationFailure finalizationFailure,
+                        out diagnostic))
+                {
+                    failure = MapRestoreFinalizationFailure(finalizationFailure);
+                    if (string.IsNullOrWhiteSpace(diagnostic))
+                        diagnostic = "The Core application could not finalize its restored owner boundary: "
+                            + finalizationFailure + ".";
+                    return false;
+                }
+
+                targetOwnerSections = recapturedOwnerSections;
+                targetMutationEpoch = recapturedMutationEpoch;
             }
-            stageObserver?.Invoke(P12GDailyV1RestoreStage.BoundaryAdmitted);
+            else
+            {
+                if (!targetRuntime.TryBindRestoredCandidateMutationGuard(out string mutationGuardDiagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.BindingValidationFailed;
+                    diagnostic = mutationGuardDiagnostic;
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.CandidateGuardBound);
+
+                if (!targetRuntime.TryCaptureUnadmittedRestoredDailyOwnerVector(
+                        out IReadOnlyList<OwnerSectionCensusSnapshot> postBindingOwnerSections,
+                        out long postBindingMutationEpoch,
+                        out ContinuationCensusFailure postBindingCensusFailure))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                    diagnostic = "The private target could not recapture its owner vector after mutation-guard binding: "
+                        + postBindingCensusFailure + ".";
+                    return false;
+                }
+
+                if (!P12GDailyV1OwnerVector.TryMatchCurrentTargetSnapshot(
+                        targetOwnerSections,
+                        targetMutationEpoch,
+                        postBindingOwnerSections,
+                        postBindingMutationEpoch,
+                        out P12GDailyV1OwnerVectorFailure postBindingVectorFailure,
+                        out string postBindingVectorDiagnostic))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetOwnerVectorFailed;
+                    diagnostic = "The private target owner vector changed during mutation-guard binding: "
+                        + (postBindingVectorDiagnostic ?? postBindingVectorFailure.ToString());
+                    return false;
+                }
+                targetOwnerSections = postBindingOwnerSections;
+                targetMutationEpoch = postBindingMutationEpoch;
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.TargetOwnerVectorRecaptured);
+
+                if (!targetRuntime.TryAdmitRestoredDailyBoundary(
+                        stagedC.WorldIdentity,
+                        sourceToken.AbsoluteDay,
+                        sourceToken.CompletedCoreSequence,
+                        targetOwnerSections,
+                        targetMutationEpoch,
+                        out DailyCaptureEligibilityFailure admissionFailure))
+                {
+                    failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
+                    diagnostic = "The target-bound completed-boundary admission failed: " + admissionFailure + ".";
+                    return false;
+                }
+                stageObserver?.Invoke(P12GDailyV1RestoreStage.BoundaryAdmitted);
+            }
 
             if (!targetRuntime.HasValidRestoredDailyBoundaryAdmission()
                 || !targetRuntime.IsHealthyDailyOwnerThreadBoundary()
-                || !sourceRuntime.TryValidateCompletedDailyCaptureToken(sourceToken, out _))
+                || !IsSourceTokenCurrent(
+                    sourceRuntime, sourceToken, captureContinuationImage, replacementOperation,
+                    continuationSaveOperation))
             {
                 failure = P12GDailyV1RestoreFailure.TargetAdmissionFailed;
                 diagnostic = "The admitted target or source boundary changed before the publication handoff.";
@@ -623,6 +889,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 && !TryComposeContinuationImage(sourceSession, sourceToken, sourceOwnerSections,
                     worldIdentitySnapshot, allocatorSnapshot, recordSequenceSnapshot, spatialSnapshot,
                     manifestSnapshot, randomSnapshot, stagedD, stagedE, capturedF,
+                    dotNetIdentity,
+                    continuationSaveOperation,
                     out continuationImage, out P12AResult imageResult))
             {
                 failure = P12GDailyV1RestoreFailure.SourceCaptureFailed;
@@ -663,64 +931,170 @@ internal static partial class P12GDailyV1RestoreCoordinator
         P12DDailyV1OwnerPackage d,
         P12EDailyV1OwnerPackage e,
         P12FDailyV1OwnerCapture f,
+        DailyV1HostEnvironmentIdentity dotNetIdentity,
+        DailyV1P12GContinuationSaveOperation continuationSaveOperation,
         out P12AContinuationImage image,
         out P12AResult result)
     {
         image = null;
         result = new P12AResult(P12AResultCode.CaptureRejected);
+        P12ACompatibilityDescriptor compatibility = null;
+        P12ACompatibilityDescriptorV2 compatibilityV2 = null;
+        P12CP9GenesisManifestSnapshot descriptorP9Manifest = p9Manifest;
+        P12CSpatialAuthoritySnapshot descriptorSpatialAuthority = spatialAuthority;
+        string p8Fingerprint = null;
+        if (continuationSaveOperation != null)
+        {
+            DailyV1P12GCoreBoundCausalRootSources boundRoots =
+                continuationSaveOperation.CoreCausalRootSources;
+            if (boundRoots == null || !boundRoots.IsFor(continuationSaveOperation)
+                || boundRoots.Snapshots == null)
+            {
+                result = new P12AResult(P12AResultCode.CaptureRejected,
+                    "p12c.continuation-roots");
+                return false;
+            }
+            descriptorP9Manifest = P12CP9GenesisManifestSnapshot.FromCore(
+                boundRoots.Snapshots.P9Manifest);
+            descriptorSpatialAuthority = boundRoots.Snapshots.SpatialAuthority;
+            if (!P12ACSpatialAuthorityCodec.TryComputeFingerprint(
+                    descriptorSpatialAuthority, out p8Fingerprint))
+            {
+                result = new P12AResult(P12AResultCode.InvalidOwnerValue,
+                    P12P8AImageSectionContract.HexSectionId);
+                return false;
+            }
+        }
+
         if (sourceSession == null || token == null || ownerSections == null
             || !ReferenceEquals(token.OwnerSections, ownerSections)
-            || !sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(token, out _)
-            || !P12ADailyV1Census.TryCreate(ownerSections, out P12ADailyV1Census census, out result)
-            || !P12ACSpatialAuthorityCodec.TryComputeFingerprint(spatialAuthority,
-                out string p8Fingerprint)
-            || !P12ACompatibilityDescriptorFactory.TryCreate(sourceSession.Configuration,
-                sourceSession.Runtime.Configuration, sourceSession.Composition.Calendar,
-                sourceSession.Composition.ProfileFingerprint,
-                p9Manifest, p8Fingerprint,
-                out P12ACompatibilityDescriptor compatibility))
+            || (continuationSaveOperation != null
+                ? !IsSourceTokenCurrent(sourceSession.Runtime, token, true, null, continuationSaveOperation)
+                : !sourceSession.Runtime.TryValidateCompletedDailyCaptureTokenForContinuationSave(token, out _))
+            || !P12ADailyV1Census.TryCreate(ownerSections, out P12ADailyV1Census census, out result))
         {
             if (result == null) result = new P12AResult(P12AResultCode.IncompatibleContentOrConfiguration);
             return false;
         }
 
-        P12AContinuationHeader header = new P12AContinuationHeader(
-            token.WorldId.Value,
-            token.AbsoluteDay,
-            token.CompletedCoreSequence,
-            sourceSession.ReportState.LastEconomySnapshotDay,
-            p9Manifest.SelectedP9ContractIdentity,
-            p9Manifest.Fingerprint,
-            "P8-A",
-            p8Fingerprint,
-            sourceSession.Runtime.PoliticalWorldRevision,
-            compatibility);
-        if (!header.IsValid
-            || !P12ACausalRootImageAdapter.TryEncode(header, worldIdentity, allocator,
-                recordSequence, spatialAuthority, p9Manifest, randomRoot,
-                out P12ACausalRootPayload causalRoots,
-                out IReadOnlyList<P12AOwnerSection> causalSections, out result)
-            || !P12CRuntimeIdentityOwnerSnapshot.TryCapture(sourceSession.IdentityRegistry,
-                out P12CRuntimeIdentityOwnerSnapshot identitySnapshot)
-            || !P12ADailyV1OwnerSectionEncoder.TryEncode(ownerSections, identitySnapshot,
-                d, e, f, token.AbsoluteDay,
-                out IReadOnlyList<P12AOwnerSection> ownerSectionsEncoded, out result))
+        if (continuationSaveOperation == null
+            && !P12ACSpatialAuthorityCodec.TryComputeFingerprint(
+                spatialAuthority, out p8Fingerprint))
         {
-            if (result == null) result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            if (result == null)
+                result = new P12AResult(P12AResultCode.IncompatibleContentOrConfiguration);
             return false;
         }
 
-        List<P12AOwnerSection> encodedRequired = new List<P12AOwnerSection>(
-            causalSections.Count + ownerSectionsEncoded.Count);
-        encodedRequired.AddRange(causalSections);
-        encodedRequired.AddRange(ownerSectionsEncoded);
-        if (!P12ADailyV1ImageComposer.TryCompose(header, causalRoots, ownerSections,
-                encodedRequired, out image, out _, out result))
+        bool compatibilityCreated = dotNetIdentity == null
+            ? P12ACompatibilityDescriptorFactory.TryCreate(sourceSession.Configuration,
+                sourceSession.Runtime.Configuration, sourceSession.Composition.Calendar,
+                sourceSession.Composition.SelectedDefinitions,
+                sourceSession.Composition.ProfileFingerprint,
+                descriptorP9Manifest, p8Fingerprint, out compatibility)
+            : P12ACompatibilityDescriptorFactory.TryCreateDotNetV2(sourceSession.Configuration,
+                sourceSession.Composition.Calendar, sourceSession.Composition.SelectedDefinitions,
+                sourceSession.Composition.ProfileFingerprint, descriptorP9Manifest, p8Fingerprint,
+                dotNetIdentity, out compatibilityV2);
+        if (!compatibilityCreated)
+        {
+            result = new P12AResult(P12AResultCode.IncompatibleContentOrConfiguration);
+            return false;
+        }
+
+        bool composed;
+        if (continuationSaveOperation != null)
+        {
+            if (!continuationSaveOperation.TryEncodeCoreP12DOwnerSections(
+                    out IReadOnlyList<P12AOwnerSection> coreP12DSections,
+                    out bool coreP12DIncludesNpcRows, out result)
+                || !continuationSaveOperation.TryEncodeCoreP12EOwnerSections(
+                    token.AbsoluteDay,
+                    out IReadOnlyList<P12AOwnerSection> coreP12ESections, out result)
+                || !continuationSaveOperation.TryEncodeCoreP12FOwnerSections(
+                    out IReadOnlyList<P12AOwnerSection> coreP12FSections, out result)
+                || !P12ADailyV1OwnerSectionEncoder.TryEncodeWithCoreP12DAndEOwnerSections(
+                    ownerSections, d, e, coreP12DSections,
+                    coreP12DIncludesNpcRows, coreP12ESections, coreP12FSections,
+                    token.AbsoluteDay,
+                    out IReadOnlyList<P12AOwnerSection> ownerSectionsEncoded, out result))
+            {
+                if (result == null) result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+                return false;
+            }
+
+            // The Core application always composes its bound P12-D/E/F owners.
+            // When its NPC graph is partial, its P12-D encoder deliberately
+            // omits NPC rows; the complete adapter projection above remains
+            // available for those mixed-roster rows and is checked against
+            // every Core-owned overlapping section by the application.
+            composed = continuationSaveOperation.TryComposeCoreOwnedImage(
+                compatibility,
+                compatibilityV2,
+                sourceSession.Runtime.PoliticalWorldRevision,
+                ownerSectionsEncoded,
+                out image,
+                out _,
+                out result);
+        }
+        else
+        {
+            P12AContinuationHeader header = dotNetIdentity == null
+                ? new P12AContinuationHeader(token.WorldId.Value, token.AbsoluteDay,
+                    token.CompletedCoreSequence, sourceSession.ReportState.LastEconomySnapshotDay,
+                    p9Manifest.SelectedP9ContractIdentity, p9Manifest.Fingerprint,
+                    "P8-A", p8Fingerprint, sourceSession.Runtime.PoliticalWorldRevision,
+                    compatibility)
+                : P12AContinuationHeader.ForDotNetV2(token.WorldId.Value, token.AbsoluteDay,
+                    token.CompletedCoreSequence, sourceSession.ReportState.LastEconomySnapshotDay,
+                    p9Manifest.SelectedP9ContractIdentity, p9Manifest.Fingerprint,
+                    "P8-A", p8Fingerprint, sourceSession.Runtime.PoliticalWorldRevision,
+                    compatibilityV2);
+            if (!header.IsValid
+                || !P12ACausalRootImageCodec.TryEncode(header, worldIdentity, allocator,
+                    recordSequence, spatialAuthority, p9Manifest.CoreValue, randomRoot,
+                    out P12ACausalRootPayload causalRoots,
+                    out IReadOnlyList<P12AOwnerSection> causalSections, out result))
+            {
+                image = null;
+                if (result == null) result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+                return false;
+            }
+
+            // Preserve the legacy capture ordering: causal roots are encoded
+            // before identity and owner sections are sampled from the Unity
+            // compatibility runtime.
+            if (!P12CRuntimeIdentityOwnerCaptureAdapter.TryCapture(sourceSession.IdentityRegistry,
+                    out P12CRuntimeIdentityOwnerSnapshot identitySnapshot)
+                || !P12ADailyV1OwnerSectionEncoder.TryEncode(ownerSections, identitySnapshot,
+                    d, e, f, token.AbsoluteDay,
+                    out IReadOnlyList<P12AOwnerSection> ownerSectionsEncoded, out result))
+            {
+                if (result == null) result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+                return false;
+            }
+
+            List<P12AOwnerSection> encodedRequired = new List<P12AOwnerSection>(
+                causalSections.Count + ownerSectionsEncoded.Count);
+            encodedRequired.AddRange(causalSections);
+            encodedRequired.AddRange(ownerSectionsEncoded);
+            composed = P12ADailyV1ImageComposer.TryCompose(
+                header,
+                causalRoots,
+                ownerSections,
+                encodedRequired,
+                out image,
+                out _,
+                out result);
+        }
+        if (!composed)
         {
             image = null;
             return false;
         }
-        if (!sourceSession.Runtime.TryValidateCompletedDailyCaptureToken(token, out _))
+        if (continuationSaveOperation != null
+            ? !IsSourceTokenCurrent(sourceSession.Runtime, token, true, null, continuationSaveOperation)
+            : !sourceSession.Runtime.TryValidateCompletedDailyCaptureTokenForContinuationSave(token, out _))
         {
             image = null;
             result = new P12AResult(P12AResultCode.CaptureRejected);
@@ -749,6 +1123,127 @@ internal static partial class P12GDailyV1RestoreCoordinator
     }
 
     private static bool TryValidateTravelPartyBindings(
+        SimulationActiveSession session,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        DailyV1ActiveRuntimeSession coreSession = session?.CoreRuntimeSession;
+        if (coreSession == null)
+            return TryValidateLegacyTravelPartyBindings(session, out diagnostic);
+
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph = coreSession.OwnerGraph;
+        TravelPartyStore projectedParties = session.Composition?.TravelParties;
+        SimulationRuntime runtime = session.Runtime;
+        RuntimeIdentityRegistry identities = session.IdentityRegistry;
+        SpatialNetworkRuntime spatialNetwork = session.SpatialNetwork;
+        if (ownerGraph == null || runtime == null || identities == null || spatialNetwork == null
+            || !ReferenceEquals(runtime.SelectedRuntimeOwnerGraph, ownerGraph)
+            || !ReferenceEquals(projectedParties, ownerGraph.TravelParties)
+            || !ReferenceEquals(identities.CoreIdentityIndex, ownerGraph.RuntimeIdentityIndex))
+        {
+            diagnostic = "The selected Core session and Unity restore projection do not retain the same TravelParty, runtime, or identity owners.";
+            return false;
+        }
+
+        if (!ownerGraph.TryValidateRestoredTravelPartyBindings(out diagnostic))
+            return false;
+
+        return TryValidateTravelPartyProjectionBindings(
+            session, ownerGraph, out diagnostic);
+    }
+
+    private static bool TryValidateTravelPartyProjectionBindings(
+        SimulationActiveSession session,
+        DailyV1SelectedRuntimeOwnerGraph ownerGraph,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        TravelPartyStore parties = ownerGraph?.TravelParties;
+        SimulationRuntime runtime = session?.Runtime;
+        RuntimeIdentityRegistry identities = session?.IdentityRegistry;
+        SpatialNetworkRuntime spatialNetwork = session?.SpatialNetwork;
+        if (parties == null || runtime == null || identities == null || spatialNetwork == null)
+        {
+            diagnostic = "The selected Unity projection of the Core TravelParty graph is unavailable.";
+            return false;
+        }
+
+        Dictionary<string, NpcRuntime> npcsById = new Dictionary<string, NpcRuntime>(StringComparer.Ordinal);
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            if (npc == null || string.IsNullOrWhiteSpace(npc.RuntimeId)
+                || !npcsById.TryAdd(npc.RuntimeId, npc))
+            {
+                diagnostic = "The selected Unity NPC projection has a missing or duplicate RuntimeId.";
+                return false;
+            }
+        }
+
+        Dictionary<string, string> partyByMemberId = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (TravelPartyRuntime party in parties.ActiveParties)
+        {
+            if (party == null
+                || !identities.TryGetLocation(party.OriginLocationRuntimeId, out SpatialLocationRuntime origin)
+                || !identities.TryGetLocation(party.DestinationLocationRuntimeId, out SpatialLocationRuntime destination)
+                || !identities.TryGetRoute(party.RouteRuntimeId, out SpatialRouteRuntime route)
+                || !spatialNetwork.TryGetRoute(party.RouteRuntimeId, out SpatialRouteRuntime networkRoute)
+                || !ReferenceEquals(route, networkRoute)
+                || !ReferenceEquals(route.Origin, origin)
+                || !ReferenceEquals(route.Destination, destination))
+            {
+                diagnostic = "The Unity projection does not resolve an active Core TravelParty's exact Location/Route objects.";
+                return false;
+            }
+
+            session.TryGetCityByLocation(destination, out CityRuntime expectedDestinationCity);
+            foreach (string memberId in party.MemberRuntimeIds)
+            {
+                if (string.IsNullOrWhiteSpace(memberId)
+                    || !partyByMemberId.TryAdd(memberId, party.TravelPartyId)
+                    || !npcsById.TryGetValue(memberId, out NpcRuntime member)
+                    || !identities.TryGetNpc(memberId, out NpcRuntime registeredMember)
+                    || !ReferenceEquals(member, registeredMember)
+                    || !ownerGraph.TryGetNpcOwner(memberId, out DailyV1NpcRuntimeOwners owner)
+                    || !ReferenceEquals(member.SelectedRuntimeOwnerGraph, ownerGraph)
+                    || !member.IsAlive
+                    || !member.IsTraveling
+                    || member.CurrentLocation != null
+                    || member.CurrentCity != null
+                    || !ReferenceEquals(member.DestinationLocation, destination)
+                    || !ReferenceEquals(member.DestinationCity, expectedDestinationCity)
+                    || !string.Equals(expectedDestinationCity?.RuntimeId,
+                        owner.Travel.DestinationCityRuntimeId, StringComparison.Ordinal)
+                    || !string.Equals(member.TravelRouteRuntimeId,
+                        owner.Travel.TravelRouteRuntimeId, StringComparison.Ordinal)
+                    || member.TravelDaysTotal != owner.Travel.TravelDaysTotal
+                    || member.TravelDaysRemaining != owner.Travel.TravelDaysRemaining
+                    || member.TravelStartedToday != owner.Travel.TravelStartedToday
+                    || !string.Equals(member.TravelOriginDecisionId,
+                        owner.Travel.TravelOriginDecisionId, StringComparison.Ordinal)
+                    || !string.Equals(member.ActiveTravelPartyId,
+                        owner.Travel.ActiveTravelPartyId, StringComparison.Ordinal))
+                {
+                    diagnostic = "An active Core TravelParty member does not resolve to its exact Unity NPC, Location, City, and travel-state projection.";
+                    return false;
+                }
+            }
+        }
+
+        foreach (NpcRuntime npc in runtime.NpcRuntimes)
+        {
+            if (string.IsNullOrWhiteSpace(npc.ActiveTravelPartyId)) continue;
+            if (!partyByMemberId.TryGetValue(npc.RuntimeId, out string partyId)
+                || !string.Equals(partyId, npc.ActiveTravelPartyId, StringComparison.Ordinal))
+            {
+                diagnostic = "A Unity NPC ActiveTravelPartyId has no reciprocal active Core party-member projection.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool TryValidateLegacyTravelPartyBindings(
         SimulationActiveSession session,
         out string diagnostic)
     {
@@ -969,7 +1464,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         {
             if (npc == null || npc.NpcData == null)
                 return false;
-            npcDefinitions.Add(npc.NpcData);
+            AddUniqueDefinitionReference(npcDefinitions, npc.NpcData);
             InventoryRuntime inventory = npc.ExistingInventory;
             if (inventory == null)
                 continue;
@@ -988,10 +1483,78 @@ internal static partial class P12GDailyV1RestoreCoordinator
         values.Add(candidate);
     }
 
+    private static void AddUniqueDefinitionReference(List<NpcData> values, NpcData candidate)
+    {
+        if (candidate == null) return;
+        foreach (NpcData value in values)
+            if (ReferenceEquals(value, candidate)) return;
+        values.Add(candidate);
+    }
+
+    private static bool TryInstallOrVerifyCoreP18ReceiptSnapshots(
+        DailyV1ActiveRuntimeSession coreSession,
+        P12ACrimeReceiptOwnerSnapshot crimeSnapshot,
+        P12AJusticeReceiptOwnerSnapshot justiceSnapshot,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = coreSession?.OwnerGraph;
+        if (graph?.CrimeP18ReceiptOwner == null || graph.JusticeP18ReceiptOwner == null
+            || crimeSnapshot == null || justiceSnapshot == null)
+        {
+            diagnostic = "The private Core session is missing its exact P18 receipt owners or decoded snapshots.";
+            return false;
+        }
+
+        if (!TryInstallOrVerifyCoreP18ReceiptSnapshot(
+                graph.CrimeP18ReceiptOwner,
+                crimeSnapshot)
+            || !TryInstallOrVerifyCoreP18ReceiptSnapshot(
+                graph.JusticeP18ReceiptOwner,
+                justiceSnapshot))
+        {
+            diagnostic = "The exact decoded P12-A receipt snapshots could not be installed into the private Core owners.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryInstallOrVerifyCoreP18ReceiptSnapshot(
+        DailyV1CrimeP18ReceiptOwner owner,
+        P12ACrimeReceiptOwnerSnapshot snapshot)
+    {
+        if (owner == null || snapshot == null || !snapshot.IsValid) return false;
+        if (owner.TryCaptureP12AReceiptOwnerSnapshot(
+                out P12ACrimeReceiptOwnerSnapshot current)
+            && ReferenceEquals(current, snapshot))
+            return true;
+        return owner.TryInstallP12AReceiptOwnerSnapshot(snapshot)
+            && owner.TryCaptureP12AReceiptOwnerSnapshot(
+                out current)
+            && ReferenceEquals(current, snapshot);
+    }
+
+    private static bool TryInstallOrVerifyCoreP18ReceiptSnapshot(
+        DailyV1JusticeP18ReceiptOwner owner,
+        P12AJusticeReceiptOwnerSnapshot snapshot)
+    {
+        if (owner == null || snapshot == null || !snapshot.IsValid) return false;
+        if (owner.TryCaptureP12AReceiptOwnerSnapshot(
+                out P12AJusticeReceiptOwnerSnapshot current)
+            && ReferenceEquals(current, snapshot))
+            return true;
+        return owner.TryInstallP12AReceiptOwnerSnapshot(snapshot)
+            && owner.TryCaptureP12AReceiptOwnerSnapshot(
+                out current)
+            && ReferenceEquals(current, snapshot);
+    }
+
     private static bool TryBuildRestoredSession(
         SimulationConfigData config,
         EffectiveSimulationConfiguration effective,
         CalendarDefinition calendar,
+        DailyV1EffectiveDefinitions selectedDefinitions,
         SimulationRuntimeAdmissionContext sourceAdmissionContext,
         long politicalWorldRevision,
         long lastEconomySnapshotDay,
@@ -1000,20 +1563,46 @@ internal static partial class P12GDailyV1RestoreCoordinator
         P12EDailyV1OwnerPackage stagedE,
         P12FDailyV1OwnerPackage stagedF,
         SimulationTime time,
-        DomainEventStore eventStore,
-        HistoryStore history,
+        DailyV1DomainEventAuthority eventAuthority,
         NpcDecisionStore decisions,
         NpcDecisionRecorder decisionRecorder,
-        DomainEventRecorder eventRecorder,
         EconomyTransactionService economyTransactions,
         SimulationLogger logger,
         Func<SimulationRuntimeAdmissionContext, SimulationRuntimeAdmissionContext> restoredAdmissionContextFactoryForTest,
+        DailyV1Application application,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.ExclusiveOperation replacementOperation,
+        P12AContinuationImage coreImage,
+        DailyV1RestoredImageCoreOwnerStages stagedImageCoreOwners,
         out SimulationActiveSession candidate,
         out string diagnostic)
     {
         candidate = null;
         diagnostic = null;
-        if (config == null || effective == null || calendar == null || sourceAdmissionContext == null)
+        if (eventAuthority == null
+            || stagedC == null
+            || time == null
+            || !eventAuthority.IsFor(stagedC.RuntimeIdAllocator, time, stagedC.RecordSequence, decisions))
+        {
+            diagnostic = "The detached Core event/history roots do not match their staged runtime identities.";
+            return false;
+        }
+
+        if (stagedImageCoreOwners != null
+            && (application == null || coreImage == null || stagedC.CoreRoot == null
+                || !stagedImageCoreOwners.MatchesCompositionInputs(
+                    application, coreImage, selectedDefinitions, stagedC.CoreRoot,
+                    replacementOperation?.ExpectedSession, replacementOperation, time,
+                    stagedD?.CoreRestoreOwners, stagedE?.CoreOwnerRestoreStage,
+                    stagedF?.CoreOwnerRestoreStage, decisions, eventAuthority)))
+        {
+            diagnostic = "The restored Core session composition inputs no longer match the exact staged image owner token.";
+            return false;
+        }
+
+        DomainEventStore eventStore = eventAuthority.EventStore;
+        HistoryStore history = eventAuthority.History;
+        DomainEventRecorder eventRecorder = eventAuthority.Recorder;
+        if (config == null || effective == null || calendar == null || selectedDefinitions == null || sourceAdmissionContext == null)
         {
             diagnostic = "The selected Daily-v1 host configuration and admission roots are required.";
             return false;
@@ -1094,23 +1683,180 @@ internal static partial class P12GDailyV1RestoreCoordinator
             effective.Crime,
             stagedC.DeterministicRandom,
             time);
-        if (!crime.TryInstallP12AReceiptOwnerSnapshot(stagedE.CrimeReceiptSnapshot))
-        {
-            diagnostic = "P12-A Crime receipt history could not be installed into the private restored owner.";
-            return false;
-        }
         if (effective.Crime.Enabled == true) actionProviders.Add(crime);
         if (effective.GuardCrime.Enabled == true)
             actionProviders.Add(new GuardSystem(stagedE.Justice, config.hiddenStatus, effective.GuardCrime));
         NpcDecisionSystem decisionsSystem = new NpcDecisionSystem(actionProviders, stagedC.DeterministicRandom);
-        if (!TryCreateRestoredAdmissionContext(
-                sourceAdmissionContext,
-                restoredAdmissionContextFactoryForTest,
-                out SimulationRuntimeAdmissionContext restoredAdmissionContext,
-                out diagnostic))
+        SimulationRuntimeAdmissionContext restoredAdmissionContext = null;
+        if (stagedImageCoreOwners == null)
+        {
+            bool restoredAdmissionContextCreated = application != null
+                && restoredAdmissionContextFactoryForTest == null
+                ? application.TryCreateRestoredContinuationAdmissionContext(
+                    replacementOperation?.ExpectedSession,
+                    replacementOperation,
+                    out restoredAdmissionContext,
+                    out diagnostic)
+                : TryCreateRestoredAdmissionContext(
+                    sourceAdmissionContext,
+                    restoredAdmissionContextFactoryForTest,
+                    out restoredAdmissionContext,
+                    out diagnostic);
+            if (!restoredAdmissionContextCreated)
+                return false;
+        }
+
+        if (!DailyV1DefinitionAdapter.TryCreateBindings(
+                config, selectedDefinitions,
+                out DailyV1DefinitionAdapter.SelectedBindings selectedBindings,
+                out string bindingDiagnostic))
+        {
+            diagnostic = "The detached candidate could not rebind the selected Unity assets to the source typed graph: "
+                + bindingDiagnostic;
             return false;
+        }
+        foreach (CityRuntime city in stagedD.Cities)
+        {
+            if (city == null
+                || string.IsNullOrWhiteSpace(city.DefinitionId)
+                || !selectedDefinitions.Cities.TryGetValue(city.DefinitionId, out DailyV1CityDefinition cityNode)
+                || cityNode == null
+                || !string.Equals(cityNode.DefinitionId, city.DefinitionId, StringComparison.Ordinal)
+                || !selectedDefinitions.Cities.TryGetValue(cityNode.DefinitionId, out DailyV1CityDefinition exactCityNode)
+                || !ReferenceEquals(cityNode, exactCityNode)
+                || !city.TryBindSelectedDailyV1Definition(cityNode, selectedDefinitions, selectedBindings))
+            {
+                diagnostic = "A detached City did not resolve its captured definition identity to the exact admitted typed graph node.";
+                return false;
+            }
+        }
+        foreach (NpcRuntime npc in stagedD.Npcs)
+        {
+            if (npc == null
+                || !selectedBindings.TryGet(npc.NpcData, selectedDefinitions, out DailyV1NpcDefinition npcNode)
+                || !npc.TryBindSelectedDailyV1Definition(npcNode, selectedDefinitions, selectedBindings,
+                    cityRuntimeId => stagedD.Cities.FirstOrDefault(city => city != null
+                        && string.Equals(city.RuntimeId, cityRuntimeId, StringComparison.Ordinal))))
+            {
+                diagnostic = "A detached NPC did not retain the exact admitted typed definition node.";
+                return false;
+            }
+        }
+
+        DailyV1ExecutionBoundaryState restoredExecutionBoundary;
+        SimulationCalendar restoredCalendar;
+        DailyV1ActiveRuntimeSession coreRuntimeSession = null;
+        if (application == null)
+        {
+            if (!TryCreateRestoredCoreExecutionBoundary(
+                    selectedDefinitions, effective, calendar, time, restoredAdmissionContext,
+                    stagedC, stagedD, stagedE, stagedF, decisions,
+                    out restoredExecutionBoundary, out restoredCalendar, out diagnostic))
+                return false;
+
+            if (restoredExecutionBoundary.HasAdmittedSelectedDailyExecution
+                && !DailyV1ActiveRuntimeSession.TryCreateRestored(
+                    restoredExecutionBoundary,
+                    selectedDefinitions,
+                    lastEconomySnapshotDay,
+                    stagedC.CoreRoot.GenesisManifest,
+                    stagedC.SpatialAuthority,
+                    eventAuthority,
+                    out coreRuntimeSession,
+                    out diagnostic))
+                return false;
+        }
+        else if (stagedImageCoreOwners != null)
+        {
+            if (stagedImageCoreOwners.CoreSession != null)
+            {
+                coreRuntimeSession = stagedImageCoreOwners.CoreSession;
+                restoredCalendar = stagedImageCoreOwners.CoreCalendar;
+                if (restoredCalendar == null
+                    || !ReferenceEquals(coreRuntimeSession.Calendar, restoredCalendar))
+                {
+                    diagnostic = "The already composed Core restored session lost its exact calendar projection.";
+                    return false;
+                }
+            }
+            else if (!application.TryComposeRestoredImageCoreSession(
+                         stagedImageCoreOwners,
+                         lastEconomySnapshotDay,
+                         out coreRuntimeSession,
+                         out restoredCalendar,
+                         out diagnostic)
+                     || coreRuntimeSession == null)
+            {
+                return false;
+            }
+
+            restoredAdmissionContext = coreRuntimeSession.AdmissionContext;
+            if (restoredAdmissionContext == null)
+            {
+                diagnostic = "The Core-composed restored image session has no retained admission identity.";
+                return false;
+            }
+            restoredExecutionBoundary = coreRuntimeSession.ExecutionBoundaryState;
+        }
+        else
+        {
+            // Both detached image staging and capture-bound staging retain
+            // their exact Core owner candidates. Compose through the same
+            // Core path so Unity projections cannot reselect owner instances
+            // for one restore route but not the other.
+            if (stagedD.CoreRestoreOwners == null
+                || stagedE.CoreOwnerRestoreStage == null
+                || stagedF.CoreOwnerRestoreStage == null)
+            {
+                diagnostic = "Core application restore composition requires retained P12-D/E/F owner stages.";
+                return false;
+            }
+
+            if (!application.TryCreateRestoredActiveRuntimeSessionFromOwnerStages(
+                    selectedDefinitions,
+                    effective,
+                    stagedC.CoreRoot,
+                    stagedD.CoreRestoreOwners,
+                    stagedE.CoreOwnerRestoreStage,
+                    stagedF.CoreOwnerRestoreStage,
+                    time,
+                    restoredAdmissionContext,
+                    decisions,
+                    eventAuthority,
+                    lastEconomySnapshotDay,
+                    replacementOperation,
+                    out coreRuntimeSession,
+                    out restoredCalendar,
+                    out diagnostic))
+                return false;
+
+            if (coreRuntimeSession == null)
+            {
+                diagnostic = "Core application restore composition returned no active session.";
+                return false;
+            }
+            restoredExecutionBoundary = coreRuntimeSession.ExecutionBoundaryState;
+        }
+
+        if (coreRuntimeSession != null)
+        {
+            if (!TryInstallOrVerifyCoreP18ReceiptSnapshots(
+                    coreRuntimeSession,
+                    stagedE.CrimeReceiptSnapshot,
+                    stagedE.JusticeReceiptSnapshot,
+                    out diagnostic))
+                return false;
+        }
+        else if (!crime.TryInstallP12AReceiptOwnerSnapshot(stagedE.CrimeReceiptSnapshot)
+            || !stagedE.Justice.TryInstallP12AReceiptOwnerSnapshot(stagedE.JusticeReceiptSnapshot))
+        {
+            diagnostic = "The detached Unity adapters could not install the exact P12-A receipt snapshots.";
+            return false;
+        }
 
         SimulationRuntime runtime = new SimulationRuntime(
+            selectedExecutionBoundaryState: restoredExecutionBoundary,
+            selectedCalendar: restoredCalendar,
             simulationTime: time,
             cities: stagedD.Cities,
             npcRuntimes: stagedD.Npcs,
@@ -1163,13 +1909,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             p12CrimeSocialAppraisalWorldState: stagedE.CrimeSocialAppraisal);
 
         NpcChronicleService chronicles = new NpcChronicleService(decisions, eventStore);
-        NpcChronicleFormatter formatter = TesteSimulacao.CreateNpcChronicleFormatter(
-            stagedD.RuntimeIdentities,
-            stagedD.SpatialNetwork,
-            cityByLocation,
-            stagedD.EmptyExplorableSites,
-            stagedD.Cities,
-            config);
+        NpcChronicleFormatter formatter = DailyV1SelectedNpcChronicleFormatter.Create(
+            runtime.SelectedRuntimeOwnerGraph);
         SimulationBootstrapComposition composition = new SimulationBootstrapComposition(
             stagedC.WorldIdentity,
             stagedC.GenesisManifest,
@@ -1192,7 +1933,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             stagedC.RuntimeIdAllocator,
             stagedD.EmptyExplorableSites,
             stagedF.Expeditions,
-            expeditions);
+            expeditions,
+            selectedDefinitions);
 
         candidate = new SimulationActiveSession(
             composition,
@@ -1204,7 +1946,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
             config,
             restoredAdmissionContext,
             stagedC.DeterministicRandom,
-            new SimulationSessionReportState(lastEconomySnapshotDay));
+            lastEconomySnapshotDay,
+            coreRuntimeSession);
         return true;
     }
 
@@ -1364,55 +2107,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         IReadOnlyList<OwnerSectionCensusSnapshot> sections,
         out string diagnostic)
     {
-        diagnostic = null;
-        if (composition?.Expeditions == null || sections == null)
-        {
-            diagnostic = "The selected profile's Expedition owner or census is unavailable.";
-            return false;
-        }
-
-        OwnerSectionCensusWitness witness;
-        try
-        {
-            witness = new ExpeditionCensusProvider(composition.Expeditions).GetCurrentCensus();
-        }
-        catch (InvalidOperationException exception)
-        {
-            diagnostic = "The selected profile's Expedition census is inconsistent: " + exception.Message;
-            return false;
-        }
-
-        OwnerSectionCensusSnapshot match = null;
-        foreach (OwnerSectionCensusSnapshot section in sections)
-        {
-            if (!string.Equals(section?.SectionId, ExpeditionCensusProvider.SectionId, StringComparison.Ordinal))
-                continue;
-            if (match != null)
-            {
-                diagnostic = "The owner vector duplicates the selected profile's Expedition section.";
-                return false;
-            }
-            match = section;
-        }
-
-        if (witness == null
-            || witness.SchemaVersion != ExpeditionCensusProvider.SchemaVersion
-            || witness.Cardinality != 0
-            || witness.Revision < 0L
-            || !ReferenceEquals(witness.OwnerInstanceIdentity, composition.Expeditions)
-            || match == null
-            || match.Role != OwnerSectionRole.Required
-            || match.SchemaVersion != witness.SchemaVersion
-            || match.Cardinality != 0
-            || match.Revision < 0L
-            || match.Revision != witness.Revision
-            || !ReferenceEquals(match.OwnerInstanceIdentity, witness.OwnerInstanceIdentity))
-        {
-            diagnostic = "The required p12f.expeditions row must identify the exact live ExpeditionStore at a matching revision and cardinality zero.";
-            return false;
-        }
-
-        return true;
+        return DailyV1Application.TryValidateRestoredExpeditionExactZero(
+            composition?.Expeditions, sections, out diagnostic);
     }
 
     internal static bool TryValidateAllocatorHighWater(
@@ -1435,6 +2131,9 @@ internal static partial class P12GDailyV1RestoreCoordinator
             diagnostic = "A complete staged composition is required for allocator high-water validation.";
             return false;
         }
+        if (candidate.CoreRuntimeSession != null)
+            return DailyV1Application.TryValidateAllocatorHighWater(
+                candidate.CoreRuntimeSession, out diagnostic);
 
         RuntimeIdAllocatorSnapshot allocator = candidate.Composition.RuntimeIdAllocator.CaptureSnapshot();
         List<KeyValuePair<string, string>> allocatedIdentityValues = new List<KeyValuePair<string, string>>();
@@ -1463,7 +2162,7 @@ internal static partial class P12GDailyV1RestoreCoordinator
         foreach (ExpeditionRuntime expedition in candidate.Composition.Expeditions.ActiveExpeditions)
             retainedDecisionReferences.Add(expedition?.OriginDecisionId);
 
-        return TryValidateAllocatorHighWater(
+        return DailyV1Application.TryValidateAllocatorHighWater(
             allocator, allocatedIdentityValues, retainedDecisionReferences, out diagnostic);
     }
 
@@ -1472,8 +2171,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         IReadOnlyList<KeyValuePair<string, string>> allocatedIdentityValues,
         out string diagnostic)
     {
-        return TryValidateAllocatorHighWater(
-            allocator, allocatedIdentityValues, Array.Empty<string>(), out diagnostic);
+        return DailyV1Application.TryValidateAllocatorHighWater(
+            allocator, allocatedIdentityValues, out diagnostic);
     }
 
     internal static bool TryValidateAllocatorHighWater(
@@ -1482,73 +2181,8 @@ internal static partial class P12GDailyV1RestoreCoordinator
         IReadOnlyList<string> retainedDecisionReferences,
         out string diagnostic)
     {
-        diagnostic = null;
-        if (allocator?.Counters == null || allocatedIdentityValues == null || retainedDecisionReferences == null)
-        {
-            diagnostic = "A staged RuntimeIdAllocator and retained identity inventory are required.";
-            return false;
-        }
-        Dictionary<string, long> nextSequenceByFamily = new Dictionary<string, long>(StringComparer.Ordinal);
-        foreach (RuntimeIdAllocatorCounterSnapshot counter in allocator.Counters)
-        {
-            if (counter == null || string.IsNullOrWhiteSpace(counter.FamilyId)
-                || counter.NextSequence <= 0L
-                || !nextSequenceByFamily.TryAdd(counter.FamilyId, counter.NextSequence))
-            {
-                diagnostic = "The staged RuntimeIdAllocator continuation counters contain an invalid or duplicate family.";
-                return false;
-            }
-        }
-
-        HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (KeyValuePair<string, string> identity in allocatedIdentityValues)
-        {
-            string expectedPrefix = identity.Key + "-";
-            if (string.IsNullOrWhiteSpace(identity.Value)
-                || !nextSequenceByFamily.TryGetValue(identity.Key, out long nextSequence)
-                || !identity.Value.StartsWith(expectedPrefix, StringComparison.Ordinal)
-                || !long.TryParse(identity.Value.Substring(expectedPrefix.Length), NumberStyles.None,
-                    CultureInfo.InvariantCulture, out long allocatedSequence)
-                || allocatedSequence <= 0L
-                || allocatedSequence >= nextSequence
-                || !seen.Add(identity.Key + ":" + identity.Value))
-            {
-                diagnostic = "The staged RuntimeIdAllocator next/high-water mark does not continue past every retained "
-                    + identity.Key + " identity ('" + identity.Value + "').";
-                return false;
-            }
-        }
-
-        const string decisionPrefix = "decision-";
-        foreach (string decisionReference in retainedDecisionReferences)
-        {
-            // These are retained opaque facts, not lookup keys. Only exact values the
-            // allocator can emit contribute a high-water requirement; do not resolve
-            // them through the intentionally omitted NpcDecisionStore.
-            if (string.IsNullOrWhiteSpace(decisionReference)
-                || !decisionReference.StartsWith(decisionPrefix, StringComparison.Ordinal)
-                || !long.TryParse(
-                    decisionReference.Substring(decisionPrefix.Length),
-                    NumberStyles.None,
-                    CultureInfo.InvariantCulture,
-                    out long allocatedSequence)
-                || allocatedSequence <= 0L
-                || !string.Equals(
-                    decisionReference,
-                    decisionPrefix + allocatedSequence.ToString("D6", CultureInfo.InvariantCulture),
-                    StringComparison.Ordinal))
-                continue;
-
-            if (!nextSequenceByFamily.TryGetValue("decision", out long nextSequence)
-                || allocatedSequence >= nextSequence)
-            {
-                diagnostic = "The staged RuntimeIdAllocator next/high-water mark does not continue past a retained opaque decision reference ('"
-                    + decisionReference + "').";
-                return false;
-            }
-        }
-
-        return true;
+        return DailyV1Application.TryValidateAllocatorHighWater(
+            allocator, allocatedIdentityValues, retainedDecisionReferences, out diagnostic);
     }
 
     private static bool TryValidateActorChoiceTemporalZeroWitness(

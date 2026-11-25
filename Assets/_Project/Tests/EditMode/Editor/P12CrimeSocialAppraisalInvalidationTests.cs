@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
@@ -111,6 +112,8 @@ public sealed class P12CrimeSocialAppraisalInvalidationTests
         GameObject bootstrapObject = new GameObject("P12 Crime/Social daily operation integration test");
         try
         {
+            // Selected Daily-v1 captures effective action values at bootstrap.
+            steal.canFail = false;
             TesteSimulacao bootstrap = bootstrapObject.AddComponent<TesteSimulacao>();
             SetPrivateField(bootstrap, "simulationConfig", config);
             SetPrivateField(bootstrap, "runtimeAdmissionProfile", SimulationRuntimeAdmissionProfile.UnityBootstrapDailyV1);
@@ -178,18 +181,22 @@ public sealed class P12CrimeSocialAppraisalInvalidationTests
             SetPrivateField(crime, "theftOutcomeSink", probe);
 
             ContinuationCensusProtocol protocol = GetProtocol(runtime);
-            HashSet<string> expectedOperations = (HashSet<string>)GetPrivateField(protocol, "expectedOperations");
+            IReadOnlyCollection<string> expectedOperations = protocol.RegisteredOperationContractIds;
             Assert.That(expectedOperations, Does.Contain(DailyAdvanceOperationId));
             Assert.That(protocol.TryReadMutationEpoch(out long startingEpoch, out ContinuationCensusFailure startFailure),
                 Is.True, startFailure.ToString());
-            steal.canFail = false;
             Assert.That(runtime.TryAdvanceDay(out SimulationRuntimeAdvanceFailure advanceFailure),
                 Is.True, advanceFailure.ToString());
 
             Assert.That(runtime.CurrentDay, Is.EqualTo(1L));
-            Assert.That(bootstrap.Decisions.Decisions, Has.Count.EqualTo(1));
-            Assert.That(bootstrap.Decisions.Decisions[0].Origin, Is.EqualTo(NpcDecisionOrigin.Autonomous));
-            Assert.That(bootstrap.Decisions.Decisions[0].ActionDefinitionId, Is.EqualTo(steal.DefinitionId));
+            NpcDecisionRecord[] thiefDecisions = bootstrap.Decisions.Decisions
+                .Where(decision => decision != null
+                    && string.Equals(decision.ActorRuntimeId, thief.RuntimeId, StringComparison.Ordinal)
+                    && decision.Origin == NpcDecisionOrigin.Autonomous
+                    && string.Equals(decision.ActionDefinitionId, steal.DefinitionId, StringComparison.Ordinal))
+                .ToArray();
+            Assert.That(thiefDecisions, Has.Length.EqualTo(1),
+                "The sole authored Steal actor must produce exactly one autonomous Steal decision.");
             Assert.That(world.TheftOutcomes.Count, Is.EqualTo(1));
             Assert.That(world.CrimeKnowledge.Count, Is.EqualTo(1));
             Assert.That(world.SocialReactions.Count, Is.EqualTo(1));
@@ -607,7 +614,7 @@ public sealed class P12CrimeSocialAppraisalInvalidationTests
         SimulationRuntime runtime = CreateRuntime(people);
         CrimeSocialAppraisalWorldState world = runtime.CrimeSocialAppraisal;
         ContinuationCensusProtocol protocol = GetProtocol(runtime);
-        SetPrivateField(protocol, "mutationEpoch", long.MaxValue);
+        SimulationTestFactory.SetContinuationMutationEpoch(protocol, long.MaxValue);
 
         Assert.That(world.Integration.TryAcceptTheftOutcome(
             CreateOutcome(perpetrator, victim, "shared-epoch-saturated")), Is.False);

@@ -6,7 +6,7 @@ public sealed class SimulationLoggerBoundaryOwnerTests
     [Test]
     public void KeyedMerchantDiagnosticAppendsOnceAndRejectsConflictingReuse()
     {
-        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { trade = true });
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(new SimulationLogSettings { trade = true });
         string operationIdentity = "boundary/merchant-trade-state:merchant-1/redirect-log";
         Assert.That(logger.TryPrepareKeyedOccurrence(operationIdentity, "fingerprint/v1",
             SimulationLogCategory.Trade, "redirected", out LoggerKeyedOccurrenceCommit prepared), Is.True);
@@ -27,7 +27,7 @@ public sealed class SimulationLoggerBoundaryOwnerTests
     [Test]
     public void KeyedMerchantDiagnosticRetainsNoOutputDispositionOnFirstOccurrence()
     {
-        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { trade = false });
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(new SimulationLogSettings { trade = false });
         Assert.That(logger.TryPrepareKeyedOccurrence("occurrence/no-output", "fingerprint",
             SimulationLogCategory.Trade, "hidden diagnostic", out LoggerKeyedOccurrenceCommit prepared), Is.True);
         Assert.That(prepared.TryCommit(out TimelineFailure failure), Is.True, failure.ToString());
@@ -42,7 +42,7 @@ public sealed class SimulationLoggerBoundaryOwnerTests
     [Test]
     public void EnabledBeginDayStepCommitsLegacyOutputAndReceiptWithExactReplay()
     {
-        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { showDay = true });
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(new SimulationLogSettings { showDay = true });
         DailyBoundaryOperation operation = new DailyBoundaryOperation("logger-world", "intraday", 12L);
         BoundaryContinuationManifest manifest = CreateManifest(logger, operation, 0, out BoundaryContinuationStep step);
 
@@ -66,7 +66,7 @@ public sealed class SimulationLoggerBoundaryOwnerTests
     [Test]
     public void DisabledBeginDayStepCommitsFrozenNoOutputDisposition()
     {
-        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { showDay = false });
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(new SimulationLogSettings { showDay = false });
         DailyBoundaryOperation operation = new DailyBoundaryOperation("logger-world", "intraday", 13L);
         BoundaryContinuationManifest manifest = CreateManifest(logger, operation, 0, out BoundaryContinuationStep step);
 
@@ -82,7 +82,7 @@ public sealed class SimulationLoggerBoundaryOwnerTests
     [Test]
     public void BeginDayStepRejectsDescriptorConflictForSameOccurrence()
     {
-        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { showDay = true });
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(new SimulationLogSettings { showDay = true });
         DailyBoundaryOperation operation = new DailyBoundaryOperation("logger-world", "intraday", 14L);
         BoundaryContinuationManifest manifest = CreateManifest(logger, operation, 0, out BoundaryContinuationStep step);
         Assert.That(logger.TryPrepareBeginDayStep(manifest, step, out IBoundaryContinuationStepCommit prepared, out _), Is.True);
@@ -100,7 +100,7 @@ public sealed class SimulationLoggerBoundaryOwnerTests
     [Test]
     public void UncommittedPreparationCanRetryAndCommittedUncertainResponseReplaysOnce()
     {
-        SimulationLogger logger = new SimulationLogger(new SimulationLogSettings { showDay = true });
+        SimulationLogger logger = UnitySimulationLoggerAdapter.Create(new SimulationLogSettings { showDay = true });
         DailyBoundaryOperation operation = new DailyBoundaryOperation("logger-world", "intraday", 15L);
         BoundaryContinuationManifest manifest = CreateManifest(logger, operation, 0, out BoundaryContinuationStep step);
         Assert.That(logger.TryPrepareBeginDayStep(manifest, step, out IBoundaryContinuationStepCommit prepared, out TimelineFailure failure), Is.True);

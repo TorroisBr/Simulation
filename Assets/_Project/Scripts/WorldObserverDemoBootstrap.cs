@@ -122,7 +122,26 @@ public sealed class WorldObserverDemoBootstrap : MonoBehaviour
         ruinData.siteName = "Ancient Ruin";
         ruinData.kind = ExplorableSiteKind.Ruin;
         runtimeDefinitions.Add(ruinData);
-        ExplorableSiteRuntime ruin = new ExplorableSiteRuntime("observer-demo-ruin-runtime", ruinData, ruinLocation);
+        ItemData demoResource = ScriptableObject.CreateInstance<ItemData>();
+        demoResource.id = "observer-demo-ore";
+        demoResource.itemName = "Observer Demo Ore";
+        demoResource.basePrice = 10f;
+        runtimeDefinitions.Add(demoResource);
+        northData.marketItems.Add(new MarketItemConfig { item = demoResource, initialAmount = 0, desiredAmount = 0 });
+        SimulationConfigData definitionConfig = ScriptableObject.CreateInstance<SimulationConfigData>();
+        definitionConfig.cities.Add(northData);
+        definitionConfig.explorableSites.Add(new ExplorableSiteConfig
+        {
+            site = ruinData,
+            anchorCity = northData,
+            travelDaysFromAnchor = 3
+        });
+        runtimeDefinitions.Add(definitionConfig);
+        DailyV1EffectiveDefinitions selectedDefinitions = SimulationGenesisPipeline.CreateSelectedDefinitions(definitionConfig);
+        if (!selectedDefinitions.ExplorableSites.TryGetValue(ruinData.DefinitionId, out DailyV1ExplorableSiteDefinition ruinDefinition)
+            || !selectedDefinitions.Items.TryGetValue(demoResource.DefinitionId, out _))
+            throw new System.InvalidOperationException("The observer demo definition graph did not retain its authored site and item definitions.");
+        ExplorableSiteRuntime ruin = new ExplorableSiteRuntime("observer-demo-ruin-runtime", ruinDefinition, ruinLocation);
         identity.RegisterExplorableSite(ruin);
         ExplorableSiteStore sites = new ExplorableSiteStore();
         sites.Add(ruin);
@@ -144,14 +163,10 @@ public sealed class WorldObserverDemoBootstrap : MonoBehaviour
         contentStore = content;
         content.GetOrCreate(ruin);
         SimulationTime time = new SimulationTime(12L);
+        SimulationLogger eventLogger = UnitySimulationLoggerAdapter.Create(null);
         HistoryStore history = new HistoryStore();
-        DomainEventStore events = new DomainEventStore(history, new HistoryPolicy());
+        DomainEventStore events = new DomainEventStore(history, new HistoryPolicy(), eventLogger);
         WorldCommandDefinitionCatalog definitions = new WorldCommandDefinitionCatalog();
-        ItemData demoResource = ScriptableObject.CreateInstance<ItemData>();
-        demoResource.id = "observer-demo-ore";
-        demoResource.itemName = "Observer Demo Ore";
-        demoResource.basePrice = 10f;
-        runtimeDefinitions.Add(demoResource);
         definitions.RegisterItem(demoResource);
         worldCommandService = new WorldCommandService(
             runtimeIdAllocator: commandRuntimeIds,
@@ -161,7 +176,8 @@ public sealed class WorldObserverDemoBootstrap : MonoBehaviour
         ConflictResolutionService conflictService = new ConflictResolutionService(
             new ConflictResolver(new WorldObserverDemoCapabilityModel(), new SeededConflictRandomSource(12)),
             null,
-            new DomainEventRecorder(commandRuntimeIds, time, new SimulationRecordSequence(), events));
+            new DomainEventRecorder(commandRuntimeIds, time, new SimulationRecordSequence(), events, eventLogger));
+
         SimulationRuntime runtime = new SimulationRuntime(time, new[] { north, south }, new NpcRuntime[0], economyEnabled: false);
         WorldCommandHandlerRegistration.RegisterCoreHandlers(
             worldCommandService,
