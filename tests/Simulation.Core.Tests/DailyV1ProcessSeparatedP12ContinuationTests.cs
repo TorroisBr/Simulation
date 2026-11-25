@@ -91,6 +91,13 @@ public sealed class DailyV1ProcessSeparatedP12ContinuationTests
             Assert.That(uninterruptedControl.Long("epoch"),
                 Is.GreaterThan(uninterruptedControl.Long("epochStart")),
                 "The uninterrupted control must publish committed mutations through its local epoch.");
+            long resumedEpochAdvance =
+                (dayOne.Long("epoch") - dayOne.Long("epochStart"))
+                + (dayTwo.Long("epoch") - dayTwo.Long("epochStart"))
+                + (dayThree.Long("epoch") - dayThree.Long("epochStart"));
+            Assert.That(resumedEpochAdvance,
+                Is.EqualTo(uninterruptedControl.Long("epoch") - uninterruptedControl.Long("epochStart")),
+                "The sum of the three process-local committed mutation epochs must equal the uninterrupted three-day control.");
             Assert.That(dayThree.Int("sections"), Is.EqualTo(299));
             Assert.That(dayThree.Int("owners"), Is.EqualTo(uninterruptedControl.Int("owners")));
             Assert.That(dayThree.Int("emptySections"), Is.EqualTo(uninterruptedControl.Int("emptySections")));
