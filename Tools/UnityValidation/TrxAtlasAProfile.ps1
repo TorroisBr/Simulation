@@ -133,6 +133,8 @@ function Assert-AtlasACaptureRecordBinding {
     foreach($pair in @(@('bytes','bytes'),@('sha256','sha256'),@('mvid','mvid'),@('pdbBytes','pdb.bytes'),@('pdbSha256','pdb.sha256'))){$left=$pair[0];$right=$pair[1];$expected=if($right.StartsWith('pdb.')){[string]$runnerAssembly.pdb[$right.Substring(4)]}else{[string]$runnerAssembly[$right]};if(([string]$assembly[$left]).ToLowerInvariant() -cne $expected.ToLowerInvariant()){throw "ATLAS-A controlled capture assembly '$left' differs from the runner."}}
     $argv=Get-AtlasAPublicArgumentVector @($runner.invocation.argv);$captureArgv=Get-AtlasAPublicArgumentVector @($capture.invocation.argv)
     if((ConvertTo-Json -InputObject @($argv) -Compress) -cne (ConvertTo-Json -InputObject @($captureArgv) -Compress)){throw 'ATLAS-A controlled capture command differs from the runner invocation.'}
+    $resultsRoot=[IO.Path]::GetFullPath([string]$capture.invocation.argv[11]);$expectedEvidenceSuffix='WorldAtlas/.validation-evidence/ATLAS-A-3e4ed67a-2026-11-25/controlled-recapture-20261125'
+    if(-not $resultsRoot.Replace('\','/').EndsWith('/'+$expectedEvidenceSuffix,[StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetFullPath([string]$runner.invocation.argv[11]) -cne $resultsRoot){throw 'ATLAS-A captured test-host evidence root differs from the exact accepted run folder.'}
     if($capture.invocation.executable -cne 'dotnet' -or $capture.invocation.workingDirectory -cne '<ATLAS_SOURCE_ROOT>' -or $capture.invocation.environment.NUGET_PACKAGES -cne '<PRIVATE_NUGET_CACHE>' -or $capture.invocation.environment.DOTNET_ROOT -cne '<PRIVATE_SDK_ROOT>' -or [long]$capture.invocation.environment.processPathLengthBefore -ne 26028 -or [long]$capture.invocation.environment.processPathLengthDuring -ne 26100 -or [string]$capture.invocation.environment.DOTNET_MULTILEVEL_LOOKUP -cne '0'){throw 'ATLAS-A captured invocation/environment identity is invalid.'}
     $dotnetRoot=[IO.Path]::GetFullPath([string]$runner.invocation.environment.DOTNET_ROOT);$nugetRoot=[IO.Path]::GetFullPath([string]$runner.invocation.environment.NUGET_PACKAGES)
     if(-not (Test-Path -LiteralPath $dotnetRoot -PathType Container) -or -not (Test-Path -LiteralPath (Join-Path $dotnetRoot 'dotnet.exe') -PathType Leaf) -or -not (Test-Path -LiteralPath $nugetRoot -PathType Container)){throw 'ATLAS-A captured SDK/NuGet roots are not available for binding.'}
@@ -142,7 +144,31 @@ function Assert-AtlasACaptureRecordBinding {
     foreach($pair in @(@($raw,40431L,'fa0e16f267c5a11656222ba530882741e3c0d5c10dac0618edaa879c4a9e2cf6'),@($diag,163762L,'606915d560190fee069ba8c0384c638dae140ac45a3e9a3cbfddc27798e0693b'),@($console,810L,'3534b28b7318ea5c608ea792ab7bcd04a752cb5acf77d3870ecc434340be4019'))){if([long]$pair[0].bytes -ne [long]$pair[1] -or ([string]$pair[0].sha256).ToLowerInvariant() -cne [string]$pair[2]){throw 'ATLAS-A controlled capture artifact identity differs from its fixed evidence record.'}}
     if($raw.name -cne 'ATLAS-A-3e4ed67a-recapture.trx' -or $diag.name -cne 'vstest-diagnostics.log' -or $console.name -cne 'test-console.txt' -or $old.name -cne 'ATLAS-A-ux-3e4ed67a.trx' -or [long]$old.bytes -ne 40163L -or ([string]$old.sha256).ToLowerInvariant() -cne '7b72bd1708a78eb762b95668128551f647c2c77a88f96a270d4fafc58d554907' -or -not [bool]$old.unchanged){throw 'ATLAS-A original 29/29 TRX evidence is not recorded as immutable.'}
     foreach($pair in @(@($raw,$runner.artifacts.rawReport),@($diag,$runner.artifacts.diagnostics),@($console,$runner.artifacts.console),@($old,$runner.artifacts.originalTrx))){$captured=$pair[0];$runnerRecord=$pair[1];if([long]$captured.bytes -ne [long]$runnerRecord.bytes -or ([string]$captured.sha256).ToLowerInvariant() -cne ([string]$runnerRecord.sha256).ToLowerInvariant()){throw 'ATLAS-A capture and runner artifact identities differ.'}}
+    if([IO.Path]::GetFullPath([string]$runner.artifacts.rawReport.path) -cne (Join-Path $resultsRoot $raw.name) -or [IO.Path]::GetFullPath([string]$runner.artifacts.diagnostics.path) -cne (Join-Path $resultsRoot $diag.name) -or [IO.Path]::GetFullPath([string]$runner.artifacts.console.path) -cne (Join-Path $resultsRoot $console.name)){throw 'ATLAS-A captured evidence artifacts do not resolve beneath the pinned run folder.'}
     if([IO.Path]::GetFileName([string]$runner.artifacts.rawReport.path) -cne $raw.name -or [IO.Path]::GetFileName([string]$runner.artifacts.diagnostics.path) -cne $diag.name -or [IO.Path]::GetFileName([string]$runner.artifacts.console.path) -cne $console.name -or [IO.Path]::GetFileName([string]$runner.artifacts.originalTrx.path) -cne $old.name){throw 'ATLAS-A capture and runner artifact filenames differ.'}
+}
+
+function ConvertTo-AtlasAPublicEvidenceText {
+    param([string]$Value,[string]$EvidenceRoot)
+    if(-not [IO.Path]::IsPathRooted($EvidenceRoot)){throw 'ATLAS-A evidence path root must be absolute before privacy projection.'}
+    $variants=@($EvidenceRoot,$EvidenceRoot.Replace('\','/'),$EvidenceRoot.Replace('/','\'))|Select-Object -Unique
+    foreach($variant in $variants){$Value=$Value.Replace([string]$variant,'<EVIDENCE>/controlled-recapture-20261125',[StringComparison]::OrdinalIgnoreCase)}
+    return $Value
+}
+
+function ConvertTo-AtlasAPublicDocument {
+    param([pscustomobject]$Private,[pscustomobject]$Facts)
+    $roots=@($Private.SourceRoot,$Private.TestOutputRoot)
+    $document=ConvertTo-TrxProjectedDocument $Facts.Document $roots
+    $arguments=@($Private.Runner.invocation.argv)
+    if($arguments.Count -ne 18){throw 'ATLAS-A captured command cannot bind an evidence output directory.'}
+    $evidenceRoot=[IO.Path]::GetFullPath([string]$arguments[11]);$replacementCount=0
+    foreach($element in @($document.SelectNodes('//*'))){
+        foreach($attribute in $element.Attributes){$before=[string]$attribute.Value;$after=ConvertTo-AtlasAPublicEvidenceText $before $evidenceRoot;if($after -cne $before){$attribute.Value=$after;$replacementCount++}}
+        if($element.LocalName -in @('StdOut','StdErr','DebugTrace','Message','StackTrace','Text')){$before=[string]$element.InnerText;$after=ConvertTo-AtlasAPublicEvidenceText $before $evidenceRoot;if($after -cne $before){$element.InnerText=$after;$replacementCount++}}
+    }
+    if($replacementCount -lt 1){throw 'ATLAS-A captured test-host diagnostic path was absent from the TRX projection.'}
+    return $document
 }
 
 function Get-AtlasAPublicRunModel {
@@ -410,7 +436,7 @@ function Assert-AtlasATrxContextBinding {
     param([pscustomobject]$Private,[System.Collections.IDictionary]$PublicRun,[System.Collections.IDictionary]$PublicManifest,[System.Collections.Generic.Dictionary[string,byte[]]]$ArchivedEntries)
     $facts=Assert-AtlasACapturedRun $Private;$roots=@($Private.SourceRoot,$Private.TestOutputRoot)
     $runId=([guid]::Parse([string]$Private.Runner.run.runId)).ToString('N');$entry="results/$runId/atlas-a.trx"
-    $projected=ConvertTo-TrxProjectedDocument $facts.Document $roots;$normalized=ConvertTo-TrxCanonicalXml $projected
+    $projected=ConvertTo-AtlasAPublicDocument $Private $facts;$normalized=ConvertTo-TrxCanonicalXml $projected
     if(-not $ArchivedEntries.ContainsKey($entry)){throw 'ATLAS-A normalized result is absent from the checked archive.'}
     $actual=$ArchivedEntries[$entry];if($actual.LongLength -ne $normalized.LongLength -or (Get-TrxBytesSha256 $actual) -cne (Get-TrxBytesSha256 $normalized)){throw 'ATLAS-A normalized TRX differs from the privacy-safe projection of the protected original.'}
     $expected=Get-AtlasAPublicRunModel $Private $facts $normalized
@@ -428,7 +454,7 @@ function New-AtlasATrxEvidencePackage {
     param([Parameter(Mandatory)][string]$SourceContextPath,[Parameter(Mandatory)][string]$OutputDirectory,[string]$BundleId)
     $private=Read-AtlasASourceContext $SourceContextPath;$facts=Assert-AtlasACapturedRun $private
     $before=[IO.File]::ReadAllBytes([string]$private.ReportPath)
-    $projected=ConvertTo-TrxProjectedDocument $facts.Document @($private.SourceRoot,$private.TestOutputRoot);$normalized=ConvertTo-TrxCanonicalXml $projected
+    $projected=ConvertTo-AtlasAPublicDocument $private $facts;$normalized=ConvertTo-TrxCanonicalXml $projected
     $temp=[IO.Path]::GetTempFileName();try{[IO.File]::WriteAllBytes($temp,$normalized);$normalizedFacts=Get-TrxFacts $temp;if((Get-TrxBytesSha256 $normalized) -cne (Get-TrxBytesSha256 (ConvertTo-TrxCanonicalXml $normalizedFacts.Document))){throw 'ATLAS-A normalized TRX is not deterministic canonical XML.'}}finally{Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue}
     if((Get-TrxBytesSha256 ([IO.File]::ReadAllBytes([string]$private.ReportPath))) -cne (Get-TrxBytesSha256 $before)){throw 'ATLAS-A original TRX changed during normalization.'}
     if(-not $BundleId){$BundleId='atlas-a-29-tests-v1'};if($BundleId -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$'){throw 'ATLAS-A bundle ID contains unsupported characters.'}

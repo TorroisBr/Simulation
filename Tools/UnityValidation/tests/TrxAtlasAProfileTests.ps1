@@ -38,6 +38,12 @@ $resolved=& $m {param($a,$b) Get-AtlasAPathWithinRoot $a $b 'test'} $r $inside
 Check ([IO.Path]::GetFullPath($resolved) -ceq [IO.Path]::GetFullPath($inside)) 'Valid root mapping failed.'
 Reject {& $m {param($a,$b) Get-AtlasAPathWithinRoot $a $b 'escape'} $r (Join-Path $r '..\outside')} '*escapes its declared root*' 'Escaping root was accepted.'
 
+$evidenceRoot='C:\Private\ATLAS-A\controlled-recapture-20261125'
+$mappedEvidence=& $m {param($v,$root) ConvertTo-AtlasAPublicEvidenceText $v $root} ($evidenceRoot+'\vstest-diagnostics.host.log') $evidenceRoot
+Check ($mappedEvidence -ceq '<EVIDENCE>/controlled-recapture-20261125\vstest-diagnostics.host.log') 'Evidence-root privacy mapping failed.'
+$mappedEvidenceForward=& $m {param($v,$root) ConvertTo-AtlasAPublicEvidenceText $v $root} 'c:/private/atlas-a/controlled-recapture-20261125/vstest-diagnostics.host.log' $evidenceRoot
+Check ($mappedEvidenceForward -ceq '<EVIDENCE>/controlled-recapture-20261125/vstest-diagnostics.host.log') 'Case/slash-variant evidence-root privacy mapping failed.'
+
 $input=@([ordered]@{path='test-output/b.bin';bytes=2;sha256='b'*64},[ordered]@{path='test-output/a.bin';bytes=1;sha256='a'*64})
 $sorted=& $m {param($x) ConvertTo-AtlasAInventory $x 'test' '' 2} $input
 Check ($sorted[0].path -ceq 'test-output/a.bin') 'Inventory ordering is not ordinal.'
