@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <AssemblyName>WorldAtlas.Tests</AssemblyName>
+    <RootNamespace>WorldAtlas.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless.NUnit" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\WorldAtlas.Observations\WorldAtlas.Observations.csproj" />
+    <ProjectReference Include="..\..\src\WorldAtlas.Desktop\WorldAtlas.Desktop.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\..\fixtures\demo\*.json" Link="fixtures\demo\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\WorldAtlas.Desktop\WorldAtlas.Desktop.csproj" Link="boundary\WorldAtlas.Desktop.csproj" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\WorldAtlas.Observations\WorldAtlas.Observations.csproj" Link="boundary\WorldAtlas.Observations.csproj" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

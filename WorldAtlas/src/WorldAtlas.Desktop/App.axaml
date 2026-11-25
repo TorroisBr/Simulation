@@ -1,0 +1,18 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="WorldAtlas.Desktop.App"
+             RequestedThemeVariant="Dark">
+  <Application.Styles>
+    <FluentTheme />
+  </Application.Styles>
+  <Application.Resources>
+    <SolidColorBrush x:Key="AtlasBackground" Color="#111722" />
+    <SolidColorBrush x:Key="AtlasSurface" Color="#18212D" />
+    <SolidColorBrush x:Key="AtlasSurfaceRaised" Color="#202B39" />
+    <SolidColorBrush x:Key="AtlasBorder" Color="#303D4E" />
+    <SolidColorBrush x:Key="AtlasText" Color="#E7EDF5" />
+    <SolidColorBrush x:Key="AtlasMuted" Color="#98A7BA" />
+    <SolidColorBrush x:Key="AtlasAccent" Color="#83D2B3" />
+    <SolidColorBrush x:Key="AtlasWarning" Color="#E9C675" />
+  </Application.Resources>
+</Application>
