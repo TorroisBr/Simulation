@@ -127,7 +127,7 @@ public sealed partial class MainWindow : Window
 
     private async Task ShowNoticeAsync(string title, string message)
     {
-        var dialog = new AboutDialogWindow(message) { Title = title };
+        var dialog = new AboutDialogWindow(message, _viewModel.UiScalePercent) { Title = title };
         await dialog.ShowDialog(this);
     }
 
