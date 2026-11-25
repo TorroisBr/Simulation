@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -21,7 +22,7 @@ public sealed partial class MainWindow : Window
         _viewModel = viewModel;
         InitializeComponent();
         DataContext = viewModel;
-        AtlasTypography.Apply(viewModel.UiScalePercent);
+        ApplyUiScale();
         MapView.HexSelected += viewModel.SelectMapHex;
         viewModel.PropertyChanged += (_, args) =>
         {
@@ -31,7 +32,7 @@ public sealed partial class MainWindow : Window
             }
             else if (args.PropertyName == nameof(MainWindowViewModel.UiScalePercent))
             {
-                AtlasTypography.Apply(viewModel.UiScalePercent);
+                ApplyUiScale();
             }
         };
         RefreshNavigationTabs();
@@ -104,6 +105,13 @@ public sealed partial class MainWindow : Window
     }
 
     private void OnFitClick(object? sender, RoutedEventArgs e) => MapView.FitToView();
+
+    private void ApplyUiScale()
+    {
+        AtlasTypography.Apply(_viewModel.UiScalePercent);
+        RootLayoutGrid.RowDefinitions[0].Height = new GridLength(AtlasTypography.HeaderHeight(_viewModel.UiScalePercent));
+        RootLayoutGrid.InvalidateMeasure();
+    }
 
     private void OnZoomInClick(object? sender, RoutedEventArgs e) => MapView.ZoomFromCenter(1.2d);
 

@@ -319,10 +319,11 @@ public sealed class HexMapView : Control
             }
 
             var offset = new Point(HexProjection.DefaultHexSize * Zoom * 0.66d,
-                -HexProjection.DefaultHexSize * Zoom * 0.67d - marker.OffsetOrder * 17d);
+                -HexProjection.DefaultHexSize * Zoom * 0.67d - marker.OffsetOrder * LabelFontSize * 1.35d);
             var point = new Point(cell.Center.X + offset.X, cell.Center.Y + offset.Y);
             var color = marker.Kind == MapMarkerKind.Location ? Color.Parse("#CFD9E8") : Color.Parse("#E7C77B");
-            context.DrawEllipse(new SolidColorBrush(color), MarkerBorderPen, point, 8d, 8d);
+            var markerRadius = LabelFontSize * 0.6d;
+            context.DrawEllipse(new SolidColorBrush(color), MarkerBorderPen, point, markerRadius, markerRadius);
             DrawText(context, marker.Kind == MapMarkerKind.Location ? "L" : "C", new MapPoint(point.X, point.Y), LabelFontSize * 0.8d,
                 Color.Parse("#17202A"));
         }

@@ -15,6 +15,14 @@ public static class AtlasTypography
         ("AtlasMapFontSize", 14)
     ];
 
+    private static readonly (string Key, double BaseSize)[] ControlSizes =
+    [
+        ("AtlasCountBadgeWidth", 26),
+        ("AtlasCountBadgeHeight", 22)
+    ];
+
+    public static double HeaderHeight(int percentage) => 128d + (percentage - 100d) * 0.5d;
+
     public static void Apply(int percentage)
     {
         if (!UiScalePreferenceStore.IsSupported(percentage))
@@ -30,6 +38,11 @@ public static class AtlasTypography
 
         var multiplier = percentage / 100d;
         foreach (var (key, baseSize) in FontSizes)
+        {
+            resources[key] = Math.Round(baseSize * multiplier, 1);
+        }
+
+        foreach (var (key, baseSize) in ControlSizes)
         {
             resources[key] = Math.Round(baseSize * multiplier, 1);
         }

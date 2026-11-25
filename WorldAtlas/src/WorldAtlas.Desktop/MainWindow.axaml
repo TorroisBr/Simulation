@@ -73,12 +73,12 @@
     </Style>
   </Window.Styles>
 
-  <Grid RowDefinitions="128,*,8,236" ColumnDefinitions="250,*">
-    <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#151D28" BorderBrush="#2C3745" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="250,*" RowDefinitions="*,*,*" Margin="18,4">
+  <Grid x:Name="RootLayoutGrid" RowDefinitions="128,*,8,236" ColumnDefinitions="250,*">
+    <Border x:Name="HeaderPanel" Grid.Row="0" Grid.ColumnSpan="2" Background="#151D28" BorderBrush="#2C3745" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="250,*" RowDefinitions="Auto,Auto,Auto" Margin="18,4">
         <StackPanel Grid.RowSpan="3" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
           <Border Width="40" Height="40" CornerRadius="11" Background="#254438" BorderBrush="#426F5C" BorderThickness="1">
-            <TextBlock Text="A" Foreground="#B4F0D5" FontSize="{DynamicResource AtlasFontTitle}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <TextBlock Text="A" Foreground="#B4F0D5" FontSize="{DynamicResource AtlasFontMedium}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
           <StackPanel Spacing="2" VerticalAlignment="Center">
             <TextBlock Text="WORLD ATLAS" FontSize="{DynamicResource AtlasFontMedium}" FontWeight="Bold" />
@@ -88,8 +88,8 @@
 
         <Grid Grid.Column="1" Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="12,0,0,0">
           <StackPanel VerticalAlignment="Center" Spacing="1">
-            <TextBlock Text="Demo World" FontSize="{DynamicResource AtlasFontLarge}" FontWeight="SemiBold" />
-            <TextBlock Text="{Binding WorldIdentityLine}" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" />
+            <TextBlock x:Name="DemoWorldTitle" Text="Demo World" FontSize="{DynamicResource AtlasFontLarge}" FontWeight="SemiBold" />
+            <TextBlock x:Name="WorldIdentityLine" Text="{Binding WorldIdentityLine}" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" />
           </StackPanel>
           <Border Grid.Column="1" Background="#463B25" BorderBrush="#887143" BorderThickness="1" CornerRadius="8" Padding="11,6" VerticalAlignment="Center" Margin="8,0">
             <StackPanel Orientation="Horizontal" Spacing="7">
@@ -132,7 +132,7 @@
         <ToggleButton x:Name="CityNav" Grid.Row="4" Classes="nav-item" Content="▦   Cities" Click="OnCitiesClick" />
         <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="8" Margin="8,24,0,8">
           <TextBlock Text="ENTITIES" Classes="section-label" VerticalAlignment="Center" />
-          <Border Width="26" Height="22" Background="#253243" CornerRadius="6" VerticalAlignment="Center">
+          <Border Width="{DynamicResource AtlasCountBadgeWidth}" Height="{DynamicResource AtlasCountBadgeHeight}" Background="#253243" CornerRadius="6" VerticalAlignment="Center">
             <TextBlock Text="{Binding EntityCount}" FontSize="{DynamicResource AtlasFontBody}" Foreground="#B7C6D8" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
         </StackPanel>

@@ -156,6 +156,9 @@ public sealed class PresentationAndScaleTests
                 var scaleCombo = window.FindControl<ComboBox>("UiScaleCombo")!;
                 var openButton = window.FindControl<Button>("OpenObservationButton")!;
                 var comparisonPanel = window.FindControl<Border>("ComparisonPanel")!;
+                var headerPanel = window.FindControl<Border>("HeaderPanel")!;
+                var demoTitle = window.FindControl<TextBlock>("DemoWorldTitle")!;
+                var worldIdentity = window.FindControl<TextBlock>("WorldIdentityLine")!;
                 var map = window.FindControl<WorldAtlas.Desktop.Controls.HexMapView>("MapView")!;
 
                 foreach (var option in viewModel.UiScaleOptions)
@@ -164,6 +167,10 @@ public sealed class PresentationAndScaleTests
                     window.UpdateLayout();
 
                     Assert.That(viewModel.UiScaleChoice, Is.EqualTo(option));
+                    Assert.That(demoTitle.Bounds.Height, Is.GreaterThanOrEqualTo(demoTitle.FontSize));
+                    Assert.That(worldIdentity.Bounds.Height, Is.GreaterThanOrEqualTo(worldIdentity.FontSize));
+                    Assert.That(ToWindowRect(worldIdentity, window).Bottom,
+                        Is.LessThanOrEqualTo(ToWindowRect(headerPanel, window).Bottom + 1));
                     Assert.That(beforeCombo.ItemTemplate, Is.Not.Null);
                     Assert.That(afterCombo.ItemTemplate, Is.Not.Null);
                     Assert.That(comparisonPanel.Bounds.Height, Is.GreaterThanOrEqualTo(220));
