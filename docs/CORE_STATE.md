@@ -1043,3 +1043,13 @@ Acceptance evidence is recorded in [`CORE-F Final Acceptance Evidence Reconcilia
 - The separately process-launched P12 continuation restores and advances T+1/T+2 consistently with the uninterrupted control. Restored mutation-epoch parity is `87 + 92 + 80 = 259`.
 
 The promotion delivers the accepted selected Daily-v1 application, persistence/restoration, and deterministic continuation contract only. It does not establish P13 historical-fork readiness, CORE-X compatibility, broader profiles, or readiness of the separately gated Simulation Lab observation workstream. Existing numbered-phase State and canonical branches are unchanged.
+
+### Post-promotion LAB-OBS-A reassessment — WAIT_DEPENDENCY (2026-11-25)
+
+The reviewed LAB-OBS-A design remains implementation-gated after CORE-F promotion. Its current architecture/source handoff is recorded on `codex/architecture/world-identity-projection` at `1ad2835524fe135c87eeca13f15cd16d4d9cb303`; the technical design requires a promoted suitable Core host, approved official selected-content inputs, and reader-admission/writer-isolation revalidation on that host.
+
+CORE-F now supplies a real Core-owned .NET application and a process-separated verification host. The promoted `Tools/Simulation.Core.DailyV1ProcessHost` is not the official Lab observation path: its project links `DailyV1CapturedSelectedContentFixture` from the test tree, and it exercises genesis/restore, advance, and persistence rather than publishing factual observation cuts. The existing `tools/Simulation.Lab` remains the bounded finite-source scenario and does not hold a published Daily-v1 session. No `observe-daily` command, `DailyV1LabObservationRun`, or `DailyV1AtlasObservationReader` exists in promoted Core.
+
+Remaining LAB-OBS-A dependencies are: a production-owned, promoted reference input provider for the admitted selected definitions; an official Lab adapter using the Core application and exact session; and a revalidated coherent read boundary that binds actual P8 geography/Hex-to-Location facts, the City roster/identity and anchor census, and the scoped Market stock rows/revisions to the same completed cut. The design also requires proving callback-free capture and exclusion of unscoped writers under the held runtime-advance reservation, plus the prescribed adjacent successful observations and a real nonzero stock delta. The current process-continuation/fingerprint evidence does not prove those observation-specific claims.
+
+Therefore LAB-OBS-A remains `WAIT_DEPENDENCY`; CORE-F promotion does not make it implementation-ready. No P8/City/Market contract or CORE-F scope is changed. ATLAS-B is not started and remains dependent on its own ATLAS-A promotion and actual LAB-OBS-A observations.
