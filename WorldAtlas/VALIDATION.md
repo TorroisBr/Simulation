@@ -74,3 +74,101 @@ Original validation files are retained outside Git at `WorldAtlas/.validation-ev
 - Native interaction smoke: `PENDING` by user choice.
 - ATLAS-B real artifact integration: `WAIT_DEPENDENCY` on reviewed LAB-OBS-A observations.
 - Remote publication: none.
+
+## Intermediate UX candidate f3b9078 (superseded; preserved)
+
+This section records the bounded UX successor; the preceding hashes remain the historical evidence for the earlier `cc6455a5` package.
+
+### Source and input identity
+
+- Candidate branch: `codex/atlas/standalone-ux`.
+- Tested implementation commit: `f3b907880b0bc0802bc421340dcb2b6b9d985e2b`.
+- Tested root tree: `efc1636fed6e3f353dacb488db370396769b16aa`.
+- Atlas base: `dba4a8c6ac85c4a7913a9a27b6e9d6ae0b69f9e0`.
+- Refreshed architecture tip merged before implementation: `158f04d4a021c3984b3ba841e246b45e1b0a457b`; its user-authority changes continue to treat Atlas as a read-only consumer.
+- The commit tree binds application source, tests, Demo fixtures, project files, app manifest, package manifest, and lock files. Desktop lock SHA-256: `72f9fa5284ebd35bc2337547b200289ccfad2910a2a431b131a81da262d5ef2a`; Observation lock: `1e39bb5149e1289978e01a366893a0697356e855bc7156b7c70747288030042f9`; test lock: `81641df0637e3a8000da45ac7b08ed5c06b2cb9b636f804077ee950fab541ffc`.
+- Day 1 fixture SHA-256: `e833b19e05fb11b5376d3469490b7b592499eaac4fef4df46666ebec38bcc452`. Day 2 fixture SHA-256: `e4f55131bd55dd2767bcb7b1e29c1e403049a5f7a70ba8231a1d9638fc955900`.
+
+### Feedback classification and changes
+
+- Native tests A and B were confirmed passing by the user: map navigation and the Demo City marker indication. The Demo marker remains clearly separated from real Core-backed P8 relationships.
+- C and D were UX gaps: the comparison was hard to find, JSON appeared to be the main entry point, and labels were not human-readable. The candidate starts on bundled Demo World without file selection, displays Day 1/Day 2 choices, elevates the comparison into a resizable panel, and labels its row `City city-1 — Wheat`, `Day 1 = 20`, `Day 2 = 25`, `+5`. It explicitly says causal events are not covered. Clicking the row selects that City. File opening remains under `Advanced: Open file…` and still uses the versioned reader.
+- Fixing the checked-in Demo chain was necessary: Day 2 previously referenced a digest that did not match the actual Day 1 bytes. The Day 2 `previousDigest` now matches Day 1's raw-byte SHA-256; the existing reader and comparer enforce the chain. No observation schema, provenance rule, compatibility rule, or Core behavior changed.
+- Typography now defaults larger and exposes 100%, 125%, 150%, and 175% interface scale choices. The setting is persisted under the current user's Local AppData, outside observation files. Avalonia's per-monitor DPI awareness remains enabled by default and the Windows manifest declares `true/pm`; no OS display setting was changed.
+- The previous About window used `SizeToContent.Height` around wrapped text at a fixed width. Its content measurement could change as available width or control template state was remeasured. The Atlas dialog now has explicit 520×310 dimensions, matching min/max bounds, no resizing, and a scrollable text region. Headless regression coverage confirms bounds remain fixed after pointer-over at 175%. This Atlas-specific diagnosis does not assume Dungeon Studio has the same cause.
+
+### Build and automated validation
+
+Host/toolchain: Windows build 10.0.26200, `win-x64`, .NET SDK `10.0.404`, MSBuild `18.9.15`, runtime `10.0.15`. Outputs were redirected to the existing C: scratch build root; C: had more than 15 GB free and E: remained above its 8 GB operational floor.
+
+The initial online vulnerability-data audit could not reach `api.nuget.org` and failed with `NU1900` under warnings-as-errors. Locked restores then passed with `NuGetAudit=false`; all packages stayed pinned and the lock files remained unchanged. The desktop-only restore/build also used `MSBuildEnableWorkloadResolver=false` and the existing output-redirection helper; its imported project-property lines were verified identical to this candidate's `WorldAtlas/Directory.Build.props`.
+
+| Check | Result |
+| --- | --- |
+| Locked solution restore | Passed; C: scratch packages and existing NuGet cache |
+| Locked `win-x64` restore | Passed |
+| Release build | Passed; 0 warnings, 0 errors |
+| Full .NET/Avalonia Headless suite | **29 passed, 0 failed, 0 skipped** |
+| Headless viewport coverage | Five logical sizes: 1920×1080, 3840×2160, 1280×720, 2560×1440, and 1097×617; all four interface scales; toolbar, map, comparison panel, scale binding, and bounds checked |
+| Native desktop interaction | **PENDING by user choice**; no executable launch or UI interaction in this iteration |
+
+The smaller logical sizes approximate Windows 150% and 175% display scaling on Full HD/4K monitors; they do not replace a native per-monitor-DPI check. The user explicitly asked to leave native smoke pending. The manual file-picker itself was not automated; its validated ViewModel fallback and visible control are covered, with native picker interaction pending.
+
+Original TRX and console transcripts are retained at `WorldAtlas/.validation-evidence/ATLAS-A-f3b90788-2026-11-25/`. The local evidence directory has inheritance disabled and was checked to contain only the current-user and SYSTEM ACL principals. TRX SHA-256: `19a751f0f4817df69ea5b2eb09e689fd00edd236f1811869d10ca107e1bcf9fa` (29/29 passing cases); test console SHA-256: `8ee9d4b0ee4d77a130f7296e42467b0aeb065522e1226475697f123bf2dadc2e`; Release build console SHA-256: `a1619540ace28ae1a36b3e46c7a33a90afe703b1e07f649c2778b21c2116e60c`; publish console SHA-256: `29108edb50871fd92a95d42d736b76b10e09997017fb15eb093b6fc668f6fc6b`. The full execution record is local with SHA-256 `0f3675723bda9179bdacd28bdfa03fca03a081bb3397f8520e830015525c1f87`.
+
+The repository's .NET TRX result-only adapter is not available, so raw TRX is not committed and no permanent report package is claimed. This candidate has not been promoted. The protected local original is retained for this review and must not be mistaken for a durable public validation package.
+
+### Windows package
+
+Published self-contained single-file `win-x64` output under the ignored local `WorldAtlas/artifacts/WorldAtlas-win-x64-ux-f3b90788/` directory. The ZIP contains exactly the executable and the two Demo observation JSON files; symbol files were excluded. Published fixture bytes match source fixtures.
+
+| File | Size | SHA-256 |
+| --- | ---: | --- |
+| `WorldAtlas.Desktop.exe` | 102,100,602 bytes | `368a4614237d6b8ed90a1cddf2065f6a8523426e743eceb08d604a0ceb2a4dea` |
+| `WorldAtlas-win-x64-ux-f3b90788.zip` | 44,529,467 bytes | `4f27e2df3be7394c04d90aba1d011dfa77e7a1bbd23e61cc3bc31dfd1bd08cd5` |
+
+### Follow-on boundaries and status
+
+- `WorldAtlas/docs/REAL_WORLD_DISCOVERY_RECOMMENDATION.md` is recommendation-only. A producer-owned versioned catalog is a candidate for a separate design with LAB-OBS-A; no real-world discovery, arbitrary directory scan, P12 reader, ATLAS-B, or Core connection was implemented.
+- `WorldAtlas/docs/SHARED_UI_ARCHITECTURE_REVIEW_REQUEST.md` contains the bounded cross-app review prompt. Its transmission to the existing General Architect thread was rejected by the Codex approval reviewer because the trusted transcript did not explicitly authorize sending this repository metadata. No alternate route was used; the review has not been received.
+- Independent review for this intermediate tip returned `NEEDS_CHANGES` with two P2 scale/layout findings: the fixed header could clip scaled text, and file-open notices defaulted to 100%. Commits `d082319b119aa5e8387de06ab5a345ec1843c682` and `3e4ed67aecec74e857f6be080dea0e4f7cad5646` address those findings; the final successor is reviewed separately.
+- ATLAS-A is **not fully accepted**. Native interactive smoke remains pending by user choice; ATLAS-B remains `WAIT_DEPENDENCY`; no canonical promotion or remote publication occurred.
+
+## Final UX candidate 3e4ed67a
+
+The final code candidate includes the f3 UX work and two reviewed follow-ups: scale-aware auto-sized header text/control geometry and applying the selected scale to file-open notices as well as About. The f3 artifact and evidence remain preserved under their own names above; this final package was rebuilt from the exact source commit below.
+
+### Final source and inputs
+
+- Branch: `codex/atlas/standalone-ux`.
+- Tested implementation commit: `3e4ed67aecec74e857f6be080dea0e4f7cad5646`.
+- Tested root tree: `b0b572257a580570e8d1a36f7c0480ad937d2436`.
+- Atlas base: `dba4a8c6ac85c4a7913a9a27b6e9d6ae0b69f9e0`.
+- Current architecture contract: `158f04d4a021c3984b3ba841e246b45e1b0a457b`.
+- Source, tests, fixtures, app manifest, projects, and lock files are bound by the commit tree. The two fixture hashes and the three package lock hashes are identical to the f3 inventory above; the final build also records the configuration hashes and external scratch helper identity in its protected execution record.
+
+### Final exact-tip validation
+
+Host/toolchain: Windows build 10.0.26200, `win-x64`, .NET SDK `10.0.404`, MSBuild `18.9.15`, runtime `10.0.15`. The locked restore, locked `win-x64` restore, Release build, and full test suite were rerun for this final tip. Locked restores passed with the pinned package locks; the Release build had 0 warnings and 0 errors. The test run reports **29 passed, 0 failed, 0 skipped**.
+
+Headless layout coverage uses logical client sizes 1920×1080, 3840×2160, 1280×720, 2560×1440, and 1097×617 at 100%, 125%, 150%, and 175%. Assertions cover scaled header text fitting its allocated rows, selector/action bounds, comparison panel height, map presence, and UI scale binding. These logical-size cases approximate Windows display scaling; they do not substitute for a native per-monitor-DPI check.
+
+The complete original TRX and command transcripts are retained locally at `WorldAtlas/.validation-evidence/ATLAS-A-3e4ed67a-2026-11-25/`. The evidence directory has inheritance disabled; the directory and all children were checked to contain only current-user and SYSTEM ACL principals, with no reparse points. TRX SHA-256: `7b72bd1708a78eb762b95668128551f647c2c77a88f96a270d4fafc58d554907`; Release build console SHA-256: `a87030dc759a64b89cb307d067238406c1307da713e3334a84b4dfcdee709379`; test console SHA-256: `842518ba45fa1dd89a85425989640bab753f575cd29bbeff74f5e603f4f2b3e2`; publish console SHA-256: `6d2568e154a76ef8ad4fb97c674a681aeea658294ce94d8109e5eeca5dd7c460`; execution record SHA-256: `05ae22b49f35d9e9e6b951909f001e4068a9405ac8785a364dbb1014d290d9c1`.
+
+The .NET TRX result-only adapter remains unavailable, so the raw TRX is not committed and no permanent report package is claimed. This local diagnostic evidence is available for exact-tip review, but it is not a durable public test-results package.
+
+### Final Windows package
+
+Self-contained single-file `win-x64` publish is under ignored local `WorldAtlas/artifacts/WorldAtlas-win-x64-ux-3e4ed67a/`. The ZIP contains only the executable and the two validated Demo fixtures; published fixture hashes equal source. No executable launch or native UI smoke was performed.
+
+| File | Size | SHA-256 |
+| --- | ---: | --- |
+| `WorldAtlas.Desktop.exe` | 102,100,602 bytes | `93f1eaa5ec8e1d6f460aabc8cacfc668f0cf71ddbaa6c263ba85ba76d6675c1` |
+| `WorldAtlas-win-x64-ux-3e4ed67a.zip` | 44,529,526 bytes | `e24535ddefe0d6ae15324c6464abfcebd51a85a0d402c20f5cae5aea1bf4a598` |
+
+### Final review and acceptance status
+
+- Independent exact-tip review of `3e4ed67aecec74e857f6be080dea0e4f7cad5646` returned **VALIDATED_CANDIDATE** with no blocking findings. The reviewer verified that both prior P2 findings are closed, the final TRX reports 29 passed / 0 failed / 0 skipped, the Release build has 0 warnings / 0 errors, evidence ACLs and archive contents are as recorded, and executable/archive/fixture hashes match. The reviewer also confirmed this documentation-only successor applies to the unchanged tested code tree.
+- Native UI smoke remains **PENDING by user choice**. The user-confirmed A/B results are preserved; the C/D UX changes have headless coverage but have not been accepted through a new native interaction run. ATLAS-A is not marked fully accepted.
+- ATLAS-B / real-world discovery remains `WAIT_DEPENDENCY`. Real catalog/discovery and shared UI extraction were not implemented. The bounded discovery recommendation is in `WorldAtlas/docs/REAL_WORLD_DISCOVERY_RECOMMENDATION.md`.
+- The cross-application review prompt is prepared but was not transmitted: the Codex approval reviewer rejected sending repository metadata to the General Architect thread because the trusted transcript did not explicitly authorize that transfer. No alternate route was used. No promotion or remote publication occurred.
