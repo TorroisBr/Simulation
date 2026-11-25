@@ -5333,7 +5333,7 @@ precondições naturais que podem ser dispensadas e preserva os invariantes
 estruturais e as obrigações de persistência do perfil.
 
 O aceite de um documento fixa a intenção autoral sobre uma revisão exata.
-World Truth só é estabelecida pela gênese admitida ou por uma intervenção
+Uma decisão autoral entra em World Truth pela gênese admitida ou por uma intervenção
 tipada que Core autoriza, valida e confirma atomicamente na fronteira real.
 Registre a causa externa, a ordem e o efeito com proveniência recuperável.
 Os consumidores aplicam seus próprios contratos. A topologia permanece
