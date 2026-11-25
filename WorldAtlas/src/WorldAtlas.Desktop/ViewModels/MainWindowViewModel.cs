@@ -7,6 +7,7 @@ using WorldAtlas.Observations.Geometry;
 using WorldAtlas.Observations.Models;
 using WorldAtlas.Observations.Navigation;
 using WorldAtlas.Observations.Parsing;
+using WorldAtlas.Desktop.Settings;
 
 namespace WorldAtlas.Desktop.ViewModels;
 
@@ -14,9 +15,18 @@ public sealed record ObservationChoice(string Label, ObservationDocument Observa
 
 public sealed record InspectorFactViewModel(string Name, string DisplayValue, string AvailabilityLabel);
 
+public sealed record ComparisonDifferenceViewModel(
+    string Label,
+    string BeforeText,
+    string AfterText,
+    string DeltaText,
+    string AvailabilityText,
+    AtlasEntityKey TargetEntity);
+
 public sealed class MainWindowViewModel : INotifyPropertyChanged
 {
     private readonly ObservationFileReader _reader;
+    private readonly UiScalePreferenceStore _scalePreferenceStore;
     private readonly ObservationComparer _comparer = new();
     private readonly ObservableCollection<ObservationChoice> _observationChoices = [];
     private readonly ObservableCollection<NavigationItem> _entityItems = [];
@@ -28,10 +38,17 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string? _selectedHexId;
     private string _statusMessage = "Offline Demo fixtures are ready.";
     private ObservationComparison? _comparison;
+    private UiScaleOption _uiScaleChoice;
 
-    private MainWindowViewModel(ObservationFileReader reader, ObservationChoice beforeChoice, ObservationChoice afterChoice)
+    private MainWindowViewModel(
+        ObservationFileReader reader,
+        ObservationChoice beforeChoice,
+        ObservationChoice afterChoice,
+        UiScalePreferenceStore scalePreferenceStore)
     {
         _reader = reader;
+        _scalePreferenceStore = scalePreferenceStore;
+        _uiScaleChoice = UiScalePreferenceStore.Options.Single(option => option.Percentage == scalePreferenceStore.Load());
         _beforeChoice = beforeChoice;
         _afterChoice = afterChoice;
         _observationChoices.Add(beforeChoice);
@@ -48,6 +65,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public ObservableCollection<ObservationChoice> ObservationChoices => _observationChoices;
+
+    public IReadOnlyList<UiScaleOption> UiScaleOptions => UiScalePreferenceStore.Options;
 
     public ObservableCollection<NavigationItem> EntityItems => _entityItems;
 
@@ -68,6 +87,14 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public ImmutableArray<ObservationDifference> Differences => _comparison?.Differences ?? ImmutableArray<ObservationDifference>.Empty;
 
+    public ImmutableArray<ComparisonDifferenceViewModel> ComparisonRows => _comparison is { IsComparable: true }
+        ? _comparison.Differences.Select(ToComparisonRow).ToImmutableArray()
+        : ImmutableArray<ComparisonDifferenceViewModel>.Empty;
+
+    public string ComparisonPeriod => _comparison is null
+        ? "Choose two observations"
+        : $"{BoundaryLabel(BeforeChoice.Observation)} → {BoundaryLabel(AfterChoice.Observation)}";
+
     public string ComparisonHeadline => _comparison switch
     {
         null => "Select two observations",
@@ -80,6 +107,31 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public string ComparisonScope => _comparison?.ScopeDescription ?? "Same Demo run and named capability scope required.";
 
     public string ComparisonSummary => _comparison?.Summary ?? "Choose the recorded Demo boundaries to compare.";
+
+    public UiScaleOption UiScaleChoice
+    {
+        get => _uiScaleChoice;
+        set
+        {
+            if (!SetProperty(ref _uiScaleChoice, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(UiScalePercent));
+            try
+            {
+                _scalePreferenceStore.Save(value.Percentage);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                StatusMessage = "Interface scale changed for this session; the preference could not be saved.";
+                OnPropertyChanged(nameof(ViewSubtitle));
+            }
+        }
+    }
+
+    public int UiScalePercent => _uiScaleChoice.Percentage;
 
     public string StatusMessage
     {
@@ -98,6 +150,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     public string ViewSubtitle =>
         $"{CurrentObservation.WorldId}  ·  Day {CurrentObservation.Boundary.AbsoluteDay}  ·  completed sequence {CurrentObservation.Boundary.CompletedSequence}  ·  {StatusMessage}";
+
+    public string WorldIdentityLine =>
+        $"{CurrentObservation.WorldId} · Day {CurrentObservation.Boundary.AbsoluteDay} · sequence {CurrentObservation.Boundary.CompletedSequence}";
 
     public string MapFooter
     {
@@ -158,6 +213,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 OnPropertyChanged(nameof(MapHexes));
                 OnPropertyChanged(nameof(MapMarkers));
                 OnPropertyChanged(nameof(ViewSubtitle));
+                OnPropertyChanged(nameof(WorldIdentityLine));
                 OnPropertyChanged(nameof(MapFooter));
                 RefreshEntities();
                 if (_selectedEntity is { } selected && !EntityExists(CurrentObservation, selected))
@@ -168,6 +224,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 {
                     SelectEntity(current);
                 }
+
+                CompareSelectedObservations();
             }
         }
     }
@@ -175,10 +233,16 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     public ObservationChoice AfterChoice
     {
         get => _afterChoice;
-        set => SetProperty(ref _afterChoice, value);
+        set
+        {
+            if (SetProperty(ref _afterChoice, value))
+            {
+                CompareSelectedObservations();
+            }
+        }
     }
 
-    public static MainWindowViewModel LoadBundledDemo(string fixtureDirectory)
+    public static MainWindowViewModel LoadBundledDemo(string fixtureDirectory, UiScalePreferenceStore? scalePreferenceStore = null)
     {
         var reader = new ObservationFileReader();
         var firstPath = Path.Combine(fixtureDirectory, "observation-day-1.json");
@@ -187,7 +251,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         var second = reader.Read(File.ReadAllBytes(secondPath), secondPath);
         return new MainWindowViewModel(reader,
             new ObservationChoice("Day 1 · sequence 1", first),
-            new ObservationChoice("Day 2 · sequence 2", second));
+            new ObservationChoice("Day 2 · sequence 2", second),
+            scalePreferenceStore ?? new UiScalePreferenceStore());
     }
 
     public void SetNavigationKind(AtlasEntityKind kind)
@@ -239,7 +304,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         try
         {
             var observation = await _reader.ReadFileAsync(path, cancellationToken).ConfigureAwait(true);
-            var choice = new ObservationChoice($"Opened · {Path.GetFileName(path)}", observation);
+            var choice = new ObservationChoice($"{BoundaryLabel(observation)} · opened", observation);
             _observationChoices.Add(choice);
             BeforeChoice = choice;
             StatusMessage = $"Opened validated Demo observation · {Path.GetFileName(path)}";
@@ -262,8 +327,60 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ComparisonHeadline));
         OnPropertyChanged(nameof(ComparisonScope));
         OnPropertyChanged(nameof(ComparisonSummary));
+        OnPropertyChanged(nameof(ComparisonPeriod));
+        OnPropertyChanged(nameof(ComparisonRows));
         return _comparison;
     }
+
+    public void SelectComparisonEntity(ComparisonDifferenceViewModel row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        if (_comparison is { IsComparable: true } && EntityExists(CurrentObservation, row.TargetEntity))
+        {
+            SelectEntity(row.TargetEntity);
+        }
+    }
+
+    private ComparisonDifferenceViewModel ToComparisonRow(ObservationDifference difference)
+    {
+        var before = BeforeChoice.Observation;
+        var after = AfterChoice.Observation;
+        var scope = before.CityMarketStock.Scope;
+        var itemLabel = HumanizeIdentifier(scope.ItemDefinitionId);
+        var beforeValue = difference.Before.DisplayValue;
+        var afterValue = difference.After.DisplayValue;
+        var delta = difference.Before.Availability == FactAvailability.Known &&
+                    difference.After.Availability == FactAvailability.Known &&
+                    difference.Before.Value is long beforeQuantity && difference.After.Value is long afterQuantity
+            ? FormatDelta((decimal)afterQuantity - beforeQuantity)
+            : "Unavailable";
+        var availability = difference.Before.Availability == FactAvailability.Known &&
+                           difference.After.Availability == FactAvailability.Known
+            ? "Observed value difference · causal events are not covered"
+            : $"Availability: {AvailabilityLabel(difference.Before.Availability)} → {AvailabilityLabel(difference.After.Availability)}; no value was inferred.";
+
+        return new ComparisonDifferenceViewModel(
+            $"City {scope.CityId} — {itemLabel}",
+            $"{BoundaryDayLabel(before)} = {beforeValue}",
+            $"{BoundaryDayLabel(after)} = {afterValue}",
+            delta,
+            availability,
+            new AtlasEntityKey(AtlasEntityKind.City, scope.CityId));
+    }
+
+    private static string BoundaryLabel(ObservationDocument observation) =>
+        $"Day {observation.Boundary.AbsoluteDay} · sequence {observation.Boundary.CompletedSequence}";
+
+    private static string BoundaryDayLabel(ObservationDocument observation) =>
+        $"Day {observation.Boundary.AbsoluteDay}";
+
+    private static string HumanizeIdentifier(string identifier) => string.Join(' ', identifier
+        .Split(['-', '_', ' '], StringSplitOptions.RemoveEmptyEntries)
+        .Select(part => char.ToUpperInvariant(part[0]) + part[1..]));
+
+    private static string FormatDelta(decimal delta) => delta > 0
+        ? $"+{delta.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+        : delta.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     private void RefreshEntities()
     {

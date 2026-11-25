@@ -1,11 +1,9 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using WorldAtlas.Observations.Models;
 using WorldAtlas.Observations.Navigation;
+using WorldAtlas.Desktop.Settings;
 using WorldAtlas.Desktop.ViewModels;
 
 namespace WorldAtlas.Desktop;
@@ -23,12 +21,17 @@ public sealed partial class MainWindow : Window
         _viewModel = viewModel;
         InitializeComponent();
         DataContext = viewModel;
+        AtlasTypography.Apply(viewModel.UiScalePercent);
         MapView.HexSelected += viewModel.SelectMapHex;
         viewModel.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName == nameof(MainWindowViewModel.NavigationKind))
             {
                 RefreshNavigationTabs();
+            }
+            else if (args.PropertyName == nameof(MainWindowViewModel.UiScalePercent))
+            {
+                AtlasTypography.Apply(viewModel.UiScalePercent);
             }
         };
         RefreshNavigationTabs();
@@ -58,13 +61,21 @@ public sealed partial class MainWindow : Window
 
     private void OnCompareClick(object? sender, RoutedEventArgs e) => _viewModel.CompareSelectedObservations();
 
+    private void OnComparisonEntryClick(object? sender, RoutedEventArgs e)
+    {
+        if ((sender as Control)?.DataContext is ComparisonDifferenceViewModel row)
+        {
+            _viewModel.SelectComparisonEntity(row);
+        }
+    }
+
     private async void OnOpenClick(object? sender, RoutedEventArgs e)
     {
         try
         {
             var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = "Open a World Atlas Demo observation",
+                Title = "Open an additional validated Atlas observation",
                 AllowMultiple = false,
                 FileTypeFilter =
                 [
@@ -98,39 +109,17 @@ public sealed partial class MainWindow : Window
 
     private void OnZoomOutClick(object? sender, RoutedEventArgs e) => MapView.ZoomFromCenter(1d / 1.2d);
 
-    private async void OnAboutClick(object? sender, RoutedEventArgs e) =>
-        await ShowNoticeAsync("World Atlas · ATLAS-A",
-            "Standalone offline Demo viewer. Select Hexes, Locations, or Cities; inspect the selected record; compare compatible observations. This shell has no Core authority or Unity connection.");
+    private async void OnAboutClick(object? sender, RoutedEventArgs e)
+    {
+        var dialog = new AboutDialogWindow(
+            "Standalone offline Demo viewer. Explore the bundled world, select Hexes, Locations, or Cities, inspect the selected record, and compare compatible observations. This shell has no Core authority or Unity connection.",
+            _viewModel.UiScalePercent);
+        await dialog.ShowDialog(this);
+    }
 
     private async Task ShowNoticeAsync(string title, string message)
     {
-        var closeButton = new Button
-        {
-            Content = "Close",
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
-            Padding = new Thickness(14, 7)
-        };
-        var dialog = new Window
-        {
-            Title = title,
-            Width = 440,
-            SizeToContent = SizeToContent.Height,
-            MinHeight = 150,
-            MaxHeight = 400,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = new SolidColorBrush(Color.Parse("#18212D")),
-            Content = new StackPanel
-            {
-                Spacing = 18,
-                Margin = new Thickness(20),
-                Children =
-                {
-                    new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap, FontSize = 13 },
-                    closeButton
-                }
-            }
-        };
-        closeButton.Click += (_, _) => dialog.Close();
+        var dialog = new AboutDialogWindow(message) { Title = title };
         await dialog.ShowDialog(this);
     }
 

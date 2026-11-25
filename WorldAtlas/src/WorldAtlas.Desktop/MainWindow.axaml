@@ -3,7 +3,7 @@
         xmlns:controls="using:WorldAtlas.Desktop.Controls"
         x:Class="WorldAtlas.Desktop.MainWindow"
         Title="World Atlas"
-        Width="1460" Height="920" MinWidth="1120" MinHeight="720"
+        Width="1460" Height="960" MinWidth="1024" MinHeight="600"
         Background="#111722"
         FontFamily="Segoe UI">
   <Window.Styles>
@@ -14,17 +14,31 @@
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="8" />
       <Setter Property="Padding" Value="12,8" />
-      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontSize" Value="{DynamicResource AtlasFontBody}" />
     </Style>
     <Style Selector="Button.atlas-action:pointerover">
       <Setter Property="Background" Value="#34465A" />
+    </Style>
+    <Style Selector="Button.comparison-entry">
+      <Setter Property="Background" Value="#202B39" />
+      <Setter Property="Foreground" Value="#E7EDF5" />
+      <Setter Property="BorderBrush" Value="#3A4A5D" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12,9" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="FontSize" Value="{DynamicResource AtlasFontBody}" />
+    </Style>
+    <Style Selector="Button.comparison-entry:pointerover">
+      <Setter Property="Background" Value="#2A3949" />
     </Style>
     <Style Selector="ToggleButton.nav-item">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="#AAB7C8" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
-      <Setter Property="Padding" Value="12,9" />
+      <Setter Property="Padding" Value="12,10" />
       <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="FontSize" Value="{DynamicResource AtlasFontBody}" />
     </Style>
     <Style Selector="ToggleButton.nav-item:checked">
       <Setter Property="Background" Value="#273645" />
@@ -50,42 +64,66 @@
     </Style>
     <Style Selector="TextBlock.section-label">
       <Setter Property="Foreground" Value="#91A3B7" />
-      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontSize" Value="{DynamicResource AtlasFontSmall}" />
       <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+    <Style Selector="ComboBox.atlas-combo">
+      <Setter Property="FontSize" Value="{DynamicResource AtlasFontBody}" />
+      <Setter Property="MinHeight" Value="38" />
     </Style>
   </Window.Styles>
 
-  <Grid RowDefinitions="70,*,168" ColumnDefinitions="250,*">
+  <Grid RowDefinitions="128,*,8,236" ColumnDefinitions="250,*">
     <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#151D28" BorderBrush="#2C3745" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="250,*,Auto,Auto,Auto,Auto" Margin="18,0">
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-          <Border Width="34" Height="34" CornerRadius="10" Background="#254438" BorderBrush="#426F5C" BorderThickness="1">
-            <TextBlock Text="A" Foreground="#B4F0D5" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+      <Grid ColumnDefinitions="250,*" RowDefinitions="*,*,*" Margin="18,4">
+        <StackPanel Grid.RowSpan="3" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+          <Border Width="40" Height="40" CornerRadius="11" Background="#254438" BorderBrush="#426F5C" BorderThickness="1">
+            <TextBlock Text="A" Foreground="#B4F0D5" FontSize="{DynamicResource AtlasFontTitle}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
-          <StackPanel Spacing="1" VerticalAlignment="Center">
-            <TextBlock Text="WORLD ATLAS" FontSize="13" FontWeight="Bold" />
-            <TextBlock Text="Simulation · read-only explorer" Classes="muted" FontSize="11" />
+          <StackPanel Spacing="2" VerticalAlignment="Center">
+            <TextBlock Text="WORLD ATLAS" FontSize="{DynamicResource AtlasFontMedium}" FontWeight="Bold" />
+            <TextBlock Text="Read-only world explorer" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" />
           </StackPanel>
         </StackPanel>
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="10,0,0,0">
-          <TextBlock Text="OBSERVATION PAIR" Classes="section-label" VerticalAlignment="Center" Margin="0,0,4,0" />
-          <ComboBox x:Name="BeforeCombo" Width="178" ItemsSource="{Binding ObservationChoices}" SelectedItem="{Binding BeforeChoice}" />
-          <TextBlock Text="→" Classes="muted" FontSize="18" VerticalAlignment="Center" />
-          <ComboBox x:Name="AfterCombo" Width="178" ItemsSource="{Binding ObservationChoices}" SelectedItem="{Binding AfterChoice}" />
-        </StackPanel>
-        <Button Grid.Column="2" Classes="atlas-action" Content="Compare" Click="OnCompareClick" VerticalAlignment="Center" Margin="8,0" />
-        <Button Grid.Column="3" Classes="atlas-action" Content="Open JSON…" Click="OnOpenClick" VerticalAlignment="Center" Margin="8,0" />
-        <Border Grid.Column="4" Background="#463B25" BorderBrush="#887143" BorderThickness="1" CornerRadius="8" Padding="10,6" VerticalAlignment="Center" Margin="8,0">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <Ellipse Width="7" Height="7" Fill="#F0C96E" VerticalAlignment="Center" />
-            <TextBlock Text="DEMO DATA" Foreground="#F1D99D" FontSize="11" FontWeight="Bold" />
+
+        <Grid Grid.Column="1" Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="12,0,0,0">
+          <StackPanel VerticalAlignment="Center" Spacing="1">
+            <TextBlock Text="Demo World" FontSize="{DynamicResource AtlasFontLarge}" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding WorldIdentityLine}" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" />
           </StackPanel>
-        </Border>
-        <Button Grid.Column="5" Classes="atlas-action" Content="About" Click="OnAboutClick" VerticalAlignment="Center" Margin="8,0,0,0" />
+          <Border Grid.Column="1" Background="#463B25" BorderBrush="#887143" BorderThickness="1" CornerRadius="8" Padding="11,6" VerticalAlignment="Center" Margin="8,0">
+            <StackPanel Orientation="Horizontal" Spacing="7">
+              <Ellipse Width="8" Height="8" Fill="#F0C96E" VerticalAlignment="Center" />
+              <TextBlock Text="DEMO DATA" Foreground="#F1D99D" FontSize="{DynamicResource AtlasFontBody}" FontWeight="Bold" />
+            </StackPanel>
+          </Border>
+          <Button Grid.Column="2" Classes="atlas-action" Content="About" Click="OnAboutClick" VerticalAlignment="Center" Margin="8,0,0,0" />
+        </Grid>
+
+        <StackPanel Grid.Column="1" Grid.Row="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="12,0,0,0">
+          <TextBlock Text="COMPARE OBSERVATIONS" Classes="section-label" VerticalAlignment="Center" Margin="0,0,3,0" />
+          <ComboBox x:Name="BeforeCombo" Classes="atlas-combo" Width="146" ItemsSource="{Binding ObservationChoices}" SelectedItem="{Binding BeforeChoice, Mode=TwoWay}">
+            <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" /></DataTemplate></ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Text="→" Classes="muted" FontSize="{DynamicResource AtlasFontLarge}" VerticalAlignment="Center" />
+          <ComboBox x:Name="AfterCombo" Classes="atlas-combo" Width="146" ItemsSource="{Binding ObservationChoices}" SelectedItem="{Binding AfterChoice, Mode=TwoWay}">
+            <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" /></DataTemplate></ComboBox.ItemTemplate>
+          </ComboBox>
+          <Button Classes="atlas-action" Content="Compare" Click="OnCompareClick" VerticalAlignment="Center" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Grid.Row="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="12,0,0,0">
+          <Button x:Name="OpenObservationButton" Classes="atlas-action" Content="Advanced: Open file…" Click="OnOpenClick" VerticalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="3,0,0,0">
+            <TextBlock Text="Scale" Classes="muted" VerticalAlignment="Center" />
+            <ComboBox x:Name="UiScaleCombo" Classes="atlas-combo" Width="88" ItemsSource="{Binding UiScaleOptions}" SelectedItem="{Binding UiScaleChoice, Mode=TwoWay}">
+              <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" /></DataTemplate></ComboBox.ItemTemplate>
+            </ComboBox>
+          </StackPanel>
+        </StackPanel>
       </Grid>
     </Border>
 
-    <Border Grid.Row="1" Grid.RowSpan="2" Grid.Column="0" Background="#151D28" BorderBrush="#2C3745" BorderThickness="0,0,1,0" Padding="14,18">
+    <Border Grid.Row="1" Grid.RowSpan="3" Grid.Column="0" Background="#151D28" BorderBrush="#2C3745" BorderThickness="0,0,1,0" Padding="14,18">
       <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*,Auto">
         <TextBlock Grid.Row="0" Text="WORKSPACE" Classes="section-label" Margin="8,0,0,10" />
         <ToggleButton x:Name="WorldNav" Grid.Row="1" Classes="nav-item" Content="◉   World overview" Click="OnWorldClick" />
@@ -94,51 +132,51 @@
         <ToggleButton x:Name="CityNav" Grid.Row="4" Classes="nav-item" Content="▦   Cities" Click="OnCitiesClick" />
         <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="8" Margin="8,24,0,8">
           <TextBlock Text="ENTITIES" Classes="section-label" VerticalAlignment="Center" />
-          <Border Width="23" Height="20" Background="#253243" CornerRadius="6" VerticalAlignment="Center">
-            <TextBlock Text="{Binding EntityCount}" FontSize="10" Foreground="#B7C6D8" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          <Border Width="26" Height="22" Background="#253243" CornerRadius="6" VerticalAlignment="Center">
+            <TextBlock Text="{Binding EntityCount}" FontSize="{DynamicResource AtlasFontBody}" Foreground="#B7C6D8" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Border>
         </StackPanel>
         <ListBox x:Name="EntityList" Grid.Row="6" Classes="atlas-list" ItemsSource="{Binding EntityItems}" SelectedItem="{Binding SelectedNavigationItem}" SelectionChanged="OnEntitySelectionChanged">
           <ListBox.ItemTemplate>
             <DataTemplate>
-              <StackPanel Spacing="2">
-                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                <TextBlock Text="{Binding Detail}" Classes="muted" FontSize="10" TextTrimming="CharacterEllipsis" />
+              <StackPanel Spacing="3">
+                <TextBlock Text="{Binding Label}" FontSize="{DynamicResource AtlasFontBody}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding Detail}" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>
         <Border Grid.Row="7" Background="#1D2835" BorderBrush="#334153" BorderThickness="1" CornerRadius="9" Padding="11" Margin="0,12,0,0">
           <StackPanel Spacing="4">
-            <TextBlock Text="OFFLINE FIXTURE" Foreground="#B3C6D8" FontSize="10" FontWeight="Bold" />
-            <TextBlock Text="No Core or Unity connection" Classes="muted" FontSize="10" />
+            <TextBlock Text="OFFLINE FIXTURE" Foreground="#B3C6D8" FontSize="{DynamicResource AtlasFontBody}" FontWeight="Bold" />
+            <TextBlock Text="No Core or Unity connection" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" TextWrapping="Wrap" />
           </StackPanel>
         </Border>
       </Grid>
     </Border>
 
-    <Grid Grid.Row="1" Grid.Column="1" ColumnDefinitions="*,352" Margin="16,16,16,12">
+    <Grid Grid.Row="1" Grid.Column="1" ColumnDefinitions="*,360" Margin="16,14,16,10">
       <Border Grid.Column="0" Background="#18212D" BorderBrush="#303D4E" BorderThickness="1" CornerRadius="12" ClipToBounds="True">
-        <Grid RowDefinitions="62,*,44">
+        <Grid RowDefinitions="68,*,50">
           <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto" Margin="20,0">
-            <StackPanel VerticalAlignment="Center" Spacing="2">
-              <TextBlock Text="{Binding ViewTitle}" FontSize="17" FontWeight="SemiBold" />
-              <TextBlock Text="{Binding ViewSubtitle}" Classes="muted" FontSize="11" />
+            <StackPanel VerticalAlignment="Center" Spacing="3">
+              <TextBlock Text="{Binding ViewTitle}" FontSize="{DynamicResource AtlasFontLarge}" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding ViewSubtitle}" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" TextTrimming="CharacterEllipsis" />
             </StackPanel>
-            <Button Grid.Column="1" Classes="atlas-action" Content="−" Width="38" Padding="4" Click="OnZoomOutClick" VerticalAlignment="Center" Margin="5,0" />
-            <Button Grid.Column="2" Classes="atlas-action" Content="+" Width="38" Padding="4" Click="OnZoomInClick" VerticalAlignment="Center" Margin="5,0" />
+            <Button Grid.Column="1" Classes="atlas-action" Content="−" Width="42" Height="42" Padding="4" Click="OnZoomOutClick" VerticalAlignment="Center" Margin="5,0" />
+            <Button Grid.Column="2" Classes="atlas-action" Content="+" Width="42" Height="42" Padding="4" Click="OnZoomInClick" VerticalAlignment="Center" Margin="5,0" />
             <Button Grid.Column="3" Classes="atlas-action" Content="Fit map" Click="OnFitClick" VerticalAlignment="Center" Margin="8,0,0,0" />
           </Grid>
           <Border Grid.Row="1" Background="#121A24" Margin="12,0,12,0" CornerRadius="9" ClipToBounds="True">
-            <controls:HexMapView x:Name="MapView" Hexes="{Binding MapHexes}" Markers="{Binding MapMarkers}" SelectedHexId="{Binding SelectedHexId}" />
+            <controls:HexMapView x:Name="MapView" LabelFontSize="{DynamicResource AtlasMapFontSize}" Hexes="{Binding MapHexes}" Markers="{Binding MapMarkers}" SelectedHexId="{Binding SelectedHexId}" />
           </Border>
           <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="18,0">
             <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
-              <StackPanel Orientation="Horizontal" Spacing="6"><Ellipse Width="8" Height="8" Fill="#7EA985" /><TextBlock Text="Plain" Classes="muted" FontSize="10" /></StackPanel>
-              <StackPanel Orientation="Horizontal" Spacing="6"><Ellipse Width="8" Height="8" Fill="#9F8D72" /><TextBlock Text="Hill" Classes="muted" FontSize="10" /></StackPanel>
-              <TextBlock Text="L location · C City anchor · marker indicates Hex anchor, not a point location" Classes="muted" FontSize="10" VerticalAlignment="Center" />
+              <StackPanel Orientation="Horizontal" Spacing="7"><Ellipse Width="9" Height="9" Fill="#7EA985" /><TextBlock Text="Plain" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" /></StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="7"><Ellipse Width="9" Height="9" Fill="#9F8D72" /><TextBlock Text="Hill" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" /></StackPanel>
+              <TextBlock Text="L location · C City anchor · marker shows Hex anchor" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             </StackPanel>
-            <TextBlock Grid.Column="1" Text="{Binding MapFooter}" Classes="muted" FontSize="10" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding MapFooter}" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" VerticalAlignment="Center" />
           </Grid>
         </Grid>
       </Border>
@@ -146,56 +184,69 @@
       <Border Grid.Column="1" Background="#18212D" BorderBrush="#303D4E" BorderThickness="1" CornerRadius="12" Margin="14,0,0,0" Padding="18">
         <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
           <TextBlock Grid.Row="0" Text="INSPECTOR" Classes="section-label" />
-          <StackPanel Grid.Row="1" Spacing="4" Margin="0,12,0,16">
-            <TextBlock Text="{Binding SelectedEntityTitle}" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
-            <TextBlock Text="{Binding SelectedEntityKindLabel}" Classes="muted" FontSize="11" />
+          <StackPanel Grid.Row="1" Spacing="5" Margin="0,12,0,16">
+            <TextBlock Text="{Binding SelectedEntityTitle}" FontSize="{DynamicResource AtlasFontTitle}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding SelectedEntityKindLabel}" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" />
           </StackPanel>
-          <Border Grid.Row="2" Background="#202B39" BorderBrush="#354457" BorderThickness="1" CornerRadius="7" Padding="9,7" Margin="0,0,0,9">
-            <TextBlock Text="{Binding SelectedEntityIdentity}" Foreground="#C3D4E7" FontSize="11" TextTrimming="CharacterEllipsis" />
+          <Border Grid.Row="2" Background="#202B39" BorderBrush="#354457" BorderThickness="1" CornerRadius="7" Padding="9,8" Margin="0,0,0,9">
+            <TextBlock Text="{Binding SelectedEntityIdentity}" Foreground="#C3D4E7" FontSize="{DynamicResource AtlasFontBody}" TextTrimming="CharacterEllipsis" />
           </Border>
           <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding InspectorFacts}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Border BorderBrush="#2E3A49" BorderThickness="0,0,0,1" Padding="0,9">
-                    <Grid ColumnDefinitions="112,*" RowDefinitions="Auto,Auto">
-                      <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Name}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
-                      <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DisplayValue}" FontSize="11" TextWrapping="Wrap" />
-                      <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding AvailabilityLabel}" Foreground="#83D2B3" FontSize="9" Margin="0,4,0,0" />
+                  <Border BorderBrush="#2E3A49" BorderThickness="0,0,0,1" Padding="0,10">
+                    <Grid ColumnDefinitions="118,*" RowDefinitions="Auto,Auto">
+                      <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Name}" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" TextWrapping="Wrap" />
+                      <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DisplayValue}" FontSize="{DynamicResource AtlasFontBody}" TextWrapping="Wrap" />
+                      <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding AvailabilityLabel}" Foreground="#83D2B3" FontSize="{DynamicResource AtlasFontTiny}" Margin="0,4,0,0" />
                     </Grid>
                   </Border>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
           </ScrollViewer>
-          <TextBlock Grid.Row="4" Text="Facts reflect the selected observation boundary." Classes="muted" FontSize="10" Margin="0,10,0,0" TextWrapping="Wrap" />
+          <TextBlock Grid.Row="4" Text="Facts reflect the selected observation boundary." Classes="muted" FontSize="{DynamicResource AtlasFontBody}" Margin="0,10,0,0" TextWrapping="Wrap" />
         </Grid>
       </Border>
     </Grid>
 
-    <Border Grid.Row="2" Grid.Column="1" Background="#18212D" BorderBrush="#303D4E" BorderThickness="1" CornerRadius="12" Margin="16,0,16,16" Padding="18,13">
-      <Grid ColumnDefinitions="250,*" RowDefinitions="Auto,*">
-        <StackPanel Grid.RowSpan="2" Spacing="5" VerticalAlignment="Top">
-          <TextBlock Text="OBSERVATION COMPARISON" Classes="section-label" />
-          <TextBlock Text="{Binding ComparisonHeadline}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,4,12,0" />
-          <TextBlock Text="{Binding ComparisonScope}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
-        </StackPanel>
-        <TextBlock Grid.Column="1" Grid.Row="0" Text="{Binding ComparisonSummary}" Foreground="#C3D0DE" FontSize="11" TextWrapping="Wrap" />
-        <ItemsControl Grid.Column="1" Grid.Row="1" ItemsSource="{Binding Differences}" Margin="0,8,0,0">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate>
-              <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                <Border Background="#493D27" BorderBrush="#806B42" BorderThickness="1" CornerRadius="6" Padding="7,4">
-                  <TextBlock Text="OBSERVED DIFFERENCE" Foreground="#F2D899" FontSize="9" FontWeight="Bold" />
-                </Border>
-                <TextBlock Text="{Binding Label}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding Before.DisplayValue}" Foreground="#D8B48A" FontSize="12" VerticalAlignment="Center" />
-                <TextBlock Text="→" Classes="muted" FontSize="14" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding After.DisplayValue}" Foreground="#9AD9BC" FontSize="12" FontWeight="Bold" VerticalAlignment="Center" />
-              </StackPanel>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+    <GridSplitter x:Name="ComparisonSplitter" Grid.Row="2" Grid.Column="1" Height="8" HorizontalAlignment="Stretch" Background="#2C3745" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" />
+
+    <Border x:Name="ComparisonPanel" Grid.Row="3" Grid.Column="1" Background="#18212D" BorderBrush="#303D4E" BorderThickness="1" CornerRadius="12" Margin="16,0,16,14" Padding="18,14">
+      <Grid RowDefinitions="Auto,Auto,*">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="18">
+          <TextBlock Grid.Column="0" Text="OBSERVATION COMPARISON" Classes="section-label" VerticalAlignment="Center" />
+          <TextBlock Grid.Column="1" Text="{Binding ComparisonHeadline}" FontSize="{DynamicResource AtlasFontMedium}" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <Border Grid.Column="2" Background="#253243" CornerRadius="7" Padding="9,5" VerticalAlignment="Center">
+            <TextBlock Text="{Binding ComparisonPeriod}" Foreground="#D8E4EF" FontSize="{DynamicResource AtlasFontBody}" FontWeight="SemiBold" />
+          </Border>
+          <TextBlock Grid.Column="3" Text="{Binding ComparisonScope}" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" VerticalAlignment="Center" />
+        </Grid>
+        <TextBlock Grid.Row="1" Text="{Binding ComparisonSummary}" Foreground="#C3D0DE" FontSize="{DynamicResource AtlasFontBody}" Margin="0,8,0,9" TextWrapping="Wrap" />
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+          <ItemsControl ItemsSource="{Binding ComparisonRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button x:Name="ComparisonEntryButton" Classes="comparison-entry" Click="OnComparisonEntryClick" Margin="0,2,0,4">
+                  <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="14" RowSpacing="4">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Label}" FontSize="{DynamicResource AtlasFontMedium}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding BeforeText}" Foreground="#D8B48A" FontSize="{DynamicResource AtlasFontMedium}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="→" Classes="muted" FontSize="{DynamicResource AtlasFontMedium}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="3" Text="{Binding AfterText}" Foreground="#9AD9BC" FontSize="{DynamicResource AtlasFontMedium}" FontWeight="Bold" VerticalAlignment="Center" />
+                    <Border Grid.Column="4" Grid.RowSpan="2" Background="#254438" BorderBrush="#426F5C" BorderThickness="1" CornerRadius="7" Padding="10,6" VerticalAlignment="Center">
+                      <StackPanel Spacing="1">
+                        <TextBlock Text="{Binding DeltaText}" Foreground="#B4F0D5" FontSize="{DynamicResource AtlasFontMedium}" FontWeight="Bold" HorizontalAlignment="Center" />
+                        <TextBlock Text="OBSERVED DELTA" Foreground="#A6CDBD" FontSize="{DynamicResource AtlasFontTiny}" FontWeight="Bold" HorizontalAlignment="Center" />
+                      </StackPanel>
+                    </Border>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4" Text="{Binding AvailabilityText}" Classes="muted" FontSize="{DynamicResource AtlasFontBody}" TextWrapping="Wrap" />
+                  </Grid>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
       </Grid>
     </Border>
   </Grid>

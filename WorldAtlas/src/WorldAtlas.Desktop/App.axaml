@@ -6,6 +6,13 @@
     <FluentTheme />
   </Application.Styles>
   <Application.Resources>
+    <x:Double x:Key="AtlasFontTiny">11</x:Double>
+    <x:Double x:Key="AtlasFontSmall">12</x:Double>
+    <x:Double x:Key="AtlasFontBody">14</x:Double>
+    <x:Double x:Key="AtlasFontMedium">17</x:Double>
+    <x:Double x:Key="AtlasFontLarge">21</x:Double>
+    <x:Double x:Key="AtlasFontTitle">25</x:Double>
+    <x:Double x:Key="AtlasMapFontSize">14</x:Double>
     <SolidColorBrush x:Key="AtlasBackground" Color="#111722" />
     <SolidColorBrush x:Key="AtlasSurface" Color="#18212D" />
     <SolidColorBrush x:Key="AtlasSurfaceRaised" Color="#202B39" />

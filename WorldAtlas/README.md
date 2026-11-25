@@ -6,12 +6,13 @@ The shipped files are synthetic UI fixtures. Their Demo badge is always visible.
 
 ## Quick start
 
-Open `WorldAtlas.Desktop.exe` from the published `win-x64` folder. The app starts on the Day 1 Demo map and loads Day 2 as the comparison target. The comparison panel reports wheat stock changing from 20 to 25 as an **observed difference**; it does not claim a causal event.
+Open `WorldAtlas.Desktop.exe` from the published `win-x64` folder. The app loads the bundled Demo World automatically, starts on Day 1, and selects Day 2 as the comparison target. The prominent comparison panel reports **City city-1 — Wheat: Day 1 = 20, Day 2 = 25, observed delta = +5**. It describes an observed value difference; causal events are not covered.
 
 - Use the left navigation to browse the World, Hexes, Locations, and Cities.
 - Select a map Hex or a list entity to update the Inspector.
 - Focus the map and use the arrow keys to move between visible Hexes. Scroll to zoom at the pointer, drag with the middle mouse button to pan, and use **Fit map** to reset.
-- Use **Open JSON…** to load another compatible Demo v1 file. A rejected file leaves the last valid view visible with a status message.
+- Use **Advanced: Open file…** only when you need to load another observation artifact. The same versioned reader and provenance checks apply; a rejected file leaves the last valid view visible with a status message.
+- Choose **100%, 125%, 150%, or 175%** from the Scale control. Atlas saves this interface preference under the current user's Local AppData settings, separately from observation data.
 - The unbound City remains in the City list and has no map placement.
 
 Unplaced Hexes have null coordinates and terrain values in the reviewed contract. They stay in the entity list and Inspector and never receive a fabricated map polygon. The validation-only fixture `fixtures/demo/unplaced-hex-validation.json` exercises this behavior and is excluded from the app's fixture picker defaults.
@@ -27,7 +28,7 @@ dotnet run --project .\src\WorldAtlas.Desktop\WorldAtlas.Desktop.csproj
 dotnet publish .\src\WorldAtlas.Desktop\WorldAtlas.Desktop.csproj -c Release -r win-x64 --self-contained true --no-restore -o .\artifacts\publish\win-x64
 ```
 
-Avalonia Headless tests exercise controls and selection. A separate launched Windows desktop smoke and user-run native acceptance remain distinct checks. The app solution contains only the Observation library, the Avalonia desktop client, and focused tests.
+Avalonia Headless tests exercise controls, selection, the comparison panel, scale settings, and dialog bounds. A native Windows interaction smoke and user-run acceptance remain distinct checks. The app solution contains only the Observation library, the Avalonia desktop client, and focused tests.
 
 ## Observation boundary
 

@@ -16,6 +16,8 @@ public sealed class HexMapView : Control
         AvaloniaProperty.Register<HexMapView, IReadOnlyList<MapMarker>?>(nameof(Markers));
     public static readonly StyledProperty<string?> SelectedHexIdProperty =
         AvaloniaProperty.Register<HexMapView, string?>(nameof(SelectedHexId));
+    public static readonly StyledProperty<double> LabelFontSizeProperty =
+        AvaloniaProperty.Register<HexMapView, double>(nameof(LabelFontSize), 14d);
 
     private static readonly Brush BackgroundBrush = new SolidColorBrush(Color.Parse("#121A24"));
     private static readonly Brush PlainBrush = new SolidColorBrush(Color.Parse("#405746"));
@@ -66,6 +68,12 @@ public sealed class HexMapView : Control
         set => SetValue(SelectedHexIdProperty, value);
     }
 
+    public double LabelFontSize
+    {
+        get => GetValue(LabelFontSizeProperty);
+        set => SetValue(LabelFontSizeProperty, value);
+    }
+
     public double Zoom { get; private set; } = 1d;
 
     public MapPoint Pan { get; private set; } = new(0, 0);
@@ -86,16 +94,16 @@ public sealed class HexMapView : Control
             var fill = selected ? SelectedBrush : TerrainBrush(cell.Hex.TerrainId);
             var geometry = CreateHexGeometry(cell.Vertices);
             context.DrawGeometry(fill, selected ? SelectedBorderPen : HexBorderPen, geometry);
-            DrawText(context, cell.Hex.HexId, cell.Center, 11, selected ? Color.Parse("#FFFFFF") : Color.Parse("#DEE6EF"));
+            DrawText(context, cell.Hex.HexId, cell.Center, LabelFontSize, selected ? Color.Parse("#FFFFFF") : Color.Parse("#DEE6EF"));
         }
 
         DrawMarkers(context, projected);
         if (projected.IsEmpty)
         {
             DrawCenteredText(context, "No Hex has registered coordinates", new Point(Bounds.Width / 2d, Bounds.Height / 2d),
-                Color.Parse("#AEBBCB"), 14);
+                Color.Parse("#AEBBCB"), LabelFontSize);
             DrawCenteredText(context, "Unplaced Hexes remain available in the entity list.",
-                new Point(Bounds.Width / 2d, Bounds.Height / 2d + 26d), Color.Parse("#8291A3"), 11);
+                new Point(Bounds.Width / 2d, Bounds.Height / 2d + LabelFontSize * 2d), Color.Parse("#8291A3"), LabelFontSize * 0.85d);
         }
     }
 
@@ -109,7 +117,7 @@ public sealed class HexMapView : Control
             FitToView();
             InvalidateVisual();
         }
-        else if (change.Property == MarkersProperty || change.Property == SelectedHexIdProperty)
+        else if (change.Property == MarkersProperty || change.Property == SelectedHexIdProperty || change.Property == LabelFontSizeProperty)
         {
             InvalidateVisual();
         }
@@ -315,7 +323,7 @@ public sealed class HexMapView : Control
             var point = new Point(cell.Center.X + offset.X, cell.Center.Y + offset.Y);
             var color = marker.Kind == MapMarkerKind.Location ? Color.Parse("#CFD9E8") : Color.Parse("#E7C77B");
             context.DrawEllipse(new SolidColorBrush(color), MarkerBorderPen, point, 8d, 8d);
-            DrawText(context, marker.Kind == MapMarkerKind.Location ? "L" : "C", new MapPoint(point.X, point.Y), 9,
+            DrawText(context, marker.Kind == MapMarkerKind.Location ? "L" : "C", new MapPoint(point.X, point.Y), LabelFontSize * 0.8d,
                 Color.Parse("#17202A"));
         }
     }
