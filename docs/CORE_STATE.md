@@ -1063,3 +1063,9 @@ The independent exact-tip review returned **VALIDATED_CANDIDATE**, with no actio
 The supplied exact-tip validation results are: Atlas profile **18 assertions PASS**, TRX regression **153 assertions PASS**, Unity evidence packager **69 assertions PASS**, and validation driver **33 passed / 0 failed**. The controlled Atlas run is separate from the historical original run and is recorded as **29/29 passed** against the unchanged implementation `3e4ed67aecec74e857f6be080dea0e4f7cad5646` / tree `b0b572257a580570e8d1a36f7c0480ad937d2436`. The package path, complete normalized result, original-comparison record, and exact public hashes are recorded in the owning World Atlas validation ledger; the original TRX remains in protected local retention and is not published.
 
 This is an evidence-profile candidate record pending canonical integration preflight. It does not reopen ATLAS-A application work, alter CORE-F/LAB-OBS-A, or authorize ATLAS-B or another domain implementation.
+
+### Promotion result
+
+The reviewed candidate and this State record were fast-forwarded from refreshed Core canonical `145f4bc6534ee69de7915f2c94de798c22627794` to `d0030542a075a01f0ca025745c172bf0c4e31407` (tree `c02f522c80bb5d3ee298e36154b60fdf14c9fd5d`). Immediately before promotion, the remote was refreshed and remained at the reviewed base; the local branch was its ancestor, the integrated diff was the six expected tooling/contract/State files, the worktree was clean and `git diff --check` passed. The push to `origin/codex/core/canonical` succeeded and `git ls-remote` verified the ref at `d0030542a075a01f0ca025745c172bf0c4e31407`.
+
+This supersedes the earlier pending-integration sentence in this entry. The promoted extension supplies only the closed Atlas VSTest evidence profile; it does not change CORE-F or promote CORE-A. The exact Atlas run package and its original-comparison evidence remain recorded in the separate World Atlas validation ledger.
