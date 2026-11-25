@@ -1,6 +1,6 @@
 # Shared desktop UI foundations
 
-**Status:** Architecture candidate for independent review. The implementation mandate and consumer integration gates are separate.
+**Status** · Proposed architecture. The implementation mandate and consumer integration gates are separate.
 
 ## Source baseline
 
@@ -45,7 +45,7 @@ SharedDesktopUi/
 
 First dependency direction: `WorldAtlas.Observations → Simulation.Ui.Viewport ← Dungeon.Studio`. World Atlas Desktop continues to depend on its Observations project. The portable observation assembly can call the pure helper without importing Avalonia. Dungeon Studio's existing dependencies on Dungeon.Core and ProjectFiles remain. The shared projects must have no dependency on either app, Unity, Simulation Core, Lab, World Exchange, P12, or any document/observation model. Future City Studio can choose a compatible shared release. There is no shared app host, view-model base, DI container, navigation service, selection store, event bus or global settings store.
 
-Start with exact source `ProjectReference` inside each repository checkout. Keep the shared source in one dedicated implementation commit and apply that unchanged source to each compatible consumer base. Record the shared commit/tree and consumer base in each review. Each app still builds, tests and publishes from one checkout and owns its target framework, SDK lock, central package pins and app version. CI verifies the project is reachable with a clean checkout, no sibling worktree or local feed. Keep the API additive across early consumers or update each opt-in explicitly. Independent release cadence may later justify SemVer packages on an approved feed with exact consumer pins, committed restore locks, source mapping where used and published source provenance. This review adds no feed. A future Avalonia-dependent package requires version-matrix validation and an explicit supported range. There is no shared Avalonia upgrade in the viewport slice.
+Start with exact source `ProjectReference` inside each repository checkout. Keep the shared source in one dedicated implementation commit and apply that unchanged source to each compatible consumer base. Record the shared source commit, the identical SharedDesktopUi subtree hash and the consumer base in each review. Carry the library in the normal consumer solution and publish graph. Each app still builds, tests and publishes from one checkout and owns its target framework, SDK lock, central package pins and app version. CI verifies the project is reachable with a clean checkout, no sibling worktree or local feed. Keep the API additive across early consumers or update each opt-in explicitly. Independent release cadence may later justify SemVer packages on an approved feed with exact consumer pins, committed restore locks, source mapping where used and published source provenance. This review adds no feed. A future Avalonia-dependent package requires version-matrix validation and an explicit supported range. There is no shared Avalonia upgrade in the viewport slice.
 
 ## UI scale and visual conventions
 
