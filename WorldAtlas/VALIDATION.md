@@ -243,3 +243,11 @@ Package-bearing candidate `19677ba9f429097e813835655260e55488a13419` (tree `450c
 Refreshed preflight found local canonical at `dba4a8c6ac85c4a7913a9a27b6e9d6ae0b69f9e0`, clean and an ancestor of the candidate by 17 commits. Live remote refs were Core `935a958512042a8660d5bb183e959bb9bd430b35` and architecture `cb71a70fc503e926c3b3f39415b86f2fab896ba8`; no remote `codex/atlas/standalone` branch existed. The exact candidate was fast-forwarded into the local canonical worktree; this documentation successor records the readiness snapshot before publishing the final reviewed tip.
 
 **ATLAS-A — PASS / READY_FOR_CANONICAL_PROMOTION.** The native acceptance, unchanged-source 29/29 validation and durable public result package gates are satisfied. The next step is the non-destructive canonical fast-forward and verification of the newly created remote branch.
+
+## ATLAS-A canonical promotion result — 2026-11-25
+
+**ATLAS-A — ACCEPTED / PROMOTED.** The package-bearing candidate `19677ba9f429097e813835655260e55488a13419` received independent exact-tip `VALIDATED_CANDIDATE` review; the readiness successor `b6150fe20e00ca3332a4bda89c4ac4d5c85ca25f` received independent applicability **PASS**. The existing local canonical baseline `dba4a8c6ac85c4a7913a9a27b6e9d6ae0b69f9e0` was clean and an ancestor. The reviewed candidate and readiness successor were integrated without rewriting history.
+
+No remote `codex/atlas/standalone` branch existed before publication. A normal push created it, and an immediate live-ref check verified `origin/codex/atlas/standalone` at `b6150fe20e00ca3332a4bda89c4ac4d5c85ca25f` (tree `c9aa948261e79ae9f9c398615d855e29c28f6819`). The push also confirmed current Core `935a958512042a8660d5bb183e959bb9bd430b35` and architecture `cb71a70fc503e926c3b3f39415b86f2fab896ba8`. The accepted application implementation remains `3e4ed67aecec74e857f6be080dea0e4f7cad5646` / tree `b0b572257a580570e8d1a36f7c0480ad937d2436`; the public 29/29 package remains the exact ZIP and manifest identified above.
+
+This post-promotion closure record changes documentation only. It supersedes historical `PENDING`, evidence-blocked and `NOT PROMOTED` wording without removing the historical decision trail. ATLAS-B remains `WAIT_DEPENDENCY` on reviewed LAB-OBS-A artifacts and its separate real-world conformance gate; no downstream implementation was started.
