@@ -14,5 +14,6 @@
     <ProjectReference Include="../../src/Simulation.DailyV1.DotNetHostIdentity/Simulation.DailyV1.DotNetHostIdentity.csproj" />
     <Compile Include="Program.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DailyV1CapturedSelectedContentFixture.cs" Link="Fixtures/DailyV1CapturedSelectedContentFixture.cs" />
+    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/CoreFHostNeutralBehaviorFingerprint.cs" Link="Fixtures/CoreFHostNeutralBehaviorFingerprint.cs" />
   </ItemGroup>
 </Project>

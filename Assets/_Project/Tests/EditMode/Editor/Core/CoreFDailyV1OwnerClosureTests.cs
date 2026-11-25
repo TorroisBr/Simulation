@@ -163,6 +163,45 @@ public sealed class CoreFDailyV1OwnerClosureTests
         Assert.That(runtime.TryGetCompletedDailyCaptureToken(
             out DailyCaptureEligibilityToken completedToken,
             out DailyCaptureEligibilityFailure tokenFailure), Is.True, tokenFailure.ToString());
+        MethodInfo captureProjection = typeof(TesteSimulacao).GetMethod(
+            "CaptureActiveSession", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.That(captureProjection, Is.Not.Null);
+        SimulationActiveSession unityProjection = (SimulationActiveSession)captureProjection.Invoke(simulation, null);
+        Assert.That(unityProjection, Is.Not.Null);
+        Assert.That(unityProjection.CoreRuntimeSession, Is.SameAs(coreSession));
+        Assert.That(application.TryBeginContinuationSaveOperation(
+            coreSession,
+            out DailyV1P12GContinuationSaveOperation continuationSaveOperation,
+            out DailyCaptureEligibilityFailure continuationSaveFailure), Is.True,
+            continuationSaveFailure.ToString());
+        P12AContinuationImage unityImage;
+        using (continuationSaveOperation)
+        {
+            Assert.That(P12GDailyV1RestoreCoordinator.TryCreateRestoredSessionAndCaptureImage(
+                unityProjection,
+                unityProjection.AdmissionContext,
+                continuationSaveOperation,
+                out unityImage,
+                out _,
+                out P12GDailyV1RestoreFailure parityCaptureFailure,
+                out string parityCaptureDiagnostic), Is.True,
+                parityCaptureFailure + ": " + parityCaptureDiagnostic);
+        }
+        Assert.That(unityImage.Header.Day, Is.EqualTo(runtime.CurrentDay));
+        string expectedContentFingerprint =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions().ContentFingerprint;
+        Assert.That(unityImage.Header.Compatibility.ContentFingerprint,
+            Is.EqualTo(expectedContentFingerprint),
+            "The Unity authored profile and detached .NET host must bind the same captured effective-definition content.");
+        string commonBehaviorSha = CoreFHostNeutralBehaviorFingerprint.Compute(unityImage);
+        Assert.That(commonBehaviorSha, Is.EqualTo(CoreFHostNeutralBehaviorFingerprint.ExpectedUnityDotNetDayOneSha256),
+            "Unity and detached .NET must produce the same accepted Daily-v1 day-one projection.");
+        TestContext.WriteLine(
+            "CORE_F_HOST_PARITY_V1|host=Unity|contentSha=" + unityImage.Header.Compatibility.ContentFingerprint
+            + "|world=" + unityImage.Header.WorldId
+            + "|day=" + unityImage.Header.Day
+            + "|sequence=" + unityImage.Header.Sequence
+            + "|commonSha=" + commonBehaviorSha);
         IReadOnlyList<OwnerSectionCensusSnapshot> afterAdvance =
             CoreFDailyV1OwnerClosureVectors.Capture(protocol, out P12ADailyV1Census afterAdvanceCensus);
         CoreFDailyV1OwnerClosureVectors.AssertAliasGroupsMatchReferences(afterAdvance, afterAdvanceCensus);

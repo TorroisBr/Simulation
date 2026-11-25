@@ -101,6 +101,8 @@ public static class Program
                 + "|owners=" + ownerRows.ToString(CultureInfo.InvariantCulture)
                 + "|emptySections=" + emptyOwnerSections.ToString(CultureInfo.InvariantCulture)
                 + "|stateSha=" + ComputeComparablePersistedStateSha256(image)
+                + "|commonSha=" + CoreFHostNeutralBehaviorFingerprint.Compute(image)
+                + "|contentSha=" + definitions.ContentFingerprint
                 + "|p12sha=" + Sha256(persistedBytes));
             return 0;
         }

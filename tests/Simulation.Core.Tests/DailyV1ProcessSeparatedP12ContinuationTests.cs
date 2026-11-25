@@ -54,13 +54,24 @@ public sealed class DailyV1ProcessSeparatedP12ContinuationTests
             foreach (ProcessResult result in new[] { dayOne, dayTwo, dayThree, uninterruptedControl })
             {
                 TestContext.WriteLine(
-                    "{0}: pid={1}, start={2}, world={3}, day={4}, sequence={5}, epoch={6}->{7}, sections={8}, rows={9}, exactEmpty={10}, stateSha={11}, p12Sha={12}",
+                    "{0}: pid={1}, start={2}, world={3}, day={4}, sequence={5}, epoch={6}->{7}, sections={8}, rows={9}, exactEmpty={10}, stateSha={11}, commonSha={12}, contentSha={13}, p12Sha={14}",
                     result.Fields["mode"], result.Int("pid"), result.Fields["start"],
                     result.Fields["world"], result.Long("day"), result.Long("sequence"),
                     result.Long("epochStart"), result.Long("epoch"), result.Int("sections"),
                     result.Int("owners"), result.Int("emptySections"), result.Fields["stateSha"],
-                    result.Fields["p12sha"]);
+                    result.Fields["commonSha"], result.Fields["contentSha"], result.Fields["p12sha"]);
             }
+
+            Assert.That(dayOne.Fields["contentSha"], Is.Not.Empty,
+                "The .NET comparison run must bind the exact admitted effective-definition content.");
+            Assert.That(dayOne.Fields["contentSha"], Is.EqualTo(dayTwo.Fields["contentSha"]));
+            Assert.That(dayOne.Fields["contentSha"], Is.EqualTo(dayThree.Fields["contentSha"]));
+            Assert.That(dayOne.Fields["commonSha"], Does.Match("^[0-9a-f]{64}$"));
+            Assert.That(dayOne.Fields["commonSha"],
+                Is.EqualTo(CoreFHostNeutralBehaviorFingerprint.ExpectedUnityDotNetDayOneSha256),
+                "The detached .NET host must match the Unity day-one projection.");
+            Assert.That(dayThree.Fields["commonSha"], Is.EqualTo(uninterruptedControl.Fields["commonSha"]),
+                "Restored day three must match the uninterrupted host-neutral owner projection.");
 
             Assert.That(dayTwo.Fields["start"], Is.EqualTo("Loaded"));
             Assert.That(dayThree.Fields["start"], Is.EqualTo("Loaded"));
