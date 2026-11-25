@@ -5324,6 +5324,25 @@ GM authority must NOT break structural invariants
 
 Exemplo: GM pode declarar que Arthur virou rei, mas o sistema deve atualizar incumbency/tenure/history de forma estruturalmente coerente, não setar um campo arbitrário.
 
+### Regras do mundo, autoria e intervenções explícitas
+
+Geração procedural e evolução natural obedecem às regras efetivas da
+composição. A autoria explícita pode declarar uma configuração ou efeito que
+essas regras não produziriam. Cada capacidade de declaração define as
+precondições naturais que podem ser dispensadas e preserva os invariantes
+estruturais e as obrigações de persistência do perfil.
+
+O aceite de um documento fixa a intenção autoral sobre uma revisão exata.
+Uma decisão autoral entra em World Truth pela gênese admitida ou por uma intervenção
+tipada que Core autoriza, valida e confirma atomicamente na fronteira real.
+Registre a causa externa, a ordem e o efeito com proveniência recuperável.
+Os consumidores aplicam seus próprios contratos. A topologia permanece
+explícita, inclusive quando desenhos de corredores se cruzam, e operações
+dependentes de geometria exigem a sua validação específica.
+
+Veja [User authority, world rules and explicit interventions](architecture/USER_AUTHORITY_WORLD_RULES.md)
+e [o handoff para autoria e intervenções](architecture/USER_AUTHORITY_WORLD_RULES_HANDOFF.md).
+
 ### Controle de ator e divindade factual
 
 **DECIDIDO**
