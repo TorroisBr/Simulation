@@ -48,7 +48,7 @@ The TRX is retained at `.worktrees/shared-ui-viewport-clean/SharedDesktopUi/.cod
 
 ## Independent review
 
-The first exact-tip review identified missing directed zoom-endpoint preservation cases. The four Atlas and Dungeon endpoint transitions listed above were added in source commit `ef9bcdcd8c41cf341fa08160738465da62d2aa20`, and the local and clean-checkout suites both pass 22/22. The reviewer confirmed that this resolves the coverage finding and is checking this refreshed validation record for exact-tip confirmation.
+Independent exact-tip review passed for candidate `df7e0cbf053fbed8ca55831f70664533d92609a5` (tree `f79277f01d87bd192803afe26510e865e52dbb8a`) against baseline `1ad2835524fe135c87eeca13f15cd16d4d9cb303`. The reviewer confirmed that the four endpoint cases resolve the original coverage finding, the refreshed validation hashes and TRX counters match, and the implementation conforms to the approved API, arithmetic, failure, allocation, dependency, and scope requirements.
 
 ## Consumer integration handoff
 
