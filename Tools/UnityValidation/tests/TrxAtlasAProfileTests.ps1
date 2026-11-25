@@ -44,6 +44,15 @@ Check ($mappedEvidence -ceq '<EVIDENCE>/controlled-recapture-20261125\vstest-dia
 $mappedEvidenceForward=& $m {param($v,$root) ConvertTo-AtlasAPublicEvidenceText $v $root} 'c:/private/atlas-a/controlled-recapture-20261125/vstest-diagnostics.host.log' $evidenceRoot
 Check ($mappedEvidenceForward -ceq '<EVIDENCE>/controlled-recapture-20261125/vstest-diagnostics.host.log') 'Case/slash-variant evidence-root privacy mapping failed.'
 
+$captureArgv=[string[]]::new(18);$captureArgv[11]='C:\Private\ATLAS-A\run';$captureArgv[13]='C:\Private\ATLAS-A\run\vstest-diagnostics.log';$captureArgv[16]='-p:DirectoryBuildPropsPath=C:\Temp\world-atlas-build\Directory.Build.props'
+$runnerArgv=[string[]]$captureArgv.Clone();$expectedHelper='C:\Temp\world-atlas-build\Directory.Build.props'
+& $m {param($c,$r,$root,$diag,$helper) Assert-AtlasARawCommandPathBinding $c $r $root $diag $helper} $captureArgv $runnerArgv 'C:\Private\ATLAS-A\run' 'C:\Private\ATLAS-A\run\vstest-diagnostics.log' $expectedHelper
+$script:Assertions++
+$badCapture=[string[]]$captureArgv.Clone();$badCapture[13]='C:\Private\ATLAS-A\wrong.log'
+Reject {& $m {param($c,$r,$root,$diag,$helper) Assert-AtlasARawCommandPathBinding $c $r $root $diag $helper} $badCapture $runnerArgv 'C:\Private\ATLAS-A\run' 'C:\Private\ATLAS-A\run\vstest-diagnostics.log' $expectedHelper} '*raw results/diagnostic*' 'Altered raw diagnostic argv was accepted.'
+$badRunner=[string[]]$runnerArgv.Clone();$badRunner[16]='-p:DirectoryBuildPropsPath=C:\Temp\other\Directory.Build.props'
+Reject {& $m {param($c,$r,$root,$diag,$helper) Assert-AtlasARawCommandPathBinding $c $r $root $diag $helper} $captureArgv $badRunner 'C:\Private\ATLAS-A\run' 'C:\Private\ATLAS-A\run\vstest-diagnostics.log' $expectedHelper} '*raw build-helper*' 'Altered raw build-helper argv was accepted.'
+
 $input=@([ordered]@{path='test-output/b.bin';bytes=2;sha256='b'*64},[ordered]@{path='test-output/a.bin';bytes=1;sha256='a'*64})
 $sorted=& $m {param($x) ConvertTo-AtlasAInventory $x 'test' '' 2} $input
 Check ($sorted[0].path -ceq 'test-output/a.bin') 'Inventory ordering is not ordinal.'

@@ -97,6 +97,18 @@ function Get-AtlasAPublicArgumentVector {
 }
 
 
+function Assert-AtlasARawCommandPathBinding {
+    param([string[]]$CaptureArgv,[string[]]$RunnerArgv,[string]$ResultsRoot,[string]$DiagnosticsPath,[string]$BuildHelperPath)
+    if($CaptureArgv.Count -ne 18 -or $RunnerArgv.Count -ne 18){throw 'ATLAS-A raw capture and runner command vectors must contain 18 arguments.'}
+    $root=[IO.Path]::GetFullPath($ResultsRoot);$diag=[IO.Path]::GetFullPath($DiagnosticsPath);$helper=[IO.Path]::GetFullPath($BuildHelperPath)
+    foreach($argv in @($CaptureArgv,$RunnerArgv)){
+        if(-not [string]::Equals([IO.Path]::GetFullPath([string]$argv[11]),$root,[StringComparison]::OrdinalIgnoreCase) -or -not [string]::Equals([IO.Path]::GetFullPath([string]$argv[13]),$diag,[StringComparison]::OrdinalIgnoreCase)){throw 'ATLAS-A raw results/diagnostic command paths differ from the captured artifact paths.'}
+        $prefix='-p:DirectoryBuildPropsPath='
+        if(-not ([string]$argv[16]).StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase) -or -not [string]::Equals([IO.Path]::GetFullPath(([string]$argv[16]).Substring($prefix.Length)),$helper,[StringComparison]::OrdinalIgnoreCase)){throw 'ATLAS-A raw build-helper command path differs from the captured helper file.'}
+    }
+    if(-not [string]::Equals($CaptureArgv[13],$RunnerArgv[13],[StringComparison]::OrdinalIgnoreCase) -or -not [string]::Equals($CaptureArgv[16],$RunnerArgv[16],[StringComparison]::OrdinalIgnoreCase)){throw 'ATLAS-A capture and runner raw diagnostic/build-helper arguments differ.'}
+}
+
 function Assert-AtlasACaptureRecordBinding {
     param([pscustomobject]$Private)
     $runner=$Private.Runner
@@ -137,6 +149,14 @@ function Assert-AtlasACaptureRecordBinding {
     if((ConvertTo-Json -InputObject @($argv) -Compress) -cne (ConvertTo-Json -InputObject @($captureArgv) -Compress)){throw 'ATLAS-A controlled capture command differs from the runner invocation.'}
     $resultsRoot=[IO.Path]::GetFullPath([string]$capture.invocation.argv[11]);$expectedEvidenceSuffix='WorldAtlas/.validation-evidence/ATLAS-A-3e4ed67a-2026-11-25/controlled-recapture-20261125'
     if(-not $resultsRoot.Replace('\','/').EndsWith('/'+$expectedEvidenceSuffix,[StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetFullPath([string]$runner.invocation.argv[11]) -cne $resultsRoot){throw 'ATLAS-A captured test-host evidence root differs from the exact accepted run folder.'}
+    $expectedDiag=Join-Path $resultsRoot 'vstest-diagnostics.log'
+    $helperPrefix='-p:DirectoryBuildPropsPath=';$captureHelperArg=[string]$capture.invocation.argv[16]
+    if(-not $captureHelperArg.StartsWith($helperPrefix,[StringComparison]::OrdinalIgnoreCase)){throw 'ATLAS-A captured build-helper argument is malformed.'}
+    $expectedHelper=[IO.Path]::GetFullPath((Join-Path (Join-Path ([IO.Path]::GetTempPath()) 'world-atlas-build') 'Directory.Build.props'))
+    Assert-AtlasARawCommandPathBinding @($capture.invocation.argv) @($runner.invocation.argv) $resultsRoot ([string]$runner.artifacts.diagnostics.path) $expectedHelper
+    if(-not [string]::Equals([IO.Path]::GetFullPath($expectedDiag),[IO.Path]::GetFullPath([string]$runner.artifacts.diagnostics.path),[StringComparison]::OrdinalIgnoreCase)){throw 'ATLAS-A test-host diagnostic target is not the captured diagnostics artifact.'}
+    $commandHelperPath=([string]$runner.invocation.argv[16]).Substring($helperPrefix.Length);$commandHelper=Get-Item -LiteralPath $commandHelperPath
+    if(($commandHelper.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $commandHelper.Length -ne (Get-Item -LiteralPath $Private.BuildHelperPath).Length -or (Get-EvidenceSha256 $commandHelper.FullName).ToLowerInvariant() -cne ([string]$runner.inputs.buildHelper.sha256).ToLowerInvariant()){throw 'ATLAS-A command build-helper target does not match the protected captured helper bytes.'}
     if($capture.invocation.executable -cne 'dotnet' -or $capture.invocation.workingDirectory -cne '<ATLAS_SOURCE_ROOT>' -or $capture.invocation.environment.NUGET_PACKAGES -cne '<PRIVATE_NUGET_CACHE>' -or $capture.invocation.environment.DOTNET_ROOT -cne '<PRIVATE_SDK_ROOT>' -or [long]$capture.invocation.environment.processPathLengthBefore -ne 26028 -or [long]$capture.invocation.environment.processPathLengthDuring -ne 26100 -or [string]$capture.invocation.environment.DOTNET_MULTILEVEL_LOOKUP -cne '0'){throw 'ATLAS-A captured invocation/environment identity is invalid.'}
     $dotnetRoot=[IO.Path]::GetFullPath([string]$runner.invocation.environment.DOTNET_ROOT);$nugetRoot=[IO.Path]::GetFullPath([string]$runner.invocation.environment.NUGET_PACKAGES)
     if(-not (Test-Path -LiteralPath $dotnetRoot -PathType Container) -or -not (Test-Path -LiteralPath (Join-Path $dotnetRoot 'dotnet.exe') -PathType Leaf) -or -not (Test-Path -LiteralPath $nugetRoot -PathType Container)){throw 'ATLAS-A captured SDK/NuGet roots are not available for binding.'}
